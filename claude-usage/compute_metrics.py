@@ -435,55 +435,105 @@ PR_SUBJECT = re.compile(r"\(#\d+\)$")  # the squash-merge signature this repo la
 CONVENTIONAL = re.compile(r"^(\w+)[(:]")   # the type in a Conventional Commits subject
 
 
+# The backlog's two homes: anchored rows in one table until Q889, one file per
+# row after it. Both are walked, because the series spans the move.
+QUEUE_TABLE = "docs/STATUS.md"
+QUEUE_STORE = "docs/queue/"
+QUEUE_ANCHOR = re.compile(r'id="(Q\d+)"')
+QUEUE_FILE = re.compile(r"^docs/queue/(Q\d+)\.md$")
+
+
 def queue_flow():
     """``(closed, filed)`` maps of ``{date: count}`` for rows leaving and entering.
 
     Closures alone cannot tell progress from treading water: this project closed
-    15 rows a day in its busiest stretch while filing 20, so the backlog grew.
-    Both directions are counted from one walk.
+    15 rows a day in its busiest stretch while filing 21, so the backlog grew.
+    Both directions are counted from one walk per home.
 
-    A row's anchor disappearing is work shipped in the common case, and a decline
-    or a prune in the rest — a work proxy, not a completion ledger. Only a Q-id's
-    *first* removal counts, so a row re-filed under a shipped id (the defect Q775
+    A row leaving is work shipped in the common case, and a decline or a prune in
+    the rest — a work proxy, not a completion ledger. Only a Q-id's *first*
+    removal counts, so a row re-filed under a shipped id (the defect Q775
     describes) can't book the same work twice.
 
-    One ``git log -p`` walk, not a ``git show`` per revision: that file has over a
-    thousand revisions and the per-revision form takes ~40 s.
-    """
-    out = git("log", "--reverse", "--format=%x00%ad", "--date=short",
-              "-p", "--", "docs/STATUS.md")
-    anchor = re.compile(r'id="(Q\d+)"')
-    closed, filed = defaultdict(int), defaultdict(int)
-    seen_closed, seen_filed, date = set(), set(), None
-    removed, added = set(), set()
+    The backlog has had two homes: anchored table rows in ``docs/STATUS.md`` until
+    Q889, then one file per row under ``docs/queue/``, with both live for a day.
+    So a removal only closes a row the *other* home doesn't still hold: reading
+    either diff alone books the migration as 178 closures and 178 filings for work
+    that never moved.
 
-    def flush():
-        # An anchor on both sides moved within the file (Queue -> Deferred); only
-        # one gone from the revision entirely has closed, and only one that was not
-        # there before has been filed.
+    One ``git log`` walk per home, not a ``git show`` per revision: the table has
+    over a thousand revisions and the per-revision form takes ~40 s.
+    """
+    closed, filed = defaultdict(int), defaultdict(int)
+    seen_closed, seen_filed = set(), set()
+    live = {"table": set(), "store": set()}
+
+    for date, home, added, removed in sorted(_table_revisions() + _store_revisions(),
+                                             key=lambda r: r[0]):
+        other = live["store" if home == "table" else "table"]
+        # An id on both sides moved within its home (Queue -> Deferred, or a row
+        # rewritten in place); only one gone from the revision entirely has left.
         for q in removed - added:
-            if q not in seen_closed:
+            if q not in seen_closed and q not in other:
                 seen_closed.add(q)
                 closed[date] += 1
         for q in added - removed:
             if q not in seen_filed:
                 seen_filed.add(q)
                 filed[date] += 1
-        removed.clear()
-        added.clear()
+        live[home] = (live[home] | added) - (removed - added)
+    return closed, filed
 
+
+def _table_revisions():
+    """``(date, "table", added, removed)`` per revision of the retired Queue table."""
+    out = git("log", "--reverse", "--format=%x00%ad", "--date=short",
+              "-p", "--", QUEUE_TABLE)
+    revisions, date, added, removed = [], None, set(), set()
     for ln in out.splitlines():
         if ln.startswith("\x00"):
             if date:
-                flush()
-            date = ln[1:]
+                revisions.append((date, "table", added, removed))
+            date, added, removed = ln[1:], set(), set()
         elif ln.startswith("-") and not ln.startswith("---"):
-            removed.update(anchor.findall(ln))
+            removed.update(QUEUE_ANCHOR.findall(ln))
         elif ln.startswith("+") and not ln.startswith("+++"):
-            added.update(anchor.findall(ln))
+            added.update(QUEUE_ANCHOR.findall(ln))
     if date:
-        flush()
-    return closed, filed
+        revisions.append((date, "table", added, removed))
+    return revisions
+
+
+def _store_revisions():
+    """``(date, "store", added, removed)`` per revision of the per-item store.
+
+    One file per row, so the name-status stream is the whole signal and no patch
+    text is read. A rename is a delete plus an add, which is what a row re-filed
+    under a new id is.
+    """
+    out = git("log", "--reverse", "--format=%x00%ad", "--date=short",
+              "--name-status", "-M", "--", QUEUE_STORE)
+    revisions, date, added, removed = [], None, set(), set()
+    for ln in out.splitlines():
+        if ln.startswith("\x00"):
+            if date:
+                revisions.append((date, "store", added, removed))
+            date, added, removed = ln[1:], set(), set()
+            continue
+        fields = ln.split("\t")
+        if len(fields) < 2 or not date:
+            continue
+        status = fields[0][:1]
+        if status in ("A", "C"):
+            added.update(QUEUE_FILE.findall(fields[1]))
+        elif status == "D":
+            removed.update(QUEUE_FILE.findall(fields[1]))
+        elif status == "R":
+            removed.update(QUEUE_FILE.findall(fields[1]))
+            added.update(QUEUE_FILE.findall(fields[-1]))
+    if date:
+        revisions.append((date, "store", added, removed))
+    return revisions
 
 
 # Bounds on the pull-request fetch. Measured 2026-08-15: one 100-PR page costs 3
@@ -1068,15 +1118,17 @@ def is_human_prompt(rec):
 # A session opened by the dispatcher starts with a brief it composed rather than
 # anything a person wrote. Two shapes exist, because the convention changed:
 #
-#   2026-07-27 .. 08-04   a second-person persona brief, 97 openings, median
-#                         5,058 chars. A closed set: unused since 08-04.
-#   2026-08-08 ..         prose pointing the session at the worker skill, 21
-#                         openings, median 2,746 chars, no persona line at all.
+#   2026-07-27 .. 08-25   a second-person persona brief, 134 openings, median
+#                         4,773 chars.
+#   2026-08-08 .. 08-15   prose pointing the session at the worker skill, 20
+#                         openings, median 2,827 chars, no persona line at all.
 #
-# The persona test alone therefore stopped classifying anything on 08-04 and put
-# 21 later dispatches in the authored bucket, which is the silent-drift failure
-# its own comment predicted. Detected on opening rather than on length: 42
-# genuinely authored prompts here run past 2,000 characters.
+# Neither shape is retired: measured 2026-08-26, the persona one looked closed at
+# the previous snapshot and is the more recent of the two. Matching it alone put
+# the skill-brief dispatches in the authored bucket, which is the silent-drift
+# failure its own comment predicted. Detected on opening rather than on length:
+# 38 genuinely authored prompts here run past 2,000 characters, and the shortest
+# brief is 2,281.
 #
 # The skill-name half is deliberately a set, not a literal, because the skill was
 # renamed (``dispatch-worker`` -> ``session-worker``, karlkfi/claude-skills #45).
@@ -1105,7 +1157,7 @@ def is_authored_prompt(rec):
 
     Nothing here keys on a prompt's position in its session, so an authored
     prompt discussing the worker skill by path would be misfiled. Measured at
-    zero across 1,428 human prompts: every match is its session's first.
+    zero across 1,585 human prompts: every match is its session's first.
     """
     if not is_human_prompt(rec):
         return False

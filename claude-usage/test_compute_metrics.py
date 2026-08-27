@@ -413,7 +413,8 @@ class WordCounts(unittest.TestCase):
 
 
 class QueueFlow(unittest.TestCase):
-    """Both directions come from one walk, and a moved row is neither."""
+    """Both directions, across both homes the backlog has had: a moved row is
+    neither, and a row that changed home has not closed."""
 
     def setUp(self):
         self._git = cm.git
@@ -421,8 +422,8 @@ class QueueFlow(unittest.TestCase):
     def tearDown(self):
         cm.git = self._git
 
-    def feed(self, stream):
-        cm.git = lambda *a, **k: stream
+    def feed(self, stream, store=""):
+        cm.git = lambda *a, **k: store if cm.QUEUE_STORE in a else stream
         return cm.queue_flow()
 
     def test_added_is_filed_and_removed_is_closed(self):
@@ -435,6 +436,43 @@ class QueueFlow(unittest.TestCase):
     def test_a_moved_row_is_neither_filed_nor_closed(self):
         closed, filed = self.feed(
             '\x002026-06-02\n-| <a id="Q2"></a>Q2 | queue |\n+| <a id="Q2"></a>Q2 | deferred |\n')
+        self.assertEqual((dict(filed), dict(closed)), ({}, {}))
+
+    def test_a_row_that_moves_to_the_item_store_is_neither_filed_nor_closed(self):
+        """The Q889 migration: the table drops every anchor and the store gains a
+        file per row, a day apart. Read either walk alone and the same 178 rows
+        close and are re-filed; the pair says the backlog never moved."""
+        closed, filed = self.feed(
+            '\x002026-06-01\n+| <a id="Q3"></a>Q3 | x |\n'
+            '\x002026-06-03\n-| <a id="Q3"></a>Q3 | x |\n',
+            store='\x002026-06-02\nA\tdocs/queue/Q3.md\n')
+        self.assertEqual((dict(filed), dict(closed)), ({"2026-06-01": 1}, {}))
+
+    def test_a_row_deleted_from_the_store_closes(self):
+        """Once the table is gone the store is the only home, so its deletions are
+        the closures. Without this the series flatlines at the migration."""
+        closed, filed = self.feed(
+            "",
+            store='\x002026-06-02\nA\tdocs/queue/Q4.md\n'
+                  '\x002026-06-05\nD\tdocs/queue/Q4.md\n')
+        self.assertEqual((dict(filed), dict(closed)),
+                         ({"2026-06-02": 1}, {"2026-06-05": 1}))
+
+    def test_a_renamed_store_file_closes_one_id_and_files_the_other(self):
+        """A rename is the on-disk shape of a row re-filed under another id, so it
+        is a delete plus an add rather than a move within one home."""
+        closed, filed = self.feed(
+            "",
+            store='\x002026-06-02\nA\tdocs/queue/Q5.md\n'
+                  '\x002026-06-06\nR100\tdocs/queue/Q5.md\tdocs/queue/Q6.md\n')
+        self.assertEqual((dict(filed), dict(closed)),
+                         ({"2026-06-02": 1, "2026-06-06": 1}, {"2026-06-06": 1}))
+
+    def test_a_store_path_that_is_not_a_row_is_ignored(self):
+        """The store holds its own README beside the rows, and an edit to it is not
+        backlog flow."""
+        closed, filed = self.feed(
+            "", store='\x002026-06-02\nA\tdocs/queue/README.md\n')
         self.assertEqual((dict(filed), dict(closed)), ({}, {}))
 
 
