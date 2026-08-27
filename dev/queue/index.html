@@ -2649,7 +2649,7 @@ Priority is the <code>rank</code> key, not the position of a line in a table, so
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.6-gate</code> (blocks the Release 1.6 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>1.7-gate</code> (blocks the Release 1.7 tag, same ladder) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.7-gate</code> (blocks the Release 1.7 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.
 It exits unmeasurable rather than passing when that happens, which is how this was caught.</p>
@@ -3607,7 +3607,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>feature</code></td>
 <td>💤</td>
 <td>L</td>
-<td><strong>Demand:</strong> an in-cluster cache ask, OR <a href="Q408/">Q408</a> Phase 1 lands and removes the working one.</td>
+<td><strong>Demand:</strong> an in-cluster cache ask.</td>
 </tr>
 <tr>
 <td><a href="Q718/">Q718</a></td>

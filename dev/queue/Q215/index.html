@@ -2598,8 +2598,17 @@
 
 
 <h1 id="worker-cache-backend-actionscache--docker-layer-cache">Worker cache backend (actions/cache + Docker layer cache)<a class="headerlink" href="#worker-cache-backend-actionscache--docker-layer-cache" title="Permanent link">&para;</a></h1>
-<p><strong>Demand:</strong> an in-cluster cache ask, OR <a href="../Q408/">Q408</a> Phase 1 lands and removes the working one.
-<code>actions/cache</code> reaches its store today, so the gap is local; the read-only mirror role cannot hold a read-write cache, which is the design question.</p>
+<p><strong>Demand:</strong> an in-cluster cache ask.
+<strong>Event:</strong> a tenant loses its working <code>actions/cache</code>, which is the <em>tenant</em> path and not this repo's own CI.</p>
+<p>The reading was ambiguous until 2026-08-26 and is now fixed, because an ambiguous trigger is a standing query nobody can re-run.
+The trigger is about the capability GAG offers a tenant, and that capability works today: the tenant egress proxy's implicit GitHub allowlist carries <code>*.blob.core.windows.net</code>, the Azure-blob store the Actions cache runs on (<code>githubEgressFQDNs</code> in <code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code>).
+So <code>actions/cache</code> reaches its store on the proxy form, and the gap is local rather than absolute.</p>
+<p><a href="../Q408/">Q408</a> Phase 1 did <strong>not</strong> fire this.
+It gated every <code>actions/cache</code> step and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code> in this repo's own <code>e2e-reusable.yml</code>, which is GAG dogfooding the untrusted-PR posture on its self-hosted lane, not a tenant losing anything.
+Settled in <a href="../../plan/release-1.7/#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes">release-1.7.md</a>.</p>
+<p>One asymmetry to know before re-reading this: the direct-egress form admits GitHub CIDRs, and the Azure blob store is not among them, so a tenant on that form has no working <code>actions/cache</code> now and never did.
+The trigger reads on the proxy form because that is where the capability exists to lose.</p>
+<p>The design question the row exists for is unchanged: the read-only mirror role cannot hold a read-write cache.</p>
 
 
 
