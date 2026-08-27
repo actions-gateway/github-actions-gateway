@@ -25,27 +25,39 @@ Meanwhile `gh-pages` itself was correct throughout: its `versions.json` carried 
 `make verify-published-docs VERSION=v1.6.0` found it, exiting 1 with `the published docs for 1.6.0 do not advertise 1.6.0`.
 A manual `workflow_dispatch` of `pages.yml` (`version=1.6.0 alias=stable set_default=true docs_ref=v1.6.0`) republished, after which the same gate exited 0 and `/stable/` resolved to `/1.6.0/`.
 
-## What is established, and what is not
+## Why: the artifact was correct, and the site did not serve it
 
-Established: `gh-pages` held the correct tree immediately after the run; the artifact that deployed did not; every step of the run reported success.
+Settled 2026-08-27 (Q1000), against the artifact the failing run uploaded.
+`actions/upload-pages-artifact` keeps it, and it had not expired:
 
-**Not established: why.** Two hypotheses survive and this document does not pick one.
+```bash
+gh api /repos/actions-gateway/github-actions-gateway/actions/runs/33023216267/artifacts
+gh run download 33023216267 -n github-pages -D ./artifact
+tar -xOf ./artifact/artifact.tar ./versions.json
+```
 
-1. `git archive gh-pages` resolved a ref that was not the one `mike` had just written.
-   The step runs after the push, in the same workspace, so this requires the local `refs/heads/gh-pages` to differ from what was pushed.
-2. Propagation took unusually long, and the manual republish merely coincided with it resolving.
+That artifact carries a `./1.6.0` directory, and its `versions.json` lists `1.6.0` with `aliases: ["stable"]`.
+So `git archive gh-pages` resolved the ref `mike` had just written, and the first hypothesis is refuted: nothing in the workflow assembled a stale tree.
+The deployment side agrees.
+Deployment `6113682780` went `success` at 23:25:21Z and marked the previous one `inactive` a second later, so the correct artifact was the active deployment for the whole window the site was serving the old one.
 
-One thing was ruled out: the two `pages.yml` runs in the window did not overlap.
-The `main` run finished at 23:23:14Z and the tag run started at 23:24:12Z, so they did not race the shared `gh-pages` branch, and the tag run's deployment was the last to become active.
+What the site served during that window matches `898d30bb6` exactly, the `gh-pages` commit from *before* the tag run's `mike` step.
+That is the previous deployment's content, not a partial or intermediate one: the run also passed through `5f8cd7940`, which lists `1.6.0` with `stable` still on `1.5.0`, and the site never showed that.
+
+So the failure was on the serving side, between an accepted deployment and what the CDN returned.
+This document does not claim to know which layer, because nothing outside GitHub can see it.
+What it does establish is where the failure was **not**: every step the repository controls produced the right bytes.
 
 An early reading called this a race between the push and the assembly.
 The timestamps refute it: they are sequential steps in one job, 7 milliseconds apart, push first.
-The correction is recorded here because the wrong mechanism was stated confidently before it was measured.
+The correction is recorded here because the wrong mechanism was stated confidently before it was measured, and the artifact that settles it was one API call away the whole time.
 
 ## Contributing factors
 
-**The run's own verification cannot fail on this failure.** The `Verify the artifact serves a reachable root` step asserts `_site/index.html` and `_site/CNAME` exist.
-Both are true of a stale version tree, so a deploy that publishes the wrong content passes its own check and reports green.
+**The run's own verification cannot fail on a stale tree.** The `Verify the artifact serves a reachable root` step asserted `_site/index.html` and `_site/CNAME` exist.
+Both are true of a stale version tree, so a deploy that published the wrong content would have passed its own check and reported green.
+That gap was real and is now closed, and it is worth being explicit that it is not this incident's cause: the artifact here was correct, so the assertion added for it passes on this run.
+Reading the two as one thing is what the measurement above exists to prevent.
 
 **The only check that reads the live site is manual and post-hoc.** `verify-published-docs` is what caught this, and it runs when a release engineer chooses to run it.
 Nothing in CI compares what was deployed against what was meant to be deployed.
@@ -57,11 +69,18 @@ The disagreement only appeared by asking the site.
 
 **Mitigative** — done: the version was republished and verified.
 
-**Preventative** — [Q1000](../queue/Q1000.md): establish which hypothesis holds, then make the publish job assert its own artifact contains the version being deployed, and that `_site/versions.json` lists it with the resolved alias.
-A deploy that publishes the wrong tree should fail its own run rather than wait for someone to read the live site.
+**Preventative** — done, Q1000.
+The publish job now runs two checks instead of one.
+[`verify-pages-artifact.sh`](../../scripts/pages/verify-pages-artifact.sh) asserts, before the upload, that `_site` carries the version being deployed and that `versions.json` lists it with the alias the run claimed.
+[`verify-pages-live.sh`](../../scripts/pages/verify-pages-live.sh) then reads the site after the deploy and polls for up to five minutes, failing the run with the republish command when it never arrives.
+The second is what covers this incident.
+The first covers the tree-side failure this was mistaken for, which nothing had ever checked.
+Neither replaces `verify-published-docs`, which reads the version pins inside the pages and cannot run at tag time (see [release.md step 7](../operations/release.md#the-bump-on-main-does-not-reach-the-published-release)).
 
 ## What this is a case of
 
 The repo already records that three of the four releases before 1.5.0 published the previous version's install command as their landing page, and that no working-tree gate saw it.
 `verify-published-docs` exists because of that, and it worked here.
-The gap that remains is that it is the *last* line of defence rather than a gate, so the failure is caught by a human remembering to look, at whatever point they look.
+The gap was that it was the *last* line of defence rather than a gate, so the failure was caught by a human remembering to look, at whatever point they looked.
+That is what `verify-pages-live.sh` closes: the same question, asked by the run that caused it, within five minutes rather than whenever someone thinks to check.
+`verify-published-docs` keeps its own job, which is the pins, and stays a hand step because a tag cannot pass it.

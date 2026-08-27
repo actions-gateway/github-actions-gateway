@@ -1058,6 +1058,11 @@ So are `stable` and the root redirect a visitor lands on.
 `make release-pins-check` cannot catch this: it reads the working tree, not the published site.
 `make verify-published-docs` is the half that reads the site, and it is the last thing this step does.
 
+The publish run does its own, narrower live check first: after deploying, it polls until the site actually serves the version, and fails with the republish command when it does not (Q1000, [website.md](../development/website.md#what-the-publish-job-verifies-and-why-it-takes-two-checks)).
+That answers *did the deploy reach the site*, which is what `v1.6.0` got wrong.
+It cannot answer *do the published pages pin the right release*, because a tag's own tree carries the previous release's pins until the republish below.
+So a green publish run is not a substitute for the command at the end of this step.
+
 The two facts are stated separately above and were never reconciled.
 Three of the four releases cut since `1.0.0` published the previous version's install command as their landing page.
 Measured on the live site 2026-08-10: `/1.1.0/` and `/1.2.0/` both advertise `--version 1.0.0`, and `/1.4.0/` advertised `1.3.0` together with the `v1.3.0` CRD manifest URL, as did `stable` and the root redirect, for the three hours until it was reported.

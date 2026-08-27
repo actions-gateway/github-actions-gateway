@@ -140,7 +140,11 @@ jobs:
   publish:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The live-site check below polls on a release publish, on top of the
+    # build, the mike deploy and the Pages rollout. Its 300s budget bounds when
+    # the LAST attempt may start, not when the run ends: an attempt already in
+    # flight spends its own curl budget, so the worst case is nearer 6 minutes.
+    timeout-minutes: 20
     permissions:
       contents: write   # push the gh-pages version tree
       pages: write      # deploy the Pages artifact
@@ -307,6 +311,7 @@ jobs:
           echo "Resolved: deploy=${deploy} version=${version} alias=${alias} default=${is_default} stable_tag=${stable_tag}"
 
       - name: Deploy the version with mike
+        id: mike
         if: steps.resolve.outputs.deploy == 'true'
         env:
           VERSION: ${{ steps.resolve.outputs.version }}
@@ -318,8 +323,18 @@ jobs:
           DOCS_REF: ${{ github.event.inputs.docs_ref }}
         # mike commits each version into a subdir of gh-pages; the branch is pushed
         # once at the end. --alias-type=copy makes an alias (e.g. `stable`) a real
-        # directory, not a symlink: GitHub Pages artifact deploys don't follow
-        # symlinks, so a symlinked `stable/` would 404 on deep links.
+        # directory rather than a symlink, so the tree is correct independent of
+        # how the upload archives it.
+        #
+        # That is robustness, not a requirement. This comment used to say a
+        # symlinked alias would 404 because Pages artifact deploys don't follow
+        # symlinks; that was never true of any released upload-pages-artifact —
+        # v1.0.0, v2.0.0, v3.0.1 and the pinned v5.0.0 all tar with
+        # `--dereference --hard-dereference` (measured 2026-08-27), so a symlink
+        # is materialised into the artifact. Keep the flag anyway: it holds if
+        # the action ever drops those flags. scripts/pages/verify-pages-artifact.sh
+        # asserts the alias serves a page, and deliberately passes a symlinked
+        # one for the same reason.
         #
         # `stable` + the default root redirect only move to a release tag when it is
         # the HIGHEST released version, so a backport patch to an older supported
@@ -327,6 +342,10 @@ jobs:
         # explicit alias/default is applied verbatim instead (the seeding path).
         run: |
           set -euo pipefail
+          # Which alias this run actually put on the version. The two checks
+          # below assert against it rather than re-deriving the backport rule,
+          # which would be a second copy of step 3's semver comparison.
+          claimed_alias=""
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
@@ -361,6 +380,7 @@ jobs:
           args=(deploy "${cfg[@]}" --update-aliases --title "${TITLE}")
           if [[ -n "${ALIAS}" ]]; then
             args+=(--alias-type=copy "${VERSION}" "${ALIAS}")
+            claimed_alias="${ALIAS}"
           else
             args+=("${VERSION}")
           fi
@@ -379,6 +399,7 @@ jobs:
             if [[ "${highest}" == "${VERSION}" ]]; then
               mike deploy "${cfg[@]}" --alias-type=copy --update-aliases --title "${TITLE}" "${VERSION}" stable
               mike set-default "${cfg[@]}" stable
+              claimed_alias="stable"
             else
               echo "Backport: ${VERSION} is not the highest release (${highest}); leaving stable unchanged."
             fi
@@ -386,6 +407,8 @@ jobs:
 
           # 4) Publish the updated version tree.
           git push origin gh-pages
+
+          echo "claimed_alias=${claimed_alias}" >> "${GITHUB_OUTPUT}"
 
       - name: Assemble the Pages artifact from the gh-pages version tree
         if: steps.resolve.outputs.deploy == 'true'
@@ -410,28 +433,30 @@ jobs:
           Sitemap: https://actions-gateway.com/stable/sitemap.xml
           ROBOTS
 
-      - name: Verify the artifact serves a reachable root
+      - name: Verify the artifact carries the version being deployed
         if: steps.resolve.outputs.deploy == 'true'
-        # The root `/` of a mike tree is not a built page: it is the redirect stub
-        # `mike set-default` writes. Until some version claims the default, the tree
-        # has only version subdirs and the apex domain 404s, while this workflow
-        # still reports success on every push. That is exactly what happened between
-        # the Q238 cutover and the first seed. Fail loudly instead.
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          CLAIMED_ALIAS: ${{ steps.mike.outputs.claimed_alias }}
+          STABLE_TAG: ${{ steps.resolve.outputs.stable_tag }}
+        # A stale archive still has a root index.html and a CNAME, which is all
+        # this step asserted until Q1000: a deploy of the previous tree passed
+        # its own verification and reported green. Assert the version tree and
+        # the alias mike actually claimed as well.
+        #
+        # STABLE_TAG comes from `resolve`, which reads the git ref, so the check
+        # can re-derive the highest-release rule for itself rather than trusting
+        # the mike step's report of the alias it claimed. Without that the
+        # assertion is fail-open exactly where it matters: a `mike list` that
+        # fails leaves stable unmoved AND the claim empty, which switches the
+        # alias check off instead of failing it.
         run: |
           set -euo pipefail
-          rc=0
-          if [[ ! -f _site/index.html ]]; then
-            echo "::error::Pages artifact has no root index.html, so the apex domain will 404. No version owns the default; run 'mike set-default' via a workflow_dispatch seed (docs/development/website.md, Seeding already-released versions)."
-            rc=1
+          args=(--site _site --version "${VERSION}" --alias "${CLAIMED_ALIAS}")
+          if [[ "${STABLE_TAG}" == "true" ]]; then
+            args+=(--stable-tag)
           fi
-          if [[ ! -f _site/CNAME ]]; then
-            echo "::error::Pages artifact has no root CNAME; deploying would clear the custom domain."
-            rc=1
-          fi
-          if (( rc == 0 )); then
-            echo "Root OK: $(ls _site/index.html _site/CNAME)"
-          fi
-          exit "${rc}"
+          scripts/pages/verify-pages-artifact.sh "${args[@]}"
 
       - name: Upload Pages artifact
         if: steps.resolve.outputs.deploy == 'true'
@@ -443,3 +468,23 @@ jobs:
         id: deployment
         if: steps.resolve.outputs.deploy == 'true'
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+      # Every tree-side signal was green when v1.6.0 published nothing: mike
+      # pushed the right commit, the archive picked it up, the artifact carried
+      # 1.6.0 with the stable alias (it was re-read afterwards), and the
+      # deployment reported success and went active. The site served the
+      # previous release for 25 minutes regardless. Nothing in the run could see
+      # that, because every check it ran read the tree. So ask the site (Q1000).
+      #
+      # `dev` is excluded because it is already in versions.json before the run
+      # starts: there is no assertion here that could go red for it, and a check
+      # that cannot fail on every push to `main` is worse than no check.
+      - name: Verify the live site serves the version
+        if: steps.resolve.outputs.deploy == 'true' && steps.resolve.outputs.version != 'dev'
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          CLAIMED_ALIAS: ${{ steps.mike.outputs.claimed_alias }}
+        run: |
+          set -euo pipefail
+          scripts/pages/verify-pages-live.sh \
+            --version "${VERSION}" --alias "${CLAIMED_ALIAS}"
