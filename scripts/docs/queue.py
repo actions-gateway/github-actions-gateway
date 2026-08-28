@@ -693,12 +693,13 @@ def _ids_at(rev, rel, root):
 # about the store, so `next` reads it and `lint` never does: the gates that run
 # lint have no network, and a checker reaching for one fails on the wrong axis.
 #
-# The whole open list rather than one `gh pr list --search Q<n>` per candidate.
-# `--search` answers from GitHub's search index rather than from the pull
-# request records, so its freshness is a property of that index; the list
-# endpoint reads what the PR page reads, and the PR this check most needs to
-# catch is the one opened minutes ago. It is also one call covering every
-# candidate rather than one per candidate.
+# The whole open list rather than one `gh pr list --search Q<n>` per candidate:
+# one call covers every candidate, and a full page is detectable, so a
+# truncated read refuses instead of reporting nothing claimed. `--search`
+# answers from a separate index rather than from the pull request records, and
+# the PR this check most needs to catch is the freshest one — though measured
+# 2026-08-27 it returned a 40-second-old PR, so reading the records is a
+# preference on mechanism and not a fix for any observed lag.
 GH_PR_LIMIT = 200
 
 
