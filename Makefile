@@ -269,6 +269,10 @@ endpoint-parity-check: ## Fail when the AGC calls a GitHub REST endpoint the e2e
 script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md entry
 	scripts/docs/check-script-docs.sh
 
+.PHONY: script-modes-check
+script-modes-check: ## Fail when a script under scripts/ carries the wrong executable bit
+	scripts/ci/check-script-modes.sh
+
 # The three backlog rules queue.py lint has no equivalent for, because each is a
 # function of what the branch changed rather than of what the store holds: a
 # flake item may not vanish, deleting a plan's last item obliges its index row,
