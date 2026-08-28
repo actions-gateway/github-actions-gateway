@@ -49,6 +49,7 @@ REPO=octo/repo
 CALL_LOG="${WORKDIR}/calls.log"
 GATEWAYS_FILE="${WORKDIR}/gateways"
 WAIT_EXIT=0
+ROLLOUT_EXIT=0
 
 kubectl() {
 	printf 'kubectl %s\n' "$*" >>"${CALL_LOG}"
@@ -56,6 +57,7 @@ kubectl() {
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
 	config\ current-context) echo "gke_${PROJECT}_${ZONE}_${CLUSTER}" ;;
 	wait*) return "${WAIT_EXIT}" ;;
+	rollout\ status*) return "${ROLLOUT_EXIT}" ;;
 	esac
 	return 0
 }
@@ -70,6 +72,7 @@ reset_stubs() {
 	printf '%s\n' "$@" >"${GATEWAYS_FILE}"
 	: >"${CALL_LOG}"
 	WAIT_EXIT=0
+	ROLLOUT_EXIT=0
 	E2E_VARIANT=kata
 	E2E_SYSTEM_NODES=2
 	unset E2E_ROUTE_VAR
@@ -321,6 +324,36 @@ check_not_contains "rejects before any cluster mutation" \
 	"clusters resize" "$(cat "${CALL_LOG}")"
 check_not_contains "rejects before applying an overlay" \
 	"apply -k" "$(cat "${CALL_LOG}")"
+
+# --- the GMC rollout is waited for before the tenant apply -------------------
+#
+# The apply is converted by GMC's webhook, so from the 0-node at-rest state it
+# fails with `no endpoints available for service "webhook-service"` unless GMC
+# has rolled out first. Both the wait's presence and its position are asserted:
+# placed before the resize it would wait on a cluster with no node to schedule
+# GMC on, and placed after the apply it would not gate anything.
+
+reset_stubs gag-dogfood gag-dogfood-ci
+run_main
+check_contains "waits for the GMC rollout" \
+	"rollout status deployment/gmc-controller-manager" "$(cat "${CALL_LOG}")"
+check_before "waits for GMC only once a node exists to schedule it" \
+	"clusters resize" "rollout status"
+check_before "waits for GMC before the apply its webhook converts" \
+	"rollout status" "apply -k"
+
+# The failure direction: a GMC that never rolls out must abort the bring-up
+# rather than let the apply fail on the webhook message that names the
+# dataplane instead of the cause.
+reset_stubs gag-dogfood gag-dogfood-ci
+ROLLOUT_EXIT=1
+E2E_ROUTE_VAR=1
+run_main
+check "a failed GMC rollout fails the bring-up" 1 "${MAIN_RC}"
+check_not_contains "never applies the tenant without the conversion webhook" \
+	"apply -k" "$(cat "${CALL_LOG}")"
+check_not_contains "never routes e2e jobs when GMC is down" \
+	"variable set" "$(cat "${CALL_LOG}")"
 
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2

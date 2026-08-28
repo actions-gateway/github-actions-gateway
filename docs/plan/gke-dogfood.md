@@ -933,7 +933,8 @@ The same fail-early rule covers local tools (Q356): the CRD smoke is the gate's 
 `main()` now preflights it alongside the `require_cmd` checks, before the confirmation prompt and anything billable; `crd_smoke` only consumes the resolved `COSIGN_BIN`.
 The test script asserts the preflight's paths too.
 
-`e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`, default `2`, never below the derived running size — a smaller resize would evict a tenant AGC), and `e2e-stop.sh` restores the running size afterwards (derived the same way as `dogfood/start.sh`, so the two agree by construction; `SYSTEM_POOL_AT_REST_NODES` pins it instead); `dogfood/stop.sh` later takes the pool to 0 for the zero-cost-at-rest state.
+`e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`, default `2`, never below the derived running size — a smaller resize would evict a tenant AGC), then waits for the GMC rollout (`GMC_ROLLOUT_TIMEOUT`, default `5m`) before applying the tenant, because that apply is converted by GMC's webhook and at rest GMC has no node to schedule on until the resize lands.
+`e2e-stop.sh` restores the running size afterwards (derived the same way as `dogfood/start.sh`, so the two agree by construction; `SYSTEM_POOL_AT_REST_NODES` pins it instead); `dogfood/stop.sh` later takes the pool to 0 for the zero-cost-at-rest state.
 All resizes pin `--project` and `--zone` and are idempotent, so re-running any of these scripts is safe.
 
 ```bash
