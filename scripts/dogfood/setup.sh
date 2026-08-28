@@ -51,6 +51,8 @@ shopt -s inherit_errexit
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/dogfood/lib/gmc.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 
 # Default: a post-Q74 main SHA whose control-plane image is published to GHCR and
 # whose tree carries the v2beta1+v2alpha1 conversion-webhook CRD chart (Q281). This
@@ -355,15 +357,12 @@ QUOTA
 	# pod-creation backoff from before the quota existed), restart so it retries
 	# immediately instead of waiting out the exponential backoff. Skip when it's
 	# already healthy so a re-run doesn't needlessly bounce the control plane.
-	if ! kubectl rollout status deployment/gmc-controller-manager \
-		-n gmc-system --timeout=5s >/dev/null 2>&1; then
+	if ! gmc_ready; then
 		echo "GMC not ready — restarting to clear any pod-creation backoff..."
-		kubectl rollout restart deployment/gmc-controller-manager -n gmc-system
+		kubectl rollout restart "${GMC_DEPLOYMENT}" --namespace "${GMC_NAMESPACE}"
 	fi
 
-	echo "Waiting for GMC to be ready..."
-	kubectl rollout status deployment/gmc-controller-manager \
-		-n gmc-system --timeout=3m
+	wait_for_gmc 3m
 
 	rm -f "${values}"
 	trap - EXIT

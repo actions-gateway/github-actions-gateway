@@ -91,6 +91,17 @@ sleep() { :; }
 
 echo "scripts/dogfood/start-test.sh"
 
+# --- start.sh sources the shared GMC helper ----------------------------------
+#
+# It calls wait_for_gmc before applying anything the conversion webhook has to
+# serve, and a missing `source` line fails only at runtime, with `command not
+# found` on a cluster that is otherwise fine. `bash -n` cannot see it and the
+# helper's own suite does not know who calls it, so the seam is asserted here.
+# What the helper then does is scripts/dogfood/gmc-test.sh's subject.
+
+check "sources lib/gmc.sh, so wait_for_gmc resolves" \
+	"function" "$(type -t wait_for_gmc || true)"
+
 # --- the rollout is tracked by Deployment, never by a pod selector ------------
 
 reset_kubectl 0
