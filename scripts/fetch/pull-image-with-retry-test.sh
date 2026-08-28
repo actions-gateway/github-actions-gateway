@@ -173,6 +173,52 @@ else
 	fail 'first delay is jittered' "all 12 runs slept ${!seen[*]}s — jitter missing"
 fi
 
+# --- the registry mirror (Q408 Phase 3) -------------------------------------
+#
+# This script is the chokepoint every docker pull in the e2e job goes through,
+# so it is where the job is pointed at the in-cluster pull-through cache. The
+# contract it has to keep is that NOTHING DOWNSTREAM CAN TELL: the callers
+# `docker tag`, `docker save` and `kind load` the ref they asked for, and
+# prepull-manifest-images.sh writes that same ref into images.txt. A rewrite
+# that pulled but left the image under the mirror's name would pass a pull and
+# fail a `kind load` several steps later.
+
+# docker_calls_matching PATTERN — how many recorded docker invocations match.
+docker_calls_matching() {
+	grep -c -- "$1" "$FIXTURE_DIR/docker.calls" || true
+}
+
+MIRROR=mirror-quay-io.gag-registry-mirror.svc.cluster.local:5000
+QUAY_REF=quay.io/jetstack/cert-manager-controller:v1.20.2
+
+DOCKER_SUCCEED_ON=1 run_pull "$QUAY_REF"
+assert_eq 'no map: the pull uses the caller ref' 1 "$(docker_calls_matching "^pull $QUAY_REF\$")"
+assert_eq 'no map: nothing is re-tagged' 0 "$(docker_calls_matching '^tag ')"
+
+REGISTRY_MIRRORS="quay.io=$MIRROR" DOCKER_SUCCEED_ON=1 run_pull "$QUAY_REF"
+assert_eq 'mapped: the pull goes to the mirror' \
+	1 "$(docker_calls_matching "^pull $MIRROR/jetstack/cert-manager-controller:v1.20.2\$")"
+assert_eq 'mapped: the caller ref is never pulled' 0 "$(docker_calls_matching "^pull $QUAY_REF\$")"
+assert_eq 'mapped: the image is re-tagged to the caller ref' \
+	1 "$(docker_calls_matching "^tag $MIRROR/jetstack/cert-manager-controller:v1.20.2 $QUAY_REF\$")"
+assert_eq 'mapped: the mirror tag is removed again' \
+	1 "$(docker_calls_matching "^rmi $MIRROR/jetstack/cert-manager-controller:v1.20.2\$")"
+assert_eq 'mapped: a first-attempt success still exits 0' 0 "$run_rc"
+
+# An unmapped registry under a configured map is the common case, not an edge
+# one: the map covers five hosts and the job also pulls from the in-job local
+# registry on 127.0.0.1:5000.
+REGISTRY_MIRRORS="quay.io=$MIRROR" DOCKER_SUCCEED_ON=1 run_pull 127.0.0.1:5000/gmc:dev
+assert_eq 'an unmapped registry is pulled direct' \
+	1 "$(docker_calls_matching '^pull 127.0.0.1:5000/gmc:dev$')"
+assert_eq 'and is not re-tagged' 0 "$(docker_calls_matching '^tag ')"
+
+# The retry schedule is measured on the ref actually being pulled, so a mirror
+# that is down must still exhaust the budget rather than fail on the first try.
+REGISTRY_MIRRORS="quay.io=$MIRROR" PULL_RETRY_ATTEMPTS=3 run_pull "$QUAY_REF"
+assert_eq 'a failing mirror pull exits 1' 1 "$run_rc"
+assert_eq 'a failing mirror pull uses every attempt' 3 "$docker_calls"
+
 if ((fails > 0)); then
 	printf '\n%d assertion(s) failed\n' "$fails" >&2
 	exit 1

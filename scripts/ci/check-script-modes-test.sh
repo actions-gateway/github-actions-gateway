@@ -102,6 +102,35 @@ expect "a library with the bit fails" 1 "$promoted" 'lib/pool.sh'
 expect "and says it is sourced" 1 "$promoted" 'sourced, not run'
 expect "and names the fix" 1 "$promoted" 'update-index --chmod=-x'
 
+# --- a suite beside its subject, which position alone gets wrong -------------
+#
+# The repo convention puts a `*-test.sh` next to what it tests, so a library's
+# own suite lives in lib/ — and `SCRIPTS_TESTS` runs every suite by path, so it
+# has to be executable there. A purely positional rule reads that file as a
+# library and demands 644, which would leave `make scripts-test` unable to run
+# it. Both directions, because an exemption that swallowed the library beside it
+# would be invisible from the passing case alone.
+
+suite="$(repo suite)"
+printf '#!/usr/bin/env bash\ntrue\n' >"$suite/scripts/dogfood/lib/pool-test.sh"
+chmod +x "$suite/scripts/dogfood/lib/pool-test.sh"
+commit "$suite"
+expect "an executable suite under lib/ passes" 0 "$suite" 'ok ('
+
+suite_demoted="$(repo suite-demoted)"
+printf '#!/usr/bin/env bash\ntrue\n' >"$suite_demoted/scripts/dogfood/lib/pool-test.sh"
+commit "$suite_demoted"
+expect "a suite under lib/ without the bit fails" 1 "$suite_demoted" 'lib/pool-test.sh'
+expect "and names the fix" 1 "$suite_demoted" 'update-index --chmod=+x'
+
+# The exemption must not widen: the library beside the suite is still a library.
+suite_wide="$(repo suite-wide)"
+printf '#!/usr/bin/env bash\ntrue\n' >"$suite_wide/scripts/dogfood/lib/pool-test.sh"
+chmod +x "$suite_wide/scripts/dogfood/lib/pool-test.sh"
+chmod +x "$suite_wide/scripts/dogfood/lib/pool.sh"
+commit "$suite_wide"
+expect "the library beside a suite is still a library" 1 "$suite_wide" 'lib/pool.sh'
+
 # --- the index is what a clone gets, so it outranks the filesystem -----------
 #
 # An unstaged `chmod +x` leaves the working tree executable and the index 644,

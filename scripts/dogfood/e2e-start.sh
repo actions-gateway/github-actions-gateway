@@ -78,10 +78,12 @@ E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
 # pool is exactly the cost Q231 keeps the e2e AGC off it to avoid. e2e-stop.sh
 # scales them back to zero.
 #
-# Idempotent server-side apply, and safe to run before the mirror is wired to any
-# client: until Q408 Phase 3 points dockerd/buildkit/helm at it, nothing pulls
-# through it, and its additive policy is a no-op while the Kata overlay's
-# allow-all e2e-open-egress is still in place.
+# Idempotent server-side apply. The Kata overlay wires dockerd, the docker-client
+# refs, buildkit and helm to these instances (Q408 Phase 3,
+# deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml), and the dind overlay does
+# not, so both variants are safe to bring up either way: the mirror's additive
+# policy is a no-op while the Kata overlay's allow-all e2e-open-egress is still
+# in place, and an unwired client simply reaches its upstream.
 apply_registry_mirror() {
 	# Ephemeral caches by default (emptyDir — $0 at rest, cold on the first pull
 	# of each e2e window). Set REGISTRY_MIRROR_PERSISTENT=1 to render the

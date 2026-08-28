@@ -26,6 +26,7 @@ resources:
   - ../../base
   - ../../../templates/kata-dind
   - resources.yaml
+  - mirror-wiring.yaml
 patches:
   # Namespace -> privileged PSA, same four gates as ../dind. NOT because the pod
   # is privileged (it is not — that is the point of this variant) but because
@@ -102,3 +103,36 @@ patches:
       - op: add
         path: /spec/podTemplate/spec/volumes/0/ephemeral/volumeClaimTemplate/spec/storageClassName
         value: standard-rwo
+      # Q408 Phase 3 wiring — mirror-wiring.yaml carries both halves and the
+      # reasoning. dockerd reads /etc/docker/daemon.json without being told to,
+      # so the sidecar needs no flag and the shipped library entry stays
+      # untouched by a change that is this cluster's, not the template's.
+      - op: add
+        path: /spec/podTemplate/spec/volumes/-
+        value:
+          name: docker-config
+          configMap:
+            name: registry-mirror-wiring
+            items:
+              - key: daemon.json
+                path: daemon.json
+      # The dind sidecar has no volumeMounts of its own (only the raw block
+      # device), so this creates the list rather than appending to it.
+      - op: add
+        path: /spec/podTemplate/spec/initContainers/0/volumeMounts
+        value:
+          - name: docker-config
+            mountPath: /etc/docker/daemon.json
+            subPath: daemon.json
+            readOnly: true
+      # The runner container's environment is what the job's steps inherit, so
+      # this is how scripts/lib/registry-mirror.sh reaches the docker, helm and
+      # buildkit call sites without the mirror's address entering a workflow.
+      - op: add
+        path: /spec/podTemplate/spec/containers/0/env/-
+        value:
+          name: REGISTRY_MIRRORS
+          valueFrom:
+            configMapKeyRef:
+              name: registry-mirror-wiring
+              key: registry-mirrors

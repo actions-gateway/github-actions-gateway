@@ -1,0 +1,61 @@
+# Q408 Phase 3: how a worker in this tenant reaches the in-cluster pull-through
+# caches (../../../registry-mirror) instead of the upstream registries.
+#
+# Kata-overlay only. The dind overlay is the explicit trusted-CI fallback and
+# keeps talking to the upstreams directly, so nothing here belongs in ../../base.
+#
+# ONE ConfigMap holds BOTH representations of the same fact, because the job has
+# two kinds of client and neither can read the other's form:
+#
+#   daemon.json       the inner dockerd's own config, mounted into the dind
+#                     sidecar. Serves every Hub pull transparently, including
+#                     the digest-pinned ones no ref rewrite can restore a local
+#                     name for, and permits plain HTTP to each mirror.
+#   registry-mirrors  the <upstream>=<mirror> map read by
+#                     scripts/lib/registry-mirror.sh, which rewrites the refs
+#                     the clients that have no mirror setting of their own
+#                     pull: the docker pulls of non-Hub refs, helm's OCI chart
+#                     pull, and buildkit's generated config.
+#
+# The two are hand-kept copies of one endpoint set, and so is
+# ../../../registry-mirror/base/service.yaml, which names the Services they both
+# address. scripts/manifest/check-registry-mirror-wiring.sh reconciles all three
+# — a drift here costs a booked dogfood session to discover, which is why it is
+# gated rather than commented.
+#
+# NOTHING HERE ENFORCES ANYTHING. `e2e-open-egress` is still in place until
+# Phase 4, so a client that ignores its wiring reaches the upstream and the run
+# is still green. What proves the wiring rode the mirror is the mirror's own
+# access log: scripts/dogfood/e2e-mirror-hits.sh.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-mirror-wiring
+  namespace: gag-dogfood-e2e
+data:
+  # dockerd mirrors Docker Hub and only Docker Hub — `registry-mirrors` is not a
+  # general redirect map, which is why the other four upstreams need the ref
+  # rewrite below rather than an entry here.
+  #
+  # insecure-registries carries all five: transport in-cluster is plain HTTP
+  # (plan §3.1), and dockerd refuses an http:// endpoint — the Hub mirror
+  # included — unless the host is listed here.
+  daemon.json: |
+    {
+      "registry-mirrors": [
+        "http://mirror-docker-io.gag-registry-mirror.svc.cluster.local:5000"
+      ],
+      "insecure-registries": [
+        "mirror-docker-io.gag-registry-mirror.svc.cluster.local:5000",
+        "mirror-ghcr-io.gag-registry-mirror.svc.cluster.local:5000",
+        "mirror-quay-io.gag-registry-mirror.svc.cluster.local:5000",
+        "mirror-registry-k8s-io.gag-registry-mirror.svc.cluster.local:5000",
+        "mirror-gcr-io.gag-registry-mirror.svc.cluster.local:5000"
+      ]
+    }
+  registry-mirrors: >-
+    docker.io=mirror-docker-io.gag-registry-mirror.svc.cluster.local:5000
+    ghcr.io=mirror-ghcr-io.gag-registry-mirror.svc.cluster.local:5000
+    quay.io=mirror-quay-io.gag-registry-mirror.svc.cluster.local:5000
+    registry.k8s.io=mirror-registry-k8s-io.gag-registry-mirror.svc.cluster.local:5000
+    gcr.io=mirror-gcr-io.gag-registry-mirror.svc.cluster.local:5000
