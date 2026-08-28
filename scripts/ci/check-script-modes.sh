@@ -6,6 +6,7 @@
 # The rule is positional, because position is what the tree already encodes:
 #
 #   scripts/**/lib/*.sh   sourced by a caller, never run — must NOT be executable
+#   scripts/**/*-test.sh  a suite `make scripts-test` runs by path — executable
 #   every other .sh       run as a command — must be executable
 #
 # Nothing held the tree to that, and six entrypoints had drifted to 644 by the
@@ -19,6 +20,13 @@
 # `*/lib/*` on the same reasoning, that a sourced file runs under the caller's
 # shell rather than its own. This gate reuses that split rather than inventing a
 # second way to say which files are entrypoints.
+#
+# A `*-test.sh` is the one place position alone gets it wrong, and it outranks
+# the lib/ marker. The repo convention is that a suite sits beside its subject
+# (scripts/README.md), so a library gets its tests in the same directory — and
+# `SCRIPTS_TESTS` runs every suite by path, so that file must be executable
+# however it is filed. Position still decides the library beside it; what
+# changes is that the suffix is read first.
 #
 # Both directions are checked. A one-way rule would let a library drift to 755
 # and read as an entrypoint, and the reverse direction costs nothing here: all
@@ -50,8 +58,10 @@ cd "$(git rev-parse --show-toplevel)"
 
 # wants_executable PATH — 0 when PATH should carry the executable bit.
 # A `lib/` path component is the source-only marker; anything else is a command.
+# A `*-test.sh` is checked first, because `make scripts-test` runs one by path
+# wherever it is filed, a library's own suite included.
 wants_executable() {
-	[[ "$1" != */lib/* ]]
+	[[ "$1" == *-test.sh || "$1" != */lib/* ]]
 }
 
 # indexed_mode PATH — the file's mode in the git index, empty when untracked.
