@@ -566,8 +566,127 @@ item "$S" Q4 a0 ready
 item "$S" Q7 a1 deferred
 expect_eq "Q4 Q9 " "$(ids "$S")" "render: rank order, deferred hidden"
 expect_eq "Q4 Q7 Q9 " "$(ids "$S" --all)" "render: --all includes deferred"
-expect_eq "Q4: Title for Q4" "$(python3 "$Q" --store "$S" next --title)" \
+expect_eq "Q4: Title for Q4" "$(python3 "$Q" --store "$S" next --title --no-pr-check)" \
     "next: picks the top ready item"
+
+# --- next: the open-PR check (Q990) ---------------------------------------
+#
+# A stub gh rather than the real one: the check reaches the network by design,
+# and this suite runs in a gate that has none. FAKE_GH_CLAIMED is the set of
+# ids an open PR names; FAKE_GH_FAIL makes the call fail the way an offline or
+# unauthenticated gh does; FAKE_GH_FLOOD pads the list past the read limit.
+#
+# Each claimed id gets a PR that names it in the *body* only. That is the shape
+# the check has to catch and the one a title match would miss, so a stub that
+# put the id in the title would pass a matcher that only ever read titles.
+GHBIN="$TMP/ghbin"
+mkdir -p "$GHBIN"
+cat > "$GHBIN/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit
+if [[ -n "${FAKE_GH_FAIL:-}" ]]; then
+    printf 'gh: %s\n' "$FAKE_GH_FAIL" >&2
+    exit 1
+fi
+if [[ -n "${FAKE_GH_SLEEP:-}" ]]; then sleep "$FAKE_GH_SLEEP"; fi
+n=0
+printf '['
+sep=""
+for qid in ${FAKE_GH_CLAIMED:-}; do
+    n=$(( n + 1 ))
+    printf '%s{"number":%d,"title":"feat: something","url":"https://x.invalid/%d",' \
+        "$sep" "$n" "$n"
+    printf '"body":"Closes %s in passing."}' "$qid"
+    sep=","
+done
+for (( i = n + 1; i <= ${FAKE_GH_FLOOD:-0}; i++ )); do
+    printf '%s{"number":%d,"title":"chore: pad","url":"https://x.invalid/%d","body":""}' \
+        "$sep" "$i" "$i"
+    sep=","
+done
+printf ']\n'
+STUB
+chmod +x "$GHBIN/gh"
+
+# QUEUE_GH_TIMEOUT so the stubbed cases do not ride on host scheduling: the
+# product default is 20s, and a loaded box starves even a local stub past it.
+# Seen at load 64 on 18 cores, where three assertions went red on a timeout.
+withgh() {  # withgh <claimed-ids> <cmd...>
+    local claimed="$1"
+    shift
+    env PATH="$GHBIN:$PATH" QUEUE_GH_TIMEOUT=600 FAKE_GH_CLAIMED="$claimed" "$@"
+}
+
+expect_rc 0 "next: an unclaimed top item is handed out" \
+    withgh "" python3 "$Q" --store "$S" next
+expect_in "^Q4:" "$TMP/out" "next: ... and it is the top one"
+expect_in "no open PR named it" "$TMP/out" \
+    "next: the prompt says the check ran, rather than telling the session to"
+
+expect_rc 0 "next: a claimed top item is skipped" \
+    withgh "Q4" python3 "$Q" --store "$S" next
+expect_in "^Q9:" "$TMP/out" "next: ... and the next ready item is handed out"
+expect_in "skipping Q4: #1 is open" "$TMP/err" \
+    "next: ... loudly, naming the PR so a false hit can be judged"
+
+# --title is a second process in the invocation the docs teach, so it must see
+# the same skip: a title that checked nothing would name the session after one
+# item while the prompt handed out another.
+expect_eq "Q9: Title for Q9" \
+    "$(withgh "Q4" python3 "$Q" --store "$S" next --title 2>/dev/null)" \
+    "next: --title runs the check too"
+
+expect_rc 0 "next: --allow takes an id an open PR only cites" \
+    withgh "Q4" python3 "$Q" --store "$S" next --allow Q4
+expect_in "^Q4:" "$TMP/out" "next: ... the overridden id, not the one below it"
+expect_in "check for an open PR first" "$TMP/out" \
+    "next: ... and the prompt claims no clean check, because there was none"
+
+expect_rc 1 "next: every ready item claimed is a failure, not a pick" \
+    withgh "Q4 Q9" python3 "$Q" --store "$S" next
+
+# The two constraints the row names. Neither may end with a pick on stdout: an
+# unverified pick reads exactly like a verified one once it is in the prompt.
+expect_rc 1 "next: a gh that cannot answer fails loud" \
+    env PATH="$GHBIN:$PATH" QUEUE_GH_TIMEOUT=600 \
+    FAKE_GH_FAIL="could not reach github.com" \
+    python3 "$Q" --store "$S" next
+expect_eq "" "$(cat "$TMP/out")" "next: ... and hands out nothing"
+expect_in "could not reach github.com" "$TMP/err" "next: ... quoting gh's reason"
+
+# A full page means the rest went unread, so "nothing claims this" is a read
+# that never happened — the silent pass the row forbids.
+expect_rc 1 "next: a truncated PR list fails rather than reporting nothing" \
+    env PATH="$GHBIN:$PATH" QUEUE_GH_TIMEOUT=600 FAKE_GH_FLOOD=200 \
+    python3 "$Q" --store "$S" next
+expect_in "went unread" "$TMP/err" "next: ... saying the read was incomplete"
+expect_eq "" "$(cat "$TMP/out")" "next: ... and handing out nothing"
+
+# The deadline knob is wired, and the message names the deadline that actually
+# applied — without this the cases above could be green because 600 was never
+# read, which is indistinguishable from a stub that simply answered in time.
+expect_rc 1 "next: a gh that outlives its deadline fails loud" \
+    env PATH="$GHBIN:$PATH" QUEUE_GH_TIMEOUT=1 FAKE_GH_SLEEP=5 \
+    python3 "$Q" --store "$S" next
+expect_in "within 1s" "$TMP/err" "next: ... naming the deadline that applied"
+
+NOGH="$TMP/nogh"
+mkdir -p "$NOGH"
+ln -sf "$(command -v python3)" "$NOGH/python3"
+if PATH="$NOGH" command -v gh >/dev/null 2>&1; then
+    bad "next: fixture wrong — gh is still on PATH, so the absent case is untested"
+else
+    expect_rc 1 "next: an absent gh fails loud" \
+        env PATH="$NOGH" python3 "$Q" --store "$S" next
+    expect_in "gh is not on PATH" "$TMP/err" "next: ... saying which tool is missing"
+fi
+
+expect_rc 0 "next: --no-pr-check takes the top item with no network" \
+    env PATH="$NOGH" python3 "$Q" --store "$S" next --no-pr-check
+expect_in "^Q4:" "$TMP/out" "next: ... the top one"
+expect_in "nothing asked whether Q4" "$TMP/err" \
+    "next: ... and says the check was skipped, so the pick is not read as clean"
 
 # Equal ranks break by id, so two sessions that never saw each other commute.
 S="$TMP/tie"

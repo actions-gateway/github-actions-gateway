@@ -25,6 +25,10 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   [Details below](#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position).
 - [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready item, for starting a fresh session on the next task.
   A thin forward to `queue.py next` since Q889; it reads `docs/queue/` and takes no file path.
+  **The pick is checked against open pull requests before it is printed** (Q990): `next` lists them and skips an item one already names, so the instruction to check no longer sits in three places with nothing performing it.
+  A hit is a candidate rather than a verdict, because an id is cited by neighbouring rows and by the retro that filed it, so the skip names the PR and `--allow QNNN` takes the item anyway once you have read it.
+  When `gh` cannot answer it fails rather than handing out an unverified pick; `--no-pr-check` is the deliberate offline escape, and it says on stderr that nothing was checked.
+  `lint` reaches no network, so the gates that run it are unaffected.
 - [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the backlog's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
   Read-only, and continuous across the storage move: it reads the retired table by path and the store after it, suppresses the two bulk commits at the seam, and marks where the storage changed so a span across it stays one span (Q889).
 

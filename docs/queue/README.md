@@ -9,6 +9,11 @@ Pick the top ready item, or read the whole backlog in priority order:
 python3 scripts/docs/queue.py next
 ```
 
+`next` skips an item an open pull request already names, and says which PR on stderr.
+A PR that merely cites the id has not claimed it, so read it and pass `--allow QNNN` to take the item anyway.
+With no network, `--no-pr-check` hands out the top item and says nothing checked it.
+
+
 ```bash
 python3 scripts/docs/queue.py render
 ```

@@ -8,9 +8,11 @@
 #   scripts/docs/next-task.sh [--title]   # just print
 #
 # Naming the session after the Q-ID keeps `claude --resume` history and
-# after-the-fact metrics readable. The session still re-verifies the pick
-# (open PRs, blockers); if the item turns out to be in flight, it takes the
-# next one (rename with /rename if that happens).
+# after-the-fact metrics readable. The pick itself is checked before it is
+# printed: `queue.py next` lists open pull requests and skips an item one
+# already names, loudly enough that a PR merely citing the id can be judged
+# and taken anyway with --allow (Q990). Blockers are still the session's to
+# verify, and so is a PR opened in the seconds since.
 #
 # The logic is `queue.py next`, which reads docs/queue/ rather than the table
 # this script used to parse with awk (Q889). The wrapper stays because the
