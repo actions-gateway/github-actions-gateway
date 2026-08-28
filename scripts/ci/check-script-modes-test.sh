@@ -127,6 +127,21 @@ untracked="$(repo untracked)"
 printf '#!/usr/bin/env bash\ntrue\n' >"$untracked/scripts/dogfood/new.sh"
 expect "an untracked non-executable script fails" 1 "$untracked" 'new.sh'
 
+# --- a non-ASCII path is checked, not silently skipped -----------------------
+#
+# git C-quotes such a path unless core.quotePath=false, and a quoted name
+# matches no file. Selected with a bare `git ls-files` the entry survives into
+# the total while being dropped by the reader, so the gate reports it as covered
+# and never checks its mode: a false green of exactly the class the
+# empty-selection case below guards, arriving one file at a time instead of all
+# at once. common.sh's git_candidates is what sets the flag.
+
+unicode="$(repo unicode)"
+printf '#!/usr/bin/env bash\ntrue\n' >"$unicode/scripts/dogfood/café.sh"
+chmod -x "$unicode/scripts/dogfood/café.sh"
+commit "$unicode"
+expect "a non-ASCII entrypoint is caught, not skipped" 1 "$unicode" 'café.sh'
+
 # --- an empty selection is a failure, not a pass -----------------------------
 #
 # The false green a reconciliation gate hides best: a selection that matches

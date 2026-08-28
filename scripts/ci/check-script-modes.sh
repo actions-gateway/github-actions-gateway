@@ -45,6 +45,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
 
+# git_candidates is cwd-sensitive by contract, and its pathspec is root-relative.
+cd "$(git rev-parse --show-toplevel)"
+
 # wants_executable PATH — 0 when PATH should carry the executable bit.
 # A `lib/` path component is the source-only marker; anything else is a command.
 wants_executable() {
@@ -72,9 +75,18 @@ is_executable() {
 
 # select_scripts — every present scripts/**/*.sh, tracked or
 # untracked-and-not-gitignored, one per line.
+#
+# Both halves come from common.sh rather than a local `git ls-files`, because
+# each drops a file this gate would otherwise miscount. git_candidates sets
+# core.quotePath=false, without which git C-quotes a non-ASCII path
+# (`"scripts/ci/caf\303\251.sh"`); that name matches no file, so the entry is
+# dropped by the reader while still counting toward the total this gate reports
+# — the exact false green the empty-selection guard below exists to prevent,
+# one file at a time. select_present_files then drops deleted-but-tracked paths
+# and the duplicate stages `--cached` emits for an unmerged path, which would
+# otherwise mode-check the same file three times.
 select_scripts() {
-	git ls-files --cached --others --exclude-standard -- 'scripts/*.sh' |
-		sort -u
+	git_candidates 'scripts/*.sh' | select_present_files
 }
 
 main() {
@@ -92,7 +104,6 @@ main() {
 
 	local path findings=0
 	for path in "${scripts[@]}"; do
-		[[ -f "$path" ]] || continue
 		if wants_executable "$path"; then
 			if ! is_executable "$path"; then
 				echo "check-script-modes: $path is run as a command but is not executable" >&2
