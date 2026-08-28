@@ -1613,6 +1613,21 @@ The hang was that new call re-asking an unroutable fake for its whole retry wind
 
 Two corollaries, with the repo's numbers: **time the package alone before believing "under load"**, where 240 s under the gate and 1.6 s standalone is the load story and 240 s both ways is not; and **a pre-existing test can hang on new code**, so what matters is whether its fixture reaches the new path, not that the test predates the change.
 
+### A test that can reach a timeout path controls the deadline
+
+A test asserting on what happens when a subprocess is too slow inherits the product's own deadline unless something overrides it, and a deadline sized for a network call is a wall-clock budget the host can spend on its own.
+This box is routinely oversubscribed: 18 cores at load 64 with sibling sessions building, and at that ratio a local stub answering in under a second is descheduled past a 20 s timeout.
+Measured 2026-08-27 closing Q990: three `queue-test.sh` assertions went red on `gh did not answer within 20s`, from a stub whose 20 direct invocations each returned in 0 s.
+The suite was green on the run before and the run after, which is what a load-induced flake looks like from inside.
+
+The fix is not a longer product timeout, it is a deadline the test sets.
+`queue.py` reads `QUEUE_GH_TIMEOUT`, the stubbed cases pass 600, and the default stays 20 s where a slow link is the thing being survived.
+Prefer an override that earns its place in production over a test-only hook: the same knob lets a slow link wait rather than reach for `--no-pr-check`, which does not relax the check but turns it off.
+
+**The override needs a control, because a green run cannot show that it was read.** A suite passing 600 and a suite whose variable is ignored produce identical output whenever the host happens to be idle.
+So the case that pins the wiring sets the deadline to 1 s against a stub that sleeps 5 and requires the failure to name `within 1s`.
+Without it, every other case's green is evidence about the host's load rather than about the code.
+
 ### A `directive is unused` red is about the linter's silence, not the directive
 
 `nolintlint` runs with `allow-unused: false` (`.golangci.yml`), so a `//nolint:<linter>` directive that suppressed nothing fails the build.
