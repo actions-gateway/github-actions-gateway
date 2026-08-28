@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -42,10 +43,17 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// queued at GitHub and is redelivered to a sibling session with capacity —
 	// rather than claiming a job whose worker pod we cannot place, which would be
 	// cancelled when its unrenewed lock lapses (failure shape 1 in the Q59 plan).
-	// admitRelease frees the reserved worker slot; nil when the gate is disabled.
-	// The AdmitFunc's closure is idempotent, so the deferred release and any earlier
-	// explicit release (the deduped-loser path below) together free it exactly once.
-	var admitRelease func()
+	// admitRelease frees the reserved worker slot and settles the scale-up token;
+	// nil when the gate is disabled. The AdmitFunc's closure is idempotent, so the
+	// deferred release and any earlier explicit release (the deduped-loser path
+	// below) together free it exactly once.
+	//
+	// admitOutcome is what that closure is told. It starts at AdmitAborted and flips
+	// to AdmitProvisioned at the one point below that asks for a worker pod, so every
+	// earlier return refunds the scale-up token: a failed acquire, and above all a
+	// Q260 dedup loser (Q972, see scaleUpLimiter.refund for what that costs).
+	var admitRelease func(runnercore.AdmitOutcome)
+	admitOutcome := runnercore.AdmitAborted
 	if cfg.Admit != nil {
 		release, ok, reason := cfg.Admit(ctx)
 		if !ok {
@@ -64,7 +72,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		// pod terminal (JobHandler has returned by then); on any earlier return it
 		// fires immediately. Either way the gate's in-flight count tracks only live
 		// jobs. Released exactly once via the AdmitFunc's idempotent closure.
-		defer release()
+		defer func() { release(admitOutcome) }()
 	}
 
 	var (
@@ -188,7 +196,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 				// pod under a tight maxWorkers ceiling (Q248). Idempotent with the
 				// deferred release.
 				if admitRelease != nil {
-					admitRelease()
+					admitRelease(runnercore.AdmitAborted)
 				}
 				outcome := waitForWinnerConclusion(ctx, cfg, log, planID, claim.WinnerConcluded)
 				if cfg.Metrics != nil {
@@ -259,6 +267,10 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	if cfg.JobHandler != nil {
+		// The token this delivery took is now buying a worker pod, so it stays spent:
+		// refunding anything from here on would make the bucket a concurrency ceiling
+		// rather than a rate limit (Q972).
+		admitOutcome = runnercore.AdmitProvisioned
 		result, jobErr := cfg.JobHandler(jobCtx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
 		// Record the pod-phase proxy for the winner's deferred sibling fan-out; keep
 		// the succeeded default on an empty result (the pod never reached a terminal
