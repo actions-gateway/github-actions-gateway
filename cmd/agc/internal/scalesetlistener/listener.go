@@ -183,6 +183,22 @@ const defaultCapacityRetryInterval = 5 * time.Second
 // never pays for it at all.
 const defaultAssignmentCheckInterval = 60 * time.Second
 
+// defaultDemandRefreshInterval paces the statistics reading a scale set advertising no
+// capacity takes on the empty-poll path (Q960). A 202 carries no statistics, so a set
+// withholding capacity is delivered nothing to read a count from — which is the state
+// the demand gauge exists to explain, and the one it would otherwise report a stale
+// zero for.
+//
+// Only a set advertising zero capacity pays: one with a free slot is delivered a message
+// whenever GitHub has anything to assign, and every delivery carries the statistics.
+//
+// Five minutes is what §3.5's budget affords. The reading is a session refresh, so it
+// costs 12 requests/hour on top of the ~72 an idle session already spends long-polling,
+// against 15,000 per installation per hour. A minute would cost 60 — comparable to the
+// poll budget that §3.5 says already dominates everything else — to resolve a queue
+// backing up, which is a minutes-scale state that no alert samples faster than this.
+const defaultDemandRefreshInterval = 5 * time.Minute
+
 // Job is one assigned job the Listener hands to its ProvisionFunc. The listener has
 // already minted the JIT config; the provisioner stages it into the worker Secret and
 // creates a run.sh --jitconfig worker pod.
@@ -500,6 +516,11 @@ type Config struct {
 	// defaultAssignmentCheckInterval. Overridable in tests to drive the check
 	// deterministically.
 	AssignmentCheckInterval time.Duration
+	// DemandRefreshInterval is the wait between the statistics readings a set advertising
+	// no capacity takes so its demand gauge does not go stale (Q960). Non-positive selects
+	// defaultDemandRefreshInterval. Overridable in tests to drive the refresh
+	// deterministically.
+	DemandRefreshInterval time.Duration
 }
 
 // Listener owns one scale set's acquisition session and provisions workers for its
@@ -513,6 +534,7 @@ type Listener struct {
 	deferredBackoff    time.Duration
 	capacityInterval   time.Duration
 	assignmentInterval time.Duration
+	demandInterval     time.Duration
 
 	// Session-failure condition state (Q325), owned by Start and then the run
 	// goroutine — the goroutine-creation happens-before makes the handoff safe
@@ -538,6 +560,13 @@ type Listener struct {
 	// is zero whenever the last reading counted an assignment.
 	nextAssignmentCheck time.Time
 	lastZeroAssignedAt  time.Time
+
+	// lastStatsAt is when statistics last arrived, by whichever path carried them (Q960).
+	// Same run-goroutine ownership. It is what lets the demand refresh share a clock with
+	// every other reading rather than keeping one of its own: a set the assignment check
+	// is already refreshing, or one being delivered messages, has a fresh gauge, so the
+	// demand path sees it and adds no second call.
+	lastStatsAt time.Time
 
 	// identityWarnOnce bounds the "assignment carried no run identity" warning to one
 	// line per listener (Q417). Unlike the condition flags above it is touched from the
@@ -625,6 +654,7 @@ func New(cfg Config) (*Listener, error) {
 		deferredBackoff:    cfg.DeferredRetryBackoff,
 		capacityInterval:   cfg.CapacityRetryInterval,
 		assignmentInterval: cfg.AssignmentCheckInterval,
+		demandInterval:     cfg.DemandRefreshInterval,
 		provisioned:        make(map[string]bool),
 		completed:          make(map[string]bool),
 		abandoned:          make(map[string]bool),
@@ -653,6 +683,9 @@ func New(cfg Config) (*Listener, error) {
 	}
 	if l.assignmentInterval <= 0 {
 		l.assignmentInterval = defaultAssignmentCheckInterval
+	}
+	if l.demandInterval <= 0 {
+		l.demandInterval = defaultDemandRefreshInterval
 	}
 	return l, nil
 }
@@ -700,6 +733,10 @@ func (l *Listener) setLastStats(stats scaleset.RunnerScaleSetStatistic) {
 	l.mu.Lock()
 	l.lastStats = stats
 	l.mu.Unlock()
+	// Every reading lands here, which is what makes this the demand refresh's clock
+	// (Q960). Run-goroutine owned like the rest of the pacing state, so it is set
+	// outside mu: Start writes it before the loop goroutine exists.
+	l.lastStatsAt = time.Now()
 	l.metricsSetAvailable(stats.TotalAvailableJobs)
 }
 
@@ -1013,6 +1050,9 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 			// The queue is drained, so a guard no held message assigns has nothing left
 			// to answer (Q606).
 			l.sweepStaleGuards()
+			// A 202 carries no statistics, so a set advertising no capacity would hold
+			// the reading it opened with (Q960).
+			l.refreshDemand(ctx, ssID, sess, capacity)
 			// Pace the empty path: a server that did not actually hold the poll must not
 			// spin the loop (minPollInterval). A real long-poll already outlasts the floor.
 			if !l.paceEmptyPoll(ctx, time.Since(polledAt)) {
@@ -1024,6 +1064,41 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		// The completions this delivery concluded, deleted before the next long poll
 		// rather than after it (Q603).
 		l.flushDeletes(ctx, sess)
+	}
+}
+
+// refreshDemand takes a paced statistics reading for a scale set that is advertising no
+// capacity, so its demand gauge tracks GitHub's queue instead of holding whatever the
+// session opened with (Q960).
+//
+// Zero capacity is the whole blind spot. A set with a free slot is delivered a message
+// whenever GitHub has anything to assign and every delivery carries the statistics, so
+// its gauge cannot go stale in a way an operator could act on; a set withholding capacity
+// is delivered nothing, and that is exactly the state the gauge exists to explain.
+//
+// Paced off lastStatsAt rather than a deadline of its own, so a reading any other path
+// already took counts: a set the assignment check is refreshing every assignmentInterval
+// adds nothing here. Cost when it does call, and the reason the interval is what it is,
+// are on defaultDemandRefreshInterval.
+func (l *Listener) refreshDemand(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession, capacity int) {
+	if capacity > 0 {
+		return
+	}
+	if time.Since(l.lastStatsAt) < l.demandInterval {
+		return
+	}
+	// Advanced before the call, not after it: a backend that cannot answer must not be
+	// re-asked every poll.
+	l.lastStatsAt = time.Now()
+	if err := l.cfg.Client.RefreshSession(ctx, ssID, sess); err != nil {
+		// Nothing depends on the reading — the gauge keeps its last value, which is what
+		// it would have done anyway, and the poll loop refreshes its own token on a 401.
+		l.log.Debug("scaleset: session refresh for the demand reading failed",
+			"scaleSet", l.cfg.ScaleSetName, "err", err)
+		return
+	}
+	if sess.Statistics != nil {
+		l.setLastStats(*sess.Statistics)
 	}
 }
 

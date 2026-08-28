@@ -124,7 +124,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		AvailableJobs: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "actions_gateway_scaleset_jobs_available",
-			Help: "Jobs GitHub holds queued for the scale set and has not assigned to anyone, from the most recent statistics reading; an empty poll carries no statistics, so this holds its last reading rather than refreshing every poll.",
+			Help: "Jobs GitHub holds queued for the scale set and has not assigned to anyone, from the most recent statistics reading; an empty poll carries no statistics, so this holds its last reading rather than refreshing every poll, and a set advertising no capacity refreshes it every 5m.",
 		}, []string{"namespace", "runner_set"}),
 
 		JobsAbandonedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{

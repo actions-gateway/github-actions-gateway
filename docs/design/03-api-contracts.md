@@ -977,10 +977,18 @@ The AGC's per-session and per-job request mix produces a predictable steady-stat
 * One-shot calls (`POST /sessions` once per session create, `POST /acquirejob` once per job) are negligible against the hourly budget.
   `POST /acknowledge` is confirmed optional (Investigation A) and is not counted.
 
+**Per-withholding-set cost** (a scale set advertising `0` capacity, Q960):
+
+* `PATCH` session refresh, every 5 minutes while the set advertises no capacity, so ~12 requests/hour.
+  It exists because such a set is delivered nothing and a 202 carries no statistics, so `actions_gateway_scaleset_jobs_available` would otherwise hold the reading it took at session open.
+  Only a set advertising zero pays: one with a free slot reads the same statistics off the work GitHub delivers it.
+  The interval is paced off the last reading rather than a clock of its own, so a set the once-a-minute assignment check (Q553) is already refreshing adds nothing on top.
+
 **Steady-state ceiling.** A reasonable safe target is **≤ 250 concurrent sessions per installation**, leaving headroom for bursts:
 
 ```
   250 sessions × 72 message-polls/hr   = 18,000  -- already exceeds 15K alone
+  250 withholding × 12 refreshes/hr    =  3,000  -- only while every set advertises zero
 ```
 
 In practice the empty-message poll budget dominates everything else.
