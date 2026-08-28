@@ -3347,7 +3347,7 @@ The Kata overlay's allow-all <code>e2e-open-egress</code> is still in place, so 
 The probe did ride a worker's own policy pair, which is real coverage of <code>registry-mirror-worker-access</code> and <code>e2e-mirror-egress</code>, but the negatives that separate the two paths are Phase 4's.</p>
 <p><strong>Two findings about the session path, neither about the mirror.</strong> <code>e2e-start.sh</code> applies the tenant without waiting for GMC, so from the 0-node at-rest state its apply fails on <code>no endpoints available for service "webhook-service"</code> after it has already resized the pool.
 <a href="../../operations/release/">release.md</a> documents the remedy by ordering <code>start.sh</code> ahead of it; the failure is the documented ordering being skipped rather than a defect, and it costs a pool resize either way.
-Separately, <code>e2e-start.sh</code> and <code>e2e-stop.sh</code> are committed non-executable, so the bare invocation both this plan and <code>release.md</code> prescribe exits 126 before reading an env var: <a href="../../queue/Q1013/">Q1013</a>.</p>
+Separately, <code>e2e-start.sh</code> and <code>e2e-stop.sh</code> were committed non-executable, so the bare invocation both this plan and <code>release.md</code> prescribe exited 126 before reading an env var (Q1013, fixed with a gate against the whole class).</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
 Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
