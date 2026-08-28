@@ -249,7 +249,9 @@ type CapacityAdvertisement struct {
 // per long-poll, how many jobs GitHub may keep assigned to it. Both are the same
 // ladder, and a rung that is expressed in only one of them silently ships to only one
 // tier — which is exactly how the quota rung came to be classic-only until Q443. Any
-// rung added here must be added to Admit, and vice versa.
+// rung added here must be added to Admit, and vice versa; TestAdmissionRungParity_*
+// gates that pair off the AdmitReason* declarations rather than leaving it to this
+// comment (Q973).
 //
 // unboundedDefault is the value to advertise when the owner declares no ceiling at all;
 // the caller owns that policy (the scale-set reconciler passes the maxListeners-matched
