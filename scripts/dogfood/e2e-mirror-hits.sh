@@ -27,6 +27,20 @@
 # since a mirror answering 500 to everything is the §3.6 fsGroup shape and is
 # not a mirror that worked.
 #
+# THE OTHER WRITER OF THIS LOG IS THE PHASE 2 BATTERY, and it is the one that
+# would make this reading unfalsifiable. e2e-mirror-validate.sh fetches a real
+# manifest and attempts an upload against every instance from a curl pod, so a
+# session that runs it first — which the plan's own sequence does, and Phase 4
+# does again — leaves all five instances non-zero before the job starts.
+# Measured 2026-08-28: the battery alone puts 2 content requests and 1 served on
+# each instance, which is a PASS from an instrument that measured nothing.
+#
+# So a hit must also come from a client that is not that probe, and the test is
+# the user agent: real pulls carry docker's, helm's or buildkit's, and the probe
+# carries curl's. The exclusion is written to fail SAFE — an unrecognised client
+# UA under-counts and reports FAIL, which is investigated, while a probe whose
+# curl version bumps stays excluded because the pattern is the client name.
+#
 # This script only reads: no manifest is applied, no pod is created. Run it
 # after a Kata e2e run has finished, against the same tenant, before
 # `e2e-stop.sh` scales the mirrors to zero and their logs go with the pods.
@@ -67,10 +81,15 @@ MIRROR_INSTANCES=(
 # hit_repositories — read an access log on stdin, print each distinct repository
 # a content request named, sorted. `/v2/<name>/{manifests,blobs,tags}/…`, where
 # <name> may itself hold slashes, so the tail is stripped rather than the parts
-# counted.
+# counted. Excludes the Phase 2 battery's own probes on the same test as
+# count_hits, so the audit listing names what the JOB asked each upstream for.
 hit_repositories() {
 	awk '
 		match($0, /"[A-Z]+ \/v2\/[^ "]+/) {
+			ua = $0
+			sub(/"[^"]*$/, "", ua)
+			if (match(ua, /"[^"]*$/) && substr(ua, RSTART + 1) ~ /^curl\//) next
+			match($0, /"[A-Z]+ \/v2\/[^ "]+/)
 			uri = substr($0, RSTART, RLENGTH)
 			sub(/^"[A-Z]+ \/v2\//, "", uri)
 			if (uri !~ /\/(manifests|blobs|tags)\//) next
@@ -94,8 +113,17 @@ count_hits() {
 			req = substr($0, RSTART + 1, RLENGTH - 2)
 			split(req, parts, " ")
 			if (parts[2] !~ /^\/v2\/.+/) next
+			# Everything after the request field, captured NOW: the user-agent
+			# match below resets RSTART/RLENGTH, and reading the status off the
+			# stale pair silently reported every request unserved.
+			rest = substr($0, RSTART + RLENGTH)
+			# The user agent is the last quoted field of the CLF line. A curl
+			# there is e2e-mirror-validate.sh probing, not a pull (see header).
+			ua = $0
+			sub(/"[^"]*$/, "", ua)
+			if (match(ua, /"[^"]*$/) && substr(ua, RSTART + 1) ~ /^curl\//) next
 			content++
-			split(substr($0, RSTART + RLENGTH), after, " ")
+			split(rest, after, " ")
 			if (after[1] ~ /^[23][0-9][0-9]$/) served++
 		}
 		END { printf "%d %d\n", content + 0, served + 0 }' <<<"${log}")"

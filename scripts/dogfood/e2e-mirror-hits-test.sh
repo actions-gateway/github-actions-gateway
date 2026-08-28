@@ -23,6 +23,13 @@
 #   4. A mirror answering 500 to every pull is the §3.6 fsGroup shape. It is
 #      reached, so it accumulates content requests; none are served. Content
 #      alone would grade it green.
+#   5. The Phase 2 battery writes into the same log. e2e-mirror-validate.sh
+#      fetches a manifest and attempts an upload against every instance, so a
+#      session that runs it first — the plan's own sequence, and Phase 4's —
+#      leaves all five non-zero before the job starts. Measured 2026-08-28 on
+#      the dogfood cluster: the battery alone is 2 content and 1 served per
+#      instance, a PASS from an instrument that measured nothing. The probe is
+#      told apart by its user agent, and BOTH directions are asserted below.
 #
 # The script is sourced with E2E_MIRROR_HITS_LIB_ONLY=1 so main() does not run;
 # nothing here touches kubectl or a cluster.
@@ -65,6 +72,10 @@ check_contains() {
 # logrus lines and the Combined Log Format access lines — because the parser has
 # to pick the second out of the first, and a fixture holding only the shape it
 # wants would not test that.
+#
+# The curl lines are verbatim from that capture and are exactly what the Phase 2
+# battery writes; the docker line is the shape a real pull writes. Keeping both
+# in one fixture is what makes the probe exclusion testable at all.
 measured_log() {
 	cat <<'LOG'
 time="2026-08-28T15:22:58.1Z" level=info msg="using inmemory blob descriptor cache" environment=development go.version=go1.25.9 instance.id=01a048f7 service=registry version=3.1.1
@@ -76,10 +87,34 @@ time="2026-08-28T15:23:00.6Z" level=info msg="Challenge established with upstrea
 LOG
 }
 
+# What e2e-mirror-validate.sh alone leaves behind: its /v2/ check, its manifest
+# fetch and its upload attempt, all from the curl probe pod. This is the exact
+# state a Phase 4 session reaches before dispatching anything.
+battery_only_log() {
+	cat <<'LOG'
+10.4.2.9 - - [28/Aug/2026:16:41:00 +0000] "GET /v2/ HTTP/1.1" 200 2 "" "curl/8.10.1"
+10.4.2.9 - - [28/Aug/2026:16:41:01 +0000] "GET /v2/library/alpine/manifests/latest HTTP/1.1" 200 9218 "" "curl/8.10.1"
+10.4.2.9 - - [28/Aug/2026:16:41:01 +0000] "POST /v2/library/alpine/blobs/uploads/ HTTP/1.1" 405 78 "" "curl/8.10.1"
+LOG
+}
+
 # --- count_hits --------------------------------------------------------------
 
-check 'the measured log yields 3 content requests, 2 served, 1 repository' \
-	'3 2 1' "$(measured_log | count_hits)"
+# Only the docker-agent blob fetch counts: the manifest GET and the upload POST
+# beside it are the battery's curl, and the /v2/ root is the kubelet's.
+check 'the measured log yields 1 content request, 1 served, 1 repository' \
+	'1 1 1' "$(measured_log | count_hits)"
+
+# The hazard this instrument is most exposed to, and the one a booked session
+# pays for: the battery ran, the job did not, and the counts must still be zero.
+check 'a battery-only log counts nothing' '0 0 0' "$(battery_only_log | count_hits)"
+check 'and names no repository' '' "$(battery_only_log | hit_repositories)"
+
+rc=0
+out="$(printf 'mirror-docker-io %s\n' "$(battery_only_log | count_hits)" | grade_hit_counts)" || rc=$?
+check 'so an instance only the battery touched still grades 1' 1 "${rc}"
+check_contains 'and is reported as pulled through by nothing' \
+	'FAIL mirror-docker-io: 0 content requests' "${out}"
 
 check 'a log of nothing but /v2/ probes counts no content' \
 	'0 0 0' "$(count_hits <<'LOG'
@@ -94,6 +129,15 @@ check 'an instance answering 500 to every pull is content-but-unserved' \
 10.0.0.1 - - [28/Aug/2026:15:23:00 +0000] "GET /v2/ HTTP/1.1" 200 2 "" "kube-probe/1.35"
 10.0.0.1 - - [28/Aug/2026:15:23:01 +0000] "GET /v2/library/alpine/manifests/latest HTTP/1.1" 500 78 "" "docker/28.0.0"
 10.0.0.1 - - [28/Aug/2026:15:23:02 +0000] "GET /v2/library/alpine/manifests/3.20 HTTP/1.1" 500 78 "" "docker/28.0.0"
+LOG
+)"
+
+# The three client agents the measured run actually produced (§3.11), so the
+# exclusion cannot widen into the clients it is meant to keep.
+check 'docker, helm and buildkit agents all count' '3 3 3' "$(count_hits <<'LOG'
+10.0.0.1 - - [28/Aug/2026:15:23:01 +0000] "GET /v2/library/golang/manifests/1.26 HTTP/1.1" 200 1 "" "buildkit/v0.18.1"
+10.0.0.1 - - [28/Aug/2026:15:23:02 +0000] "GET /v2/actions-gateway/charts/actions-gateway/manifests/1.2.0 HTTP/1.1" 200 1 "" "Helm/3.16.3"
+10.0.0.1 - - [28/Aug/2026:15:23:03 +0000] "GET /v2/jetstack/cert-manager-controller/manifests/v1.20.2 HTTP/1.1" 200 1 "" "docker/28.0.0 go/go1.23.0"
 LOG
 )"
 
