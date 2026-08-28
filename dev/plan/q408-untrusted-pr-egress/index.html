@@ -2768,6 +2768,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#39-phase-3-build-notes-2026-08-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.9 Phase 3 build notes (2026-08-28)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#310-the-phase-3-validation-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.10 The Phase 3 validation reading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#311-phase-3-validation-graded-2026-08-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.11 Phase 3 validation: graded (2026-08-28)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2839,10 +2872,14 @@
 
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-08-28): Phase 2 is done.
-Its manifests are authored, wired into the e2e setup path, and now validated on the dogfood cluster: 25 of 25 checks passed over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>).</strong> Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
-The battery is a command rather than a prose checklist: <code>scripts/dogfood/e2e-mirror-validate.sh</code> (<a href="#37-the-phase-2-validation-battery">§3.7</a>), with every expected value measured and every control fired.
-Phase 3's wiring is unblocked, and books the next dogfood session.
+<p><strong>Status (2026-08-28): Phase 3 is done.</strong> Its wiring is built and gated, and validated on the dogfood cluster: a green Kata e2e run whose five mirror instances served 161 content requests between them, against a zero baseline measured on the same cluster twenty minutes earlier (<a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>).
+All four clients are wired (<a href="#39-phase-3-build-notes-2026-08-28">§3.9</a>): dockerd by a mounted <code>daemon.json</code>, the non-Hub docker pulls by a ref rewrite at the one chokepoint they share, buildkit by a generated <code>buildkitd.toml</code>, helm by its OCI ref.
+<code>make registry-mirror-wiring-check</code> holds the three files that name the endpoint set to each other.
+A green run says nothing on its own here: the open-egress policy is still in place, so an unwired client reaches its upstream and the suite is green either way.
+What discriminates is the access log, and the repositories it names attribute each of the four clients separately.
+Phase 4, the deletion of <code>e2e-open-egress</code>, is unblocked and books the next dogfood session.
+Phase 2 was validated 2026-08-28: 25 of 25 checks over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>), by <code>scripts/dogfood/e2e-mirror-validate.sh</code> (<a href="#37-the-phase-2-validation-battery">§3.7</a>), with every expected value measured and every control fired.
+Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
 Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>) and re-sequenced Phases 1–4.
 Phase 1's workflow change gates <code>azure/setup-helm</code> (<code>get.helm.sh</code>), every <code>actions/cache</code> step, and the bake's <code>GHA_CACHE</code> to the hosted lane, per the resolved <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions.
 <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a> grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a <strong>fifth</strong> registry upstream, <code>gcr.io</code>, that Phase 0's host extraction was structurally unable to see.</p>
@@ -3209,14 +3246,15 @@ Cosign signatures key on the manifest digest, not the pull location, so verifica
 <h3 id="32-wiring-the-clients">3.2 Wiring the clients<a class="headerlink" href="#32-wiring-the-clients" title="Permanent link">&para;</a></h3>
 <p>Five upstreams need a mirror instance, per the <a href="#22-the-inventory">§2.2</a> inventory as corrected by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>: <code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>.</p>
 <ul>
-<li><strong>Inner dockerd</strong> (Kata overlay dind sidecar <code>args</code>): add <code>--registry-mirror=http://mirror-docker-io.&lt;ns&gt;.svc.cluster.local:5000</code>.
-  This transparently covers every Docker-Hub pull, implicit or explicit.
+<li><strong>Inner dockerd</strong> (the Kata worker's dind sidecar): <code>registry-mirrors</code> in a <code>daemon.json</code>, not a flag, because dockerd reads <code>/etc/docker/daemon.json</code> unasked, so the wiring is a ConfigMap the overlay mounts and the shipped library entry (<code>deploy/templates/kata-dind</code>) stays untouched by a value that is one cluster's.
+  This transparently covers every Docker-Hub pull, implicit or explicit, digest-pinned ones included.
   <code>dockerd</code> mirrors <strong>only</strong> Docker Hub, and the measured job makes non-Hub docker-client pulls — <code>ghcr.io/actions-gateway/gmc</code>, and on a cold cache the <code>quay.io</code> and <code>registry.k8s.io</code> prepulls.
-  Those refs are rewritten to the mirror address (<code>mirror-ghcr-io:5000/owner/img</code>) at their call sites, which pull-through mode serves natively.</li>
-<li><strong>buildkit</strong> (the image bake): resolves <code>gcr.io/distroless/static:nonroot</code> for four of the six baked images, and takes neither dockerd's <code>--registry-mirror</code> nor a rewritten docker-client ref, because the ref is in <code>Dockerfile</code>.
-  The tight lane points it at <code>mirror-gcr-io</code> via a build arg or a buildkitd registry-mirror config, and this is the only client whose fetch no cache and no <code>kind load</code> can cover (<a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>).</li>
+  Those refs are rewritten to the mirror address (<code>mirror-ghcr-io:5000/owner/img</code>), which pull-through mode serves natively, at one call site rather than each, since <code>scripts/fetch/pull-image-with-retry.sh</code> is the chokepoint every <code>docker pull</code> in the job already goes through (<a href="#39-phase-3-build-notes-2026-08-28">§3.9</a>).</li>
+<li><strong>buildkit</strong> (the image bake): resolves <code>gcr.io/distroless/static:nonroot</code> for four of the six baked images, and takes neither dockerd's mirror config nor a rewritten docker-client ref, because the ref is in <code>Dockerfile</code>.
+  Resolved as a generated <code>buildkitd.toml</code> rather than a build arg: a build arg reaches only the base images somebody thought to parameterise, and the <code>Dockerfile</code> also names <code>golang</code> and <code>ghcr.io/actions/actions-runner</code>.
+  This is the only client whose fetch no cache and no <code>kind load</code> can cover (<a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>).</li>
 <li><strong>helm's OCI client</strong> (<code>chart-released-upgrade-check.sh</code>): <code>helm pull oci://ghcr.io/&lt;owner&gt;/charts/…</code> takes neither of the above.
-  The script already parameterises the ref (<code>RELEASED_CHART_OCI</code>), so the tight lane points it at <code>mirror-ghcr-io:5000/&lt;owner&gt;/charts</code> with <code>--plain-http</code>.</li>
+  The script already parameterises the ref (<code>RELEASED_CHART_OCI</code>), so it points at <code>mirror-ghcr-io:5000/&lt;owner&gt;/charts</code> with <code>--plain-http</code>, added only when a rewrite happened, so a direct GHCR pull is never downgraded off TLS.</li>
 <li><strong>Inner kind containerd</strong> (<code>test/kind-config-*.yaml</code>): nothing required.
   Measured: zero upstream pulls, because every image is <code>kind load</code>ed or served from the in-job <code>127.0.0.1:5000</code> registry.
   Mirror entries via <code>containerdConfigPatches</code> remain an option as a fallback for a preload that goes missing; they would need to be additive-with-fallback (containerd falls back to the upstream when the mirror is unreachable) since the same configs serve local <code>make e2e</code> outside the cluster.</li>
@@ -3348,6 +3386,111 @@ The probe did ride a worker's own policy pair, which is real coverage of <code>r
 <p><strong>Two findings about the session path, neither about the mirror.</strong> <code>e2e-start.sh</code> applies the tenant without waiting for GMC, so from the 0-node at-rest state its apply fails on <code>no endpoints available for service "webhook-service"</code> after it has already resized the pool.
 <a href="../../operations/release/">release.md</a> documents the remedy by ordering <code>start.sh</code> ahead of it; the failure is the documented ordering being skipped rather than a defect, and it costs a pool resize either way.
 Separately, <code>e2e-start.sh</code> and <code>e2e-stop.sh</code> were committed non-executable, so the bare invocation both this plan and <code>release.md</code> prescribe exited 126 before reading an env var (Q1013, fixed with a gate against the whole class).</p>
+<h3 id="39-phase-3-build-notes-2026-08-28">3.9 Phase 3 build notes (2026-08-28)<a class="headerlink" href="#39-phase-3-build-notes-2026-08-28" title="Permanent link">&para;</a></h3>
+<p>What the wiring landed as, and the readings behind each decision.
+All of it is off-cluster: the clients are configured and their configuration is gated, and <strong>nothing here says a pull rode a mirror</strong>.
+That is the booked session's, and <a href="#310-the-phase-3-validation-reading">§3.10</a> is the instrument for it.</p>
+<p><strong>The endpoint set lives in one ConfigMap, in the two forms the clients can read.</strong> <code>registry-mirror-wiring</code> in the tenant namespace (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml"><code>mirror-wiring.yaml</code></a>) carries <code>daemon.json</code> for the inner dockerd and a <code>&lt;upstream&gt;=&lt;mirror&gt;</code> map for everything else.
+Two forms because no two of the four clients read the same configuration, and one object because they are copies of one fact.</p>
+<p><strong>dockerd is wired by a mounted <code>daemon.json</code>, not by a flag.</strong> <a href="#32-wiring-the-clients">§3.2</a> said "dind sidecar <code>args</code>", and the sidecar's <code>args</code> are a 60-line entrypoint in the <em>shipped library entry</em> <code>deploy/templates/kata-dind</code>, which Q554 made the artifact an operator applies.
+A flag there would put one cluster's Service address in a shipped template; a JSON 6902 patch replacing that <code>args</code> string in the overlay would restate all 60 lines. dockerd reads <code>/etc/docker/daemon.json</code> without being told to, so the overlay mounts the ConfigMap key at that path and the template is untouched.
+<code>insecure-registries</code> lists all five endpoints alongside: transport is plain in-cluster HTTP, which dockerd refuses to an <code>http://</code> mirror otherwise.</p>
+<p><strong>The ref rewrite is at one chokepoint, not at each call site.</strong> <a href="#32-wiring-the-clients">§3.2</a> said "at their call sites", and the call sites turn out to be one: every <code>docker pull</code> the job makes already goes through <code>scripts/fetch/pull-image-with-retry.sh</code>: the buildkit builder image, the kind node image, curl, Vault, the three <code>prepull-manifest-images.sh</code> consumers (cert-manager, metrics-server, Calico), and the released GMC image in <code>chart-released-upgrade-check.sh</code>.
+So the rewrite is there, reading the map through the shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/registry-mirror.sh"><code>scripts/lib/registry-mirror.sh</code></a>.</p>
+<p>The property that makes it safe is that <strong>the daemon is left as a direct pull would have left it</strong>: pull from the mirror, <code>docker tag</code> back to the caller's ref, <code>docker rmi</code> the mirror's.
+Callers <code>docker save</code>, <code>kind load</code> and write <code>images.txt</code> under the ref they asked for, and kubelet resolves the manifests' own names, so a rewrite that stopped at the pull would pass and fail a <code>kind load</code> several steps later.</p>
+<p><strong>A digest-bearing ref is deliberately not rewritten.</strong> <code>docker pull name:tag@digest</code> stores the image under <code>name@digest</code>, and a digest is not a legal <code>docker tag</code> target, so the local reference could not be restored.
+Nothing is thereby off the mirror: every digest-pinned ref in the <a href="#22-the-inventory">§2.2</a> inventory belongs to a client carrying its own mirror config, Hub's to dockerd and buildkit's to <code>buildkitd.toml</code>, which redirects it without touching the name.</p>
+<p><strong>buildkit gets a generated <code>buildkitd.toml</code>, which is the open choice in <a href="#32-wiring-the-clients">§3.2</a> resolved against a build arg.</strong> A build arg reaches only the base images somebody parameterised, and <code>distroless/static</code> is four of the <code>Dockerfile</code>'s eight <code>FROM</code>s; <code>golang:1.26</code> and <code>docker:29-cli</code> are Hub's and <code>ghcr.io/actions/actions-runner</code> is GHCR's, none of which dockerd's mirror or a rewritten ref reaches, because buildkit resolves them itself.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/buildkitd-mirror-config.sh"><code>scripts/e2e/buildkitd-mirror-config.sh</code></a> renders one <code>[registry]</code> block per upstream from the same map and hands the path to <code>docker/setup-buildx-action</code>'s <code>buildkitd-config</code> input; with no map it prints nothing, and an empty value is falsy there, so no <code>--config</code> reaches <code>docker buildx create</code>.
+Each upstream's block is paired with an <code>http = true</code> block for the mirror itself, without which buildkit dials the mirror over TLS and <strong>falls back to the upstream</strong>, which is a green build that never rode the mirror and exactly the reading <a href="#310-the-phase-3-validation-reading">§3.10</a> has to be able to fail.
+That <code>http</code> goes on the mirror's own entry rather than the upstream's, which is where <code>buildkitd.toml.md</code>'s example puts it: the resolver builds each mirror host with <code>fillInsecureOpts(mirrorHost, m[mirrorHost], h)</code>, keyed on the mirror, and the documented placement would also downgrade the fallback path to plain HTTP, which is the opposite of the point.</p>
+<p>The same class of reading corrected the workflow input: <code>docker/setup-buildx-action</code> v4 declares <code>buildkitd-config</code>, not <code>config</code>, and an action silently ignores an input it does not declare, so the first form would have booted a builder with no mirror config and gone green. actionlint passes on both, since it does not validate a third-party action's inputs.</p>
+<p><strong>The map cannot be a workflow <code>env</code>, and that is what decides where it lives.</strong> <code>e2e-reusable.yml</code> serves the hosted lane too, and the <code>env</code> context holds only what a workflow declares, so a value supplied by the cluster cannot be read by <code>${{ env.… }}</code> in a <code>with:</code> block.
+It is set on the worker's runner container instead, from the same ConfigMap, and job steps inherit it the way they already inherit <code>DOCKER_HOST</code>.
+The consequence is the one worth having: no cluster-local Service address enters this repo's workflows, and every caller with no map set pulls direct, unchanged: the hosted lane, <code>publish.yml</code>, a developer's <code>make e2e</code>.</p>
+<p><strong>Three hand-kept copies of one endpoint set, so they are gated.</strong> The instances, their Services and the ConfigMap can each be edited without the others.
+An upstream added on one side only leaves its pulls going direct, and under this phase's own posture that is <strong>green</strong>: open egress is still in place, the run passes, the mirror is simply unused.
+<code>make registry-mirror-wiring-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-registry-mirror-wiring.py"><code>scripts/manifest/check-registry-mirror-wiring.py</code></a>) reconciles all three in both directions, reads each instance's upstream from its <code>REGISTRY_PROXY_REMOTEURL</code> rather than from its name, and refuses with rc 2 rather than reporting a consistent tree when an extraction comes back empty.</p>
+<h3 id="310-the-phase-3-validation-reading">3.10 The Phase 3 validation reading<a class="headerlink" href="#310-the-phase-3-validation-reading" title="Permanent link">&para;</a></h3>
+<p>The phase's success condition is a green Kata e2e run whose mirrors show hits, and the green run is the half that proves nothing.
+<code>e2e-open-egress</code> is still in place, so a client that ignored its wiring reaches its upstream and the suite passes identically.
+The reading that discriminates is the mirror's own access log, which no unmirrored pull can write into, and it is <code>scripts/dogfood/e2e-mirror-hits.sh</code> for the reason <a href="#37-the-phase-2-validation-battery">§3.7</a>'s battery is a command: the booked session is the scarce resource.</p>
+<p>Run it after the e2e run and <strong>before <code>e2e-stop.sh</code></strong>, which scales the mirrors to zero and takes their logs with the pods.</p>
+<p><strong>A hit is not a request.</strong> Distribution's access log is Combined Log Format, one line per request, and the kubelet's readiness and liveness probes both <code>GET /v2/</code>, every 10 and every 20 seconds, on every instance, whether or not anything ever pulled through it.
+So a hit is a request whose path is <em>deeper</em> than <code>/v2/</code>, and the verdict needs one that was also <strong>served</strong> (2xx/3xx), since an instance answering 500 to every pull is <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>'s unwritable-storage-root shape and is not a mirror that worked.</p>
+<p><strong>The other writer of that log is <a href="#37-the-phase-2-validation-battery">§3.7</a>'s battery, and it is the one that would make this reading unfalsifiable.</strong> The battery fetches a real manifest and attempts an upload against every instance, so a session that runs it first, which this plan's sequence does and Phase 4 does again, leaves all five non-zero before the job starts.
+Measured on the cluster (<a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>): the battery alone puts 2 content requests and 1 served on each instance, which is a PASS from an instrument that measured nothing.
+So a hit must also come from a client that is not that probe, and the discriminator is the user agent: real pulls carry docker's, helm's or buildkit's, the probe carries curl's.
+The exclusion is written to fail safe, since an unrecognised client agent under-counts and reports FAIL, which gets investigated, while a probe whose curl version bumps stays excluded because the pattern is the client name rather than the version.</p>
+<p>Both readings were measured rather than assumed: <code>registry:3.1.1</code> was run locally in proxy mode with the Deployment's own env on 2026-08-28 and probed, and the log lines it emitted are the test's fixture, verbatim.
+Without that the parser would be the failure this instrument is most exposed to: a query that never matches counts zero, and zero here is a FAIL, so a broken parser wastes the session rather than passing it.</p>
+<p>The expected set is the declared instance table, not the transcript, so an instance whose log cannot be read is a named failure rather than a battery that quietly shrank to four.
+Both properties, and the 500-answering control, are pinned by <code>scripts/dogfood/e2e-mirror-hits-test.sh</code> under <code>make check</code>, and the parser was confirmed by inverting it and requiring red.</p>
+<p><strong>What it still does not establish is enforcement</strong>, exactly as in Phase 2.
+A hit says the wiring rode the mirror; it says nothing about whether the upstream was also reachable.
+The negatives that separate the two paths are Phase 4's.</p>
+<h3 id="311-phase-3-validation-graded-2026-08-28">3.11 Phase 3 validation: graded (2026-08-28)<a class="headerlink" href="#311-phase-3-validation-graded-2026-08-28" title="Permanent link">&para;</a></h3>
+<p>Run against <code>gag-dogfood</code> (<code>us-east1-b</code>, <code>actions-gateway-dogfood</code>), Kata overlay, ephemeral mirror caches.
+Sequence: <code>start.sh</code>, <code>e2e-start.sh</code>, the <a href="#37-the-phase-2-validation-battery">§3.7</a> battery, a mirror restart (below), <code>scripts/dogfood/e2e-mirror-hits.sh</code> for a baseline, one dispatched run of <code>e2e-test.yml</code> against this phase's branch with <code>runner='"gag-ci-e2e"'</code>, then the same hits reading again.</p>
+<p><strong>The e2e run is green</strong>: <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33190837137">33190837137</a>, 75 of 75 specs, 62 passed, 0 failed, 13 skipped, 8m19s in the suite.
+It is the cold run Phase 3 asks for without anything being arranged: Phase 1's gating skipped <code>azure/setup-helm</code> and every <code>actions/cache</code> step on this lane, which the job's step list records.</p>
+<p><strong>All five instances served, and the verdict is a change from a measured zero.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Instance</th>
+<th>Content requests</th>
+<th>Served</th>
+<th>Repositories</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mirror-docker-io</code></td>
+<td>58</td>
+<td>58</td>
+<td><code>kindest/node</code>, <code>library/registry</code>, <code>curlimages/curl</code>, <code>hashicorp/vault</code>, <code>moby/buildkit</code>, <code>library/golang</code>, <code>docker/dockerfile</code></td>
+</tr>
+<tr>
+<td><code>mirror-ghcr-io</code></td>
+<td>36</td>
+<td>36</td>
+<td><code>actions-gateway/charts/actions-gateway</code>, <code>actions-gateway/gmc</code>, <code>actions/actions-runner</code></td>
+</tr>
+<tr>
+<td><code>mirror-quay-io</code></td>
+<td>33</td>
+<td>33</td>
+<td>the three <code>jetstack/cert-manager-*</code></td>
+</tr>
+<tr>
+<td><code>mirror-registry-k8s-io</code></td>
+<td>17</td>
+<td>17</td>
+<td><code>metrics-server/metrics-server</code></td>
+</tr>
+<tr>
+<td><code>mirror-gcr-io</code></td>
+<td>17</td>
+<td>17</td>
+<td><code>distroless/static</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The repositories are what make each client separately proven</strong>, rather than the totals.
+<code>actions-gateway/charts/actions-gateway</code> is the OCI chart and can only be helm's; <code>distroless/static</code> can only be buildkit's; the three cert-manager repositories and <code>metrics-server</code> can only be the rewritten prepull refs; <code>kindest/node</code> and <code>library/registry</code> can only be dockerd's own mirror, since the first is digest-pinned and the rewrite deliberately leaves those alone.
+So the table is four independent readings rather than one.</p>
+<p><strong>Two of buildkit's three rows were not predicted by <a href="#32-wiring-the-clients">§3.2</a>, and they are the argument for the config file.</strong> <code>library/golang</code>, <code>docker/dockerfile</code> and <code>actions/actions-runner</code> are the builder's Go base, its frontend, and the worker stage's base.
+A build arg parameterising <code>distroless/static</code> alone would have left all three going direct, and Phase 4 would then have failed on them.</p>
+<p><strong>The baseline is the control.</strong> The same script was run twenty minutes earlier, after the mirrors were restarted and before the run was dispatched, and reported all five instances <code>FAIL</code> at 0 content requests.
+So the instrument is measured able to report the opposite on this cluster rather than argued to be.</p>
+<p><strong>A finding about the two instruments, not about the wiring.</strong> The <a href="#37-the-phase-2-validation-battery">§3.7</a> battery fetches a real manifest and attempts an upload per instance, and both land in the access log the hit counts read, so running it first leaves every instance non-zero before the job starts.
+Left alone that makes the Phase 3 reading unfalsifiable.
+This session cleared it with a <code>kubectl rollout restart</code> of the mirror Deployments between the battery and the dispatch, which costs a cold cache and nothing else, and the baseline below was taken after that restart.
+Phase 4 re-runs both instruments in the same session, so the hazard is real again there and does not belong in an operator's memory: the script now discounts the probe by its user agent (<a href="#310-the-phase-3-validation-reading">§3.10</a>), and deleting that exclusion turns a battery-only log back into 2 content and 1 served, which its suite requires.</p>
+<p><strong>What this does not establish is enforcement.</strong> <code>e2e-open-egress</code> was in place throughout, so the mirrors being used does not mean the upstreams were unreachable.
+The negatives that separate the two paths are Phase 4's.</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
 Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
@@ -3364,9 +3507,11 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   Validation: <code>scripts/dogfood/e2e-mirror-validate.sh</code> against the dogfood cluster once <code>e2e-start.sh</code> has applied the manifests: five checks per instance (<a href="#37-the-phase-2-validation-battery">§3.7</a>), read-only, and it applies no manifest of its own.
   Graded 2026-08-28 at 25 of 25 over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>), which discharges the <strong>precondition</strong> <a href="../release-1.7/">release-1.7.md</a> sets on Phase 3's run: "manifests must serve before wiring can be proven to ride them".
   It booked a dogfood session of its own, per this section's header.</li>
-<li><strong>Phase 3 — wiring.</strong> dockerd <code>--registry-mirror</code> in the Kata overlay; non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr mirror.
-  Validation: a green Kata e2e run <strong>with open egress still present</strong>, with the mirror access logs proving the pulls rode the mirror (hit counts &gt; 0 per instance) — wiring proven before enforcement changes.
-  Run it once with the image caches cold, so the <code>quay.io</code> / <code>registry.k8s.io</code> prepulls are exercised rather than skipped.</li>
+<li><strong>Phase 3 — wiring. ✅ Done (built and validated 2026-08-28).</strong> dockerd via a mounted <code>daemon.json</code> in the Kata overlay; non-Hub docker-client refs rewritten at the one chokepoint they all share; buildkit given a generated <code>buildkitd.toml</code>; helm's OCI ref pointed at the ghcr mirror.
+  What each resolved to, and why, is <a href="#39-phase-3-build-notes-2026-08-28">§3.9</a>.
+  Validation: a green Kata e2e run <strong>with open egress still present</strong>, then <code>scripts/dogfood/e2e-mirror-hits.sh</code> reporting a served content request per instance (<a href="#310-the-phase-3-validation-reading">§3.10</a>), so the wiring is proven before enforcement changes.
+  Graded 2026-08-28 at five of five instances over 161 served content requests, against a zero baseline measured on the same cluster (<a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>).
+  The run was cold without arranging it: the self-hosted lane has had no <code>actions/cache</code> step since Phase 1.</li>
 <li><strong>Phase 4 — enforcement.</strong> Delete <code>e2e-open-egress</code> from the Kata overlay.
   A deletion rather than a swap: Phase 2 shipped <code>e2e-mirror-egress</code>, where it is a no-op under the allow-all policy (<a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>, decision 3).
   The overlay's own comment on that policy names Phase 3 as the replacing phase, which is wrong and needs no separate fix: that file holds this one object, so the deletion takes the comment with it.

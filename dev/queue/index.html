@@ -4108,6 +4108,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td><code>docs/releases/v1.6.0.md</code> opens its "Everything since" section with a commit count that no tool derives.</td>
 </tr>
+<tr>
+<td><a href="Q1014/">Q1014</a></td>
+<td>errexit-prologue gate exempts an executable suite under lib/</td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>scripts/ci/check-errexit-prologue.sh</code> requires <code>set -euo pipefail</code> plus <code>shopt -s inherit_errexit</code> in every executable script under …</td>
+</tr>
 </tbody>
 </table>
 

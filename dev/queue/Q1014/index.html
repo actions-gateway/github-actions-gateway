@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q408/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1014/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Untrusted-PR egress posture for Kata workers - GitHub Actions Gateway</title>
+        <title>errexit-prologue gate exempts an executable suite under lib/ - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#untrusted-pr-egress-posture-for-kata-workers" class="md-skip">
+        <a href="#errexit-prologue-gate-exempts-an-executable-suite-under-lib" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Untrusted-PR egress posture for Kata workers
+              errexit-prologue gate exempts an executable suite under lib/
             
           </span>
         </div>
@@ -2597,15 +2597,14 @@
   
 
 
-<h1 id="untrusted-pr-egress-posture-for-kata-workers">Untrusted-PR egress posture for Kata workers<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers" title="Permanent link">&para;</a></h1>
-<p>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that fires on both.
-Phase 2 is done as of 2026-08-28: the mirror manifests, over five upstreams rather than four once the grading added <code>gcr.io</code>, are validated on the dogfood cluster at 25 of 25 checks by <code>scripts/dogfood/e2e-mirror-validate.sh</code>.
-Every instance serves a real upstream manifest, refuses uploads with 405, and exposes no debug listener, so the mirrors are measured serving rather than merely applied.
-Phase 3 is done as of 2026-08-28: dockerd via a mounted <code>daemon.json</code>, the non-Hub docker refs rewritten at the one chokepoint every <code>docker pull</code> shares, buildkit given a generated <code>buildkitd.toml</code>, and helm's OCI ref pointed at the ghcr mirror.
-Validated on the dogfood cluster by a green Kata run (75 of 75 specs) whose five instances served 161 content requests, against a zero baseline measured on the same cluster twenty minutes earlier, so the reading is a change rather than a number.
-The repositories attribute each client separately: the OCI chart can only be helm's, <code>distroless/static</code> only buildkit's, cert-manager and metrics-server only the rewritten refs, <code>kindest/node</code> only dockerd's own mirror.
-Next is Phase 4, which books a dogfood session: delete <code>e2e-open-egress</code> from the Kata overlay, then prove enforcement with the negatives that separate the mirror path from the open one.
-<strong>Unblocks <a href="../Q539/">Q539</a>.</strong></p>
+<h1 id="errexit-prologue-gate-exempts-an-executable-suite-under-lib">errexit-prologue gate exempts an executable suite under lib/<a class="headerlink" href="#errexit-prologue-gate-exempts-an-executable-suite-under-lib" title="Permanent link">&para;</a></h1>
+<p><code>scripts/ci/check-errexit-prologue.sh</code> requires <code>set -euo pipefail</code> plus <code>shopt -s inherit_errexit</code> in every executable script under <code>scripts/</code>, and exempts <code>*/lib/*</code> on the reasoning that a sourced file runs under its caller's shell options.
+That marker is positional, and a <code>*-test.sh</code> is the case it gets wrong: the repo convention puts a suite beside its subject, so a library's own suite lives in <code>lib/</code> and <code>SCRIPTS_TESTS</code> runs it by path, with its own shell and its own need for the prologue.</p>
+<p>Measured 2026-08-28: <code>scripts/lib/registry-mirror-test.sh</code> is the first such file, and it is exempt from this gate while being an entry point.
+No defect today, because it carries the prologue; what is missing is the gate's ability to notice if it stops.</p>
+<p><code>check-script-modes.sh</code> had the identical gap and was corrected in the same PR by reading the <code>-test.sh</code> suffix ahead of the <code>lib/</code> marker, with both directions and a no-widening case asserted in <code>check-script-modes-test.sh</code>.
+The fix here is that same one-line reordering in <code>is_exempt</code>, plus the matching assertions.</p>
+<p>Not urgent: one file, and the prologue it would check is present.</p>
 
 
 
