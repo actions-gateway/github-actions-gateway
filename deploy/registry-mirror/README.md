@@ -106,7 +106,9 @@ Adopting the wiring elsewhere means the ConfigMap and the two patches in [the Ka
 The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, five per instance, by [`scripts/dogfood/e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh): Available, `/v2/`, a real upstream manifest, an upload refused with 405, and the bundled image's `:5001` debug listener unbound.
 
 The wiring above **rides them** when [`scripts/dogfood/e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reports a served content request per instance after a Kata e2e run.
-That reading is needed because the tenant still carries the allow-all `e2e-open-egress` policy: a client that ignored its wiring reaches its upstream and the run is green either way, and the access log is the one place an unmirrored pull cannot appear.
+That reading was needed because the tenant still carried an allow-all `e2e-open-egress` policy while the wiring was being proven: a client that ignored its wiring reached its upstream and the run was green either way, and the access log is the one place an unmirrored pull cannot appear.
 
-Nothing here is **enforced** yet.
-Deleting `e2e-open-egress` is the last step of Q408, and only then does reaching the mirror distinguish itself from reaching the upstream.
+The posture is **built but not yet graded on a cluster**.
+The Kata overlay no longer carries that policy, so a worker's registry path there should be these instances or nothing, and [`scripts/e2e/egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) is what will say whether it is: it runs inside the job on every run of the lane and requires three destinations not to answer (a mirrored upstream reached by its own hostname, the plain internet, and the metadata server), each paired with a control that must.
+No dogfood session has run it yet, so "should" is the honest word until one does.
+The dind overlay keeps its open-egress policy: it is the explicit trusted-CI fallback, and privileged DinD was never a candidate for untrusted code.

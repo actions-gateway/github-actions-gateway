@@ -3,11 +3,13 @@
 # Unit tests for scripts/dogfood/e2e-mirror-hits.sh: the Q408 Phase 3 reading
 # that says whether the job's pulls actually rode the mirror.
 #
-# Why it is tested. Phase 3 runs with the Kata overlay's allow-all
-# `e2e-open-egress` still in place, so the e2e suite is green whether the wiring
-# worked or not — this counter is the ONLY thing that separates the two, on a
-# booked dogfood session that costs a pool resize to repeat. Every way it could
-# lie is silent:
+# Why it is tested. Phase 3 ran with an allow-all `e2e-open-egress` still on the
+# Kata overlay, so the e2e suite was green whether the wiring worked or not and
+# this counter was the only thing that separated the two. Phase 4 deleted that
+# policy, which makes an unwired client fail the run rather than pass it quietly
+# — but the counter is still what attributes a pull to a client and names the
+# repositories the plan's §3.4 audit point reads, on a booked dogfood session
+# that costs a pool resize to repeat. Every way it could lie is silent:
 #
 #   1. A query that never matches counts zero. Here zero is a FAIL, so a broken
 #      parser wastes the session rather than passing it — which is the safe

@@ -4,13 +4,14 @@
 # the mirror instances, their Services and the tenant's wiring ConfigMap to one
 # endpoint set (Q408 Phase 3).
 #
-# Why every drift class is asserted rather than just the happy path. Under the
-# Phase 3 posture the Kata overlay's allow-all `e2e-open-egress` is still in
-# place, so a mirror the job never reaches changes nothing an e2e run can see:
-# the suite is green, the pulls simply go direct. This gate is the only thing
-# between that drift and a booked dogfood session, so a gate that stopped firing
-# would be indistinguishable from a tree that is in step — which is exactly the
-# state the real tree is in, and why "it passes" proves nothing on its own.
+# Why every drift class is asserted rather than just the happy path. An endpoint
+# named in one file and not the others leaves a client pointed at a mirror that
+# does not exist, and on the Kata lane, where the tenant has no egress but the
+# mirrors (Q408 Phase 4), that is a booked dogfood session spent watching the
+# suite die at pull time. This gate is the only thing between the drift and the
+# session, so a gate that stopped firing would be indistinguishable from a tree
+# that is in step — which is exactly the state the real tree is in, and why "it
+# passes" proves nothing on its own.
 #
 # Each case mutates a copy of the real files rather than a hand-written fixture:
 # a fixture asserts the shape its author had in mind, and the shape that matters

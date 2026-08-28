@@ -81,9 +81,10 @@ E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
 # Idempotent server-side apply. The Kata overlay wires dockerd, the docker-client
 # refs, buildkit and helm to these instances (Q408 Phase 3,
 # deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml), and the dind overlay does
-# not, so both variants are safe to bring up either way: the mirror's additive
-# policy is a no-op while the Kata overlay's allow-all e2e-open-egress is still
-# in place, and an unwired client simply reaches its upstream.
+# not, so both variants are safe to bring up either way: on the dind overlay,
+# whose allow-all e2e-open-egress remains, the mirror's additive policy is a
+# no-op and an unwired client simply reaches its upstream. On the Kata overlay it
+# is the whole of a worker's registry reach (Q408 Phase 4).
 apply_registry_mirror() {
 	# Ephemeral caches by default (emptyDir — $0 at rest, cold on the first pull
 	# of each e2e window). Set REGISTRY_MIRROR_PERSISTENT=1 to render the

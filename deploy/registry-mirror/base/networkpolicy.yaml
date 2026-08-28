@@ -19,9 +19,11 @@
 # `metadata.namespace`, and below as the mirror-side policy's
 # `kubernetes.io/metadata.name` peer. See ../README.md before retargeting.
 #
-# Applying this while the Kata overlay's allow-all `e2e-open-egress` is still in
-# place is a no-op — union with allow-all. That is deliberate: it makes Q408
-# Phase 4 a pure deletion of `e2e-open-egress` rather than a swap.
+# On the Kata overlay this rule is the whole of a worker's registry reach: that
+# overlay ships no additive egress policy, so the managed default-deny plus this
+# is the complete set (Q408). On ../../dogfood-e2e/overlays/dind it is a no-op —
+# union with that overlay's allow-all `e2e-open-egress`, which the trusted-CI
+# fallback keeps.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

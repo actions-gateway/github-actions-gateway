@@ -42,12 +42,14 @@
 # injects, and whether that is admitted is a venue question no run here can
 # settle. An object read has no venue.
 #
-# It does NOT prove enforcement. The probe pod runs in the tenant namespace
-# carrying the workload label, so it rides the same NetworkPolicy pair a worker
-# does — which exercises the mirror-side `registry-mirror-worker-access` ingress
-# rule for real — but the Kata overlay's allow-all `e2e-open-egress` is still in
-# place until Q408 Phase 4, so reachability here does not distinguish the mirror
-# path from the open one. Enforcement is Phase 4's negatives.
+# It does NOT prove enforcement, and not because the probe pod is the wrong
+# vehicle: it runs in the tenant namespace carrying the workload label, so it
+# rides the same NetworkPolicy pair a worker does and exercises the mirror-side
+# `registry-mirror-worker-access` ingress rule for real. What it cannot show is a
+# path that is NOT here — every check above is a reachability check, and the
+# posture is a claim about what is unreachable. That half is
+# scripts/e2e/egress-negatives.sh, which runs inside the job because the claim is
+# about a Kata worker and this pod is not one (Q408 Phase 4).
 #
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)

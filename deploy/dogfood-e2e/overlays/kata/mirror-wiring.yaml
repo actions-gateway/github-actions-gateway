@@ -23,10 +23,13 @@
 # — a drift here costs a booked dogfood session to discover, which is why it is
 # gated rather than commented.
 #
-# NOTHING HERE ENFORCES ANYTHING. `e2e-open-egress` is still in place until
-# Phase 4, so a client that ignores its wiring reaches the upstream and the run
-# is still green. What proves the wiring rode the mirror is the mirror's own
-# access log: scripts/dogfood/e2e-mirror-hits.sh.
+# NOTHING HERE ENFORCES ANYTHING — this says where a client should go, and the
+# tenant's policy set is what leaves it nowhere else (kustomization.yaml ships no
+# additive egress policy, which is the Q408 deliverable). Two readings, because
+# they answer different questions: scripts/dogfood/e2e-mirror-hits.sh reads the
+# mirror's access log, which attributes a pull to the client that made it, and
+# scripts/e2e/egress-negatives.sh probes from inside the job for the paths that
+# must not exist.
 apiVersion: v1
 kind: ConfigMap
 metadata:
