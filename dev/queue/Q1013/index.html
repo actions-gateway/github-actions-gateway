@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q408/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1013/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Untrusted-PR egress posture for Kata workers - GitHub Actions Gateway</title>
+        <title>Six dogfood entrypoints are committed non-executable - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#untrusted-pr-egress-posture-for-kata-workers" class="md-skip">
+        <a href="#six-dogfood-entrypoints-are-committed-non-executable" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Untrusted-PR egress posture for Kata workers
+              Six dogfood entrypoints are committed non-executable
             
           </span>
         </div>
@@ -2597,13 +2597,14 @@
   
 
 
-<h1 id="untrusted-pr-egress-posture-for-kata-workers">Untrusted-PR egress posture for Kata workers<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers" title="Permanent link">&para;</a></h1>
-<p>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that fires on both.
-Phase 2 is done as of 2026-08-28: the mirror manifests, over five upstreams rather than four once the grading added <code>gcr.io</code>, are validated on the dogfood cluster at 25 of 25 checks by <code>scripts/dogfood/e2e-mirror-validate.sh</code>.
-Every instance serves a real upstream manifest, refuses uploads with 405, and exposes no debug listener, so the mirrors are measured serving rather than merely applied.
-Next is Phase 3's wiring, which books the next dogfood session: dockerd <code>--registry-mirror</code>, the non-Hub docker refs rewritten, and helm's OCI ref pointed at the ghcr mirror, proven by a green Kata run whose mirror access logs show non-zero hits per instance while open egress is still in place.
-Enforcement, the deletion of <code>e2e-open-egress</code>, stays Phase 4.
-<strong>Unblocks <a href="../Q539/">Q539</a>.</strong></p>
+<h1 id="six-dogfood-entrypoints-are-committed-non-executable">Six dogfood entrypoints are committed non-executable<a class="headerlink" href="#six-dogfood-entrypoints-are-committed-non-executable" title="Permanent link">&para;</a></h1>
+<p><code>git ls-files -s scripts/dogfood/</code> reports mode <code>100644</code> for <code>e2e-setup.sh</code>, <code>e2e-start.sh</code>, <code>e2e-stop.sh</code>, <code>start.sh</code>, <code>stop.sh</code> and <code>runner-build.sh</code>, while every other top-level script there (<code>setup.sh</code>, <code>delete.sh</code>, <code>ops.sh</code>, <code>validate-release.sh</code>, <code>e2e-run-watch.sh</code>) and all their own <code>*-test.sh</code> siblings are <code>100755</code>.
+Measured 2026-08-28 booking the Q408 Phase 2 dogfood session: <code>scripts/dogfood/e2e-start.sh</code> exits <strong>126, <code>Permission denied</code></strong>, before it reads a single env var.
+<a href="../../operations/release/">release.md</a> prescribes the bare form for all six.
+Steps 4 and 5 of the dogfood validation are <code>scripts/dogfood/e2e-start.sh</code> and <code>scripts/dogfood/e2e-stop.sh</code>, and the teardown pairs <code>stop.sh</code> with them, so four of the runbook's five bring-up/teardown commands do not execute as written.
+An operator following the page hits 126 and has to guess <code>bash</code> in front of it.
+The fix is <code>git update-index --chmod=+x</code> on the six, not a docs change: the split is with their own siblings and their own tests, so 755 is the convention and these are the outliers.
+Worth pairing with a gate: nothing checks that a script a doc invokes bare is executable, which is how six accumulated.</p>
 
 
 

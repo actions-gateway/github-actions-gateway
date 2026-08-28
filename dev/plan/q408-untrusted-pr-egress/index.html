@@ -2757,6 +2757,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#38-phase-2-validation-graded-2026-08-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.8 Phase 2 validation: graded (2026-08-28)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2828,9 +2839,10 @@
 
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-08-27): Phase 2 manifests authored and wired into the e2e setup path; their cluster-side validation is outstanding, and books a dogfood session of its own ahead of Phase 3 rather than riding Phase 3's.</strong> Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
-That outstanding validation is now a command rather than a prose battery: <code>scripts/dogfood/e2e-mirror-validate.sh</code> (<a href="#37-the-phase-2-validation-battery">§3.7</a>), with every expected value measured and every control fired.
-What it still needs is the cluster.
+<p><strong>Status (2026-08-28): Phase 2 is done.
+Its manifests are authored, wired into the e2e setup path, and now validated on the dogfood cluster: 25 of 25 checks passed over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>).</strong> Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
+The battery is a command rather than a prose checklist: <code>scripts/dogfood/e2e-mirror-validate.sh</code> (<a href="#37-the-phase-2-validation-battery">§3.7</a>), with every expected value measured and every control fired.
+Phase 3's wiring is unblocked, and books the next dogfood session.
 Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>) and re-sequenced Phases 1–4.
 Phase 1's workflow change gates <code>azure/setup-helm</code> (<code>get.helm.sh</code>), every <code>actions/cache</code> step, and the bake's <code>GHA_CACHE</code> to the hosted lane, per the resolved <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions.
 <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a> grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a <strong>fifth</strong> registry upstream, <code>gcr.io</code>, that Phase 0's host extraction was structurally unable to see.</p>
@@ -3323,6 +3335,19 @@ The negatives that do are Phase 4's.</p>
 So the expected set is the declared instance table rather than the transcript, and a check that did not report is a failure with its own reason.
 The same argument is why availability is read per declared instance instead of from a <code>-l app=registry-mirror</code> listing: derived from a listing, four healthy mirrors out of five declared grade green.
 Both properties are pinned by <code>scripts/dogfood/e2e-mirror-validate-test.sh</code> under <code>make check</code>, and both were confirmed by inverting the script and requiring red.</p>
+<h3 id="38-phase-2-validation-graded-2026-08-28">3.8 Phase 2 validation: graded (2026-08-28)<a class="headerlink" href="#38-phase-2-validation-graded-2026-08-28" title="Permanent link">&para;</a></h3>
+<p>Run against <code>gag-dogfood</code> (<code>us-east1-b</code>, <code>actions-gateway-dogfood</code>), Kata overlay, ephemeral mirror caches, by <code>scripts/dogfood/e2e-start.sh</code> followed by <code>scripts/dogfood/e2e-mirror-validate.sh</code>.</p>
+<p><strong>25 of 25 checks passed</strong>, which is the five declared instances times <a href="#37-the-phase-2-validation-battery">§3.7</a>'s five checks: five <code>available</code>, five <code>debug</code>, and fifteen probe results over <code>v2</code>, <code>manifest</code> and <code>push</code>.
+The count is the reconciliation rather than a tally of the transcript: the expected set is the declared instance table, so a check that did not report would have been a <code>FAIL</code> with its own reason instead of shrinking the battery.</p>
+<p><strong>The discriminating check is the one that passed.</strong> Every instance answered 200 on a real upstream manifest, so the unwritable-storage-root shape <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a> measured locally, where <code>/v2/</code> answers 200 and every pull answers 500, is absent here.
+All five refused an upload with 405, so <a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s read-only property is now measured on the cluster rather than argued.
+<code>REGISTRY_HTTP_DEBUG_ADDR</code> was present and empty in all five pod specs, so the bundled image's :5001 pprof and <code>/metrics</code> listener is unbound.</p>
+<p><strong>What this does not establish is enforcement</strong>, exactly as <a href="#37-the-phase-2-validation-battery">§3.7</a> states.
+The Kata overlay's allow-all <code>e2e-open-egress</code> is still in place, so reachability through the mirror does not distinguish the mirror path from the open one.
+The probe did ride a worker's own policy pair, which is real coverage of <code>registry-mirror-worker-access</code> and <code>e2e-mirror-egress</code>, but the negatives that separate the two paths are Phase 4's.</p>
+<p><strong>Two findings about the session path, neither about the mirror.</strong> <code>e2e-start.sh</code> applies the tenant without waiting for GMC, so from the 0-node at-rest state its apply fails on <code>no endpoints available for service "webhook-service"</code> after it has already resized the pool.
+<a href="../../operations/release/">release.md</a> documents the remedy by ordering <code>start.sh</code> ahead of it; the failure is the documented ordering being skipped rather than a defect, and it costs a pool resize either way.
+Separately, <code>e2e-start.sh</code> and <code>e2e-stop.sh</code> are committed non-executable, so the bare invocation both this plan and <code>release.md</code> prescribe exits 126 before reading an env var: <a href="../../queue/Q1013/">Q1013</a>.</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
 Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
@@ -3334,11 +3359,11 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   The <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions are resolved: <code>e2e-reusable.yml</code> gates <code>azure/setup-helm</code>, every <code>actions/cache</code> step, and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code>.
   Validated by grading four green self-hosted Kata runs against a Phase 0 control (<a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), and no dogfood session was booked because the qualifying runs had already happened.
   The grading also corrected the upstream set from four to five.</li>
-<li><strong>Phase 2 — mirror manifests, authored 2026-08-27 with cluster-side validation outstanding.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (<code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>, the fifth added by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), applied by <code>scripts/dogfood/e2e-start.sh</code> and scaled back to zero by <code>e2e-stop.sh</code>.
+<li><strong>Phase 2 — mirror manifests. ✅ Done (authored 2026-08-27, validated 2026-08-28).</strong> <code>deploy/registry-mirror/</code> (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (<code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>, the fifth added by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), applied by <code>scripts/dogfood/e2e-start.sh</code> and scaled back to zero by <code>e2e-stop.sh</code>.
   What is pinned, and what was measured to pin it, is <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>.
   Validation: <code>scripts/dogfood/e2e-mirror-validate.sh</code> against the dogfood cluster once <code>e2e-start.sh</code> has applied the manifests: five checks per instance (<a href="#37-the-phase-2-validation-battery">§3.7</a>), read-only, and it applies no manifest of its own.
-  That half is outstanding rather than skipped, and it is a <strong>precondition</strong> of Phase 3's run rather than something that run can establish: <a href="../release-1.7/">release-1.7.md</a> line 104 sequences the phases strictly, "manifests must serve before wiring can be proven to ride them".
-  It books a dogfood session of its own, per this section's header.</li>
+  Graded 2026-08-28 at 25 of 25 over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>), which discharges the <strong>precondition</strong> <a href="../release-1.7/">release-1.7.md</a> sets on Phase 3's run: "manifests must serve before wiring can be proven to ride them".
+  It booked a dogfood session of its own, per this section's header.</li>
 <li><strong>Phase 3 — wiring.</strong> dockerd <code>--registry-mirror</code> in the Kata overlay; non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr mirror.
   Validation: a green Kata e2e run <strong>with open egress still present</strong>, with the mirror access logs proving the pulls rode the mirror (hit counts &gt; 0 per instance) — wiring proven before enforcement changes.
   Run it once with the image caches cold, so the <code>quay.io</code> / <code>registry.k8s.io</code> prepulls are exercised rather than skipped.</li>
