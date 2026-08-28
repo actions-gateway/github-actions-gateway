@@ -127,7 +127,7 @@ Scripts under `scripts/` are shellcheck-gated by `make check`.
 
 ## Hooks: minimizing approval prompts
 
-Six `PreToolUse` hooks guard tool calls; each denial message explains the specific fix.
+`PreToolUse` hooks guard tool calls; each denial message explains the specific fix.
 The habits that avoid most prompts:
 
 - **workspace-guard** prompts when a Bash file read/write command (`grep`/`cat`/`cp`/`rm`/…) resolves a path outside the worktree.
@@ -143,10 +143,6 @@ The habits that avoid most prompts:
 - **go-throttle** prefixes `go build`/`go test` with the local throttle prefix: a bare form is rewritten and auto-allowed; a compound, redirected, or wrapped `-race` form is rewritten and *asked* (no longer blocked); a `-race` it cannot throttle is *denied* with the reason: two go invocations and one prefix to place, or a throttle probe that could not run (Q785; retry, or use the `make` target).
   It counts a `go` in command position or behind an allowlisted wrapper (`timeout … go test -race`, Q696), so a commit message or heredoc body quoting one is left alone.
   Detail: testing.md § Resource auto-throttle.
-- **pipe-guard** *denies* when a command whose exit status is the answer (`make`, `go build/test`, a `scripts/` gate, `git pull`/`push`/`rebase`/`merge`/`commit`, `gh pr create`) is piped into a filter, when a command reads `$PIPESTATUS` (bash-only; empty in zsh), when a **backgrounded** call ends in something that drops the gate's status (an `echo`, a `||` fallback, a trailing `&`), and when a gate sequenced with `;` precedes a state-changing command, where the status is read correctly and then ignored. Fix: `cmd > tmp/out.log 2>&1; echo "EXIT=$?"`, then grep the file, plus `rc=$?; echo "EXIT=$rc"; exit $rc` when backgrounded.
-  It is the installed plugin (`karlkfi/claude-pipe-guard`), not a repo script: its gate list ships with the plugin and covers this repo's gates, so there is no `.claude/pipe-guard.json` here — add one only for a pattern the shipped list misses.
-  Break-glass for a case the rule reads wrong: re-run prefixed `PIPE_GUARD_OVERRIDE=<reason>`, and file the defect upstream rather than overriding it every time.
-  **It carries no repo-state checks.** Two rules the retired repo hook enforced are now yours to check by hand: at `git push`, whether the base moved into this branch's own files; at `gh pr create`, whether an open PR already changes them ([CONTRIBUTING.md](CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open)).
 - **Read background-task and watcher output with the Read tool, not Bash `cat`/`head`.** Only a Read puts the text in the transcript, and hooks that key on it go silent otherwise: pr-sentinel dampens a repeated event by comparing the last report's head SHA, so a Bash read leaves it unable to tell a repeat from a new failure and the Stop hook asks for a relaunch that re-fires the same event (three redundant cycles in Q844; upstream `karlkfi/claude-pr-sentinel` #9 and #14).
 - **no-subagent-workers** fires on `Agent`/`Task` spawns and *asks* (soft) when a spawn looks like a parallel-dispatch worker — workers must be task chips, never sub-agents (`docs/development/parallel-dispatch.md`).
   Read-only agent types (`Explore`, `Plan`) pass untouched.
