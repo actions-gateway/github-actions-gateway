@@ -44,6 +44,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)](#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded)
 - [Worker Pods Reaped on Gateway Teardown (WorkerPodsReapedOnGatewayTeardown)](#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown)
 - [ActionsGateway Deletion Hangs on WaitingForWorkerDrain](#actionsgateway-deletion-hangs-on-waitingforworkerdrain)
+- [Agent Pool Blocked: Another Tenant Owns the Agent Secret](#agent-pool-blocked-another-tenant-owns-the-agent-secret)
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
@@ -1776,6 +1777,37 @@ kubectl delete pod -n <namespace> -l actions-gateway.com/runner-set=<set-name>
 ```
 
 To avoid the wait entirely, fix or restore the AGC before deleting the gateway, or drain the sets first so there is nothing to wait for.
+
+---
+
+## Agent Pool Blocked: Another Tenant Owns the Agent Secret
+
+**Symptom.** A `RunnerGroup` or `RunnerSet` never fills its agent pool, while another tenant in the same namespace keeps serving jobs normally.
+The AGC logs `EnsureAgents failed` and records an `AgentPoolError` Warning Event whose message ends in `agent identity is owned by another pool`, naming the Secret and the tenant that holds it:
+
+```text
+secret agentpool-rs-web-0 is owned by RunnerSet "web"
+```
+
+**What happened.** Two tenants in one namespace derive the same agent identity.
+A `RunnerSet` is kept apart from a same-named `RunnerGroup` by an `rs-` prefix, and a prefix is not unique: a `RunnerGroup` named `rs-web` derives everything a `RunnerSet` named `web` derives, which is the agent Secret name, the runner name registered with GitHub, and the label selector each pool enumerates its own agents with.
+One Secret name belongs to one object, so whichever tenant reconciles second finds its agents missing on every pass and cannot create them.
+
+Registering the runner name anyway would take a 409 from GitHub, and the AGC's 409 recovery deletes whatever record holds the name.
+Here that record is the other tenant's live registration, whose agent Secret still names the deleted ID, so both tenants end up unable to authorize.
+The AGC checks the Secret's owner before it registers, and refuses to delete a runner record another pool's Secret claims, which confines the collision to the second tenant's pool.
+
+**Fix.** Rename one of the two objects.
+Nothing else clears it: the condition is a naming conflict, not a transient failure, and it does not resolve on retry.
+Confirm which tenant holds the Secret before choosing:
+
+```sh
+kubectl -n <namespace> get secret <secret-name> -o jsonpath='{.metadata.ownerReferences}'
+```
+
+**Avoiding it.** Do not name a `RunnerGroup` with an `rs-` prefix.
+That prefix belongs to the v2 derivation, and a v1 name carrying it can claim a v2 tenant's identity.
+See [Migration v1 to v2](migration-v1-to-v2.md#the-two-tenants-keep-separate-runners) for the full derivation table.
 
 ---
 
