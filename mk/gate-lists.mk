@@ -59,7 +59,8 @@ CHECK_FAST_GATES := roadmap-check \
                     getting-started-check \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
-                    metric-tiers-check reason-tiers-check upgrade-toc-check \
+                    metric-tiers-check reason-tiers-check rung-order-check \
+                    upgrade-toc-check \
                     endpoint-parity-check \
                     release-notes-check \
                     dashboard-render-check \
@@ -126,6 +127,7 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 #   promql-check         an alert renamed in observability-alerting.md or the runbook but not in the rule
 #   metric-tiers-check   a metric's tier edited in observability-metrics.md away from what the AGC emits
 #   reason-tiers-check   a reason edited in observability-metrics.md or troubleshooting.md the same way
+#   rung-order-check     the admission ladder's rungs listed in 04-operational-flows.md in an order Admit does not walk
 #   api-reference-check  docs/reference/api.md hand-edited away from what controller-gen renders
 #   gate-lists-check     testing.md stopping short of citing the list targets it must name
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
@@ -146,7 +148,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               conflict-markers-check \
               release-ladder-check \
               roadmap-check comparison-stamps-check promql-check \
-              metric-tiers-check reason-tiers-check \
+              metric-tiers-check reason-tiers-check rung-order-check \
               api-reference-check gate-lists-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
@@ -264,6 +266,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  release/check-release-digests-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
                  docs/check-metric-tiers-test docs/check-reason-tiers-test \
+                 docs/check-rung-order-test \
                  e2e/check-endpoint-parity-test \
                  manifest/check-dashboard-render-test \
                  ci/check-tool-pins-test \

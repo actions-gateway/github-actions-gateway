@@ -107,7 +107,7 @@ The prose one exists because those gates run at the very *end* of `make check`, 
 `gate-lists-check` holds both lists to that claim in both directions: a member outside `CHECK_FAST_GATES` makes the target a second opinion, and a fast gate the list omits makes it report a green `make check` would not.
 `DOCS_GATES` was never passed in, and it had been failing the first half for the life of the list: `make docs-gates` ran `release-notes-check`, which was in neither gate list, so it tested something `make check` did not (Q920).
 It was failing the second half too, and by more: the completeness rule read only the pathspecs a gate hands git, and every page-scoped gate here names its page as a constant instead, so seven were invisible at once and `make docs-gates` was green on prose edits to nine pages `make check` can fail (Q930).
-`roadmap-check`, `comparison-stamps-check`, `promql-check`, `metric-tiers-check`, `reason-tiers-check`, `api-reference-check` and `gate-lists-check` joined the list when the rule learned to read a hardcoded subject; the target runs 18 gates in about 4 seconds.
+`roadmap-check`, `comparison-stamps-check`, `promql-check`, `metric-tiers-check`, `reason-tiers-check`, `api-reference-check` and `gate-lists-check` joined the list when the rule learned to read a hardcoded subject, and `rung-order-check` with it (Q972); the target runs 20 gates in about 7 seconds.
 
 **A shell edit needs `make shellcheck` on its own.** Neither subset target includes it.
 The gate is 37 s over all 210 scripts, against a whole fast fan-out to learn the same thing from `make check` (measured 2026-08-15, Q870).
