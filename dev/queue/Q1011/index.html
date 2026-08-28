@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q979/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1011/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Q466's rs- scoping is not injective, so kinds deregister each other - GitHub Actions Gateway</title>
+        <title>Nothing rejects a CR name colliding across the v1/v2 derivations - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#q466s-rs--scoping-is-not-injective-so-kinds-deregister-each-other" class="md-skip">
+        <a href="#nothing-rejects-a-cr-name-colliding-across-the-v1v2-derivations" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Q466's rs- scoping is not injective, so kinds deregister each other
+              Nothing rejects a CR name colliding across the v1/v2 derivations
             
           </span>
         </div>
@@ -2597,14 +2597,14 @@
   
 
 
-<h1 id="q466s-rs--scoping-is-not-injective-so-kinds-deregister-each-other">Q466's <code>rs-</code> scoping is not injective, so kinds deregister each other<a class="headerlink" href="#q466s-rs--scoping-is-not-injective-so-kinds-deregister-each-other" title="Permanent link">&para;</a></h1>
-<p>A RunnerGroup named <code>rs-foo</code> and a RunnerSet named <code>foo</code> derive the same registered runner name, <code>rs-foo-0</code>, and the same Secret name.
-<code>createAgent</code> registers before it writes the Secret, so the loser's 409 path resolves the incumbent's ID and <strong>deregisters its live GitHub record</strong> before failing.
-Measured against <code>StubRegistrar</code>: incumbent id 1001 destroyed and re-registered as 1002, <code>registerCalls</code> 1→3, <code>deregisterCalls</code> 0→1, and only then <code>secrets "agentpool-rs-foo-0" already exists</code>.
-The incumbent's Secret still holds agentId 1001, which no longer exists, so its listener cannot authorize; the other pool repeats this every reconcile.
-That is verbatim the loop <code>Pool.agentName</code>'s godoc says the discriminator exists to prevent.
-Nothing validates a CR name against the prefix.
-The registration damage never reaches the returned error, which is why a first reading of this called it a failed create.</p>
+<h1 id="nothing-rejects-a-cr-name-colliding-across-the-v1v2-derivations">Nothing rejects a CR name colliding across the v1/v2 derivations<a class="headerlink" href="#nothing-rejects-a-cr-name-colliding-across-the-v1v2-derivations" title="Permanent link">&para;</a></h1>
+<p>Q979 stopped a colliding pool from deregistering the incumbent's GitHub record, but the collision itself is still accepted and still costs one tenant its whole agent pool until an operator renames a CR.
+A <code>RunnerGroup</code> named <code>rs-&lt;x&gt;</code> derives the same agent Secret and the same GitHub runner name as a <code>RunnerSet</code> named <code>&lt;x&gt;</code>, because Q466's discriminator is an <code>rs-</code> prefix rather than an injection.
+The AGC reports <code>agent identity is owned by another pool</code> on every reconcile of the loser and cannot self-heal.</p>
+<p>Admission is the place to refuse it, and only one direction is cheap today: <code>RunnerSetCustomValidator</code> already does a cross-object uniqueness check (<code>validateScaleSetLabelUniqueness</code>), so a create of RunnerSet <code>&lt;x&gt;</code> can reject when RunnerGroup <code>rs-&lt;x&gt;</code> exists in the namespace.
+The reverse direction has nowhere to land — <code>cmd/gmc/internal/webhook/v1alpha1/</code> carries only the ActionsGateway validator, so a RunnerGroup named <code>rs-&lt;x&gt;</code> created after the RunnerSet is unguarded until a v1alpha1 RunnerGroup validator exists.
+Whether v1 gets a validator at all is the design question: v1 is the rollback target of a migration and adding admission to it can reject writes an operator relies on during rollback.</p>
+<p>Note the guard is namespace-scoped for Secrets but the GitHub runner-name half is scoped to the org or repo, so two namespaces can still collide on the runner name alone; scoping the check is part of the work, not an afterthought.</p>
 
 
 

@@ -3291,6 +3291,11 @@ They are still two independent tenants, and each provisions its own pool of pre-
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>Do not name a <code>RunnerGroup</code> with an <code>rs-</code> prefix.</strong> The prefix is what separates the two derivations, so a <code>RunnerGroup</code> named <code>rs-web</code> derives the same Secret and the same GitHub runner name as a <code>RunnerSet</code> named <code>web</code>.
+Whichever of the two reconciles second cannot create its agents at all, and reports <code>agent identity is owned by another pool</code> until one of them is renamed.
+See <a href="../troubleshooting/#agent-pool-blocked-another-tenant-owns-the-agent-secret">Agent Pool Blocked: Another Tenant Owns the Agent Secret</a>.</p>
+</blockquote>
 <p>So during coexistence you will see <strong>two sets of runners</strong> registered with GitHub for one tenant — expected, and the reason both can run at once.
 Each agent Secret also carries an <code>ownerReference</code> to the <code>RunnerGroup</code> or <code>RunnerSet</code> it belongs to, so <code>kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'</code> answers "which tenant owns this?" without guessing from the name.</p>
 <h3 id="each-agc-serves-exactly-one-api">Each AGC serves exactly one API<a class="headerlink" href="#each-agc-serves-exactly-one-api" title="Permanent link">&para;</a></h3>

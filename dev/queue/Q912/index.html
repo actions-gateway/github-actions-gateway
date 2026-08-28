@@ -2616,6 +2616,13 @@ The CPU time is a floor: procps-ng 4.0.4 on <code>ubuntu-latest</code> prints wh
 A finer Linux figure means <code>/proc/&lt;pid&gt;/stat</code> fields 14 and 15, which does not port to darwin; that is the trade to weigh if the next occurrence is still ambiguous.
 <code>childLog</code>'s <code>(the fake wrote nothing, so it had not reached its first log line)</code> was the over-claim that made the first occurrence unanswerable, and it now states the observation alone.
 The suite instance yielded only <code>expected rc=0, got rc=2</code> because <code>expect_rc</code> discarded the checker's output; it now prints it on a status mismatch.</p>
+<p>A second sighting 2026-08-27, under local <code>make check</code> on a PR branch, so the trigger does not fire and the row stays here.
+The soak counts from this date rather than from the fix.
+The suite instance went red on port 50347 (<code>check-endpoint-parity-test</code>, the "failure names the endpoint and the call site" case); the same suite passed standalone straight afterwards and the whole gate passed on a re-run, and the branch changed neither the checker nor anything it builds.
+The reading the timeout branch was built for: <code>ps</code> reported the child as <code>S 0:00.00</code>, and the poll never observed the log non-empty.
+<code>S</code> is blocked on something other than CPU, where starvation past the 30s bound predicts <code>R</code>, so this sample points away from the cause the row was left with.
+The <code>0:00.00</code> discriminates nothing on its own, since a child that never got going and one waiting for CPU both burn none, and macOS printing hundredths only bounds it under 10ms.
+One sample, on a host running the rest of the fan-out at the time, so it narrows the cause without settling it.</p>
 
 
 

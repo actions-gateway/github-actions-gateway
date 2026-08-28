@@ -2730,14 +2730,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
-<td><a href="Q979/">Q979</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">Q466's <code>rs-</code> scoping is not injective, so kinds deregister each other</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A RunnerGroup named <code>rs-foo</code> and a RunnerSet named <code>foo</code> derive the same registered runner name, <code>rs-foo-0</code>, and the same Secret name.</td>
-</tr>
-<tr>
 <td><a href="Q951/">Q951</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools-test.sh"><code>version-cmds-answer</code> flakes on kubectl, cause unverified</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3216,6 +3208,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Three clean runs say lock TTL (9m36–9m45s); the lone 17s run predates the <code>runner_name</code> identity check, so "not reliably ungraceful" is …</td>
+</tr>
+<tr>
+<td><a href="Q1011/">Q1011</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnerset_webhook.go">Nothing rejects a CR name colliding across the v1/v2 derivations</a></td>
+<td><code>feature</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q979 stopped a colliding pool from deregistering the incumbent's GitHub record, but the collision itself is still accepted and still costs …</td>
 </tr>
 <tr>
 <td><a href="Q662/">Q662</a></td>
