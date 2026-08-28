@@ -2746,6 +2746,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#37-the-phase-2-validation-battery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.7 The Phase 2 validation battery
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2818,6 +2829,8 @@
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status (2026-08-27): Phase 2 manifests authored and wired into the e2e setup path; their cluster-side validation is outstanding, and books a dogfood session of its own ahead of Phase 3 rather than riding Phase 3's.</strong> Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
+That outstanding validation is now a command rather than a prose battery: <code>scripts/dogfood/e2e-mirror-validate.sh</code> (<a href="#37-the-phase-2-validation-battery">§3.7</a>), with every expected value measured and every control fired.
+What it still needs is the cluster.
 Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>) and re-sequenced Phases 1–4.
 Phase 1's workflow change gates <code>azure/setup-helm</code> (<code>get.helm.sh</code>), every <code>actions/cache</code> step, and the bake's <code>GHA_CACHE</code> to the hosted lane, per the resolved <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions.
 <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a> grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a <strong>fifth</strong> registry upstream, <code>gcr.io</code>, that Phase 0's host extraction was structurally unable to see.</p>
@@ -3250,6 +3263,66 @@ That closes the reachability half of <a href="#23-what-the-measurement-changes">
 <p><strong>Gated, but only as far as a linter reaches.</strong> <code>deploy/registry-mirror/</code> joins <code>make manifest-validate</code>: yamllint over the tree, and kubeconform over the base manifests plus the overlay's PVCs, which are all native kinds.
 That is schema and syntax, and it says nothing about whether the instances serve, so it narrows what is unchecked off the cluster without closing it.
 <code>deploy/kata-ci/</code> is in the same script's <code>standalone_manifests</code> list and in no workflow path filter, so an edit to it alone runs neither check; that gap is filed as <a href="../../queue/Q1004/">Q1004</a> and is not this phase's.</p>
+<h3 id="37-the-phase-2-validation-battery">3.7 The Phase 2 validation battery<a class="headerlink" href="#37-the-phase-2-validation-battery" title="Permanent link">&para;</a></h3>
+<p>The plan spelt this out as prose, <em>curl the mirror's <code>/v2/</code> and pull one image through each instance from a debug pod</em>, and it is now <code>scripts/dogfood/e2e-mirror-validate.sh</code>, because Phase 3 re-runs the same battery once the clients are wired and Phase 4 re-runs it under the tight policy.
+A booked dogfood session is the scarce resource in all three, so the battery is a command that returns a verdict rather than a transcript somebody re-reads.</p>
+<p>Five checks per instance, over the five declared upstreams:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Passes on</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>available</code></td>
+<td>the Deployment's <code>Available</code> condition</td>
+<td>an instance that never scheduled</td>
+</tr>
+<tr>
+<td><code>v2</code></td>
+<td><code>GET /v2/</code> → 200</td>
+<td>the process is not up</td>
+</tr>
+<tr>
+<td><code>manifest</code></td>
+<td>a real upstream manifest → 200</td>
+<td><strong>a mirror that cannot cache anything</strong>, see below</td>
+</tr>
+<tr>
+<td><code>push</code></td>
+<td><code>POST …/blobs/uploads/</code> → 405</td>
+<td><a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s read-only property is false</td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td><code>REGISTRY_HTTP_DEBUG_ADDR</code> set and empty in the pod spec</td>
+<td>the bundled development config's pprof + <code>/metrics</code> listener is still bound</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>manifest</code> is the check that discriminates, and <code>v2</code> is the one that would have lied.</strong> <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a> records that a non-root instance whose storage root is unwritable answers 200 on <code>/v2/</code> and 500 on every pull; a battery graded on <code>/v2/</code> alone calls that mirror healthy.
+The same reading is why the readiness probe cannot stand in for this script.</p>
+<p><strong><code>debug</code> is read off the Deployment rather than probed, because the network reading cannot work.</strong> Each Service declares one port (<code>5000/5000</code>) and <code>registry-mirror-worker-access</code> admits only TCP/5000, so a connection to a ClusterIP on 5001 never reaches the pod whatever the listener is doing.
+The dataplane decides that result, which means such a probe grades the Service and the policy rather than the config it names, and both of its outcomes are wrong: an unmatched ClusterIP port that is dropped times out, so a healthy cluster reports five failures on the first booked session, and one that is rejected gives the same refusal the probe scores as healthy whether or not the listener is bound.
+Which of the two this cluster does is unmeasured, and the object read is correct either way.
+The other observable reading, an ephemeral container in the pod's own netns, is not taken either: this namespace enforces PSA <code>restricted</code>, <code>kubectl debug</code> sets no <code>securityContext</code> on the container it injects, and whether that is admitted is a venue question no run off the cluster can settle.</p>
+<p><strong>The env read carries a trap of the same shape.</strong> kubectl's jsonpath renders an empty value and an absent entry identically, and an absent entry is exactly the state where the bundled listener <em>is</em> bound.
+So the check reads the entry's name alongside its value: name present with an empty value passes, name absent fails.</p>
+<p><strong>Every expected value above was measured, and every control fires.</strong> The three probe checks were taken against five instances in proxy mode on a Docker network, probed by a <code>curlimages/curl</code> container addressing them at their in-cluster names: all five returned 200 / 200 / 405.
+One run non-root with no writable storage answered <code>/v2/</code> 200 and its manifest <strong>500</strong>, which is the fsGroup shape reproduced.
+<code>debug</code> was measured separately, with the script's own jsonpath against the real manifests and two hand-built controls: healthy renders <code>True|REGISTRY_HTTP_DEBUG_ADDR|</code>, an instance with the entry removed renders <code>True||</code>, and one bound to an address renders <code>True|REGISTRY_HTTP_DEBUG_ADDR|:5001</code>.
+So the battery can show the opposite of what it reported.</p>
+<p><strong>The probe rides a worker's path, and that is not the same as proving enforcement.</strong> The probe pod runs in the tenant namespace carrying <code>actions-gateway/component=workload</code>, so it is selected by <code>e2e-mirror-egress</code> and admitted by the mirror-side <code>registry-mirror-worker-access</code> ingress rule.
+A wrong <code>namespaceSelector</code> on either shows up as a timeout on the three probe checks, every one of which addresses 5000, the single port both the Service and the policy carry.
+But the Kata overlay's allow-all <code>e2e-open-egress</code> is still in place until Phase 4, so reachability through the mirror does not yet distinguish the mirror path from the open one.
+The negatives that do are Phase 4's.</p>
+<p><strong>What no battery closes: an absent result reads as an absent failure.</strong> A probe pod that is evicted or dies before its first line produces empty output, and a grader that walks what it received finds nothing wrong with it: green from an instrument that ran nothing.
+So the expected set is the declared instance table rather than the transcript, and a check that did not report is a failure with its own reason.
+The same argument is why availability is read per declared instance instead of from a <code>-l app=registry-mirror</code> listing: derived from a listing, four healthy mirrors out of five declared grade green.
+Both properties are pinned by <code>scripts/dogfood/e2e-mirror-validate-test.sh</code> under <code>make check</code>, and both were confirmed by inverting the script and requiring red.</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
 Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
@@ -3263,7 +3336,7 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   The grading also corrected the upstream set from four to five.</li>
 <li><strong>Phase 2 — mirror manifests, authored 2026-08-27 with cluster-side validation outstanding.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (<code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>, the fifth added by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), applied by <code>scripts/dogfood/e2e-start.sh</code> and scaled back to zero by <code>e2e-stop.sh</code>.
   What is pinned, and what was measured to pin it, is <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>.
-  Validation: apply to the dogfood cluster; <code>curl</code> the mirror's <code>/v2/</code> and pull one image through each instance from a debug pod.
+  Validation: <code>scripts/dogfood/e2e-mirror-validate.sh</code> against the dogfood cluster once <code>e2e-start.sh</code> has applied the manifests: five checks per instance (<a href="#37-the-phase-2-validation-battery">§3.7</a>), read-only, and it applies no manifest of its own.
   That half is outstanding rather than skipped, and it is a <strong>precondition</strong> of Phase 3's run rather than something that run can establish: <a href="../release-1.7/">release-1.7.md</a> line 104 sequences the phases strictly, "manifests must serve before wiring can be proven to ride them".
   It books a dogfood session of its own, per this section's header.</li>
 <li><strong>Phase 3 — wiring.</strong> dockerd <code>--registry-mirror</code> in the Kata overlay; non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr mirror.
@@ -3272,7 +3345,8 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
 <li><strong>Phase 4 — enforcement.</strong> Delete <code>e2e-open-egress</code> from the Kata overlay.
   A deletion rather than a swap: Phase 2 shipped <code>e2e-mirror-egress</code>, where it is a no-op under the allow-all policy (<a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>, decision 3).
   The overlay's own comment on that policy names Phase 3 as the replacing phase, which is wrong and needs no separate fix: that file holds this one object, so the deletion takes the comment with it.
-  Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) negatives from inside a job — <code>docker pull</code> of a host with no mirror instance fails, <code>curl https://example.com</code> times out, a push to the mirror is refused; (c) kind-side pull of a non-local-registry image succeeds via the mirror.</li>
+  Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) negatives from inside a job — <code>docker pull</code> of a host with no mirror instance fails, <code>curl https://example.com</code> times out, a push to the mirror is refused; (c) kind-side pull of a non-local-registry image succeeds via the mirror.
+  Re-run <a href="#37-the-phase-2-validation-battery">§3.7</a>'s battery here too: under the tight policy its reachability checks stop being ambiguous, since the open path they could also have ridden is gone.</li>
 <li><strong>Phase 5 — docs + close-out.</strong> <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> caveat "validated posture is trusted CI" flips to the how-to; <a href="../../operations/security-operations/">security-operations.md</a> mirror section links the concrete manifests; <a href="../../operations/in-runner-image-builds/">in-runner image builds</a> and <a href="../../design/network-architecture/">network-architecture.md</a> cross-refs; G.14 marked shipped; <a href="../../roadmap/">roadmap.md</a> entry moves out of "exploring"; Q408 row deleted.</li>
 </ul>
 <h2 id="5-alternatives-considered">5. Alternatives considered<a class="headerlink" href="#5-alternatives-considered" title="Permanent link">&para;</a></h2>
