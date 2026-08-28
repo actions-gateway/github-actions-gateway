@@ -3229,17 +3229,20 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
    <strong>Admit (Q59, #784, Q405, Q406, Q717):</strong> Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks four questions in order.
    <strong>Quota:</strong> can the namespace <code>ResourceQuota</code> admit one more worker pod right now (<code>hard − used</code> against this owner's worker footprint)?
    <strong>Capacity:</strong> if the owner opted into a capacity gate, can the cluster currently <em>place</em> one more worker pod of this shape?
-   <strong>Rate:</strong> if the owner opted into <code>spec.scaleUp</code>, does its token bucket have a token for another pod creation?
    <strong>Ceiling:</strong> is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (<code>maxWorkers</code> / the maximum <code>priorityTiers</code> threshold)?
+   <strong>Rate:</strong> if the owner opted into <code>spec.scaleUp</code>, does its token bucket have a token for another pod creation?
    A no from any of them <strong>skips <code>acquirejob</code></strong>, increments <code>actions_gateway_jobs_admission_rejected_total{reason}</code> (<code>quota</code>, <code>capacity</code>, <code>scaleup</code>, or <code>ceiling</code>), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped.
    When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3.
    The two observed rungs fail open and reserve nothing, which is why they precede the ceiling; the reservation is fail-safe soft state (reset on AGC restart).
    The rate rung reserves nothing either but <em>takes</em> its token, which is what lets it bind on a simultaneously-delivered burst where an observation could not: every listener would read the same free token and claim anyway.
-   It is ordered after the two observed rungs so a job refused for quota or placeability is never charged a token it will not spend, and so the reason reported is the one that will not clear on its own.</li>
+   It comes last, behind the ceiling, so no rung refuses a job the bucket has already charged, and so the reason reported is the one that will not clear on its own.</li>
 </ol>
+<p><strong>Why an admitted job can hand its token back (Q972).</strong> The token buys a worker pod, so a delivery that returns before asking for one gives it back when it releases its slot: a failed <code>acquirejob</code>, and above all a duplicate delivery whose <code>planID</code> a sibling has already claimed (Q260).
+   Without the refund a job fanned out to N sibling sessions charges N tokens for the one pod its dedup winner creates, so the effective ramp is <code>maxPerSecond / N</code> under exactly the burst <code>spec.scaleUp</code> exists to smooth.
+   The refund stops at pod creation and never fires on job <em>completion</em>: returning a token when a worker finishes would make the bucket a second concurrency ceiling rather than a rate limit.</p>
 <p><strong>Why the rate limit is a rung rather than a wait (Q717).</strong> <code>spec.scaleUp</code> used to be waited on <em>after</em> the claim, at pod-creation time, which put it in exactly the position this gate exists to remove: a job that cannot be provisioned yet, holding a GitHub job lock while it waits.
    A long ramp (a large burst at a low <code>maxPerSecond</code>) walks the tail of that burst past the lock's lifetime, and a job whose lock lapses is cancelled rather than redelivered, so the anti-stampede knob could destroy the jobs it was smoothing.
-   As a rung it withholds intake instead, and the classic provisioning path no longer touches the bucket at all: the token is charged once, before the claim.
+   As a rung it withholds intake instead, and the classic provisioning path no longer touches the bucket at all: the token is charged once, before the claim, and refunded there too if the job never reaches a pod.
    The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.</p>
 <p><strong>Tier scope.</strong> This <em>per-delivered-job</em> form of the gate is wired from <code>AdmitFor</code> (v1 <code>RunnerGroup</code>) and the classic branch of the v2 <code>RunnerSet</code> reconciler; <code>reconcileScaleSetListener</code> returns before it.
    A <code>ScaleSet</code> set walks the same ladder once per long-poll and states the result as one integer — see <a href="#the-ladder-as-an-integer-scale-set-tier-q443">The ladder as an integer</a>.

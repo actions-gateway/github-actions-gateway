@@ -2695,7 +2695,11 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   <strong>The backlog itself has no driver, deliberately</strong>: one file per item is what the driver was compensating for, and two sessions editing the <em>same</em> item have a real conflict that must not be resolved by ID behind anyone's back.
   <a href="#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">Details below</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/next-task.sh"><code>scripts/docs/next-task.sh</code></a> — prints a kickoff prompt (or <code>--title</code>) for the top ready item, for starting a fresh session on the next task.
-  A thin forward to <code>queue.py next</code> since Q889; it reads <code>docs/queue/</code> and takes no file path.</li>
+  A thin forward to <code>queue.py next</code> since Q889; it reads <code>docs/queue/</code> and takes no file path.
+  <strong>The pick is checked against open pull requests before it is printed</strong> (Q990): <code>next</code> lists them and skips an item one already names, so the instruction to check no longer sits in three places with nothing performing it.
+  A hit is a candidate rather than a verdict, because an id is cited by neighbouring rows and by the retro that filed it, so the skip names the PR and <code>--allow QNNN</code> takes the item anyway once you have read it.
+  When <code>gh</code> cannot answer it fails rather than handing out an unverified pick; <code>--no-pr-check</code> is the deliberate offline escape, and it says on stderr that nothing was checked.
+  <code>lint</code> reaches no network, so the gates that run it are unaffected.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/backlog-metrics.sh"><code>scripts/docs/backlog-metrics.sh</code></a> — replays the backlog's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
   Read-only, and continuous across the storage move: it reads the retired table by path and the store after it, suppresses the two bulk commits at the seam, and marks where the storage changed so a span across it stays one span (Q889).</li>
 </ul>

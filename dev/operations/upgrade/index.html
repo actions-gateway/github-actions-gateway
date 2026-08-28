@@ -1674,6 +1674,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a spec.scaleUp token is now charged per worker pod, not per delivered job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3333,6 +3344,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a spec.scaleUp token is now charged per worker pod, not per delivered job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3982,6 +4004,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job</a></li>
 <li><a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed</a></li>
 <li><a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)</a></li>
 <li><a href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job">Non-breaking: deleting a cancelled run's worker no longer re-queues the job</a></li>
@@ -4055,6 +4078,38 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job<a class="headerlink" href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every runner group or runner set that sets <code>spec.scaleUp</code> on the classic acquisition tier.
+It is off by default, so a tenant that never configured a ramp sees nothing.
+<code>ScaleSet</code> sets are unaffected: that tier states its capacity per long-poll and never charged per delivery.</p>
+<p><strong>What changed.</strong> The rate rung takes its token before the job is claimed, which is what lets it bind on a simultaneously-delivered burst (Q717).
+GitHub fans a queued job out to several sibling sessions at once, and only one of them provisions: the rest recognise the duplicate after <code>acquirejob</code> and return without creating anything (Q260).
+Each of those took a token and never gave it back, so a job delivered to N sessions spent N tokens for one worker pod.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Effective ramp under an N-way fan-out</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before</td>
+<td><code>maxPerSecond / N</code>, because every duplicate delivery charged a token for a pod it never created</td>
+</tr>
+<tr>
+<td>Now</td>
+<td><code>maxPerSecond</code>: a delivery that returns before asking for a worker pod hands its token back</td>
+</tr>
+</tbody>
+</table>
+<p>A failed <code>acquirejob</code> refunds on the same rule.
+The refund stops at pod creation and never fires on job completion, so the bucket stays a rate limit rather than becoming a second concurrency ceiling.</p>
+<p><strong>What to expect at upgrade.</strong> A set whose deliveries fan out will ramp at the rate it configured, which may be faster than what it has been doing.
+Nothing else moves: <code>burst</code> still bounds the instantaneous batch, and a refund into a full bucket adds nothing.
+<code>actions_gateway_worker_scaleup_throttled_total</code> and <code>actions_gateway_jobs_admission_rejected_total{reason="scaleup"}</code> should fall for an affected set, because fewer deliveries now find the bucket empty.</p>
+<p><strong>Action required:</strong> none.
+If you raised <code>maxPerSecond</code> to compensate for a ramp that ran slower than configured, the value you first chose is now the one that applies, so re-check it against the egress path you were protecting.</p>
 <h3 id="non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed<a class="headerlink" href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every runner group or runner set that sets <code>spec.scaleUp</code>.
 It is off by default, so a tenant that never configured a ramp sees nothing.</p>

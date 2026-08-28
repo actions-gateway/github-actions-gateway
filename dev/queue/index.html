@@ -2644,6 +2644,9 @@ Priority is the <code>rank</code> key, not the position of a line in a table, so
 <p>Pick the top ready item, or read the whole backlog in priority order:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python3<span class="w"> </span>scripts/docs/queue.py<span class="w"> </span>next
 </code></pre></div>
+<p><code>next</code> skips an item an open pull request already names, and says which PR on stderr.
+A PR that merely cites the id has not claimed it, so read it and pass <code>--allow QNNN</code> to take the item anyway.
+With no network, <code>--no-pr-check</code> hands out the top item and says nothing checked it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python3<span class="w"> </span>scripts/docs/queue.py<span class="w"> </span>render
 </code></pre></div>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
@@ -2746,14 +2749,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that …</td>
 </tr>
 <tr>
-<td><a href="Q990/">Q990</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py"><code>next-task</code> tells the session to check for an open PR, and never checks</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>cmd_next</code> prints "check for an open PR first" into the kickoff prompt, <code>next-task.sh</code>'s header says the session re-verifies the pick, and …</td>
-</tr>
-<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2776,14 +2771,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the …</td>
-</tr>
-<tr>
-<td><a href="Q972/">Q972</a></td>
-<td>Refund the scale-up token when a deduped listener loses the race</td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>Admit</code> takes a <code>spec.scaleUp</code> token before the claim (Q717), and the Q260 dedup loser returns from <code>listener/job.go</code> without ever creating …</td>
 </tr>
 <tr>
 <td><a href="Q960/">Q960</a></td>
