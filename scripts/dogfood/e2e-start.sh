@@ -39,6 +39,9 @@
 #                pull-through layer caches warm across e2e windows at the cost of
 #                five continuously-billed disks. Default: ephemeral emptyDir
 #                caches. See deploy/registry-mirror/README.md.
+#   GMC_ROLLOUT_TIMEOUT
+#                How long to wait for the GMC rollout that serves the v2beta1
+#                conversion webhook (default: 5m).
 #   E2E_VARIANT  Worker-isolation overlay: "kata" (unprivileged kind in a Kata
 #                micro-VM — the default, live-validated green under Q286) or
 #                "dind" (privileged DinD — explicit opt-in fallback for
@@ -65,6 +68,18 @@ E2E_VARIANT="${E2E_VARIANT:-kata}"
 # with a third always-on tenant this resize cannot evict a tenant AGC.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
 E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
+
+# The tenant apply is converted by GMC's webhook, so a GMC that has not rolled
+# out fails it with `no endpoints available for service "webhook-service"`,
+# naming the dataplane rather than the cause. At rest that is the ordinary case:
+# the resize is what gives GMC a node, so it is still starting when the apply
+# lands (measured 2026-08-28). Runs after the resize for that node, and before
+# the apply because the apply is what needs the webhook.
+wait_for_gmc() {
+	echo "Waiting for the GMC rollout (it serves the v2beta1 conversion webhook)..."
+	kubectl rollout status deployment/gmc-controller-manager \
+		--namespace gmc-system --timeout="${GMC_ROLLOUT_TIMEOUT:-5m}"
+}
 
 # The in-cluster registry pull-through cache (Q408) — one Distribution instance
 # per upstream registry, plus the additive NetworkPolicy that gives workload pods
@@ -136,6 +151,8 @@ main() {
 	gcloud container clusters resize "${CLUSTER}" \
 		--project="${PROJECT}" \
 		--node-pool="${SYSTEM_POOL}" --num-nodes="${nodes}" --zone="${ZONE}" --quiet
+
+	wait_for_gmc
 
 	# Spin up the on-demand e2e tenant. Idempotent server-side apply of the
 	# selected isolation overlay (namespace + quota + ClusterRunnerTemplate +
