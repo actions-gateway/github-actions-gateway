@@ -1,7 +1,7 @@
 # Untrusted-PR Egress Posture for Kata Workers — Q408
 
 > **Status (2026-08-27): Phase 2 manifests authored and wired into the e2e setup path; their cluster-side validation is outstanding, and books a dogfood session of its own ahead of Phase 3 rather than riding Phase 3's.** Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
-> That outstanding validation is now a command rather than a prose battery: `scripts/dogfood/e2e-mirror-validate.sh` ([§3.7](#37-the-phase-2-validation-battery)), with every expected value measured against the pinned image and both controls fired.
+> That outstanding validation is now a command rather than a prose battery: `scripts/dogfood/e2e-mirror-validate.sh` ([§3.7](#37-the-phase-2-validation-battery)), with every expected value measured and every control fired.
 > What it still needs is the cluster.
 > Phase 0 (2026-08-03) measured the job-time egress inventory ([§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0)) and re-sequenced Phases 1–4.
 > Phase 1's workflow change gates `azure/setup-helm` (`get.helm.sh`), every `actions/cache` step, and the bake's `GHA_CACHE` to the hosted lane, per the resolved [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions.
@@ -322,17 +322,25 @@ Five checks per instance, over the five declared upstreams:
 | `v2` | `GET /v2/` → 200 | the process is not up |
 | `manifest` | a real upstream manifest → 200 | **a mirror that cannot cache anything**, see below |
 | `push` | `POST …/blobs/uploads/` → 405 | [§3.1](#31-the-mirror--one-pull-through-cache-per-upstream)'s read-only property is false |
-| `debug` | nothing answers on `:5001` | the bundled development config's pprof + `/metrics` listener is still bound |
+| `debug` | `REGISTRY_HTTP_DEBUG_ADDR` set and empty in the pod spec | the bundled development config's pprof + `/metrics` listener is still bound |
 
 **`manifest` is the check that discriminates, and `v2` is the one that would have lied.** [§3.6](#36-phase-2-build-notes-measured-2026-08-27) records that a non-root instance whose storage root is unwritable answers 200 on `/v2/` and 500 on every pull; a battery graded on `/v2/` alone calls that mirror healthy.
 The same reading is why the readiness probe cannot stand in for this script.
 
-**Every expected value above was measured against the pinned image, and both controls fire.** Five instances in proxy mode on a Docker network, probed by a `curlimages/curl` container addressing them at their in-cluster names: all five returned 200 / 200 / 405 / curl-7.
-Against that, an instance left on the image's bundled config answered on `:5001` (curl 0, not 7), and one run non-root with no writable storage answered `/v2/` 200 and its manifest **500**, which is the fsGroup shape reproduced.
+**`debug` is read off the Deployment rather than probed, because the network reading cannot work.** Each Service declares one port (`5000/5000`) and `registry-mirror-worker-access` admits only TCP/5000, so a connection to a ClusterIP on 5001 never reaches the pod whatever the listener is doing.
+The dataplane decides that result, which means such a probe grades the Service and the policy rather than the config it names, and it fails in the expensive direction: an unmatched ClusterIP port is dropped rather than refused on Dataplane V2, so a healthy cluster times out and the battery reports five failures on the first booked session.
+The other observable reading, an ephemeral container in the pod's own netns, is not taken either: this namespace enforces PSA `restricted`, `kubectl debug` sets no `securityContext` on the container it injects, and whether that is admitted is a venue question no run off the cluster can settle.
+
+**The env read carries a trap of the same shape.** kubectl's jsonpath renders an empty value and an absent entry identically, and an absent entry is exactly the state where the bundled listener *is* bound.
+So the check reads the entry's name alongside its value: name present with an empty value passes, name absent fails.
+
+**Every expected value above was measured, and every control fires.** The three probe checks were taken against five instances in proxy mode on a Docker network, probed by a `curlimages/curl` container addressing them at their in-cluster names: all five returned 200 / 200 / 405.
+One run non-root with no writable storage answered `/v2/` 200 and its manifest **500**, which is the fsGroup shape reproduced.
+`debug` was measured separately, with the script's own jsonpath against the real manifests and two hand-built controls: healthy renders `True|REGISTRY_HTTP_DEBUG_ADDR|`, an instance with the entry removed renders `True||`, and one bound to an address renders `True|REGISTRY_HTTP_DEBUG_ADDR|:5001`.
 So the battery can show the opposite of what it reported.
 
 **The probe rides a worker's path, and that is not the same as proving enforcement.** The probe pod runs in the tenant namespace carrying `actions-gateway/component=workload`, so it is selected by `e2e-mirror-egress` and admitted by the mirror-side `registry-mirror-worker-access` ingress rule.
-A wrong `namespaceSelector` on either shows up here as a timeout.
+A wrong `namespaceSelector` on either shows up as a timeout on the three probe checks, every one of which addresses 5000, the single port both the Service and the policy carry.
 But the Kata overlay's allow-all `e2e-open-egress` is still in place until Phase 4, so reachability through the mirror does not yet distinguish the mirror path from the open one.
 The negatives that do are Phase 4's.
 

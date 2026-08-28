@@ -22,7 +22,25 @@
 #               finding), so the `v2` check alone grades a broken mirror green.
 #   push        POST /v2/<name>/blobs/uploads/ is refused. §3.1's read-only
 #               property, measured on the cluster rather than argued.
-#   debug       the bundled config's :5001 pprof + /metrics listener is unbound.
+#   debug       REGISTRY_HTTP_DEBUG_ADDR is set and empty in the pod spec, which
+#               is what unbinds the bundled config's :5001 pprof + /metrics
+#               listener.
+#
+# `debug` is read off the object rather than probed over the network, and the
+# network is the reading that cannot work. Each Service declares one port
+# (5000/5000) and `registry-mirror-worker-access` admits only TCP/5000, so a
+# connection to a ClusterIP on 5001 never reaches the pod whatever the listener
+# is doing: the dataplane decides the result, so the probe grades the Service
+# and the policy rather than the config it names. It also fails closed in the
+# expensive direction, since an unmatched ClusterIP port is dropped rather than
+# rejected on Dataplane V2, and the timeout that produces is not the refusal a
+# probe would score as healthy.
+#
+# The other observable reading is an ephemeral container in the pod's own netns
+# (`kubectl debug --target`). Not taken: this namespace enforces PSA
+# `restricted`, `kubectl debug` sets no securityContext on the container it
+# injects, and whether that is admitted is a venue question no run here can
+# settle. An object read has no venue.
 #
 # It does NOT prove enforcement. The probe pod runs in the tenant namespace
 # carrying the workload label, so it rides the same NetworkPolicy pair a worker
@@ -77,9 +95,14 @@ MIRROR_INSTANCES=(
 	"mirror-gcr-io distroless/static nonroot"
 )
 
-# The four checks each instance is graded on. `available` is read from the
-# cluster by this script; the other four come back from the probe pod.
-PROBE_CHECKS=(v2 manifest push debug)
+# The three checks the probe pod reports. `available` and `debug` are read from
+# the Deployment object by this script instead, so they are graded separately.
+PROBE_CHECKS=(v2 manifest push)
+
+# The env var whose empty value unbinds the image's bundled :5001 debug listener.
+# Read by name AND value: kubectl's jsonpath renders an empty value and an absent
+# entry identically, and an absent entry means the listener is bound.
+DEBUG_ADDR_VAR="REGISTRY_HTTP_DEBUG_ADDR"
 
 # --- pure helpers (unit-tested; no kubectl, no cluster) ----------------------
 
@@ -109,11 +132,6 @@ mirror_probe_script() {
 			"${instance}" "${accept}" "${host}" "${repo}" "${ref}"
 		printf 'echo "%s push $(curl -s -o /dev/null -w "%%{http_code}" --max-time 20 -X POST http://%s/v2/%s/blobs/uploads/ || true)"\n' \
 			"${instance}" "${host}" "${repo}"
-		# No -w here: what is being read is whether the connection establishes at
-		# all, which is curl's exit status (7 == could not connect), not a status
-		# line. A listener that answers anything makes this non-7 and fails.
-		printf 'curl -s -o /dev/null --max-time 10 http://%s.%s.svc.cluster.local:5001/metrics; echo "%s debug $?"\n' \
-			"${instance}" "${ns}" "${instance}"
 	done
 }
 
@@ -149,13 +167,17 @@ grade_probe_output() {
 			# independently of `delete.enabled`. Any 2xx here means the mirror
 			# accepted an upload and §3.1's read-only property is false.
 			push) expected=405 ;;
-			# curl 7: connection refused / nothing listening.
-			debug) expected=7 ;;
 			esac
 			if [[ "${got}" == "${expected}" ]]; then
 				echo "PASS ${instance} ${check}"
 			elif [[ "${check}" == "push" && "${got}" =~ ^2[0-9][0-9]$ ]]; then
 				echo "FAIL ${instance} ${check}: upload ACCEPTED (${got}) — the mirror is not read-only"
+				failed=1
+			elif [[ "${got}" == 429 ]]; then
+				# Anonymous pull-through shares the mirror's egress IP, so Docker
+				# Hub's per-IP limit can answer here. It is a rate limit rather
+				# than a broken mirror, and the code alone does not say so.
+				echo "FAIL ${instance} ${check}: got 429, want ${expected} — upstream rate limit, not a mirror fault; retry, or set proxy.username/password"
 				failed=1
 			else
 				echo "FAIL ${instance} ${check}: got ${got}, want ${expected}"
@@ -175,21 +197,42 @@ probe_pod_overrides() {
 
 # --- cluster-side ------------------------------------------------------------
 
-# check_instances_available — grade the `available` check for every declared
-# instance off the Deployment's Available condition. Reads each instance by name
-# rather than listing the label, for the reason the instance table gives: a
-# listing shrinks the battery when an instance is missing instead of failing it.
-check_instances_available() {
-	local row instance repo ref status failed=0
+# check_instance_objects — grade the two checks that are properties of the
+# Deployment rather than of a request: `available` and `debug`. Reads each
+# instance by name rather than listing the label, for the reason the instance
+# table gives: a listing shrinks the battery when an instance is missing instead
+# of failing it.
+#
+# One read per instance, three fields, pipe-separated. Both the env name and its
+# value are read because they answer different halves: an entry present with an
+# empty value is what unbinds :5001, while no entry at all leaves the bundled
+# config's listener bound. kubectl's jsonpath renders those identically on the
+# value alone, so reading only the value would grade the dangerous state green.
+# A kubectl that fails outright leaves all three empty, which fails both checks.
+check_instance_objects() {
+	local row instance repo ref raw status envname envvalue failed=0
+	local jsonpath="jsonpath={.status.conditions[?(@.type==\"Available\")].status}"
+	jsonpath+="|{.spec.template.spec.containers[0].env[?(@.name==\"${DEBUG_ADDR_VAR}\")].name}"
+	jsonpath+="|{.spec.template.spec.containers[0].env[?(@.name==\"${DEBUG_ADDR_VAR}\")].value}"
 	for row in "${MIRROR_INSTANCES[@]}"; do
 		read -r instance repo ref <<<"${row}"
-		status="$(kubectl get deployment "${instance}" --namespace "${MIRROR_NAMESPACE}" \
-			-o 'jsonpath={.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)"
+		raw="$(kubectl get deployment "${instance}" --namespace "${MIRROR_NAMESPACE}" \
+			-o "${jsonpath}" 2>/dev/null || true)"
+		IFS='|' read -r status envname envvalue <<<"${raw}"
 		if [[ "${status}" == "True" ]]; then
 			echo "PASS ${instance} available"
 		else
 			echo "FAIL ${instance} available: Available=${status:-<absent>}"
 			failed=1
+		fi
+		if [[ -z "${envname}" ]]; then
+			echo "FAIL ${instance} debug: ${DEBUG_ADDR_VAR} is not set, so the image's bundled :5001 listener is bound"
+			failed=1
+		elif [[ -n "${envvalue}" ]]; then
+			echo "FAIL ${instance} debug: ${DEBUG_ADDR_VAR}=${envvalue}, want empty"
+			failed=1
+		else
+			echo "PASS ${instance} debug"
 		fi
 	done
 	return "${failed}"
@@ -252,12 +295,19 @@ main() {
 		die "namespace '${TENANT_NAMESPACE}' is absent — bring the e2e tenant up first (scripts/dogfood/e2e-start.sh)"
 	fi
 
+	# Both namespaces get a precondition with a named remedy rather than a check
+	# that grades nothing: a typo in either produces a well-formed all-FAIL run
+	# whose reason lines describe the wrong problem.
+	if ! kubectl get namespace "${MIRROR_NAMESPACE}" >/dev/null 2>&1; then
+		die "namespace '${MIRROR_NAMESPACE}' is absent — apply the mirror first (scripts/dogfood/e2e-start.sh)"
+	fi
+
 	local failed=0
 
-	step "Instance availability (${MIRROR_NAMESPACE})"
-	check_instances_available || failed=1
+	step "Instance availability and debug-listener config (${MIRROR_NAMESPACE})"
+	check_instance_objects || failed=1
 
-	step "Serving, read-only and debug-listener probes (from ${TENANT_NAMESPACE})"
+	step "Serving and read-only probes (from ${TENANT_NAMESPACE})"
 	local probe_out
 	probe_out="$(run_probe)"
 	grade_probe_output <<<"${probe_out}" || failed=1

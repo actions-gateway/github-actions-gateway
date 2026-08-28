@@ -89,8 +89,8 @@ a_clean_transcript() {
 	local row instance repo ref
 	for row in "${MIRROR_INSTANCES[@]}"; do
 		read -r instance repo ref <<<"${row}"
-		printf '%s v2 200\n%s manifest 200\n%s push 405\n%s debug 7\n' \
-			"${instance}" "${instance}" "${instance}" "${instance}"
+		printf '%s v2 200\n%s manifest 200\n%s push 405\n' \
+			"${instance}" "${instance}" "${instance}"
 	done
 }
 
@@ -148,15 +148,6 @@ check "an unexpected refusal fails" 1 "${GRADE_RC}"
 check_contains "an unexpected refusal reports both codes" \
 	"FAIL mirror-ghcr-io push: got 404, want 405" "${GRADE_OUT}"
 
-# --- the debug listener ------------------------------------------------------
-#
-# Measured control: an instance running the image's bundled development config
-# answers on :5001, so curl exits 0 rather than 7.
-grade "$(a_clean_transcript | awk '$1 == "mirror-gcr-io" && $2 == "debug" { $3 = 0 } { print }')"
-check "a bound debug listener fails" 1 "${GRADE_RC}"
-check_contains "a bound debug listener reports curl's status" \
-	"FAIL mirror-gcr-io debug: got 0, want 7" "${GRADE_OUT}"
-
 # --- the probe script covers the whole table --------------------------------
 
 probe="$(mirror_probe_script gag-registry-mirror)"
@@ -177,10 +168,16 @@ for row in "${MIRROR_INSTANCES[@]}"; do
 	[[ "${probe}" == *"/v2/${repo}/manifests/${ref}"* ]] || missing="${missing} ${instance}/ref"
 	[[ "${probe}" == *"${instance}.gag-registry-mirror.svc.cluster.local:5000"* ]] ||
 		missing="${missing} ${instance}/host"
-	[[ "${probe}" == *"${instance}.gag-registry-mirror.svc.cluster.local:5001"* ]] ||
-		missing="${missing} ${instance}/debug-host"
 done
 check "the probe covers every instance and check" "" "${missing}"
+
+# The probe must not address 5001 at all. Each Service declares only 5000/5000
+# and the ingress policy admits only TCP/5000, so a ClusterIP probe on 5001 is
+# graded by the dataplane rather than by the listener: on Dataplane V2 an
+# unmatched port is dropped, which times out and fails a healthy cluster, and a
+# reject would pass a bound listener. `debug` is an object read for that reason,
+# and this assertion is what keeps it from drifting back to a probe.
+check_not_contains "the probe never addresses the debug port" ":5001" "${probe}"
 
 # The namespace is a parameter, and it reaches every address the probe builds.
 check_contains "the probe honours the namespace" \
@@ -189,51 +186,97 @@ check_contains "the probe honours the namespace" \
 check_not_contains "and leaves no default behind" \
 	"gag-registry-mirror" "$(mirror_probe_script other-ns)"
 
-# --- availability is read per declared instance, not from a listing ---------
+# --- the object reads: availability and the debug listener ------------------
+#
+# Both come off one `kubectl get deployment` per declared instance, whose output
+# the stub returns verbatim as `<Available>|<env name>|<env value>`. Those three
+# fields were measured against the real manifests and two controls, using the
+# exact jsonpath the script builds: healthy renders
+# `True|REGISTRY_HTTP_DEBUG_ADDR|`, an instance with the env entry removed
+# renders `True||`, and one bound to an address renders
+# `True|REGISTRY_HTTP_DEBUG_ADDR|:5001`.
 
 CALL_LOG="${WORKDIR}/calls.log"
-AVAILABLE_FILE="${WORKDIR}/available"
+OBJECTS_FILE="${WORKDIR}/objects"
 kubectl() {
 	printf 'kubectl %s\n' "$*" >>"${CALL_LOG}"
 	local name
 	name="$(awk '{ for (i = 1; i <= NF; i++) if ($i == "deployment") { print $(i + 1); exit } }' <<<"$*")"
-	grep -qx "${name}" "${AVAILABLE_FILE}" && echo -n True
+	awk -v n="${name}" '$1 == n { print $2 }' "${OBJECTS_FILE}"
 	return 0
 }
 
-# arm_available NAME... — only these instances report Available.
-arm_available() {
-	printf '%s\n' "$@" >"${AVAILABLE_FILE}"
+# arm_objects "<instance> <raw>"... — what `kubectl get` returns per instance.
+# An instance left out returns nothing, which is the absent case.
+arm_objects() {
+	printf '%s\n' "$@" >"${OBJECTS_FILE}"
 	: >"${CALL_LOG}"
 }
 
-run_available() {
+run_objects() {
 	set +e
-	AVAIL_OUT="$(check_instances_available)"
-	AVAIL_RC=$?
+	OBJ_OUT="$(check_instance_objects)"
+	OBJ_RC=$?
 	set -e
 }
 
-all_instances=()
+# healthy NAME — the raw read a correctly-configured instance produces.
+healthy() { printf '%s True|REGISTRY_HTTP_DEBUG_ADDR|' "$1"; }
+
+all_healthy=()
 for row in "${MIRROR_INSTANCES[@]}"; do
 	read -r instance repo ref <<<"${row}"
-	all_instances+=("${instance}")
+	all_healthy+=("$(healthy "${instance}")")
 done
 
-arm_available "${all_instances[@]}"
-run_available
-check "all instances Available passes" 0 "${AVAIL_RC}"
+arm_objects "${all_healthy[@]}"
+run_objects
+check "a healthy cluster passes" 0 "${OBJ_RC}"
 check "one read per declared instance" "${#MIRROR_INSTANCES[@]}" "$(wc -l <"${CALL_LOG}" | tr -d ' ')"
+check "both object checks are graded per instance" \
+	"$((${#MIRROR_INSTANCES[@]} * 2))" "$(grep -c '^PASS ' <<<"${OBJ_OUT}")"
 
 # An instance the cluster does not have at all. The reason the table is data
 # rather than a `kubectl get -l app=registry-mirror` listing: derived, four
 # healthy mirrors out of five declared would report four passes and no failure.
-arm_available mirror-docker-io mirror-ghcr-io mirror-quay-io mirror-registry-k8s-io
-run_available
-check "a missing instance fails" 1 "${AVAIL_RC}"
+arm_objects "$(healthy mirror-docker-io)" "$(healthy mirror-ghcr-io)" \
+	"$(healthy mirror-quay-io)" "$(healthy mirror-registry-k8s-io)"
+run_objects
+check "a missing instance fails" 1 "${OBJ_RC}"
 check_contains "a missing instance is named" \
-	"FAIL mirror-gcr-io available: Available=<absent>" "${AVAIL_OUT}"
-check "the other four still pass" 4 "$(grep -c '^PASS ' <<<"${AVAIL_OUT}")"
+	"FAIL mirror-gcr-io available: Available=<absent>" "${OBJ_OUT}"
+check "the other four still pass availability" 4 \
+	"$(grep -c '^PASS .* available$' <<<"${OBJ_OUT}")"
+
+# --- the debug check reads the env NAME, not only its value -----------------
+#
+# This is the case that would grade the dangerous state green if the check read
+# `.value` alone. kubectl's jsonpath renders an empty value and an absent entry
+# identically, and the absent one is the state where the bundled config's :5001
+# listener is bound. Measured with the script's own jsonpath: `True||`.
+arm_objects "$(healthy mirror-docker-io)" "$(healthy mirror-ghcr-io)" \
+	"$(healthy mirror-quay-io)" "$(healthy mirror-registry-k8s-io)" \
+	"mirror-gcr-io True||"
+run_objects
+check "an unset debug var fails" 1 "${OBJ_RC}"
+check_contains "an unset debug var says the listener is bound" \
+	"FAIL mirror-gcr-io debug: REGISTRY_HTTP_DEBUG_ADDR is not set" "${OBJ_OUT}"
+check_contains "its availability is unaffected" "PASS mirror-gcr-io available" "${OBJ_OUT}"
+
+# Bound to a real address: present, non-empty.
+arm_objects "$(healthy mirror-docker-io)" "$(healthy mirror-ghcr-io)" \
+	"$(healthy mirror-quay-io)" "$(healthy mirror-registry-k8s-io)" \
+	"mirror-gcr-io True|REGISTRY_HTTP_DEBUG_ADDR|:5001"
+run_objects
+check "a bound debug listener fails" 1 "${OBJ_RC}"
+check_contains "a bound debug listener reports the address" \
+	"FAIL mirror-gcr-io debug: REGISTRY_HTTP_DEBUG_ADDR=:5001, want empty" "${OBJ_OUT}"
+
+# A kubectl that cannot read the object at all fails both checks rather than one.
+arm_objects "$(healthy mirror-docker-io)"
+run_objects
+check "an unreadable object fails both checks" 1 "${OBJ_RC}"
+check "four instances fail twice each" 8 "$(grep -c '^FAIL ' <<<"${OBJ_OUT}")"
 
 # --- the probe rides a worker's network path --------------------------------
 
