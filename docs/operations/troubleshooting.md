@@ -94,6 +94,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [Worker Pod Crashes With configuredSettings ArgumentNullException](#worker-pod-crashes-with-configuredsettings-argumentnullexception)
 - [kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout](#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout)
+- [Applying Any v2 Object Fails With no endpoints available for service "webhook-service"](#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service)
 - [Worker HTTPS_PROXY Returns connection refused During Proxy Rollout](#worker-https_proxy-returns-connection-refused-during-proxy-rollout)
 - [Prometheus Not Scraping Proxy or AGC Metrics](#prometheus-not-scraping-proxy-or-agc-metrics)
 - [Proxy Replica Stuck Pending After Enabling HA Defaults](#proxy-replica-stuck-pending-after-enabling-ha-defaults)
@@ -4516,6 +4517,65 @@ kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout
 **Resolution.**
 - Upgrade the GMC image to one built from commit `0eaa30e` or later — the readyz check now waits for the webhook server's `StartedChecker()`.
 - Until the upgrade is in place, retry the failing `kubectl apply` after 5–10 seconds.
+
+---
+
+## Applying Any v2 Object Fails With `no endpoints available for service "webhook-service"`
+
+**Symptoms.** Creating or updating any v2 custom resource fails immediately, with no timeout:
+
+```
+Internal error occurred: conversion webhook for actions-gateway.com/v2beta1,
+Kind=ActionsGateway failed: Post
+"https://webhook-service.gmc-system.svc:443/convert?timeout=30s":
+no endpoints available for service "webhook-service"
+```
+
+It affects every v2 kind, not just `ActionsGateway`: `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate` and `EgressProxy` all set `conversion.strategy: Webhook` against the same Service, so a `kubectl apply` of any of them is routed through `/convert`.
+
+**This is not the rollout race documented above.** That one reports `context deadline exceeded`, has endpoints present but not yet serving, and clears in seconds on retry.
+This one names *no endpoints at all*, fails instantly, and does not clear on retry, because there is no GMC pod for the Service to select.
+
+**Likely causes.**
+
+- **The cluster has no schedulable node**, so the GMC is `Pending` rather than crashed.
+  A cluster kept at zero nodes for cost reasons returns through this state on every scale-up: the resize is what gives the GMC somewhere to schedule, and it is still pulling its image when the first apply lands.
+- The GMC Deployment is scaled to zero, or its namespace was cleaned up while the CRDs were left installed.
+  The CRDs and the GMC are separate charts ([install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds)), so removing one leaves the other's conversion wiring in place.
+- The GMC is deployed to a namespace other than the one baked into the CRDs' `clientConfig`.
+  The release asset hardcodes `gmc-system`; a GMC installed elsewhere leaves that Service permanently empty.
+
+**Diagnostics.**
+
+```sh
+# 1. Endpoints first: this is the reading the error is actually about.
+#    Empty output means no Ready GMC pod backs the Service.
+kubectl get endpointslice -n gmc-system -l kubernetes.io/service-name=webhook-service
+
+# 2. Distinguish "not scheduled" from "not installed" from "crashed".
+kubectl get deployment gmc-controller-manager -n gmc-system
+kubectl get pods -n gmc-system -o wide
+
+# 3. If a pod is Pending, it is a scheduling problem, not a webhook problem.
+kubectl describe pod -n gmc-system -l control-plane=controller-manager | tail -20
+kubectl get nodes
+```
+
+**Resolution.**
+
+- **Wait for the rollout, then re-apply.** Nothing is broken; the apply was simply made too early:
+
+  ```sh
+  kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=5m
+  ```
+
+- **If the pod is `Pending`, add capacity** and let the rollout complete.
+  The apply cannot succeed before it does.
+- **If the GMC runs outside `gmc-system`**, re-render the CRDs for that namespace.
+  The conversion `clientConfig` is baked per namespace, and no amount of waiting fixes a Service reference that points somewhere the GMC is not ([install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds)).
+
+**Ordering, so it does not recur.** Bring the GMC up before applying v2 objects, which is the rule [install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds) states as *create v2 objects only once the GMC is running*.
+The dogfood scripts encode it: `wait_for_gmc` in `scripts/dogfood/lib/gmc.sh` runs after the pool resize that gives the GMC a node and before the apply its webhook serves.
 
 ---
 
