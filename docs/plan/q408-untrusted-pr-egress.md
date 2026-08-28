@@ -368,7 +368,7 @@ The probe did ride a worker's own policy pair, which is real coverage of `regist
 
 **Two findings about the session path, neither about the mirror.** `e2e-start.sh` applies the tenant without waiting for GMC, so from the 0-node at-rest state its apply fails on `no endpoints available for service "webhook-service"` after it has already resized the pool.
 [release.md](../operations/release.md) documents the remedy by ordering `start.sh` ahead of it; the failure is the documented ordering being skipped rather than a defect, and it costs a pool resize either way.
-Separately, `e2e-start.sh` and `e2e-stop.sh` are committed non-executable, so the bare invocation both this plan and `release.md` prescribe exits 126 before reading an env var: [Q1013](../queue/Q1013.md).
+Separately, `e2e-start.sh` and `e2e-stop.sh` were committed non-executable, so the bare invocation both this plan and `release.md` prescribe exited 126 before reading an env var (Q1013, fixed with a gate against the whole class).
 
 ## 4. Phases
 
