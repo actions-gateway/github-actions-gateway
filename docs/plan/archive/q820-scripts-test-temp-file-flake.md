@@ -143,7 +143,7 @@ Watch the syscalls with an interposer on `open`/`mkdir`/`rmdir`/`unlink`, rememb
 
 The fix removes the only concurrent writer found in these repositories, so a recurrence means a different one.
 Capture, in order: the failing call from the `ERR` trap, the `Q820:` tree reading, the errno and which object, and whether a sibling suite failed in the same run.
-[Q826](../../queue/Q826.md) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../../queue/Q822.md) tracks unrelated suites failing under concurrent load.
+Q826 is a sibling flake in [`git-merge-gate-lists-test.sh`](../../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../../queue/Q822.md) tracks unrelated suites failing under concurrent load.
 
 **This mechanism does not reach Q826**, measured 2026-08-18 while sweeping the fix across the tier.
 That fixture holds about six objects against `gc.auto`'s default 6700, so its three detached maintenance runs return without repacking anything, and there is no prune to race — the trace shows the `maintenance run` line followed straight by the next suite command, where this suite's shows `git repack -d -l --cruft` under it.
