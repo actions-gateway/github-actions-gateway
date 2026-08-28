@@ -3350,6 +3350,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-control-that-fires-in-the-wrong-venue-is-not-a-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A control that fires in the wrong venue is not a control
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5296,6 +5307,11 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
   A background run's verdict comes from its completion notification and its output file, never from a process probe.
   Read the task output for the <code>EXIT=</code> line the <code>rc=</code> idiom above preserves.
   When a probe genuinely needs <code>pgrep</code>, break the self-match with a bracket, <code>pgrep -f "pr-sentinel-watc[h]"</code>, and confirm it against a case whose answer is already known.</li>
+<li><strong>A refused or aborted call runs nothing, and what you see can still read like success.</strong> A guard hook denies the <em>whole</em> Bash invocation, so an edit bundled with the command that verifies it never executes, and the next command's <code>OK</code> is indistinguishable from the edit's.
+  A multi-step script aborts the same way: a Python edit run that asserts on a stale anchor writes nothing and leaves the steps before it unwritten, while whatever ran earlier in the call has already printed.
+  Both landed on 2026-08-27 in one session, and in the second case a terminal still showing <code>ok &lt;other file&gt;</code> sat above a file that had not changed.
+  Two habits close it: keep a file mutation in its own call, away from the gate that checks it, and confirm it by grepping the file for the new text rather than by the status of the call that wrote it.
+  This is the write-side twin of the pipe rule above, where the status is lost; here the command never ran.</li>
 <li><strong>A tool that exits 0 having printed nothing may have checked nothing.</strong> <code>gh attestation verify</code> writes its summary only to a TTY; captured or redirected it is silent, so make it emit something assertable (<code>--format json</code>, then read the predicate) rather than trusting the status.</li>
 <li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes, and a set that looks static may be churning underneath a stable count, so compare <em>identities</em> across two readings rather than counts.</li>
 <li><strong>A count grouped by symptom is not a measurement of cause.</strong> workspace-guard's friction report folds <code>f=$(ls -t …)</code>, <code>for f in &lt;glob&gt;</code>, and a literal <code>f=/path</code> into a single <code>$f</code> row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days.
@@ -5693,6 +5709,21 @@ A control must be able to fail, and it must vary one thing.</p>
 <p>That census probe reproduced the Q571 regex verbatim: a character class excluding a preceding <code>/</code>, so every <code>$REPO_ROOT/tmp/…</code> was skipped and only the rare bare <code>tmp/…</code> survived.
 The trap two sections up, in a different tool, in a session that had the section open.
 Treat a path-matching pattern's treatment of its own leading separator as a thing to test rather than a thing to read.</p>
+<h4 id="a-control-that-fires-in-the-wrong-venue-is-not-a-control">A control that fires in the wrong venue is not a control<a class="headerlink" href="#a-control-that-fires-in-the-wrong-venue-is-not-a-control" title="Permanent link">&para;</a></h4>
+<p>The two rules above ask a control to name a member and to vary one thing.
+A control can do both, fire exactly as designed, and still prove nothing about the check that ships, because it ran somewhere the check does not.</p>
+<p>Q408's mirror battery graded a <code>debug</code> check by curling <code>mirror-&lt;x&gt;.&lt;ns&gt;.svc.cluster.local:5001</code> and scoring a refused connection as healthy.
+Its control was a second instance left on the image's bundled development config, which answers on 5001; the control fired, returning curl 0 against the healthy case's 7.
+Both ran on a Docker network, addressing container IPs through <code>--add-host</code>.
+The shipped check runs in-cluster, where every mirror Service declares one port (<code>5000/5000</code>) and the ingress policy admits only TCP/5000, so a connection to a ClusterIP on 5001 never reaches the pod at all.
+The dataplane decides that result, not the listener, and both of its outcomes are wrong: a dropped port times out and fails a healthy cluster, a rejected one returns the same refusal whether or not the listener is bound.
+The control could not have discriminated in the venue that mattered, and it looked like proof because it discriminated in the one it was run in.
+Caught in review, before the first booked dogfood session spent itself on five false failures.</p>
+<p>Ask what stands between the probe and the thing being measured <strong>in the venue the check runs in</strong>, and put each layer in the control or take the reading somewhere it has no layers.
+The replacement reads the value off the Deployment object, where there is no Service, no policy and no venue.</p>
+<p>Its own trap is the same shape one level down, and worth the paragraph because a config read looks unimpeachable: kubectl's jsonpath renders an absent env entry and an entry with an empty value identically, and the absent one is the <em>unsafe</em> state.
+Reading <code>.value</code> alone would have graded it green.
+The check reads the entry's name alongside its value, and its controls are three renderings of the real manifests rather than a live cluster: <code>True|REGISTRY_HTTP_DEBUG_ADDR|</code> healthy, <code>True||</code> for a removed entry, <code>True|REGISTRY_HTTP_DEBUG_ADDR|:5001</code> for a bound one.</p>
 <h3 id="a-syscall-level-probe-of-a-scripts-suite-has-two-silent-ways-to-measure-nothing">A syscall-level probe of a <code>scripts/</code> suite has two silent ways to measure nothing<a class="headerlink" href="#a-syscall-level-probe-of-a-scripts-suite-has-two-silent-ways-to-measure-nothing" title="Permanent link">&para;</a></h3>
 <p>Tracing what a suite's child processes actually do means interposing on libc with <code>DYLD_INSERT_LIBRARIES</code>, and two mechanics here make that report a clean negative while observing nothing at all.</p>
 <ul>
