@@ -62,29 +62,32 @@ git clone git@github.com:karlkfi/claude-skills.git ~/workspace/claude-skills
 ln -s ~/workspace/claude-skills/tech-docs-layers ~/.claude/skills/tech-docs-layers
 ```
 
-Three guard plugins are also recommended — `PreToolUse` hooks that keep AI-assisted work on the rails this repo expects (worktree-scoped edits, `claude/*` feature branches, no accidental destructive commands against the shared dogfood cluster).
-Install all three from within Claude Code:
+Guard plugins are also recommended: `PreToolUse` hooks that keep AI-assisted work on the rails this repo expects (worktree-scoped edits, `claude/*` feature branches, no accidental destructive commands against the shared dogfood cluster, no gate whose failure is swallowed).
+All five ship from one marketplace, [`karlkfi/claude-bouncer`](https://github.com/karlkfi/claude-bouncer); install them from within Claude Code:
 
 ```
-/plugin marketplace add karlkfi/claude-workspace-guard
-/plugin install workspace-guard@workspace-guard
+/plugin marketplace add karlkfi/claude-bouncer
 
-/plugin marketplace add karlkfi/claude-branch-guard
-/plugin install branch-guard@branch-guard
-
-/plugin marketplace add karlkfi/claude-prod-guard
-/plugin install prod-guard@prod-guard
+/plugin install workspace-guard@claude-bouncer
+/plugin install branch-guard@claude-bouncer
+/plugin install prod-guard@claude-bouncer
+/plugin install foreground-guard@claude-bouncer
+/plugin install exit-status-guard@claude-bouncer
 ```
 
-- [`workspace-guard`](https://github.com/karlkfi/claude-workspace-guard) — path-aware bash permissions: prompts when a guarded file command targets a path outside the project root.
-- [`branch-guard`](https://github.com/karlkfi/claude-branch-guard) — prompts before commits, pushes, or destructive git commands on a protected branch (`main`/`master`).
-- [`prod-guard`](https://github.com/karlkfi/claude-prod-guard) — denies destructive commands (`kubectl`/`helm`/`gcloud`/`terraform`) aimed at production-classified targets.
-  This repo ships [`.claude/prod-guard.json`](.claude/prod-guard.json) marking the shared GKE dogfood cluster (`gag-dogfood`) as production, so ad-hoc `kubectl delete`/`helm uninstall`/`gcloud clusters delete` against it are blocked unless prefixed with `PROD_GUARD_OVERRIDE=<reason>`.
+- `workspace-guard` gives path-aware bash permissions: it prompts when a guarded file command targets a path outside the project root.
+- `branch-guard` prompts before commits, pushes, or destructive git commands on a protected branch (`main`/`master`).
+- `prod-guard` denies destructive commands (`kubectl`/`helm`/`gcloud`/`terraform`) aimed at production-classified targets.
+- `foreground-guard` prompts when a call parks the main thread (watch/follow modes, sleep-poll loops) or runs a registered slow gate with too short a timeout.
+- `exit-status-guard` denies a call that loses a gate's exit status: a gate piped into a filter, a backgrounded call ending in something that cannot carry a failure out, or a gate sequenced with `;` before a state-changing command.
+
+Each guard was previously published from a repo of its own; those repos still exist and still hold the issues their code and docs cite, but the plugins are maintained in `claude-bouncer` now.
+This repo ships [`.claude/prod-guard.json`](.claude/prod-guard.json) marking the shared GKE dogfood cluster (`gag-dogfood`) as production, so ad-hoc `kubectl delete`/`helm uninstall`/`gcloud clusters delete` against it are blocked unless prefixed with `PROD_GUARD_OVERRIDE=<reason>`.
 
 Restart Claude Code after installing so the hooks register (`python3` and `git` must be on your `PATH`).
 
 **These plugins are built by this project's maintainer, and this repo is their primary dogfood.** That makes the guards part of what is being developed here, not just tooling around it.
-So a prompt that fires wrongly, a pattern that misses, or a denial with an unhelpful message is a **finding**, and it gets filed against the plugin's own repo rather than worked around in a session.
+So a prompt that fires wrongly, a pattern that misses, or a denial with an unhelpful message is a **finding**, and it gets recorded upstream rather than worked around in a session: a backlog row under `docs/queue/` in [`karlkfi/claude-bouncer`](https://github.com/karlkfi/claude-bouncer) for the five guards, an issue on its own repo for `pr-sentinel`.
 Working around one fixes nothing for the next session, the next repo, or anyone else running the plugin.
 The same goes for bugs found in Claude Code itself, and in upstream projects this exercises; several have been reported from work on this repo.
 
@@ -331,7 +334,7 @@ The title said nothing about that.
 Revise before opening; if the other PR's evidence invalidates yours, put that on the Queue row instead of shipping around it.
 
 **Nothing checks this for you.** A repo-local hook used to compare this branch's changes against every open PR's at `gh pr create` (Q668), narrowed to colliding line ranges rather than shared paths (Q862) after reading disjoint hunks in one large file as a collision cost three overrides in two days (#1505, #1527, #1531).
-It was retired with the rest of that hook, which duplicated the installed pipe-guard plugin; the plugin carries no repo-state checks.
+It was retired with the rest of that hook, which duplicated the installed exit-status-guard plugin; the plugin carries no repo-state checks.
 Run the comparison by hand: `gh pr list` for what is open, then `gh pr diff <n>` for any PR sharing a path with your own `git diff origin/main...HEAD --stat`.
 Two edits within six lines of each other collide, because a diff carries three lines of context on either side.
 **What that check asked for is the reading, not a re-scope**: read the other PR's diff and body, and say what that PR claims rather than only where it sits.
