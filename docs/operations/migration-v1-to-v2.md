@@ -213,6 +213,10 @@ They are still two independent tenants, and each provisions its own pool of pre-
 | Secret label | `actions-gateway/runner-group=web` | `actions-gateway.com/runner-set=web` |
 | GitHub runner name | `web-<index>` | `rs-web-<index>` |
 
+> **Do not name a `RunnerGroup` with an `rs-` prefix.** The prefix is what separates the two derivations, so a `RunnerGroup` named `rs-web` derives the same Secret and the same GitHub runner name as a `RunnerSet` named `web`.
+> Whichever of the two reconciles second cannot create its agents at all, and reports `agent identity is owned by another pool` until one of them is renamed.
+> See [Agent Pool Blocked: Another Tenant Owns the Agent Secret](troubleshooting.md#agent-pool-blocked-another-tenant-owns-the-agent-secret).
+
 So during coexistence you will see **two sets of runners** registered with GitHub for one tenant — expected, and the reason both can run at once.
 Each agent Secret also carries an `ownerReference` to the `RunnerGroup` or `RunnerSet` it belongs to, so `kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'` answers "which tenant owns this?" without guessing from the name.
 

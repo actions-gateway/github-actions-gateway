@@ -11,10 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // Q466: a v1 RunnerGroup and a v2 RunnerSet of the same name share a namespace for
@@ -144,6 +146,99 @@ func TestCoexistence_SameNameGroupAndSetDoNotCollide(t *testing.T) {
 	assert.Len(t, groupAgents, 2, "the v1 pool must still be whole after the v2 side is removed")
 	assert.Equal(t, 4, registrar.RegisterCalls(),
 		"tearing down the RunnerSet must not have forced the RunnerGroup to re-register")
+}
+
+// TestCollision_PrefixedNameDoesNotDeregisterIncumbent covers Q979: the "rs-"
+// discriminator is a prefix, not an injection, so a RunnerGroup named "rs-foo" and a
+// RunnerSet named "foo" derive one Secret name and one GitHub runner name. Neither
+// pool's selector sees the other's Secret, so the second one to reconcile finds its
+// index missing — and before the fix registered anyway, took the 409, and resolved it
+// by deregistering the incumbent's live record. The pool that loses the name must fail
+// without touching GitHub, in both orderings.
+func TestCollision_PrefixedNameDoesNotDeregisterIncumbent(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		incumbent func(c client.Client, r agentpool.Registrar) *agentpool.Pool
+		loser     func(c client.Client, r agentpool.Registrar) *agentpool.Pool
+	}{
+		{
+			name: "RunnerSet first",
+			incumbent: func(c client.Client, r agentpool.Registrar) *agentpool.Pool {
+				return agentpool.NewRunnerSetPool(c, testNS, "foo", "2.335.1", nil, r, agentpool.KeyTypeEd25519)
+			},
+			loser: func(c client.Client, r agentpool.Registrar) *agentpool.Pool {
+				return agentpool.NewPool(c, testNS, "rs-foo", "2.335.1", nil, r, agentpool.KeyTypeEd25519)
+			},
+		},
+		{
+			name: "RunnerGroup first",
+			incumbent: func(c client.Client, r agentpool.Registrar) *agentpool.Pool {
+				return agentpool.NewPool(c, testNS, "rs-foo", "2.335.1", nil, r, agentpool.KeyTypeEd25519)
+			},
+			loser: func(c client.Client, r agentpool.Registrar) *agentpool.Pool {
+				return agentpool.NewRunnerSetPool(c, testNS, "foo", "2.335.1", nil, r, agentpool.KeyTypeEd25519)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			c := fake.NewClientBuilder().WithScheme(scheme()).Build()
+			registrar := agentpool.NewStubRegistrar()
+
+			require.NoError(t, tc.incumbent(c, registrar).EnsureAgents(ctx, 1, "tok"))
+			id := registrar.AgentIDForName("rs-foo-0")
+			require.NotZero(t, id)
+
+			err := tc.loser(c, registrar).EnsureAgents(ctx, 1, "tok")
+			require.ErrorIs(t, err, agentpool.ErrAgentNameCollision,
+				"the colliding pool must report the collision, not a bare Secret AlreadyExists")
+
+			assert.Equal(t, id, registrar.AgentIDForName("rs-foo-0"),
+				"the incumbent's GitHub record must survive, holding the ID its Secret still names")
+			assert.Equal(t, 0, registrar.DeregisterCalls(), "no live record may be deregistered")
+			assert.Equal(t, 1, registrar.RegisterCalls(),
+				"the collision must be settled before GitHub is called at all")
+			assert.Equal(t, []string{"agentpool-rs-foo-0"}, secretNames(t, c))
+		})
+	}
+}
+
+// TestCollision_RefusesDeregisterAfterRacingRegister covers the window the Secret
+// pre-check cannot: the incumbent registers with GitHub but has not yet written its
+// Secret when the colliding pool looks, so the collision surfaces as the 409 instead.
+// Resolving that 409 by deregistering is what destroys a live record, so the
+// conflicting name is re-checked against the Secret before anything is deleted (Q979).
+func TestCollision_RefusesDeregisterAfterRacingRegister(t *testing.T) {
+	ctx := context.Background()
+	registrar := agentpool.NewStubRegistrar()
+
+	// Hide the incumbent's Secret from the loser's pre-check exactly once, leaving it
+	// visible to the re-check the 409 path makes after Register has already failed.
+	var armed, hidden bool
+	c := fake.NewClientBuilder().WithScheme(scheme()).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			if armed && key.Name == "agentpool-rs-foo-0" && !hidden {
+				hidden = true
+				return apierrors.NewNotFound(corev1.Resource("secrets"), key.Name)
+			}
+			return cl.Get(ctx, key, obj, opts...)
+		},
+	}).Build()
+
+	setPool := agentpool.NewRunnerSetPool(c, testNS, "foo", "2.335.1", nil, registrar, agentpool.KeyTypeEd25519)
+	require.NoError(t, setPool.EnsureAgents(ctx, 1, "tok"))
+	id := registrar.AgentIDForName("rs-foo-0")
+	require.NotZero(t, id)
+
+	armed = true
+	groupPool := agentpool.NewPool(c, testNS, "rs-foo", "2.335.1", nil, registrar, agentpool.KeyTypeEd25519)
+	err := groupPool.EnsureAgents(ctx, 1, "tok")
+	require.ErrorIs(t, err, agentpool.ErrAgentNameCollision)
+	require.True(t, hidden, "the pre-check must have been the call that missed the Secret")
+
+	assert.Equal(t, id, registrar.AgentIDForName("rs-foo-0"), "the incumbent's record must survive the 409 path")
+	assert.Equal(t, 0, registrar.DeregisterCalls())
+	assert.Equal(t, 2, registrar.RegisterCalls(), "the 409 must not be retried after a refused deregister")
 }
 
 // TestEnsureAgents_StampsAndBackfillsOwnerRef covers both halves of the ownership

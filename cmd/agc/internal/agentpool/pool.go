@@ -290,6 +290,47 @@ func (p *Pool) agentName(index int) string {
 	return fmt.Sprintf("%s-%d", p.ownerName, index)
 }
 
+// ErrAgentNameCollision reports that the agent identity at some index is already
+// held by a pool with a different owner. Scheme keeps a v1alpha1 RunnerGroup and a
+// v2 RunnerSet of the same name apart, but it does so with an "rs-" prefix, which is
+// not injective: a RunnerGroup named "rs-<x>" derives every identity a RunnerSet
+// named "<x>" derives — Secret name, label-selected pool membership, and the runner
+// name registered with GitHub (Q979). Neither pool's selector sees the other's
+// Secret, so each keeps finding its own index missing. The condition is not
+// self-healing: one of the two CRs has to be renamed.
+var ErrAgentNameCollision = stderrors.New("agentpool: agent identity is owned by another pool")
+
+// foreignSecretOwner names the owning CR of the agent Secret at name when that
+// Secret exists and this pool does not own it, and returns "" when it is absent or
+// is this pool's own.
+func (p *Pool) foreignSecretOwner(ctx context.Context, name string) (string, error) {
+	sec, err := p.getSecret(ctx, name)
+	if errors.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("agentpool: get secret %s: %w", name, err)
+	}
+	for k, v := range p.ownerLabels() {
+		if sec.Labels[k] != v {
+			return describeSecretOwner(sec), nil
+		}
+	}
+	return "", nil
+}
+
+// describeSecretOwner renders an agent Secret's owning CR from its selector labels,
+// for the operator who has to resolve a collision by renaming one of the two.
+func describeSecretOwner(sec *corev1.Secret) string {
+	if name := sec.Labels[labelRunnerSet]; name != "" {
+		return fmt.Sprintf("RunnerSet %q", name)
+	}
+	if name := sec.Labels[labelRunnerGroup]; name != "" {
+		return fmt.Sprintf("RunnerGroup %q", name)
+	}
+	return "an unlabeled agent pool"
+}
+
 // ownerLabels is the selector identifying this pool's agent Secrets, per its Scheme.
 func (p *Pool) ownerLabels() map[string]string {
 	if p.scheme == SchemeRunnerSet {
@@ -444,6 +485,18 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 }
 
 func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
+	// The Secret's absence is this call's precondition, and it is checked before
+	// GitHub is touched: registering first turns a name another pool already owns
+	// into a 409 whose resolution deregisters that pool's live record, and only
+	// then fails on the Create (Q979).
+	conflict, err := p.foreignSecretOwner(ctx, p.secretName(index))
+	if err != nil {
+		return err
+	}
+	if conflict != "" {
+		return fmt.Errorf("agentpool: secret %s is owned by %s: %w", p.secretName(index), conflict, ErrAgentNameCollision)
+	}
+
 	creds, privKeyPEM, err := p.registerAgent(ctx, token, index)
 	if err != nil {
 		return err
@@ -484,6 +537,16 @@ func (p *Pool) registerAgent(ctx context.Context, token string, index int) (*Age
 			return nil, nil, fmt.Errorf("resolve conflicting runner record %q: %w", agentName, rerr)
 		}
 		if id > 0 {
+			// The conflicting record is only ours to delete when no other pool's
+			// Secret claims the derived name. A collision derives the same Secret
+			// name as the same runner name, so one Get settles it (Q979).
+			owner, oerr := p.foreignSecretOwner(ctx, p.secretName(index))
+			if oerr != nil {
+				return nil, nil, oerr
+			}
+			if owner != "" {
+				return nil, nil, fmt.Errorf("runner record %q (id %d) is claimed by %s: %w", agentName, id, owner, ErrAgentNameCollision)
+			}
 			if derr := p.registrar.Deregister(ctx, token, id); derr != nil {
 				return nil, nil, fmt.Errorf("deregister conflicting runner record %q (id %d): %w", agentName, id, derr)
 			}
