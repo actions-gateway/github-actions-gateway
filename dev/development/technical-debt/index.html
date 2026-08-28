@@ -3138,7 +3138,7 @@ The <a href="../../plan/markdown-gates-parser/">Q612 survey</a> and the Queue ro
 <td><code>scripts/agent/claude-piped-gate-hook.sh</code> (since retired)</td>
 <td>393, now 74</td>
 <td>175 of its 257 code lines were a hand-rolled shell-grammar scanner: quote state, heredoc bodies, subshell nesting, matched delimiters</td>
-<td><strong>Rewritten</strong> (Q625): the decision became <code>devtools/agent/pipedgate</code> over <code>mvdan.cc/sh</code>; both retired with the hook, which duplicated the installed pipe-guard plugin</td>
+<td><strong>Rewritten</strong> (Q625): the decision became <code>devtools/agent/pipedgate</code> over <code>mvdan.cc/sh</code>; both retired with the hook, which duplicated the installed exit-status-guard plugin</td>
 </tr>
 </tbody>
 </table>
