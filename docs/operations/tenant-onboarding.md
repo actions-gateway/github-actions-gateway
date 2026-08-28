@@ -417,6 +417,10 @@ That is what makes a low `maxPerSecond` safe against a large burst — the ramp 
 Each withheld job increments `actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}`; a sustained non-zero rate means the ramp is actively smoothing a burst (see [observability: metrics](observability.md)).
 Set `maxPerSecond` high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is now time-to-pickup rather than a held lock.
 
+A token is charged per worker pod, not per delivered job.
+GitHub fans one queued job out to several sibling sessions at once and only one of them provisions, so the duplicates hand their tokens back and the ramp you configure is the ramp you get (Q972).
+A failed `acquirejob` returns its token on the same rule; a job that reaches pod creation keeps it.
+
 **Pick the right tool for the stampede.** A scale-up rate limit is the wrong fix for some bursts:
 
 | Burst symptom | Use instead |

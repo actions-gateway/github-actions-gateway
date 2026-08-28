@@ -123,7 +123,7 @@ func TestAdmit_CapacityRungIsSkippedWhenTheGateIsOff(t *testing.T) {
 	require.True(t, ok, "a set with no capacity gate must admit exactly as before Q405")
 	assert.Empty(t, reason)
 	require.NotNil(t, release)
-	release()
+	release(runnercore.AdmitProvisioned)
 }
 
 // TestAdmit_CapacityRungFailsOpen covers the contract that matters most for this rung:
@@ -167,7 +167,7 @@ func TestAdmit_CapacityRungRereadsEveryDelivery(t *testing.T) {
 	release, ok, _ := admit(ctx)
 	require.True(t, ok, "a cleared gate must readmit on the next delivery, with no restart")
 	require.NotNil(t, release)
-	release()
+	release(runnercore.AdmitProvisioned)
 
 	// That job's pod is unschedulable too, so the gate closes again — one claim per
 	// deadline window rather than one per delivered job.
@@ -312,7 +312,7 @@ func TestAdmit_CeilingRefusalDoesNotSpendAToken(t *testing.T) {
 		"only the admitted job spent a token: ceiling refusals must not drain the bucket")
 
 	// The property the drained bucket would have broken.
-	release()
+	release(runnercore.AdmitProvisioned)
 	_, ok, reason := admit(ctx)
 	assert.True(t, ok, "a freed ceiling slot must be immediately fillable; refused for %q", reason)
 }

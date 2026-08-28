@@ -29,14 +29,36 @@ type EventRecorder interface {
 	Event(namespace, name, eventtype, reason, action, note string)
 }
 
+// AdmitOutcome tells the admission gate how an admitted job ended. The gate
+// spends two different things — a refundable ceiling reservation and a scale-up
+// token — and only the reservation can be freed without knowing which happened,
+// so release takes the outcome rather than inferring it (Q972).
+//
+// The zero value is AdmitProvisioned: a caller that does not distinguish gets
+// today's no-refund behaviour, which is the safe direction for a knob whose
+// purpose is to create pods more slowly.
+type AdmitOutcome int
+
+const (
+	// AdmitProvisioned means the admitted job reached worker-pod creation, so the
+	// scale-up token it took bought a pod and is not owed back.
+	AdmitProvisioned AdmitOutcome = iota
+	// AdmitAborted means the admitted job returned without any worker pod being
+	// created — a failed acquire, or a Q260 dedup loser whose planID a sibling had
+	// already claimed. The token bought nothing, so it is refunded.
+	AdmitAborted
+)
+
 // AdmitFunc gates job acquisition on available worker capacity (Q59). It is
 // called after a job is delivered but before the acquisition tier claims it from
 // GitHub. ok=false means there is no capacity: the caller skips the acquire,
 // leaving the job queued at GitHub for redelivery to a sibling session — rather
 // than claiming a job whose worker pod it cannot place, which would be cancelled
 // when the unrenewed lock lapses. ok=true returns release, which the caller
-// invokes exactly once when the reserved slot is freed (acquire failure or job
-// completion) so the gate's in-flight count tracks only live jobs.
+// invokes exactly once when the admitted work ends — with AdmitProvisioned once a
+// worker pod has been asked for, AdmitAborted on any earlier return — so the
+// gate's in-flight count tracks only live jobs and its rate bucket is charged
+// once per pod rather than once per delivery.
 //
 // reason is set only when ok=false and names which rung refused (an AdmitReason*
 // constant); it becomes the `reason` label on
@@ -46,7 +68,7 @@ type EventRecorder interface {
 // The gate itself is the provisioner's in-memory per-owner reservation counter
 // (provisioner.Provisioner.Admit), which is why this type is protocol-neutral
 // even though the classic listener is its only caller today.
-type AdmitFunc func(ctx context.Context) (release func(), ok bool, reason string)
+type AdmitFunc func(ctx context.Context) (release func(AdmitOutcome), ok bool, reason string)
 
 // AdmitReason* are the AdmitFunc rejection reasons, used verbatim as the `reason`
 // label of actions_gateway_jobs_admission_rejected_total. All mean the job was

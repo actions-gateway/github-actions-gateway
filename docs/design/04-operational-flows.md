@@ -111,17 +111,21 @@ sequenceDiagram
    **Admit (Q59, #784, Q405, Q406, Q717):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks four questions in order.
    **Quota:** can the namespace `ResourceQuota` admit one more worker pod right now (`hard − used` against this owner's worker footprint)?
    **Capacity:** if the owner opted into a capacity gate, can the cluster currently *place* one more worker pod of this shape?
-   **Rate:** if the owner opted into `spec.scaleUp`, does its token bucket have a token for another pod creation?
    **Ceiling:** is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold)?
+   **Rate:** if the owner opted into `spec.scaleUp`, does its token bucket have a token for another pod creation?
    A no from any of them **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total{reason}` (`quota`, `capacity`, `scaleup`, or `ceiling`), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped.
    When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3.
    The two observed rungs fail open and reserve nothing, which is why they precede the ceiling; the reservation is fail-safe soft state (reset on AGC restart).
    The rate rung reserves nothing either but *takes* its token, which is what lets it bind on a simultaneously-delivered burst where an observation could not: every listener would read the same free token and claim anyway.
-   It is ordered after the two observed rungs so a job refused for quota or placeability is never charged a token it will not spend, and so the reason reported is the one that will not clear on its own.
+   It comes last, behind the ceiling, so no rung refuses a job the bucket has already charged, and so the reason reported is the one that will not clear on its own.
+
+   **Why an admitted job can hand its token back (Q972).** The token buys a worker pod, so a delivery that returns before asking for one gives it back when it releases its slot: a failed `acquirejob`, and above all a duplicate delivery whose `planID` a sibling has already claimed (Q260).
+   Without the refund a job fanned out to N sibling sessions charges N tokens for the one pod its dedup winner creates, so the effective ramp is `maxPerSecond / N` under exactly the burst `spec.scaleUp` exists to smooth.
+   The refund stops at pod creation and never fires on job *completion*: returning a token when a worker finishes would make the bucket a second concurrency ceiling rather than a rate limit.
 
    **Why the rate limit is a rung rather than a wait (Q717).** `spec.scaleUp` used to be waited on *after* the claim, at pod-creation time, which put it in exactly the position this gate exists to remove: a job that cannot be provisioned yet, holding a GitHub job lock while it waits.
    A long ramp (a large burst at a low `maxPerSecond`) walks the tail of that burst past the lock's lifetime, and a job whose lock lapses is cancelled rather than redelivered, so the anti-stampede knob could destroy the jobs it was smoothing.
-   As a rung it withholds intake instead, and the classic provisioning path no longer touches the bucket at all: the token is charged once, before the claim.
+   As a rung it withholds intake instead, and the classic provisioning path no longer touches the bucket at all: the token is charged once, before the claim, and refunded there too if the job never reaches a pod.
    The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.
 
    **Tier scope.** This *per-delivered-job* form of the gate is wired from `AdmitFor` (v1 `RunnerGroup`) and the classic branch of the v2 `RunnerSet` reconciler; `reconcileScaleSetListener` returns before it.

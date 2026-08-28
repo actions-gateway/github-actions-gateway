@@ -176,7 +176,7 @@ func TestAdmit_QuotaRungClosesGate(t *testing.T) {
 	require.True(t, ok, "freed quota headroom must reopen the gate")
 	assert.Empty(t, reason)
 	require.NotNil(t, release)
-	release()
+	release(runnercore.AdmitProvisioned)
 }
 
 // TestAdmit_QuotaRungOptOut verifies AGC_QUOTA_ADMISSION=false (DisableQuotaAdmission)
@@ -193,5 +193,5 @@ func TestAdmit_QuotaRungOptOut(t *testing.T) {
 	require.True(t, ok, "the opt-out must ignore quota headroom")
 	assert.Empty(t, reason)
 	require.NotNil(t, release)
-	release()
+	release(runnercore.AdmitProvisioned)
 }

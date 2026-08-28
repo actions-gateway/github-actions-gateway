@@ -1850,7 +1850,9 @@ func TestListener_AdmissionRejected(t *testing.T) {
 	cfg.Metrics = m
 	cfg.IsLastPoller = func() bool { return true }
 	// Gate is full: every delivered job is rejected.
-	cfg.Admit = func(_ context.Context) (func(), bool, string) { return nil, false, runnercore.AdmitReasonCeiling }
+	cfg.Admit = func(_ context.Context) (func(runnercore.AdmitOutcome), bool, string) {
+		return nil, false, runnercore.AdmitReasonCeiling
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -1962,9 +1964,9 @@ func TestListener_AdmissionReleasedOnCompletion(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Metrics = newTestMetrics()
 	cfg.IsLastPoller = func() bool { return true }
-	cfg.Admit = func(_ context.Context) (func(), bool, string) {
+	cfg.Admit = func(_ context.Context) (func(runnercore.AdmitOutcome), bool, string) {
 		admitCalls.Add(1)
-		return func() { releaseCalls.Add(1) }, true, ""
+		return func(_ runnercore.AdmitOutcome) { releaseCalls.Add(1) }, true, ""
 	}
 	handlerDone := make(chan struct{}, 1)
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {

@@ -145,12 +145,12 @@ func (l *scaleUpLimiter) wait(ctx context.Context, key string, cfg *ScaleUpConfi
 // limiter's own lock, which is the rate-limit counterpart of the admission gate's
 // reservation counter.
 //
-// A token taken here is spent. A job that goes on to fail its acquire does not
-// return it, because the admission gate's release runs on job COMPLETION too and
-// refunding there would turn the rate limit into a second concurrency ceiling. The
-// cost is one pod of under-provisioning per lost acquire, which the bucket refills
-// at MaxPerSecond — under-provisioning being the safe direction for a knob whose
-// whole purpose is to create pods more slowly.
+// A token taken here is spent until the caller says how the admitted job ended: a
+// delivery that reaches worker-pod creation keeps it, and one that returns first
+// gets it back via refund (Q972). Only the caller can tell those apart, which is
+// why runnercore.AdmitOutcome exists — the reservation release alone cannot, and
+// refunding on COMPLETION would turn the rate limit into a second concurrency
+// ceiling.
 //
 // cfg==nil (or a disabled config) is a no-op returning true, so an opted-out owner
 // pays nothing.
@@ -160,6 +160,34 @@ func (l *scaleUpLimiter) allow(key string, cfg *ScaleUpConfig) bool {
 		return true
 	}
 	return lim.AllowN(l.nowFn(), 1)
+}
+
+// refund returns one token to key's bucket for a delivery that took one in allow
+// and then returned without any worker pod being created (Q972). Without it a
+// fanned-out job charges one token per sibling delivery for the single pod its
+// dedup winner creates, so N-way fan-out cuts the effective ramp to MaxPerSecond/N
+// under exactly the burst spec.scaleUp exists to smooth.
+//
+// Refunding is correct only BEFORE a pod is asked for. On completion it would make
+// the bucket a concurrency ceiling rather than a rate limit, which is why the
+// decision belongs to the caller and not to the reservation release.
+//
+// AllowN with a negative n is how the refund reaches the bucket: x/time/rate
+// exposes no token setter, and Reservation.CancelAt restores nothing once its
+// timeToAct has passed, which is every deferred refund. Measured on the vendored
+// golang.org/x/time v0.15.0: AllowN(now, -1) adds exactly one token, and the burst
+// cap is applied on every read and take, so a refund into a full bucket cannot
+// raise availability above Burst. scaleuplimiter_internal_test.go pins both, so a
+// dependency bump that changed either goes red here rather than silently loosening
+// the limit.
+//
+// cfg==nil (or a disabled config) is a no-op, so an opted-out owner pays nothing.
+func (l *scaleUpLimiter) refund(key string, cfg *ScaleUpConfig) {
+	lim := l.limiterFor(key, cfg)
+	if lim == nil {
+		return
+	}
+	lim.AllowN(l.nowFn(), -1)
 }
 
 // tokens reports the whole tokens free in key's bucket under cfg, and whether a

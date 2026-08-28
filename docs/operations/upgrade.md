@@ -13,6 +13,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job](#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job)
   - [Non-breaking: `spec.scaleUp` now withholds intake instead of delaying jobs it has already claimed](#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed)
   - [Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)](#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)
   - [Non-breaking: deleting a cancelled run's worker no longer re-queues the job](#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job)
@@ -92,6 +93,31 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job
+
+**Who is affected:** every runner group or runner set that sets `spec.scaleUp` on the classic acquisition tier.
+It is off by default, so a tenant that never configured a ramp sees nothing.
+`ScaleSet` sets are unaffected: that tier states its capacity per long-poll and never charged per delivery.
+
+**What changed.** The rate rung takes its token before the job is claimed, which is what lets it bind on a simultaneously-delivered burst (Q717).
+GitHub fans a queued job out to several sibling sessions at once, and only one of them provisions: the rest recognise the duplicate after `acquirejob` and return without creating anything (Q260).
+Each of those took a token and never gave it back, so a job delivered to N sessions spent N tokens for one worker pod.
+
+| | Effective ramp under an N-way fan-out |
+| --- | --- |
+| Before | `maxPerSecond / N`, because every duplicate delivery charged a token for a pod it never created |
+| Now | `maxPerSecond`: a delivery that returns before asking for a worker pod hands its token back |
+
+A failed `acquirejob` refunds on the same rule.
+The refund stops at pod creation and never fires on job completion, so the bucket stays a rate limit rather than becoming a second concurrency ceiling.
+
+**What to expect at upgrade.** A set whose deliveries fan out will ramp at the rate it configured, which may be faster than what it has been doing.
+Nothing else moves: `burst` still bounds the instantaneous batch, and a refund into a full bucket adds nothing.
+`actions_gateway_worker_scaleup_throttled_total` and `actions_gateway_jobs_admission_rejected_total{reason="scaleup"}` should fall for an affected set, because fewer deliveries now find the bucket empty.
+
+**Action required:** none.
+If you raised `maxPerSecond` to compensate for a ramp that ran slower than configured, the value you first chose is now the one that applies, so re-check it against the egress path you were protecting.
 
 ### Non-breaking: `spec.scaleUp` now withholds intake instead of delaying jobs it has already claimed
 

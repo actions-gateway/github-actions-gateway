@@ -29,6 +29,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/broker/brokertest"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
@@ -86,10 +87,10 @@ func TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes(t *testing.T
 			LoserRecycleDeferTimeout: 30 * time.Second,
 			// Unlimited worker capacity; the closure only lets us observe reservations so
 			// we can prove a deferred loser frees its slot before parking (does not pin it).
-			Admit: func(_ context.Context) (func(), bool, string) {
+			Admit: func(_ context.Context) (func(runnercore.AdmitOutcome), bool, string) {
 				admitHeld.Add(1)
 				var once sync.Once
-				return func() { once.Do(func() { admitHeld.Add(-1) }) }, true, ""
+				return func(_ runnercore.AdmitOutcome) { once.Do(func() { admitHeld.Add(-1) }) }, true, ""
 			},
 			MarkAgentConsumed: func() {},
 			// One ReleaseAgent call per goroutine exit — our collapse detector.

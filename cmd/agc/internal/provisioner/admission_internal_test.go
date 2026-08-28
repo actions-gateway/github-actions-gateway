@@ -201,6 +201,85 @@ func TestAdmitFor_ReadsFreshSpec(t *testing.T) {
 	r2, ok, _ := admit(context.Background())
 	assert.True(t, ok, "raised ceiling should admit a second slot")
 
-	r1()
-	r2()
+	r1(runnercore.AdmitProvisioned)
+	r2(runnercore.AdmitProvisioned)
+}
+
+// TestAdmit_AbortedOutcomeRefundsTheScaleUpToken covers the whole ladder spend, not
+// just the bucket: an admitted delivery that returns without asking for a worker pod
+// must hand back both the ceiling reservation and the scale-up token, while one that
+// provisions hands back only the reservation (Q972).
+func TestAdmit_AbortedOutcomeRefundsTheScaleUpToken(t *testing.T) {
+	newGate := func() (runnercore.AdmitFunc, *Provisioner) {
+		rg := &v1alpha1.RunnerGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
+			Spec: v1alpha1.RunnerGroupSpec{
+				MaxWorkers: ptr.To(int32(10)),
+				ScaleUp:    &v1alpha1.ScaleUpRateLimit{MaxPerSecond: 1, Burst: ptr.To(int32(2))},
+			},
+		}
+		fc := fake.NewClientBuilder().WithScheme(admissionTestScheme()).WithObjects(rg).Build()
+		p := NewProvisioner(fc, nil, nil)
+		return p.AdmitFor(rg), p
+	}
+
+	t.Run("aborted delivery returns its token", func(t *testing.T) {
+		admit, p := newGate()
+		ctx := context.Background()
+
+		// Spend the whole burst, then abort both deliveries — the fan-out shape, where
+		// every sibling but one returns without provisioning.
+		r1, ok, _ := admit(ctx)
+		require.True(t, ok)
+		r2, ok, _ := admit(ctx)
+		require.True(t, ok)
+		_, ok, reason := admit(ctx)
+		require.False(t, ok, "burst of 2 is spent")
+		assert.Equal(t, runnercore.AdmitReasonScaleUp, reason)
+
+		r1(runnercore.AdmitAborted)
+		r2(runnercore.AdmitAborted)
+
+		for i := 0; i < 2; i++ {
+			_, ok, reason = admit(ctx)
+			assert.Truef(t, ok, "admit %d after two refunds was refused with %q", i, reason)
+		}
+		assert.Equal(t, int32(2), p.admission.reservedCount("ns/g"), "the two refunded slots should be held by the new admits")
+	})
+
+	t.Run("provisioned delivery keeps its token", func(t *testing.T) {
+		admit, _ := newGate()
+		ctx := context.Background()
+
+		r1, ok, _ := admit(ctx)
+		require.True(t, ok)
+		r2, ok, _ := admit(ctx)
+		require.True(t, ok)
+
+		r1(runnercore.AdmitProvisioned)
+		r2(runnercore.AdmitProvisioned)
+
+		_, ok, reason := admit(ctx)
+		require.False(t, ok, "a token spent on a pod must not come back")
+		assert.Equal(t, runnercore.AdmitReasonScaleUp, reason)
+	})
+
+	t.Run("release is idempotent across outcomes", func(t *testing.T) {
+		admit, p := newGate()
+		ctx := context.Background()
+
+		r1, ok, _ := admit(ctx)
+		require.True(t, ok)
+		r1(runnercore.AdmitAborted)
+		// A second call must add nothing: not a slot, and not a token.
+		r1(runnercore.AdmitAborted)
+		assert.Equal(t, int32(0), p.admission.reservedCount("ns/g"))
+
+		for i := 0; i < 2; i++ {
+			_, ok, _ = admit(ctx)
+			require.Truef(t, ok, "admit %d should pass on the restored burst", i)
+		}
+		_, ok, _ = admit(ctx)
+		assert.False(t, ok, "a repeated release refunded a second token")
+	})
 }

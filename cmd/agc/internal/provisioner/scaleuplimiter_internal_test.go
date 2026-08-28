@@ -204,3 +204,72 @@ func TestScaleUpLimiter_PerKeyIsolation(t *testing.T) {
 		t.Fatal("group B first call throttled by group A's usage; buckets should be isolated")
 	}
 }
+
+// TestScaleUpLimiter_RefundRestoresOneToken pins the refund at the level the ramp
+// is felt: a spent token that bought no pod must buy one later (Q972).
+func TestScaleUpLimiter_RefundRestoresOneToken(t *testing.T) {
+	clock := newFakeClock()
+	l := newTestLimiter(clock, nil)
+	cfg := &ScaleUpConfig{MaxPerSecond: 1, Burst: 3}
+
+	for i := 0; i < 3; i++ {
+		if !l.allow("ns/rg", cfg) {
+			t.Fatalf("burst take %d refused; the first %d must pass instantly", i, cfg.Burst)
+		}
+	}
+	if l.allow("ns/rg", cfg) {
+		t.Fatal("a 4th take passed; the bucket should be empty")
+	}
+
+	// Two of the three deliveries never created a pod, so their tokens come back
+	// and the very next two takes pass with no time on the clock.
+	l.refund("ns/rg", cfg)
+	l.refund("ns/rg", cfg)
+	for i := 0; i < 2; i++ {
+		if !l.allow("ns/rg", cfg) {
+			t.Fatalf("take %d after two refunds was refused; a refunded token must be spendable", i)
+		}
+	}
+	if l.allow("ns/rg", cfg) {
+		t.Fatal("a third take passed after only two refunds; the refund added more than it returned")
+	}
+}
+
+// TestScaleUpLimiter_RefundCannotExceedBurst pins the other half: a refund into a
+// bucket that owes nothing must not raise availability above Burst, or an operator
+// who set burst=N could see N+k pods start at once. This is the property the
+// AllowN(now, -1) mechanism rests on, so a golang.org/x/time bump that dropped the
+// burst cap fails here rather than silently loosening the limit (Q972).
+func TestScaleUpLimiter_RefundCannotExceedBurst(t *testing.T) {
+	clock := newFakeClock()
+	l := newTestLimiter(clock, nil)
+	cfg := &ScaleUpConfig{MaxPerSecond: 1, Burst: 2}
+
+	// The bucket is full, so these refunds are owed nothing.
+	for i := 0; i < 5; i++ {
+		l.refund("ns/rg", cfg)
+	}
+
+	takes := 0
+	for i := 0; i < 10; i++ {
+		if l.allow("ns/rg", cfg) {
+			takes++
+		}
+	}
+	if takes != int(cfg.Burst) {
+		t.Fatalf("%d instantaneous takes after refunding into a full bucket; want %d (burst)", takes, cfg.Burst)
+	}
+}
+
+// TestScaleUpLimiter_RefundDisabledIsNoOp keeps the default-off promise: an owner
+// that never opted into spec.scaleUp allocates no limiter, refund included.
+func TestScaleUpLimiter_RefundDisabledIsNoOp(t *testing.T) {
+	clock := newFakeClock()
+	l := newTestLimiter(clock, nil)
+
+	l.refund("ns/rg", nil)
+	l.refund("ns/rg", &ScaleUpConfig{MaxPerSecond: 0, Burst: 5})
+	if l.limiterFor("ns/rg", nil) != nil {
+		t.Fatal("refund with a disabled config allocated a limiter")
+	}
+}

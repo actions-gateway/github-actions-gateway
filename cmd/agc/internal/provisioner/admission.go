@@ -105,17 +105,21 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 // or capacity was never counted against the ceiling or charged a rate-limit token, so
 // neither piece of arithmetic is touched.
 //
-// The rate rung comes LAST, behind the ceiling, because its token is the only thing
-// this ladder spends that it cannot hand back. A reservation is refundable — the rate
-// rung releases one when it refuses — while a token taken from the bucket is gone. Run
-// the other way round, a set sitting at its ceiling under continued delivery spends a
-// token per refusal, pinning the bucket at zero: maxPerSecond stops being the ramp rate
-// and becomes a function of delivery churn, a freed ceiling slot cannot be filled until
-// a refill wins against that churn, and every refusal past the burst reports
-// reason="scaleup" for a set whose actual limit is maxWorkers — sending an operator to
-// raise maxPerSecond, which feeds the churn faster. Ordering it last also puts the
-// reasons in the right priority: ceiling needs someone to act, the rate rung clears
-// itself.
+// The rate rung comes LAST, behind the ceiling, because nothing refuses after it: a
+// rung that refused a job the bucket had already charged would have to hand the token
+// back on the refusal path, and the ladder has no such path. Run the other way round,
+// a set sitting at its ceiling under continued delivery spends a token per refusal,
+// pinning the bucket at zero: maxPerSecond stops being the ramp rate and becomes a
+// function of delivery churn, a freed ceiling slot cannot be filled until a refill
+// wins against that churn, and every refusal past the burst reports reason="scaleup"
+// for a set whose actual limit is maxWorkers — sending an operator to raise
+// maxPerSecond, which feeds the churn faster. Ordering it last also puts the reasons
+// in the right priority: ceiling needs someone to act, the rate rung clears itself.
+//
+// The token IS refundable once admitted, but only on the outcome the caller reports:
+// a delivery that returns without asking for a worker pod hands it back through the
+// release closure (Q972). That is a different question from refusal ordering — it
+// covers the admitted job that never provisions, not a rung saying no.
 //
 // The order costs one bounded artifact, which is the cheaper side of the trade and is
 // recorded so the next reader does not file it as a bug (Q977). A job reserves before
@@ -183,7 +187,7 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 // RunnerSet-backed Target.
 func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 	key := target.Key().String()
-	return func(ctx context.Context) (release func(), ok bool, reason string) {
+	return func(ctx context.Context) (release func(runnercore.AdmitOutcome), ok bool, reason string) {
 		if !p.DisableQuotaAdmission {
 			if exhausted, detail := target.QuotaExhausted(ctx); exhausted {
 				// Per-delivery and high-volume while a tenant sits at its quota
@@ -201,15 +205,19 @@ func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 			return nil, false, runnercore.AdmitReasonCapacity
 		}
 		limit, bounded := target.Ceiling(ctx)
-		release, ok = p.admission.admit(key, limit, bounded)
+		freeSlot, ok := p.admission.admit(key, limit, bounded)
 		if !ok {
 			return nil, false, runnercore.AdmitReasonCeiling
 		}
-		if !p.scaleUp.allow(key, target.ScaleUpLimit(ctx)) {
+		// Read the rate config once and reuse it for the refund, so the token goes
+		// back to the bucket that took it even if the owner edits spec.scaleUp while
+		// the job is in flight.
+		rateCfg := target.ScaleUpLimit(ctx)
+		if !p.scaleUp.allow(key, rateCfg) {
 			// Hand the reservation straight back: this job takes no slot. The closure is
 			// idempotent, so this nets to zero and the later release the caller would
 			// have made is not owed.
-			release()
+			freeSlot()
 			// Per-delivery and high-volume while a set ramps: Debug, with the metric's
 			// reason label as the operator-facing signal. Self-clearing — the bucket
 			// refills at maxPerSecond — so unlike the rungs above it needs no condition.
@@ -219,7 +227,18 @@ func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 			}
 			return nil, false, runnercore.AdmitReasonScaleUp
 		}
-		return release, true, ""
+		// One closure for both spends, so the caller frees the slot and settles the
+		// token in a single idempotent call. AdmitAborted refunds the token because
+		// no worker pod was ever asked for; AdmitProvisioned leaves it spent (Q972).
+		var once sync.Once
+		return func(outcome runnercore.AdmitOutcome) {
+			once.Do(func() {
+				freeSlot()
+				if outcome == runnercore.AdmitAborted {
+					p.scaleUp.refund(key, rateCfg)
+				}
+			})
+		}, true, ""
 	}
 }
 
