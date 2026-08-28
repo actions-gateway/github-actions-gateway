@@ -2773,14 +2773,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the …</td>
 </tr>
 <tr>
-<td><a href="Q960/">Q960</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">Refresh the scale-set demand gauge while the set advertises no capacity</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>actions_gateway_scaleset_jobs_available</code> (Q720) reads GitHub's queued-but-unassigned count off the statistics that ride on session …</td>
-</tr>
-<tr>
 <td><a href="Q962/">Q962</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">Condition transition Events fire once per object, never on a later flip</a></td>
 <td><code>bug</code></td>
@@ -3331,6 +3323,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body …</td>
+</tr>
+<tr>
+<td><a href="Q1012/">Q1012</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh">Nothing checks that a make target named in docs exists</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make next-task</code> was taught by CLAUDE.md and had no rule behind it, so a session following the entrypoint the repo names ran `make -n …</td>
 </tr>
 <tr>
 <td><a href="Q735/">Q735</a></td>
