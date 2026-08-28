@@ -17,6 +17,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/dogfood/lib/pool.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
+# shellcheck source=scripts/dogfood/lib/gmc.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 
 # System pool sizing for the running state (Q335/Q357). One e2-standard-2 fits
 # only one 500m tenant AGC beside the kube-system baseline, so at a fixed size
@@ -95,9 +97,7 @@ main() {
 		--project="${PROJECT}" \
 		--node-pool="${SYSTEM_POOL}" --num-nodes="${SYSTEM_NODES}" --zone="${ZONE}" --quiet
 
-	echo "Waiting for GMC to be ready (~3 min)..."
-	kubectl rollout status deployment/gmc-controller-manager \
-		-n gmc-system --timeout=5m
+	wait_for_gmc
 
 	echo "Waiting for AGC pod..."
 	wait_agc_rollout gag-dogfood dogfood-agc

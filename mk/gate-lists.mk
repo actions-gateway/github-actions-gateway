@@ -242,6 +242,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
                  dogfood/nodes-test dogfood/quota-test \
+                 dogfood/gmc-test \
                  dogfood/start-test dogfood/e2e-start-test dogfood/e2e-stop-test \
                  dogfood/e2e-mirror-validate-test \
                  dogfood/delete-test dogfood/e2e-run-watch-test \
