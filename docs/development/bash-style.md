@@ -117,6 +117,12 @@ The root `Makefile` keeps recipes as thin target→script wiring so the logic st
 **A new script goes in a `scripts/<group>/` directory, never at the top level.** The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in [`scripts/README.md`](../../scripts/README.md) and the rule is explained in [testing.md § `scripts/` is grouped by blast radius](testing.md#scripts-is-grouped-by-blast-radius).
 Put a `*-test.sh` beside its subject.
 
+**Commit an entry point executable, and a sourced `lib/` file not.** Docs and runbooks invoke these scripts bare, so a script committed `100644` exits 126 `Permission denied` before it reads a single env var.
+Six dogfood entry points had accumulated that way, four of them in the five bring-up/teardown commands [release.md](../operations/release.md) prescribes (Q1013).
+[`make script-modes-check`](../../scripts/ci/check-script-modes.sh) enforces both directions.
+It reads the mode from the git index rather than the worktree, which is the reading the machine that introduced the defect cannot take: a local `chmod +x` that never reached the index runs for its author and is broken for every fresh clone.
+Set the bit with `git update-index --chmod=+x <path>` when a `chmod` alone leaves the index behind.
+
 ## When not to write the script in shell
 
 A script that sequences `kubectl`/`helm`/`gcloud` calls belongs here however long it gets.
