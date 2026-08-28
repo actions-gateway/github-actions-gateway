@@ -9,6 +9,7 @@ and with no merge driver installed.
 Subcommands:
   render    the ordered backlog — the read path, one call for the whole queue
   next      the top ready item, as a session kickoff prompt
+            (skipping any item an open pull request already claims)
   lint      check the store (frontmatter, ids, ranks, references)
   claims    check every id this branch adds holds a claim on the remote
   metrics   replay git history into flow metrics
@@ -21,6 +22,7 @@ written by either tool reads and extends under the other.
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -413,21 +415,70 @@ def cmd_render(args):
 
 
 def cmd_next(args):
-    items, _ = load(args.store or store_dir())
+    store = Path(args.store or store_dir())
+    items, _ = load(store)
     ready = [i for i in items if i.status == "ready"]
     if not ready:
         print("queue: no ready item", file=sys.stderr)
         return 1
-    top = ready[0]
+
+    # --title and the full prompt are two processes in the invocation the docs
+    # teach, so both run the check: a title that skipped it would name the
+    # session after one item while the prompt handed out another.
+    allow = set(args.allow or [])
+    checked = False
+    if args.no_pr_check:
+        top = ready[0]
+        print(f"queue: next: --no-pr-check, so nothing asked whether {top.id} "
+              f"is already claimed", file=sys.stderr)
+    else:
+        prs, why = _gh_open_prs(store)
+        # Loud rather than a fallthrough. An unverified pick is the state this
+        # check exists to end, and once it is in the prompt it reads exactly
+        # like a verified one.
+        if prs is None:
+            print(f"queue: next: cannot ask GitHub what is already claimed: {why}",
+                  file=sys.stderr)
+            print("queue: next: refusing to hand out an unverified pick; "
+                  "fix gh, or pass --no-pr-check to take it anyway",
+                  file=sys.stderr)
+            return 1
+        for cand in ready:
+            if cand.id in allow:
+                top = cand
+                break
+            naming = _prs_naming(cand.id, prs)
+            if not naming:
+                top, checked = cand, True
+                break
+            for pr in naming:
+                print(f"queue: next: skipping {cand.id}: #{pr['number']} is "
+                      f"open and names it — {pr['title']} ({pr['url']})",
+                      file=sys.stderr)
+            # A hit is a candidate rather than a verdict: an id is cited by
+            # neighbouring rows and by the retro that filed it, so a PR can
+            # name one it is not implementing. Reading the PR closes a hit,
+            # and --allow is how a reader says it did.
+            print(f"queue: next: a PR that merely cites {cand.id} has not "
+                  f"claimed it — read those, then --allow {cand.id} to take it "
+                  f"anyway", file=sys.stderr)
+        else:
+            print("queue: next: every ready item has an open PR naming it; "
+                  "read them, then --allow the one that is really free",
+                  file=sys.stderr)
+            return 1
+
     if args.title:
         print(f"{top.id}: {top.title}")
-    else:
-        print(f"{top.id}: {top.title} — take this item from the top of the "
-              f"backlog and work it per the repo process: check for an open PR "
-              f"first, verify any blockers, do the work, then delete "
-              f"docs/queue/{top.id}.md in the PR that completes it."
-              + (f" Notes: {top.notes}" if top.notes else "")
-              + (f" See: {top.target}" if top.target else ""))
+        return 0
+    pick = ("no open PR named it when this prompt was printed, so verify any "
+            "blockers" if checked else
+            "check for an open PR first, verify any blockers")
+    print(f"{top.id}: {top.title} — take this item from the top of the "
+          f"backlog and work it per the repo process: {pick}, do the work, "
+          f"then delete docs/queue/{top.id}.md in the PR that completes it."
+          + (f" Notes: {top.notes}" if top.notes else "")
+          + (f" See: {top.target}" if top.target else ""))
     return 0
 
 
@@ -638,6 +689,82 @@ def _ids_at(rev, rel, root):
     return {p for p in (Path(x).stem for x in out.split("\n")) if ID_RE.match(p)}
 
 
+# Whether an item is already being worked is a fact about GitHub rather than
+# about the store, so `next` reads it and `lint` never does: the gates that run
+# lint have no network, and a checker reaching for one fails on the wrong axis.
+#
+# The whole open list rather than one `gh pr list --search Q<n>` per candidate:
+# one call covers every candidate, and a full page is detectable, so a
+# truncated read refuses instead of reporting nothing claimed. `--search`
+# answers from a separate index rather than from the pull request records, and
+# the PR this check most needs to catch is the freshest one — though measured
+# 2026-08-27 it returned a 40-second-old PR, so reading the records is a
+# preference on mechanism and not a fix for any observed lag.
+GH_PR_LIMIT = 200
+
+
+def _gh_timeout():
+    """The deadline for the gh call, overridable through QUEUE_GH_TIMEOUT.
+
+    A slow link should be able to wait longer rather than reach for
+    --no-pr-check, which does not relax the check but turns it off. A value
+    that is not a positive integer falls back to the default rather than
+    failing, because a mistyped deadline is not a reason to refuse the pick.
+    """
+    try:
+        seconds = int(os.environ.get("QUEUE_GH_TIMEOUT") or 0)
+    except ValueError:
+        return REMOTE_TIMEOUT
+    return seconds if seconds > 0 else REMOTE_TIMEOUT
+
+
+def _gh_open_prs(cwd, timeout=None):
+    """(prs, why) — every open pull request, or (None, reason) if none was read.
+
+    None is not an empty list. A read that never happened has to stay
+    distinguishable from a remote that answered "nothing", because the caller
+    hands out work on the strength of the answer.
+    """
+    timeout = timeout or _gh_timeout()
+    try:
+        p = subprocess.run(
+            ["gh", "pr", "list", "--state", "open",
+             "--limit", str(GH_PR_LIMIT), "--json", "number,title,url,body"],
+            cwd=cwd, capture_output=True, text=True, timeout=timeout,
+            env={**os.environ, "GH_PAGER": "cat", "GH_PROMPT_DISABLED": "1"})
+    except FileNotFoundError:
+        return None, "gh is not on PATH"
+    except subprocess.TimeoutExpired:
+        return None, f"gh did not answer within {timeout}s"
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"gh could not be run: {e}"
+    if p.returncode != 0:
+        return None, (p.stderr.strip().splitlines() or ["gh exited "
+                      f"{p.returncode} and said nothing"])[0]
+    try:
+        prs = json.loads(p.stdout or "[]")
+    except ValueError:
+        return None, f"gh printed no readable json: {p.stdout.strip()[:80]!r}"
+    # A full page is a truncated read, and a truncated read that answered
+    # "nothing claims this" is the silent pass this check exists to remove.
+    if len(prs) >= GH_PR_LIMIT:
+        return None, (f"{len(prs)} open PRs came back, which is the whole page "
+                      f"— the rest went unread, so a claim could be among them")
+    return prs, ""
+
+
+def _prs_naming(qid, prs):
+    """The PRs whose title or body carries `qid` as a whole token.
+
+    Whole token so Q23 does not match Q231. The id is matched anywhere in
+    either field, which is what a claiming PR does and also what a neighbouring
+    row's citation does, so a hit is a candidate rather than a verdict.
+    """
+    at = re.compile(rf"\b{re.escape(qid)}\b")
+    return [p for p in prs
+            if at.search(p.get("title") or "") or at.search(p.get("body") or "")]
+
+
 def cmd_claims(args):
     def skip(why):
         print(f"queue: claims: {why}", file=sys.stderr)
@@ -838,6 +965,11 @@ def main(argv=None):
 
     n = sub.add_parser("next", help="print the top ready item")
     n.add_argument("--title", action="store_true")
+    n.add_argument("--no-pr-check", action="store_true",
+                   help="hand out the top item without asking GitHub whether "
+                        "an open PR already claims it")
+    n.add_argument("--allow", action="append", metavar="QNNN",
+                   help="take this id even though an open PR names it")
     n.set_defaults(fn=cmd_next)
 
     sub.add_parser("lint", help="check the store").set_defaults(fn=cmd_lint)
