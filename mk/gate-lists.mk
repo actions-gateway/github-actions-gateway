@@ -55,7 +55,7 @@ CHECK_FAST_GATES := roadmap-check \
                     chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check queue-rules-check queue-lint \
+                    script-docs-check script-modes-check queue-rules-check queue-lint \
                     getting-started-check \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
@@ -223,6 +223,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-uses-pinned-test ci/check-cosign-pin-test \
                  ci/check-publish-digest-test \
                  ci/run-parallel-test ci/check-fixture-maintenance-test \
+                 ci/check-script-modes-test \
                  ci/check-template-library-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \

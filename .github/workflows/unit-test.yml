@@ -364,6 +364,14 @@ jobs:
         # against the tracked tree — so the verdict for the bug class this
         # repo cares most about is not buried in a suite's tail (Q733).
         run: make errexit-prologue-check
+      - name: script executable bits (make script-modes-check)
+        # The mode a clone gets, not the mode this checkout happens to have: a
+        # script under lib/ is sourced and must not be executable, every other
+        # one is run as a command and must be. Six entrypoints had drifted to
+        # 644 and exited 126 on the bare invocation release.md prescribes
+        # (Q1013). Same job as shellcheck, since both gate the scripts/ tree on
+        # a scripts-only change.
+        run: make script-modes-check
       - name: scripts behavioural tests (make scripts-test)
         # Pure-bash assertions shellcheck can't express — currently the tags-only
         # release signing-identity regexp (Q124). Same job as shellcheck since
