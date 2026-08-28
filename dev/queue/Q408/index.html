@@ -2601,7 +2601,7 @@
 <p>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that fires on both.
 Phase 2's mirror manifests are authored, over five upstreams rather than four: the grading added <code>gcr.io</code>.
 Next is Phase 2's cluster-side validation, which books a dogfood session of its own ahead of Phase 3's wiring.
-That battery is <code>scripts/dogfood/e2e-mirror-validate.sh</code>, not a prose checklist: five checks per instance, every expected value measured against the pinned image, both controls fired.
+That battery is <code>scripts/dogfood/e2e-mirror-validate.sh</code>, not a prose checklist: five checks per instance, every expected value measured and every control fired.
 What it still needs is the cluster.
 <strong>Unblocks <a href="../Q539/">Q539</a>.</strong></p>
 
