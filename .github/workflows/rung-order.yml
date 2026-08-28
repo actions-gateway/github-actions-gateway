@@ -1,0 +1,67 @@
+# Reconcile the classic admission ladder's rung order in the design doc against
+# the order Provisioner.Admit evaluates it in (Q972 retro). Its own workflow for
+# the reason reason-tiers.yml has one, and separate from that one because their
+# inputs differ: this gate reads one source file and one design doc, so folding
+# it in would re-run each on the other's triggers.
+#
+# The order is load-bearing rather than presentational — the rate rung is last so
+# nothing refuses after the bucket has been charged — and it drifted for real:
+# 04-operational-flows.md listed Rate before Ceiling from Q717 until Q972 edited
+# that paragraph, with nothing reporting it.
+#
+# The `paths` below are the gate's actual inputs and nothing else: the file
+# declaring Admit, the design doc it reconciles against, the checker and its
+# entry point, the Makefile target, and this file. `scripts/lib/**` is there
+# because the entry point sources common.sh.
+#
+# The two lists are the same list written twice — GitHub has no anchor syntax
+# across `pull_request` and `push` — so every edit belongs in both.
+name: rung-order
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/agc/internal/provisioner/admission.go'
+      - 'docs/design/04-operational-flows.md'
+      - 'devtools/docs/rungorder/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/docs/check-rung-order.sh'
+      - 'scripts/docs/check-rung-order-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/rung-order.yml'
+  # Merge queue: also run on the candidate merge commit, which is the only one
+  # carrying the merge result. `merge_group` takes no path filter, so unlike the
+  # two lists either side this runs on every candidate; the job is a checkout
+  # plus one script, and a candidate the gate never sees is the defect this
+  # trigger closes (Q942).
+  merge_group:
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/agc/internal/provisioner/admission.go'
+      - 'docs/design/04-operational-flows.md'
+      - 'devtools/docs/rungorder/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/docs/check-rung-order.sh'
+      - 'scripts/docs/check-rung-order-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/rung-order.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rung-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: admission ladder rung order (make rung-order-check)
+        run: make rung-order-check

@@ -247,6 +247,10 @@ metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a 
 reason-tiers-check: ## Fail on a condition/Event reason with no acquisition-tier row, or a tier claim the source refutes
 	scripts/docs/check-reason-tiers.sh
 
+.PHONY: rung-order-check
+rung-order-check: ## Fail when the design doc lists the admission ladder's rungs in an order Admit does not evaluate
+	scripts/docs/check-rung-order.sh
+
 # The e2e venue and the code it exercises drifted apart with nothing comparing
 # them: Q811 added a run read, test/fakegithub 404'd it, and the drained-worker
 # spec failed thirteen merge-queue entries while the PR stayed green. Both sides
