@@ -200,16 +200,45 @@ jobs:
         # a single pull. The exponential, jittered retry schedule covers it.
         run: scripts/fetch/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
 
+      - name: Configure buildkit registry mirrors
+        # Q408 Phase 3. buildkit is the one image client that reads neither
+        # dockerd's registry-mirrors nor a rewritten ref: its base images are
+        # named in the Dockerfile. REGISTRY_MIRRORS comes from the worker's own
+        # environment on the dogfood Kata lane (the tenant's
+        # registry-mirror-wiring ConfigMap), so this is a no-op everywhere else:
+        # the output is empty, which is falsy in the action, so no --config
+        # reaches `docker buildx create`.
+        #
+        # It cannot be an `env` context expression: the variable is set on the
+        # runner process by the cluster, and the `env` context holds only what a
+        # workflow declares.
+        id: buildkit-mirrors
+        run: |
+          set -euo pipefail
+          config="$(scripts/e2e/buildkitd-mirror-config.sh /tmp/buildkitd.toml)"
+          echo "config=${config}" >> "$GITHUB_OUTPUT"
+          if [[ -n "${config}" ]]; then
+            echo "buildkit will resolve these registries through the in-cluster mirror:"
+            cat "${config}"
+          else
+            echo "no REGISTRY_MIRRORS configured; buildkit resolves upstream directly"
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           # image pins the builder to the buildkit image pre-pulled above so the
           # boot uses the local cache instead of pulling from Docker Hub.
           # network=host so the docker-container builder can push to the
-          # registry container published on the runner's 127.0.0.1:5000.
+          # registry container published on the runner's 127.0.0.1:5000, and so
+          # the builder resolves the mirror's in-cluster DNS name.
           driver-opts: |
             image=${{ env.BUILDKIT_IMAGE }}
             network=host
+          # `buildkitd-config`, not `config`: v4 renamed it, and this action
+          # ignores an input it does not declare — a silent no-op, which is the
+          # one failure this wiring cannot afford.
+          buildkitd-config: ${{ steps.buildkit-mirrors.outputs.config }}
 
       - name: Cache kind node image
         # The node image (~1 GB) is otherwise pulled from Docker Hub on every

@@ -226,6 +226,16 @@ promql-check: ## Fail on unparseable PromQL in the rules or the dashboards, or a
 dashboard-render-check: ## Fail when a dashboard changed beyond its panel descriptions and its screenshot did not
 	scripts/manifest/check-dashboard-render.sh
 
+# Three files hold one endpoint set between them: the mirror Deployments, their
+# Services, and the tenant ConfigMap wiring the e2e job's image clients to them
+# (Q408 Phase 3). A sixth upstream added on one side only leaves its pulls going
+# direct, which is GREEN while the Kata overlay still carries open egress — the
+# drift surfaces on a booked dogfood session, or on the next one after Phase 4
+# deletes that policy and the run fails instead.
+.PHONY: registry-mirror-wiring-check
+registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tenant's wiring to them name different endpoints
+	scripts/manifest/check-registry-mirror-wiring.sh
+
 # Capability parity between the two acquisition tiers rested on a one-time seam
 # walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
 # classic-only from birth with nothing re-walking it. This inverts the

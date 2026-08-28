@@ -133,7 +133,11 @@ main() {
 	mirrors="$(kubectl get deployment --namespace gag-registry-mirror \
 		-l app=registry-mirror -o name 2>/dev/null || true)"
 	if [[ -n "${mirrors}" ]]; then
+		# The pods go, and their access logs go with them. That log is the only
+		# reading that says whether the job's pulls rode the mirror (Q408
+		# Phase 3), so say so before it is gone rather than after.
 		echo "Scaling the registry pull-through cache back to zero..."
+		echo "  (their access logs go with the pods; scripts/dogfood/e2e-mirror-hits.sh reads them)"
 		kubectl scale deployment --namespace gag-registry-mirror \
 			-l app=registry-mirror --replicas=0
 	else

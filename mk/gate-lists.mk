@@ -66,7 +66,8 @@ CHECK_FAST_GATES := roadmap-check \
                     dashboard-render-check \
                     tool-pin-check \
                     release-ladder-check \
-                    vendored-skills-check
+                    vendored-skills-check \
+                    registry-mirror-wiring-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -275,4 +276,6 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/cosign-release-sha256-test \
                  docs/check-release-ladder-test \
                  ci/check-vendored-skills-test \
-                 docs/doc-blocks-test
+                 docs/doc-blocks-test \
+                 dogfood/e2e-mirror-hits-test lib/registry-mirror-test \
+                 manifest/check-registry-mirror-wiring-test

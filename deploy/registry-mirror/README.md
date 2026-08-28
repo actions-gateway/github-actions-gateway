@@ -7,8 +7,8 @@ It is a **cache**: a miss is fetched upstream and re-populated, so correctness n
 This is the container-image sibling of [`deploy/athens/`](../athens/README.md) (Go modules), and the concrete artifact behind the recommendation in [`docs/operations/security-operations.md`](../../docs/operations/security-operations.md#prefer-an-in-cluster-caching-mirror-first).
 It exists so the Kata e2e variant can carry untrusted-PR CI: with every registry pull riding the mirror, the workers' allow-all egress policy can be deleted and their reachable set becomes cluster DNS, GitHub, and these five Services.
 
-**It is not yet load-bearing.** Nothing is wired to it, and the workers' allow-all egress policy is still in place.
-Both of those land in later phases of Q408; see [what is not wired yet](#what-is-not-wired-yet).
+**It is not yet load-bearing.** The e2e job's image clients are wired to it (see [how the job is wired](#how-the-job-is-wired-to-these-instances)), but the workers' allow-all egress policy is still in place, so nothing yet depends on the mirror being the only path.
+Deleting that policy is the last phase of Q408.
 
 ## The instances
 
@@ -83,15 +83,30 @@ Three values are specific to this cluster, all of them in [`base/networkpolicy.y
 
 The workload label selector is not cluster-specific: `actions-gateway/component=workload` is what the gateway puts on every worker pod.
 
-## What is not wired yet
+## How the job is wired to these instances
 
-Nothing pulls through these instances today.
-The remaining work is tracked as Q408:
+The clients live in the e2e job, and no two of them read the same configuration, so the wiring is in four places.
+The tenant's [`registry-mirror-wiring` ConfigMap](../dogfood-e2e/overlays/kata/mirror-wiring.yaml) holds the endpoint set once, in the two forms those clients can read:
 
-- **Wiring.** `dockerd --registry-mirror` for Docker Hub, rewritten refs for the non-Hub pulls, buildkit pointed at the gcr.io instance, and helm's OCI ref pointed at the ghcr.io instance.
-  Neither `dockerd --registry-mirror` nor containerd's mirror config redirects helm, which speaks the registry protocol itself.
-- **Enforcement.** Deleting the e2e tenant's allow-all `e2e-open-egress` policy, once the wiring is proven from the mirror's access logs.
+| Client | Reads | Covers |
+|---|---|---|
+| the inner `dockerd` | `daemon.json`, mounted into the dind sidecar | every Docker Hub pull, digest-pinned ones included, which no ref rewrite can restore a local name for |
+| `docker pull` of a non-Hub ref | the `<upstream>=<mirror>` map, via [`scripts/lib/registry-mirror.sh`](../../scripts/lib/registry-mirror.sh) | the cert-manager, metrics-server, Calico and released-GMC pulls |
+| helm's OCI client | the same map, rewriting the chart ref and adding `--plain-http` | the released chart the upgrade gate installs |
+| buildkit | a generated `buildkitd.toml` off the same map | the `Dockerfile`'s base images, which no cache and no `kind load` covers |
 
-The manifests here have not been applied to a cluster.
-The instance configuration was measured against `registry:3.1.1` locally.
-The Kubernetes half (scheduling, probes, the policies, the volume permissions) needs a booked dogfood session, and has to pass before the next phase's wiring can be proven to ride it.
+`dockerd` mirrors Docker Hub and only Docker Hub, which is why the other four upstreams need the ref rewrite rather than an entry in `daemon.json`.
+The rewrite re-tags each image to the ref the caller asked for, so everything downstream is untouched: `docker save`, `kind load`, and the manifests kubelet resolves.
+
+Adopting the wiring elsewhere means the ConfigMap and the two patches in [the Kata overlay](../dogfood-e2e/overlays/kata/kustomization.yaml) that mount it, on top of the three cluster-specific values above.
+`make registry-mirror-wiring-check` reconciles that ConfigMap with the instances here, in both directions.
+
+## What is proven, and what is not
+
+The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, five per instance, by [`scripts/dogfood/e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh): Available, `/v2/`, a real upstream manifest, an upload refused with 405, and the bundled image's `:5001` debug listener unbound.
+
+The wiring above **rides them** when [`scripts/dogfood/e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reports a served content request per instance after a Kata e2e run.
+That reading is needed because the tenant still carries the allow-all `e2e-open-egress` policy: a client that ignored its wiring reaches its upstream and the run is green either way, and the access log is the one place an unmirrored pull cannot appear.
+
+Nothing here is **enforced** yet.
+Deleting `e2e-open-egress` is the last step of Q408, and only then does reaching the mirror distinguish itself from reaching the upstream.

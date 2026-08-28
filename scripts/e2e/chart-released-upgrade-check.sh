@@ -63,6 +63,9 @@
 #   RELEASED_TAG        skip discovery and test the upgrade from this tag
 #   RELEASED_CHART_OCI  OCI chart ref base (default oci://ghcr.io/<owner>/charts,
 #                       owner parsed from the origin remote URL)
+#   REGISTRY_MIRRORS    <upstream>=<mirror> map; when it covers the chart ref's
+#                       registry the pull rides the mirror over plain HTTP
+#                       (Q408 Phase 3, scripts/lib/registry-mirror.sh)
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -74,6 +77,8 @@ RELEASE_NS="${RELEASE_NS:-gmc-system}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/lib/registry-mirror.sh
+source "${REPO_ROOT}/scripts/lib/registry-mirror.sh"
 
 readonly CHART_DIR="${REPO_ROOT}/charts/actions-gateway"
 readonly PROBE_NS="chart-released-upgrade-check"
@@ -288,14 +293,28 @@ if [[ -z "${RELEASED_CHART_OCI:-}" ]]; then
 fi
 readonly released_chart_ref="${RELEASED_CHART_OCI}/actions-gateway"
 
-step "helm pull ${released_chart_ref} --version ${released_version}"
+# Q408 Phase 3: helm's OCI client takes neither dockerd's registry-mirror nor a
+# rewritten docker ref, so the chart pull is the one client wired by rewriting
+# the ref here. The mirror speaks plain HTTP in-cluster, which helm will not do
+# unless told to — and --plain-http is added ONLY when a rewrite happened, so a
+# direct ghcr.io pull is never downgraded off TLS.
+helm_pull_ref="${released_chart_ref}"
+helm_pull_scheme_args=()
+if [[ -n "$(mirror_for "$(mirror_ref_host "${released_chart_ref#oci://}")")" ]]; then
+	helm_pull_ref="oci://$(mirror_rewrite "${released_chart_ref#oci://}")"
+	helm_pull_scheme_args=(--plain-http)
+	echo "     pulling the released chart via the registry mirror: ${helm_pull_ref}"
+fi
+
+step "helm pull ${helm_pull_ref} --version ${released_version}"
 # The published artifact, not `git archive` of the tag: a packaging difference
 # between the chart source and what operators can actually pull is exactly the
 # kind of escape this check exists to catch. Retried: GHCR serves transient
 # errors under load, and one blip must not redden the whole e2e run.
 pull_ok=""
 for attempt in 1 2 3 4 5; do
-	if helm pull "${released_chart_ref}" --version "${released_version}" -d "${work_dir}" 2>&1; then
+	if helm pull "${helm_pull_ref}" "${helm_pull_scheme_args[@]}" \
+		--version "${released_version}" -d "${work_dir}" 2>&1; then
 		pull_ok="yes"
 		break
 	fi
@@ -303,7 +322,7 @@ for attempt in 1 2 3 4 5; do
 	sleep 5
 done
 if [[ -z "${pull_ok}" ]]; then
-	die "could not pull ${released_chart_ref} version ${released_version}. If the tag
+	die "could not pull ${helm_pull_ref} version ${released_version}. If the tag
        ${RELEASED_TAG} exists but its chart was never published, the release is broken for
        operators too — fix the publish (docs/operations/release.md) rather than this check.
        The chart package must also be public (or the environment logged into ghcr.io)."
