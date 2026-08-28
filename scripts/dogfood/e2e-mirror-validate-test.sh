@@ -18,12 +18,12 @@
 #   3. Read-only is the posture's load-bearing property (§3.1). A push that is
 #      ACCEPTED must be a failure, not an unexpected-status note.
 #
-# The expected values the grader asserts were measured against the pinned image
-# rather than read off the design: five instances in proxy mode, one real
-# manifest per upstream, all 200 / 405 / connection-refused. Both controls fire
-# — a bundled-config instance answers on :5001 (curl 0, not 7), and a non-root
-# instance with no writable storage answers `/v2/` 200 and the manifest 500. See
-# the PR body for the commands.
+# The expected values the grader asserts were measured rather than read off the
+# design. The three probe checks: five instances in proxy mode against the pinned
+# image, one real manifest per upstream, all 200 / 200 / 405. Its control is a
+# non-root instance with no writable storage, which answers `/v2/` 200 and the
+# manifest 500. `debug` is an object read rather than a probe, measured with the
+# script's own jsonpath and its own two controls, below. See the PR body.
 #
 # The script is sourced with E2E_MIRROR_VALIDATE_LIB_ONLY=1 so main() does not
 # run; `kubectl` is stubbed, so no cluster.
@@ -83,8 +83,9 @@ grade() {
 	set -e
 }
 
-# a_clean_transcript — what a healthy cluster reports: the measured 200/200/405/7
-# for every declared instance.
+# a_clean_transcript — what the probe pod reports on a healthy cluster: the
+# measured 200/200/405 for every declared instance. `debug` is not here; it is an
+# object read, graded further down.
 a_clean_transcript() {
 	local row instance repo ref
 	for row in "${MIRROR_INSTANCES[@]}"; do
@@ -173,10 +174,10 @@ check "the probe covers every instance and check" "" "${missing}"
 
 # The probe must not address 5001 at all. Each Service declares only 5000/5000
 # and the ingress policy admits only TCP/5000, so a ClusterIP probe on 5001 is
-# graded by the dataplane rather than by the listener: on Dataplane V2 an
-# unmatched port is dropped, which times out and fails a healthy cluster, and a
-# reject would pass a bound listener. `debug` is an object read for that reason,
-# and this assertion is what keeps it from drifting back to a probe.
+# graded by the dataplane rather than by the listener, and both of its outcomes
+# are wrong: a drop times out and fails a healthy cluster, a reject passes a
+# bound listener. `debug` is an object read for that reason, and this assertion
+# is what keeps it from drifting back to a probe.
 check_not_contains "the probe never addresses the debug port" ":5001" "${probe}"
 
 # The namespace is a parameter, and it reaches every address the probe builds.
@@ -271,6 +272,19 @@ run_objects
 check "a bound debug listener fails" 1 "${OBJ_RC}"
 check_contains "a bound debug listener reports the address" \
 	"FAIL mirror-gcr-io debug: REGISTRY_HTTP_DEBUG_ADDR=:5001, want empty" "${OBJ_OUT}"
+
+# The container is selected by name, never by index. Measured against a fixture
+# with a sidecar prepended: the name form returns
+# `REGISTRY_HTTP_DEBUG_ADDR|`, while `containers[0]` returns empty and so fails
+# with the reason line for an unset variable, describing the wrong problem on a
+# correctly-configured mirror.
+arm_objects "$(healthy mirror-docker-io)"
+run_objects
+jsonpath_call="$(grep -m1 -F 'kubectl get deployment mirror-docker-io' "${CALL_LOG}")"
+check_contains "the container is selected by name" \
+	'containers[?(@.name=="registry")]' "${jsonpath_call}"
+check_not_contains "the container is never selected by index" \
+	"containers[0]" "${jsonpath_call}"
 
 # A kubectl that cannot read the object at all fails both checks rather than one.
 arm_objects "$(healthy mirror-docker-io)"

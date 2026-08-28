@@ -31,10 +31,10 @@
 # (5000/5000) and `registry-mirror-worker-access` admits only TCP/5000, so a
 # connection to a ClusterIP on 5001 never reaches the pod whatever the listener
 # is doing: the dataplane decides the result, so the probe grades the Service
-# and the policy rather than the config it names. It also fails closed in the
-# expensive direction, since an unmatched ClusterIP port is dropped rather than
-# rejected on Dataplane V2, and the timeout that produces is not the refusal a
-# probe would score as healthy.
+# and the policy rather than the config it names. Which way it fails is
+# unmeasured and both ways are wrong: an unmatched ClusterIP port that is dropped
+# times out, failing a healthy cluster, and one that is rejected gives the same
+# refusal a probe scores as healthy whether or not the listener is bound.
 #
 # The other observable reading is an ephemeral container in the pod's own netns
 # (`kubectl debug --target`). Not taken: this namespace enforces PSA
@@ -104,6 +104,10 @@ PROBE_CHECKS=(v2 manifest push)
 # entry identically, and an absent entry means the listener is bound.
 DEBUG_ADDR_VAR="REGISTRY_HTTP_DEBUG_ADDR"
 
+# The container the env var is read from, selected by name so a prepended sidecar
+# cannot shift it. All five Deployments name it `registry`.
+MIRROR_CONTAINER="registry"
+
 # --- pure helpers (unit-tested; no kubectl, no cluster) ----------------------
 
 # mirror_probe_script NAMESPACE — emit the shell program the probe pod runs,
@@ -113,9 +117,9 @@ DEBUG_ADDR_VAR="REGISTRY_HTTP_DEBUG_ADDR"
 #
 # Every curl carries `|| true`: a connection refused by NetworkPolicy is a
 # finding to report, not a reason for the pod to exit before the later probes
-# run. The value carried is what discriminates — an HTTP status for the three
-# HTTP probes, curl's own exit code for `debug`, where the pass condition is a
-# connection that never establishes.
+# run. Every probe here addresses 5000 and carries an HTTP status, so a
+# connection the dataplane never completes surfaces as an empty value, which the
+# grader reports as an unreported check rather than as a status.
 mirror_probe_script() {
 	local ns="$1" row instance repo ref
 	local accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json'
@@ -209,11 +213,17 @@ probe_pod_overrides() {
 # config's listener bound. kubectl's jsonpath renders those identically on the
 # value alone, so reading only the value would grade the dangerous state green.
 # A kubectl that fails outright leaves all three empty, which fails both checks.
+#
+# The container is selected by name rather than by index: a sidecar prepended to
+# the pod would shift index 0, and the env read would then come back empty and
+# fail with a reason line describing a missing variable rather than the wrong
+# container.
 check_instance_objects() {
 	local row instance repo ref raw status envname envvalue failed=0
+	local c="containers[?(@.name==\"${MIRROR_CONTAINER}\")]"
 	local jsonpath="jsonpath={.status.conditions[?(@.type==\"Available\")].status}"
-	jsonpath+="|{.spec.template.spec.containers[0].env[?(@.name==\"${DEBUG_ADDR_VAR}\")].name}"
-	jsonpath+="|{.spec.template.spec.containers[0].env[?(@.name==\"${DEBUG_ADDR_VAR}\")].value}"
+	jsonpath+="|{.spec.template.spec.${c}.env[?(@.name==\"${DEBUG_ADDR_VAR}\")].name}"
+	jsonpath+="|{.spec.template.spec.${c}.env[?(@.name==\"${DEBUG_ADDR_VAR}\")].value}"
 	for row in "${MIRROR_INSTANCES[@]}"; do
 		read -r instance repo ref <<<"${row}"
 		raw="$(kubectl get deployment "${instance}" --namespace "${MIRROR_NAMESPACE}" \

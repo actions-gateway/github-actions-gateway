@@ -328,7 +328,8 @@ Five checks per instance, over the five declared upstreams:
 The same reading is why the readiness probe cannot stand in for this script.
 
 **`debug` is read off the Deployment rather than probed, because the network reading cannot work.** Each Service declares one port (`5000/5000`) and `registry-mirror-worker-access` admits only TCP/5000, so a connection to a ClusterIP on 5001 never reaches the pod whatever the listener is doing.
-The dataplane decides that result, which means such a probe grades the Service and the policy rather than the config it names, and it fails in the expensive direction: an unmatched ClusterIP port is dropped rather than refused on Dataplane V2, so a healthy cluster times out and the battery reports five failures on the first booked session.
+The dataplane decides that result, which means such a probe grades the Service and the policy rather than the config it names, and both of its outcomes are wrong: an unmatched ClusterIP port that is dropped times out, so a healthy cluster reports five failures on the first booked session, and one that is rejected gives the same refusal the probe scores as healthy whether or not the listener is bound.
+Which of the two this cluster does is unmeasured, and the object read is correct either way.
 The other observable reading, an ephemeral container in the pod's own netns, is not taken either: this namespace enforces PSA `restricted`, `kubectl debug` sets no `securityContext` on the container it injects, and whether that is admitted is a venue question no run off the cluster can settle.
 
 **The env read carries a trap of the same shape.** kubectl's jsonpath renders an empty value and an absent entry identically, and an absent entry is exactly the state where the bundled listener *is* bound.
