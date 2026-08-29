@@ -58,10 +58,15 @@ It is **off by default** and opted into per pool with `spec.auditLogging: Connec
 Two deltas from the sketch this entry originally carried, both recorded so a reader is not left looking for what it described:
 
 - **The field is `EgressProxy.spec.auditLogging`, not `spec.proxy.auditLogging`.** The inline `ActionsGateway.spec.proxy` this entry predates was decomposed into the standalone `EgressProxy` kind (§H.4), and a proxy pool is what the record attributes.
-- **It is a string enum, not a bool.** What gets recorded is a policy, so the [API design rules](../development/api-review.md#prefer-a-string-enum-to-a-bool) put it on an enum whose values name the method: `Connections` today, with room for a kind of record that is not per-connection.
+- **It is a string enum, not a bool.** What gets recorded is a policy, so the [API design rules](../development/api-review.md#prefer-a-string-enum-to-a-bool) put it on an enum whose values name the method, which is what let `ConnectionsWithSource` join `Connections` later without widening what an existing pool records.
+
+Attribution (Q986) is a third value plus a second record, not a wider first one.
+`ConnectionsWithSource` adds the client address to the egress record, and `ActionsGateway.spec.auditLogging: WorkerAddresses` has the AGC write which job holds each worker address while its pod lives.
+That second record is necessary because a worker pod is deleted with its job, so the binding cannot be resolved afterwards.
+Both default `Off` and are opted into separately: neither record is a movement log alone, the join of the two is.
 
 - Field contract and what the record deliberately omits: [05-security.md § Proxy egress audit record](05-security.md#proxy-egress-audit-record).
-- Record shape and how to select it: [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record).
+- Record shape and how to select it: [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record), and the attribution join in [§ Attributing a record to a tenant and a job](../operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job).
 - Turning it on: [tenant-onboarding.md § Per-pool egress audit record](../operations/tenant-onboarding.md#per-pool-egress-audit-record).
 
 ---

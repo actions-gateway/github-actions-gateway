@@ -93,6 +93,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
   Readable from `kubectl describe`, so answering it no longer needs metrics access.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
+- **[Which host each job reached](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.7</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.
 
 ## Install and day-2 operations
 

@@ -64,6 +64,9 @@ spec:
   auditLogging: Connections   # Off (default) writes no per-connection record
 ```
 
+`ConnectionsWithSource` writes the same record with the client's source address added, which is what makes a connection attributable to one consumer namespace and one job rather than to the pool.
+It needs a second opt-in on the consuming side to be useful: see [attributing a record to a tenant and a job](#attributing-a-record-to-a-tenant-and-a-job) below.
+
 Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.
 See [tenant onboarding: per-pool egress audit record](tenant-onboarding.md#per-pool-egress-audit-record) for when to turn it on and what it costs.
 
@@ -95,6 +98,7 @@ The fields:
 | `host` / `port` | The CONNECT destination. `host` is capped at 253 **bytes** (the longest legal DNS name) and gains a `…(truncated)` marker if cut, so a capped value never reads as a real destination. The cut lands on a rune boundary, so a raw-UTF-8 internationalized name is never left as a broken character. The same cap applies to every proxy log line carrying the destination (the denial, the dial failure, and the response-write failure), not only to the audit record |
 | `bytesToDestination` / `bytesFromDestination` | Bytes relayed each way, final at tunnel close |
 | `durationSeconds` | How long the tunnel was open |
+| `sourceIP` / `sourcePort` | The client address the CONNECT arrived from. **Only under `auditLogging: ConnectionsWithSource`**, absent entirely under `Connections`. Read from the accepted connection, never from a request header, so a worker cannot forge it |
 
 Three properties worth knowing before you build on it:
 
@@ -103,6 +107,65 @@ Three properties worth knowing before you build on it:
 - **One line per connection.** Under load that is the pool's dominant log volume, which is the cost the opt-in is asking you to accept, so size the pipeline before turning it on.
 
 What the record deliberately does *not* carry, and why, is in the [security design](../design/05-security.md#proxy-egress-audit-record).
+
+### Attributing a record to a tenant and a job
+
+The record above names the destination and the **pool**.
+On a pool shared via `spec.sharing.allowedNamespaces` it cannot say which consumer reached that destination, and on any pool it cannot say which job did.
+Closing both takes two records, from two processes, joined on the source address.
+
+**Turn on both halves.** Either alone records something nothing asks about:
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: EgressProxy
+spec:
+  auditLogging: ConnectionsWithSource   # adds sourceIP/sourcePort to the egress record
+---
+apiVersion: actions-gateway.com/v2beta1
+kind: ActionsGateway
+spec:
+  auditLogging: WorkerAddresses         # says which job holds each address
+```
+
+Both roll their workload, the same as `logLevel`, so records start once the new pods are up.
+
+The AGC's half is a second stream on that gateway's own stdout, selected on `msg == "worker address audit"`:
+
+```json
+{
+  "time": "2026-08-24T19:57:11.882Z",
+  "level": "INFO",
+  "msg": "worker address audit",
+  "namespace": "team-a",
+  "event": "bind",
+  "podIP": "10.44.3.17",
+  "pod": "gag-worker-7c9f2",
+  "owner": "default",
+  "runID": "12345678",
+  "repository": "owner/repo"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `namespace` | The namespace the **worker pod** runs in, so the consuming tenant, including on a shared pool, because it is read from the pod rather than from a CONNECT |
+| `event` | `bind` when the address becomes live, `release` when the pod goes away and the address may be reused |
+| `podIP` | The worker's address, which is what a proxy record's `sourceIP` matches |
+| `pod` / `owner` | The worker pod and the RunnerSet it belongs to |
+| `runID` / `repository` | The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose payload carried no run identity |
+
+**The join is address plus time.** A `bind` opens a window and the matching `release` closes it; an egress record whose `sourceIP` equals that `podIP`, with a `time` inside the window, is that job's connection.
+The window matters because addresses are reused: a worker pod is deleted when its job ends and its address returns to the CNI's pool, which is also why the binding has to be recorded live rather than looked up afterwards.
+
+Three things to know before you build on it:
+
+- **Two switches, and half-on is legal.** `ConnectionsWithSource` without `WorkerAddresses` gives addresses nothing names; `WorkerAddresses` without it gives bindings nothing asks about.
+  Neither is an error, and neither attributes anything.
+- **It assumes the proxy sees the worker's own address.** Pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path, so `sourceIP` is the worker's `podIP`.
+  A CNI that SNATs it breaks the join, so check yours before relying on the records.
+- **The gateway's own egress has no binding.** The AGC reaches GitHub through the same pool, so its connections carry a `sourceIP` no `bind` record ever names.
+  That is how you tell control-plane traffic from a job's, not a gap.
 
 ### What never appears in logs
 

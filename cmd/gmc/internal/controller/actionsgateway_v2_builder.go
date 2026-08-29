@@ -453,6 +453,15 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 			corev1.EnvVar{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecret},
 		)
 	}
+	// Worker-address audit record (Q986). Injected only for a non-Off value, for
+	// the same reason proxyAuditEnv is conditional: a gateway that has not opted in
+	// keeps a byte-for-byte unchanged pod template, so upgrading the GMC does not
+	// roll every AGC in the cluster. The AGC defaults to Off with the variable
+	// absent, so the off-by-default guarantee holds at both ends independently.
+	if ag.Spec.AuditLogging != "" && ag.Spec.AuditLogging != auditLoggingOff {
+		env = append(env, corev1.EnvVar{Name: "AGC_AUDIT_LOGGING", Value: ag.Spec.AuditLogging})
+	}
+
 	// GHES private-CA trust (Q536): names the ConfigMap applyGitHubCABundleV2 mounts,
 	// so the AGC knows it was opted in and its pod provisioner can project the same
 	// bundle into worker pods. Precedes extraEnv for the same reason GITHUB_API_BASE_URL

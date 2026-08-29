@@ -86,7 +86,8 @@ type Server struct {
 	// AuditLogging selects the per-connection egress record this proxy writes
 	// (Q564, design appendix G.3). AuditOff — the default, and what an unset or
 	// unrecognized PROXY_AUDIT_LOGGING resolves to — writes nothing per
-	// connection. See AuditMode for why it is opt-in.
+	// connection, and AuditConnectionsWithSource adds the client's source
+	// address to it (Q986). See AuditMode for why each is opt-in.
 	AuditLogging AuditMode
 	// Namespace is the namespace THIS POOL runs in, read from the downward API
 	// and stamped on the audit record so the record attributes itself without
@@ -800,7 +801,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	go relay(conn, upstreamSrc, &bytesFromDestination)
 	<-done
 
-	if s.AuditLogging == AuditConnections {
+	if s.AuditLogging.records() {
 		// Close both ends so the far relay unwinds and its counter is final
 		// before the record is written. The deferred Closes do exactly this,
 		// but they run after the body returns — too late to be read here. Both
@@ -810,7 +811,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close()
 		_ = upstream.Close()
 		<-done
-		s.logConnectAudit(r.Host, bytesToDestination.Load(), bytesFromDestination.Load(), time.Since(start))
+		s.logConnectAudit(r.Host, r.RemoteAddr, bytesToDestination.Load(), bytesFromDestination.Load(), time.Since(start))
 	}
 }
 

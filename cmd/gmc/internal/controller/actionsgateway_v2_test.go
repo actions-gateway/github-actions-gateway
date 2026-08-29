@@ -955,3 +955,23 @@ func TestBuildAGCDeploymentV2_RenderIsDeterministic(t *testing.T) {
 		require.Equal(t, first, render(), "render %d differs from the first", i)
 	}
 }
+
+// TestBuildAGCDeploymentV2_AuditLogging pins both directions of the worker-address
+// audit opt-in (Q986). The absent-when-Off half is not cosmetic: injecting the var
+// unconditionally would change the pod template of every AGC in the cluster on a
+// GMC upgrade and roll them all, which is why proxyAuditEnv is conditional too.
+func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
+	off := v2Gateway("gw", "team-a", "github-app", "")
+	assert.NotContains(t, agcEnv(buildAGCDeploymentV2(off, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)),
+		"AGC_AUDIT_LOGGING", "an unset auditLogging must inject nothing")
+
+	explicitOff := v2Gateway("gw", "team-a", "github-app", "")
+	explicitOff.Spec.AuditLogging = "Off"
+	assert.NotContains(t, agcEnv(buildAGCDeploymentV2(explicitOff, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)),
+		"AGC_AUDIT_LOGGING", "an explicit Off must inject nothing either")
+
+	on := v2Gateway("gw", "team-a", "github-app", "")
+	on.Spec.AuditLogging = "WorkerAddresses"
+	assert.Equal(t, "WorkerAddresses",
+		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
+}
