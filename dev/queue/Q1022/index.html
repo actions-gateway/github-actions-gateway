@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1020/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1022/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure the mirror cache hit/miss timing gap from inside a Kata guest - GitHub Actions Gateway</title>
+        <title>Close /v2/_catalog on a shared registry mirror - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" class="md-skip">
+        <a href="#close-v2_catalog-on-a-shared-registry-mirror" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure the mirror cache hit/miss timing gap from inside a Kata guest
+              Close /v2/_catalog on a shared registry mirror
             
           </span>
         </div>
@@ -2597,19 +2597,16 @@
   
 
 
-<h1 id="measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest">Measure the mirror cache hit/miss timing gap from inside a Kata guest<a class="headerlink" href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" title="Permanent link">&para;</a></h1>
-<p>Both mirror topologies and the decision between them shipped: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a> renders the shared set, the default renders the isolated one, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> carries the cost, the risk and the thresholds.
-What is left of the original row is the one thing it called unmeasured: whether a cache hit is distinguishable from a miss <strong>from inside a Kata guest</strong>, across the bridge NAT, on this Deployment shape.</p>
-<p><strong>What was measured, and where it falls short.</strong> On 2026-08-28, against <code>registry:3.1.1</code> at the pinned digest run locally as a pull-through cache: blob hits at 10 to 70 ms against misses of 400 to 640 ms, and manifest hits and misses overlapping (medians near 360 ms and 430 ms, a warm 445 ms against a cold 407 ms), because a pull-through cache revalidates a manifest upstream on every request.
-That was taken from a laptop over the public internet, not from the position an attacker occupies, so it bounds the channel rather than measuring it.</p>
-<p><strong>This no longer decides anything, which is why it is small.</strong> <a href="../Q1022/">Q1022</a> records a measurement of <code>GET /v2/_catalog</code>, which names every cached repository on the same port the worker policy admits, so a shared set exposes the repository list with no timing involved.
-A refuted timing channel would not make a shared set private, and a confirmed one adds a second route to information already readable.
-Take it to sharpen the guidance and to know what is left once Q1022 closes the catalog, not to settle the topology choice.</p>
-<p><strong>How to take it.</strong> It needs a live Kata worker: a probe in the job on the Kata lane, beside <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/egress-negatives.sh"><code>egress-negatives.sh</code></a>, which already runs there for the reason this measurement needs (a plain pod cannot answer what holds at the end of a path leaving a micro-VM guest through a bridge NAT).
-Time blob fetches rather than manifest fetches, since the manifest arm has already come back null.
-Warm one repository and leave a second cold, interleave the fetches, and report the distributions rather than two numbers: what matters is whether they overlap, not the ratio of the medians.</p>
-<p>Attempted and not taken on 2026-08-28: the dogfood cluster was parked at zero nodes across all four pools, <code>default-pool</code> and <code>workers-od</code> with autoscaling disabled, so taking it meant unparking the cluster by hand rather than riding a window that was already running.
-Prefer folding it into the next real Kata e2e window, where it costs a probe rather than a cluster.</p>
+<h1 id="close-v2_catalog-on-a-shared-registry-mirror">Close <code>/v2/_catalog</code> on a shared registry mirror<a class="headerlink" href="#close-v2_catalog-on-a-shared-registry-mirror" title="Permanent link">&para;</a></h1>
+<p>On the shared mirror topology (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a>), any tenant that can reach a mirror can list what every other tenant pulled.
+<code>GET /v2/_catalog</code> names every repository in the cache, answers 200 on port 5000 (the port <code>e2e-mirror-egress</code> admits), and needs one manifest fetch to list a repository.</p>
+<p><strong>Measured 2026-08-28</strong> against <code>registry:3.1.1</code> at the digest <code>base/deployment.yaml</code> pins, run locally as a pull-through cache with the deployed proxy configuration: cold it returned <code>{"repositories":[]}</code>; after a single fetch of <code>library/alpine:3.20</code>, <code>{"repositories":["library/alpine"]}</code>.
+<code>REGISTRY_CATALOG_MAXENTRIES=0</code> does not close it, measured on a second instance: the endpoint still answered with the repository listed.
+Only that one setting was tried, so "distribution offers no knob" is unverified; establish it before designing around it.</p>
+<p>This is a documented registry API endpoint rather than a side channel, so it is not narrowed by anything done to cache timing, and it dominates the timing question <a href="../Q1020/">Q1020</a> still holds.
+Today it is a documented trade-off (<a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a>) an administrator opts into, which is correct for a shipped option and weak as a durable answer: the shared topology is the one an adopter with several tenants reaches for first, and the cost of the isolated alternative is a whole mirror set per tenant.</p>
+<p>Deliverables: a way to serve pulls while refusing <code>/v2/_catalog</code>, rendered as part of the shared overlay rather than as prose; a test that the endpoint refuses and that a pull still succeeds, since a fix that breaks pulls fails silently in the direction nobody probes; and the operator page's decision section corrected to match, including the residual-risk bullet in <a href="../../plan/secure-multi-tenant-oss-ci/#explicitly-out-of-scope-and-residual-risk-accepted">secure-multi-tenant-oss-ci.md</a>.</p>
+<p>Do not reach for <code>REGISTRY_AUTH</code> without checking what it costs: the mirror serves anonymous pulls today, and the four image clients wired to it (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#how-the-job-is-wired-to-these-instances">README § How the job is wired</a>) each read their own configuration, so credentials would have to reach all four.</p>
 
 
 

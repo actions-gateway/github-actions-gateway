@@ -2805,12 +2805,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in …</td>
 </tr>
 <tr>
-<td><a href="Q1020/">Q1020</a></td>
-<td><a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">Ship both mirror topologies and the cost-versus-risk choice between them</a></td>
-<td><code>security</code> <code>docs</code></td>
+<td><a href="Q1022/">Q1022</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md">Close <code>/v2/_catalog</code> on a shared registry mirror</a></td>
+<td><code>security</code> <code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
-<td><code>deploy/registry-mirror/</code> renders one mirror set admitting one tenant: <code>base/networkpolicy.yaml</code> names the tenant namespace twice, as …</td>
+<td>On the shared mirror topology (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a>), any …</td>
+</tr>
+<tr>
+<td><a href="Q1026/">Q1026</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/components/shared-tenants/kustomization.yaml">Narrow the shared mirror's ingress peer from namespace to worker pods</a></td>
+<td><code>security</code> <code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The mirror-side ingress admits a <em>namespace</em>, not a workload: <code>registry-mirror-worker-access</code> names a <code>namespaceSelector</code> with no …</td>
+</tr>
+<tr>
+<td><a href="Q1020/">Q1020</a></td>
+<td><a href="../operations/kata-dind-workloads/#choosing-a-mirror-topology">Measure the mirror cache hit/miss timing gap from inside a Kata guest</a></td>
+<td><code>security</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Both mirror topologies and the decision between them shipped …</td>
 </tr>
 <tr>
 <td><a href="Q957/">Q957</a></td>
@@ -2827,6 +2843,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>effective_tolerance</code> is <code>max(COVERAGE_TOLERANCE, COVERAGE_TOLERANCE_STMT * 100 / NSTMT)</code>, so the pass bound moves with the module's …</td>
+</tr>
+<tr>
+<td><a href="Q1024/">Q1024</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md">Nothing renders the registry-mirror kustomize overlays in CI</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>deploy/registry-mirror/</code> ships four render targets an operator applies with <code>kubectl apply -k</code>, and no gate renders any of them: the root …</td>
 </tr>
 <tr>
 <td><a href="Q992/">Q992</a></td>

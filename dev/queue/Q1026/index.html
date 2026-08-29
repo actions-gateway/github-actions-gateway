@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1020/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1026/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure the mirror cache hit/miss timing gap from inside a Kata guest - GitHub Actions Gateway</title>
+        <title>Narrow the shared mirror's ingress peer from namespace to worker pods - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" class="md-skip">
+        <a href="#narrow-the-shared-mirrors-ingress-peer-from-namespace-to-worker-pods" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure the mirror cache hit/miss timing gap from inside a Kata guest
+              Narrow the shared mirror's ingress peer from namespace to worker pods
             
           </span>
         </div>
@@ -2597,19 +2597,15 @@
   
 
 
-<h1 id="measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest">Measure the mirror cache hit/miss timing gap from inside a Kata guest<a class="headerlink" href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" title="Permanent link">&para;</a></h1>
-<p>Both mirror topologies and the decision between them shipped: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a> renders the shared set, the default renders the isolated one, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> carries the cost, the risk and the thresholds.
-What is left of the original row is the one thing it called unmeasured: whether a cache hit is distinguishable from a miss <strong>from inside a Kata guest</strong>, across the bridge NAT, on this Deployment shape.</p>
-<p><strong>What was measured, and where it falls short.</strong> On 2026-08-28, against <code>registry:3.1.1</code> at the pinned digest run locally as a pull-through cache: blob hits at 10 to 70 ms against misses of 400 to 640 ms, and manifest hits and misses overlapping (medians near 360 ms and 430 ms, a warm 445 ms against a cold 407 ms), because a pull-through cache revalidates a manifest upstream on every request.
-That was taken from a laptop over the public internet, not from the position an attacker occupies, so it bounds the channel rather than measuring it.</p>
-<p><strong>This no longer decides anything, which is why it is small.</strong> <a href="../Q1022/">Q1022</a> records a measurement of <code>GET /v2/_catalog</code>, which names every cached repository on the same port the worker policy admits, so a shared set exposes the repository list with no timing involved.
-A refuted timing channel would not make a shared set private, and a confirmed one adds a second route to information already readable.
-Take it to sharpen the guidance and to know what is left once Q1022 closes the catalog, not to settle the topology choice.</p>
-<p><strong>How to take it.</strong> It needs a live Kata worker: a probe in the job on the Kata lane, beside <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/egress-negatives.sh"><code>egress-negatives.sh</code></a>, which already runs there for the reason this measurement needs (a plain pod cannot answer what holds at the end of a path leaving a micro-VM guest through a bridge NAT).
-Time blob fetches rather than manifest fetches, since the manifest arm has already come back null.
-Warm one repository and leave a second cold, interleave the fetches, and report the distributions rather than two numbers: what matters is whether they overlap, not the ratio of the medians.</p>
-<p>Attempted and not taken on 2026-08-28: the dogfood cluster was parked at zero nodes across all four pools, <code>default-pool</code> and <code>workers-od</code> with autoscaling disabled, so taking it meant unparking the cluster by hand rather than riding a window that was already running.
-Prefer folding it into the next real Kata e2e window, where it costs a probe rather than a cluster.</p>
+<h1 id="narrow-the-shared-mirrors-ingress-peer-from-namespace-to-worker-pods">Narrow the shared mirror's ingress peer from namespace to worker pods<a class="headerlink" href="#narrow-the-shared-mirrors-ingress-peer-from-namespace-to-worker-pods" title="Permanent link">&para;</a></h1>
+<p>The mirror-side ingress admits a <em>namespace</em>, not a workload: <code>registry-mirror-worker-access</code> names a <code>namespaceSelector</code> with no <code>podSelector</code> beside it, so every pod in an admitted namespace reaches port 5000 whether or not it carries <code>actions-gateway/component: workload</code>.</p>
+<p>The base has the same shape and this is not a regression, but the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/components/shared-tenants/kustomization.yaml">shared topology</a> widens what it costs: the base admits any pod in <strong>one</strong> tenant namespace, the component admits any pod in <strong>every</strong> managed tenant namespace.
+So a non-worker pod a tenant runs for its own reasons can reach a cache shared with tenants it is meant to be separated from, and can read <a href="../Q1022/"><code>/v2/_catalog</code></a> from there.</p>
+<p>The worker-side policy is already tight in the way this is not: <code>e2e-mirror-egress</code> selects <code>actions-gateway/component: workload</code> and nothing else.
+ANDing that same selector into the ingress peer as a second key of one <code>from</code> element (not a second element, which ORs, per the comment in <code>base/networkpolicy.yaml</code>) would make the two halves agree.</p>
+<p><strong>Do not ship it on that reasoning alone.</strong> Whether every client that must reach the mirror carries the workload label is a cluster measurement nobody has taken, and the failure is fail-closed and total: a client that loses the path cannot pull at all, and the four wired clients read four different configurations (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#how-the-job-is-wired-to-these-instances">README § How the job is wired</a>).
+Take it inside a Kata e2e window, where <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-hits.sh"><code>e2e-mirror-hits.sh</code></a> already reads each mirror's access log and is the instrument that would show a client silently dropping off.</p>
+<p>Raised in review of the Q1020 PR, which shipped the shared topology and deliberately did not change this.</p>
 
 
 

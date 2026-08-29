@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1020/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1024/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure the mirror cache hit/miss timing gap from inside a Kata guest - GitHub Actions Gateway</title>
+        <title>Nothing renders the registry-mirror kustomize overlays in CI - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" class="md-skip">
+        <a href="#nothing-renders-the-registry-mirror-kustomize-overlays-in-ci" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure the mirror cache hit/miss timing gap from inside a Kata guest
+              Nothing renders the registry-mirror kustomize overlays in CI
             
           </span>
         </div>
@@ -2597,19 +2597,21 @@
   
 
 
-<h1 id="measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest">Measure the mirror cache hit/miss timing gap from inside a Kata guest<a class="headerlink" href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" title="Permanent link">&para;</a></h1>
-<p>Both mirror topologies and the decision between them shipped: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a> renders the shared set, the default renders the isolated one, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> carries the cost, the risk and the thresholds.
-What is left of the original row is the one thing it called unmeasured: whether a cache hit is distinguishable from a miss <strong>from inside a Kata guest</strong>, across the bridge NAT, on this Deployment shape.</p>
-<p><strong>What was measured, and where it falls short.</strong> On 2026-08-28, against <code>registry:3.1.1</code> at the pinned digest run locally as a pull-through cache: blob hits at 10 to 70 ms against misses of 400 to 640 ms, and manifest hits and misses overlapping (medians near 360 ms and 430 ms, a warm 445 ms against a cold 407 ms), because a pull-through cache revalidates a manifest upstream on every request.
-That was taken from a laptop over the public internet, not from the position an attacker occupies, so it bounds the channel rather than measuring it.</p>
-<p><strong>This no longer decides anything, which is why it is small.</strong> <a href="../Q1022/">Q1022</a> records a measurement of <code>GET /v2/_catalog</code>, which names every cached repository on the same port the worker policy admits, so a shared set exposes the repository list with no timing involved.
-A refuted timing channel would not make a shared set private, and a confirmed one adds a second route to information already readable.
-Take it to sharpen the guidance and to know what is left once Q1022 closes the catalog, not to settle the topology choice.</p>
-<p><strong>How to take it.</strong> It needs a live Kata worker: a probe in the job on the Kata lane, beside <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/egress-negatives.sh"><code>egress-negatives.sh</code></a>, which already runs there for the reason this measurement needs (a plain pod cannot answer what holds at the end of a path leaving a micro-VM guest through a bridge NAT).
-Time blob fetches rather than manifest fetches, since the manifest arm has already come back null.
-Warm one repository and leave a second cold, interleave the fetches, and report the distributions rather than two numbers: what matters is whether they overlap, not the ratio of the medians.</p>
-<p>Attempted and not taken on 2026-08-28: the dogfood cluster was parked at zero nodes across all four pools, <code>default-pool</code> and <code>workers-od</code> with autoscaling disabled, so taking it meant unparking the cluster by hand rather than riding a window that was already running.
-Prefer folding it into the next real Kata e2e window, where it costs a probe rather than a cluster.</p>
+<h1 id="nothing-renders-the-registry-mirror-kustomize-overlays-in-ci">Nothing renders the registry-mirror kustomize overlays in CI<a class="headerlink" href="#nothing-renders-the-registry-mirror-kustomize-overlays-in-ci" title="Permanent link">&para;</a></h1>
+<p><code>deploy/registry-mirror/</code> ships four render targets an operator applies with <code>kubectl apply -k</code>, and no gate renders any of them: the root (isolated, ephemeral), <code>overlays/persistent/</code>, <code>overlays/shared-tenants/</code> and <code>overlays/shared-tenants-persistent/</code>.
+Enumerate them rather than counting them, so the next overlay does not silently fall outside the check.
+<code>components/shared-tenants/</code> is deliberately not on that list: a Component does not render alone, and <code>kubectl kustomize</code> on it exits 1 with <code>no matches for Id NetworkPolicy...registry-mirror-worker-access</code> (measured 2026-08-28), so it is covered through the two overlays that compose it.
+<code>manifest-validate.yml</code> yamllints the tree and kubeconforms the files named in <code>scripts/manifest/manifest-validate.sh</code>'s <code>standalone_manifests</code> list, which is the base plus <code>overlays/persistent/pvc.yaml</code>; a <code>kustomization.yaml</code> that does not render is caught by neither, and first fails at apply time on the operator's cluster.</p>
+<p>Separate from <a href="../Q1022/">Q1022</a>, which shares this target: that one closes an exposure in what the shared overlay renders, this one is that nothing renders it at all.</p>
+<p><code>scripts/ci/check-template-library.sh</code> is the precedent to copy rather than a design to invent: it renders each <code>deploy/templates/</code> overlay and asserts a load-bearing line the base declares survived the render, and it does so only when kubectl is on PATH, degrading rather than failing where it is not.
+<strong>No host-tool decision blocks this.</strong> kubectl is already on the hosted runner: on unit-test.yml run 33230881190 (<code>main</code>, push, so <code>runs-on</code> resolved to <code>ubuntu-latest</code>) that script's skip note, <code>kubectl not on PATH</code>, is absent from the log while its success line is present, so <code>command -v kubectl</code> succeeded.
+<code>manifest-validate.yml</code>'s <code>validate</code> job is plain <code>runs-on: ubuntu-latest</code>, the same hosted image; that last step is inference, since the log read was of a different job.
+Copy the <code>command -v kubectl</code> guard anyway, which keeps the check correct if a job ever moves to a runner without it.</p>
+<p>Assert something load-bearing rather than exit status alone, in both directions.
+For both shared targets, that the rendered <code>registry-mirror-worker-access</code> ingress peer is the tenant marker and that the base's single-namespace peer is gone; and that <strong>nothing else the base declares was dropped</strong>, because the patch replaces <code>ingress</code> wholesale.
+For both persistent targets, that the five PVCs survive, which is what tells <code>shared-tenants-persistent</code> apart from <code>shared-tenants</code>.
+A second ingress rule added to the base disappears from that render at exit 0, measured 2026-08-28 by adding one and rendering.
+Both failures read as green, which is what the assertions are for.</p>
 
 
 
