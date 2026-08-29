@@ -41,6 +41,31 @@
 # and never invents one. Every sample is printed rather than only the summary,
 # so a miss arm holding a hit-shaped outlier is visible to whoever reads it.
 #
+# READ WHICH VERDICT THAT PROTECTS, because it is not the one it sounds like. A
+# gap that survives contamination is real, so SEPARATED is trustworthy. It buys
+# OVERLAPPING nothing: contamination is the leading alternative explanation for
+# exactly that null, so a null is the WEAKER reading rather than the safe one,
+# and it is also the likelier outcome, so this is the common case rather than
+# the corner. An OVERLAPPING run says the arms did not separate HERE. It does
+# not say there is no channel.
+#
+# THE PROBE WARMS ITS OWN REFERENCES, so it is single-shot per mirror pod. The
+# cache is an emptyDir on a long-lived Deployment and these four references are
+# cold only until this runs once. A second run against a surviving pod has a
+# fully contaminated miss arm and reports a clean-looking OVERLAPPING WITHOUT
+# refusing, which nothing here catches. Only the first reading against a given
+# mirror pod counts; a later one is expected to overlap and is not a finding.
+#
+# THE WHOLE PROBE RESTS ON ONE ASSUMPTION: that resolving a digest does not warm
+# the blob. blob_digest fetches every manifest before any timing, so if proxy
+# mode prefetched layers on manifest resolution then every blob would be warm
+# before the first "miss" and every run would report OVERLAPPING. It is
+# consistent with the 2026-08-28 reading -- manifests overlapped because a
+# pull-through cache revalidates them upstream, while blobs did not -- and with
+# blob content being stored separately, but it has not been measured directly.
+# The printed samples are what would show it: a miss arm indistinguishable from
+# its hit arm on EVERY reference is that failure, not a refuted channel.
+#
 # THE VERDICT IS THE OVERLAP, NOT THE RATIO. Two medians an order of magnitude
 # apart still leak nothing if the distributions overlap, because an attacker
 # sees one sample and not a median. So the line that matters is whether the
@@ -209,17 +234,17 @@ main() {
 	for ((i = 0; i < ${#repos[@]}; i++)); do
 		ms="$(fetch_ms "${endpoint}" "${repos[i]}" "${digests[i]}")"
 		[[ -z "${ms}" ]] || samples+="miss ${ms}"$'\n'
-		printf '  miss  %-24s %sms\n' "${PROBE_REFS[i]}" "${ms:-timeout}"
+		printf '  miss  %-24s %s\n' "${PROBE_REFS[i]}" "${ms:-timeout}${ms:+ms}"
 		((i == 0)) && continue
 		ms="$(fetch_ms "${endpoint}" "${repos[i - 1]}" "${digests[i - 1]}")"
 		[[ -z "${ms}" ]] || samples+="hit ${ms}"$'\n'
-		printf '  hit   %-24s %sms\n' "${PROBE_REFS[i - 1]}" "${ms:-timeout}"
+		printf '  hit   %-24s %s\n' "${PROBE_REFS[i - 1]}" "${ms:-timeout}${ms:+ms}"
 	done
 	# The last reference has no later iteration to be re-fetched in.
 	i=$((${#repos[@]} - 1))
 	ms="$(fetch_ms "${endpoint}" "${repos[i]}" "${digests[i]}")"
 	[[ -z "${ms}" ]] || samples+="hit ${ms}"$'\n'
-	printf '  hit   %-24s %sms\n' "${PROBE_REFS[i]}" "${ms:-timeout}"
+	printf '  hit   %-24s %s\n' "${PROBE_REFS[i]}" "${ms:-timeout}${ms:+ms}"
 
 	echo
 	separation_verdict <<<"${samples}"
