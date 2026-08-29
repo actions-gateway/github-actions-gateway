@@ -115,10 +115,44 @@ Re-run any whose window has moved before the stable tag.
 | Check | Measured at | Verdict |
 |---|---|---|
 | Gating rows | `c54b712a9` | **PASS.** No `1.7-gate` row remains, and no `X.Y-gate` label survives anywhere in the store. The pattern was confirmed against a label that does exist before the empty result was trusted. |
-| `main` green | `c54b712a9` | **PASS.** All nine required gates ran and passed on the SHA — none path-skipped, so no `check-artifact-unchanged.sh` proof is owed. |
+| `main` green | `c54b712a9` | **PASS.** All nine required gates ran and passed on the SHA, none path-skipped, so no `check-artifact-unchanged.sh` proof is owed. |
 | Semver floor | `c54b712a9` | **MINOR**, over 56 commits, set by eight touching the released surface. `v1.7.0` is forced by merged work rather than chosen. |
 | API surface | `c54b712a9` | **PASS, ship as-is.** Exactly what [Definition of done #6](#definition-of-done) predicted and nothing else: one added wire field `auditLogging`, the `Off;Connections;ConnectionsWithSource` enum on `EgressProxy`, a new `Off;WorkerAddresses` enum on `ActionsGateway`, defaulting `Off`. No new condition types, Event reasons, labels or annotations. |
 
 Both `auditLogging` fields default `Off` and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is ([q986-egress-attribution.md](q986-egress-attribution.md)).
 
 **Deferred to the stable tag, deliberately.** The marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
+
+## Candidate validation
+
+### `v1.7.0-rc.1`: FAILED, 2026-08-29
+
+Tagged at `c54b712a9`, published and artifact-verified; the dogfood gate failed its capacity leg.
+
+**Publish verified by content, not by green jobs.** 9 of 9 assets with `draft: false`, all eight signatures OK (six images, both charts), and the provenance digest reported `publish.yml@refs/tags/v1.7.0-rc.1` with `sourceRepositoryDigest` equal to the tag target.
+That digest is the check that discriminates: signatures prove who built an artifact, and only the digest proves what was built.
+A negative control against a wrong signer workflow exited 1, so the check could have failed.
+
+| Leg | Result |
+|---|---|
+| e2e (Kata, mirrors) | **PASS**, 75/75 specs, 62 ok, 0 failed, 13 skipped |
+| capacity (quota rung) | **FAIL**, bound correctly at zero headroom, did not release |
+| Everything after | Not reached; the gate tore down |
+
+**What failed.** The rung bound as designed (`withheldCapacity[quota]=2`, `advertisedCapacity=0`), and 300s after the ResourceQuota was restored to 6 pods it was still withholding 2.
+The gate's own discriminator is whether the headroom came back rather than the rung.
+It did, at `hard.pods=6` against `used.pods=1`, so this is not a namespace that had grown.
+
+**The mechanism is undetermined, and the two candidates need different fixes.** [`applyAdvertisedCapacity`](../../cmd/agc/internal/controller/runnerset_scaleset.go) publishes the listener's *most recent* advertisement, so a stale status is the expected reading when no advertisement has been made since, and the e2e suite had drained by then, which is exactly when demand stops.
+Against that, a scale-set listener long-polls continuously, so 300s should have spanned several.
+Settling it needs the AGC's own logs or its demand gauge, and both went with the cluster at teardown.
+So this is a product defect only if the listener was still advertising, and a gate defect otherwise, waiting on a refresh it supplies no demand to trigger.
+
+**Read the leg's newness as part of the finding.** Q637 added this leg on 2026-08-29, hours before the cut, so `rc.1` is the first candidate any quota-rung check has run against and it failed on its first outing.
+That is the leg working, whichever way the mechanism resolves.
+
+**The host slept through the run.** It changed nothing about the verdict, but it changed how the run read.
+`pmset` records maintenance sleeps from 08:25 to 08:56 with two 45-second dark wakes, so the gate's 300s poll budget, which counts `sleep` rather than wall clock, took 35 minutes of wall clock to spend.
+A watcher reading elapsed time against a process-time budget saw a wedged gate for half an hour and recommended killing it.
+The gate was polling normally and tore itself down cleanly once the host woke.
+Confirmed at rest afterwards by asking the cluster rather than by reading the gate's own teardown line.
