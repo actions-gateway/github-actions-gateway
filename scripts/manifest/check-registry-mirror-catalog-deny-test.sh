@@ -128,6 +128,23 @@ edit "${root}" "${BASE}/deployment.yaml" '        - name: catalog-deny
 run_checker "${root}"
 expect 'a deny container off the admitted port fails' 1 'but 5000 is the port the Services target'
 
+# networkpolicy.yaml holds a second, independent policy. A port added to the
+# WORKER-side egress rule is nobody's business but that rule's, and the gate must
+# not read it as the mirror's admitted port. This case demands rc 0 while its
+# neighbours demand 1 -- that is the assertion, not a typo.
+root="$(fixture)"
+edit "${root}" "${BASE}/networkpolicy.yaml" '      ports:
+        - protocol: TCP
+          port: 5000
+---' '      ports:
+        - protocol: TCP
+          port: 5000
+        - protocol: TCP
+          port: 5443
+---'
+run_checker "${root}"
+expect 'an unrelated port on the worker policy is not the mirror'\''s' 0 'fronts all 5 mirror instances'
+
 # The component's patch replaces the base's ingress wholesale, so its restated
 # port is a second copy that can drift on its own. Its own header says so.
 root="$(fixture)"

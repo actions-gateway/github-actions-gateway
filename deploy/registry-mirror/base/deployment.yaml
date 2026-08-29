@@ -28,7 +28,9 @@
 # registry container declares 5002 and binds loopback. Its probes stay on 5000
 # and so traverse the proxy: a proxy that fails to start leaves the pod NotReady
 # and the Service endpointless, so the failure is closed rather than a pod that
-# serves the catalog because its deny did not load. See catalog-deny.cfg.
+# serves the catalog because its deny did not load. The proxy carries the same
+# probes, so a proxy that hangs rather than exits restarts the proxy instead of
+# restarting the registry behind it forever. See catalog-deny.cfg.
 #
 # ONE CONSEQUENCE FOR THE AUDIT POINT: the registry's access log records
 # 127.0.0.1 as the remote address for every request, since the proxy is what
@@ -151,6 +153,23 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+          # Its own probes, so a wedged proxy restarts the proxy. Without them
+          # only the registry container is probed, and since its probes traverse
+          # this one, a proxy that hangs rather than exits restarts the registry
+          # indefinitely while the broken container is never touched. The path is
+          # the same /v2/ and so covers both processes.
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
@@ -265,6 +284,23 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+          # Its own probes, so a wedged proxy restarts the proxy. Without them
+          # only the registry container is probed, and since its probes traverse
+          # this one, a proxy that hangs rather than exits restarts the registry
+          # indefinitely while the broken container is never touched. The path is
+          # the same /v2/ and so covers both processes.
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
@@ -379,6 +415,23 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+          # Its own probes, so a wedged proxy restarts the proxy. Without them
+          # only the registry container is probed, and since its probes traverse
+          # this one, a proxy that hangs rather than exits restarts the registry
+          # indefinitely while the broken container is never touched. The path is
+          # the same /v2/ and so covers both processes.
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
@@ -493,6 +546,23 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+          # Its own probes, so a wedged proxy restarts the proxy. Without them
+          # only the registry container is probed, and since its probes traverse
+          # this one, a proxy that hangs rather than exits restarts the registry
+          # indefinitely while the broken container is never touched. The path is
+          # the same /v2/ and so covers both processes.
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
@@ -607,6 +677,23 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+          # Its own probes, so a wedged proxy restarts the proxy. Without them
+          # only the registry container is probed, and since its probes traverse
+          # this one, a proxy that hangs rather than exits restarts the registry
+          # indefinitely while the broken container is never touched. The path is
+          # the same /v2/ and so covers both processes.
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.

@@ -48,6 +48,10 @@ DENY_CONTAINER = "catalog-deny"
 CONFIGMAP = "mirror-catalog-deny"
 CATALOG_PATH = "/v2/_catalog"
 
+# The mirror-side ingress policy. networkpolicy.yaml also holds the worker-side
+# egress rule, whose ports are its own business.
+INGRESS_POLICY = "registry-mirror-worker-access"
+
 NAME_RE = re.compile(r"^  name: (\S+)$", re.M)
 KIND_RE = re.compile(r"^kind: (\S+)$", re.M)
 CONTAINER_RE = re.compile(r"^        - name: (\S+)$", re.M)
@@ -104,6 +108,21 @@ def read_instances():
     return instances
 
 
+def policy_document(path, name):
+    """The one YAML document of path declaring a policy called name.
+
+    networkpolicy.yaml holds two independent policies, and their ports coincide
+    by design rather than by constraint: the worker-side egress rule may
+    legitimately gain a port that has nothing to do with the mirror. Reading the
+    whole file would turn that change into a refusal naming a port the mirror
+    never admitted.
+    """
+    docs = [d for d in documents(path) if re.search(rf"^  name: {re.escape(name)}$", d, re.M)]
+    if len(docs) != 1:
+        raise Refusal(f"{path}: expected exactly one policy named {name}, found {len(docs)}")
+    return docs[0]
+
+
 def sole(values, what, path):
     """The one value a set of restatements agrees on, or a refusal."""
     if not values:
@@ -119,7 +138,8 @@ def main():
         config = read(DENY_CONFIG)
         kustomization = read(KUSTOMIZATION)
         service_port = sole(TARGET_PORT_RE.findall(read(SERVICES)), "targetPort", SERVICES)
-        base_port = sole(POLICY_PORT_RE.findall(read(POLICIES)), "admitted port", POLICIES)
+        base_port = sole(POLICY_PORT_RE.findall(policy_document(POLICIES, INGRESS_POLICY)),
+                         "admitted port", POLICIES)
         shared_port = sole(POLICY_PORT_RE.findall(read(SHARED)), "admitted port", SHARED)
     except Refusal as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)

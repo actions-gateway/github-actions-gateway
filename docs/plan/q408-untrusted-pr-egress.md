@@ -330,7 +330,7 @@ That is schema and syntax, and it says nothing about whether the instances serve
 The plan spelt this out as prose, *curl the mirror's `/v2/` and pull one image through each instance from a debug pod*, and it is now `scripts/dogfood/e2e-mirror-validate.sh`, because Phase 3 re-runs the same battery once the clients are wired and Phase 4 re-runs it under the tight policy.
 A booked dogfood session is the scarce resource in all three, so the battery is a command that returns a verdict rather than a transcript somebody re-reads.
 
-Five checks per instance, over the five declared upstreams:
+Six checks per instance, over the five declared upstreams:
 
 | Check | Passes on | What it catches |
 |---|---|---|
@@ -338,6 +338,7 @@ Five checks per instance, over the five declared upstreams:
 | `v2` | `GET /v2/` → 200 | the process is not up |
 | `manifest` | a real upstream manifest → 200 | **a mirror that cannot cache anything**, see below |
 | `push` | `POST …/blobs/uploads/` → 405 | [§3.1](#31-the-mirror--one-pull-through-cache-per-upstream)'s read-only property is false |
+| `catalog` | `GET /v2/_catalog` → 403 | the deny proxy is not in the path, so the repository list is readable (Q1022) |
 | `debug` | `REGISTRY_HTTP_DEBUG_ADDR` set and empty in the pod spec | the bundled development config's pprof + `/metrics` listener is still bound |
 
 **`manifest` is the check that discriminates, and `v2` is the one that would have lied.** [§3.6](#36-phase-2-build-notes-measured-2026-08-27) records that a non-root instance whose storage root is unwritable answers 200 on `/v2/` and 500 on every pull; a battery graded on `/v2/` alone calls that mirror healthy.
@@ -603,7 +604,7 @@ No off-cluster gate stands in either, whatever `deploy/registry-mirror/` ends up
   The grading also corrected the upstream set from four to five.
 - **Phase 2 — mirror manifests. ✅ Done (authored 2026-08-27, validated 2026-08-28).** `deploy/registry-mirror/` (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (`docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, `gcr.io`, the fifth added by [§2.5](#25-phase-1-validation-graded-2026-08-24)), applied by `scripts/dogfood/e2e-start.sh` and scaled back to zero by `e2e-stop.sh`.
   What is pinned, and what was measured to pin it, is [§3.6](#36-phase-2-build-notes-measured-2026-08-27).
-  Validation: `scripts/dogfood/e2e-mirror-validate.sh` against the dogfood cluster once `e2e-start.sh` has applied the manifests: five checks per instance ([§3.7](#37-the-phase-2-validation-battery)), read-only, and it applies no manifest of its own.
+  Validation: `scripts/dogfood/e2e-mirror-validate.sh` against the dogfood cluster once `e2e-start.sh` has applied the manifests: six checks per instance ([§3.7](#37-the-phase-2-validation-battery)), read-only, and it applies no manifest of its own.
   Graded 2026-08-28 at 25 of 25 over the five declared instances ([§3.8](#38-phase-2-validation-graded-2026-08-28)), which discharges the **precondition** [release-1.7.md](release-1.7.md) sets on Phase 3's run: "manifests must serve before wiring can be proven to ride them".
   It booked a dogfood session of its own, per this section's header.
 - **Phase 3 — wiring. ✅ Done (built and validated 2026-08-28).** dockerd via a mounted `daemon.json` in the Kata overlay; non-Hub docker-client refs rewritten at the one chokepoint they all share; buildkit given a generated `buildkitd.toml`; helm's OCI ref pointed at the ghcr mirror.

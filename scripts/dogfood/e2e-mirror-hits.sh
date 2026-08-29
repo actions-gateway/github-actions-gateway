@@ -19,11 +19,16 @@
 # path is absent rather than used, is scripts/e2e/egress-negatives.sh.
 #
 # WHAT COUNTS AS A HIT. Distribution's access log is Combined Log Format, one
-# line per request, alongside the structured logrus lines. Measured on
-# registry:3.1.1 in proxy mode (2026-08-28, the image the manifests pin):
+# line per request, alongside the structured logrus lines. Measured 2026-08-29 on
+# registry:3.1.1 at the pinned digest, behind the catalog-deny proxy, which is
+# the shape this reads today:
 #
-#   127.0.0.1 - - [28/Aug/2026:15:23:00 +0000] "GET /v2/ HTTP/1.1" 200 2 "" "curl/8.7.1"
-#   127.0.0.1 - - [28/Aug/2026:15:23:00 +0000] "GET /v2/library/alpine/manifests/latest HTTP/1.1" 200 9218 "" "curl/8.7.1"
+#   127.0.0.1 - - [29/Aug/2026:07:02:22 +0000] "GET /v2/ HTTP/1.1" 200 2 "" "curl/8.7.1"
+#   127.0.0.1 - - [29/Aug/2026:07:02:28 +0000] "GET /v2/library/alpine/manifests/3.20 HTTP/1.1" 200 9226 "" "curl/8.7.1"
+#
+# The 2026-08-28 capture the earlier version of this header quoted was taken
+# against an unfronted registry and carried a real client address; the lines
+# above are a separate reading, not that one restamped.
 #
 # THE REMOTE ADDRESS IS THE POD'S OWN LOOPBACK, and reading it as the client is
 # the mistake this shape invites. Every pod fronts its registry with the
