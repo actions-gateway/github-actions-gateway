@@ -152,9 +152,10 @@ jobs:
   #
   # Newest-RC is the reading that suggests itself and it is unsafe. `v1.5.0-rc.2`
   # was tagged and published having spent no validation at all
-  # (docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md), so a gate keyed on
-  # the newest prerelease would have accepted it. This reads the marker the gate
-  # writes instead: `refs/validated/<rc-tag>`, created by
+  # (docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md), and a gate keyed on
+  # the newest prerelease accepts whatever is newest, validated or not. What
+  # superseded rc.2 was a person questioning the tag's commit directly. This reads
+  # the marker the gate writes instead: `refs/validated/<rc-tag>`, created by
   # scripts/dogfood/record-validated-candidate.sh when the run passes.
   #
   # It is a record, not an attestation — anyone who can push a tag can push the

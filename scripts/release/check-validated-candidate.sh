@@ -10,7 +10,9 @@
 # Newest-RC is the reading that suggests itself and it is unsafe: `v1.5.0-rc.2` was
 # tagged, published, and never validated (a stale-commit push burned the number,
 # docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md). A check keyed on the
-# newest prerelease would have accepted it.
+# newest prerelease accepts whatever is newest, validated or not, so it would have
+# accepted rc.2 for as long as rc.2 was the newest. What superseded it was a person
+# questioning the tag's commit directly, which is the control this replaces.
 #
 #   scripts/release/check-validated-candidate.sh <tag>
 #
@@ -65,7 +67,11 @@ fi
 # Newest *validated* candidate of this release line, by version order. Newest
 # prerelease is the reading this exists to replace, so the glob is over the marker
 # namespace and never over `git tag --list`.
-marker="$(git for-each-ref --format='%(refname:lstrip=2)' "refs/validated/${tag}-*" | sort -V | tail -1)"
+if ! marker="$(git for-each-ref --format='%(refname:lstrip=2)' "refs/validated/${tag}-*")"; then
+	echo "check-validated-candidate: could not read refs/validated/" >&2
+	exit 2
+fi
+marker="$(printf '%s\n' "$marker" | sort -V | tail -1)"
 if [[ -z "$marker" ]]; then
 	cat >&2 <<-EOF
 		check-validated-candidate: no candidate for ${tag} has a recorded validation.
@@ -75,12 +81,18 @@ if [[ -z "$marker" ]]; then
 
 		  git ls-remote origin 'refs/validated/*'
 
-		Validate a candidate (docs/operations/release.md#validate-the-release-candidate-on-dogfood),
-		or record a validation that already happened, with the command that gate prints.
+		Validate a candidate: docs/operations/release.md#validate-the-release-candidate-on-dogfood.
+		A patch line needs its own candidate too; there is no exemption for one.
+		If one already passed and only the record is missing, write it directly:
+
+		  REPO=<owner/repo> scripts/dogfood/record-validated-candidate.sh ${tag}-rc.N
 	EOF
 	exit 1
 fi
-validated_sha="$(git rev-parse "refs/validated/${marker}^{commit}")"
+if ! validated_sha="$(git rev-parse "refs/validated/${marker}^{commit}")"; then
+	echo "check-validated-candidate: refs/validated/${marker} does not resolve to a commit" >&2
+	exit 2
+fi
 
 # The marker records the commit; the RC tag names one too. They are written from
 # the same read, so a disagreement means the tag moved under the record — which is
@@ -88,8 +100,15 @@ validated_sha="$(git rev-parse "refs/validated/${marker}^{commit}")"
 # the honest answer when the tag is absent: publish.yml checks out at full depth,
 # so an absent tag there is an anomaly rather than a shallow clone.
 if ! git rev-parse --verify --quiet "${marker}^{commit}" >/dev/null; then
-	echo "check-validated-candidate: ${marker} is recorded as validated but no such tag is present here" >&2
-	echo "  (a full-depth checkout is required to cross-check the marker against the tag)" >&2
+	cat >&2 <<-EOF
+		check-validated-candidate: ${marker} is recorded as validated but no such tag is present here.
+
+		The marker cannot be cross-checked against the commit its tag names. Either the
+		checkout is not full-depth, or the tag is gone. If the tag is gone the marker is
+		the stale half and clearing it is the repair:
+
+		  git push origin --delete refs/validated/${marker}
+	EOF
 	exit 2
 fi
 marker_tag_commit="$(git rev-parse "${marker}^{commit}")"

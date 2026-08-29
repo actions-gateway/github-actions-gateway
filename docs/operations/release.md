@@ -255,7 +255,8 @@ The point of doing it here rather than at the tag is that the answers are free b
 
 Before promoting a release-candidate line to a **stable** `vX.Y.Z` tag, validate the *latest RC* functionally on the dogfood cluster.
 `main`-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
-Run it before every GA (`vX.Y.Z`) cut; skip it only for an RC-to-RC or a patch tag that changes nothing an operator runs.
+Run it before every stable (`vX.Y.Z`) cut, patch releases included; skip it only for an RC-to-RC.
+A patch line cuts and validates its own candidate like any other release: `publish.yml` refuses a stable tag whose line has no recorded validation, and there is no patch exemption ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
@@ -1183,9 +1184,17 @@ A patch release (`vX.Y.Z+1`) is **bugfix-only** by SemVer.
 That has a release- engineering consequence: **do not tag a patch from `main` once `main` has merged features headed for the next minor** — doing so ships those unreleased features in the patch's images *and* chart, and advertises them in the patch's docs (the site builds each version from its tag).
 Tag a patch from the released line instead:
 
-- **Ephemeral branch off the tag (branchless-friendly).** For a one-off patch: `git switch --detach vX.Y.Z`, `git switch -c release-X.Y`, cherry-pick the fix, tag `vX.Y.(Z+1)`, push the tag.
+- **Ephemeral branch off the tag (branchless-friendly).** For a one-off patch: `git switch --detach vX.Y.Z`, `git switch -c release-X.Y`, cherry-pick the fix, tag and push `vX.Y.(Z+1)-rc.1`, [validate it on dogfood](#validate-the-release-candidate-on-dogfood), then tag `vX.Y.(Z+1)` and push that.
   Delete the branch afterward if you don't maintain the line.
 - **Long-lived release branch.** If you support multiple minor lines at once, keep a `release-X.Y` branch at the minor's tag and land backported fixes on it.
+
+**The candidate is not optional on a patch line, and this is the one place that surprises people.** A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: six signed images and a chart.
+`publish.yml`'s `validated-candidate` job asks the same question of `v1.2.1` that it asks of `v2.0.0`, so a patch tag with no `v1.2.1-rc.*` marker fails before anything is pushed.
+Budget the dogfood run into the patch, or the tag fails at the end instead of the start.
+
+Note the asymmetry with `announce-bar`, the other pre-publish gate, which *does* exempt a backport: the banner advertises the newest release, so a `v1.2.5` cut after `v1.3.0` correctly renders `v1.3.0`.
+That is a question about what the docs site says.
+Whether the images were validated is a question about the artifact, and every artifact gets asked.
 
 You only need a branch/backport **when `main` isn't itself the intended patch** — i.e. when it has diverged past the release with content you don't want in the patch.
 If `main` is clean and ready to ship, that's the next **minor** (`vX.(Y+1).0`), not a patch.
@@ -1237,8 +1246,9 @@ The `worker` image has no chart `image` block — it is the optional batteries-i
 
 PR CI proves the image builds and the SBOM generates so those paths can't silently break; signing, SBOM attestation, and build-provenance attestation are all first exercised on a real `v*` tag, which is why step 3 verification matters on every release.
 
-`publish.yml` also runs one **pre-publish gate**, `announce-bar`, that every publishing job depends on.
-It builds the docs site at the tag and asserts the rendered banner names it (see [Pre-flight](#1-pre-flight)), so a docs-site banner advertising the wrong version stops the release before an image, chart, or GitHub Release exists, rather than after.
+`publish.yml` also runs two **pre-publish gates** that every publishing job depends on: `announce-bar`, and `validated-candidate` ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
+`announce-bar` builds the docs site at the tag and asserts the rendered banner names it (see [Pre-flight](#1-pre-flight)), so a docs-site banner advertising the wrong version stops the release before an image, chart, or GitHub Release exists, rather than after.
+`validated-candidate` refuses a stable tag no dogfood-validated candidate covers, so an unvalidated release stops at the same point.
 
 ## Supply-chain integrity of the pipeline itself
 

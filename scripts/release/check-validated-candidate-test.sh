@@ -132,6 +132,10 @@ want_out "the prerelease exemption says why" "it is the artifact that gets valid
 run_case "a stable tag with no marker anywhere is a stop-ship" 1 0 v1.5.0
 want_out "the failure names the namespace to look in" "refs/validated/"
 want_out "the failure routes to the runbook" "validate-the-release-candidate-on-dogfood"
+# The message has to carry the recorder command rather than pointing at one the
+# gate prints only on its own failure path: a maintainer whose record never ran
+# has never seen it.
+want_out "the failure prints the recorder command" "record-validated-candidate.sh v1.5.0-rc.N"
 
 # THE ROW'S CASE. rc.2 is the newest candidate and validated nothing; rc.1 is the
 # reference. A check reading `git tag --list` picks rc.2 and passes on a candidate
@@ -181,6 +185,9 @@ fixture_git update-ref -d refs/validated/v1.5.0-rc.3
 fixture_git update-ref refs/validated/v1.5.0-rc.9 "$rc2_sha"
 run_case "a marker whose tag is absent cannot be measured" 2 0 v1.5.0
 want_out "the unmeasurable case names the missing tag" "v1.5.0-rc.9"
+# Not only the shallow-clone diagnosis: a deleted tag leaves the marker as the
+# stale half, and clearing it is the only repair anything names.
+want_out "the unmeasurable case says how to clear a stale marker" "git push origin --delete refs/validated/v1.5.0-rc.9"
 fixture_git update-ref -d refs/validated/v1.5.0-rc.9
 
 # Markers are per release line: 1.4's validation says nothing about 1.5.
@@ -191,6 +198,27 @@ fixture_git update-ref -d refs/validated/v1.5.0-rc.1
 fixture_git update-ref -d refs/validated/v1.5.0-rc.2
 run_case "a marker from another release line does not cover this tag" 1 0 v1.5.0
 want_out "the cross-line case reports no validation for this line" "no candidate for v1.5.0 has a recorded validation"
+
+# A PATCH tag gets no exemption. The documented patch procedure used to cut no
+# candidate at all, and announce-bar, the sibling stop-ship gate, does exempt a
+# backport, so "patches are exempt" is the reading to expect. The decision
+# recorded in docs/operations/release.md is that every stable tag needs a
+# validated candidate of its own line, and this is what holds it.
+patch_sha="$(fixture_git rev-parse HEAD)"
+fixture_git tag -a v1.5.1 -m 'patch' "$patch_sha"
+run_case "a patch tag with no candidate of its own is a stop-ship" 1 0 v1.5.1
+want_out "the patch case is named, because it is the surprising one" "A patch line needs its own candidate"
+
+fixture_git tag -a v1.5.1-rc.1 -m 'patch rc' "$patch_sha"
+fixture_git update-ref refs/validated/v1.5.1-rc.1 "$patch_sha"
+run_case "a patch tag with its own validated candidate publishes" 0 0 v1.5.1
+want_out "the passing line names the patch candidate" "v1.5.1-rc.1 validated"
+
+# ...and the minor's marker does not stand in for the patch's.
+fixture_git update-ref -d refs/validated/v1.5.1-rc.1
+fixture_git update-ref refs/validated/v1.5.0-rc.2 "$rc2_sha"
+run_case "the minor's validation does not cover its patch" 1 0 v1.5.1
+want_out "the cross-line refusal names the patch tag" "no candidate for v1.5.1 has a recorded validation"
 
 printf '[check-validated-candidate-test] %d passed, %d failed\n' "$pass" "$fail"
 ((fail == 0))

@@ -1025,7 +1025,12 @@ main() {
 		REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" "${GAG_IMAGE_TAG}" || record_rc=$?
 	fi
 	if ((record_rc)); then
-		progress_event gate "done" "validation PASSED for ${GAG_IMAGE_TAG}, verdict NOT recorded"
+		# A fail event rather than a `gate done`, for two reasons. The renderer
+		# takes the FIRST fail in the stream and the teardown trap adds a second
+		# one, so this is what names the step that actually broke; and a `gate
+		# done` here would make the stream read `passed` for the microseconds
+		# before the trap fires, which is what release-sentinel.sh would report.
+		progress_event record fail "validation passed; verdict not recorded"
 		echo ""
 		echo "Validation gate PASSED for ${GAG_IMAGE_TAG} — but the verdict is NOT recorded."
 		echo "  publish.yml reads refs/validated/ and will refuse the stable tag until it is."
