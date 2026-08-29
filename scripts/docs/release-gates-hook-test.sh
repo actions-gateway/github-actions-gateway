@@ -213,12 +213,20 @@ labels:
 
 # --- the real tree ------------------------------------------------------------
 # A lookup that stops matching renders a chipless page, which is indistinguishable
-# from "nothing is gated" by eye. Assert the real backlog still resolves gates.
+# from "nothing is gated" by eye. Assert the real backlog still resolves gates --
+# but only while it holds any, which the tree between releases does not. Q408 was
+# the last `1.7-gate` row and closing it emptied the set, so an unconditional
+# canary would read the ladder working as the store's format having moved. The
+# frontmatter is counted here independently of the hook, so the two can disagree,
+# which is the whole point of the check.
+gated_rows="$({ grep -lE '^[[:space:]]+- [0-9]+\.[0-9]+-gate$' "$REPO_ROOT"/docs/queue/*.md 2>/dev/null || true; } | wc -l | tr -d ' ')"
 resolved="$(python3 "$HOOK" "$REPO_ROOT/docs" | wc -l | tr -d ' ')"
 if [[ "$resolved" -gt 0 ]]; then
 	printf 'ok   docs/queue/ still resolves %s gated item(s)\n' "$resolved"
+elif [[ "$gated_rows" -eq 0 ]]; then
+	printf 'ok   docs/queue/ holds no gated item, and the hook resolves none\n'
 else
-	printf 'FAIL docs/queue/ resolved no gated items — the store format changed?\n' >&2
+	printf 'FAIL docs/queue/ has %s gated row(s) the hook resolved none of — the store format changed?\n' "$gated_rows" >&2
 	fails=$((fails + 1))
 fi
 

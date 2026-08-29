@@ -125,6 +125,20 @@ expect total-count 1 'an original total the two sections contradict fails' \
 	"$(write_page tc "$TWO_ROWS" three "$TOTAL_BACK")" \
 	"$(write_store tc Q565:deferred Q566:deferred Q765:deferred Q408:ready Q564:ready)"
 
+# The last revived item shipping empties the paragraph, which is a legal state
+# rather than a shape change -- but only when the prose says so. Both directions,
+# because a gate that accepts an empty paragraph unconditionally stops reading
+# the half it exists for.
+NONE_BACK='**None of the original three are back.** The last one that was has since shipped: [Q408](../queue/Q408.md) landed, leaving this accounting.'
+expect revived-none 0 'a declared-empty revived paragraph passes' \
+	"$(write_page rn "$TWO_ROWS" three "$NONE_BACK")" \
+	"$(write_store rn Q565:deferred Q566:deferred Q765:deferred)"
+
+CLAIMED_BACK='**Two of the original five are back.** Both triggers fired, and neither is named here.'
+expect revived-claimed-empty 2 'a paragraph claiming revived items while naming none refuses' \
+	"$(write_page rce "$TWO_ROWS" three "$CLAIMED_BACK")" \
+	"$(write_store rce Q565:deferred Q566:deferred Q765:deferred)"
+
 # Refusals: a page whose shape moved must not report every claim in it verified.
 expect no-punted 2 'a page whose punted table names no item refuses' \
 	"$(write_page np '| Waiting on | nothing yet |' three "$BACK")" \
