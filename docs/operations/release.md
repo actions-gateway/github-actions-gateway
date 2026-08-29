@@ -1193,7 +1193,8 @@ Tag a patch from the released line instead:
 Budget the dogfood run into the patch, or the tag fails at the end instead of the start.
 
 One thing a patch line's run does not inherit: the e2e leg dispatches `e2e-test.yml` from `main` unless `E2E_DISPATCH_REF` says otherwise, so the workflow and its test code come from `main` while the runners come from the candidate.
-That is the harness-against-artifact split described below, and on a patch cut off an older tag the gap is wider than it is for a minor cut from `main`'s head.
+That is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.
+On a patch cut off an older tag `main` can be several releases ahead of what you are validating; for a minor cut from `main`'s head the two nearly coincide, which is why this has not bitten before.
 
 Note the asymmetry with `announce-bar`, the other pre-publish gate, which *does* exempt a backport: the banner advertises the newest release, so a `v1.2.5` cut after `v1.3.0` correctly renders `v1.3.0`.
 That is a question about what the docs site says.
