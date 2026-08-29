@@ -152,6 +152,33 @@ edit "${root}" "${SHARED}" '                port: 5000' '                port: 5
 run_checker "${root}"
 expect 'a shared component off the base port fails' 1 'admits 5001, but the base admits 5000'
 
+# --- the deny container probes itself, not the path it proxies ---------------
+#
+# The defect this pins: both probes were on /v2/, which is proxied through, so a
+# registry fault failed the healthy proxy's own probe. Measured against the
+# pinned images with no registry in the netns: the proxy answers /haproxy-up 200
+# while /v2/ is 503 and /v2/_catalog is still 403.
+
+root="$(fixture)"
+edit "${root}" "${BASE}/deployment.yaml" '            httpGet:
+              path: /haproxy-up' '            httpGet:
+              path: /v2/'
+run_checker "${root}"
+expect 'a deny container probing a proxied path fails' 1 'a healthy proxy restarts on a registry fault'
+
+root="$(fixture)"
+edit "${root}" "${BASE}/catalog-deny.cfg" '    monitor-uri /haproxy-up
+' ''
+run_checker "${root}"
+expect 'a config answering no monitor path fails' 1 'declares 0 monitor-uri paths'
+
+# The two files hold one string. Moving either alone must fail, so this mutates
+# the config side where the case above mutated the Deployment side.
+root="$(fixture)"
+edit "${root}" "${BASE}/catalog-deny.cfg" 'monitor-uri /haproxy-up' 'monitor-uri /proxy-up'
+run_checker "${root}"
+expect 'a monitor path the probes do not name fails' 1 'but catalog-deny.cfg answers /proxy-up itself'
+
 # --- the config the ConfigMap is generated from ------------------------------
 
 root="$(fixture)"

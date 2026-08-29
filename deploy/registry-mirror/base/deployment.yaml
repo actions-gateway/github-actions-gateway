@@ -28,9 +28,12 @@
 # registry container declares 5002 and binds loopback. Its probes stay on 5000
 # and so traverse the proxy: a proxy that fails to start leaves the pod NotReady
 # and the Service endpointless, so the failure is closed rather than a pod that
-# serves the catalog because its deny did not load. The proxy carries the same
-# probes, so a proxy that hangs rather than exits restarts the proxy instead of
-# restarting the registry behind it forever. See catalog-deny.cfg.
+# serves the catalog because its deny did not load. The proxy probes ITSELF at
+# /haproxy-up, which catalog-deny.cfg answers and never forwards, so a proxy that
+# hangs rather than exits restarts the proxy while a registry fault does not:
+# measured with no registry running, the proxy answers /haproxy-up 200 and /v2/
+# 503 in that same state. Probing it at /v2/ instead, as an earlier version did,
+# fails the healthy proxy on every registry fault. See catalog-deny.cfg.
 #
 # ONE CONSEQUENCE FOR THE AUDIT POINT: the registry's access log records
 # 127.0.0.1 as the remote address for every request, since the proxy is what
@@ -160,13 +163,13 @@ spec:
           # the same /v2/ and so covers both processes.
           readinessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
@@ -291,13 +294,13 @@ spec:
           # the same /v2/ and so covers both processes.
           readinessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
@@ -422,13 +425,13 @@ spec:
           # the same /v2/ and so covers both processes.
           readinessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
@@ -553,13 +556,13 @@ spec:
           # the same /v2/ and so covers both processes.
           readinessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
@@ -684,13 +687,13 @@ spec:
           # the same /v2/ and so covers both processes.
           readinessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v2/
+              path: /haproxy-up
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20

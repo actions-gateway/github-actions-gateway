@@ -52,6 +52,12 @@ CATALOG_PATH = "/v2/_catalog"
 # egress rule, whose ports are its own business.
 INGRESS_POLICY = "registry-mirror-worker-access"
 
+# The deny container probes its own health here rather than at /v2/, which is
+# proxied through: a registry fault would otherwise fail the healthy proxy's
+# probe. The path lives in two files and must be one string.
+PROBE_RE = re.compile(r"^\s+path: (\S+)$", re.M)
+MONITOR_RE = re.compile(r"^\s*monitor-uri (\S+)$", re.M)
+
 NAME_RE = re.compile(r"^  name: (\S+)$", re.M)
 KIND_RE = re.compile(r"^kind: (\S+)$", re.M)
 CONTAINER_RE = re.compile(r"^        - name: (\S+)$", re.M)
@@ -147,6 +153,11 @@ def main():
 
     problems = []
 
+    # Read once, before the per-instance loop: every deny container must probe
+    # the path this config answers itself.
+    monitor_found = MONITOR_RE.findall(config)
+    monitor_path = monitor_found[0] if len(monitor_found) == 1 else None
+
     if base_port != service_port:
         problems.append(
             f"the Services target {service_port} and {POLICIES} admits {base_port}"
@@ -169,6 +180,15 @@ def main():
         if REGISTRY_CONTAINER not in found:
             problems.append(f"{name}: no {REGISTRY_CONTAINER} container")
             continue
+
+        deny_probes = set(PROBE_RE.findall(found[DENY_CONTAINER]))
+        if deny_probes != {monitor_path}:
+            problems.append(
+                f"{name}: the {DENY_CONTAINER} container probes "
+                f"{sorted(deny_probes) or 'nothing'}, but {DENY_CONFIG.name} answers "
+                f"{monitor_path} itself. A probe on a proxied path fails whenever the "
+                "registry is down, so a healthy proxy restarts on a registry fault"
+            )
 
         deny_ports = PORT_RE.findall(found[DENY_CONTAINER])
         if deny_ports != [admitted]:
@@ -239,6 +259,12 @@ def main():
             f"{DENY_CONFIG}: matches the raw path. Go decodes percent escapes before the "
             f"route is matched, so {CATALOG_PATH} is reachable as /v2/%5Fcatalog "
             "(measured); the rule must read the path through url_dec"
+        )
+    monitor_paths = MONITOR_RE.findall(directives)
+    if len(monitor_paths) != 1:
+        problems.append(
+            f"{DENY_CONFIG}: declares {len(monitor_paths)} monitor-uri paths, want exactly "
+            "one for the deny container to probe itself on"
         )
     if not re.search(rf"^\s*bind :{admitted}$", directives, re.M):
         problems.append(f"{DENY_CONFIG}: does not bind {admitted}, the admitted port")

@@ -85,7 +85,9 @@ Its only request gate is `auth`, and an access controller applies to every route
 So each pod fronts its registry with a deny proxy instead.
 [`base/catalog-deny.cfg`](base/catalog-deny.cfg) refuses that one path with 403 and forwards everything else; the registry binds `127.0.0.1:5002`, so the proxy is the only way onto it.
 The registry container keeps its probes on 5000, which now traverse the proxy, and that is what makes the failure closed: a proxy that does not start leaves the pod NotReady and its Service without an endpoint, rather than a pod that serves the catalog because its deny did not load.
-The proxy carries the same probes for the other half of that: a proxy that hangs rather than exits would otherwise restart the registry behind it indefinitely, while the container that is actually broken is never probed.
+The proxy probes *itself*, at `/haproxy-up`, which the config answers and never forwards.
+Probing it at `/v2/` would not have separated the two: that path is proxied through, so measured with no registry running the proxy answers `/haproxy-up` 200 and `/v2/` 503 in the same state, and a registry fault would restart the healthy proxy.
+`monitor-uri` answers 200 unconditionally, which is what isolates the proxy and is also why the registry container keeps its own `/v2/` probes: nothing else traverses the pair.
 
 Measured on 2026-08-29 against both pinned images and the config exactly as `kustomize` renders it — 403 for `/v2/_catalog`, for `?n=100`, for a trailing slash, for `/v2/%5Fcatalog` and `/v2%2F_catalog`, and for the redirect `/v2/./_catalog` lands on; 200 for `GET /v2/`, a real manifest and a tags list; 405 for an upload, unchanged; and a full `docker pull` of `library/alpine:3.20` through the proxy.
 The percent-encoded forms are why the rule reads the path through `url_dec`: Go decodes escapes before the route is matched, so an unfronted registry answered `/v2/%5Fcatalog` 200 with the repository listed, and a deny written against the raw path would pass it straight through.
