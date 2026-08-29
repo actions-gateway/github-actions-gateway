@@ -2599,7 +2599,7 @@
 
 <h1 id="raise-e2etested-k8s-floor-135--136">Raise e2e/tested K8s floor 1.35 → 1.36<a class="headerlink" href="#raise-e2etested-k8s-floor-135--136" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> the GKE regular channel <em>defaults</em> to 1.36, OR a 1.36-only feature is wanted, OR kind stops shipping 1.35 node images.
-Measured 2026-08-18: regular offers 1.36.2 but defaults to 1.35.6.
+Re-measured 2026-08-28, unmoved on all three arms: the GKE regular channel offers 1.36.2 and still defaults to 1.35.6-gke.1710000 (stable and extended likewise), and kind v0.33.0 still ships a 1.35.8 node image alongside 1.36.4 and 1.37.0.
 Then bump the KIND_NODE_IMAGE digest.</p>
 
 

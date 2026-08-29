@@ -3677,7 +3677,7 @@ Scraping it ad hoc needs the scraper's client leaf from the <code>&lt;gateway&gt
 <a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>scripts/dogfood/stop.sh
 </code></pre></div>
 <p>The script resets <code>GAG_RUNNER</code>, <strong>waits for in-flight worker pods to drain</strong>, and only then scales the system pool to 0.
-Worker nodes autoscale to 0 on their own within ~10 min after that.</p>
+Worker nodes then scale to 0 on the cluster autoscaler's own schedule, which no script here drives or waits for; read the managed instance groups rather than a clock (measured 2026-08-28: an e2e node took ~35 minutes).</p>
 <h4 id="why-the-drain-wait-is-not-optional-q434">Why the drain wait is not optional (Q434)<a class="headerlink" href="#why-the-drain-wait-is-not-optional-q434" title="Permanent link">&para;</a></h4>
 <p>The system pool carries the tenant AGCs, and <strong>an AGC is the only thing that reaps its worker pods.</strong> Scaling that pool to 0 with a job in flight evicts the AGC with nowhere to reschedule, so:</p>
 <ul>

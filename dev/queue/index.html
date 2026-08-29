@@ -2685,6 +2685,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q549/">Q549</a></td>
+<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Escalated 2026-08-28: the fix did …</td>
+</tr>
+<tr>
 <td><a href="Q1008/">Q1008</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2707,6 +2715,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Measured 2026-08-27 under `make …</td>
+</tr>
+<tr>
+<td><a href="Q1015/">Q1015</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/direct_egress_test.go">DirectEgress anti-vacuity control fails on calico, negative disqualified</a></td>
+<td><code>flake</code> <code>tests</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> …</td>
 </tr>
 <tr>
 <td><a href="Q912/">Q912</a></td>
@@ -2733,14 +2749,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
-<td><a href="Q951/">Q951</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools-test.sh"><code>version-cmds-answer</code> flakes on kubectl, cause unverified</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</td>
-</tr>
-<tr>
 <td><a href="Q408/">Q408</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code> <code>1.7-gate</code></td>
@@ -2757,20 +2765,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.</td>
 </tr>
 <tr>
-<td><a href="Q826/">Q826</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test</code>'s real-rebase case fails under the fan-out</a></td>
-<td><code>flake</code> <code>ci</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> <code>git-merge-gate-lists-test</code> fails on <code>main</code> again.</td>
-</tr>
-<tr>
 <td><a href="Q970/">Q970</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test</code> asserts a one-second ceiling on an instant command</a></td>
 <td><code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the …</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>scripts/ci/run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 …</td>
 </tr>
 <tr>
 <td><a href="Q962/">Q962</a></td>
@@ -3819,14 +3819,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>M</td>
 <td><strong>Event:</strong> any 15 s <code>require.Eventually</code> in the GMC integration suite breaches on <code>main</code>.</td>
-</tr>
-<tr>
-<td><a href="Q549/">Q549</a></td>
-<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the re-run wait fails on <code>main</code> in a shape neither mode covers (<a href="../plan/q549-scaleset-rerun-flake/">triage</a>).</td>
 </tr>
 <tr>
 <td><a href="Q823/">Q823</a></td>

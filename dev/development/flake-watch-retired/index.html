@@ -2619,6 +2619,20 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q951</td>
+<td><code>version-cmds-answer</code> flakes on kubectl, cause unverified</td>
+<td>#1712</td>
+<td>2026-08-28</td>
+<td>Soaked: 154 green <code>unit-test</code> runs on <code>main</code>/merge_group since 2026-08-21 (bar ≥25, infra: a tool-version probe, and a recurrence costs a rerun). Every <code>unit-test</code> red on <code>main</code> since is attributed elsewhere: two <code>script-modes-check</code> merge-queue candidates carrying <code>scripts/lib/registry-mirror-test.sh</code> before #1778 set its bit, one <code>tidy-check</code>, and <a href="../../queue/Q1005/">Q1005</a>'s listener race. The cause was never established and is not established now. The improved probes record each failing probe's exit status and combined output, so a recurrence re-enters as a fresh find carrying the evidence this row could not get.</td>
+</tr>
+<tr>
+<td>Q826</td>
+<td><code>git-merge-gate-lists-test</code>'s real-rebase case fails under the fan-out</td>
+<td>none</td>
+<td>2026-08-28</td>
+<td>Soaked: 238 green <code>unit-test</code> runs on <code>main</code>/merge_group since 2026-08-12 (bar ≥25, infra: the fan-out class Q596, Q642, Q690, Q703, Q752 and Q789 all retired under). One sighting only, 2026-08-12 at load 101-111, mechanism unverified and no mitigation shipped, so what soaked is the flake itself rather than a fix. All 23 <code>unit-test</code> reds on <code>main</code> since that date are attributed elsewhere: the 2026-08-18 groom read every one back to 2026-08-04, and the four since are <code>script-modes-check</code> ×2, <code>tidy-check</code>, and <a href="../../queue/Q1005/">Q1005</a>.</td>
+</tr>
+<tr>
 <td>Q982</td>
 <td><code>printf</code> into <code>grep -q</code> under <code>pipefail</code> falsifies a value that is present</td>
 <td>#1747</td>

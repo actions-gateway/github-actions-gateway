@@ -2602,7 +2602,7 @@
 <code>serialize_heavy_build</code> records why <code>slots</code> moved from 1 to 2, and that reasoning is about queue depth rather than about what the gates then measure.</p>
 <p><code>jobs</code> is derived from <code>hw.physicalcpu</code>; <code>slots</code> is the literal <code>DEFAULT_HEAVY_BUILD_SLOTS=2</code>, returned for anything at or above <code>MIN_CORES_FOR_MULTIPLE_SLOTS=4</code>.
 So the one number bounding machine-wide concurrency scales with neither the core count nor the number of sessions: it is 2 on a four-core laptop and 2 here.
-The script says so itself at <code>local-throttle.sh:71</code>, "Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three".
+The script says so itself at <code>scripts/agent/local-throttle.sh:71</code>, "Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three".
 Measured 2026-08-24 during a 12-session batch, which this repo's own dispatch playbook recommends: 97.43 / 149.30 / 118.63 on 18 cores, against the ~1.8x the defaults make the designed floor.</p>
 <p>What makes it worth re-deciding is that the gates' own budgets are wall clock, so they absorb the oversubscription directly rather than merely running slower: <a href="../../development/testing/#the-coverage-budget-is-wall-clock-so-it-measures-scheduling"><code>api/apinames</code> spent 37.983s on 0.645s of work</a> under it.
 <a href="../Q823/">Q823</a> bought headroom by raising one budget; this asks whether the machine should be handing out 1.8x in the first place.</p>

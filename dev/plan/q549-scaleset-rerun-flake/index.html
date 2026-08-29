@@ -2586,6 +2586,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#what-the-2026-08-26-and-2026-08-28-sightings-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the 2026-08-26 and 2026-08-28 sightings show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-two-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2692,11 +2703,56 @@
 <p><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>) deletes a running scale-set worker and waits 90 s for the AGC to re-run its disrupted run under the chart role.
 Two distinct failure modes now sit behind that one timeout.
 This file exists so the next occurrence is classified before anything is changed.</p>
-<p><strong>Status:</strong> watching.
+<p><strong>Status:</strong> escalated 2026-08-28, with a third mode open, and the two known ones do not cover it.
 Mode A is diagnosed and mitigated (PR #1120).
 <strong>Mode B is diagnosed as of 2026-08-12 and fixed under Q809</strong>; see <a href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed</a> below.
+Three failures since 2026-08-26 clear both discriminators, so classification per the table below returns neither mode: see <a href="#what-the-2026-08-26-and-2026-08-28-sightings-show">What the 2026-08-26 and 2026-08-28 sightings show</a>.
 It recurred three times that day, once on <code>main</code>, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
 Reset the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak clock</a> to <strong>2026-08-12</strong>: count green runs from the claim fix, not from PR #1120.</p>
+<h2 id="what-the-2026-08-26-and-2026-08-28-sightings-show">What the 2026-08-26 and 2026-08-28 sightings show<a class="headerlink" href="#what-the-2026-08-26-and-2026-08-28-sightings-show" title="Permanent link">&para;</a></h2>
+<p>Three failures on <code>main</code> or in the merge queue in three days, after the 228-run soak this row had been parked on:</p>
+<table>
+<thead>
+<tr>
+<th>When</th>
+<th>Lane</th>
+<th>Run</th>
+<th>Failed at</th>
+<th>Reaches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-08-26 05:25 UTC</td>
+<td><code>e2e-calico</code> merge_group</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32933225396">32933225396</a></td>
+<td><code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:299</code></td>
+<td>the <code>Fail()</code> branch</td>
+</tr>
+<tr>
+<td>2026-08-26 05:41 UTC</td>
+<td><code>e2e-test</code> merge_group</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934571793">32934571793</a></td>
+<td><code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:264</code></td>
+<td>the sampler assertion, before the claim window</td>
+</tr>
+<tr>
+<td>2026-08-28 15:35 UTC</td>
+<td><code>e2e-test</code> push to <code>main</code></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33185281929">33185281929</a></td>
+<td><code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:299</code></td>
+<td>the <code>Fail()</code> branch</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The two line-299 failures clear both discriminators</strong>, which is what makes them a new mode rather than a recurrence of either.
+Reaching <code>Fail()</code> requires <code>evictionRecoveryEvidenceLost()</code> to be false (so mode B's unwinnable half did not apply and the disruption record was still there to claim) and then <code>agcPodIdentity() == pinnedAGC</code> (so mode A's replaced control plane did not apply).
+The 08-28 run confirms the second directly: one <code>ssrec-agc</code> pod, 114 s old, zero restarts, at the moment of the dump.
+Neither run recorded a <code>Q549 re-staging</code> or a <code>Q809 re-staging</code> entry.</p>
+<p>So the spec is now saying exactly what its own message says it would: a chart role short a verb the recovery path needs, or a regressed deletion-mark discriminator.
+The 2026-08-12 evidence ruled both out <em>for mode B</em>, and that finding does not transfer: it was taken on runs where the claim was made and lost, which these are not.
+Start from the AGC logs the failing runs captured, grepping <code>could not claim scale-set worker disruption</code>.</p>
+<p><strong>The 08-26 line-264 failure is a fourth shape and wants attributing separately.</strong> It is <code>Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")</code>, and the staging never got as far as a claim window, so it says nothing about the role.</p>
 <h2 id="the-two-modes">The two modes<a class="headerlink" href="#the-two-modes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

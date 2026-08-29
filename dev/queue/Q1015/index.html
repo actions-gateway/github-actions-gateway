@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q951/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1015/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>version-cmds-answer flakes on kubectl, cause unverified - GitHub Actions Gateway</title>
+        <title>DirectEgress anti-vacuity control fails on calico, negative disqualified - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#version-cmds-answer-flakes-on-kubectl-cause-unverified" class="md-skip">
+        <a href="#directegress-anti-vacuity-control-fails-on-calico-negative-disqualified" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              version-cmds-answer flakes on kubectl, cause unverified
+              DirectEgress anti-vacuity control fails on calico, negative disqualified
             
           </span>
         </div>
@@ -2597,14 +2597,16 @@
   
 
 
-<h1 id="version-cmds-answer-flakes-on-kubectl-cause-unverified"><code>version-cmds-answer</code> flakes on kubectl, cause unverified<a class="headerlink" href="#version-cmds-answer-flakes-on-kubectl-cause-unverified" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</p>
-<p>Measured 2026-08-21 on an unmodified tree: <code>make check</code> failed <code>check-tools-test</code> with <code>no version from: kubectl, checked=5</code>, and the same test run alone passed <code>5 probed</code> immediately after.
-Both probes named the failing tool and nothing else, so the occurrence left nothing to diagnose it with.
-They now record each failing probe's exit status and combined output, which separates a binary that failed to run from one that ran and answered without a version.
-<strong>Still open:</strong> the cause.
-By hand the registry's probe for it, <code>kubectl version --client</code>, exits 0 and prints <code>v1.36.3</code> both in and out of the sandbox; the only difference in the failing run was sitting inside <code>run-parallel</code>'s 43-way fan-out, so saturation is the hypothesis and it stays <strong>unverified</strong>.
-Whether a retry belongs here is undecided, and settling it needs the evidence the next occurrence now carries.</p>
+<h1 id="directegress-anti-vacuity-control-fails-on-calico-negative-disqualified">DirectEgress anti-vacuity control fails on calico, negative disqualified<a class="headerlink" href="#directegress-anti-vacuity-control-fails-on-calico-negative-disqualified" title="Permanent link">&para;</a></h1>
+<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p><code>E2E_V2_DirectEgress_MetadataServerBlocked</code> failed on <code>main</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33080749313">e2e-calico merge_group run 33080749313</a>, 2026-08-27 14:19 UTC, at <code>cmd/gmc/test/e2e/direct_egress_test.go:276</code>.
+It is the only <code>e2e-calico</code> failure on <code>main</code> besides <a href="../Q549/">Q549</a>'s since 2026-08-18.</p>
+<p><strong>The security assertion did not fail — its control did.</strong> Line 276 is the anti-vacuity probe: a workload-labelled pod must reach the same link-local address on <code>:53</code>, so that the blocked <code>:80</code> below it means something.
+The probe returned a non-zero <code>CURL_RC</code> and the spec refused the negative, exactly as designed: <code>workload pod could not reach link-local on :53 — the NodeLocal DNSCache allowance (Q136) is not in effect</code>.
+So this is not a NetworkPolicy enforcement regression, and reading it as one is the mistake the ledger's <a href="../../development/flake-watch-retired/">refuted calico row</a> already records once.</p>
+<p>The failing wait is <code>runEgressProbe</code>'s 2-minute poll for the probe pod to terminate (<code>cmd/gmc/test/e2e/provisioning_test.go:627</code>), which the log shows still in the first poll of <code>metadata-linklocal-dns</code> at 30 s.
+Whether the allowance is genuinely absent under calico's DPv2-adjacent enforcement, or the probe pod merely had not run yet under a 6-way parallel suite, is <strong>unmeasured</strong> — settle that before touching either the allowance or the wait, because the two remedies exclude each other.
+<a href="../Q402/">Q402</a> holds the related upstream finding, that Google documents DPv2 as exempt from the extra NodeLocal DNSCache rule while Q229 measured the opposite.</p>
 
 
 
