@@ -22,6 +22,7 @@ For *why* GAG chose Kata over Sysbox/rootless and the provider-agnostic design, 
 - [Cluster setup — Kata runtime and RuntimeClass](#cluster-setup--kata-runtime-and-runtimeclass)
 - [Configure the worker podTemplate](#configure-the-worker-podtemplate)
 - [The security rationale](#the-security-rationale)
+- [Untrusted pull requests — the tight-egress posture](#untrusted-pull-requests--the-tight-egress-posture)
 - [Caveats and limitations](#caveats-and-limitations)
 - [Related](#related)
 
@@ -315,6 +316,90 @@ The honest recommendation: **prefer Kata over privileged DinD for untrusted code
 But deploy it *with* Workload Identity, `automountServiceAccountToken: false`, and ideally a NetworkPolicy denying egress to `169.254.169.254/32`.
 Kata alone is not the control.
 
+## Untrusted pull requests — the tight-egress posture
+
+Kernel isolation is one half of running an external contributor's pull request.
+The other half is egress: a micro-VM bounds what the job's code can do to the node, not what it can reach.
+This page used to tell you to stop there and treat Kata as protection against a kernel escape rather than a licence to run untrusted code.
+That caveat is retired.
+The posture below is built, shipped as manifests, and measured on GAG's own dogfood cluster, where it carries every Kata end-to-end run.
+
+**What it does.** A worker's whole reachable set becomes cluster DNS on 53, GitHub on 443, and the in-cluster registry mirrors on 5000.
+The public internet, the upstream registries by their own hostnames, and the cloud metadata server all answer nothing.
+
+**Why a mirror rather than an allowlist.** The registries a build pulls from are CDN-fronted, so a CIDR allowlist rots, and fully-qualified-domain-name policy is not enforceable on GKE Dataplane V2.
+A host allowlist is also the wrong shape even where it is enforceable: permitting `docker.io` permits `docker.io/<anyone>/<anything>`, in both directions, so the exfiltration surface stays open.
+The mirror is content-scoped instead.
+Each instance is pinned to exactly one upstream in its pod spec, and refuses uploads, so there is one auditable chokepoint rather than five open hostnames.
+
+### The four parts
+
+| Part | Where it lives | What it does |
+|---|---|---|
+| The mirrors | [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md) | One [CNCF Distribution](https://github.com/distribution/distribution) instance in pull-through cache mode per upstream registry your jobs pull from |
+| The mirror's policies | [`base/networkpolicy.yaml`](../../deploy/registry-mirror/base/networkpolicy.yaml) | Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else |
+| The worker wiring | [`overlays/kata/mirror-wiring.yaml`](../../deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml) | Points the job's image clients at the mirrors, in the two forms those clients can read |
+| The absence of an allow-all | your tenant namespace | No additive egress policy, so the gateway's default-deny is the whole story |
+
+The first three are additive.
+The fourth is the one that turns the recipe into enforcement, and it is a deletion rather than an object you apply.
+
+### Wiring the job's image clients
+
+No two image clients read the same configuration, so one endpoint set has to reach them four ways.
+[`mirror-wiring.yaml`](../../deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml) holds it once, as a `daemon.json` and as an `<upstream>=<mirror>` map:
+
+| Client | Reads | Covers |
+|---|---|---|
+| the inner `dockerd` | `daemon.json`, mounted into the DinD sidecar | every Docker Hub pull, digest-pinned ones included |
+| `docker pull` of a non-Hub ref | the map, via a rewrite at the one chokepoint those pulls share | everything not on Docker Hub |
+| helm's OCI client | the map, rewriting the chart ref and adding `--plain-http` | OCI chart pulls |
+| buildkit | a generated `buildkitd.toml` off the map | a `Dockerfile`'s base images, which no build cache covers |
+
+`dockerd`'s `registry-mirrors` setting mirrors Docker Hub and only Docker Hub, which is why the other upstreams need the rewrite rather than another entry in `daemon.json`.
+The rewrite re-tags each image to the ref the caller asked for, so everything downstream of the pull is untouched.
+
+Image identity survives the redirection.
+Schema-2 and OCI digests are content addresses over bytes that carry no registry hostname, so a digest-pinned pull re-verifies client-side and a cosign signature still checks out.
+The mirror is trusted for tag-to-digest resolution, exactly as the upstream registry already was.
+
+### Adopting it
+
+1. **Measure what your jobs actually fetch**, rather than assuming.
+   The upstream set is the instance set, because proxy mode takes exactly one upstream per instance.
+   GAG's own count went from four to five on a measurement.
+2. **Render the mirrors** for your upstreams, retargeting the three cluster-specific values the [README](../../deploy/registry-mirror/README.md#adopting-this-outside-the-dogfood-cluster) names: your tenant namespace, the mirror namespace, and your storage class.
+3. **Wire the clients**, which means the ConfigMap above plus the two patches that mount it.
+4. **Delete any allow-all egress policy** from the tenant namespace, and confirm it is gone from the live rules rather than only from your manifests.
+   `kubectl apply -k` does not prune, so a policy whose manifest you deleted is still standing.
+
+### Confirming it holds
+
+Three readings, and none of them substitutes for another:
+
+- **The mirrors serve.** [`e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh) checks each instance for readiness, `GET /v2/`, a real upstream manifest, an upload refused with 405, and no debug listener.
+- **The job's pulls ride them.** [`e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reads each mirror's access log, which is the one place a pull that went upstream instead cannot appear.
+  Take a baseline first: a count means nothing without one.
+- **Nothing else is reachable.** [`egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) probes from inside the job, on the worker whose posture is being claimed, because a plain pod cannot answer whether policy still binds at the end of a path that leaves a micro-VM guest through a bridge NAT.
+
+**Every negative is paired with a positive.** A battery of nothing-is-reachable checks passes identically when the pod has no network at all, so half of the eight checks are controls that must answer: the mirror over HTTP, GitHub, an upload the mirror refuses, and a `docker pull` through the mirror.
+Only then does the silence of the other four mean the policy.
+Those four probe three destinations, the upstream twice, by curl and by `docker pull`, because a client can hold a path its shell does not.
+Run the negatives on **every** run rather than once: a policy that stops selecting the worker is invisible in a green suite.
+
+### What this posture does not cover
+
+- **The job still reaches GitHub**, which is what a runner is for.
+  Data a job can read is data it can push to a repository it has a token for.
+- **Cache misses reach upstream from the mirror pod**, which carries no workload label and so keeps the free egress a pull-through cache needs.
+  What bounds it is the pinned upstream per instance, not a network rule.
+- **The metadata server needs Workload Identity anyway.** The policy closes that path only because the DNS rule admits port 53 alone, and widening it reopens the path.
+  Enable Workload Identity, as [the security rationale](#the-security-rationale) sets out.
+- **Two things a full untrusted-PR posture wants are still open here.** A cache an untrusted job shares with another tenant, and a per-job record of which host each job reached, are both unbuilt.
+  This posture is the network layer, not the whole story: the layer map and what each layer still owes are in [the secure multi-tenant OSS CI goal](../plan/secure-multi-tenant-oss-ci.md#definition-of-done).
+
+**Measured on the dogfood cluster on 2026-08-28**: a green Kata run of 75 specs whose in-job negatives passed all eight checks, with the mirror battery at 25 of 25 and 178 content requests served across the five instances, on a tenant whose live rules carried zero allow-all.
+
 ## Caveats and limitations
 
 - **Startup overhead is small — but the `overhead` accounting is not.** Measured on `c2-standard-4`: a Kata pod reached `Ready` in ~3 s vs ~1 s for `runc`, and `kind create cluster` took 58 s from a cold image cache (43 s warm) against a ~6 min ceiling.
@@ -347,16 +432,16 @@ Kata alone is not the control.
   No bundled all-in-one runner image is needed: the daemon is a stock `docker:28-dind` native sidecar with a six-step entrypoint, and the toolchain rides the regular runner container.
   A full `make e2e` run is green through that overlay.
   Confirm the steps on your own cluster before cutting over privileged workloads.
-- **The validated posture is *trusted* CI, not untrusted pull requests.** Kata bounds the guest kernel, but it does not narrow egress, and GAG's own e2e tenant runs a permissive egress policy because its jobs pull from CDN-fronted public registries: a CIDR allowlist rots, and fully-qualified-domain-name policy is not enforceable on GKE Dataplane V2.
-  Running an external contributor's pull request on this shape safely needs an in-cluster pull-through registry mirror, so workers need no direct registry egress, plus an egress policy scoped to that mirror, GitHub, and DNS.
-  Until you have both, treat Kata isolation as protection against a kernel escape, not as a licence to run untrusted code.
-  See [Appendix G.14](../design/appendix-g-future-enhancements.md#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror).
+- **Kata alone is not the untrusted-PR posture, and the rest of it is a deliberate build.** The micro-VM bounds the guest kernel and narrows no egress, so a Kata worker on a permissive egress policy is protected against a kernel escape and nothing more.
+  What closes the gap is the in-cluster registry mirror plus an egress policy scoped to it, GitHub, and DNS, which ships as manifests and is measured on GAG's own cluster: [the tight-egress posture](#untrusted-pull-requests--the-tight-egress-posture).
+  Adopt that before running an external contributor's pull request on this shape.
 
 ## Related
 
+- [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md): the pull-through cache manifests behind [the tight-egress posture](#untrusted-pull-requests--the-tight-egress-posture), with the storage options and the values to retarget.
 - [Runner template library](runner-template-library.md): the shipped `kata-dind` entry this page describes, plus its two siblings and how to fork one.
 - [In-runner image builds](in-runner-image-builds.md) — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the `securityProfile` each needs.
 - [Kata-on-GKE spike runbook](kata-ci-spike-runbook.md) — executable go/no-go steps for the unprivileged `dockerd` + `kind` runner.
 - [Kata Containers on GKE](../plan/archive/kata-on-gke.md) — design rationale, the options rejected (Sysbox, rootless, kindbox), and the provider-agnostic reference architecture.
 - [Appendix B — Worker isolation](../design/appendix-b-worker-isolation.md) — `runc` vs gVisor vs Kata sandbox-runtime trade-offs.
-- [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in) — the authoritative `securityProfile` model. </content> </invoke>
+- [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in) — the authoritative `securityProfile` model.

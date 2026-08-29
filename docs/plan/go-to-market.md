@@ -132,15 +132,16 @@ It is "nobody has pushed this far enough yet, and here is how far we have got".
 
 **Leg 2: GAG is making it safe.** Kata micro-VM workers give a job root without a shared kernel, already the default in GAG's own end-to-end suite.
 Per-tenant egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close the network half, including the path Kata does not close (a micro-VM does not change the pod's network identity, so cloud metadata still answers from inside the guest).
-Still open and load-bearing: [Q408](../queue/Q408.md), [Q539](../queue/Q539.md), [Q540](../queue/Q540.md), under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella.
+Q408 shipped the egress half on 2026-08-28: an in-cluster registry mirror and a tenant carrying no allow-all rule, measured on the dogfood cluster.
+Still open under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella: [Q539](../queue/Q539.md) and [Q540](../queue/Q540.md), both variants graded against the contract Q408 validated.
 
 **Leg 3: GAG keeps it operable.** Quota-aware intake and automatic re-run are consequences of leg 2, not standalone features, and should be presented that way.
 Bin-packing tenants onto shared expensive nodes *requires* enforceable per-tenant quotas, and enforcing a quota is what strands jobs unless intake respects it before the claim.
 Sharing capacity *requires* eviction and preemption to be safe, and they are safe only if a disrupted job re-runs itself.
 Without both, secured multi-tenancy is an operations nightmare and the team retreats to a cluster per tenant, which is where §2's router started.
 
-**Prioritization consequence:** Q408 and Q540 are not roadmap polish.
-They complete the leg the entire argument rests on, so they outrank the proxy-polish set (Q564 to Q567) and most of the feature backlog.
+**Prioritization consequence:** this leg is not roadmap polish.
+It is what the entire argument rests on, which is why Q408 outranked the proxy-polish set (Q564 to Q567) and most of the feature backlog, and why Q540 still does.
 
 ### The persona frame, and how to say it without attacking
 

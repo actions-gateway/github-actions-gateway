@@ -1,9 +1,12 @@
 # Untrusted-PR Egress Posture for Kata Workers — Q408
 
-> **Status (2026-08-28): Phase 4 is done, so the posture is enforced and measured.** The Kata overlay ships no additive egress policy, and the tenant's live rules carry zero allow-all: cluster DNS on 53, GitHub on 443, the mirrors on 5000, nothing else.
-> Validated on the dogfood cluster ([§3.13](#313-phase-4-validation-graded-2026-08-28)): a green Kata run (75 of 75 specs) whose in-job negatives passed all eight checks on a `runtimeClassName: kata` worker, with four controls answering so the four silent destinations mean the policy rather than a dead network.
+> **Status (2026-08-28): all five phases are done and Q408 is closed.** The posture is enforced and measured: the Kata overlay ships no additive egress policy, and the tenant's live rules carry zero allow-all, so a worker reaches cluster DNS on 53, GitHub on 443 and the mirrors on 5000 and nothing else.
+> Validated on the dogfood cluster ([§3.13](#313-phase-4-validation-graded-2026-08-28)): a green Kata run (75 of 75 specs) whose in-job negatives passed all eight checks on a `runtimeClassName: kata` worker, with four controls answering so the four blocked probes, over three destinations, mean the policy rather than a dead network.
 > Phase 2's battery re-ran at 25 of 25 under that policy and the mirrors served 178 content requests.
-> What is built is [§3.12](#312-phase-4-build-notes-2026-08-28); Phase 5 is the docs flip and the close-out.
+> What is built is [§3.12](#312-phase-4-build-notes-2026-08-28).
+> Phase 5 published the recipe as the supported posture: [kata-dind-workloads.md § Untrusted pull requests](../operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture) is the operator how-to, G.14 is marked shipped, and the roadmap bullet is gone because the capability is on [Features](../features.md) instead.
+>
+> **This doc stays here rather than moving to `archive/`** because [§6](#6-follow-on-validations-q539-q540) still owns two live rows: Q539 and Q540 are graded against the contract validated here.
 >
 > **Phase 3 is done.** Its wiring is built and gated, and validated on the dogfood cluster: a green Kata e2e run whose five mirror instances served 161 content requests between them, against a zero baseline measured on the same cluster twenty minutes earlier ([§3.11](#311-phase-3-validation-graded-2026-08-28)).
 > All four clients are wired ([§3.9](#39-phase-3-build-notes-2026-08-28)): dockerd by a mounted `daemon.json`, the non-Hub docker pulls by a ref rewrite at the one chokepoint they share, buildkit by a generated `buildkitd.toml`, helm by its OCI ref.
@@ -16,7 +19,7 @@
 > Phase 1's workflow change gates `azure/setup-helm` (`get.helm.sh`), every `actions/cache` step, and the bake's `GHA_CACHE` to the hosted lane, per the resolved [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions.
 > [§2.5](#25-phase-1-validation-graded-2026-08-24) grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a **fifth** registry upstream, `gcr.io`, that Phase 0's host extraction was structurally unable to see.
 
-Design and phased plan for the posture named in [Appendix G.14](../design/appendix-g-future-enhancements.md#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror) and on the [public roadmap](../roadmap.md#exploring--longer-term): make the Kata worker variant safe for **untrusted / external-contributor pull-request CI** by removing the workers' direct registry egress.
+Design and phased plan for the posture named in [Appendix G.14](../design/appendix-g-future-enhancements.md#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror), and published while it was in flight on the public roadmap: make the Kata worker variant safe for **untrusted / external-contributor pull-request CI** by removing the workers' direct registry egress.
 Concretely: an in-cluster **registry pull-through mirror** (the container-image sibling of the Athens Go-module cache, Q244), job-side wiring so every image pull rides it, and the deletion of the e2e tenant's additive open-egress NetworkPolicy.
 
 **Scope statement — no controller or API changes.** Kata already bounds the kernel-escape axis; the missing half is pure egress posture.
@@ -615,7 +618,11 @@ No off-cluster gate stands in either, whatever `deploy/registry-mirror/` ends up
   Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) the negatives from inside a job, meaning a mirrored upstream reached by its own hostname, the plain internet and the metadata server all unreachable, each against a control that must answer, plus a push to the mirror refused; (c) **dropped** — a kind-side pull of a non-local-registry image cannot succeed via the mirror, because the inner containerd is deliberately not wired to it ([§3.12](#312-phase-4-build-notes-2026-08-28)).
   Re-run [§3.7](#37-the-phase-2-validation-battery)'s battery here too: under the tight policy its reachability checks stop being ambiguous, since the open path they could also have ridden is gone.
   Graded 2026-08-28 at eight of eight negatives, 25 of 25 on that battery, and 178 served content requests across the five instances ([§3.13](#313-phase-4-validation-graded-2026-08-28)).
-- **Phase 5 — docs + close-out.** [kata-dind-workloads.md](../operations/kata-dind-workloads.md) caveat "validated posture is trusted CI" flips to the how-to; [security-operations.md](../operations/security-operations.md) mirror section links the concrete manifests; [in-runner image builds](../operations/in-runner-image-builds.md) and [network-architecture.md](../design/network-architecture.md) cross-refs; G.14 marked shipped; [roadmap.md](../roadmap.md) entry moves out of "exploring"; Q408 row deleted.
+- **Phase 5 — docs + close-out. ✅ Done (2026-08-28).** [kata-dind-workloads.md](../operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)'s "validated posture is trusted CI" caveat became the how-to: the four parts, the client wiring, the adoption steps, the three readings that confirm it, and what it does not cover.
+  [security-operations.md](../operations/security-operations.md#prefer-an-in-cluster-caching-mirror-first) names the mirror as the load-bearing half of the posture rather than only a recommendation; [in-runner-image-builds.md](../operations/in-runner-image-builds.md#approach-5--kata-containers-micro-vm-dind-no-privileged-container), [network-architecture.md](../design/network-architecture.md) and [personas.md](../operations/personas.md) carry cross-refs.
+  G.14 is ✅ implemented; the roadmap bullet is deleted and the capability appears on [Features](../features.md) instead, since the roadmap is for what GAG does not do yet.
+  The row is deleted and every citation de-linked.
+  What Phase 5 deliberately did **not** do is claim untrusted-PR readiness: [the umbrella goal](secure-multi-tenant-oss-ci.md#definition-of-done) has five criteria and this work closes three, so the operator page states the posture and its measurements and names the two that are open.
 
 ## 5. Alternatives considered
 
@@ -641,5 +648,6 @@ Decision 2026-07-31: both alternates get validated, sequenced **after** this pla
 
 ## 7. Success criteria
 
-Q408 closes when the Phase 4 validation lands: the dogfood Kata e2e variant runs green with `e2e-open-egress` deleted, the negative probes confirm enforcement, and the Phase 5 docs make the recipe the supported posture.
-At that point "Kata-isolated runners are only suitable for trusted CI" disappears from the docs, replaced by the reference architecture for untrusted-PR CI.
+**Met 2026-08-28.** The dogfood Kata e2e variant ran green with `e2e-open-egress` deleted, the negative probes confirmed enforcement, and the Phase 5 docs made the recipe the supported posture.
+"Kata-isolated runners are only suitable for trusted CI" is gone from the docs, replaced by the reference architecture for untrusted-PR CI.
+The criteria bound the mirror work only; the broader milestone they sit under is [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md#definition-of-done), where two of five items remain open.

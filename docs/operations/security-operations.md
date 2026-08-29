@@ -742,6 +742,9 @@ Both are dogfood-shaped; each README names the handful of cluster-specific value
 Reserve the destination allowlist for what a mirror genuinely cannot proxy: a *specific* live cloud-provider API (`kms.<region>.amazonaws.com`, a Private-Google-Access CIDR like `199.36.153.8/30`), internal services reachable only by IP, and one-off stable endpoints.
 **Never** a wildcard like `*.googleapis.com` (it covers `storage.googleapis.com/<any-bucket>` and reopens broad exfil), and **not** the metadata/IMDS endpoint.
 
+The registry mirror is also the load-bearing half of the **untrusted-pull-request posture**: with every registry pull riding it, a tenant's allow-all egress policy can be deleted outright and a Kata worker's reachable set becomes cluster DNS, GitHub, and the mirror Services.
+That is measured rather than asserted, and the recipe, the client wiring, and the three readings that confirm it are in [Kata DinD workloads § Untrusted pull requests](kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture).
+
 ### How the allowlist works
 
 The destinations are governed by two **platform-owned** GMC allowlists, mirroring the [`allowed-priority-classes`](#priority-classes-the-allowed-priority-classes-allowlist) model.

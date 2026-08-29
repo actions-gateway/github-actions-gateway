@@ -5,10 +5,9 @@ Workers reach the mirror; the mirror reaches the registry.
 It is a **cache**: a miss is fetched upstream and re-populated, so correctness never depends on the cache surviving.
 
 This is the container-image sibling of [`deploy/athens/`](../athens/README.md) (Go modules), and the concrete artifact behind the recommendation in [`docs/operations/security-operations.md`](../../docs/operations/security-operations.md#prefer-an-in-cluster-caching-mirror-first).
-It exists so the Kata e2e variant can carry untrusted-PR CI: with every registry pull riding the mirror, the workers' allow-all egress policy can be deleted and their reachable set becomes cluster DNS, GitHub, and these five Services.
-
-**It is not yet load-bearing.** The e2e job's image clients are wired to it (see [how the job is wired](#how-the-job-is-wired-to-these-instances)), but the workers' allow-all egress policy is still in place, so nothing yet depends on the mirror being the only path.
-Deleting that policy is the last phase of Q408.
+It exists so the Kata e2e variant can carry untrusted-PR CI, and it does: every registry pull rides the mirror, the workers' allow-all egress policy is deleted, and their reachable set is cluster DNS, GitHub, and these five Services.
+What is measured, and what is not, is [below](#what-is-proven-and-what-is-not).
+The operator-facing recipe is [kata-dind-workloads.md § Untrusted pull requests](../../docs/operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture).
 
 ## The instances
 

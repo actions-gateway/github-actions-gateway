@@ -337,6 +337,7 @@ The destinations widen two surfaces, derived from the one CR:
 
 Because the `EgressProxy` is tenant-authorable, **what** may be requested is gated by a platform-owned allowlist (`--allowed-egress-fqdns` suffix match / `--allowed-egress-cidrs` subnet containment, optionally augmented by a watched ConfigMap), enforced by an admission webhook — **both empty ⇒ deny-all-non-GitHub** (the secure default).
 Operators should prefer an **in-cluster caching mirror** for remote third-party dependencies and reserve the allowlist for what a mirror can't proxy; see [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist) and the threat row in [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped).
+For untrusted pull requests the mirror is not merely preferred but load-bearing: it is what lets a tenant carry no additive egress policy at all, leaving a worker cluster DNS, GitHub, and the mirror Services ([the tight-egress posture](../operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)).
 
 ### DNS Resolution
 

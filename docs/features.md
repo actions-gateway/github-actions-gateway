@@ -68,6 +68,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Shared worker storage](operations/worker-shared-storage.md)** <span class="gag-new-badge">new in 1.6</span>: a validated reference architecture for a `ReadWriteMany` volume several jobs mount to pass files, with its `fsGroup` requirement measured.
   The classes it was exercised against are named; a harness validates yours.
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
+- **[Untrusted-PR egress posture](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)** <span class="gag-new-badge">new in 1.7</span>: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
+  Measured on every run of GAG's own Kata lane.
 - **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right `securityProfile` and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.
 - **[Admission policy compatibility](operations/admission-policies.md)**: a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.
