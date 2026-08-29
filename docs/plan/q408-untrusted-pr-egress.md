@@ -537,7 +537,10 @@ Run against `gag-dogfood` (`us-east1-b`, `actions-gateway-dogfood`), Kata overla
 Sequence: `e2e-start.sh`, the [§3.7](#37-the-phase-2-validation-battery) battery, one dispatched run of `e2e-test.yml` against this phase's branch with `runner='"gag-ci-e2e"'`, then `scripts/dogfood/e2e-mirror-hits.sh`, then `e2e-stop.sh`.
 `start.sh` was not used: it dispatches unit and integration bursts this phase has no use for, and `e2e-start.sh` sizes the system pool itself.
 
-**The e2e run is green**: [33223143842](https://github.com/actions-gateway/github-actions-gateway/actions/runs/33223143842) at `33b6578`, 75 of 75 specs, 62 passed, 0 failed, 13 skipped, 7m42s in the suite.
+**The e2e run is green**: [33223143842](https://github.com/actions-gateway/github-actions-gateway/actions/runs/33223143842), 75 of 75 specs, 62 passed, 0 failed, 13 skipped, 7m42s in the suite.
+It ran at `33b6578`, a SHA a later rebase onto `origin/main` rewrote, so read the run rather than the hash.
+Everything executable is byte-identical to what ran: `git diff` against that commit returns two comments, the measured 78 s replacing a guess in `egress-negatives.sh` and in the workflow step, plus prose in the mirror README.
+No probe, expectation, manifest or policy moved.
 Identical to [§3.11](#311-phase-3-validation-graded-2026-08-28)'s counts, so removing the open-egress policy cost the suite nothing.
 
 **The worker was a Kata worker, and it carried the label the policies select.** `runtimeClassName: kata` on the e2e node pool, with `actions-gateway/component=workload`, which is what both the GMC-managed default-deny and `e2e-mirror-egress` match on.
