@@ -165,6 +165,14 @@ func (p *pendingConditions) apply(key types.NamespacedName, conds *[]metav1.Cond
 	}
 }
 
+// forget drops all retained conditions for key. Call it when the owner is deleted or
+// falls out of scope so no entry leaks after its last reconcile.
+func (p *pendingConditions) forget(key types.NamespacedName) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.m, key)
+}
+
 // conditionValue returns a copy of the named condition, or the zero Condition when it
 // is absent. Read the prior condition through this rather than retaining the pointer
 // meta.FindStatusCondition returns: that pointer aliases the slice element
@@ -175,14 +183,6 @@ func conditionValue(conds []metav1.Condition, condType string) metav1.Condition 
 		return *c
 	}
 	return metav1.Condition{}
-}
-
-// forget drops all retained conditions for key. Call it when the owner is deleted or
-// falls out of scope so no entry leaks after its last reconcile.
-func (p *pendingConditions) forget(key types.NamespacedName) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	delete(p.m, key)
 }
 
 // retryBackoffCap bounds the per-item requeue delay of both reconcilers' work

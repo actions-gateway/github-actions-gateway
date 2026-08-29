@@ -13,12 +13,10 @@ import (
 	"k8s.io/client-go/tools/events"
 )
 
-// Every transition Event in these reconcilers is gated on the condition's PRIOR
-// status, which must be read by value: meta.FindStatusCondition returns a pointer
-// into the slice and meta.SetStatusCondition mutates that element in place, so a
-// retained pointer reports the value just written and the guard can only ever fire
-// on a first observation (Q962). Each case below drives a second transition, which
-// is the one a retained pointer swallows.
+// Every transition Event in these reconcilers is gated on the condition's prior
+// status, read by value through conditionValue (see runner_shared.go for why the
+// pointer form cannot work). Each case drives a second transition, which a retained
+// pointer swallows, and then a no-op reconcile, which an ungated guard would warn on.
 
 func TestRunnerSetReadyConditionEventsEveryTransition(t *testing.T) {
 	rec := events.NewFakeRecorder(16)
@@ -65,6 +63,9 @@ func TestReapBlockingSidecarWarnsOnLaterTransition(t *testing.T) {
 
 	r.setReapBlockingSidecarStatus(rs, sidecarTemplate(nil, runner, dind), nil)
 	assert.Len(t, rec.Events, 1, "the template gained a reap-blocking sidecar")
+
+	r.setReapBlockingSidecarStatus(rs, sidecarTemplate(nil, runner, dind), nil)
+	assert.Len(t, rec.Events, 1, "still True, no transition, no second Event")
 }
 
 func TestRunnerSetRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
@@ -77,6 +78,9 @@ func TestRunnerSetRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
 
 	r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
 	assert.Len(t, rec.Events, 1, "the workerImage was downgraded below the minimum")
+
+	r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
+	assert.Len(t, rec.Events, 1, "still too old, no transition, no second Event")
 }
 
 func TestRunnerGroupRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
@@ -91,4 +95,7 @@ func TestRunnerGroupRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
 	rg.Spec.WorkerImage = staleImage
 	r.setRunnerVersionStatus(rg)
 	assert.Len(t, rec.Events, 1, "the workerImage was downgraded below the minimum")
+
+	r.setRunnerVersionStatus(rg)
+	assert.Len(t, rec.Events, 1, "still too old, no transition, no second Event")
 }
