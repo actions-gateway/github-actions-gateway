@@ -241,8 +241,9 @@ jobs:
         # cannot express that: the variable is set on the runner process by the
         # cluster, and the `env` context holds only what a workflow declares.
         # Placed before the build so a lost posture fails here rather than after
-        # the suite; each blocked probe spends its whole timeout, so this step
-        # is minutes rather than seconds even when everything holds.
+        # the suite. Each blocked probe spends its whole timeout, so the step
+        # costs ~80 s even when everything holds (78 s measured on the dogfood
+        # Kata lane, 2026-08-28).
         run: scripts/e2e/egress-negatives.sh
 
       - name: Set up Docker Buildx

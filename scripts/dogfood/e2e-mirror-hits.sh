@@ -234,9 +234,10 @@ main() {
 		echo "deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml." >&2
 		return 1
 	fi
-	echo "Q408 Phase 3 validation: PASS — every declared instance served content."
-	echo "Open egress is still in place, so this proves the wiring rides the mirror,"
-	echo "not that anything is enforced. Enforcement remains Phase 4's."
+	echo "Q408: PASS — every declared instance served content."
+	echo "This says the pulls rode the mirror, and the repositories above say which"
+	echo "client rode which. It does not say the upstreams were unreachable: that is"
+	echo "scripts/e2e/egress-negatives.sh, a step of the run itself on the Kata lane."
 }
 
 [[ -n "${E2E_MIRROR_HITS_LIB_ONLY:-}" ]] || main "$@"

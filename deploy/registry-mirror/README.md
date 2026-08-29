@@ -108,7 +108,7 @@ The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, f
 The wiring above **rides them** when [`scripts/dogfood/e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reports a served content request per instance after a Kata e2e run.
 That reading was needed because the tenant still carried an allow-all `e2e-open-egress` policy while the wiring was being proven: a client that ignored its wiring reached its upstream and the run was green either way, and the access log is the one place an unmirrored pull cannot appear.
 
-The posture is **built but not yet graded on a cluster**.
-The Kata overlay no longer carries that policy, so a worker's registry path there should be these instances or nothing, and [`scripts/e2e/egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) is what will say whether it is: it runs inside the job on every run of the lane and requires three destinations not to answer (a mirrored upstream reached by its own hostname, the plain internet, and the metadata server), each paired with a control that must.
-No dogfood session has run it yet, so "should" is the honest word until one does.
+The posture is **enforced**: on the Kata lane a worker's registry path is these instances or nothing, measured on the dogfood cluster on 2026-08-28.
+The tenant's live rules carry zero allow-all, and [`scripts/e2e/egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) passed all eight of its checks inside a green Kata run: three destinations that answered nothing (a mirrored upstream reached by its own hostname, the plain internet, and the metadata server), each against a control that did answer, so the silence is the policy rather than a worker with no network.
+It runs on every run of the lane rather than once, because a policy that stops selecting the worker is invisible in a green suite.
 The dind overlay keeps its open-egress policy: it is the explicit trusted-CI fallback, and privileged DinD was never a candidate for untrusted code.

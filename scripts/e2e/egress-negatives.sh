@@ -36,10 +36,12 @@
 #   ok / fail     a `docker pull` exited zero, or did not
 #
 # A dropped packet has no error to distinguish it from a slow one, so a blocked
-# probe is bounded by `--max-time` rather than by the peer. That is why this
-# script takes minutes rather than seconds when the posture holds, and why the
-# timeouts are named constants: shortening them makes a slow upstream look
-# blocked, which is the one way this battery reports a false PASS.
+# probe is bounded by `--max-time` rather than by the peer. The whole battery
+# therefore costs ~80 s when the posture holds (78 s measured on the dogfood
+# Kata lane, 2026-08-28), almost all of it spent waiting on the three
+# destinations that correctly say nothing. The timeouts are named constants
+# because shortening them makes a slow upstream look blocked, which is the one
+# way this battery reports a false PASS.
 #
 # Usage:
 #   scripts/e2e/egress-negatives.sh

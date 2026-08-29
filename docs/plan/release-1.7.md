@@ -27,7 +27,7 @@ What this scope adds is the release's read of them.
 | 1. Shrink the non-registry residual to GitHub | ✅ implemented 2026-08-05, validated 2026-08-24 | Nothing further; it is the evidence the residual is gone |
 | 2. Mirror manifests | ❌ | `deploy/registry-mirror/`, one instance per upstream, applied from the e2e setup path |
 | 3. Wiring | ❌ | A green Kata e2e run **with open egress still present** and mirror hit counts > 0, so wiring is proven before enforcement changes |
-| 4. Enforcement | 🔨 built 2026-08-28, validation pending | The deletion plus the negative probes; this is where the posture becomes real |
+| 4. Enforcement | ✅ built and validated 2026-08-28 | The deletion plus the negative probes; this is where the posture becomes real |
 | 5. Docs and close-out | ❌ | The caveat flips to a how-to; G.14 marked shipped; the roadmap entry leaves "exploring" |
 
 **Phases 2, 3 and 4 need live dogfood sessions**, which are prod-guarded and operator-driven.
