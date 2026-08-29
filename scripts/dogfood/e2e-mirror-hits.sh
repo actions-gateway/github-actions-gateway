@@ -19,11 +19,23 @@
 # path is absent rather than used, is scripts/e2e/egress-negatives.sh.
 #
 # WHAT COUNTS AS A HIT. Distribution's access log is Combined Log Format, one
-# line per request, alongside the structured logrus lines. Measured on
-# registry:3.1.1 in proxy mode (2026-08-28, the image the manifests pin):
+# line per request, alongside the structured logrus lines. Measured 2026-08-29 on
+# registry:3.1.1 at the pinned digest, behind the catalog-deny proxy, which is
+# the shape this reads today:
 #
-#   192.168.65.1 - - [28/Aug/2026:15:23:00 +0000] "GET /v2/ HTTP/1.1" 200 2 "" "curl/8.7.1"
-#   192.168.65.1 - - [28/Aug/2026:15:23:00 +0000] "GET /v2/library/alpine/manifests/latest HTTP/1.1" 200 9218 "" "curl/8.7.1"
+#   127.0.0.1 - - [29/Aug/2026:07:02:22 +0000] "GET /v2/ HTTP/1.1" 200 2 "" "curl/8.7.1"
+#   127.0.0.1 - - [29/Aug/2026:07:02:28 +0000] "GET /v2/library/alpine/manifests/3.20 HTTP/1.1" 200 9226 "" "curl/8.7.1"
+#
+# The 2026-08-28 capture the earlier version of this header quoted was taken
+# against an unfronted registry and carried a real client address; the lines
+# above are a separate reading, not that one restamped.
+#
+# THE REMOTE ADDRESS IS THE POD'S OWN LOOPBACK, and reading it as the client is
+# the mistake this shape invites. Every pod fronts its registry with the
+# catalog-deny proxy (Q1022), so the registry sees 127.0.0.1 for every request
+# and the source address survives only in that container's log. Nothing below
+# reads it: what discriminates is the request path and the user agent, and the
+# proxy forwards both unchanged.
 #
 # The first line is why a bare request count is the wrong instrument: the
 # kubelet probes `/v2/` every 10 seconds on two probes per instance, so an
@@ -81,6 +93,12 @@ MIRROR_INSTANCES=(
 	mirror-registry-k8s-io
 	mirror-gcr-io
 )
+
+# The container whose access log this reads, named rather than left to kubectl's
+# default. Each pod carries a second container, the catalog-deny proxy, and an
+# unqualified `kubectl logs` picks by position: the read would move with the
+# container order and its warning goes to the stderr these calls discard.
+MIRROR_CONTAINER="registry"
 
 # --- pure helpers (unit-tested; no kubectl, no cluster) ----------------------
 
@@ -184,7 +202,7 @@ collect_hit_counts() {
 	local instance logs
 	for instance in "${MIRROR_INSTANCES[@]}"; do
 		logs="$(kubectl logs "deployment/${instance}" --namespace "${MIRROR_NAMESPACE}" \
-			--tail=-1 2>/dev/null || true)"
+			--container "${MIRROR_CONTAINER}" --tail=-1 2>/dev/null || true)"
 		[[ -n "${logs}" ]] || continue
 		printf '%s %s\n' "${instance}" "$(count_hits <<<"${logs}")"
 	done
@@ -199,7 +217,8 @@ print_requested_repositories() {
 	for instance in "${MIRROR_INSTANCES[@]}"; do
 		echo "  ${instance}:"
 		kubectl logs "deployment/${instance}" --namespace "${MIRROR_NAMESPACE}" \
-			--tail=-1 2>/dev/null | hit_repositories | sed 's/^/    /' || true
+			--container "${MIRROR_CONTAINER}" --tail=-1 2>/dev/null |
+			hit_repositories | sed 's/^/    /' || true
 	done
 }
 

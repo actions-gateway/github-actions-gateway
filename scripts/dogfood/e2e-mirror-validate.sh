@@ -22,6 +22,11 @@
 #               finding), so the `v2` check alone grades a broken mirror green.
 #   push        POST /v2/<name>/blobs/uploads/ is refused. §3.1's read-only
 #               property, measured on the cluster rather than argued.
+#   catalog     GET /v2/_catalog is refused with 403. Q1022's property: the
+#               deny proxy each pod fronts its registry with is in the path.
+#               Graded beside `manifest` on purpose — a deny that also broke
+#               pulls would pass this check on its own, and the pair is what
+#               makes either reading mean anything.
 #   debug       REGISTRY_HTTP_DEBUG_ADDR is set and empty in the pod spec, which
 #               is what unbinds the bundled config's :5001 pprof + /metrics
 #               listener.
@@ -97,17 +102,19 @@ MIRROR_INSTANCES=(
 	"mirror-gcr-io distroless/static nonroot"
 )
 
-# The three checks the probe pod reports. `available` and `debug` are read from
+# The four checks the probe pod reports. `available` and `debug` are read from
 # the Deployment object by this script instead, so they are graded separately.
-PROBE_CHECKS=(v2 manifest push)
+PROBE_CHECKS=(v2 manifest push catalog)
 
 # The env var whose empty value unbinds the image's bundled :5001 debug listener.
 # Read by name AND value: kubectl's jsonpath renders an empty value and an absent
 # entry identically, and an absent entry means the listener is bound.
 DEBUG_ADDR_VAR="REGISTRY_HTTP_DEBUG_ADDR"
 
-# The container the env var is read from, selected by name so a prepended sidecar
-# cannot shift it. All five Deployments name it `registry`.
+# The container the env var is read from, selected by name because each pod now
+# carries a second container: the `catalog-deny` proxy that fronts 5000. All five
+# Deployments name the registry `registry`, and an index would move with the
+# container order.
 MIRROR_CONTAINER="registry"
 
 # --- pure helpers (unit-tested; no kubectl, no cluster) ----------------------
@@ -138,6 +145,8 @@ mirror_probe_script() {
 			"${instance}" "${accept}" "${host}" "${repo}" "${ref}"
 		printf 'echo "%s push $(curl -s -o /dev/null -w "%%{http_code}" --max-time 20 -X POST http://%s/v2/%s/blobs/uploads/ || true)"\n' \
 			"${instance}" "${host}" "${repo}"
+		printf 'echo "%s catalog $(curl -s -o /dev/null -w "%%{http_code}" --max-time 20 http://%s/v2/_catalog || true)"\n' \
+			"${instance}" "${host}"
 	done
 }
 
@@ -173,11 +182,18 @@ grade_probe_output() {
 			# independently of `delete.enabled`. Any 2xx here means the mirror
 			# accepted an upload and §3.1's read-only property is false.
 			push) expected=405 ;;
+			# 403 is what the deny proxy answers, measured against the pinned
+			# images and the rendered config. A 200 here names every repository
+			# in the cache to whoever asked.
+			catalog) expected=403 ;;
 			esac
 			if [[ "${got}" == "${expected}" ]]; then
 				echo "PASS ${instance} ${check}"
 			elif [[ "${check}" == "push" && "${got}" =~ ^2[0-9][0-9]$ ]]; then
 				echo "FAIL ${instance} ${check}: upload ACCEPTED (${got}) — the mirror is not read-only"
+				failed=1
+			elif [[ "${check}" == "catalog" && "${got}" =~ ^2[0-9][0-9]$ ]]; then
+				echo "FAIL ${instance} ${check}: catalog ANSWERED (${got}) — the repository list is readable"
 				failed=1
 			elif [[ "${got}" == 429 ]]; then
 				# Anonymous pull-through shares the mirror's egress IP, so Docker

@@ -236,6 +236,17 @@ dashboard-render-check: ## Fail when a dashboard changed beyond its panel descri
 registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tenant's wiring to them name different endpoints
 	scripts/manifest/check-registry-mirror-wiring.sh
 
+# Distribution serves /v2/_catalog unconditionally and offers no setting that
+# closes it while leaving anonymous pulls working, so each mirror pod fronts its
+# registry with a deny proxy and binds the registry to loopback (Q1022). Six
+# files hold that posture between them and nothing in CI renders any of them
+# (Q1024), so an instance added without the sidecar hands one tenant the list of
+# what every other tenant pulled, and the battery that would catch it needs a
+# booked dogfood session.
+.PHONY: registry-mirror-catalog-deny-check
+registry-mirror-catalog-deny-check: ## Fail when a registry mirror is not fronted by the /v2/_catalog deny proxy
+	scripts/manifest/check-registry-mirror-catalog-deny.sh
+
 # Capability parity between the two acquisition tiers rested on a one-time seam
 # walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
 # classic-only from birth with nothing re-walking it. This inverts the

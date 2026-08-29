@@ -67,7 +67,8 @@ CHECK_FAST_GATES := roadmap-check \
                     tool-pin-check \
                     release-ladder-check \
                     vendored-skills-check \
-                    registry-mirror-wiring-check
+                    registry-mirror-wiring-check \
+                    registry-mirror-catalog-deny-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -282,4 +283,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/doc-blocks-test \
                  dogfood/e2e-mirror-hits-test lib/registry-mirror-test \
                  manifest/check-registry-mirror-wiring-test \
+                 manifest/check-registry-mirror-catalog-deny-test \
                  e2e/egress-negatives-test

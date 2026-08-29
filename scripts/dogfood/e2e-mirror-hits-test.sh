@@ -34,7 +34,7 @@
 #      told apart by its user agent, and BOTH directions are asserted below.
 #
 # The script is sourced with E2E_MIRROR_HITS_LIB_ONLY=1 so main() does not run;
-# nothing here touches kubectl or a cluster.
+# `kubectl` is stubbed for the one case that needs it, so no cluster.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -78,6 +78,13 @@ check_contains() {
 # The curl lines are verbatim from that capture and are exactly what the Phase 2
 # battery writes; the docker line is the shape a real pull writes. Keeping both
 # in one fixture is what makes the probe exclusion testable at all.
+#
+# THEIR CLIENT ADDRESS IS HISTORY, not the current shape. That capture predates
+# the catalog-deny proxy, so a mirror now logs 127.0.0.1 for every request and
+# the source survives only in the proxy's own log. The lines are left verbatim
+# rather than restamped -- a capture edited to look current is a measurement
+# nobody took -- and nothing here reads the address anyway: what discriminates
+# is the request path and the user agent.
 measured_log() {
 	cat <<'LOG'
 time="2026-08-28T15:22:58.1Z" level=info msg="using inmemory blob descriptor cache" environment=development go.version=go1.25.9 instance.id=01a048f7 service=registry version=3.1.1
@@ -214,6 +221,28 @@ out="$(grade_hit_counts </dev/null)" || rc=$?
 check 'an empty transcript grades 1' 1 "${rc}"
 check 'an empty transcript still grades five instances' 5 \
 	"$(printf '%s\n' "${out}" | grep -c '^FAIL' || true)"
+
+# --- the log is read from the registry container, by name --------------------
+#
+# Each pod carries a second container now (the catalog-deny proxy), and an
+# unqualified `kubectl logs` picks by position while writing its warning to the
+# stderr these calls discard. A read that moved to the proxy would report zero
+# content requests per instance, which grades as a job that never rode the
+# mirror rather than as a broken read.
+
+CALL_LOG="$(mktemp)"
+trap 'rm -f "${CALL_LOG}"' EXIT
+kubectl() {
+	printf 'kubectl %s\n' "$*" >>"${CALL_LOG}"
+	printf '%s\n' "${A_CLEAN_LOG}"
+}
+
+A_CLEAN_LOG='127.0.0.1 - - [28/Aug/2026:15:23:01 +0000] "GET /v2/library/alpine/manifests/latest HTTP/1.1" 200 9218 "" "docker/28.0.0"'
+counts="$(collect_hit_counts)"
+check "every instance is read" "${#MIRROR_INSTANCES[@]}" "$(grep -c '^kubectl logs ' "${CALL_LOG}")"
+check "every read names the registry container" "${#MIRROR_INSTANCES[@]}" \
+	"$(grep -c -- '--container registry' "${CALL_LOG}")"
+check "the stubbed log still grades" "${#MIRROR_INSTANCES[@]}" "$(grep -c ' 1 1 1$' <<<"${counts}")"
 
 if ((fails)); then
 	echo "${fails} assertion(s) failed" >&2
