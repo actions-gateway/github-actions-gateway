@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/secure-multi-tenant-oss-ci/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1033/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Secure, Isolated, Multi-Tenant OSS CI - GitHub Actions Gateway</title>
+        <title>baseRefName is the merge target, not what a stacked PR sits on - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#secure-isolated-multi-tenant-oss-ci" class="md-skip">
+        <a href="#baserefname-is-the-merge-target-not-what-a-stacked-pr-sits-on" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Secure, Isolated, Multi-Tenant OSS CI
+              baseRefName is the merge target, not what a stacked PR sits on
             
           </span>
         </div>
@@ -2579,113 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-is-the-goal" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this is the goal
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-makes-it-unsolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What makes it unsolved
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#threat-model-the-untrusted-contributor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Threat model: the untrusted contributor
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-layer-map-with-current-state" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The layer map, with current state
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Definition of done
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope-and-residual-risk-accepted" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explicitly out of scope, and residual risk accepted
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-the-site-may-claim-today" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the site may claim today
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#deliverables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Deliverables
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#gaps-with-no-row-yet" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Gaps with no row yet
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2704,166 +2597,33 @@
   
 
 
-<h1 id="secure-isolated-multi-tenant-oss-ci">Secure, Isolated, Multi-Tenant OSS CI<a class="headerlink" href="#secure-isolated-multi-tenant-oss-ci" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status: goal stated 2026-08-06, deliverables partly shipped.</strong> This is a map and a definition of done, not a design.
-The design for the network half is <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a> and is not restated here.
-Kernel isolation is shipped and validated.
-The rest is open.</p>
-</blockquote>
-<h2 id="why-this-is-the-goal">Why this is the goal<a class="headerlink" href="#why-this-is-the-goal" title="Permanent link">&para;</a></h2>
-<p>Multi-tenant CI on shared, expensive nodes is the efficient answer, and almost nobody runs it.
-Where managed Kubernetes is cheap and CI fits inside one cloud, a cluster per tenant in its own network and project is a perfectly good answer, and a stronger isolation boundary than a shared cluster can offer.
-GAG exists for the case where that stops being cheap: cluster overhead is real, the nodes are big and expensive (GPU, large-memory, on-premises, or reserved capacity already paid for), and sharing them is the only way the economics work.</p>
-<p>Account-per-tenant and cluster-per-tenant have <strong>no cheap on-premises analogue</strong>.
-In a cloud an account or project is a free API call that inherits a pre-built control plane.
-On bare metal the equivalent boundary is a hardware purchase, or building the hypervisor, software-defined-networking, and self-service storage layer that would make accounts possible.
-Worse, partitioned capacity cannot be shifted between tenants, so every tenant is provisioned for its own peak and every trough is stranded.
-You cannot hand the hardware back at month end.</p>
-<h2 id="what-makes-it-unsolved">What makes it unsolved<a class="headerlink" href="#what-makes-it-unsolved" title="Permanent link">&para;</a></h2>
-<p>The reason teams retreat to a cluster per tenant is not cost.
-It is that <strong>CI multi-tenancy has never been secured well enough</strong>, and CI is the hard case on two axes at once:</p>
-<ul>
-<li><strong>CI needs root.</strong> Image builds, Docker-in-Docker, <code>services:</code> containers, package installs.
-  Privileged Docker-in-Docker on a shared node defeats Pod Security Admission <code>restricted</code> outright.</li>
-<li><strong>CI needs network isolation, and that is hard on Kubernetes.</strong> NetworkPolicy needs a policy-enforcing CNI to mean anything; egress by hostname is CNI-specific; and CDN-fronted registries cannot be pinned by CIDR at all.</li>
-</ul>
-<p>So the honest framing for this milestone is not "competitor X lacks feature Y".
-It is: <strong>nobody has solved this, here is how far we have got, and here is the boundary of what we currently claim.</strong></p>
-<h2 id="threat-model-the-untrusted-contributor">Threat model: the untrusted contributor<a class="headerlink" href="#threat-model-the-untrusted-contributor" title="Permanent link">&para;</a></h2>
-<p><code>docs/design/05-security.md</code> models tenant against tenant, where every tenant is a team inside the operator's organization.
-This milestone adds an adversary that model does not carry: <strong>a contributor who can cause code to run but is not a user of the platform.</strong> A fork pull request is an arbitrary-code-execution request that the CI system is designed to honour.</p>
-<p>What changes:</p>
-<ul>
-<li>The adversary chooses the workload, so "misconfigured tenant" becomes "deliberately hostile job".</li>
-<li>The adversary is anonymous and cheap to become.
-  Rate limiting and abuse response matter more than attribution.</li>
-<li>The blast radius that matters is not the tenant's own namespace.
-  It is every other tenant on the node, the node's own credentials, and the mirror or cache the platform provides.</li>
-<li>GitHub itself warns that self-hosted runners should not be used with public repositories, because untrusted workflow code can persist on the runner.
-  GAG's answer has to be that nothing persists and nothing reachable is worth having.</li>
-</ul>
-<h2 id="the-layer-map-with-current-state">The layer map, with current state<a class="headerlink" href="#the-layer-map-with-current-state" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Layer</th>
-<th>Mechanism</th>
-<th>State</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Kernel</td>
-<td>Kata micro-VM workers, no <code>privileged: true</code></td>
-<td><strong>Shipped and validated.</strong> Default for GAG's own end-to-end CI, a kind cluster built inside an unprivileged worker pod, on nested-virtualization GKE. See <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a></td>
-</tr>
-<tr>
-<td>Pod identity floor</td>
-<td><code>hostPID</code>/<code>hostNetwork</code>/<code>hostIPC</code>/<code>automountServiceAccountToken</code> all false, controller-managed ServiceAccount, stamped over any tenant <code>PodTemplateSpec</code></td>
-<td><strong>Shipped</strong></td>
-</tr>
-<tr>
-<td>Network egress</td>
-<td>Default-deny NetworkPolicy, per-tenant proxy pool, in-cluster pull-through mirror, egress scoped to mirror plus GitHub plus DNS</td>
-<td><strong>Shipped and validated (Q408, 2026-08-28).</strong> A Kata worker reaches cluster DNS on 53, GitHub on 443 and the mirrors on 5000 and nothing else, measured on the dogfood cluster by in-job negatives against controls that answered, on every run of the lane. Recipe: <a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">kata-dind-workloads.md § Untrusted pull requests</a>; design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>. <a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a> grade two variants against the contract this validated, and are follow-ons rather than gaps</td>
-</tr>
-<tr>
-<td>Node metadata</td>
-<td>The link-local DNS allowance is scoped to port 53, so no rule admits the metadata address on any port it serves</td>
-<td><strong>Shipped and asserted (Q716).</strong> Q226 measured HTTP 200 from inside a Kata guest, because Kata bounds the guest kernel and not the pod's network identity. <code>TestBuildNetworkPolicy_DeniesCloudMetadataServer</code> pins the authored policy on every PR; <code>E2E_V2_DirectEgress_MetadataServerBlocked</code> proves a real CNI enforces it on the Calico lane. Needs a policy-enforcing CNI: without one, Workload Identity is the only control</td>
-</tr>
-<tr>
-<td>Cross-job cache</td>
-<td>none in-cluster</td>
-<td><strong>This posture removes the cache that works.</strong> <code>actions/cache</code> reaches its Azure-blob store through the default egress allowlist today; closing egress to GitHub plus mirror plus DNS takes it away, so an in-cluster cache stops being an optimisation and becomes the only cache an untrusted job can have. Q215 is blocked on that review, which <a href="../caching-and-worker-storage/">caching-and-worker-storage.md</a> reframes as the design</td>
-</tr>
-<tr>
-<td>Evidence</td>
-<td>Per-tenant egress audit records</td>
-<td><strong>Shipped, opt-in (Q564, Q986).</strong> <code>EgressProxy.spec.auditLogging: Connections</code> writes one structured line per accepted CONNECT: namespace, destination host and port, bytes each way, duration. Off by default: the record is data about a tenant's egress, so retaining it is the platform's decision. Definition of Done #5 takes a further opt-in on both sides — <code>ConnectionsWithSource</code> adds the client address to that record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> records which job holds each address while its pod lives — because attribution is what turns an egress record into a per-worker movement log, and because a worker pod is deleted with its job so the binding cannot be looked up afterwards. See <a href="../../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">observability-logging.md</a> and <a href="../q986-egress-attribution/">q986-egress-attribution.md</a></td>
-</tr>
-<tr>
-<td>Transport to the proxy</td>
-<td>TLS on the AGC-to-proxy and worker-to-proxy hop</td>
-<td><strong>Open.</strong> The CONNECT target is cleartext on that hop and readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub. Row: Q566</td>
-</tr>
-<tr>
-<td>Noisy-neighbour containment</td>
-<td>Per-runner-group proxy pool</td>
-<td><strong>Open.</strong> One pool per gateway today, so a bandwidth-heavy group can saturate a co-tenant's. Row: Q567</td>
-</tr>
-</tbody>
-</table>
-<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<p>Broader than Q408's success criteria, which bound the mirror work only and are met.
-This milestone is done when all of the following hold, each demonstrated rather than argued:</p>
-<ol>
-<li>A job from an untrusted fork pull request runs on a shared cluster with a kernel it cannot escape into anything useful, and reaching that state costs one documented step rather than a design of the adopter's own.
-   <strong>The default-versus-opt-in question splits, and Q408's Phase 4 is what split it.</strong> The <em>network</em> posture is the default and always was: a tenant's egress is default-deny plus GitHub, and what Phase 4 shipped was the <strong>deletion</strong> of an additive allow-all rather than a new object, so weakening the posture is the deliberate act and holding it is the resting state.
-   The <em>pod shape</em> is not the default and must not become one: a <code>ClusterRunnerTemplate</code> marked default applies to every <code>RunnerSet</code> naming no template, so shipping the Kata shape as a cluster default would hand a privileged capability set to sets that never asked for one (<a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a>).
-   This criterion therefore asks that the secure state be what an operator gets by not acting, and that adopting the kernel boundary on top be one <code>kubectl apply -k</code> against a shipped template.
-   It does not ask for a default template, and a future reading that revives that demand is reading a criterion this project already declined on a security argument.</li>
-<li>Its egress reaches the mirror, GitHub, and DNS, and an end-to-end run's logs name no other host.</li>
-<li>It cannot reach the node's metadata service, and a test asserts this on a policy-enforcing CNI rather than a doc recommending it.</li>
-<li>It cannot read another tenant's cache, secrets, or job payloads, including through anything the platform provides for its convenience.</li>
-<li>An operator can produce, unprompted, a per-tenant record of which host each job reached.
-   Controls without evidence do not satisfy an auditor.
-   <strong>Met as of Q986</strong>, on the two opt-ins above: the join is the proxy record's source address against the AGC's worker-address bindings, and it names the consuming tenant on a shared pool as well as an unshared one.</li>
-<li>The residual channels are enumerated in this document and each one is either closed or explicitly accepted with a reason.</li>
-</ol>
-<h2 id="explicitly-out-of-scope-and-residual-risk-accepted">Explicitly out of scope, and residual risk accepted<a class="headerlink" href="#explicitly-out-of-scope-and-residual-risk-accepted" title="Permanent link">&para;</a></h2>
-<p>The most important section.
-"We run untrusted OSS CI" is indefensible without a boundary.</p>
-<ul>
-<li><strong>Compute abuse is contained, not prevented.</strong> A hostile job can consume the capacity its tenant's quota allows.
-  The quota, the priority tiers, and <code>maxWorkerLifetime</code> bound it; nothing detects intent in advance.</li>
-<li><strong>Secrets a maintainer deliberately grants a fork are out of reach.</strong> If a workflow is configured to expose a secret to <code>pull_request_target</code>, that is a repository configuration decision GAG cannot override and should not pretend to.</li>
-<li><strong>Side channels between co-tenant micro-VMs are not addressed.</strong> Kata bounds the kernel.
-  Speculative-execution and shared-cache side channels between guests on one node are a hardware and hypervisor concern, not one this milestone closes.</li>
-<li><strong>The mirror is a trusted component.</strong> A compromised pull-through mirror reaches every job that pulls through it.
-  The mirror contract in <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> is what bounds this, and it is a contract rather than an enforcement.</li>
-<li><strong>A shared mirror set exposes cache timing to every tenant that can reach it.</strong> Whether a repository is already warm says that some other tenant pulled it.
-  The repository <em>list</em> is no longer part of this: <code>GET /v2/_catalog</code> answered 200 with every cached repository named, <code>catalog.maxentries=0</code> did not close it, and every instance is now fronted by a proxy that refuses the path under both topologies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#closing-the-repository-catalog">how, and what it was measured against</a>).
-  What is left is timing.
-  The reading that counts is taken from inside the guest by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/mirror-timing.sh"><code>mirror-timing.sh</code></a> on the Kata lane; until a window has run it, the only figures are a laptop's, which bound the channel rather than measure it where an attacker sits.
-  It is an accepted risk only for an adopter who chose the shared topology knowing it, which is what <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.</li>
-<li><strong>This is not a claim about arbitrary hostile input at scale.</strong> The goal is that a fork pull request on an adopter's own repositories is safe to run.
-  A public, unauthenticated build service is a different product with different economics.</li>
-</ul>
-<h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
-<p>Down to earth, current state only:</p>
-<blockquote>
-<p>Kata micro-VM workers are validated end to end and are the default for GAG's own CI, which builds a kind cluster inside an unprivileged worker pod.
-Their egress is now closed to match: an in-cluster registry mirror carries every image pull, the tenant carries no allow-all rule, and a run's own probes confirm that a worker reaches cluster DNS, GitHub and the mirror and nothing else.
-What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.</p>
-</blockquote>
-<p>Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
-Item 5 closed with Q986.
-Item 4 is open on <a href="../../queue/Q215/">Q215</a>, and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> is what they choose on.
-The guest timing measurement the probe now takes sharpens that guidance rather than settling it: it can narrow what a shared set costs and cannot widen it past what a timing channel carries.
-Do not claim untrusted-PR readiness until all six hold.
-The claim is checkable and a wrong one costs more than the feature is worth.</p>
-<h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
-<p>Open, with rows: Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
-<h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
-<p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
-<ol>
-<li><strong>Secret exposure to fork pull requests.</strong> What GAG can and cannot influence, and what it should refuse to run.
-   Interacts with <code>pull_request_target</code> semantics that belong to the repository, not the platform.</li>
-<li><strong>Runner-token scope for an untrusted job.</strong> The job's own credentials are a reachable asset.
-   Whether an untrusted class should receive a narrower token than a trusted one is unexamined.</li>
-<li><strong>What "untrusted" is, as a declared thing.</strong> Today it is a posture an operator assembles.
-   A declared class would let the platform apply the whole set at once, but the moat review rejected building that surface while five of its dependencies are open or blocked, which is the correct order.
-   The decision this document owes is what the class would mean, not yet how to express it.</li>
-</ol>
+<h1 id="baserefname-is-the-merge-target-not-what-a-stacked-pr-sits-on"><code>baseRefName</code> is the merge target, not what a stacked PR sits on<a class="headerlink" href="#baserefname-is-the-merge-target-not-what-a-stacked-pr-sits-on" title="Permanent link">&para;</a></h1>
+<p>Nothing records how to ask what a stacked branch is based on, and the two <code>gh pr view</code> fields that look like the answer are not.</p>
+<p><strong>Measured 2026-08-29</strong> on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1795">#1795</a>, a PR stacked on #1794:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>baseRefName  main         &lt;- the merge target
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>baseRefOid   ef29e336f    &lt;- origin/main's head, NOT the parent branch's
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>#1794 tip    42a94729c    &lt;- what it actually sits on
+</code></pre></div>
+<p>A reviewer read <code>baseRefName: main</code> and reported the branch as rebased off #1794 onto main.
+It was still stacked: <code>git merge-base --is-ancestor claude/hungry-mahavira-d19a81 b0eb56b69</code> returns 0, and <code>origin/main..b0eb56b69</code> carried all nine commits including the parent's.</p>
+<p><strong>The natural repair does not work, which is why this is worth writing down rather than leaving to care.</strong> Widening the read to <code>baseRefOid</code> returns a second description of the merge target, and it returns a plausible SHA, so the mistake survives the correction.
+No <code>gh pr view</code> field answers what a branch sits on; only ancestry does, and <code>git merge-base --is-ancestor &lt;parent-branch&gt; &lt;head&gt;</code> is the whole check.</p>
+<p><strong>Same shape as <a href="../Q1028/">Q1028</a>, and the two together sharpen it.</strong> That row has the CI instance: a correct instrument aimed at a narrower question than the claim built on it.
+What both instances add is <em>when</em> the substitution bites — each field equals the right answer except in the one case that makes anyone ask.
+<code>baseRefName</code> equals what a branch sits on for every unstacked PR and diverges exactly when there is a stack; a workflow-level run conclusion equals job reality except when a path-gated job skips.
+So a long history of the shortcut being right is not weak evidence, it is none: the shortcut is only ever exercised where it holds.
+That is why a field read correctly a hundred times is not distrusted on the hundred-and-first, and it is the part neither instance states on its own.</p>
+<p>Fixes are separable, which is why this is not folded into Q1028: that row replaces a CI recipe, this one records an ancestry check for stacked work, and neither closes the other.
+Deliverable: the ancestry check in <a href="../../development/parallel-dispatch/">parallel-dispatch.md</a>, beside the rebase guidance, with the measurement above as the reason.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 

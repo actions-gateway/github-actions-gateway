@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1020/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1034/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure the mirror cache hit/miss timing gap from inside a Kata guest - GitHub Actions Gateway</title>
+        <title>verify-pages-live-test retry cases rest on a clock it does not control - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" class="md-skip">
+        <a href="#verify-pages-live-test-retry-cases-rest-on-a-clock-it-does-not-control" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure the mirror cache hit/miss timing gap from inside a Kata guest
+              verify-pages-live-test retry cases rest on a clock it does not control
             
           </span>
         </div>
@@ -2597,19 +2597,28 @@
   
 
 
-<h1 id="measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest">Measure the mirror cache hit/miss timing gap from inside a Kata guest<a class="headerlink" href="#measure-the-mirror-cache-hitmiss-timing-gap-from-inside-a-kata-guest" title="Permanent link">&para;</a></h1>
-<p>Both mirror topologies and the decision between them shipped: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a> renders the shared set, the default renders the isolated one, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> carries the cost, the risk and the thresholds.
-What is left of the original row is the one thing it called unmeasured: whether a cache hit is distinguishable from a miss <strong>from inside a Kata guest</strong>, across the bridge NAT, on this Deployment shape.</p>
-<p><strong>What was measured, and where it falls short.</strong> On 2026-08-28, against <code>registry:3.1.1</code> at the pinned digest run locally as a pull-through cache: blob hits at 10 to 70 ms against misses of 400 to 640 ms, and manifest hits and misses overlapping (medians near 360 ms and 430 ms, a warm 445 ms against a cold 407 ms), because a pull-through cache revalidates a manifest upstream on every request.
-That was taken from a laptop over the public internet, not from the position an attacker occupies, so it bounds the channel rather than measuring it.</p>
-<p><strong>This is now the whole of what a shared set exposes, and it still does not decide the topology.</strong> Q1022 closed <code>GET /v2/_catalog</code> on every instance, so the repository list is no longer readable and timing is the only channel left.
-That raises what the measurement is worth without inverting the guidance: it can narrow what a shared set costs, and it cannot widen it past what a timing channel carries.
-Take it to sharpen the guidance; where tenants must not learn what each other build, take isolation without waiting for it.</p>
-<p><strong>How to take it.</strong> It needs a live Kata worker: a probe in the job on the Kata lane, beside <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/egress-negatives.sh"><code>egress-negatives.sh</code></a>, which already runs there for the reason this measurement needs (a plain pod cannot answer what holds at the end of a path leaving a micro-VM guest through a bridge NAT).
-Time blob fetches rather than manifest fetches, since the manifest arm has already come back null.
-Warm one repository and leave a second cold, interleave the fetches, and report the distributions rather than two numbers: what matters is whether they overlap, not the ratio of the medians.</p>
-<p>Attempted and not taken on 2026-08-28: the dogfood cluster was parked at zero nodes across all four pools, <code>default-pool</code> and <code>workers-od</code> with autoscaling disabled, so taking it meant unparking the cluster by hand rather than riding a window that was already running.
-Prefer folding it into the next real Kata e2e window, where it costs a probe rather than a cluster.</p>
+<h1 id="verify-pages-live-test-retry-cases-rest-on-a-clock-it-does-not-control"><code>verify-pages-live-test</code> retry cases rest on a clock it does not control<a class="headerlink" href="#verify-pages-live-test-retry-cases-rest-on-a-clock-it-does-not-control" title="Permanent link">&para;</a></h1>
+<p>Three cases fail under host load and pass on rerun, and the mechanism is <code>SECONDS</code> rather than anything about the subject.</p>
+<p><strong>Measured 2026-08-29 03:24 PDT</strong> in <code>make check</code> on a branch touching no file under <code>scripts/pages/</code>, host at load average 28.35 over 18 cores.
+The three that failed are the retry cases: <em>a site that goes correct on a later attempt passes</em>, <em>the check polls rather than sampling once</em>, and <em>each attempt carries its own cache-busting query</em>.
+Their reported reason is one line:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>did not serve 1.6.0 after 606s (60s budget, 1 attempt(s))
+</code></pre></div>
+<p>Re-run alone eight minutes later on the same tree: all assertions pass.</p>
+<p><strong>Why the budget is the wrong instrument here.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-live.sh"><code>verify-pages-live.sh</code></a> stops starting attempts when <code>((SECONDS + INTERVAL &gt;= TIMEOUT))</code>, so the loop's attempt count is a function of wall clock.
+That is correct for the real subject, where the budget bounds how long a release waits on Pages.
+Under a stubbed <code>curl</code> the same expression measures the host instead: one simulated attempt took 606 s against a 60 s budget, so the loop made a single attempt and every assertion about <em>retrying</em> had nothing to observe.
+The three failures are one cause, and none of them is about the code under test.</p>
+<p>Two candidate fixes, neither measured:</p>
+<ul>
+<li>Inject the clock.
+  The loop reads <code>SECONDS</code>; a test that could set it would make the attempt count a property of the scenario rather than of the machine.</li>
+<li>Or assert the retry behaviour without a budget at all: drive the loop with a stub that succeeds on attempt N and assert N attempts happened, with <code>TIMEOUT</code> set high enough that it cannot bind.</li>
+</ul>
+<p>The second is likely right, because the first leaves the same failure available on a slower machine and the cases are about <em>how many attempts</em>, not <em>how long</em>.</p>
+<p><strong>Related and not a duplicate.</strong> <a href="../Q822/">Q822</a> is the class, suites failing under concurrent load and passing on rerun, and its open question is whether to cap <code>run-parallel.sh</code>'s fan-out.
+<a href="../Q1031/">Q1031</a> is a traced instance whose mechanism is a killed probe.
+This is a second traced instance with a different mechanism, a wall-clock budget consumed by the host, and it is the one of the three that names a fix needing nobody's permission.</p>
 
 
 
