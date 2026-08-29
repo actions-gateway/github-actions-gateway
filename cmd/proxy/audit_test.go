@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -270,17 +271,95 @@ func TestParseAuditMode(t *testing.T) {
 	// Everything unrecognized must resolve to Off: a GMC newer than the proxy
 	// image can inject a mode this binary does not know, and under-recording is
 	// the only safe direction.
-	for _, in := range []string{"", "  ", "off", "Off", "OFF", "on", "true", "1", "Connections\n\r", "connectionz", "Full"} {
+	for _, in := range []string{"", "  ", "off", "Off", "OFF", "on", "true", "1", "Connections\n\r", "connectionz", "Full", "ConnectionsWithSourceIP", "WithSource"} {
 		got := parseAuditMode(in)
-		if strings.EqualFold(strings.TrimSpace(in), "connections") {
+		switch trimmed := strings.TrimSpace(in); {
+		case strings.EqualFold(trimmed, "connections"):
 			assert.Equal(t, AuditConnections, got, "input %q", in)
-			continue
+		case strings.EqualFold(trimmed, "connectionswithsource"):
+			assert.Equal(t, AuditConnectionsWithSource, got, "input %q", in)
+		default:
+			assert.Equal(t, AuditOff, got, "input %q must resolve to Off", in)
 		}
-		assert.Equal(t, AuditOff, got, "input %q must resolve to Off", in)
 	}
 	assert.Equal(t, AuditConnections, parseAuditMode("Connections"))
 	assert.Equal(t, AuditConnections, parseAuditMode("connections"))
 	assert.Equal(t, AuditConnections, parseAuditMode("  Connections  "))
+	assert.Equal(t, AuditConnectionsWithSource, parseAuditMode("ConnectionsWithSource"))
+	assert.Equal(t, AuditConnectionsWithSource, parseAuditMode("  connectionswithsource  "))
+
+	// The prefix relationship between the two enabled values is the one way a
+	// naive matcher silently under-records: ConnectionsWithSource must not fall
+	// back to Connections, and Connections must not widen into it.
+	assert.False(t, parseAuditMode("Connections").carriesSource())
+	assert.True(t, parseAuditMode("ConnectionsWithSource").records())
+}
+
+// TestAudit_ConnectionsOmitsSourceAddress is the control for the source-address
+// half: the mode that shipped first must keep recording exactly what it did, so
+// upgrading the proxy image cannot start a movement log on a pool that opted
+// into Connections and nothing more.
+func TestAudit_ConnectionsOmitsSourceAddress(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	echoAddr := startEchoServer(t)
+	srv, sink := newAuditServer(t, AuditConnections)
+
+	tunnelOnce(t, srv, echoAddr, "hello proxy")
+
+	recs := sink.records(t)
+	require.Len(t, recs, 1)
+	_, ip := recs[0]["sourceIP"]
+	_, port := recs[0]["sourcePort"]
+	assert.False(t, ip, "Connections must not carry sourceIP")
+	assert.False(t, port, "Connections must not carry sourcePort")
+}
+
+// TestAudit_ConnectionsWithSourceRecordsClientAddress drives the new mode through
+// the real handler, so the address on the record is the one net/http read off the
+// accepted connection rather than anything the test handed the logger.
+func TestAudit_ConnectionsWithSourceRecordsClientAddress(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	echoAddr := startEchoServer(t)
+	srv, sink := newAuditServer(t, AuditConnectionsWithSource)
+	srv.Namespace = "tenant-a"
+
+	tunnelOnce(t, srv, echoAddr, "hello proxy")
+
+	recs := sink.records(t)
+	require.Len(t, recs, 1)
+	assert.Equal(t, "tenant-a", recs[0]["namespace"])
+	assert.Equal(t, auditEventConnect, recs[0]["event"])
+
+	// The loopback client dialled from an ephemeral port on the local address,
+	// which is what the record must name — not the destination, and not empty.
+	sourceIP, _ := recs[0]["sourceIP"].(string)
+	require.NotEmpty(t, sourceIP, "ConnectionsWithSource must carry the client address")
+	assert.True(t, net.ParseIP(sourceIP).IsLoopback(), "sourceIP %q must be the client's, not the destination's", sourceIP)
+	sourcePort, _ := recs[0]["sourcePort"].(string)
+	require.NotEmpty(t, sourcePort)
+	n, err := strconv.Atoi(sourcePort)
+	require.NoError(t, err, "sourcePort %q must be numeric", sourcePort)
+	assert.Positive(t, n)
+}
+
+// TestSplitSourceAddr covers the shape a RemoteAddr can take that the record
+// still has to report: net/http always sets host:port, but a Server driven
+// directly (or a future non-TCP listener) need not, and dropping the address
+// would silently lose attribution rather than fail.
+func TestSplitSourceAddr(t *testing.T) {
+	addr, port := splitSourceAddr("10.1.2.3:41000")
+	assert.Equal(t, "10.1.2.3", addr)
+	assert.Equal(t, "41000", port)
+
+	addr, port = splitSourceAddr("[fd00::1]:41000")
+	assert.Equal(t, "fd00::1", addr)
+	assert.Equal(t, "41000", port)
+
+	addr, port = splitSourceAddr("no-port-here")
+	assert.Equal(t, "no-port-here", addr)
+	assert.Equal(t, "", port)
 }
 
 func TestTruncateHost(t *testing.T) {
@@ -300,7 +379,7 @@ func TestAudit_HostIsTruncatedInRecord(t *testing.T) {
 	srv, sink := newAuditServer(t, AuditConnections)
 	longHost := strings.Repeat("c", maxAuditHostLen+50)
 
-	srv.logConnectAudit(longHost+":443", 1, 2, time.Second)
+	srv.logConnectAudit(longHost+":443", "10.1.2.3:41000", 1, 2, time.Second)
 
 	recs := sink.records(t)
 	require.Len(t, recs, 1)
@@ -315,7 +394,7 @@ func TestAudit_HostIsTruncatedInRecord(t *testing.T) {
 func TestAudit_UnsplittableAuthorityIsLoggedWhole(t *testing.T) {
 	srv, sink := newAuditServer(t, AuditConnections)
 
-	srv.logConnectAudit("no-port-here", 3, 4, 2*time.Second)
+	srv.logConnectAudit("no-port-here", "10.1.2.3:41000", 3, 4, 2*time.Second)
 
 	recs := sink.records(t)
 	require.Len(t, recs, 1)

@@ -20,6 +20,10 @@ type agcConfig struct {
 	// LogLevel (LOG_LEVEL, info|debug) is the per-tenant verbosity knob the GMC
 	// threads from ActionsGateway.spec.logLevel.
 	LogLevel string
+	// AuditLogging (AGC_AUDIT_LOGGING, Off|WorkerAddresses) selects the
+	// worker-address audit record the GMC threads from
+	// ActionsGateway.spec.auditLogging. Off with the variable absent (Q986).
+	AuditLogging string
 	// PodNamespace (POD_NAMESPACE) scopes the controller cache to the AGC's own
 	// tenant namespace.
 	PodNamespace string
@@ -71,6 +75,7 @@ type agcConfig struct {
 func loadConfig(getenv func(string) string) agcConfig {
 	return agcConfig{
 		LogLevel:                  getenv("LOG_LEVEL"),
+		AuditLogging:              getenv("AGC_AUDIT_LOGGING"),
 		PodNamespace:              getenv("POD_NAMESPACE"),
 		GatewayName:               getenv("GATEWAY_NAME"),
 		WorkerServiceAccount:      getenv("WORKER_SERVICE_ACCOUNT"),

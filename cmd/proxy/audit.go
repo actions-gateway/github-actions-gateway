@@ -26,7 +26,21 @@ const (
 	// CONNECTs are already covered by the existing warn/error lines and the
 	// actions_gateway_proxy_connect_denied_total / _dial_errors_total counters.
 	AuditConnections AuditMode = "Connections"
+	// AuditConnectionsWithSource writes the AuditConnections record with the
+	// client's source address added, which is what makes a connection
+	// attributable to one consumer namespace and one job rather than to the pool
+	// (Q986). Separate from AuditConnections because recording where a tenant's
+	// individual workers went is a further retention decision, not a wider view
+	// of the same one.
+	AuditConnectionsWithSource AuditMode = "ConnectionsWithSource"
 )
+
+// records reports whether mode writes a per-connection record at all.
+func (m AuditMode) records() bool { return m != AuditOff }
+
+// carriesSource reports whether mode puts the client's source address on the
+// record.
+func (m AuditMode) carriesSource() bool { return m == AuditConnectionsWithSource }
 
 const (
 	// auditMsg is the stable slog message on every audit record. Collectors
@@ -68,10 +82,14 @@ const (
 // binary knows — resolves to AuditOff, so a mismatch between the GMC and the
 // proxy image can only under-record, never start recording unasked.
 func parseAuditMode(s string) AuditMode {
-	if strings.EqualFold(strings.TrimSpace(s), string(AuditConnections)) {
+	switch v := strings.TrimSpace(s); {
+	case strings.EqualFold(v, string(AuditConnectionsWithSource)):
+		return AuditConnectionsWithSource
+	case strings.EqualFold(v, string(AuditConnections)):
 		return AuditConnections
+	default:
+		return AuditOff
 	}
-	return AuditOff
 }
 
 // truncateForLog bounds a tenant-influenced value at max BYTES. A cut can land
@@ -116,21 +134,28 @@ func auditPort(port string) string {
 // available to it. The namespace comes from the downward API, not from the
 // request, so a worker cannot forge its own attribution. It names the POOL,
 // though, which is the consuming tenant only when no other namespace references
-// this pool (see Server.Namespace). The client's source IP is omitted: on an
-// unshared pool it adds no attribution the namespace does not already carry,
-// and including it would turn the record into a per-worker movement log. On a
-// shared pool that trade is open rather than settled.
+// this pool (see Server.Namespace). The client's source address is carried only
+// under AuditConnectionsWithSource: joined with the worker-address records the
+// consuming AGC writes, it is what attributes a connection to one tenant and one
+// job, and that is a retention decision the platform opts into rather than gets
+// by default (Q986). It is read off the accepted connection, never from a
+// request header, so a worker cannot forge it.
 //
 // hostport is the raw CONNECT authority; a value that does not split is logged
-// whole as the host with no port, rather than dropped.
-func (s *Server) logConnectAudit(hostport string, bytesToDestination, bytesFromDestination int64, dur time.Duration) {
+// whole as the host with no port, rather than dropped. remoteAddr is
+// http.Request.RemoteAddr.
+func (s *Server) logConnectAudit(hostport, remoteAddr string, bytesToDestination, bytesFromDestination int64, dur time.Duration) {
 	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {
 		host, port = hostport, ""
 	}
-	attrs := make([]any, 0, 14)
+	attrs := make([]any, 0, 18)
 	if s.Namespace != "" {
 		attrs = append(attrs, "namespace", s.Namespace)
+	}
+	if s.AuditLogging.carriesSource() {
+		sourceIP, sourcePort := splitSourceAddr(remoteAddr)
+		attrs = append(attrs, "sourceIP", sourceIP, "sourcePort", sourcePort)
 	}
 	attrs = append(attrs,
 		"event", auditEventConnect,
@@ -141,4 +166,17 @@ func (s *Server) logConnectAudit(hostport string, bytesToDestination, bytesFromD
 		"durationSeconds", dur.Seconds(),
 	)
 	s.logger().Info(auditMsg, attrs...)
+}
+
+// splitSourceAddr splits a net/http RemoteAddr into its address and port halves.
+// Unlike the CONNECT authority this is the kernel's view of the peer rather than
+// tenant-supplied text, so it needs no cap; a value that does not split is
+// reported whole as the address with no port, matching how the destination half
+// handles that shape.
+func splitSourceAddr(remoteAddr string) (addr, port string) {
+	addr, port, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return remoteAddr, ""
+	}
+	return addr, port
 }

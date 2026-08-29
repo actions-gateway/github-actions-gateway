@@ -146,6 +146,32 @@ type ActionsGatewaySpec struct {
 	// +kubebuilder:default=info
 	LogLevel string `json:"logLevel,omitempty"`
 
+	// AuditLogging selects the worker-address audit record this tenant's AGC writes
+	// to its log stream. Off (the default) writes none. WorkerAddresses writes one
+	// structured line when a worker pod's address is first observed and one when
+	// the pod goes away, each carrying the pod's namespace, its address, and the
+	// GitHub run ID and repository of the job it runs.
+	//
+	// Its only purpose is to make the proxy's per-connection audit record
+	// attributable. That record names a destination and, under
+	// EgressProxy.spec.auditLogging: ConnectionsWithSource, a source address; this
+	// one says which tenant and which job held that address, and names no
+	// destination itself. Neither is a movement log alone, the join of the two is,
+	// so each half is opted into separately and both default off. Enabling this
+	// without the proxy half records addresses nothing ever asks about (Q986).
+	//
+	// It is written at info, so it never depends on logLevel: debug, and debug adds
+	// no field to it. Two lines per worker pod, which is why it is opt-in rather
+	// than a widening of the per-pod lines the AGC already writes at debug.
+	//
+	// Changing it is a rolling restart of the AGC, not a hot reload, the same as
+	// logLevel.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Off;WorkerAddresses
+	// +kubebuilder:default=Off
+	AuditLogging string `json:"auditLogging,omitempty"`
+
 	// Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's
 	// AGC. Tracing stays off unless tracing.endpoint is set.
 	//

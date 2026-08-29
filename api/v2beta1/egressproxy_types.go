@@ -138,6 +138,18 @@ type EgressProxySpec struct {
 	// spec.sharing the namespace is the pool's, not the consumer's, so attribution
 	// there is per pool rather than per tenant.
 	//
+	// ConnectionsWithSource adds the client's source address to that record, which
+	// is what makes a connection attributable to one consumer namespace and one
+	// job rather than to the pool. The address is read from the accepted
+	// connection, never from a request header, so a worker cannot forge it. It
+	// resolves to a tenant and a job only against the worker-address records the
+	// consuming AGC writes under its own ActionsGateway.spec.auditLogging, since a
+	// worker pod and its address are both gone by the time anything could look
+	// them up; enabling one half without the other yields addresses nothing names.
+	// Recording where a tenant's individual workers went is a further retention
+	// decision beyond Connections, which is why it is a separate value and not a
+	// widening of that one (Q986).
+	//
 	// It is opt-in per pool because the record is data about a tenant's egress:
 	// which destination their workers reached and when. Turning it on is a
 	// deliberate decision to retain that, and to size the log pipeline for one
@@ -154,7 +166,7 @@ type EgressProxySpec struct {
 	// logLevel. Design appendix G.3 / Q564.
 	//
 	// +optional
-	// +kubebuilder:validation:Enum=Off;Connections
+	// +kubebuilder:validation:Enum=Off;Connections;ConnectionsWithSource
 	// +kubebuilder:default=Off
 	AuditLogging string `json:"auditLogging,omitempty"`
 

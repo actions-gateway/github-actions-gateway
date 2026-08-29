@@ -214,12 +214,21 @@ type InformerPodWaiter struct {
 	PodCreationLatency *prometheus.HistogramVec
 	JobDuration        *prometheus.HistogramVec
 
+	// WorkerAudit selects the worker-address audit record emitted off these same
+	// pod events. The zero value is WorkerAuditOff, so a waiter nobody configured
+	// records nothing (Q986). See WorkerAuditMode.
+	WorkerAudit WorkerAuditMode
+
 	mu      sync.Mutex
 	waiters map[string]map[chan podResult]struct{} // key: "namespace/name"
 	// observed keys the worker pods this process has already emitted histograms
 	// for, so the informer's repeated post-terminal update events cannot double
 	// count. An entry is released when the pod is deleted.
 	observed map[types.UID]struct{}
+	// bound keys the worker pods this process has already written a bind record
+	// for. A pod's address is announced once, not on every update event that
+	// carries it. Released with the pod, alongside observed.
+	bound map[types.UID]struct{}
 }
 
 // NewInformerPodWaiter returns an InformerPodWaiter backed by the manager cache.
@@ -234,6 +243,7 @@ func NewInformerPodWaiter(c cache.Cache, log *slog.Logger) *InformerPodWaiter {
 		log:      log,
 		waiters:  make(map[string]map[chan podResult]struct{}),
 		observed: make(map[types.UID]struct{}),
+		bound:    make(map[types.UID]struct{}),
 	}
 }
 
@@ -374,6 +384,19 @@ func (w *InformerPodWaiter) releaseObservation(uid types.UID) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	delete(w.observed, uid)
+	delete(w.bound, uid)
+}
+
+// claimBind reports whether this call is the first to announce pod uid's
+// address, and claims it.
+func (w *InformerPodWaiter) claimBind(uid types.UID) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, ok := w.bound[uid]; ok {
+		return false
+	}
+	w.bound[uid] = struct{}{}
+	return true
 }
 
 // observeWorkerPod emits pod's histograms, at most once per pod. A pod carrying
@@ -400,8 +423,34 @@ func (w *InformerPodWaiter) observeWorkerPod(pod *corev1.Pod, claimOnly bool) {
 	}
 }
 
-// onPodEvent resolves waiters when an Add/Update brings a pod to a terminal phase,
-// and emits that pod's histograms.
+// auditWorkerBind announces a worker pod's address the first time an event
+// carries one, at most once per pod.
+//
+// A pod already running when this process started is announced again rather than
+// claimed silently, which is the opposite of how observeWorkerPod retires an
+// initial-list pod. The asymmetry is deliberate and the two failure modes are not
+// symmetric: a duplicate histogram observation corrupts the series, while a
+// duplicate bind record is one extra line an auditor joins to the same job, and a
+// MISSING bind leaves every connection from that address unattributable for the
+// rest of the pod's life. An AGC restart mid-job is exactly when that would bite.
+func (w *InformerPodWaiter) auditWorkerBind(pod *corev1.Pod) {
+	// Tested before the claim, so a Pending pod does not burn its pod's one bind
+	// on an event that carries no address to announce.
+	if _, ok := workerAuditable(w.WorkerAudit, pod); !ok {
+		return
+	}
+	if !w.claimBind(pod.UID) {
+		return
+	}
+	logWorkerAddress(w.log, w.WorkerAudit, pod, workerAuditEventBind)
+}
+
+// onPodEvent announces a worker pod's address, and resolves waiters and emits
+// that pod's histograms when an Add/Update brings it to a terminal phase.
+//
+// The address is announced ahead of the terminal test because a pod's whole
+// running life is non-terminal: gating it on the same condition as the
+// histograms would bind every worker exactly once, at the moment its job ended.
 //
 // A pod already terminal in the informer's initial list finished before this
 // process started, so the AGC that provisioned it already emitted its
@@ -413,6 +462,7 @@ func (w *InformerPodWaiter) onPodEvent(obj any, isInInitialList bool) {
 	if !ok {
 		return
 	}
+	w.auditWorkerBind(pod)
 	out, terminal := terminalPhase(pod)
 	if !terminal {
 		return
@@ -450,6 +500,7 @@ func (w *InformerPodWaiter) onPodDelete(obj any) {
 	// deletion timestamp. A pod already observed terminal claims nothing new, and
 	// either way the claim is released now that the pod is gone.
 	w.observeWorkerPod(pod, false)
+	logWorkerAddress(w.log, w.WorkerAudit, pod, workerAuditEventRelease)
 	w.releaseObservation(pod.UID)
 	w.resolve(pod.Namespace+"/"+pod.Name, podResult{
 		outcome: PodOutcome{

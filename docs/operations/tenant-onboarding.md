@@ -1031,7 +1031,8 @@ kubectl patch egressproxy -n <tenant-namespace> <name> \
   --type merge -p '{"spec":{"auditLogging":"Connections"}}'
 ```
 
-Only `Off` (the default) and `Connections` are accepted; admission rejects anything else.
+`Off` (the default), `Connections`, and `ConnectionsWithSource` are accepted; admission rejects anything else.
+`ConnectionsWithSource` is the attribution value, covered below.
 
 **It records; it does not enforce.** Neither value changes what the proxy forwards.
 If you know `audit` from Pod Security Admission, where it means *evaluate the policy but admit anyway*, that sense does not apply here: enabling this does not put the destination allowlist into report-only, and it relaxes nothing.
@@ -1041,8 +1042,23 @@ Destination enforcement is `destinationFQDNs`/`destinationCIDRs` plus the pod-eg
 Write `auditLogging: "Off"`, or leave the field out, which means the same thing.
 The `kubectl patch` above is JSON and is unaffected.
 
-**A shared pool attributes per pool, not per tenant.** If this pool is referenced from other namespaces via `spec.sharing.allowedNamespaces`, the record's `namespace` names the pool, not whichever consumer sent the request: a CONNECT carries no namespace and nothing else in the line identifies the caller.
-Give a tenant whose audit trail has to name them their own unshared pool.
+**Under `Connections`, a shared pool attributes per pool, not per tenant.** If this pool is referenced from other namespaces via `spec.sharing.allowedNamespaces`, the record's `namespace` names the pool, not whichever consumer sent the request: a CONNECT carries no namespace and nothing else in the line identifies the caller.
+Either give such a tenant their own unshared pool, or turn on the attribution pair below.
+
+**`ConnectionsWithSource` plus `WorkerAddresses` names the tenant and the job.** The first adds the client's source address to the egress record; the second, on the consuming `ActionsGateway`, records which job holds each address while its pod is alive:
+
+```bash
+kubectl patch egressproxy -n <tenant-namespace> <name> \
+  --type merge -p '{"spec":{"auditLogging":"ConnectionsWithSource"}}'
+kubectl patch actionsgateway -n <tenant-namespace> <gateway> \
+  --type merge -p '{"spec":{"auditLogging":"WorkerAddresses"}}'
+```
+
+Turn on both or neither: one alone records data nothing joins to.
+Both roll their workload.
+The record shapes, the join, and the CNI assumption it rests on are in [logging: attributing a record to a tenant and a job](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job).
+
+Weigh it as a third cost on top of the two below: together the two streams say which host each of a tenant's jobs reached, which is the evidence an auditor asks for and also a per-worker record the platform now keeps.
 
 **Off is the default deliberately, and turning it on is a decision with two costs.** The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
 Agree that with the tenant rather than switching it on across a cluster.

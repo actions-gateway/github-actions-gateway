@@ -321,9 +321,10 @@ Neither relies on the other, so a GMC newer than the proxy image, which is the s
 | Destination host and port | The CONNECT authority; already the hard gate's input, and the whole point of the record. Capped at the longest legal DNS name (see the amplifier note below) |
 | Bytes to and from the destination | Counts taken from the relay, never content |
 | Tunnel duration | A number |
+| Client source address, under `ConnectionsWithSource` only | Read off the accepted connection, never a request header, so a worker cannot forge it. See the attribution section below for why it is a separate value rather than a widening of `Connections` |
 
 Not in it, and unreachable from the code path that writes it: **any request header** (`Proxy-Authorization` above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
-The client's source IP is omitted deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
+The client's source IP is omitted under `Connections`, deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
 The record is written at **info**, so it never depends on raising a pool to `debug`, and raising a pool to `debug` never adds a field to it.
 
 **The authority is capped wherever it is logged, not only in the record.** It is tenant-controlled text and `http.Server` admits a request line up to `MaxHeaderBytes` (1 MiB by default), so an uncapped log site is a volume amplifier a worker drives on demand: measured at 400,167 bytes written for one 200,000-byte authority, because the dial-failure path logged it twice (the `host` attribute, and the dial error, which embeds the address).
@@ -334,10 +335,31 @@ Splitting is why the record needs both: a cap on the host alone leaves the port 
 The dial error is bounded separately too, since capping only the `host` attribute would leave half that volume in place.
 One policy for one field, so a reader here does not have to work out which log line it covers.
 
-**A shared pool attributes per pool, not per tenant.** `spec.sharing.allowedNamespaces` lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
-The record is still un-forgeable and still says which destination was reached; what it cannot do on a shared pool is say by whom.
-Nothing is added to close that here: the only field that would is the client's source IP, and adding it to every record is the movement-log trade above, which no measurement settles.
-A pool whose audit trail has to name the tenant should not be shared.
+**A shared pool attributes per pool, not per tenant under `Connections`.** `spec.sharing.allowedNamespaces` lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
+The record is still un-forgeable and still says which destination was reached; what it cannot do under that value is say by whom.
+Closing it is `ConnectionsWithSource` plus the consuming gateway's own opt-in, below.
+A pool left on `Connections` and shared has an audit trail that cannot name the tenant, and should not be shared.
+
+**Attribution is two opted-in records, not one wider one (Q986).** The source address is what ties a connection to a consumer and to a job, and it is what turns an egress record into a per-worker movement log, so it is a further retention decision rather than a wider view of the one `Connections` already made.
+That is why it is a separate enum value rather than a field added to the record everyone on `Connections` already gets: an image upgrade must not start recording where a tenant's individual workers went.
+
+The address alone still resolves to nothing.
+A worker pod is **deleted when its job ends** and its address returns to the CNI's pool, so nothing can look up afterwards which pod held it.
+The binding has to be written down while the pod exists, which is `ActionsGateway.spec.auditLogging: WorkerAddresses`: the AGC writes one record when a worker's address becomes live and one when the pod goes away, each carrying the pod's namespace and the run ID and repository of its job, and **no destination at all**.
+
+Neither record is a movement log by itself.
+The proxy's says where a pool went; the AGC's says which job held an address.
+So each half is opted into on its own object and both default `Off`.
+Two switches rather than one is also what keeps an `EgressProxy` edit from rolling every gateway that references it across namespaces.
+An operator can enable half, which records addresses nothing names or bindings nothing asks about; that degrades to no attribution rather than to anything false.
+
+The join rests on the proxy seeing the worker's own address, which holds because pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path.
+A CNI that SNATs it breaks attribution, which is why the operator docs say to check.
+The gateway's own control-plane egress shares the pool and is bound by nothing, so an auditor separates it from a job's by finding no binding for its address.
+
+The AGC record is written at **info** for the same reason the proxy's is, and it does not resolve anything the AGC does not already hold: the run ID and repository are annotations it stamps on every worker pod at creation, and the shared pod informer already watches every worker pod on both acquisition tiers.
+Notably the **proxy** resolves nothing.
+It has no Kubernetes client at all, and it is the one component untrusted worker code talks to directly, so giving it cross-namespace pod read to save a join the log pipeline is already doing was rejected.
 
 Only **accepted** CONNECTs produce a record.
 A refusal and a failed dial already have their warn/error line and their counter (`actions_gateway_proxy_connect_denied_total`, `actions_gateway_proxy_dial_errors_total`); recording them here would double-count a connection that carried no egress.

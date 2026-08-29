@@ -15,7 +15,7 @@
 //	PROXY_METRICS_CLIENT_CA_FILE - Path to CA that scraper client certs are verified against
 //	PROXY_ALLOWED_HOST_SUFFIXES  - Comma-separated CONNECT destination allowlist by DNS host suffix (Q242 G.1); empty ⇒ transport-only (NetworkPolicy is the gate)
 //	PROXY_ALLOWED_CIDRS          - Comma-separated CONNECT destination allowlist by IP range (CIDR); empty ⇒ no CIDR allowance
-//	PROXY_AUDIT_LOGGING          - Per-connection egress audit record: Off (default) or Connections; anything unrecognized is Off (Q564 G.3)
+//	PROXY_AUDIT_LOGGING          - Per-connection egress audit record: Off (default), Connections, or ConnectionsWithSource (adds the client source address, Q986); anything unrecognized is Off (Q564 G.3)
 //	POD_NAMESPACE                - Pool namespace stamped on the audit record; downward-API supplied, empty omits the field
 package main
 

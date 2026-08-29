@@ -732,6 +732,10 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	// which is what makes the series present on the scale-set tier too (Q713).
 	podWaiter.PodCreationLatency = m.PodCreationLatency
 	podWaiter.JobDuration = m.JobDuration
+	// Worker-address audit record (Q986), off unless the GMC threaded the opt-in.
+	// It rides the same pod events for the same reason the histograms do: the
+	// informer is the one place that sees both acquisition tiers' pods.
+	podWaiter.WorkerAudit = provisioner.ParseWorkerAuditMode(cfg.AuditLogging)
 	if err := mgr.Add(podWaiter); err != nil {
 		return nil, fmt.Errorf("add pod completion watcher: %w", err)
 	}

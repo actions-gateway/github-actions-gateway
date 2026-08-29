@@ -68,6 +68,7 @@ func newTestWaiter(objs ...client.Object) *InformerPodWaiter {
 		log:      slog.Default(),
 		waiters:  make(map[string]map[chan podResult]struct{}),
 		observed: make(map[types.UID]struct{}),
+		bound:    make(map[types.UID]struct{}),
 	}
 }
 
