@@ -521,6 +521,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    |---|---|
    | **Every rung is evaluated** | **Hard failure.** `status.withheldCapacity` on `ci-e2e` must carry `quota`, `capacity` and `scaleup`. Each rung publishes an *explicit zero* when it does not bind, so an **absent** reason means the rung was never evaluated on this tier. Needs no constraint to detect. This observes the scale-set path only, and the rung *roster* is already gated both ways by `TestAdmissionRungParity_CoversEveryAdmitReason` (Q973). What this adds is that the ladder ran at all against a live cluster. |
    | **The quota rung binds, then releases** | **Hard failure.** The leg patches the tenant's own `ResourceQuota` down to zero pods headroom, requires `withheldCapacity[quota]` to rise above zero, restores the ceiling, and requires it to fall back to zero. Reversible, costs no nodes, and needs no scale-up. |
+   | **A dirty baseline declines the drive** | **Pass, and said out loud.** A rung already withholding before the leg tightens anything would have a bind asserted for a state the leg did not cause, and its release could never return to zero, which the leg would report as a latch. It skips the drive instead. That is a green leg which proved evaluation only, the same shape as `NOT VALIDATED THIS RUN` above: read the phase detail (`quota rung NOT driven: …`) before taking a green capacity leg as a driven rung. |
 
    The release half matters as much as the bind: the advertisement is recomputed per long-poll rather than latched, so a rung that kept withholding after a quota was raised would throttle a tenant indefinitely.
 
@@ -540,7 +541,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 7. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
    `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
-A red matrix, a failed CRD smoke, a dead `NodeShare` profile, or an admission ladder that does not withhold under zero quota headroom is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
+A red matrix, a failed CRD smoke, a dead `NodeShare` profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
 
 ### 2. Tag and push
 

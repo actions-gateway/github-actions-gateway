@@ -880,6 +880,7 @@ CAP_QUOTA_LATCHES=0 # 1 => it keeps withholding after the headroom returns
 cap_reset() {
 	printf '6' >"${CAP_HARD_FILE}"
 	printf '0' >"${CAP_PATCHES_FILE}"
+	CAPACITY_DRIVEN=""
 }
 
 cap_hard() { cat "${CAP_HARD_FILE}"; }
@@ -946,6 +947,9 @@ check "the happy path leaves nothing to undo" "" "${E2E_QUOTA_RESTORE}"
 # The rung it cannot drive must be named, not silently skipped: a leg that
 # reported only what it proved would read as having covered the whole ladder.
 check_contains "the undriven placeability rung is called out" "NOT driven this run" "${out}"
+# A driven pass and a declined pass are both exit 0, so the phase event alone
+# cannot separate them — the detail is what a release-sentinel.sh reader gets.
+check_contains "a driven rung is recorded for the progress stream" "quota rung driven" "${CAPACITY_DRIVEN}"
 
 # A tenant already at its quota ceiling withholds before the leg touches anything.
 # Driving from there would assert a bind this leg did not cause, and the release
@@ -966,6 +970,7 @@ check_contains "the leg declines to drive from a dirty baseline" "already withho
 check_contains "the declined drive names the remedy" "raise the quota" "${out}"
 check "a declined drive tightens nothing" "0" "$(cap_patches)"
 check "a declined drive leaves nothing to undo" "" "${E2E_QUOTA_RESTORE}"
+check_contains "a declined drive says so in the progress stream" "NOT driven" "${CAPACITY_DRIVEN}"
 
 # A rung missing from withheldCapacity is the regression this leg exists for —
 # an absent reason means the rung was never evaluated on this tier (Q443), which

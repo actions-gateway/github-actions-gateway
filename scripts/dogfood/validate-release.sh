@@ -202,6 +202,12 @@ CAPACITY_RUNGS="quota capacity scaleup"
 # rather than the plan.
 E2E_QUOTA_RESTORE=""
 
+# CAPACITY_DRIVEN records whether the quota rung was actually driven, for the
+# capacity phase's progress detail. A declined drive is a PASS, so the phase
+# event alone cannot separate the two and a release-sentinel.sh reader would see
+# "done" either way — this is what carries the distinction into the stream.
+CAPACITY_DRIVEN=""
+
 # How long the quota rung gets to bind and then to release, each way. The
 # advertisement is recomputed once per listener long-poll, so this is bounded by
 # the poll interval and not by anything the gate controls.
@@ -861,9 +867,13 @@ capacity_leg() {
 	# bind would assert a state it did not cause, and the release could never come
 	# back to zero — reported as a latch, which is a false alarm about the product
 	# rather than a reading of the tenant.
+	# MUST stay after the missing-rung check above: an ABSENT reason is also not
+	# "0", so reordering these would turn an unevaluated quota rung into a
+	# decline-and-pass instead of the hard failure it is.
 	local baseline
 	baseline="$(capacity_withheld_slots quota)"
 	if [[ "${baseline}" != "0" ]]; then
+		CAPACITY_DRIVEN="quota rung NOT driven: already withholding ${baseline} slot(s)"
 		echo "  quota rung: already withholding ${baseline} slot(s) before this leg ran, so the"
 		echo "              drive is NOT run — it would assert a state it did not cause. The"
 		echo "              tenant is at its ResourceQuota ceiling; drain ${E2E_NAMESPACE} or"
@@ -918,6 +928,7 @@ capacity_leg() {
 	fi
 	echo "  quota rung: released after the quota was restored — withheldCapacity[quota]=0, advertisedCapacity=$(capacity_advertised)"
 
+	CAPACITY_DRIVEN="quota rung driven: bound at zero headroom, released on restore"
 	echo "  Placeability rung: evaluated, NOT driven this run. Binding it needs a worker"
 	echo "                     pod the cluster cannot place, which an autoscaling cluster"
 	echo "                     answers by growing a node. Q1025 tracks driving it."
@@ -1250,7 +1261,7 @@ main() {
 
 	progress_phase capacity "Driving the admission ladder's quota rung"
 	capacity_leg
-	progress_event capacity "done"
+	progress_event capacity "done" "${CAPACITY_DRIVEN}"
 
 	progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
 	crd_smoke
