@@ -3475,7 +3475,7 @@ Each instance is pinned to exactly one upstream in its pod spec, and refuses upl
 <tr>
 <td>The mirror's policies</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/base/networkpolicy.yaml"><code>base/networkpolicy.yaml</code></a></td>
-<td>Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else</td>
+<td>Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else. Under the shared topology the ingress is narrowed further, to workload-labelled pods</td>
 </tr>
 <tr>
 <td>The worker wiring</td>
@@ -3495,7 +3495,7 @@ The fourth is the one that turns the recipe into enforcement, and it is a deleti
 <p>One mirror set can serve every tenant, or each tenant can have its own.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#two-topologies-one-shared-set-or-one-set-per-tenant"><code>deploy/registry-mirror/</code></a> renders both, and the choice is a platform administrator's rather than a default this project can pick for you.
 It turns on your tenant count, your disk budget, and whether your tenants are mutually hostile.</p>
-<p><strong>A shared set is one line of difference.</strong> The mirror-side ingress admits any namespace carrying the managed-tenant marker instead of one namespace named literally, and <code>kubectl apply -k deploy/registry-mirror/overlays/shared-tenants</code> renders it.
+<p><strong>A shared set is one peer of difference.</strong> The mirror-side ingress admits workload-labelled pods in any namespace carrying the managed-tenant marker, instead of any pod in one namespace named literally, and <code>kubectl apply -k deploy/registry-mirror/overlays/shared-tenants</code> renders it.
 The worker-side egress policy sits in the tenant's own namespace and is per-tenant under either topology, so that half is unchanged.</p>
 <p><strong>An isolated set costs a whole set per tenant.</strong> Read off the rendered manifests, one set is 5 Deployments and 5 Services requesting 175m of CPU and 480Mi of memory, with limits of 3000m and 3200Mi; the persistent overlay adds 5 PVCs holding 50Gi, which the deployment README prices at about $5 a month.
 Multiply all of it by tenant count.

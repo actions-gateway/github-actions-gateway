@@ -2693,6 +2693,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>claude-go-throttle-hook-test</code> fails its <code>safety: -race not throttled by rewrite</code> case when the machine is loaded, and the hook it …</td>
 </tr>
 <tr>
+<td><a href="Q1039/">Q1039</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/components/shared-tenants/kustomization.yaml">No cluster this repo stands up runs the shared-tenants mirror topology</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</td>
+</tr>
+<tr>
 <td><a href="Q1008/">Q1008</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2821,14 +2829,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in …</td>
 </tr>
 <tr>
-<td><a href="Q1026/">Q1026</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/components/shared-tenants/kustomization.yaml">Narrow the shared mirror's ingress peer from namespace to worker pods</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The mirror-side ingress admits a <em>namespace</em>, not a workload: <code>registry-mirror-worker-access</code> names a <code>namespaceSelector</code> with no …</td>
-</tr>
-<tr>
 <td><a href="Q1020/">Q1020</a></td>
 <td><a href="../operations/kata-dind-workloads/#choosing-a-mirror-topology">Measure the mirror cache hit/miss timing gap from inside a Kata guest</a></td>
 <td><code>security</code> <code>docs</code></td>
@@ -2859,6 +2859,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>deploy/registry-mirror/</code> ships four render targets an operator applies with <code>kubectl apply -k</code>, and no gate renders any of them: the root …</td>
+</tr>
+<tr>
+<td><a href="Q1030/">Q1030</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-registry-mirror-catalog-deny.py">Nothing reconciles the mirror's ingress peer with the worker's label</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two halves of the registry mirror's network posture have to name one label, and nothing compares them.</td>
 </tr>
 <tr>
 <td><a href="Q992/">Q992</a></td>

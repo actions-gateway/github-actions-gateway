@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1026/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1039/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Narrow the shared mirror's ingress peer from namespace to worker pods - GitHub Actions Gateway</title>
+        <title>No cluster this repo stands up runs the shared-tenants mirror topology - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#narrow-the-shared-mirrors-ingress-peer-from-namespace-to-worker-pods" class="md-skip">
+        <a href="#no-cluster-this-repo-stands-up-runs-the-shared-tenants-mirror-topology" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Narrow the shared mirror's ingress peer from namespace to worker pods
+              No cluster this repo stands up runs the shared-tenants mirror topology
             
           </span>
         </div>
@@ -2597,16 +2597,19 @@
   
 
 
-<h1 id="narrow-the-shared-mirrors-ingress-peer-from-namespace-to-worker-pods">Narrow the shared mirror's ingress peer from namespace to worker pods<a class="headerlink" href="#narrow-the-shared-mirrors-ingress-peer-from-namespace-to-worker-pods" title="Permanent link">&para;</a></h1>
-<p>The mirror-side ingress admits a <em>namespace</em>, not a workload: <code>registry-mirror-worker-access</code> names a <code>namespaceSelector</code> with no <code>podSelector</code> beside it, so every pod in an admitted namespace reaches port 5000 whether or not it carries <code>actions-gateway/component: workload</code>.</p>
-<p>The base has the same shape and this is not a regression, but the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/components/shared-tenants/kustomization.yaml">shared topology</a> widens what it costs: the base admits any pod in <strong>one</strong> tenant namespace, the component admits any pod in <strong>every</strong> managed tenant namespace.
-So a non-worker pod a tenant runs for its own reasons can reach a cache shared with tenants it is meant to be separated from, and can time its blob fetches there to learn what those tenants pulled.
-Q1022 has since closed <code>/v2/_catalog</code> on every instance, so the repository list is no longer readable from that position; what this row narrows is the reachability itself.</p>
-<p>The worker-side policy is already tight in the way this is not: <code>e2e-mirror-egress</code> selects <code>actions-gateway/component: workload</code> and nothing else.
-ANDing that same selector into the ingress peer as a second key of one <code>from</code> element (not a second element, which ORs, per the comment in <code>base/networkpolicy.yaml</code>) would make the two halves agree.</p>
-<p><strong>Do not ship it on that reasoning alone.</strong> Whether every client that must reach the mirror carries the workload label is a cluster measurement nobody has taken, and the failure is fail-closed and total: a client that loses the path cannot pull at all, and the four wired clients read four different configurations (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#how-the-job-is-wired-to-these-instances">README § How the job is wired</a>).
-Take it inside a Kata e2e window, where <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-hits.sh"><code>e2e-mirror-hits.sh</code></a> already reads each mirror's access log and is the instrument that would show a client silently dropping off.</p>
-<p>Raised in review of the Q1020 PR, which shipped the shared topology and deliberately did not change this.</p>
+<h1 id="no-cluster-this-repo-stands-up-runs-the-shared-tenants-mirror-topology">No cluster this repo stands up runs the shared-tenants mirror topology<a class="headerlink" href="#no-cluster-this-repo-stands-up-runs-the-shared-tenants-mirror-topology" title="Permanent link">&para;</a></h1>
+<p>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</p>
+<p><strong>Measured 2026-08-29.</strong> <code>scripts/dogfood/e2e-start.sh</code>'s <code>apply_registry_mirror()</code> applies <code>deploy/registry-mirror</code> or, under <code>REGISTRY_MIRROR_PERSISTENT=1</code>, <code>overlays/persistent</code>.
+Neither composes <code>components/shared-tenants</code>.
+Nothing under <code>scripts/</code>, <code>.github/</code> or <code>mk/</code> names the component or its two overlays except the static gate that reads their text, so no dogfood window and no e2e lane has ever rendered the shared ingress policy, let alone driven traffic through it.</p>
+<p><strong>Why this matters more than the render gap.</strong> <a href="../Q1024/">Q1024</a> is that no gate <em>renders</em> those overlays; this is that no cluster <em>runs</em> them.
+A rendered policy proves the YAML composes.
+It cannot show that the peers it admits match the pods that actually connect, which is the failure mode the shared topology has: a NetworkPolicy ingress narrowing is fail-closed and total, so a peer that misses one real client black-holes that client's every pull.</p>
+<p><strong>What it already cost.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1795">Q1026</a> narrowed the shared ingress peer to worker pods and was held in draft to wait for a dogfood window to confirm no client was cut off.
+That window could never confirm it: dogfood runs the isolated topology, so the narrowed policy is not applied there and <code>scripts/dogfood/e2e-mirror-clients.sh</code> would have graded a policy the cluster was not enforcing.
+The PR merged on that reasoning rather than on a live reading.</p>
+<p><strong>Done when</strong> one venue applies a shared-tenants overlay and drives at least one real pull through it.
+The cheapest shape is probably a kind lane rather than a dogfood leg, since the topology's distinguishing property is which peers the policy admits and not anything about Kata or GKE Dataplane V2; that choice is the open question here.</p>
 
 
 
