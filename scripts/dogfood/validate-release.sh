@@ -1006,6 +1006,35 @@ main() {
 	crd_smoke
 	progress_event crd-smoke "done"
 
+	# The verdict has to outlive this process. publish.yml refuses a stable tag
+	# whose release line has no recorded validation (Q879), and until this ran the
+	# only record was prose nothing could read. Recorded before the PASS event, so
+	# a run that ends clean carries a marker by construction.
+	#
+	# A record that fails does not retract the verdict — the legs above measured
+	# what they measured — so it exits non-zero without pretending the gate failed,
+	# and the recorder is idempotent so re-running costs nothing.
+	#
+	# Only for a candidate tag. GAG_IMAGE_TAG pins GAG to any published ref, so
+	# the gate is legitimately run against a branch build; there is no release
+	# line to record one against, and the recorder rejects it as a usage error.
+	local record_rc=0
+	if [[ "${GAG_IMAGE_TAG}" != v*-* ]]; then
+		echo "Not a candidate tag (${GAG_IMAGE_TAG}): nothing recorded under refs/validated/."
+	else
+		REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" "${GAG_IMAGE_TAG}" || record_rc=$?
+	fi
+	if ((record_rc)); then
+		progress_event gate "done" "validation PASSED for ${GAG_IMAGE_TAG}, verdict NOT recorded"
+		echo ""
+		echo "Validation gate PASSED for ${GAG_IMAGE_TAG} — but the verdict is NOT recorded."
+		echo "  publish.yml reads refs/validated/ and will refuse the stable tag until it is."
+		echo "  Nothing here needs re-validating; re-run the recorder alone:"
+		echo "    REPO=${REPO} ${SCRIPT_DIR}/record-validated-candidate.sh ${GAG_IMAGE_TAG}"
+		echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."
+		exit 1
+	fi
+
 	progress_event gate "done" "validation PASSED for ${GAG_IMAGE_TAG}"
 	echo ""
 	echo "Validation gate PASSED for ${GAG_IMAGE_TAG}."

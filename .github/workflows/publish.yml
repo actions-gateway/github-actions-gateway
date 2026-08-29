@@ -140,8 +140,78 @@ jobs:
 
           echo "Rendered announce bar names ${tag}."
 
+  # Second stop-ship gate, ahead of every publishing job: does a candidate that
+  # actually passed the dogfood validation cover this tag (Q879)?
+  #
+  # The freeze rule between a validated candidate and the stable tag had two
+  # halves and only one was ever machine-checked. release-freeze-watch.yml asks
+  # whether the released surface moved after the newest PRERELEASE tag; nothing
+  # asked whether that candidate was ever validated. The validated one was named
+  # in prose — release notes, a plan doc — so promoting the wrong one could not
+  # fail anything.
+  #
+  # Newest-RC is the reading that suggests itself and it is unsafe. `v1.5.0-rc.2`
+  # was tagged and published having spent no validation at all
+  # (docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md), so a gate keyed on
+  # the newest prerelease would have accepted it. This reads the marker the gate
+  # writes instead: `refs/validated/<rc-tag>`, created by
+  # scripts/dogfood/record-validated-candidate.sh when the run passes.
+  #
+  # It is a record, not an attestation — anyone who can push a tag can push the
+  # marker. What it closes is a promote with no validation anywhere behind it, and
+  # it closes it before an image is pushed rather than at the pre-flight somebody
+  # may skip.
+  #
+  # Prereleases are exempt: a candidate is the thing that gets validated, so
+  # asking this of one is the wrong question. The check makes that call itself,
+  # with publish.yml's own prerelease test.
+  validated-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags for the cross-check between a marker and the candidate it names,
+          # and history back to the validated commit for the surface diff. The
+          # default depth-1, tagless checkout can answer neither.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # check-artifact-unchanged.sh derives the released surface by building
+          # semverfloor from the vendored devtools module.
+          go-version-file: go.work
+
+      - name: a validated candidate covers this tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+
+          # actions/checkout fetches heads and tags; refs/validated/ is neither,
+          # so it arrives only if asked for by name. An empty namespace is exactly
+          # what "nothing validated" looks like, so this must not be allowed to
+          # fail quietly.
+          git fetch --no-tags origin '+refs/validated/*:refs/validated/*'
+
+          rc=0
+          scripts/release/check-validated-candidate.sh "${tag}" || rc=$?
+          if [ "${rc}" -eq 0 ]; then
+            exit 0
+          fi
+          # Exit 2 is "could not measure" and is a defect in the check rather than
+          # a finding about the release — but it still stops the ship here, because
+          # unlike the freeze watch this gate is the last thing between an
+          # unvalidated candidate and six signed images.
+          if [ "${rc}" -ge 2 ]; then
+            echo "::error::Could not measure whether a validated candidate covers ${tag}. Nothing has been established either way; see the log above."
+          else
+            echo "::error::${tag} would ship what no candidate validated. Validate a candidate on dogfood and record it, or revert what moved the released surface — docs/operations/release.md, Validate the release candidate on dogfood."
+          fi
+          exit 1
+
   publish:
-    needs: announce-bar
+    needs: [announce-bar, validated-candidate]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

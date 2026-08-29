@@ -275,6 +275,32 @@ A healthy leg finishes in 25–33 minutes; raise the variable rather than removi
 
 The gate also checks every local tool it needs up front — including the pinned `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to `.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run before it spends anything, not 25 minutes in.
 
+##### The gate records its verdict, and publish reads it
+
+A passing run writes `refs/validated/<rc-tag>` on the remote, pointing at the commit that tag resolves to.
+That marker is the only machine-readable record that a candidate was validated: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes, and [`publish.yml`](../../.github/workflows/publish.yml) can read none of those.
+
+**A stable tag whose release line has no marker does not publish.** `publish.yml`'s `validated-candidate` job refuses it before any image is pushed, and it takes the newest *validated* candidate as its reference rather than the newest candidate tag.
+Those differ, which is the point: `v1.5.0-rc.2` was tagged and published having spent no validation at all ([postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md)), so a gate keyed on the newest prerelease would have waved it through.
+
+It is a record, not an attestation.
+Anyone who can push a tag can push the marker, so it proves the gate was run and reported to, never that a green verdict was earned.
+What it closes is a promote with no validation anywhere behind it.
+
+**If the record fails, nothing needs re-validating.** The gate reports the pass, says the verdict is unrecorded, and exits non-zero.
+Re-run the recorder alone.
+It is idempotent, and refuses only when a marker already names a different commit:
+
+```bash
+REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N
+```
+
+Read the markers the same way you read any other ref:
+
+```bash
+git ls-remote origin 'refs/validated/*'
+```
+
 ##### The gate reserves the e2e pool's CPU budget
 
 **The gate's two legs compete for one project-wide CPU quota, so it caps the CI side before routing.** Its deploy leg routes CI to GAG, whose `workers` pool autoscales to 8 `e2-standard-4` nodes out of the same `CPUS_ALL_REGIONS` budget the e2e leg then needs 2 `n2-standard-8` nodes from.
@@ -488,6 +514,8 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    Sample history needs no advance planning: the sampler tracks every worker pod regardless of `spec.sizing`, and the aggregate re-seeds from the persisted `status.sizingRecommendation` — so samples accrue without the profile configured and survive a stop/start rather than being re-earned.
 
 5. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
+6. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
+   `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
 
@@ -508,6 +536,10 @@ scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/mai
 Exit 1 means the stable tag would ship something no candidate validated.
 Revert it, or cut and validate a new candidate.
 Exit 2 is different and is never a finding about the release: the check itself could not run, so nothing has been measured and the window is still an open question.
+
+**`publish.yml` asks the same question at the tag, and it asks the other half too.** The pre-flight above takes the validated commit as an argument, so it is only as good as whichever candidate you name; the `validated-candidate` job derives that commit from `refs/validated/`, so it also refuses a release line where *no* candidate was ever validated ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
+Both halves fail before an image is pushed.
+Running the pre-flight is still worth it, because failing here costs a command and failing there costs a burned tag.
 
 **You should already know, because the watch says so at the merge.** [`release-freeze-watch.yml`](../../.github/workflows/release-freeze-watch.yml) runs this same question after every push to `main`, and opens an issue labelled `release-freeze` naming the candidate the window invalidated.
 It closes that issue when a newer candidate covers `main` again, so an open one means a freeze is broken right now and the check above is about to exit 1.
