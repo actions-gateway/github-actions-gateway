@@ -513,6 +513,12 @@ They are named constants for that reason.
 The step carries no `if:`: `REGISTRY_MIRRORS` is set on the runner process by the cluster, so the `env` context cannot see it, and the script reports a skip wherever the map is absent (the hosted lane, a developer's `make e2e`).
 A map that is *present but missing* an upstream the battery names is not a skip, since it would drop a control rather than the whole battery, so it fails loudly.
 
+**Deleting the manifest does not delete the object, and the cluster is the proof.** `kubectl apply -k` does not prune, and `e2e-stop.sh` deliberately leaves the tenant's NetworkPolicies standing so a window can reopen without re-deriving them, so the `e2e-open-egress` applied by an earlier window survives every later apply.
+Measured on `gag-dogfood` before this session's run: the object was still there, 28 days old, with the manifests that would create it already gone from the branch.
+Nothing off the cluster can see that, and the consequence is not a failed run but a passed one: the negatives would have reported the posture unenforced, correctly, for a reason that has nothing to do with the deliverable.
+So `e2e-start.sh` deletes it on the Kata lane, `--ignore-not-found` because the steady state is that it is already gone, and the dind lane is left alone because that overlay owns the policy.
+This is a property of the recipe rather than of this cluster: an operator adopting the mirror on a cluster that already ran open-egress CI meets the same gap.
+
 **The session sequence**, so the booked run is a command list rather than improvisation.
 `start.sh`, then `e2e-start.sh` with the Kata overlay of this branch, then [§3.7](#37-the-phase-2-validation-battery)'s battery (its reachability checks stop being ambiguous here: the open path they could also have ridden is gone), then one dispatched run of `e2e-test.yml` against this branch with `runner='"gag-ci-e2e"'`, then `scripts/dogfood/e2e-mirror-hits.sh` before `e2e-stop.sh` takes the access logs with the pods.
 The negatives need no separate invocation: they are a step of that run, and a red step is the run's verdict.
