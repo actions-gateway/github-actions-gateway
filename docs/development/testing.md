@@ -2010,6 +2010,25 @@ Q612's blind spot was settled that way in a single pass.
 Repointing the README's live license badge at `THIS-FILE-DOES-NOT-EXIST.md` left `check-doc-links` green — `ok (242 files, 5134 links checked)`, exit 0 — while the identical target written as a plain link failed it on the same file.
 That is the whole finding: the collection regex matches the inner image first, so a badge-wrapped link's outer destination is never checked, and a total of 5,134 checked links says nothing about the shape the gate cannot see.
 
+### A mutation set proves the assertions it targets, not the suite
+
+The rule above establishes that one assertion can fail.
+It says nothing about the ones no mutation aimed at, and the shortfall is invisible from the direction you are working in: every mutation goes red, and a verdict on a sample reads as a verdict on the suite.
+
+**Measured 2026-08-28 on the two dogfood bootstrap suites (Q586, [#1787](https://github.com/actions-gateway/github-actions-gateway/pull/1787)).** Fifteen mutations, each asserted to have landed before the suite ran, each red only on the assertions naming its mechanism, which is clean by every rule on this page.
+The suite held 88 assertions.
+One of the 73 the pass never aimed at named the GMC's `system-cluster-critical` ResourceQuota and compared `upgrade --install gag` against `wait_for_gmc`, an order `install_gag`'s own body guarantees whether or not the quota block runs at all; deleting the entire block left the suite at 88 ok, 0 FAIL.
+An independent review session found it by walking the assertion list and asking of each one whether it could fail.
+That is the reverse direction, and the one no mutation set supplies.
+
+**So reconcile the two lists**, exactly as [a bulk mechanical change](#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query) reconciles counts rather than trusting an empty leftover query.
+Derive the mutation set from the assertions rather than from the mechanisms that seemed worth breaking: an assertion no mutation targets is unproven and reads exactly like one that is proven.
+Where a suite is too large to invert exhaustively, name in the PR body which assertions the pass covered, so the remainder is a stated scope rather than an implied claim.
+
+**Ordering assertions are where this concentrates**, because one can be satisfied by construction.
+Two needles whose relative order the code cannot change assert nothing, and that failure is silent in both directions: it passes today, and it passes after the mechanism between them is deleted.
+Anchor one of them on a marker only the mechanism itself produces; the same deletion then moves that index off 0, which is the discrimination the assertion was supposed to carry.
+
 ### A measurement that reproduces a call is not a test of the code that makes it
 
 The sibling of the rule above, and the one that survives a green **positive**.
