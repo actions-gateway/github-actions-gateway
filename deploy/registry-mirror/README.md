@@ -117,19 +117,35 @@ The worker-side `e2e-mirror-egress` policy lives in the tenant's own namespace, 
 
 ### The shared set
 
-[`components/shared-tenants/`](components/shared-tenants/kustomization.yaml) swaps the mirror-side ingress peer for the GMC's managed-tenant marker:
+[`components/shared-tenants/`](components/shared-tenants/kustomization.yaml) swaps the mirror-side ingress peer for the GMC's managed-tenant marker, ANDed with the workload label:
 
 ```yaml
 - namespaceSelector:
     matchLabels:
       actions-gateway.com/tenant: managed
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
 ```
+
+Both selectors are keys of **one** `from` element, which ANDs them.
+Split across two elements they would OR, and the result is strictly wider than the base's; the render was read both ways.
 
 That marker is what the GMC's own confinement ValidatingAdmissionPolicies key on ([`api/v2beta1/shared_types.go`](../../api/v2beta1/shared_types.go)), so the mirror reads the same label a platform admin already sets rather than a list of its own.
 It is not the same tenant set as those policies while v1 and v2 coexist: they accept the v2 marker **or** the legacy `actions-gateway.github.com/tenant: "true"`, and this accepts only v2, so the mirror's set is a strict subset of theirs until the window closes.
 It also admits tenants created later, automatically: a namespace becomes a mirror client the moment the administrator marks it.
 That is the point on a cluster whose tenant set churns and the risk on one where it must not, so the overlay's header carries the `matchExpressions` form that admits a fixed subset instead.
 A namespace still on the v1alpha1 marker (`actions-gateway.github.com/tenant: "true"`) matches nothing here and its pulls stop, which is the fail-closed direction; migrate the namespace rather than widening the selector.
+
+The pod selector is what keeps this narrower than the namespace it admits.
+Without it the component would admit any pod in **every** managed tenant namespace, and the GMC's default-deny selects only workload-labelled pods, so a pod without that label is governed by no egress policy at all and reaches whatever it likes.
+With it, the mirror's ingress and the worker's egress name the same label.
+
+**It is fail-closed and total**, which is why it needs a reading rather than an argument.
+A client that does not carry the label loses the path entirely and cannot pull, and the four wired clients read four separate configurations ([below](#how-the-job-is-wired-to-these-instances)).
+Every client in this repository is a container of an AGC-provisioned worker pod, which sets the label unconditionally, but a source read only covers the clients somebody thought of.
+[`e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh) reads who actually connected, from the deny proxy's log, and resolves each address to a pod or a node; an address that resolves to nothing is a refusal rather than a pass, because a worker is deleted at the end of its job.
+It grades every declared instance by name on whether its log was readable, so a window read over four of five mirrors refuses instead of passing as a whole reading.
 
 Each tenant still needs its own worker-side rule.
 Copy the `e2e-mirror-egress` document out of [`base/networkpolicy.yaml`](base/networkpolicy.yaml) once per tenant and change `metadata.namespace`; it names no other tenant-specific value.
