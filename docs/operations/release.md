@@ -1192,6 +1192,9 @@ Tag a patch from the released line instead:
 `publish.yml`'s `validated-candidate` job asks the same question of `v1.2.1` that it asks of `v2.0.0`, so a patch tag with no `v1.2.1-rc.*` marker fails before anything is pushed.
 Budget the dogfood run into the patch, or the tag fails at the end instead of the start.
 
+One thing a patch line's run does not inherit: the e2e leg dispatches `e2e-test.yml` from `main` unless `E2E_DISPATCH_REF` says otherwise, so the workflow and its test code come from `main` while the runners come from the candidate.
+That is the harness-against-artifact split described below, and on a patch cut off an older tag the gap is wider than it is for a minor cut from `main`'s head.
+
 Note the asymmetry with `announce-bar`, the other pre-publish gate, which *does* exempt a backport: the banner advertises the newest release, so a `v1.2.5` cut after `v1.3.0` correctly renders `v1.3.0`.
 That is a question about what the docs site says.
 Whether the images were validated is a question about the artifact, and every artifact gets asked.
