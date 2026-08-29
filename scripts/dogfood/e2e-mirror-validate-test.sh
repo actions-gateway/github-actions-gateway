@@ -17,6 +17,11 @@
 #      mirror that cannot cache anything, so the 200/500 split is pinned here.
 #   3. Read-only is the posture's load-bearing property (§3.1). A push that is
 #      ACCEPTED must be a failure, not an unexpected-status note.
+#   4. The catalog deny (Q1022) fails in two directions and only one of them is
+#      loud. A proxy that is not in the path answers the catalog 200, and a deny
+#      that also swallowed pulls answers everything 403 — so the catalog check is
+#      asserted against a transcript whose manifest checks still pass, and the
+#      manifest check against one whose catalog check does.
 #
 # The expected values the grader asserts were measured rather than read off the
 # design. The three probe checks: five instances in proxy mode against the pinned
@@ -90,8 +95,8 @@ a_clean_transcript() {
 	local row instance repo ref
 	for row in "${MIRROR_INSTANCES[@]}"; do
 		read -r instance repo ref <<<"${row}"
-		printf '%s v2 200\n%s manifest 200\n%s push 405\n' \
-			"${instance}" "${instance}" "${instance}"
+		printf '%s v2 200\n%s manifest 200\n%s push 405\n%s catalog 403\n' \
+			"${instance}" "${instance}" "${instance}" "${instance}"
 	done
 }
 
@@ -149,6 +154,27 @@ check "an unexpected refusal fails" 1 "${GRADE_RC}"
 check_contains "an unexpected refusal reports both codes" \
 	"FAIL mirror-ghcr-io push: got 404, want 405" "${GRADE_OUT}"
 
+# --- the catalog deny --------------------------------------------------------
+#
+# The measured shapes: 403 through the deny proxy, 200 from a registry it is not
+# fronting. Both directions matter, so each control leaves the other check's
+# result at its healthy value.
+
+grade "$(a_clean_transcript | awk '$1 == "mirror-docker-io" && $2 == "catalog" { $3 = 200 } { print }')"
+check "an answering catalog fails" 1 "${GRADE_RC}"
+check_contains "an answering catalog is named as such" \
+	"FAIL mirror-docker-io catalog: catalog ANSWERED (200)" "${GRADE_OUT}"
+check_contains "its manifest check still passes" \
+	"PASS mirror-docker-io manifest" "${GRADE_OUT}"
+
+# A deny that swallowed pulls as well. The catalog check alone is green over it,
+# which is why the battery grades the pair.
+grade "$(a_clean_transcript | awk '$1 == "mirror-quay-io" && $2 == "manifest" { $3 = 403 } { print }')"
+check "a deny that broke pulls fails" 1 "${GRADE_RC}"
+check_contains "the manifest check is what catches it" \
+	"FAIL mirror-quay-io manifest: got 403, want 200" "${GRADE_OUT}"
+check_contains "its catalog check still passes" "PASS mirror-quay-io catalog" "${GRADE_OUT}"
+
 # --- the probe script covers the whole table --------------------------------
 
 probe="$(mirror_probe_script gag-registry-mirror)"
@@ -179,6 +205,11 @@ check "the probe covers every instance and check" "" "${missing}"
 # bound listener. `debug` is an object read for that reason, and this assertion
 # is what keeps it from drifting back to a probe.
 check_not_contains "the probe never addresses the debug port" ":5001" "${probe}"
+
+# The catalog probe must address the endpoint itself rather than any stand-in:
+# the deny is a path rule, so a probe of a different path grades a different rule.
+check "the probe asks for the catalog once per instance" \
+	"${#MIRROR_INSTANCES[@]}" "$(grep -c '/v2/_catalog' <<<"${probe}")"
 
 # The namespace is a parameter, and it reaches every address the probe builds.
 check_contains "the probe honours the namespace" \

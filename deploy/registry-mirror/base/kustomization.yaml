@@ -6,3 +6,13 @@ resources:
   - deployment.yaml
   - service.yaml
   - networkpolicy.yaml
+
+# The deny-proxy config, hashed into the generated ConfigMap name so an edit to
+# catalog-deny.cfg rolls the Deployments instead of leaving running pods on the
+# old config with nothing to say so. `kubectl apply -k` does not prune, so a
+# superseded ConfigMap has to be deleted by hand.
+configMapGenerator:
+  - name: mirror-catalog-deny
+    namespace: gag-registry-mirror
+    files:
+      - haproxy.cfg=catalog-deny.cfg

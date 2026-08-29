@@ -206,6 +206,12 @@ jobs:
       # only python3 — no helm, no kubeconform, no git history.
       - name: mirrors and their wiring name one endpoint set (make registry-mirror-wiring-check)
         run: make registry-mirror-wiring-check
+      # The other half of the same tree's posture (Q1022): every mirror instance
+      # behind the proxy that refuses GET /v2/_catalog, with its registry on
+      # loopback. Same job for the same reason — it reads deploy/registry-mirror/**
+      # already, and the check needs only python3.
+      - name: every mirror is fronted by the catalog deny (make registry-mirror-catalog-deny-check)
+        run: make registry-mirror-catalog-deny-check
 
   # Parse the shipped PromQL — the rule file's expressions and both dashboards'
   # panel queries (Q910) — and reconcile the alert rules with the docs that

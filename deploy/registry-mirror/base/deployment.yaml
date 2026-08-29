@@ -19,6 +19,23 @@
 # so REGISTRY_STORAGE_DELETE_ENABLED=false removes this posture's dependence on
 # that internal behaviour rather than being the only thing closing the endpoint.
 #
+# THE CATALOG IS CLOSED BY A FRONTING PROXY rather than by a registry setting.
+# 3.1.1 registers /v2/_catalog unconditionally and carries one catalog knob,
+# catalog.maxentries, which the config parser raises to 1000 whenever it is <= 0
+# — so REGISTRY_CATALOG_MAXENTRIES=0 still answers 200 with every repository
+# named. Each pod runs a `catalog-deny` container on 5000 that refuses that path
+# and passes everything else to the registry on 127.0.0.1:5002, which is why the
+# registry container declares 5002 and binds loopback. Its probes stay on 5000
+# and so traverse the proxy: a proxy that fails to start leaves the pod NotReady
+# and the Service endpointless, so the failure is closed rather than a pod that
+# serves the catalog because its deny did not load. See catalog-deny.cfg.
+#
+# ONE CONSEQUENCE FOR THE AUDIT POINT: the registry's access log records
+# 127.0.0.1 as the remote address for every request, since the proxy is what
+# connects to it. The request path and the user agent are forwarded unchanged
+# and are what e2e-mirror-hits.sh reads; the source address survives only in
+# the catalog-deny container's own log.
+#
 # The image runs as root by default and its /var/lib/registry is root-owned, so
 # `fsGroup` is load-bearing: without it a non-root registry answers every pull
 # with 500 `mkdir /var/lib/registry/docker: permission denied`.
@@ -59,7 +76,7 @@ spec:
         - name: registry
           image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
           ports:
-            - containerPort: 5000
+            - containerPort: 5002
           env:
             - name: REGISTRY_PROXY_REMOTEURL
               value: https://registry-1.docker.io
@@ -69,8 +86,9 @@ spec:
               value: "false"
             - name: REGISTRY_LOG_LEVEL
               value: info
-            # The access log is this posture's single audit point for what an
-            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            # The access log is this posture's audit point for what an untrusted
+            # job asked the mirror to fetch (Q408 plan §3.4). Its remote address
+            # is the pod's own loopback now — see the header.
             - name: REGISTRY_LOG_ACCESSLOG_DISABLED
               value: "false"
             # Empty unbinds the bundled config's :5001 pprof + /metrics
@@ -78,6 +96,10 @@ spec:
             # reflects the storage-driver check — see the probe note below.
             - name: REGISTRY_HTTP_DEBUG_ADDR
               value: ""
+            # Loopback only: the pod network reaches the catalog-deny
+            # container on 5000, never this one. See the header.
+            - name: REGISTRY_HTTP_ADDR
+              value: 127.0.0.1:5002
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -109,12 +131,35 @@ spec:
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
+        - name: catalog-deny
+          image: haproxy:3.2.23-alpine@sha256:93de1368b406157be4cded231bb34336e8477e8db24e90f5fb830bec99142331
+          ports:
+            - containerPort: 5000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: catalog-deny
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
         - name: storage
           emptyDir:
             sizeLimit: 10Gi
+        - name: catalog-deny
+          configMap:
+            name: mirror-catalog-deny
 ---
 # ghcr.io — also serves helm's OCI chart pulls (Q408 plan §2.3 item 2)
 apiVersion: apps/v1
@@ -149,7 +194,7 @@ spec:
         - name: registry
           image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
           ports:
-            - containerPort: 5000
+            - containerPort: 5002
           env:
             - name: REGISTRY_PROXY_REMOTEURL
               value: https://ghcr.io
@@ -159,8 +204,9 @@ spec:
               value: "false"
             - name: REGISTRY_LOG_LEVEL
               value: info
-            # The access log is this posture's single audit point for what an
-            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            # The access log is this posture's audit point for what an untrusted
+            # job asked the mirror to fetch (Q408 plan §3.4). Its remote address
+            # is the pod's own loopback now — see the header.
             - name: REGISTRY_LOG_ACCESSLOG_DISABLED
               value: "false"
             # Empty unbinds the bundled config's :5001 pprof + /metrics
@@ -168,6 +214,10 @@ spec:
             # reflects the storage-driver check — see the probe note below.
             - name: REGISTRY_HTTP_DEBUG_ADDR
               value: ""
+            # Loopback only: the pod network reaches the catalog-deny
+            # container on 5000, never this one. See the header.
+            - name: REGISTRY_HTTP_ADDR
+              value: 127.0.0.1:5002
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -195,12 +245,35 @@ spec:
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
+        - name: catalog-deny
+          image: haproxy:3.2.23-alpine@sha256:93de1368b406157be4cded231bb34336e8477e8db24e90f5fb830bec99142331
+          ports:
+            - containerPort: 5000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: catalog-deny
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
         - name: storage
           emptyDir:
             sizeLimit: 10Gi
+        - name: catalog-deny
+          configMap:
+            name: mirror-catalog-deny
 ---
 # quay.io — cert-manager, and calico on that lane
 apiVersion: apps/v1
@@ -235,7 +308,7 @@ spec:
         - name: registry
           image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
           ports:
-            - containerPort: 5000
+            - containerPort: 5002
           env:
             - name: REGISTRY_PROXY_REMOTEURL
               value: https://quay.io
@@ -245,8 +318,9 @@ spec:
               value: "false"
             - name: REGISTRY_LOG_LEVEL
               value: info
-            # The access log is this posture's single audit point for what an
-            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            # The access log is this posture's audit point for what an untrusted
+            # job asked the mirror to fetch (Q408 plan §3.4). Its remote address
+            # is the pod's own loopback now — see the header.
             - name: REGISTRY_LOG_ACCESSLOG_DISABLED
               value: "false"
             # Empty unbinds the bundled config's :5001 pprof + /metrics
@@ -254,6 +328,10 @@ spec:
             # reflects the storage-driver check — see the probe note below.
             - name: REGISTRY_HTTP_DEBUG_ADDR
               value: ""
+            # Loopback only: the pod network reaches the catalog-deny
+            # container on 5000, never this one. See the header.
+            - name: REGISTRY_HTTP_ADDR
+              value: 127.0.0.1:5002
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -281,12 +359,35 @@ spec:
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
+        - name: catalog-deny
+          image: haproxy:3.2.23-alpine@sha256:93de1368b406157be4cded231bb34336e8477e8db24e90f5fb830bec99142331
+          ports:
+            - containerPort: 5000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: catalog-deny
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
         - name: storage
           emptyDir:
             sizeLimit: 10Gi
+        - name: catalog-deny
+          configMap:
+            name: mirror-catalog-deny
 ---
 # registry.k8s.io — metrics-server
 apiVersion: apps/v1
@@ -321,7 +422,7 @@ spec:
         - name: registry
           image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
           ports:
-            - containerPort: 5000
+            - containerPort: 5002
           env:
             - name: REGISTRY_PROXY_REMOTEURL
               value: https://registry.k8s.io
@@ -331,8 +432,9 @@ spec:
               value: "false"
             - name: REGISTRY_LOG_LEVEL
               value: info
-            # The access log is this posture's single audit point for what an
-            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            # The access log is this posture's audit point for what an untrusted
+            # job asked the mirror to fetch (Q408 plan §3.4). Its remote address
+            # is the pod's own loopback now — see the header.
             - name: REGISTRY_LOG_ACCESSLOG_DISABLED
               value: "false"
             # Empty unbinds the bundled config's :5001 pprof + /metrics
@@ -340,6 +442,10 @@ spec:
             # reflects the storage-driver check — see the probe note below.
             - name: REGISTRY_HTTP_DEBUG_ADDR
               value: ""
+            # Loopback only: the pod network reaches the catalog-deny
+            # container on 5000, never this one. See the header.
+            - name: REGISTRY_HTTP_ADDR
+              value: 127.0.0.1:5002
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -367,12 +473,35 @@ spec:
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
+        - name: catalog-deny
+          image: haproxy:3.2.23-alpine@sha256:93de1368b406157be4cded231bb34336e8477e8db24e90f5fb830bec99142331
+          ports:
+            - containerPort: 5000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: catalog-deny
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
         - name: storage
           emptyDir:
             sizeLimit: 10Gi
+        - name: catalog-deny
+          configMap:
+            name: mirror-catalog-deny
 ---
 # gcr.io — buildkit resolves distroless/static here; metadata only, no layer transfer (Q408 plan §2.5)
 apiVersion: apps/v1
@@ -407,7 +536,7 @@ spec:
         - name: registry
           image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
           ports:
-            - containerPort: 5000
+            - containerPort: 5002
           env:
             - name: REGISTRY_PROXY_REMOTEURL
               value: https://gcr.io
@@ -417,8 +546,9 @@ spec:
               value: "false"
             - name: REGISTRY_LOG_LEVEL
               value: info
-            # The access log is this posture's single audit point for what an
-            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            # The access log is this posture's audit point for what an untrusted
+            # job asked the mirror to fetch (Q408 plan §3.4). Its remote address
+            # is the pod's own loopback now — see the header.
             - name: REGISTRY_LOG_ACCESSLOG_DISABLED
               value: "false"
             # Empty unbinds the bundled config's :5001 pprof + /metrics
@@ -426,6 +556,10 @@ spec:
             # reflects the storage-driver check — see the probe note below.
             - name: REGISTRY_HTTP_DEBUG_ADDR
               value: ""
+            # Loopback only: the pod network reaches the catalog-deny
+            # container on 5000, never this one. See the header.
+            - name: REGISTRY_HTTP_ADDR
+              value: 127.0.0.1:5002
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -453,9 +587,32 @@ spec:
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 20
+        - name: catalog-deny
+          image: haproxy:3.2.23-alpine@sha256:93de1368b406157be4cded231bb34336e8477e8db24e90f5fb830bec99142331
+          ports:
+            - containerPort: 5000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: catalog-deny
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
       volumes:
         # Ephemeral by default: $0 at rest, cold on the next e2e window. The
         # persistent overlay swaps this for a PVC — see ../README.md.
         - name: storage
           emptyDir:
             sizeLimit: 10Gi
+        - name: catalog-deny
+          configMap:
+            name: mirror-catalog-deny

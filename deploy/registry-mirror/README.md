@@ -23,6 +23,7 @@ It is five because the e2e job's fetches were measured rather than assumed ([the
 | `mirror-gcr-io` | `gcr.io` | buildkit's `distroless/static` base, a manifest resolution rather than a layer transfer |
 
 Every instance answers `GET /v2/` with 200 once ready, which is also what the readiness probe reads.
+Every instance refuses `GET /v2/_catalog` with 403, which is what stops one tenant reading the list of what another pulled ([below](#closing-the-repository-catalog)).
 
 **Image identity is unaffected.** Schema-2/OCI digests are content addresses over bytes that carry no registry hostname, so a digest-pinned pull re-verifies client-side and a cosign signature still checks out.
 The mirror is trusted for tag-to-digest resolution, exactly as the upstream registry already was.
@@ -72,6 +73,25 @@ Bounding that by network is not available here: the upstreams are CDN-fronted, G
 What bounds it instead is `proxy.remoteurl`, one upstream per instance, fixed in the pod spec.
 That is content control rather than host control, and it is why the mirror is stronger than allowlisting the five registries would have been: `docker.io` allowlisted is `docker.io/<anyone>/<anything>`, in both directions.
 
+## Closing the repository catalog
+
+`GET /v2/_catalog` names every repository a mirror has cached, and one manifest fetch is enough to add a repository to that list.
+Measured on 2026-08-28 against `registry:3.1.1` at the digest [`base/deployment.yaml`](base/deployment.yaml) pins, run as a pull-through cache with the deployed proxy configuration: cold it answered `{"repositories":[]}`, and after a single fetch of `library/alpine:3.20`, `{"repositories":["library/alpine"]}`.
+It is a documented registry API endpoint rather than a side channel, so nothing done to cache timing narrows it.
+
+**Distribution offers no setting that closes it.** 3.1.1 registers the route unconditionally, and its one catalog knob is `catalog.maxentries`, which the config parser raises to a default of 1000 whenever it is set to zero or less — so `REGISTRY_CATALOG_MAXENTRIES=0` still answered 200 with the repository listed, measured on a second instance.
+Its only request gate is `auth`, and an access controller applies to every route rather than to one: the mirror serves anonymous pulls to four separately-configured clients ([below](#how-the-job-is-wired-to-these-instances)), so credentials would have to reach all four, and a client that missed them would stop pulling rather than lose the catalog.
+
+So each pod fronts its registry with a deny proxy instead.
+[`base/catalog-deny.cfg`](base/catalog-deny.cfg) refuses that one path with 403 and forwards everything else; the registry binds `127.0.0.1:5002`, so the proxy is the only way onto it.
+The registry container keeps its probes on 5000, which now traverse the proxy, and that is what makes the failure closed: a proxy that does not start leaves the pod NotReady and its Service without an endpoint, rather than a pod that serves the catalog because its deny did not load.
+
+Measured on 2026-08-29 against both pinned images and the config exactly as `kustomize` renders it — 403 for `/v2/_catalog`, for `?n=100`, for a trailing slash, for `/v2/%5Fcatalog` and `/v2%2F_catalog`, and for the redirect `/v2/./_catalog` lands on; 200 for `GET /v2/`, a real manifest and a tags list; 405 for an upload, unchanged; and a full `docker pull` of `library/alpine:3.20` through the proxy.
+The percent-encoded forms are why the rule reads the path through `url_dec`: Go decodes escapes before the route is matched, so an unfronted registry answered `/v2/%5Fcatalog` 200 with the repository listed, and a deny written against the raw path would pass it straight through.
+
+Two checks hold it.
+`make registry-mirror-catalog-deny-check` reconciles the six files the posture is spread across — an instance with no deny container, a registry back on the pod network, or a port that stopped agreeing all fail there — and the `catalog` check in [`e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh) grades it on the cluster beside the manifest fetch, so a deny that also broke pulls cannot pass on the catalog reading alone.
+
 ## Two topologies: one shared set, or one set per tenant
 
 What this tree renders is **one mirror set serving one tenant**.
@@ -82,7 +102,7 @@ The decision itself, with the tenant count and the tenant relationship that sett
 
 | Topology | Render | Mirror sets | What one tenant learns about another |
 |---|---|---|---|
-| **Shared** | `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` | one, admitting every managed tenant | the list of repositories every other tenant pulled, [below](#what-a-shared-cache-exposes) |
+| **Shared** | `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` | one, admitting every managed tenant | whether a repository is already warm in the cache, by timing a blob fetch, [below](#what-a-shared-cache-exposes) |
 | **Isolated** (what the default renders) | `kubectl apply -k deploy/registry-mirror`, retargeted once per tenant | one per tenant | nothing through the mirror |
 
 Storage is the other axis and composes with either.
@@ -125,18 +145,17 @@ The result applies cleanly and the tenant cannot pull anything.
 
 ### What a shared cache exposes
 
+The repository list is closed under both topologies ([above](#closing-the-repository-catalog)).
+What a shared set still exposes is timing: whether a repository is already in the cache, which says that some other tenant pulled it.
+
 Measured on 2026-08-28 against `registry:3.1.1` at the digest [`base/deployment.yaml`](base/deployment.yaml) pins, run as a pull-through cache with the same proxy configuration, on a laptop rather than on the cluster:
 
-- **The repository list is readable outright.** `GET /v2/_catalog` answers 200 on port 5000, the port the worker policy admits, and names every repository in the cache.
-  One manifest fetch is enough to add a repository to it: cold it returned `{"repositories":[]}`, and after a single fetch of `library/alpine:3.20`, `{"repositories":["library/alpine"]}`.
-  This is a documented registry API endpoint rather than a side channel, and `catalog.maxentries=0` does not close it: the endpoint still answered with the repository listed.
 - **Blob timing separates a hit from a miss by an order of magnitude, on two cold samples.** First fetch of `library/alpine`'s layer took 637 ms; the three after it took 13, 11 and 10 ms. `library/busybox` gave 419 ms, then 61, 44 and 70 ms. The miss arm is those two fetches, against the manifest arm's ten, so read the separation rather than the range.
 - **Manifest timing does not.** Ten distinct repositories fetched cold and then warm gave medians near 430 ms and 360 ms, with the distributions overlapping (a warm 445 ms against a cold 407 ms).
   A pull-through cache revalidates a manifest upstream on every request, so a manifest hit still pays a round trip.
 
-Two things that does not establish.
-It was taken from a laptop over the public internet, not from inside a Kata guest across the bridge NAT, which is where an attacker actually sits, so the timing figures bound the channel rather than measure it; [Q1020](../../docs/queue/Q1020.md) holds the guest measurement.
-And `/v2/_catalog` needs no timing at all, so on the shared topology the repository list is exposed whatever that measurement returns.
+That was taken from a laptop over the public internet, not from inside a Kata guest across the bridge NAT, which is where an attacker actually sits, so the figures bound the channel rather than measure it.
+[Q1020](../../docs/queue/Q1020.md) holds the guest measurement, and it is now the whole of what a shared set gives away rather than the smaller half of it.
 
 ## Adopting this outside the dogfood cluster
 
@@ -169,6 +188,7 @@ Adopting the wiring elsewhere means the ConfigMap and the two patches in [the Ka
 ## What is proven, and what is not
 
 The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, five per instance, by [`scripts/dogfood/e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh): Available, `/v2/`, a real upstream manifest, an upload refused with 405, and the bundled image's `:5001` debug listener unbound.
+That battery has since gained a sixth check per instance, that `/v2/_catalog` is refused, which has not run on the cluster yet; the deny's own reading is the local one [above](#closing-the-repository-catalog).
 
 The wiring above **rides them** when [`scripts/dogfood/e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reports a served content request per instance after a Kata e2e run.
 That reading was needed because the tenant still carried an allow-all `e2e-open-egress` policy while the wiring was being proven: a client that ignored its wiring reached its upstream and the run was green either way, and the access log is the one place an unmirrored pull cannot appear.
