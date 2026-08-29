@@ -3269,14 +3269,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>startEgressProxyReconcilerNoResync</code> says it proves a reconcile came from a watch, but a not-ready pool short-requeues every 15 s too — a …</td>
 </tr>
 <tr>
-<td><a href="Q586/">Q586</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh">The dogfood bootstrap scripts have no test coverage</a></td>
-<td><code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q581 covered the teardown half (<code>e2e-stop.sh</code>, <code>delete.sh</code>) and split this out: bootstrap aborts loudly instead of stranding nodes, so it …</td>
-</tr>
-<tr>
 <td><a href="Q574/">Q574</a></td>
 <td><a href="../development/testing/#a-path-list-written-twice-the-trigger-and-the-filter">One gate for every path list the workflows write twice</a></td>
 <td><code>ci</code> <code>retro</code></td>
