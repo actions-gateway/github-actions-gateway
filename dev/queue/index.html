@@ -2693,6 +2693,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>claude-go-throttle-hook-test</code> fails its <code>safety: -race not throttled by rewrite</code> case when the machine is loaded, and the hook it …</td>
 </tr>
 <tr>
+<td><a href="Q1035/">Q1035</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>status.withheldCapacity</code> freezes on an idle set until the 10h resync</a></td>
+<td><code>bug</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Found by the <code>v1.7.0-rc.1</code> capacity leg, which failed on it 2026-08-29 (<a href="../plan/release-1.7/#candidate-validation">release-1.7.md</a>).</td>
+</tr>
+<tr>
 <td><a href="Q1008/">Q1008</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
 <td><code>flake</code> <code>tests</code></td>

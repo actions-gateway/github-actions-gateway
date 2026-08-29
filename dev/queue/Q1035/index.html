@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.7/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1035/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Release 1.7 Milestone Definition - GitHub Actions Gateway</title>
+        <title>status.withheldCapacity freezes on an idle set until the 10h resync - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-17-milestone-definition" class="md-skip">
+        <a href="#statuswithheldcapacity-freezes-on-an-idle-set-until-the-10h-resync" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release 1.7 Milestone Definition
+              status.withheldCapacity freezes on an idle set until the 10h resync
             
           </span>
         </div>
@@ -2579,158 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this is a release rather than a row that lands whenever
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-gating-row-q408-phases-2-to-5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The gating row: Q408, Phases 2 to 5
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-three-questions-16-left-for-this-scope" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The three questions 1.6 left for this scope
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The three questions 1.6 left for this scope">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q215's trigger has not fired, and the row now says which reading it takes
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q986-landed-and-definition-of-done-5-is-claimed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q986 landed, and Definition of Done #5 is claimed
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The default-versus-opt-in conflict is real and is this release's to resolve
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explicitly out of scope
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Definition of done
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#critical-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Critical path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-flight-verdicts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-flight verdicts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#candidate-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Candidate validation
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Candidate validation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#v170-rc1-failed-2026-08-29" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v1.7.0-rc.1: FAILED, 2026-08-29
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2749,207 +2597,31 @@
   
 
 
-<h1 id="release-17-milestone-definition">Release 1.7 Milestone Definition<a class="headerlink" href="#release-17-milestone-definition" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status: the gating row is closed as of 2026-08-28.</strong> Q408 built the in-cluster registry pull-through mirror, wired the job-side clients to it, deleted the e2e tenant's open-egress NetworkPolicy, and published the recipe as the supported posture; all five phases are done and the row is gone (<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>).
-It was the only <code>1.7-gate</code> row, so nothing now blocks the tag.
-What remains is release mechanics plus the one review below that runs at the candidate rather than before it: the API surface diff.
-The bump is measured rather than assumed, and it has moved since this scope opened: <code>semver-floor.sh v1.6.0</code> read six commits and <strong>FLOOR: NONE</strong> on 2026-08-26, and reads 45 commits and <strong>FLOOR: MINOR</strong> on 2026-08-28, set by five AGC changes that touch the released surface.
-Fifteen more carry a <code>feat</code> or <code>fix</code> subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains, and Q408's own commits are all in that group: the deliverable is manifests, wiring and docs.</p>
-</blockquote>
-<h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
-<p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md § Why untrusted-PR CI on Kata is 1.7</a> recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
-Neither advances the other, because Kata already makes Docker-in-Docker unprivileged.</p>
-<p>What makes the axis a release is Phase 5, not Phase 4.
-The enforcement swap is a NetworkPolicy change in one overlay; the release is the sentence it retires.
-"Kata-isolated runners are only suitable for trusted CI" appears in <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> as a caveat, and a tag is what lets an adopter cite the version it stopped being true in.</p>
-<h2 id="the-gating-row-q408-phases-2-to-5">The gating row: Q408, Phases 2 to 5<a class="headerlink" href="#the-gating-row-q408-phases-2-to-5" title="Permanent link">&para;</a></h2>
-<p>Phases and their validation are in <a href="../q408-untrusted-pr-egress/#4-phases">q408-untrusted-pr-egress.md § 4</a> and are not restated here.
-What this scope adds is the release's read of them.</p>
-<table>
-<thead>
-<tr>
-<th>Phase</th>
-<th>State</th>
-<th>What the release needs from it</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>0. Measured egress inventory</td>
-<td>✅ 2026-08-03</td>
-<td>The upstream set, corrected to five by Phase 1's grading</td>
-</tr>
-<tr>
-<td>1. Shrink the non-registry residual to GitHub</td>
-<td>✅ implemented 2026-08-05, validated 2026-08-24</td>
-<td>Nothing further; it is the evidence the residual is gone</td>
-</tr>
-<tr>
-<td>2. Mirror manifests</td>
-<td>✅ authored 2026-08-27, validated 2026-08-28</td>
-<td><code>deploy/registry-mirror/</code>, one instance per upstream, applied from the e2e setup path</td>
-</tr>
-<tr>
-<td>3. Wiring</td>
-<td>✅ built and validated 2026-08-28</td>
-<td>A green Kata e2e run <strong>with open egress still present</strong> and mirror hit counts &gt; 0, so wiring is proven before enforcement changes</td>
-</tr>
-<tr>
-<td>4. Enforcement</td>
-<td>✅ built and validated 2026-08-28</td>
-<td>The deletion plus the negative probes; this is where the posture becomes real</td>
-</tr>
-<tr>
-<td>5. Docs and close-out</td>
-<td>✅ 2026-08-28</td>
-<td>The caveat became a how-to; G.14 marked shipped; the roadmap bullet deleted and the capability moved to Features</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Phases 2, 3 and 4 each needed a live dogfood session</strong>, prod-guarded and operator-driven, and all three ran (2026-08-27 and 2026-08-28).
-That was the schedule risk in this release and it was not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
-Phase 5 needed no cluster, so the release never waited on one after 2026-08-28.</p>
-<p><strong>Phase 3 had to run with the image caches cold</strong>, so the <code>quay.io</code> and <code>registry.k8s.io</code> prepulls were exercised rather than skipped.
-A warm run would have reported hit counts that prove nothing about the paths a fresh tenant takes.
-Nothing had to be arranged for it: Phase 1 removed every <code>actions/cache</code> step from the self-hosted lane, so that lane has been cold since, which is why Phase 4's run reported the same five instances serving too.</p>
-<h2 id="the-three-questions-16-left-for-this-scope">The three questions 1.6 left for this scope<a class="headerlink" href="#the-three-questions-16-left-for-this-scope" title="Permanent link">&para;</a></h2>
-<p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md</a> named these rather than deciding them, on the ground that they were not that release's to settle.
-Two are settled here; the third is a real conflict and is scoped as work.</p>
-<h3 id="q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes">Q215's trigger has not fired, and the row now says which reading it takes<a class="headerlink" href="#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes" title="Permanent link">&para;</a></h3>
-<p><strong>Settled 2026-08-26.</strong> <a href="../../queue/Q215/">Q215</a>'s revive trigger is an in-cluster cache ask <strong>or</strong> Q408 Phase 1 landing and removing the working one, and 1.6 could not tell whether "the working one" meant GAG's own self-hosted lane or a tenant's.</p>
-<p>It means a tenant's, and the row's own next sentence is what decides it: "<code>actions/cache</code> reaches its store today, so the gap is local."
-That is a claim about what GAG offers a tenant, not about this repo's CI, and it is true: the tenant egress proxy's implicit GitHub allowlist carries <code>*.blob.core.windows.net</code>, the Azure-blob store the Actions cache runs on (<code>githubEgressFQDNs</code>, <code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code>).
-A tenant routed through the proxy reaches the cache today.</p>
-<p>What Phase 1 removed was this repo's own self-hosted e2e lane, by gating every <code>actions/cache</code> step and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e-reusable.yml</a>.
-That is GAG dogfooding its own posture, not a tenant losing a capability, so the trigger's second clause is unfired and Q215 stays deferred.</p>
-<p>The row has been rewritten to say so, because an ambiguous trigger is a standing query nobody can re-run, which is the failure mode <a href="../release-ladder/#the-rule-this-establishes">release-ladder.md</a> names.</p>
-<p><strong>One asymmetry is worth recording rather than leaving to be rediscovered.</strong> The direct-egress form admits GitHub CIDRs, and the Azure blob store is not in them, so a tenant on that form has no working <code>actions/cache</code> now and never did.
-The trigger reads on the proxy form because that is where the capability exists to lose.</p>
-<h3 id="q986-landed-and-definition-of-done-5-is-claimed">Q986 landed, and Definition of Done #5 is claimed<a class="headerlink" href="#q986-landed-and-definition-of-done-5-is-claimed" title="Permanent link">&para;</a></h3>
-<p>Q986 was the gap under <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #5, a per-tenant and per-job record of which host each job reached.
-Q564 shipped the egress audit record in 1.6 and attributes per pool, so the tenant half held only on an unshared pool and the job half held nowhere.</p>
-<p><strong>It was admitted to 1.7 without gating the tag</strong>, on the reasoning that its first step was a declined design rather than a build: Q564 had declined the client IP as a per-worker movement log nothing had weighed, and the row said neither half closed on a source identifier alone.</p>
-<p>It shipped anyway, and the row was right that the identifier alone closes nothing — for a reason the row did not name.
-A worker pod is deleted when its job ends, so a source address resolves to nothing after the fact and the binding has to be recorded live.
-The answer is two opted-in records rather than one wider one: <code>EgressProxy.spec.auditLogging: ConnectionsWithSource</code> puts the client address on the egress record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> has the AGC say which job holds each address while its pod lives.
-Both default <code>Off</code>, because neither is a movement log alone and the join of the two is.
-Scope and the rejected alternatives are in <a href="../q986-egress-attribution/">q986-egress-attribution.md</a>.</p>
-<h3 id="the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve">The default-versus-opt-in conflict is real and is this release's to resolve<a class="headerlink" href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" title="Permanent link">&para;</a></h3>
-<p><a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #1 requires the isolated posture to be the default rather than an opt-in.
-<a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a> declines exactly that, because a shipped default template would silently hand a privileged pod shape to sets that never asked for one.</p>
-<p><strong>Resolved 2026-08-28, in the direction the evidence pointed at.</strong> The distinction holds, and Phase 4 is what established it: enforcement shipped as the <strong>deletion</strong> of an additive allow-all policy, with no template change of any kind, so the network posture is what an operator gets by not acting while the pod shape stays a deliberate <code>templateRef</code>.
-Definition of Done #1 is re-worded to say that, and <a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md</a> stands unedited: its objection was to shipping a <em>template</em> as a default and nothing here asks for one.
-The criterion now also records the decline, so a later reading cannot revive the demand without re-arguing the security case against it.</p>
-<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong><a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a>.</strong> Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before Dragonfly and the composed stack are graded against it (<a href="../q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a>).
-  They are the follow-on validations of this release's deliverable, so they cannot also be in it.</li>
-<li><strong><a href="../../queue/Q215/">Q215</a> as a build.</strong> Deferred with an unfired trigger, per the section above.</li>
-<li><strong>Controller or API changes.</strong> Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.
-  A 1.7 that grows an API field has lost the plot of what the release is.</li>
-<li><strong>The remaining proxy-hardening cluster.</strong> <a href="../../queue/Q565/">Q565</a>, <a href="../../queue/Q566/">Q566</a> and <a href="../../queue/Q567/">Q567</a> keep their demand triggers, unchanged since <a href="../release-1.4/#deferred-out-of-14-and-why">release-1.4.md</a> shelved them.</li>
-</ul>
-<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>Q408 closed</strong>, which by its own <a href="../q408-untrusted-pr-egress/#7-success-criteria">§7</a> means the dogfood Kata e2e variant runs green with <code>e2e-open-egress</code> deleted, the negative probes confirm enforcement, and the Phase 5 docs make the recipe the supported posture.</li>
-<li><strong>The trusted-CI caveat is gone</strong> from <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>, replaced by the reference architecture, with <a href="../../operations/security-operations/">security-operations.md</a> linking the concrete manifests it has recommended in the abstract since before they existed.</li>
-<li><strong>The default-versus-opt-in conflict is resolved</strong> in whichever direction Phase 4's evidence supports, and the losing text is rewritten rather than left standing.</li>
-<li><strong>G.14 and the roadmap reflect it</strong>: <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a> marked shipped, the <a href="../../roadmap/">roadmap</a> entry moved out of "exploring".</li>
-<li><strong>Definition of Done #5 claimed</strong>, per the section above: Q986 landed, so the release claims a per-tenant and per-job record of which host each job reached rather than narrowing to an unshared pool.</li>
-<li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.6.0..&lt;rc commit&gt;</code>.
-   Q986 adds two additive fields to the v2 surface, so this release expects exactly those and nothing else: a <code>ConnectionsWithSource</code> value on <code>EgressProxy.spec.auditLogging</code>, and a new <code>ActionsGateway.spec.auditLogging</code> defaulting <code>Off</code>.
-   Anything beyond them is a finding rather than a formality.</li>
-<li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
-</ol>
-<h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
-<p>Phase 2 → Phase 3 → Phase 4 → Phase 5, strictly, because each phase's validation is the next one's precondition: manifests must serve before wiring can be proven to ride them, and wiring must be proven before enforcement can be distinguished from breakage.
-Phases 2, 3 and 4 book dogfood sessions.
-Nothing else in the release is on that path: Q986 ran beside it and has landed, and the docs decision resolves inside Phase 5.</p>
-<h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>
-<p>Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later (<a href="../../operations/release/#1-pre-flight">release.md</a>).
-Re-run any whose window has moved before the stable tag.</p>
-<table>
-<thead>
-<tr>
-<th>Check</th>
-<th>Measured at</th>
-<th>Verdict</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Gating rows</td>
-<td><code>c54b712a9</code></td>
-<td><strong>PASS.</strong> No <code>1.7-gate</code> row remains, and no <code>X.Y-gate</code> label survives anywhere in the store. The pattern was confirmed against a label that does exist before the empty result was trusted.</td>
-</tr>
-<tr>
-<td><code>main</code> green</td>
-<td><code>c54b712a9</code></td>
-<td><strong>PASS.</strong> All nine required gates ran and passed on the SHA, none path-skipped, so no <code>check-artifact-unchanged.sh</code> proof is owed.</td>
-</tr>
-<tr>
-<td>Semver floor</td>
-<td><code>c54b712a9</code></td>
-<td><strong>MINOR</strong>, over 56 commits, set by eight touching the released surface. <code>v1.7.0</code> is forced by merged work rather than chosen.</td>
-</tr>
-<tr>
-<td>API surface</td>
-<td><code>c54b712a9</code></td>
-<td><strong>PASS, ship as-is.</strong> Exactly what <a href="#definition-of-done">Definition of done #6</a> predicted and nothing else: one added wire field <code>auditLogging</code>, the <code>Off;Connections;ConnectionsWithSource</code> enum on <code>EgressProxy</code>, a new <code>Off;WorkerAddresses</code> enum on <code>ActionsGateway</code>, defaulting <code>Off</code>. No new condition types, Event reasons, labels or annotations.</td>
-</tr>
-</tbody>
-</table>
-<p>Both <code>auditLogging</code> fields default <code>Off</code> and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is (<a href="../q986-egress-attribution/">q986-egress-attribution.md</a>).</p>
-<p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the operator-caveat pass, the roadmap and <code>features.md</code> reconciliation, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
-<h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
-<h3 id="v170-rc1-failed-2026-08-29"><code>v1.7.0-rc.1</code>: FAILED, 2026-08-29<a class="headerlink" href="#v170-rc1-failed-2026-08-29" title="Permanent link">&para;</a></h3>
-<p>Tagged at <code>c54b712a9</code>, published and artifact-verified; the dogfood gate failed its capacity leg.</p>
-<p><strong>Publish verified by content, not by green jobs.</strong> 9 of 9 assets with <code>draft: false</code>, all eight signatures OK (six images, both charts), and the provenance digest reported <code>publish.yml@refs/tags/v1.7.0-rc.1</code> with <code>sourceRepositoryDigest</code> equal to the tag target.
-That digest is the check that discriminates: signatures prove who built an artifact, and only the digest proves what was built.
-A negative control against a wrong signer workflow exited 1, so the check could have failed.</p>
-<table>
-<thead>
-<tr>
-<th>Leg</th>
-<th>Result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>e2e (Kata, mirrors)</td>
-<td><strong>PASS</strong>, 75/75 specs, 62 ok, 0 failed, 13 skipped</td>
-</tr>
-<tr>
-<td>capacity (quota rung)</td>
-<td><strong>FAIL</strong>, bound correctly at zero headroom, did not release</td>
-</tr>
-<tr>
-<td>Everything after</td>
-<td>Not reached; the gate tore down</td>
-</tr>
-</tbody>
-</table>
-<p><strong>What failed.</strong> The rung bound as designed (<code>withheldCapacity[quota]=2</code>, <code>advertisedCapacity=0</code>), and 300s after the ResourceQuota was restored to 6 pods it was still withholding 2.
-The gate's own discriminator is whether the headroom came back rather than the rung.
-It did, at <code>hard.pods=6</code> against <code>used.pods=1</code>, so this is not a namespace that had grown.</p>
-<p><strong>The mechanism is undetermined, and the two candidates need different fixes.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>applyAdvertisedCapacity</code></a> publishes the listener's <em>most recent</em> advertisement, so a stale status is the expected reading when no advertisement has been made since, and the e2e suite had drained by then, which is exactly when demand stops.
-Against that, a scale-set listener long-polls continuously, so 300s should have spanned several.
-Settling it needs the AGC's own logs or its demand gauge, and both went with the cluster at teardown.
-So this is a product defect only if the listener was still advertising, and a gate defect otherwise, waiting on a refresh it supplies no demand to trigger.</p>
-<p><strong>Read the leg's newness as part of the finding.</strong> Q637 added this leg on 2026-08-29, hours before the cut, so <code>rc.1</code> is the first candidate any quota-rung check has run against and it failed on its first outing.
-That is the leg working, whichever way the mechanism resolves.</p>
-<p><strong>The host slept through the run.</strong> It changed nothing about the verdict, but it changed how the run read.
-<code>pmset</code> records maintenance sleeps from 08:25 to 08:56 with two 45-second dark wakes, so the gate's 300s poll budget, which counts <code>sleep</code> rather than wall clock, took 35 minutes of wall clock to spend.
-A watcher reading elapsed time against a process-time budget saw a wedged gate for half an hour and recommended killing it.
-The gate was polling normally and tore itself down cleanly once the host woke.
-Confirmed at rest afterwards by asking the cluster rather than by reading the gate's own teardown line.</p>
+<h1 id="statuswithheldcapacity-freezes-on-an-idle-set-until-the-10h-resync"><code>status.withheldCapacity</code> freezes on an idle set until the 10h resync<a class="headerlink" href="#statuswithheldcapacity-freezes-on-an-idle-set-until-the-10h-resync" title="Permanent link">&para;</a></h1>
+<p>Found by the <code>v1.7.0-rc.1</code> capacity leg, which failed on it 2026-08-29 (<a href="../../plan/release-1.7/#candidate-validation">release-1.7.md</a>).</p>
+<p>The listener records an advertisement on <strong>every poll</strong> (<code>scaleSetCapacityFunc</code> calls <code>rec.record(adv)</code> and <code>ScaleSetMetrics.SetCapacityWithheld</code>), but status is written only by the reconcile goroutine, which reads <code>rec.last()</code> in <code>applyAdvertisedCapacity</code>.
+The two are decoupled on purpose: a poll that wrote status directly would race every other status write.</p>
+<p>Nothing requeues on an advertisement changing.
+<code>RequeueAfter</code> is assembled from <code>reapAfter</code> (0 with no worker pods), <code>capacityRequeue</code> (<code>applyWorkerCapacityConditions</code> returns 0 with nothing pending or starting), a baseline recheck that applies only while <code>mux.ActiveCount() &lt; spec.maxListeners</code>, and a proxy-share recheck that applies only to a projected share.
+An idle set satisfies none, so <code>RequeueAfter</code> is 0 and the only fallback is controller-runtime's default <code>SyncPeriod</code>, which this project does not configure: <strong>10 hours</strong>.</p>
+<p>So once a set goes idle, <code>status.withheldCapacity</code> and <code>status.advertisedCapacity</code> hold whatever the last reconcile wrote, for up to 10 hours, while Prometheus carries the live value.</p>
+<p><strong>Measured.</strong> After the release gate restored the e2e tenant's <code>ResourceQuota</code> to 6 pods with 1 in use, <code>withheldCapacity[quota]</code> still read 2 and <code>advertisedCapacity</code> 0 more than 30 minutes later, on an AGC that had been Running 60m with 0 restarts.</p>
+<p>This inverts what the field is for.
+Q721 added it so a tenant can read why intake is throttled <strong>without</strong> Prometheus; a reader who cannot see the metric is exactly the reader who gets the stale answer, and the answer says intake is throttled when it is open.</p>
+<p>Fix candidates, unmeasured: requeue when <code>rec.record</code> observes a changed advertisement, or fold a bounded re-check into <code>RequeueAfter</code> whenever withholding is non-zero.
+The second is cheaper and self-limiting, since a set withholding nothing needs no poll.</p>
+<p><strong>A second, separable defect is in the gate.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a>'s <code>capacity_leg</code> waits 300s for the rung to release by polling that status field, and supplies no demand that would trigger a reconcile.
+On a drained post-suite cluster there is none to be had, so the leg can only pass if some unrelated event fires a reconcile inside the window.
+Fixing the controller closes both; fixing only the gate (assert on the metric, or drive a reconcile) leaves the operator-facing defect live.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
