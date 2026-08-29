@@ -125,6 +125,43 @@ Both `auditLogging` fields default `Off` and are additive, so the shape is chose
 
 ## Candidate validation
 
+### `v1.7.0-rc.3`: PASSED, 2026-08-29
+
+Tagged at `f93d4164d`, the release-notes draft on top of Q1020's mirror-timing probe.
+
+**Why a third candidate, when the artifacts did not move.** `check-artifact-unchanged.sh 49b35a41a f93d4164d` exits 0, so rc.3 ships bytes identical to rc.2's.
+What moved is the published reference recipe: Q1026 narrowed `deploy/registry-mirror/components/shared-tenants/kustomization.yaml`'s shared ingress peer to worker pods.
+That is a NetworkPolicy change the dogfood Kata e2e is the only thing that exercises, and it reaches no image and no chart, so the artifact check cannot see it and rc.2's verdict does not carry.
+A candidate is validated against a tree, not against a digest.
+
+**Pre-flight, re-measured at the tag target.** No `X.Y-gate` row survives; the anchored pattern was positive-controlled against `retro` (35 rows) and `debt` (86) before the empty result was trusted, because no `-gate` label exists anywhere in the store now and a pattern that matches nothing looks identical to a clean release.
+`make check` green.
+The floor reads **MINOR** over 65 commits, nine touching the released surface.
+The API surface re-run over `v1.6.0..HEAD` returns exactly the `c54b712a9` verdict, so that window had not moved.
+
+**All nine required gates path-skipped on the target, and the skip is not a gap.** Every one ran in full at `fb48eb5be`, and `check-artifact-unchanged.sh fb48eb5be f93d4164d` exits 0, with two files changed and neither on the released surface.
+That is the commit this candidate's green rests on.
+
+**Publish verified by content.** 9 of 9 assets with `draft: false` and `immutable: true`, all eight signatures OK, and the provenance digest reported `publish.yml@refs/tags/v1.7.0-rc.3` with `sourceRepositoryDigest` equal to `f93d4164d`.
+A negative control against `unit-test.yml` as the signer workflow exited 1.
+
+| Leg | Result |
+|---|---|
+| e2e (Kata, mirrors) | **PASS**, 75/75 specs, 62 ok, 0 failed, 13 skipped, in 7m24s |
+| sizing | **PASS**, NodeShare and Throughput both Active; the RC ran CI on derived sizing (`sampleCounts=[258]`), worker CPU request `1500m` |
+| capacity (quota rung) | **PASS**, bound at zero headroom and **released** |
+| capacity (placeability rung) | **PASS**, `WorkerCapacityDeclined=False`, reason `CapacityAvailable` |
+| crd-smoke | **PASS**, signature OK, all five CRDs applied |
+
+**The quota rung released, which is the second clean reading of Q1035's fix.** It bound at `withheldCapacity[quota]=2, advertisedCapacity=0` and, once the quota was restored, reported `0` and `2`. rc.1 is what makes this leg worth running: it bound identically and never released, and the leg's discriminator is the release rather than the bind.
+
+**The verdict is recorded** as `refs/validated/v1.7.0-rc.3 -> f93d4164d`, which is what `publish.yml` reads before it will accept a stable tag.
+
+**Teardown left the same e2e node up as rc.2, and the gate's exit status again does not say so.** The gate exited 0 and printed `Teardown complete`, while one `n2-standard-8` e2e-pool node was still RUNNING with its MIG at `size=1, targetSize=1`; `default-pool`, `workers` and `workers-od` were all at 0 immediately.
+That is the documented division rather than a teardown failure, since the teardown scales `default-pool` explicitly and the e2e pool drains on the cluster autoscaler's schedule.
+It has now recurred on two consecutive candidates, so it is a standing cost of a run rather than an incident.
+It is why at-rest is confirmed by asking the cluster and never by reading the teardown line.
+
 ### `v1.7.0-rc.2`: PASSED, 2026-08-29
 
 Tagged at `49b35a41a`, which is `044b383f2`'s Q1035 fix plus two commits that touch nothing shipped.
