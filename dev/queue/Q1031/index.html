@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1022/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1031/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Close /v2/_catalog on a shared registry mirror - GitHub Actions Gateway</title>
+        <title>go-throttle's probe is killed under host load, denying a -race rewrite - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#close-v2_catalog-on-a-shared-registry-mirror" class="md-skip">
+        <a href="#go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Close /v2/_catalog on a shared registry mirror
+              go-throttle's probe is killed under host load, denying a -race rewrite
             
           </span>
         </div>
@@ -2597,16 +2597,29 @@
   
 
 
-<h1 id="close-v2_catalog-on-a-shared-registry-mirror">Close <code>/v2/_catalog</code> on a shared registry mirror<a class="headerlink" href="#close-v2_catalog-on-a-shared-registry-mirror" title="Permanent link">&para;</a></h1>
-<p>On the shared mirror topology (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a>), any tenant that can reach a mirror can list what every other tenant pulled.
-<code>GET /v2/_catalog</code> names every repository in the cache, answers 200 on port 5000 (the port <code>e2e-mirror-egress</code> admits), and needs one manifest fetch to list a repository.</p>
-<p><strong>Measured 2026-08-28</strong> against <code>registry:3.1.1</code> at the digest <code>base/deployment.yaml</code> pins, run locally as a pull-through cache with the deployed proxy configuration: cold it returned <code>{"repositories":[]}</code>; after a single fetch of <code>library/alpine:3.20</code>, <code>{"repositories":["library/alpine"]}</code>.
-<code>REGISTRY_CATALOG_MAXENTRIES=0</code> does not close it, measured on a second instance: the endpoint still answered with the repository listed.
-Only that one setting was tried, so "distribution offers no knob" is unverified; establish it before designing around it.</p>
-<p>This is a documented registry API endpoint rather than a side channel, so it is not narrowed by anything done to cache timing, and it dominates the timing question <a href="../Q1020/">Q1020</a> still holds.
-Today it is a documented trade-off (<a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a>) an administrator opts into, which is correct for a shipped option and weak as a durable answer: the shared topology is the one an adopter with several tenants reaches for first, and the cost of the isolated alternative is a whole mirror set per tenant.</p>
-<p>Deliverables: a way to serve pulls while refusing <code>/v2/_catalog</code>, rendered as part of the shared overlay rather than as prose; a test that the endpoint refuses and that a pull still succeeds, since a fix that breaks pulls fails silently in the direction nobody probes; and the operator page's decision section corrected to match, including the residual-risk bullet in <a href="../../plan/secure-multi-tenant-oss-ci/#explicitly-out-of-scope-and-residual-risk-accepted">secure-multi-tenant-oss-ci.md</a>.</p>
-<p>Do not reach for <code>REGISTRY_AUTH</code> without checking what it costs: the mirror serves anonymous pulls today, and the four image clients wired to it (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#how-the-job-is-wired-to-these-instances">README § How the job is wired</a>) each read their own configuration, so credentials would have to reach all four.</p>
+<h1 id="go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite">go-throttle's probe is killed under host load, denying a -race rewrite<a class="headerlink" href="#go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite" title="Permanent link">&para;</a></h1>
+<p><code>claude-go-throttle-hook-test</code> fails its <code>safety: -race not throttled by rewrite</code> case when the machine is loaded, and the hook it exercises denies the command rather than throttling it.</p>
+<p><strong>Measured 2026-08-29 00:45 PDT</strong>, in <code>make check</code> on a branch touching no file under <code>scripts/agent/</code>: the suite failed, took 163 s (the slowest of the 115), and the hook returned a deny whose own reason names the cause: <code>throttle probe failed after 5.805s: scripts/agent/local-throttle.sh prefix: signal: killed</code>.
+The host was at load average 40.82 over 18 cores.
+Re-run alone six minutes later on the same tree: exit 0.</p>
+<p>So the mechanism is not in doubt and does not need re-deriving: <code>local-throttle.sh prefix</code> has its own timeout, the probe exceeds it when the box is oversubscribed, and <code>gothrottle</code> is correct to fail closed, since an unthrottled <code>-race</code> can freeze the GUI, which is the incident the throttle exists for (Q92, long closed and so no longer a row).
+What is wrong is that the closed failure lands on a <em>test</em> that asserts the rewrite, so a loaded machine reddens <code>make check</code> for a branch that changed nothing near it.</p>
+<p>Two candidate fixes, neither measured:</p>
+<ul>
+<li>Give the probe a longer or load-aware budget, so it answers under the load this repository's own gate generates.
+  <code>make check</code> runs 115 suites through <code>run-parallel.sh</code>, so the gate is itself a source of the load that breaks it.</li>
+<li>Or stub the probe in the test.
+  The case asserts the <em>rewrite</em>, not that a live probe answers, so a test that depends on probe timing is measuring the host as well as the hook, which is the shape <a href="../../development/testing/#a-tests-environment-assumptions-must-be-probed-not-inferred">testing.md § A test's environment assumptions must be probed</a> names.</li>
+</ul>
+<p>The second is more likely right, because the first leaves the same failure available on a busier machine.
+Confirm which by reproducing under a synthetic load rather than waiting for it to recur.</p>
+<p>Adjacent to <a href="../Q822/">Q822</a> and not a duplicate of it, which is worth stating because <code>make queue-id</code> surfaced no near-duplicate and the titles share almost no words.
+Q822 is the generic class, suites that fail under concurrent load and pass on rerun, and its open question is whether to cap <code>run-parallel.sh</code>'s fan-out, which it calls a machine-wide throughput decision.
+It also says plainly that nothing under it reproduces a suite failing <em>because of</em> the fan-out, since a property of the runner and a failure traced to it are separate claims.
+This row is that traced instance: the hook's own deny reason names the mechanism, so the causal step Q822 lacks is in hand here.
+The fixes are independent in the useful direction, which is why they stay separate rows: capping the fan-out would probably close both and needs the throughput decision, while stubbing the probe closes this one and needs nothing.</p>
+<p>Filed from a worker session that hit it mid-stream; it did not fix it, since the fix is not that session's item.
+This is the standing flake rule's route, not an ordinary debt row: a flake fix parks in Flake watch rather than being deleted.</p>
 
 
 

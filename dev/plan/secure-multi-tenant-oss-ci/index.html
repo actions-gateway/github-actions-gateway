@@ -2823,9 +2823,10 @@ This milestone is done when all of the following hold, each demonstrated rather 
   Speculative-execution and shared-cache side channels between guests on one node are a hardware and hypervisor concern, not one this milestone closes.</li>
 <li><strong>The mirror is a trusted component.</strong> A compromised pull-through mirror reaches every job that pulls through it.
   The mirror contract in <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> is what bounds this, and it is a contract rather than an enforcement.</li>
-<li><strong>A shared mirror set exposes its repository list to every tenant that can reach it.</strong> <code>GET /v2/_catalog</code> names every repository in the cache and answers on the port the worker policy admits, so on a shared set one tenant can enumerate what every other tenant pulled.
-  Measured locally against <code>registry:3.1.1</code> at the pinned digest on 2026-08-28, not on a cluster; <code>catalog.maxentries=0</code> does not close it.
-  This is an accepted risk only for an adopter who chose the shared topology knowing it, which is what <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.</li>
+<li><strong>A shared mirror set exposes cache timing to every tenant that can reach it.</strong> Whether a repository is already warm says that some other tenant pulled it.
+  The repository <em>list</em> is no longer part of this: <code>GET /v2/_catalog</code> answered 200 with every cached repository named, <code>catalog.maxentries=0</code> did not close it, and every instance is now fronted by a proxy that refuses the path under both topologies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#closing-the-repository-catalog">how, and what it was measured against</a>).
+  What is left is timing, measured on a laptop rather than from inside a Kata guest, so the channel is bounded rather than measured where an attacker sits (<a href="../../queue/Q1020/">Q1020</a>).
+  It is an accepted risk only for an adopter who chose the shared topology knowing it, which is what <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.</li>
 <li><strong>This is not a claim about arbitrary hostile input at scale.</strong> The goal is that a fork pull request on an adopter's own repositories is safe to run.
   A public, unauthenticated build service is a different product with different economics.</li>
 </ul>

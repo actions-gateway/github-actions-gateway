@@ -3345,7 +3345,7 @@ That is schema and syntax, and it says nothing about whether the instances serve
 <h3 id="37-the-phase-2-validation-battery">3.7 The Phase 2 validation battery<a class="headerlink" href="#37-the-phase-2-validation-battery" title="Permanent link">&para;</a></h3>
 <p>The plan spelt this out as prose, <em>curl the mirror's <code>/v2/</code> and pull one image through each instance from a debug pod</em>, and it is now <code>scripts/dogfood/e2e-mirror-validate.sh</code>, because Phase 3 re-runs the same battery once the clients are wired and Phase 4 re-runs it under the tight policy.
 A booked dogfood session is the scarce resource in all three, so the battery is a command that returns a verdict rather than a transcript somebody re-reads.</p>
-<p>Five checks per instance, over the five declared upstreams:</p>
+<p>Six checks per instance, over the five declared upstreams:</p>
 <table>
 <thead>
 <tr>
@@ -3374,6 +3374,11 @@ A booked dogfood session is the scarce resource in all three, so the battery is 
 <td><code>push</code></td>
 <td><code>POST …/blobs/uploads/</code> → 405</td>
 <td><a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s read-only property is false</td>
+</tr>
+<tr>
+<td><code>catalog</code></td>
+<td><code>GET /v2/_catalog</code> → 403</td>
+<td>the deny proxy is not in the path, so the repository list is readable (Q1022)</td>
 </tr>
 <tr>
 <td><code>debug</code></td>
@@ -3730,7 +3735,7 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   The grading also corrected the upstream set from four to five.</li>
 <li><strong>Phase 2 — mirror manifests. ✅ Done (authored 2026-08-27, validated 2026-08-28).</strong> <code>deploy/registry-mirror/</code> (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (<code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>, the fifth added by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), applied by <code>scripts/dogfood/e2e-start.sh</code> and scaled back to zero by <code>e2e-stop.sh</code>.
   What is pinned, and what was measured to pin it, is <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>.
-  Validation: <code>scripts/dogfood/e2e-mirror-validate.sh</code> against the dogfood cluster once <code>e2e-start.sh</code> has applied the manifests: five checks per instance (<a href="#37-the-phase-2-validation-battery">§3.7</a>), read-only, and it applies no manifest of its own.
+  Validation: <code>scripts/dogfood/e2e-mirror-validate.sh</code> against the dogfood cluster once <code>e2e-start.sh</code> has applied the manifests: six checks per instance (<a href="#37-the-phase-2-validation-battery">§3.7</a>), read-only, and it applies no manifest of its own.
   Graded 2026-08-28 at 25 of 25 over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>), which discharges the <strong>precondition</strong> <a href="../release-1.7/">release-1.7.md</a> sets on Phase 3's run: "manifests must serve before wiring can be proven to ride them".
   It booked a dogfood session of its own, per this section's header.</li>
 <li><strong>Phase 3 — wiring. ✅ Done (built and validated 2026-08-28).</strong> dockerd via a mounted <code>daemon.json</code> in the Kata overlay; non-Hub docker-client refs rewritten at the one chokepoint they all share; buildkit given a generated <code>buildkitd.toml</code>; helm's OCI ref pointed at the ghcr mirror.

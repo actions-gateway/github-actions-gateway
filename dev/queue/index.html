@@ -2685,6 +2685,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1031/">Q1031</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh">go-throttle's probe is killed under host load, denying a -race rewrite</a></td>
+<td><code>flake</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>claude-go-throttle-hook-test</code> fails its <code>safety: -race not throttled by rewrite</code> case when the machine is loaded, and the hook it …</td>
+</tr>
+<tr>
 <td><a href="Q1008/">Q1008</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2811,14 +2819,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>L</td>
 <td>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in …</td>
-</tr>
-<tr>
-<td><a href="Q1022/">Q1022</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md">Close <code>/v2/_catalog</code> on a shared registry mirror</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>On the shared mirror topology (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/overlays/shared-tenants/kustomization.yaml"><code>overlays/shared-tenants/</code></a>), any …</td>
 </tr>
 <tr>
 <td><a href="Q1026/">Q1026</a></td>
