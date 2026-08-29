@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Route e2e CI jobs back to GitHub-hosted runners and tear down the on-demand
-# e2e tenant's AGC. The e2e node pool autoscales to 0 once jobs drain (~10 min).
+# e2e tenant's AGC. The e2e node pool then autoscales to 0 on the cluster
+# autoscaler's own schedule, which this script neither drives nor waits for.
 # See the GKE dogfood plan (indexed in docs/plan/README.md), Part F.
 #
 # On-demand (Q231): deleting the ActionsGateway makes the GMC tear down the
@@ -159,7 +160,15 @@ main() {
 		--node-pool="${SYSTEM_POOL}" --num-nodes="${restore}" --zone="${ZONE}" --quiet
 
 	echo "E2e jobs will now route to GitHub-hosted runners."
-	echo "e2e pool nodes autoscale to 0 once in-flight jobs finish (~10 min)."
+	# No duration here. Scale-down belongs to the cluster autoscaler, which this
+	# script neither drives nor waits for, and a number invites reading a pool
+	# that is merely slow as a pool that is stuck: measured 2026-08-28, a node
+	# took ~35 minutes against the "~10 min" this line used to print, and the
+	# gap nearly bought a hand-run `kubectl delete` and a pool resize against
+	# the prod-classified dogfood cluster to fix nothing.
+	echo "e2e pool nodes scale to 0 once in-flight jobs finish, on the cluster"
+	echo "autoscaler's own schedule. Check with:"
+	echo "  gcloud compute instance-groups managed list --project ${PROJECT} --filter='name~e2e'"
 }
 
 [[ -n "${E2E_STOP_LIB_ONLY:-}" ]] || main "$@"

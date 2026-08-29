@@ -135,7 +135,11 @@ main() {
 		--project="${PROJECT}" \
 		--node-pool="${SYSTEM_POOL}" --num-nodes=0 --zone="${ZONE}" --quiet
 
-	echo "Done. Worker nodes drain and autoscale to 0 automatically (~10 min)."
+	# Same reasoning as e2e-stop.sh's closing line: the duration belongs to the
+	# cluster autoscaler, not to this script, so it is not promised here.
+	echo "Done. Worker nodes drain and scale to 0 on the cluster autoscaler's"
+	echo "own schedule. Check with:"
+	echo "  gcloud compute instance-groups managed list --project ${PROJECT}"
 }
 
 main "$@"
