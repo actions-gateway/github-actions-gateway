@@ -2781,7 +2781,7 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 <tr>
 <td>Evidence</td>
 <td>Per-tenant egress audit records</td>
-<td><strong>Partly shipped, opt-in (Q564).</strong> <code>EgressProxy.spec.auditLogging: Connections</code> writes one structured line per accepted CONNECT: namespace, destination host and port, bytes each way, duration. Off by default: the record is data about a tenant's egress, so retaining it is the platform's decision. It does not meet Definition of Done #5 yet, on either dimension: it attributes per POOL, so the per-tenant half holds only on an unshared pool, and no field ties a connection to a job, so "which host each job reached" is unmet even unshared (<a href="../../queue/Q986/">Q986</a>). See <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md</a></td>
+<td><strong>Shipped, opt-in (Q564, Q986).</strong> <code>EgressProxy.spec.auditLogging: Connections</code> writes one structured line per accepted CONNECT: namespace, destination host and port, bytes each way, duration. Off by default: the record is data about a tenant's egress, so retaining it is the platform's decision. Definition of Done #5 takes a further opt-in on both sides — <code>ConnectionsWithSource</code> adds the client address to that record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> records which job holds each address while its pod lives — because attribution is what turns an egress record into a per-worker movement log, and because a worker pod is deleted with its job so the binding cannot be looked up afterwards. See <a href="../../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">observability-logging.md</a> and <a href="../q986-egress-attribution/">q986-egress-attribution.md</a></td>
 </tr>
 <tr>
 <td>Transport to the proxy</td>
@@ -2808,7 +2808,8 @@ This milestone is done when all of the following hold, each demonstrated rather 
 <li>It cannot reach the node's metadata service, and a test asserts this on a policy-enforcing CNI rather than a doc recommending it.</li>
 <li>It cannot read another tenant's cache, secrets, or job payloads, including through anything the platform provides for its convenience.</li>
 <li>An operator can produce, unprompted, a per-tenant record of which host each job reached.
-   Controls without evidence do not satisfy an auditor.</li>
+   Controls without evidence do not satisfy an auditor.
+   <strong>Met as of Q986</strong>, on the two opt-ins above: the join is the proxy record's source address against the AGC's worker-address bindings, and it names the consuming tenant on a shared pool as well as an unshared one.</li>
 <li>The residual channels are enumerated in this document and each one is either closed or explicitly accepted with a reason.</li>
 </ol>
 <h2 id="explicitly-out-of-scope-and-residual-risk-accepted">Explicitly out of scope, and residual risk accepted<a class="headerlink" href="#explicitly-out-of-scope-and-residual-risk-accepted" title="Permanent link">&para;</a></h2>
@@ -2833,12 +2834,12 @@ Their egress is now closed to match: an in-cluster registry mirror carries every
 What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.</p>
 </blockquote>
 <p>Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
-Items 4 and 5 are open, on <a href="../../queue/Q215/">Q215</a> and <a href="../../queue/Q986/">Q986</a>, and <a href="../../queue/Q1020/">Q1020</a> is the part of item 4 the mirror itself introduced: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses and the docs owe them the basis for it.
+Item 5 closed with Q986; item 4 is open on <a href="../../queue/Q215/">Q215</a>, and <a href="../../queue/Q1020/">Q1020</a> is the part of it the mirror itself introduced: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses and the docs owe them the basis for it.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, which does not satisfy Definition of Done #5 on either dimension: see the Evidence row), and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
-<p>Open, with rows: Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (the record names nobody who made the connection, which is both residuals on Definition of Done #5: tenant on a shared pool, job on any pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
+<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
+<p>Open, with rows: Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
 <ol>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q986/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1021/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Egress audit record carries no identifier for who made the connection - GitHub Actions Gateway</title>
+        <title>An unstaged delete reddens make check via a still-listed tracked path - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#egress-audit-record-carries-no-identifier-for-who-made-the-connection" class="md-skip">
+        <a href="#an-unstaged-delete-reddens-make-check-via-a-still-listed-tracked-path" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Egress audit record carries no identifier for who made the connection
+              An unstaged delete reddens make check via a still-listed tracked path
             
           </span>
         </div>
@@ -2597,15 +2597,11 @@
   
 
 
-<h1 id="egress-audit-record-carries-no-identifier-for-who-made-the-connection">Egress audit record carries no identifier for who made the connection<a class="headerlink" href="#egress-audit-record-carries-no-identifier-for-who-made-the-connection" title="Permanent link">&para;</a></h1>
-<p>Its seven fields name the pool, the destination, and the byte counts, and nothing about the caller.
-Two gaps fall out of that one absence.
-<strong>Tenant:</strong> <code>namespace</code> is the downward-API pool namespace, so on a pool shared via <code>spec.sharing.allowedNamespaces</code> a record cannot say which consumer reached a destination.
-<strong>Job:</strong> no field ties a connection to a job on ANY pool, so <a href="../../plan/secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #5, "which host each job reached", is unmet even unshared.
-Both need a per-connection source identifier first, which Q564 declined: the client IP on every record is a per-worker movement log nothing has weighed.
-Neither closes on that alone: tenant needs IP to namespace, job needs IP to pod to the AGC's mapping.
-Matters for <a href="../Q725/">Q725</a>.
-Distinct from <a href="../Q567/">Q567</a>, bandwidth isolation rather than attribution.</p>
+<h1 id="an-unstaged-delete-reddens-make-check-via-a-still-listed-tracked-path">An unstaged delete reddens <code>make check</code> via a still-listed tracked path<a class="headerlink" href="#an-unstaged-delete-reddens-make-check-via-a-still-listed-tracked-path" title="Permanent link">&para;</a></h1>
+<p><code>head_snapshot</code> walks <code>git ls-files -s</code> and opens every tracked path from the working tree, so a tracked file deleted but not yet staged is listed and absent, and the open raises <code>FileNotFoundError</code>.
+Measured 2026-08-28: <code>make check</code> failed <code>claude-usage-test</code> with <code>No such file or directory: docs/queue/Q986.md</code> after that row was closed with <code>rm</code>; <code>git rm --cached</code> on the same path turned the target green with no other change.
+This is exactly the state a session is in between closing a backlog row and committing it, which is where the workflow tells it to run <code>make check</code>, so the gate is red for a reason that is neither a defect nor the session's to fix.
+The fix is one guard at the open, not a narrower file list: an unreadable tracked path should skip rather than abort, the way a census over a moving tree has to.</p>
 
 
 

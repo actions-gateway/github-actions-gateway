@@ -3116,13 +3116,15 @@ It is <strong>off by default</strong> and opted into per pool with <code>spec.au
 <p>Two deltas from the sketch this entry originally carried, both recorded so a reader is not left looking for what it described:</p>
 <ul>
 <li><strong>The field is <code>EgressProxy.spec.auditLogging</code>, not <code>spec.proxy.auditLogging</code>.</strong> The inline <code>ActionsGateway.spec.proxy</code> this entry predates was decomposed into the standalone <code>EgressProxy</code> kind (§H.4), and a proxy pool is what the record attributes.</li>
-<li>
-<p><strong>It is a string enum, not a bool.</strong> What gets recorded is a policy, so the <a href="../../development/api-review/#prefer-a-string-enum-to-a-bool">API design rules</a> put it on an enum whose values name the method: <code>Connections</code> today, with room for a kind of record that is not per-connection.</p>
-</li>
-<li>
-<p>Field contract and what the record deliberately omits: <a href="../05-security/#proxy-egress-audit-record">05-security.md § Proxy egress audit record</a>.</p>
-</li>
-<li>Record shape and how to select it: <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a>.</li>
+<li><strong>It is a string enum, not a bool.</strong> What gets recorded is a policy, so the <a href="../../development/api-review/#prefer-a-string-enum-to-a-bool">API design rules</a> put it on an enum whose values name the method, which is what let <code>ConnectionsWithSource</code> join <code>Connections</code> later without widening what an existing pool records.</li>
+</ul>
+<p>Attribution (Q986) is a third value plus a second record, not a wider first one.
+<code>ConnectionsWithSource</code> adds the client address to the egress record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> has the AGC write which job holds each worker address while its pod lives.
+That second record is necessary because a worker pod is deleted with its job, so the binding cannot be resolved afterwards.
+Both default <code>Off</code> and are opted into separately: neither record is a movement log alone, the join of the two is.</p>
+<ul>
+<li>Field contract and what the record deliberately omits: <a href="../05-security/#proxy-egress-audit-record">05-security.md § Proxy egress audit record</a>.</li>
+<li>Record shape and how to select it: <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a>, and the attribution join in <a href="../../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">§ Attributing a record to a tenant and a job</a>.</li>
 <li>Turning it on: <a href="../../operations/tenant-onboarding/#per-pool-egress-audit-record">tenant-onboarding.md § Per-pool egress audit record</a>.</li>
 </ul>
 <hr />

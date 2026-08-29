@@ -2765,7 +2765,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.7/">release-1.7.md</a></td>
 <td>The 1.7 release gate: untrusted-PR CI on Kata, via Q408 Phases 2 to 5 (the in-cluster registry pull-through mirror, the job-side wiring, and deleting the e2e tenant's open-egress NetworkPolicy), plus the three questions 1.6 left for this scope</td>
-<td>❌ Open, and unblocked. Scope written 2026-08-26, the day <code>v1.6.0</code> tagged, which is the trigger <a href="release-ladder/">release-ladder.md</a> recorded for it. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Nothing gates the tag now. Of 1.6's three hand-offs, <a href="../queue/Q215/">Q215</a>'s trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), <a href="../queue/Q986/">Q986</a> is admitted without a gate label and is reviewed at the candidate, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in, and <a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>'s criterion is re-worded to say so. What remains is release mechanics and the API-surface review</td>
+<td>❌ Open, and unblocked. Scope written 2026-08-26, the day <code>v1.6.0</code> tagged, which is the trigger <a href="release-ladder/">release-ladder.md</a> recorded for it. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Nothing gates the tag now. Of 1.6's three hand-offs, <a href="../queue/Q215/">Q215</a>'s trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), Q986 has landed, so Definition of Done #5 is claimed rather than narrowed, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in, and <a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>'s criterion is re-worded to say so. What remains is release mechanics and the API-surface review</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
@@ -2800,6 +2800,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Done — NetworkPolicy split shipped (commit <code>4932ce7</code>); proxied worker→GitHub egress live-validated via M4 §12</td>
 </tr>
 <tr>
+<td><a href="q986-egress-attribution/">q986-egress-attribution.md</a></td>
+<td>Attributing the proxy's per-connection egress audit record to a consuming tenant and a job: the two opted-in records, why a source address alone resolves to nothing once the worker pod is deleted, and the alternatives rejected on proxy privilege and on cross-object coupling</td>
+<td>✅ Done. Both halves shipped and the Definition of Done #5 row in <a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> is claimed</td>
+</tr>
+<tr>
 <td><a href="q243-egress-ip-reference-arch/">q243-egress-ip-reference-arch.md</a></td>
 <td>Per-tenant egress-IP reference architecture: how the proxy pool's per-tenant choke point is bound to a distinct, stable source IP at GitHub — Cilium Egress Gateway vs per-tenant cloud NAT — plus single-tenant-direct (dogfood) vs production multi-tenant topology, cost model, and a deferred live-validation plan</td>
 <td>ⓘ Design reference — design + full live validation done: per-range Cloud NAT gives distinct+stable per-tenant IPs (<a href="q243-q245-q230-live-validation-campaign/">campaign</a>), and a real GMC-provisioned EgressProxy pins to a single per-tenant egress IP (live PASS 2026-07-13, <code>scripts/dev/validate-egress-ip.sh</code>). Approach-A (Cilium EG) fail-open/kill-switch/SNAT-headroom validation stays deferred</td>
@@ -2822,7 +2827,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a></td>
 <td>The umbrella goal: a map, a threat model for the untrusted contributor, a definition of done, and the residual risk accepted. Delegates all design to q408 and does not restate it</td>
-<td>ⓘ Ongoing goal doc. Kernel isolation, the pod floor, the metadata assertion and now the network layer are shipped (Q408, validated 2026-08-28), taking Definition of Done items 1 to 3; the cache and evidence layers stay open on <a href="../queue/Q215/">Q215</a> and <a href="../queue/Q986/">Q986</a></td>
+<td>ⓘ Ongoing goal doc. Kernel isolation, the pod floor, the metadata assertion and now the network layer are shipped (Q408, validated 2026-08-28), taking Definition of Done items 1 to 3; the evidence layer closed with Q986 (Definition of Done #5), and the cache layer stays open on <a href="../queue/Q215/">Q215</a></td>
 </tr>
 <tr>
 <td><a href="caching-and-worker-storage/">caching-and-worker-storage.md</a></td>

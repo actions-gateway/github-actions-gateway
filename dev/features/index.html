@@ -2904,6 +2904,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
   Readable from <code>kubectl describe</code>, so answering it no longer needs metrics access.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
 <li><strong><a href="../operations/observability-logging/#proxy-egress-audit-record">Per-pool egress audit record</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.</li>
+<li><strong><a href="../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">Which host each job reached</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.7</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.</li>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>
 <ul>

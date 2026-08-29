@@ -3870,10 +3870,14 @@ Neither relies on the other, so a GMC newer than the proxy image, which is the s
 <td>Tunnel duration</td>
 <td>A number</td>
 </tr>
+<tr>
+<td>Client source address, under <code>ConnectionsWithSource</code> only</td>
+<td>Read off the accepted connection, never a request header, so a worker cannot forge it. See the attribution section below for why it is a separate value rather than a widening of <code>Connections</code></td>
+</tr>
 </tbody>
 </table>
 <p>Not in it, and unreachable from the code path that writes it: <strong>any request header</strong> (<code>Proxy-Authorization</code> above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
-The client's source IP is omitted deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
+The client's source IP is omitted under <code>Connections</code>, deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
 The record is written at <strong>info</strong>, so it never depends on raising a pool to <code>debug</code>, and raising a pool to <code>debug</code> never adds a field to it.</p>
 <p><strong>The authority is capped wherever it is logged, not only in the record.</strong> It is tenant-controlled text and <code>http.Server</code> admits a request line up to <code>MaxHeaderBytes</code> (1 MiB by default), so an uncapped log site is a volume amplifier a worker drives on demand: measured at 400,167 bytes written for one 200,000-byte authority, because the dial-failure path logged it twice (the <code>host</code> attribute, and the dial error, which embeds the address).
 The GMC-built configuration is where that bites.
@@ -3882,10 +3886,26 @@ All four sites in <code>handleConnect</code> that log the authority are therefor
 Splitting is why the record needs both: a cap on the host alone leaves the port unbounded, and Go's port parser ignores leading zeros without saturating, so a zero-padded port dials the real port and carries arbitrary length into the line.
 The dial error is bounded separately too, since capping only the <code>host</code> attribute would leave half that volume in place.
 One policy for one field, so a reader here does not have to work out which log line it covers.</p>
-<p><strong>A shared pool attributes per pool, not per tenant.</strong> <code>spec.sharing.allowedNamespaces</code> lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
-The record is still un-forgeable and still says which destination was reached; what it cannot do on a shared pool is say by whom.
-Nothing is added to close that here: the only field that would is the client's source IP, and adding it to every record is the movement-log trade above, which no measurement settles.
-A pool whose audit trail has to name the tenant should not be shared.</p>
+<p><strong>A shared pool attributes per pool, not per tenant under <code>Connections</code>.</strong> <code>spec.sharing.allowedNamespaces</code> lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
+The record is still un-forgeable and still says which destination was reached; what it cannot do under that value is say by whom.
+Closing it is <code>ConnectionsWithSource</code> plus the consuming gateway's own opt-in, below.
+A pool left on <code>Connections</code> and shared has an audit trail that cannot name the tenant, and should not be shared.</p>
+<p><strong>Attribution is two opted-in records, not one wider one (Q986).</strong> The source address is what ties a connection to a consumer and to a job, and it is what turns an egress record into a per-worker movement log, so it is a further retention decision rather than a wider view of the one <code>Connections</code> already made.
+That is why it is a separate enum value rather than a field added to the record everyone on <code>Connections</code> already gets: an image upgrade must not start recording where a tenant's individual workers went.</p>
+<p>The address alone still resolves to nothing.
+A worker pod is <strong>deleted when its job ends</strong> and its address returns to the CNI's pool, so nothing can look up afterwards which pod held it.
+The binding has to be written down while the pod exists, which is <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code>: the AGC writes one record when a worker's address becomes live and one when the pod goes away, each carrying the pod's namespace and the run ID and repository of its job, and <strong>no destination at all</strong>.</p>
+<p>Neither record is a movement log by itself.
+The proxy's says where a pool went; the AGC's says which job held an address.
+So each half is opted into on its own object and both default <code>Off</code>.
+Two switches rather than one is also what keeps an <code>EgressProxy</code> edit from rolling every gateway that references it across namespaces.
+An operator can enable half, which records addresses nothing names or bindings nothing asks about; that degrades to no attribution rather than to anything false.</p>
+<p>The join rests on the proxy seeing the worker's own address, which holds because pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path.
+A CNI that SNATs it breaks attribution, which is why the operator docs say to check.
+The gateway's own control-plane egress shares the pool and is bound by nothing, so an auditor separates it from a job's by finding no binding for its address.</p>
+<p>The AGC record is written at <strong>info</strong> for the same reason the proxy's is, and it does not resolve anything the AGC does not already hold: the run ID and repository are annotations it stamps on every worker pod at creation, and the shared pod informer already watches every worker pod on both acquisition tiers.
+Notably the <strong>proxy</strong> resolves nothing.
+It has no Kubernetes client at all, and it is the one component untrusted worker code talks to directly, so giving it cross-namespace pod read to save a join the log pipeline is already doing was rejected.</p>
 <p>Only <strong>accepted</strong> CONNECTs produce a record.
 A refusal and a failed dial already have their warn/error line and their counter (<code>actions_gateway_proxy_connect_denied_total</code>, <code>actions_gateway_proxy_dial_errors_total</code>); recording them here would double-count a connection that carried no egress.</p>
 <p>See <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a> for the shape, and <a href="../../operations/tenant-onboarding/#per-pool-egress-audit-record">tenant-onboarding.md § Per-pool egress audit record</a> for turning it on.</p>

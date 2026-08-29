@@ -2631,10 +2631,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#q986-is-in-scope-and-it-is-what-definition-of-done-5-actually-costs" class="md-nav__link">
+  <a href="#q986-landed-and-definition-of-done-5-is-claimed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Q986 is in scope, and it is what Definition of Done #5 actually costs
+        Q986 landed, and Definition of Done #5 is claimed
       
     </span>
   </a>
@@ -2714,7 +2714,7 @@
 <blockquote>
 <p><strong>Status: the gating row is closed as of 2026-08-28.</strong> Q408 built the in-cluster registry pull-through mirror, wired the job-side clients to it, deleted the e2e tenant's open-egress NetworkPolicy, and published the recipe as the supported posture; all five phases are done and the row is gone (<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>).
 It was the only <code>1.7-gate</code> row, so nothing now blocks the tag.
-What remains is release mechanics plus the two reviews below that run at the candidate rather than before it: Q986's state, and the API surface diff.
+What remains is release mechanics plus the one review below that runs at the candidate rather than before it: the API surface diff.
 The bump is measured rather than assumed, and it has moved since this scope opened: <code>semver-floor.sh v1.6.0</code> read six commits and <strong>FLOOR: NONE</strong> on 2026-08-26, and reads 45 commits and <strong>FLOOR: MINOR</strong> on 2026-08-28, set by five AGC changes that touch the released surface.
 Fifteen more carry a <code>feat</code> or <code>fix</code> subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains, and Q408's own commits are all in that group: the deliverable is manifests, wiring and docs.</p>
 </blockquote>
@@ -2787,13 +2787,15 @@ That is GAG dogfooding its own posture, not a tenant losing a capability, so the
 <p>The row has been rewritten to say so, because an ambiguous trigger is a standing query nobody can re-run, which is the failure mode <a href="../release-ladder/#the-rule-this-establishes">release-ladder.md</a> names.</p>
 <p><strong>One asymmetry is worth recording rather than leaving to be rediscovered.</strong> The direct-egress form admits GitHub CIDRs, and the Azure blob store is not in them, so a tenant on that form has no working <code>actions/cache</code> now and never did.
 The trigger reads on the proxy form because that is where the capability exists to lose.</p>
-<h3 id="q986-is-in-scope-and-it-is-what-definition-of-done-5-actually-costs">Q986 is in scope, and it is what Definition of Done #5 actually costs<a class="headerlink" href="#q986-is-in-scope-and-it-is-what-definition-of-done-5-actually-costs" title="Permanent link">&para;</a></h3>
-<p><a href="../../queue/Q986/">Q986</a> is the gap under <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #5, a per-tenant and per-job record of which host each job reached.
-Q564 shipped the egress audit record in 1.6 and attributes per pool, so the tenant half holds only on an unshared pool and the job half holds nowhere.</p>
-<p><strong>It is admitted to 1.7 but does not gate the tag.</strong> The reasoning is that an untrusted-PR claim without attribution is a claim about controls with no evidence behind them, which argues for the gate; and against it, that Q986's own row says neither half closes on a source identifier alone: tenant needs IP to namespace, job needs IP to pod to the AGC's mapping, and Q564 already declined the client IP as a per-worker movement log nothing has weighed.
-A gate on a row whose first step is a declined design is a gate on a decision, not on a build.</p>
-<p>So Q986 is ranked into the release and reviewed at the candidate: if it has landed, Definition of Done #5 is claimed; if it has not, the docs say which half of the record exists, and the claim stays narrowed to an unshared pool.
-It takes no <code>1.7-gate</code> label, which keeps the label meaning "blocks the tag" rather than "belongs to the release".</p>
+<h3 id="q986-landed-and-definition-of-done-5-is-claimed">Q986 landed, and Definition of Done #5 is claimed<a class="headerlink" href="#q986-landed-and-definition-of-done-5-is-claimed" title="Permanent link">&para;</a></h3>
+<p>Q986 was the gap under <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #5, a per-tenant and per-job record of which host each job reached.
+Q564 shipped the egress audit record in 1.6 and attributes per pool, so the tenant half held only on an unshared pool and the job half held nowhere.</p>
+<p><strong>It was admitted to 1.7 without gating the tag</strong>, on the reasoning that its first step was a declined design rather than a build: Q564 had declined the client IP as a per-worker movement log nothing had weighed, and the row said neither half closed on a source identifier alone.</p>
+<p>It shipped anyway, and the row was right that the identifier alone closes nothing — for a reason the row did not name.
+A worker pod is deleted when its job ends, so a source address resolves to nothing after the fact and the binding has to be recorded live.
+The answer is two opted-in records rather than one wider one: <code>EgressProxy.spec.auditLogging: ConnectionsWithSource</code> puts the client address on the egress record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> has the AGC say which job holds each address while its pod lives.
+Both default <code>Off</code>, because neither is a movement log alone and the join of the two is.
+Scope and the rejected alternatives are in <a href="../q986-egress-attribution/">q986-egress-attribution.md</a>.</p>
 <h3 id="the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve">The default-versus-opt-in conflict is real and is this release's to resolve<a class="headerlink" href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" title="Permanent link">&para;</a></h3>
 <p><a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #1 requires the isolated posture to be the default rather than an opt-in.
 <a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a> declines exactly that, because a shipped default template would silently hand a privileged pod shape to sets that never asked for one.</p>
@@ -2815,15 +2817,16 @@ The criterion now also records the decline, so a later reading cannot revive the
 <li><strong>The trusted-CI caveat is gone</strong> from <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>, replaced by the reference architecture, with <a href="../../operations/security-operations/">security-operations.md</a> linking the concrete manifests it has recommended in the abstract since before they existed.</li>
 <li><strong>The default-versus-opt-in conflict is resolved</strong> in whichever direction Phase 4's evidence supports, and the losing text is rewritten rather than left standing.</li>
 <li><strong>G.14 and the roadmap reflect it</strong>: <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a> marked shipped, the <a href="../../roadmap/">roadmap</a> entry moved out of "exploring".</li>
-<li><strong>Q986 reviewed at the candidate</strong>, per the section above: landed and claimed, or not landed and the docs narrowed to what the record actually attributes.</li>
+<li><strong>Definition of Done #5 claimed</strong>, per the section above: Q986 landed, so the release claims a per-tenant and per-job record of which host each job reached rather than narrowing to an unshared pool.</li>
 <li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.6.0..&lt;rc commit&gt;</code>.
-   This release expects it to be empty, which makes a non-empty result a finding rather than a formality.</li>
+   Q986 adds two additive fields to the v2 surface, so this release expects exactly those and nothing else: a <code>ConnectionsWithSource</code> value on <code>EgressProxy.spec.auditLogging</code>, and a new <code>ActionsGateway.spec.auditLogging</code> defaulting <code>Off</code>.
+   Anything beyond them is a finding rather than a formality.</li>
 <li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
 </ol>
 <h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
 <p>Phase 2 → Phase 3 → Phase 4 → Phase 5, strictly, because each phase's validation is the next one's precondition: manifests must serve before wiring can be proven to ride them, and wiring must be proven before enforcement can be distinguished from breakage.
 Phases 2, 3 and 4 book dogfood sessions.
-Nothing else in the release is on that path: Q986 runs beside it, and the docs decision resolves inside Phase 5.</p>
+Nothing else in the release is on that path: Q986 ran beside it and has landed, and the docs decision resolves inside Phase 5.</p>
 
 
 

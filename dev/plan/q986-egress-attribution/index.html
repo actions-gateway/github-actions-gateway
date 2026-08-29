@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q725/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q986-egress-attribution/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Security and compliance dashboard for the audit persona - GitHub Actions Gateway</title>
+        <title>Q986 — attributing an egress audit record to a tenant and a job - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#security-and-compliance-dashboard-for-the-audit-persona" class="md-skip">
+        <a href="#q986--attributing-an-egress-audit-record-to-a-tenant-and-a-job" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Security and compliance dashboard for the audit persona
+              Q986 — attributing an egress audit record to a tenant and a job
             
           </span>
         </div>
@@ -2579,6 +2579,108 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-record-is-missing-and-why-one-field-is-not-enough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the record is missing, and why one field is not enough
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Approach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-proxy-does-not-resolve-the-identity-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the proxy does not resolve the identity itself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-two-switches-rather-than-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why two switches rather than one
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assumptions-this-rests-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assumptions this rests on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,19 +2699,88 @@
   
 
 
-<h1 id="security-and-compliance-dashboard-for-the-audit-persona">Security and compliance dashboard for the audit persona<a class="headerlink" href="#security-and-compliance-dashboard-for-the-audit-persona" title="Permanent link">&para;</a></h1>
-<p>The proxy's opt-in per-connection audit record (Q564) attributes per pool by default, and per tenant and per job only where the operator has turned on both halves of the Q986 attribution pair (<code>ConnectionsWithSource</code> plus <code>WorkerAddresses</code>).
-So a dashboard keyed on the consumer has to say which of the two it is reading, and show nothing rather than the pool's traffic when the pair is off.
-The Security persona needs evidence produced unprompted: per-tenant egress attribution, admission rejections, abuse signals.</p>
+<h1 id="q986--attributing-an-egress-audit-record-to-a-tenant-and-a-job">Q986 — attributing an egress audit record to a tenant and a job<a class="headerlink" href="#q986--attributing-an-egress-audit-record-to-a-tenant-and-a-job" title="Permanent link">&para;</a></h1>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>Let an operator answer "which host did this job reach", from the proxy's opt-in per-connection audit record, on a shared pool as well as an unshared one.
+That is Definition of Done #5 of <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>, which the record does not meet today on either dimension.</p>
+<h2 id="what-the-record-is-missing-and-why-one-field-is-not-enough">What the record is missing, and why one field is not enough<a class="headerlink" href="#what-the-record-is-missing-and-why-one-field-is-not-enough" title="Permanent link">&para;</a></h2>
+<p>The record's seven fields name the pool, the destination, and the byte counts.
+Nothing on it identifies the caller, which costs two separate things:</p>
+<ul>
+<li><strong>Tenant.</strong> <code>namespace</code> is the downward-API namespace of the pool, so on a pool shared via <code>spec.sharing.allowedNamespaces</code> a record cannot say which consumer reached the destination.</li>
+<li><strong>Job.</strong> No field ties a connection to a job on any pool, so the "which host each job reached" half is unmet even unshared.</li>
+</ul>
+<p>Both need a per-connection source identifier, which Q564 declined: the client IP on every record is a per-worker movement log, and the trade had not been weighed.
+Adding the IP alone still closes neither gap, and one measurement says why.</p>
+<p><strong>Worker pods are deleted at job completion</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/completion.go">completion.go</a>), so a source IP resolved after the fact against live cluster state resolves to nothing.
+The pod that held the address is gone, and the address is back in the CNI's pool.
+Whatever turns an IP into a tenant and a job has to be recorded while the pod still exists.</p>
+<h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
+<p>Two records, joined by the operator's log pipeline on address plus time.</p>
+<p><strong>The proxy</strong> gains a third <code>auditLogging</code> value, <code>ConnectionsWithSource</code>, which adds <code>sourceIP</code> and <code>sourcePort</code> to the record it already writes.
+The source address comes from the accepted connection, not from a request header, so a worker cannot forge it — the same property that makes the pool namespace trustworthy.</p>
+<p><strong>The AGC</strong> gains its own <code>auditLogging</code> field, defaulting <code>Off</code>, whose <code>WorkerAddresses</code> value writes one record when a worker pod's address is first observed and one when the pod goes away.
+That record carries the consuming tenant's namespace and the job's run ID and repository, both of which the AGC already holds: the annotations are stamped on every worker pod (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/payload.go">payload.go</a>), and the shared pod informer already watches every worker pod on both acquisition tiers.</p>
+<p>Neither record is a movement log by itself.
+The proxy's says where a pool went; the AGC's says which job held an address, and names no destination at all.
+The join is what produces attribution, which is why both halves are opted into separately and both default off.</p>
+<h3 id="why-the-proxy-does-not-resolve-the-identity-itself">Why the proxy does not resolve the identity itself<a class="headerlink" href="#why-the-proxy-does-not-resolve-the-identity-itself" title="Permanent link">&para;</a></h3>
+<p>The alternative is a proxy that maps the source address to a pod and writes <code>runID</code> directly, one self-contained line and no join.
+It was rejected on privilege: <code>cmd/proxy/go.mod</code> pulls in no Kubernetes client at all today, and the proxy is the one component untrusted worker code talks to directly.
+Giving it cross-namespace pod read, an informer, and a cache is a large increase in what a compromised proxy is worth, to save a join the log pipeline is already doing.</p>
+<h3 id="why-two-switches-rather-than-one">Why two switches rather than one<a class="headerlink" href="#why-two-switches-rather-than-one" title="Permanent link">&para;</a></h3>
+<p>An <code>EgressProxy</code> is referenced across namespaces, so driving the AGC's record from the proxy's field would make one <code>EgressProxy</code> edit roll every AGC deployment that references it.
+The AG controller watches no <code>EgressProxy</code> today, so that coupling is also new machinery.
+The cost of two switches is that an operator can turn on half: source IPs the AGC never bound, which read as unattributable rather than as anything false.
+The operator docs lead with turning on both.</p>
+<h2 id="assumptions-this-rests-on">Assumptions this rests on<a class="headerlink" href="#assumptions-this-rests-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The proxy sees the worker's pod IP.</strong> Traffic from a worker pod to the proxy's ClusterIP is not source-NAT'd on the in-cluster path, so <code>RemoteAddr</code> is the pod's own address.
+  A CNI that SNATs pod-to-service traffic breaks the join; the operator doc says to check this.</li>
+<li><strong>The AGC's own control-plane egress shares the pool.</strong> Its connections carry a source address no bind record names, which is how an auditor tells control-plane traffic from a worker's.</li>
+</ul>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api/v2alpha1</code>, <code>api/v2beta1</code></td>
+<td><code>EgressProxy.spec.auditLogging</code> gains <code>ConnectionsWithSource</code>; <code>ActionsGateway.spec.auditLogging</code> is new, <code>Off</code> or <code>WorkerAddresses</code></td>
+</tr>
+<tr>
+<td><code>cmd/proxy</code></td>
+<td>Parse the new mode; add <code>sourceIP</code>/<code>sourcePort</code> to the record</td>
+</tr>
+<tr>
+<td><code>cmd/gmc</code></td>
+<td>Thread <code>AGC_AUDIT_LOGGING</code> onto the v2 AGC deployment; the proxy's value already passes through verbatim</td>
+</tr>
+<tr>
+<td><code>cmd/agc</code></td>
+<td>Emit the bind/release record from the shared pod informer</td>
+</tr>
+<tr>
+<td>Docs</td>
+<td>Record shape and the join in <code>observability-logging.md</code>; the trade in <code>05-security.md</code>; turning it on in <code>tenant-onboarding.md</code>; the DoD row in <code>secure-multi-tenant-oss-ci.md</code>; <code>features.md</code> and <code>why-gag.md</code></td>
+</tr>
+</tbody>
+</table>
+<p>The deprecated <code>v1alpha1</code> <code>ActionsGateway</code> gets nothing: it is served until <code>v2.0.0</code> removes it, and this is a v2 capability.</p>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p>✅ Shipped 2026-08-28.
+Both opt-ins landed with their own unit coverage, and the Definition of Done #5 row in <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> is claimed.
+Not yet exercised end-to-end on a cluster: the join's CNI assumption is asserted in the operator docs rather than measured on a dogfood run.</p>
 
 
 
 
 
 
-
-  
-  
 
 
 
