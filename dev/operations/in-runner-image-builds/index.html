@@ -3028,6 +3028,8 @@ Like Sysbox it needs <strong>no</strong> <code>privileged: true</code> container
 <li><strong>Setup is cluster-admin:</strong> install the Kata runtime (DaemonSet) on the eligible nodes and create the <code>kata-qemu</code> <code>RuntimeClass</code>; GAG's controllers never install runtime handlers, they only honour a tenant-set <code>runtimeClassName</code>.</li>
 <li><strong>Full how-to:</strong> node prerequisites, the DaemonSet + <code>RuntimeClass</code> install, the worker <code>podTemplate</code> field, and the security rationale are in <a href="../kata-dind-workloads/">Kata DinD / image-build workloads</a>.
   Prefer this over Approach 4 whenever the daemon is genuinely required.</li>
+<li><strong>For untrusted code, the micro-VM is half the posture.</strong> Kata bounds the guest kernel and narrows no egress, so an external contributor's build still reaches whatever the tenant's network policy permits.
+  The other half is an in-cluster registry mirror plus egress scoped to it, GitHub, and DNS, which ships as manifests: <a href="../kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a>.</li>
 </ul>
 <h2 id="sidecar-containers-must-be-native-sidecars-q249">Sidecar containers must be native sidecars (Q249)<a class="headerlink" href="#sidecar-containers-must-be-native-sidecars-q249" title="Permanent link">&para;</a></h2>
 <p>Several approaches above run the build engine as a <strong>sidecar container</strong> — a <code>docker:dind</code> daemon (Approach 4), a <code>moby/buildkit:*-rootless</code> sidecar (Approach 1), or any long-running helper alongside the runner container.
@@ -3109,7 +3111,7 @@ Under a concurrent matrix the pool strands (the same failure class as a pod stuc
 <td><strong>Kata Containers</strong> (<code>runtimeClassName: kata-qemu</code>)</td>
 <td><code>privileged</code> label (capability adds exceed PSS baseline) — pod stays unprivileged</td>
 <td>No</td>
-<td>Needs nested-virt nodes (<code>/dev/kvm</code>) + Kata DaemonSet/<code>RuntimeClass</code>. See <a href="../kata-dind-workloads/">Kata DinD workloads</a>.</td>
+<td>Needs nested-virt nodes (<code>/dev/kvm</code>) + Kata DaemonSet/<code>RuntimeClass</code>. See <a href="../kata-dind-workloads/">Kata DinD workloads</a>, and for public PRs <a href="../kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a> it pairs with.</td>
 </tr>
 <tr>
 <td>Workload genuinely requires a privileged Docker daemon and Sysbox/Kata are unavailable</td>

@@ -2712,12 +2712,11 @@
 
 <h1 id="release-17-milestone-definition">Release 1.7 Milestone Definition<a class="headerlink" href="#release-17-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scope opened 2026-08-26</strong>, the day <code>v1.6.0</code> tagged, which is the trigger the <a href="../release-ladder/">ladder</a> recorded for writing this doc.
-1.7 is the untrusted-PR CI release: <a href="../../queue/Q408/">Q408</a> Phases 2 to 5 build the in-cluster registry pull-through mirror, wire the job-side clients to it, and delete the e2e tenant's open-egress NetworkPolicy.
-Phase 1 validated 2026-08-24, so the non-registry residual is measured gone rather than argued away; what is left is registry egress.
-Q408 is the only <code>1.7-gate</code> row, and it is an <code>L</code> with a phased plan doc already written (<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>).
-The bump is unforced so far, and measured rather than assumed: <code>semver-floor.sh v1.6.0</code> reads six commits and reports <strong>FLOOR: NONE</strong>.
-Four of them carry a <code>feat</code> or <code>fix</code> subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.</p>
+<p><strong>Status: the gating row is closed as of 2026-08-28.</strong> Q408 built the in-cluster registry pull-through mirror, wired the job-side clients to it, deleted the e2e tenant's open-egress NetworkPolicy, and published the recipe as the supported posture; all five phases are done and the row is gone (<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>).
+It was the only <code>1.7-gate</code> row, so nothing now blocks the tag.
+What remains is release mechanics plus the two reviews below that run at the candidate rather than before it: Q986's state, and the API surface diff.
+The bump is measured rather than assumed, and it has moved since this scope opened: <code>semver-floor.sh v1.6.0</code> read six commits and <strong>FLOOR: NONE</strong> on 2026-08-26, and reads 45 commits and <strong>FLOOR: MINOR</strong> on 2026-08-28, set by five AGC changes that touch the released surface.
+Fifteen more carry a <code>feat</code> or <code>fix</code> subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains, and Q408's own commits are all in that group: the deliverable is manifests, wiring and docs.</p>
 </blockquote>
 <h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
 <p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md § Why untrusted-PR CI on Kata is 1.7</a> recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
@@ -2749,12 +2748,12 @@ What this scope adds is the release's read of them.</p>
 </tr>
 <tr>
 <td>2. Mirror manifests</td>
-<td>❌</td>
+<td>✅ authored 2026-08-27, validated 2026-08-28</td>
 <td><code>deploy/registry-mirror/</code>, one instance per upstream, applied from the e2e setup path</td>
 </tr>
 <tr>
 <td>3. Wiring</td>
-<td>❌</td>
+<td>✅ built and validated 2026-08-28</td>
 <td>A green Kata e2e run <strong>with open egress still present</strong> and mirror hit counts &gt; 0, so wiring is proven before enforcement changes</td>
 </tr>
 <tr>
@@ -2764,14 +2763,14 @@ What this scope adds is the release's read of them.</p>
 </tr>
 <tr>
 <td>5. Docs and close-out</td>
-<td>❌</td>
-<td>The caveat flips to a how-to; G.14 marked shipped; the roadmap entry leaves "exploring"</td>
+<td>✅ 2026-08-28</td>
+<td>The caveat became a how-to; G.14 marked shipped; the roadmap bullet deleted and the capability moved to Features</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Phases 2, 3 and 4 each needed a live dogfood session</strong>, prod-guarded and operator-driven, and all three have now run (2026-08-27 and 2026-08-28).
+<p><strong>Phases 2, 3 and 4 each needed a live dogfood session</strong>, prod-guarded and operator-driven, and all three ran (2026-08-27 and 2026-08-28).
 That was the schedule risk in this release and it was not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
-Phase 5 needs no cluster, so nothing gating 1.7 is waiting on one.</p>
+Phase 5 needed no cluster, so the release never waited on one after 2026-08-28.</p>
 <p><strong>Phase 3 had to run with the image caches cold</strong>, so the <code>quay.io</code> and <code>registry.k8s.io</code> prepulls were exercised rather than skipped.
 A warm run would have reported hit counts that prove nothing about the paths a fresh tenant takes.
 Nothing had to be arranged for it: Phase 1 removed every <code>actions/cache</code> step from the self-hosted lane, so that lane has been cold since, which is why Phase 4's run reported the same five instances serving too.</p>
@@ -2798,10 +2797,9 @@ It takes no <code>1.7-gate</code> label, which keeps the label meaning "blocks t
 <h3 id="the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve">The default-versus-opt-in conflict is real and is this release's to resolve<a class="headerlink" href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" title="Permanent link">&para;</a></h3>
 <p><a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #1 requires the isolated posture to be the default rather than an opt-in.
 <a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a> declines exactly that, because a shipped default template would silently hand a privileged pod shape to sets that never asked for one.</p>
-<p>Both are defensible and they cannot both stand as written, so 1.7 rewrites one of them.
-The resolution is not pre-empted here, but the shape the evidence points at is worth stating: the library's objection is to shipping a <em>template</em> as a default, and the goal doc's requirement is that the <em>posture</em> be the default, which is a NetworkPolicy and a mirror rather than a pod shape.
-If that distinction holds, both survive with the goal doc's criterion re-worded to name the posture; if it does not, the criterion is the one that changes, because the library's rationale is a security argument and the criterion is an aspiration.</p>
-<p><strong>This is a docs decision with a gate attached, not a build</strong>, and it belongs in Phase 5 rather than ahead of it, because Phase 4 is what establishes whether the posture is deployable without a template change at all.</p>
+<p><strong>Resolved 2026-08-28, in the direction the evidence pointed at.</strong> The distinction holds, and Phase 4 is what established it: enforcement shipped as the <strong>deletion</strong> of an additive allow-all policy, with no template change of any kind, so the network posture is what an operator gets by not acting while the pod shape stays a deliberate <code>templateRef</code>.
+Definition of Done #1 is re-worded to say that, and <a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md</a> stands unedited: its objection was to shipping a <em>template</em> as a default and nothing here asks for one.
+The criterion now also records the decline, so a later reading cannot revive the demand without re-arguing the security case against it.</p>
 <h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a>.</strong> Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before Dragonfly and the composed stack are graded against it (<a href="../q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a>).

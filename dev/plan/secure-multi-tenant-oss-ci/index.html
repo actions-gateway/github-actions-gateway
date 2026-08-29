@@ -2766,7 +2766,7 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 <tr>
 <td>Network egress</td>
 <td>Default-deny NetworkPolicy, per-tenant proxy pool, in-cluster pull-through mirror, egress scoped to mirror plus GitHub plus DNS</td>
-<td><strong>Open.</strong> Design and phases in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>; validations are Q539 and Q540</td>
+<td><strong>Shipped and validated (Q408, 2026-08-28).</strong> A Kata worker reaches cluster DNS on 53, GitHub on 443 and the mirrors on 5000 and nothing else, measured on the dogfood cluster by in-job negatives against controls that answered, on every run of the lane. Recipe: <a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">kata-dind-workloads.md § Untrusted pull requests</a>; design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>. <a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a> grade two variants against the contract this validated, and are follow-ons rather than gaps</td>
 </tr>
 <tr>
 <td>Node metadata</td>
@@ -2796,10 +2796,14 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 </tbody>
 </table>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<p>Broader than Q408's success criteria, which bound the mirror work only.
+<p>Broader than Q408's success criteria, which bound the mirror work only and are met.
 This milestone is done when all of the following hold, each demonstrated rather than argued:</p>
 <ol>
-<li>A job from an untrusted fork pull request runs on a shared cluster with a kernel it cannot escape into anything useful, and that is the default posture rather than an opt-in.</li>
+<li>A job from an untrusted fork pull request runs on a shared cluster with a kernel it cannot escape into anything useful, and reaching that state costs one documented step rather than a design of the adopter's own.
+   <strong>The default-versus-opt-in question splits, and Q408's Phase 4 is what split it.</strong> The <em>network</em> posture is the default and always was: a tenant's egress is default-deny plus GitHub, and what Phase 4 shipped was the <strong>deletion</strong> of an additive allow-all rather than a new object, so weakening the posture is the deliberate act and holding it is the resting state.
+   The <em>pod shape</em> is not the default and must not become one: a <code>ClusterRunnerTemplate</code> marked default applies to every <code>RunnerSet</code> naming no template, so shipping the Kata shape as a cluster default would hand a privileged capability set to sets that never asked for one (<a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a>).
+   This criterion therefore asks that the secure state be what an operator gets by not acting, and that adopting the kernel boundary on top be one <code>kubectl apply -k</code> against a shipped template.
+   It does not ask for a default template, and a future reading that revives that demand is reading a criterion this project already declined on a security argument.</li>
 <li>Its egress reaches the mirror, GitHub, and DNS, and an end-to-end run's logs name no other host.</li>
 <li>It cannot reach the node's metadata service, and a test asserts this on a policy-enforcing CNI rather than a doc recommending it.</li>
 <li>It cannot read another tenant's cache, secrets, or job payloads, including through anything the platform provides for its convenience.</li>
@@ -2825,14 +2829,16 @@ This milestone is done when all of the following hold, each demonstrated rather 
 <p>Down to earth, current state only:</p>
 <blockquote>
 <p>Kata micro-VM workers are validated end to end and are the default for GAG's own CI, which builds a kind cluster inside an unprivileged worker pod.
-That makes them suitable for <strong>trusted</strong> CI today.
-Untrusted pull requests need the egress work tracked in Q408 before we would recommend them, and that gap is stated on the roadmap rather than papered over.</p>
+Their egress is now closed to match: an in-cluster registry mirror carries every image pull, the tenant carries no allow-all rule, and a run's own probes confirm that a worker reaches cluster DNS, GitHub and the mirror and nothing else.
+What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.</p>
 </blockquote>
-<p>Do not claim untrusted-PR readiness until the definition of done above is met.
+<p>Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
+Items 4 and 5 are open, on <a href="../../queue/Q215/">Q215</a> and <a href="../../queue/Q986/">Q986</a>, and <a href="../../queue/Q1020/">Q1020</a> is the part of item 4 the mirror itself introduced: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses and the docs owe them the basis for it.
+Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, which does not satisfy Definition of Done #5 on either dimension: see the Evidence row).</p>
-<p>Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (the record names nobody who made the connection, which is both residuals on Definition of Done #5: tenant on a shared pool, job on any pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
+<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, which does not satisfy Definition of Done #5 on either dimension: see the Evidence row), and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
+<p>Open, with rows: Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (the record names nobody who made the connection, which is both residuals on Definition of Done #5: tenant on a shared pool, job on any pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
 <ol>

@@ -2777,7 +2777,7 @@ Do not read this table as three deployments.</p>
 <td><strong>Image pulls</strong></td>
 <td>Container images the node pulls to start a worker</td>
 <td>Upstream registries, over per-tenant egress</td>
-<td><a href="../../queue/Q408/">Q408</a>, <a href="../../queue/Q539/">Q539</a>, <a href="../../queue/Q540/">Q540</a></td>
+<td>Q408, <a href="../../queue/Q539/">Q539</a>, <a href="../../queue/Q540/">Q540</a></td>
 </tr>
 <tr>
 <td><strong>Job cache</strong></td>
@@ -2844,7 +2844,7 @@ What a local cache would buy is egress cost and restore latency, not capability.
 Stating it the current way concedes a loss that has not happened, and it hides the loss that has: no local cache means every restore is a round trip out of the cluster and back, which on-premises or on metered egress is the expensive path.</p>
 <h2 id="the-collision-with-the-security-goal">The collision with the security goal<a class="headerlink" href="#the-collision-with-the-security-goal" title="Permanent link">&para;</a></h2>
 <p><strong>This is the reason the two goals cannot be planned separately.</strong></p>
-<p><a href="../../queue/Q408/">Q408</a> Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
+<p>Q408 Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
 The Actions cache data plane is a <strong>non-GitHub host</strong>, so closing that egress removes <code>actions/cache</code>.
 This is already the measured state of GAG's own self-hosted CI lane, where every <code>actions/cache</code> step is skipped because the hardened egress rule does not admit it (<a href="../../development/testing/#the-e2e-workflows-kindnet-and-calico">testing.md</a>, and <a href="../q408-untrusted-pr-egress/">q408 §3</a> has the measurement).</p>
 <p>The consequences run one way:</p>
@@ -2895,8 +2895,8 @@ ARC has none either, so this is not a reason to prefer ARC; GitLab Runner and th
 <p>Do not claim a local cache, a shared build cache, or persistent worker storage.
 Do not repeat that <code>actions/cache</code> has no home.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>).</p>
-<p>Open, with rows: <a href="../../queue/Q408/">Q408</a> (mirror design and phases), <a href="../../queue/Q539/">Q539</a> (Dragonfly as the mirror backend), <a href="../../queue/Q540/">Q540</a> (composed node-layer and guest-layer stack), <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
+<p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).</p>
+<p>Open, with rows: <a href="../../queue/Q539/">Q539</a> (Dragonfly as the mirror backend), <a href="../../queue/Q540/">Q540</a> (composed node-layer and guest-layer stack), <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
 <p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether <em>one</em> deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.

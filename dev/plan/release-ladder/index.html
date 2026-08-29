@@ -2707,7 +2707,7 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 </tr>
 <tr>
 <td><strong>1.7</strong></td>
-<td>Untrusted-PR CI on Kata: <a href="../../queue/Q408/">Q408</a> Phases 2 to 5, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" (<a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>)</td>
+<td>Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" (<a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>)</td>
 <td><a href="../release-1.7/">release-1.7.md</a></td>
 </tr>
 <tr>
@@ -2756,10 +2756,11 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 </tr>
 </tbody>
 </table>
-<p>Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it has left this accounting and six of the original seven remain in it, which is the set the sentence below counts against.
+<p>Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, so five of the original seven remain in it, which is the set the sentence below counts against.
 Its demand was <a href="../../queue/Q725/">Q725</a>, which had sat in the Queue the whole time.</p>
-<p><strong>One of the original six are back.</strong> <a href="../../queue/Q408/">Q408</a> waited on an operator ask plus a measurement, and its trigger fired by 2026-08-13: the maintainer is the operator asking for untrusted-PR CI.
-That is the trigger list working rather than a rule being bent, and it is what narrowed the rule above.</p>
+<p><strong>None of the original five are back.</strong> The last one that was has since shipped: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
+That is the trigger list working twice rather than a rule being bent, and it is what narrowed the rule above.
+The five left in the table have never been revived.</p>
 <p>The proxy cluster is the clearest case and the one most likely to be re-litigated.
 <a href="../release-1.4/">release-1.4.md</a> shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that <strong>none had demand recorded against it</strong>.
 That still holds of the three left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
@@ -2769,7 +2770,7 @@ A theme with no demand is a theme, not a release.</p>
 <p>This is enforceable rather than aspirational: <code>roadmapcheck</code> already binds each roadmap bullet to its backlog rows and requires a near-term bullet to name at least one Queue row.
 Parking an item moves the row to Deferred, which moves the bullet, which the gate checks.</p>
 <p><strong>Narrowed 2026-08-18.</strong> This rule originally read <em>"committed to a named release"</em>, which is a stronger claim than the gate makes and than the ladder can keep.
-The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: <a href="../../queue/Q408/">Q408</a> and Q564 came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name (Q564 has since shipped, taking its bullet off the roadmap).
+The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: Q408 and Q564 came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name (Q564 has since shipped, taking its bullet off the roadmap).
 Restoring the stronger reading needs either an invented gate label, which publishes a commitment nobody made, or a re-parked row whose trigger has fired, which is the dishonesty this page exists to remove, pointed the other way.
 The release commitment is the narrower claim the <code>X.Y-gate</code> label carries on its own, so near-term holds both gated and ungated work (Q843).</p>
 <p>The failure mode to watch is the comfortable one: leaving an item in the Queue because parking it feels like giving up.
@@ -2779,7 +2780,7 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 <p>That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
 <a href="../release-1.6/">release-1.6.md</a> was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.</p>
-<p><strong>1.7 was added on the same day, and it is a re-theme rather than a new rung.</strong> Untrusted-PR CI on Kata (<a href="../../queue/Q408/">Q408</a>, <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
+<p><strong>1.7 was added on the same day, and it is a re-theme rather than a new rung.</strong> Untrusted-PR CI on Kata (Q408, <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
 Q408 takes the <code>1.7-gate</code> label, which publishes that commitment the same way the 1.6 labels did.</p>
 <p>The one hard constraint the ladder encoded — Q726 landing before <code>v2.0.0</code>, since 2.0 removes the <code>v2alpha1</code> escape hatch its godoc pointed at — is satisfied: it landed in 1.5.
 Its <code>1.5-gate</code> label is what enforces that, a release earlier than strictly required.</p>

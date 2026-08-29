@@ -2008,6 +2008,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#untrusted-pull-requests--the-tight-egress-posture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Untrusted pull requests — the tight-egress posture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Untrusted pull requests — the tight-egress posture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-four-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The four parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring-the-jobs-image-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring the job's image clients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adopting-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adopting it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#confirming-it-holds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confirming it holds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-posture-does-not-cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this posture does not cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#caveats-and-limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2901,6 +2973,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#untrusted-pull-requests--the-tight-egress-posture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Untrusted pull requests — the tight-egress posture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Untrusted pull requests — the tight-egress posture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-four-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The four parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring-the-jobs-image-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring the job's image clients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adopting-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adopting it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#confirming-it-holds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confirming it holds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-posture-does-not-cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this posture does not cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#caveats-and-limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2961,6 +3105,7 @@ For <em>why</em> GAG chose Kata over Sysbox/rootless and the provider-agnostic d
 <li><a href="#cluster-setup--kata-runtime-and-runtimeclass">Cluster setup — Kata runtime and RuntimeClass</a></li>
 <li><a href="#configure-the-worker-podtemplate">Configure the worker podTemplate</a></li>
 <li><a href="#the-security-rationale">The security rationale</a></li>
+<li><a href="#untrusted-pull-requests--the-tight-egress-posture">Untrusted pull requests — the tight-egress posture</a></li>
 <li><a href="#caveats-and-limitations">Caveats and limitations</a></li>
 <li><a href="#related">Related</a></li>
 </ul>
@@ -3278,6 +3423,125 @@ Four limits worth stating plainly before you conclude "Kata, therefore safe":</p
 <p>The honest recommendation: <strong>prefer Kata over privileged DinD for untrusted code</strong> — it is the only option here that puts a machine boundary around an inner Docker daemon, and it converts a kernel escape from node compromise into a discarded guest.
 But deploy it <em>with</em> Workload Identity, <code>automountServiceAccountToken: false</code>, and ideally a NetworkPolicy denying egress to <code>169.254.169.254/32</code>.
 Kata alone is not the control.</p>
+<h2 id="untrusted-pull-requests--the-tight-egress-posture">Untrusted pull requests — the tight-egress posture<a class="headerlink" href="#untrusted-pull-requests--the-tight-egress-posture" title="Permanent link">&para;</a></h2>
+<p>Kernel isolation is one half of running an external contributor's pull request.
+The other half is egress: a micro-VM bounds what the job's code can do to the node, not what it can reach.
+This page used to tell you to stop there and treat Kata as protection against a kernel escape rather than a licence to run untrusted code.
+That caveat is retired.
+The posture below is built, shipped as manifests, and measured on GAG's own dogfood cluster, where it carries every Kata end-to-end run.</p>
+<p><strong>What it does.</strong> A worker's whole reachable set becomes cluster DNS on 53, GitHub on 443, and the in-cluster registry mirrors on 5000.
+The public internet, the upstream registries by their own hostnames, and the cloud metadata server all answer nothing.</p>
+<p><strong>Why a mirror rather than an allowlist.</strong> The registries a build pulls from are CDN-fronted, so a CIDR allowlist rots, and fully-qualified-domain-name policy is not enforceable on GKE Dataplane V2.
+A host allowlist is also the wrong shape even where it is enforceable: permitting <code>docker.io</code> permits <code>docker.io/&lt;anyone&gt;/&lt;anything&gt;</code>, in both directions, so the exfiltration surface stays open.
+The mirror is content-scoped instead.
+Each instance is pinned to exactly one upstream in its pod spec, and refuses uploads, so there is one auditable chokepoint rather than five open hostnames.</p>
+<h3 id="the-four-parts">The four parts<a class="headerlink" href="#the-four-parts" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Where it lives</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The mirrors</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a></td>
+<td>One <a href="https://github.com/distribution/distribution">CNCF Distribution</a> instance in pull-through cache mode per upstream registry your jobs pull from</td>
+</tr>
+<tr>
+<td>The mirror's policies</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/base/networkpolicy.yaml"><code>base/networkpolicy.yaml</code></a></td>
+<td>Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else</td>
+</tr>
+<tr>
+<td>The worker wiring</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml"><code>overlays/kata/mirror-wiring.yaml</code></a></td>
+<td>Points the job's image clients at the mirrors, in the two forms those clients can read</td>
+</tr>
+<tr>
+<td>The absence of an allow-all</td>
+<td>your tenant namespace</td>
+<td>No additive egress policy, so the gateway's default-deny is the whole story</td>
+</tr>
+</tbody>
+</table>
+<p>The first three are additive.
+The fourth is the one that turns the recipe into enforcement, and it is a deletion rather than an object you apply.</p>
+<h3 id="wiring-the-jobs-image-clients">Wiring the job's image clients<a class="headerlink" href="#wiring-the-jobs-image-clients" title="Permanent link">&para;</a></h3>
+<p>No two image clients read the same configuration, so one endpoint set has to reach them four ways.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml"><code>mirror-wiring.yaml</code></a> holds it once, as a <code>daemon.json</code> and as an <code>&lt;upstream&gt;=&lt;mirror&gt;</code> map:</p>
+<table>
+<thead>
+<tr>
+<th>Client</th>
+<th>Reads</th>
+<th>Covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the inner <code>dockerd</code></td>
+<td><code>daemon.json</code>, mounted into the DinD sidecar</td>
+<td>every Docker Hub pull, digest-pinned ones included</td>
+</tr>
+<tr>
+<td><code>docker pull</code> of a non-Hub ref</td>
+<td>the map, via a rewrite at the one chokepoint those pulls share</td>
+<td>everything not on Docker Hub</td>
+</tr>
+<tr>
+<td>helm's OCI client</td>
+<td>the map, rewriting the chart ref and adding <code>--plain-http</code></td>
+<td>OCI chart pulls</td>
+</tr>
+<tr>
+<td>buildkit</td>
+<td>a generated <code>buildkitd.toml</code> off the map</td>
+<td>a <code>Dockerfile</code>'s base images, which no build cache covers</td>
+</tr>
+</tbody>
+</table>
+<p><code>dockerd</code>'s <code>registry-mirrors</code> setting mirrors Docker Hub and only Docker Hub, which is why the other upstreams need the rewrite rather than another entry in <code>daemon.json</code>.
+The rewrite re-tags each image to the ref the caller asked for, so everything downstream of the pull is untouched.</p>
+<p>Image identity survives the redirection.
+Schema-2 and OCI digests are content addresses over bytes that carry no registry hostname, so a digest-pinned pull re-verifies client-side and a cosign signature still checks out.
+The mirror is trusted for tag-to-digest resolution, exactly as the upstream registry already was.</p>
+<h3 id="adopting-it">Adopting it<a class="headerlink" href="#adopting-it" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Measure what your jobs actually fetch</strong>, rather than assuming.
+   The upstream set is the instance set, because proxy mode takes exactly one upstream per instance.
+   GAG's own count went from four to five on a measurement.</li>
+<li><strong>Render the mirrors</strong> for your upstreams, retargeting the three cluster-specific values the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#adopting-this-outside-the-dogfood-cluster">README</a> names: your tenant namespace, the mirror namespace, and your storage class.</li>
+<li><strong>Wire the clients</strong>, which means the ConfigMap above plus the two patches that mount it.</li>
+<li><strong>Delete any allow-all egress policy</strong> from the tenant namespace, and confirm it is gone from the live rules rather than only from your manifests.
+   <code>kubectl apply -k</code> does not prune, so a policy whose manifest you deleted is still standing.</li>
+</ol>
+<h3 id="confirming-it-holds">Confirming it holds<a class="headerlink" href="#confirming-it-holds" title="Permanent link">&para;</a></h3>
+<p>Three readings, and none of them substitutes for another:</p>
+<ul>
+<li><strong>The mirrors serve.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-validate.sh"><code>e2e-mirror-validate.sh</code></a> checks each instance for readiness, <code>GET /v2/</code>, a real upstream manifest, an upload refused with 405, and no debug listener.</li>
+<li><strong>The job's pulls ride them.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-hits.sh"><code>e2e-mirror-hits.sh</code></a> reads each mirror's access log, which is the one place a pull that went upstream instead cannot appear.
+  Take a baseline first: a count means nothing without one.</li>
+<li><strong>Nothing else is reachable.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/egress-negatives.sh"><code>egress-negatives.sh</code></a> probes from inside the job, on the worker whose posture is being claimed, because a plain pod cannot answer whether policy still binds at the end of a path that leaves a micro-VM guest through a bridge NAT.</li>
+</ul>
+<p><strong>Every negative is paired with a positive.</strong> A battery of nothing-is-reachable checks passes identically when the pod has no network at all, so half of the eight checks are controls that must answer: the mirror over HTTP, GitHub, an upload the mirror refuses, and a <code>docker pull</code> through the mirror.
+Only then does the silence of the other four mean the policy.
+Those four probe three destinations, the upstream twice, by curl and by <code>docker pull</code>, because a client can hold a path its shell does not.
+Run the negatives on <strong>every</strong> run rather than once: a policy that stops selecting the worker is invisible in a green suite.</p>
+<h3 id="what-this-posture-does-not-cover">What this posture does not cover<a class="headerlink" href="#what-this-posture-does-not-cover" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>The job still reaches GitHub</strong>, which is what a runner is for.
+  Data a job can read is data it can push to a repository it has a token for.</li>
+<li><strong>Cache misses reach upstream from the mirror pod</strong>, which carries no workload label and so keeps the free egress a pull-through cache needs.
+  What bounds it is the pinned upstream per instance, not a network rule.</li>
+<li><strong>The metadata server needs Workload Identity anyway.</strong> The policy closes that path only because the DNS rule admits port 53 alone, and widening it reopens the path.
+  Enable Workload Identity, as <a href="#the-security-rationale">the security rationale</a> sets out.</li>
+<li><strong>Two things a full untrusted-PR posture wants are still open here.</strong> A cache an untrusted job shares with another tenant, and a per-job record of which host each job reached, are both unbuilt.
+  This posture is the network layer, not the whole story: the layer map and what each layer still owes are in <a href="../../plan/secure-multi-tenant-oss-ci/#definition-of-done">the secure multi-tenant OSS CI goal</a>.</li>
+</ul>
+<p><strong>Measured on the dogfood cluster on 2026-08-28</strong>: a green Kata run of 75 specs whose in-job negatives passed all eight checks, with the mirror battery at 25 of 25 and 178 content requests served across the five instances, on a tenant whose live rules carried zero allow-all.</p>
 <h2 id="caveats-and-limitations">Caveats and limitations<a class="headerlink" href="#caveats-and-limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Startup overhead is small — but the <code>overhead</code> accounting is not.</strong> Measured on <code>c2-standard-4</code>: a Kata pod reached <code>Ready</code> in ~3 s vs ~1 s for <code>runc</code>, and <code>kind create cluster</code> took 58 s from a cold image cache (43 s warm) against a ~6 min ceiling.
@@ -3310,18 +3574,18 @@ Kata alone is not the control.</p>
   No bundled all-in-one runner image is needed: the daemon is a stock <code>docker:28-dind</code> native sidecar with a six-step entrypoint, and the toolchain rides the regular runner container.
   A full <code>make e2e</code> run is green through that overlay.
   Confirm the steps on your own cluster before cutting over privileged workloads.
-- <strong>The validated posture is <em>trusted</em> CI, not untrusted pull requests.</strong> Kata bounds the guest kernel, but it does not narrow egress, and GAG's own e2e tenant runs a permissive egress policy because its jobs pull from CDN-fronted public registries: a CIDR allowlist rots, and fully-qualified-domain-name policy is not enforceable on GKE Dataplane V2.
-  Running an external contributor's pull request on this shape safely needs an in-cluster pull-through registry mirror, so workers need no direct registry egress, plus an egress policy scoped to that mirror, GitHub, and DNS.
-  Until you have both, treat Kata isolation as protection against a kernel escape, not as a licence to run untrusted code.
-  See <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a>.</p>
+- <strong>Kata alone is not the untrusted-PR posture, and the rest of it is a deliberate build.</strong> The micro-VM bounds the guest kernel and narrows no egress, so a Kata worker on a permissive egress policy is protected against a kernel escape and nothing more.
+  What closes the gap is the in-cluster registry mirror plus an egress policy scoped to it, GitHub, and DNS, which ships as manifests and is measured on GAG's own cluster: <a href="#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a>.
+  Adopt that before running an external contributor's pull request on this shape.</p>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a>: the pull-through cache manifests behind <a href="#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a>, with the storage options and the values to retarget.</li>
 <li><a href="../runner-template-library/">Runner template library</a>: the shipped <code>kata-dind</code> entry this page describes, plus its two siblings and how to fork one.</li>
 <li><a href="../in-runner-image-builds/">In-runner image builds</a> — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the <code>securityProfile</code> each needs.</li>
 <li><a href="../kata-ci-spike-runbook/">Kata-on-GKE spike runbook</a> — executable go/no-go steps for the unprivileged <code>dockerd</code> + <code>kind</code> runner.</li>
 <li><a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a> — design rationale, the options rejected (Sysbox, rootless, kindbox), and the provider-agnostic reference architecture.</li>
 <li><a href="../../design/appendix-b-worker-isolation/">Appendix B — Worker isolation</a> — <code>runc</code> vs gVisor vs Kata sandbox-runtime trade-offs.</li>
-<li><a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a> — the authoritative <code>securityProfile</code> model. </content> </invoke></li>
+<li><a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a> — the authoritative <code>securityProfile</code> model.</li>
 </ul>
 
 

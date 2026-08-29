@@ -2740,16 +2740,12 @@ There is no paid tier and no commercial roadmap, so the plan below is about capa
 Priorities move with what adopters actually hit first, so the surest way to influence what comes next is to <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a> describing your setup.
 Every open item, in priority order, is in the <a href="https://actions-gateway.com/dev/STATUS/">working backlog</a>.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
-<p>Scoped work, none of it waiting on an outside signal.
-Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under <a href="#exploring--longer-term">Exploring / longer-term</a> with the event that revives it.</p>
-<p>Some of this is committed to a named release, and a pill beside the title says which.
-The pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
-No pill means the item is on the near-term plan with no release decided for it yet.</p>
-<ul>
-<li><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <span class="gag-release-chip" title="Blocks the 1.7 release">1.7</span> <!-- q:Q408 --> <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em> CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.
-  Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.
-  Phase 1 gates hosted-only egress; a measurement grades the posture before Phase 2 builds the mirrors.</li>
-</ul>
+<p><strong>Nothing is scoped here at the moment.</strong> The last entry, CI for untrusted pull requests on Kata workers, shipped on 2026-08-28 and moved to <a href="../features/#security-posture">Features</a>.
+An empty section is the honest state between one piece of scoped work finishing and the next being picked, and the fastest way to fill it is to <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a> describing what you hit first.</p>
+<p>What lands here is scoped work, none of it waiting on an outside signal.
+Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under <a href="#exploring--longer-term">Exploring / longer-term</a> with the event that revives it.
+Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
+No pill means no release is decided for that item yet.</p>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate.
 These are intentionally unscheduled.

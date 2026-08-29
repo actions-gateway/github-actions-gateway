@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q408/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1020/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Untrusted-PR egress posture for Kata workers - GitHub Actions Gateway</title>
+        <title>Ship both mirror topologies and the cost-versus-risk choice between them - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#untrusted-pr-egress-posture-for-kata-workers" class="md-skip">
+        <a href="#ship-both-mirror-topologies-and-the-cost-versus-risk-choice-between-them" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Untrusted-PR egress posture for Kata workers
+              Ship both mirror topologies and the cost-versus-risk choice between them
             
           </span>
         </div>
@@ -2597,19 +2597,29 @@
   
 
 
-<h1 id="untrusted-pr-egress-posture-for-kata-workers">Untrusted-PR egress posture for Kata workers<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers" title="Permanent link">&para;</a></h1>
-<p>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that fires on both.
-Phase 2 is done as of 2026-08-28: the mirror manifests, over five upstreams rather than four once the grading added <code>gcr.io</code>, are validated on the dogfood cluster at 25 of 25 checks by <code>scripts/dogfood/e2e-mirror-validate.sh</code>.
-Every instance serves a real upstream manifest, refuses uploads with 405, and exposes no debug listener, so the mirrors are measured serving rather than merely applied.
-Phase 3 is done as of 2026-08-28: dockerd via a mounted <code>daemon.json</code>, the non-Hub docker refs rewritten at the one chokepoint every <code>docker pull</code> shares, buildkit given a generated <code>buildkitd.toml</code>, and helm's OCI ref pointed at the ghcr mirror.
-Validated on the dogfood cluster by a green Kata run (75 of 75 specs) whose five instances served 161 content requests, against a zero baseline measured on the same cluster twenty minutes earlier, so the reading is a change rather than a number.
-The repositories attribute each client separately: the OCI chart can only be helm's, <code>distroless/static</code> only buildkit's, cert-manager and metrics-server only the rewritten refs, <code>kindest/node</code> only dockerd's own mirror.
-Phase 4 is done as of 2026-08-28: <code>e2e-open-egress</code> is deleted from the Kata overlay, and the tenant's live rules carry zero allow-all, so a worker reaches cluster DNS on 53, GitHub on 443 and the mirrors on 5000 and nothing else.
-Validated on the dogfood cluster by a green Kata run (75 of 75 specs) whose in-job negatives passed all eight checks on a <code>runtimeClassName: kata</code> worker: a mirrored upstream by its own hostname, the plain internet and the metadata server on port 80 all silent, each against a control that answered, so the silence is the policy rather than a dead network.
-Phase 2's battery re-ran at 25 of 25 under that policy, and the five mirrors served 178 content requests.
-The negatives run as a step of every run of the lane rather than once, because a policy that stops selecting the worker is invisible in a green suite.
-Two findings the session turned up, neither an egress defect: deleting the manifest does not delete the object, since <code>kubectl apply -k</code> does not prune and <code>e2e-stop.sh</code> leaves policies standing, so <code>e2e-start.sh</code> now deletes it on the Kata lane; and the bring-up races GKE konnectivity, filed as <a href="../Q1016/">Q1016</a>.
-Next is Phase 5: flip the <code>kata-dind-workloads.md</code> caveat to a how-to, link the manifests from <code>security-operations.md</code>, mark G.14 shipped, move the roadmap entry out of "exploring", and delete this row.</p>
+<h1 id="ship-both-mirror-topologies-and-the-cost-versus-risk-choice-between-them">Ship both mirror topologies and the cost-versus-risk choice between them<a class="headerlink" href="#ship-both-mirror-topologies-and-the-cost-versus-risk-choice-between-them" title="Permanent link">&para;</a></h1>
+<p><code>deploy/registry-mirror/</code> renders one mirror set admitting one tenant: <code>base/networkpolicy.yaml</code> names the tenant namespace twice, as <code>e2e-mirror-egress</code>'s own <code>metadata.namespace</code> and as the mirror-side ingress policy's <code>kubernetes.io/metadata.name</code> peer.
+The README lists that namespace as a value to retarget and says nothing about a second tenant, so an adopter running more than one meets an undocumented fork.</p>
+<p><strong>Both topologies are legitimate and the platform admin owns the call</strong>, so ship both and write the decision rather than picking one.
+The choice is cost against risk, and it is theirs because only they know their tenant count, their disk budget, and whether their tenants are mutually hostile.</p>
+<p><strong>A shared set is one line.</strong> Only the mirror-side ingress differs: the worker-side egress policy lives in the tenant namespace and is per-tenant either way.
+Swapping that peer to <code>namespaceSelector.matchLabels: {actions-gateway.com/tenant: managed}</code> admits every managed tenant, using the marker the GMC's own confinement policies already key on (<code>api/v2beta1/shared_types.go</code>).
+Note what that buys and costs: it admits tenants created later, automatically.
+A subset needs <code>matchExpressions</code> with an explicit namespace list.</p>
+<p><strong>Isolated costs a set per tenant.</strong> Measured off the manifests: 5 Deployments, 5 Services and, on the persistent overlay, 5 PVCs, requesting 125m CPU and 320Mi memory with limits of 2500m and 2560Mi, plus 50Gi of disk the README prices at about $5/month.
+Multiply by tenant count.
+The cache also stops being shared, so every tenant pulls <code>kindest/node</code> cold on its own and pays that upstream bandwidth separately.</p>
+<p><strong>Isolated buys two things.</strong> No inference channel: on a shared set a cache hit is faster than a miss and the access log names repositories, so one tenant can learn what another pulled and when.
+And a compromised mirror reaches one tenant rather than all of them, which narrows the residual <a href="../../plan/secure-multi-tenant-oss-ci/#explicitly-out-of-scope-and-residual-risk-accepted">secure-multi-tenant-oss-ci.md</a> already accepts.
+Neither is about content confidentiality: every byte a mirror holds is a public upstream image.</p>
+<p><strong>One thing is unmeasured and the measurement belongs in this row</strong>: whether the hit/miss timing gap is actually distinguishable from inside a Kata guest, across the bridge NAT, on this Deployment shape.
+A refuted channel is as good an answer as a confirmed one and would make shared the easy default for most adopters; confirming it makes the guidance sharper.
+Do not write the decision guide as if the answer is known.</p>
+<p>Deliverables: the shared variant as a rendered option beside the current one; a decision section an admin can act on, naming the tenant count where the disk cost starts to bite and the tenant relationship where isolation stops being optional; the timing measurement, reported either way.
+Placement follows the existing split, mechanism in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/README.md</code></a> and the choice on the operator page.</p>
+<p>Sits under Definition of Done #4, which covers what a job can read through "anything the platform provides for its convenience" — Q408 made the mirror exactly that.
+Not a Q408 defect: the dogfood cluster runs one tenant, so the posture it validated is the posture it claimed.
+This is the gap between that and the multi-tenant product the recipe is published for.</p>
 
 
 

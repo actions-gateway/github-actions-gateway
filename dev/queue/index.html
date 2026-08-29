@@ -2749,14 +2749,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
-<td><a href="Q408/">Q408</a></td>
-<td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
-<td><code>security</code> <code>1.7-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that …</td>
-</tr>
-<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2811,6 +2803,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>L</td>
 <td>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in …</td>
+</tr>
+<tr>
+<td><a href="Q1020/">Q1020</a></td>
+<td><a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">Ship both mirror topologies and the cost-versus-risk choice between them</a></td>
+<td><code>security</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>deploy/registry-mirror/</code> renders one mirror set admitting one tenant: <code>base/networkpolicy.yaml</code> names the tenant namespace twice, as …</td>
 </tr>
 <tr>
 <td><a href="Q957/">Q957</a></td>
@@ -2944,9 +2944,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q539/">Q539</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">Validate Kata + Dragonfly as the mirror backend</a></td>
 <td><code>security</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked by <a href="Q408/">Q408</a>: validate the posture first.</td>
+<td>Unblocked 2026-08-28: Q408 validated the reference posture, so the contract this is graded against exists.</td>
 </tr>
 <tr>
 <td><a href="Q540/">Q540</a></td>

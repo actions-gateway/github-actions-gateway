@@ -2977,13 +2977,14 @@ The honest statement is not "ARC lacks feature X".
 It is "nobody has pushed this far enough yet, and here is how far we have got".</p>
 <p><strong>Leg 2: GAG is making it safe.</strong> Kata micro-VM workers give a job root without a shared kernel, already the default in GAG's own end-to-end suite.
 Per-tenant egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close the network half, including the path Kata does not close (a micro-VM does not change the pod's network identity, so cloud metadata still answers from inside the guest).
-Still open and load-bearing: <a href="../../queue/Q408/">Q408</a>, <a href="../../queue/Q539/">Q539</a>, <a href="../../queue/Q540/">Q540</a>, under the <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> umbrella.</p>
+Q408 shipped the egress half on 2026-08-28: an in-cluster registry mirror and a tenant carrying no allow-all rule, measured on the dogfood cluster.
+Still open under the <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> umbrella: <a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a>, both variants graded against the contract Q408 validated.</p>
 <p><strong>Leg 3: GAG keeps it operable.</strong> Quota-aware intake and automatic re-run are consequences of leg 2, not standalone features, and should be presented that way.
 Bin-packing tenants onto shared expensive nodes <em>requires</em> enforceable per-tenant quotas, and enforcing a quota is what strands jobs unless intake respects it before the claim.
 Sharing capacity <em>requires</em> eviction and preemption to be safe, and they are safe only if a disrupted job re-runs itself.
 Without both, secured multi-tenancy is an operations nightmare and the team retreats to a cluster per tenant, which is where §2's router started.</p>
-<p><strong>Prioritization consequence:</strong> Q408 and Q540 are not roadmap polish.
-They complete the leg the entire argument rests on, so they outrank the proxy-polish set (Q564 to Q567) and most of the feature backlog.</p>
+<p><strong>Prioritization consequence:</strong> this leg is not roadmap polish.
+It is what the entire argument rests on, which is why Q408 outranked the proxy-polish set (Q564 to Q567) and most of the feature backlog, and why Q540 still does.</p>
 <h3 id="the-persona-frame-and-how-to-say-it-without-attacking">The persona frame, and how to say it without attacking<a class="headerlink" href="#the-persona-frame-and-how-to-say-it-without-attacking" title="Permanent link">&para;</a></h3>
 <p>Multi-tenancy adds roles, not features.
 ARC models the platform owner and the tenant as the same person, which is coherent for a single-owner cluster and is why it has no primitive separating them.
