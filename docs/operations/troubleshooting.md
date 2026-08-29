@@ -3655,8 +3655,9 @@ Absent means no advertisement has been made: a classic-tier set, a listener that
 **Resolution.** Act on the binding rung, not on the total.
 Raising `maxWorkers` while `quota` is withholding changes nothing, because the ceiling is not what is binding: the advertisement is already below it.
 
-**One caveat when reading it.** The value is recomputed every long-poll and published every reconcile, so it lags the live number by up to one reconcile and is a snapshot rather than a live feed.
-A set whose capacity is oscillating is better watched through `actions_gateway_scaleset_advertised_capacity` and `actions_gateway_scaleset_capacity_withheld`, which carry the same numbers at metric resolution ([observability: metrics](observability-metrics.md#scale-set-acquisition-tier-q264)).
+**One caveat when reading it.** The value is recomputed every long-poll, and a poll that changes it wakes a reconcile to publish it, so the field follows a capacity change within roughly one long-poll.
+That holds on an idle set with no jobs and no worker pods, which nothing else would have reconciled.
+It is still a snapshot rather than a live feed: a set whose capacity is oscillating is better watched through `actions_gateway_scaleset_advertised_capacity` and `actions_gateway_scaleset_capacity_withheld`, which carry the same numbers at metric resolution ([observability: metrics](observability-metrics.md#scale-set-acquisition-tier-q264)).
 
 ## Worker Pod Fails to Start After Secure-by-Default SecurityContext
 
