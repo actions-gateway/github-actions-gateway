@@ -4101,12 +4101,44 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>docs/releases/v1.6.0.md</code> opens its "Everything since" section with a commit count that no tool derives.</td>
 </tr>
 <tr>
+<td><a href="Q1016/">Q1016</a></td>
+<td><a href="../operations/troubleshooting/">Bring-up races GKE konnectivity, so the first v2 apply fails</a></td>
+<td><code>debt</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-28 on <code>gag-dogfood</code>, scaling from zero for the Q408 Phase 4 session: <code>e2e-start.sh</code> resized the pool, waited out the GMC …</td>
+</tr>
+<tr>
 <td><a href="Q1014/">Q1014</a></td>
 <td>errexit-prologue gate exempts an executable suite under lib/</td>
 <td><code>debt</code> <code>tests</code></td>
 <td>🔲</td>
 <td>XS</td>
 <td><code>scripts/ci/check-errexit-prologue.sh</code> requires <code>set -euo pipefail</code> plus <code>shopt -s inherit_errexit</code> in every executable script under …</td>
+</tr>
+<tr>
+<td><a href="Q1017/">Q1017</a></td>
+<td>Overlay deletions never reach a cluster that already applied them</td>
+<td><code>debt</code> <code>dogfood</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>kubectl apply -k</code> does not prune, and <code>e2e-stop.sh</code> deliberately leaves the tenant's NetworkPolicies standing so a window can reopen …</td>
+</tr>
+<tr>
+<td><a href="Q1018/">Q1018</a></td>
+<td>A script that exits 0 on skip makes its CI step unreadable</td>
+<td><code>debt</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A gate script with a legitimate skip path exits 0 twice over: once because it checked and passed, once because it decided there was nothing …</td>
+</tr>
+<tr>
+<td><a href="Q1019/">Q1019</a></td>
+<td>Dogfood scripts write shared kubeconfig state on every run</td>
+<td><code>debt</code> <code>dogfood</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> …</td>
 </tr>
 </tbody>
 </table>

@@ -2801,6 +2801,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#312-phase-4-build-notes-2026-08-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.12 Phase 4 build notes (2026-08-28)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#313-phase-4-validation-graded-2026-08-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.13 Phase 4 validation: graded (2026-08-28)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2872,12 +2894,15 @@
 
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-08-28): Phase 3 is done.</strong> Its wiring is built and gated, and validated on the dogfood cluster: a green Kata e2e run whose five mirror instances served 161 content requests between them, against a zero baseline measured on the same cluster twenty minutes earlier (<a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>).
+<p><strong>Status (2026-08-28): Phase 4 is done, so the posture is enforced and measured.</strong> The Kata overlay ships no additive egress policy, and the tenant's live rules carry zero allow-all: cluster DNS on 53, GitHub on 443, the mirrors on 5000, nothing else.
+Validated on the dogfood cluster (<a href="#313-phase-4-validation-graded-2026-08-28">§3.13</a>): a green Kata run (75 of 75 specs) whose in-job negatives passed all eight checks on a <code>runtimeClassName: kata</code> worker, with four controls answering so the four silent destinations mean the policy rather than a dead network.
+Phase 2's battery re-ran at 25 of 25 under that policy and the mirrors served 178 content requests.
+What is built is <a href="#312-phase-4-build-notes-2026-08-28">§3.12</a>; Phase 5 is the docs flip and the close-out.</p>
+<p><strong>Phase 3 is done.</strong> Its wiring is built and gated, and validated on the dogfood cluster: a green Kata e2e run whose five mirror instances served 161 content requests between them, against a zero baseline measured on the same cluster twenty minutes earlier (<a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>).
 All four clients are wired (<a href="#39-phase-3-build-notes-2026-08-28">§3.9</a>): dockerd by a mounted <code>daemon.json</code>, the non-Hub docker pulls by a ref rewrite at the one chokepoint they share, buildkit by a generated <code>buildkitd.toml</code>, helm by its OCI ref.
 <code>make registry-mirror-wiring-check</code> holds the three files that name the endpoint set to each other.
-A green run says nothing on its own here: the open-egress policy is still in place, so an unwired client reaches its upstream and the suite is green either way.
+A green run said nothing on its own there: the open-egress policy was still in place, so an unwired client reached its upstream and the suite was green either way.
 What discriminates is the access log, and the repositories it names attribute each of the four clients separately.
-Phase 4, the deletion of <code>e2e-open-egress</code>, is unblocked and books the next dogfood session.
 Phase 2 was validated 2026-08-28: 25 of 25 checks over the five declared instances (<a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>), by <code>scripts/dogfood/e2e-mirror-validate.sh</code> (<a href="#37-the-phase-2-validation-battery">§3.7</a>), with every expected value measured and every control fired.
 Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
 Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>) and re-sequenced Phases 1–4.
@@ -2927,8 +2952,8 @@ Inventory of the existing controls, so this plan only builds what is actually mi
 </tr>
 </tbody>
 </table>
-<p><strong>The one opener:</strong> the e2e overlays ship an additive <code>e2e-open-egress</code> NetworkPolicy (<code>podSelector: {}</code>, allow-all egress — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>deploy/dogfood-e2e/overlays/kata/resources.yaml</code></a>) because the suite pulls from CDN-fronted public registries — and, as Phase 0 measured, from <code>get.helm.sh</code> and the Actions cache data plane too.
-Q408 is the work that lets us delete it from the Kata overlay.</p>
+<p><strong>The one opener:</strong> the e2e overlays shipped an additive <code>e2e-open-egress</code> NetworkPolicy (<code>podSelector: {}</code>, allow-all egress, still in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/dind/resources.yaml"><code>deploy/dogfood-e2e/overlays/dind/resources.yaml</code></a>) because the suite pulls from CDN-fronted public registries, and, as Phase 0 measured, from <code>get.helm.sh</code> and the Actions cache data plane too.
+Q408 is the work that let us delete it from the Kata overlay, which <a href="#312-phase-4-build-notes-2026-08-28">§3.12</a> did.</p>
 <h2 id="2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">2. The gap — what an e2e job actually fetches at job time (Phase 0)<a class="headerlink" href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0" title="Permanent link">&para;</a></h2>
 <p>Only <strong>in-job</strong> traffic matters.
 The worker pod's own images (runner, <code>docker:28-dind</code> sidecar) are pulled by the <em>node's</em> containerd, outside the pod network namespace, and are not governed by the tenant NetworkPolicy.</p>
@@ -3263,11 +3288,13 @@ Cosign signatures key on the manifest digest, not the pull location, so verifica
 </ul>
 <h3 id="33-the-networkpolicy-swap">3.3 The NetworkPolicy swap<a class="headerlink" href="#33-the-networkpolicy-swap" title="Permanent link">&para;</a></h3>
 <p>In the <strong>Kata overlay only</strong>: delete <code>e2e-open-egress</code>, add <code>e2e-mirror-egress</code> — workload pods → mirror pods, registry port only.
+The two halves land a phase apart, which makes the second a pure deletion: <code>e2e-mirror-egress</code> ships with the manifests in Phase 2, where union with the allow-all policy makes it a no-op (<a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>, decision 3).
 The managed default-deny stays authoritative for everything else (DNS + proxy / GitHub).
 The dind overlay keeps open egress: it is the explicit trusted-CI fallback (<code>E2E_VARIANT=dind</code>), and privileged DinD was never a candidate for untrusted code anyway.</p>
 <p>Target: the Kata worker's complete reachable set is <strong>cluster DNS (:53) + GitHub (via the managed rule) + the mirror set</strong>.
 Nothing else, including the metadata server on its service ports.</p>
 <p><strong>This swap is only green once the non-registry residual is gone.</strong> Phase 0 measured <code>get.helm.sh</code> and the Actions cache data plane as job-time fetches that no mirror serves and no managed rule admits, so Phase 1 has to close them before this policy can be applied — <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a>.</p>
+<p><strong>A policy is a claim about what is unreachable, and no reachability check can grade one.</strong> Every battery up to here probes what <em>does</em> answer, which is why the swap needs an instrument of the opposite shape: <a href="#312-phase-4-build-notes-2026-08-28">§3.12</a>'s negatives, run from inside a job on the worker itself.</p>
 <h3 id="34-residual-channels-stated-honestly">3.4 Residual channels, stated honestly<a class="headerlink" href="#34-residual-channels-stated-honestly" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>GitHub via the managed rule</strong> — inherent to running GitHub CI (job code can always write to its own repo/gists through sanctioned channels).
@@ -3491,6 +3518,203 @@ This session cleared it with a <code>kubectl rollout restart</code> of the mirro
 Phase 4 re-runs both instruments in the same session, so the hazard is real again there and does not belong in an operator's memory: the script now discounts the probe by its user agent (<a href="#310-the-phase-3-validation-reading">§3.10</a>), and deleting that exclusion turns a battery-only log back into 2 content and 1 served, which its suite requires.</p>
 <p><strong>What this does not establish is enforcement.</strong> <code>e2e-open-egress</code> was in place throughout, so the mirrors being used does not mean the upstreams were unreachable.
 The negatives that separate the two paths are Phase 4's.</p>
+<h3 id="312-phase-4-build-notes-2026-08-28">3.12 Phase 4 build notes (2026-08-28)<a class="headerlink" href="#312-phase-4-build-notes-2026-08-28" title="Permanent link">&para;</a></h3>
+<p>The deletion is one file: the Kata overlay's <code>resources.yaml</code> held the <code>e2e-open-egress</code> object and nothing else, so removing it takes the object, its header comment, and the comment's wrong claim that Phase 3 was the replacing phase.
+What a Kata worker can then reach is the managed default-deny plus <a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s mirrors: cluster DNS on 53, the GitHub CIDRs on 443 (this tenant sets no <code>defaultProxyRef</code>, so <code>buildWorkloadNetworkPolicyV2</code> takes the direct-egress branch), and TCP 5000 to the five mirror pods.
+The dind overlay keeps its policy and its object name; nothing applies both overlays at once.</p>
+<p><strong>The negatives run inside the job, and that is a change from where the other two batteries run.</strong> <a href="#37-the-phase-2-validation-battery">§3.7</a>'s probes from a pod carrying the workload label, which rides the same policy pair a worker does and is the right instrument for the mirror's own service.
+It is the wrong instrument for this phase, because the claim Phase 4 makes is about a <strong>Kata</strong> worker: its dockerd runs inside a micro-VM guest and its inner containers reach the network through a bridge NAT inside that guest, and whether policy still binds at the end of that path is exactly what an ordinary pod cannot answer.
+So <code>scripts/e2e/egress-negatives.sh</code> runs as a job step, on the worker whose posture is being claimed.</p>
+<p><strong>Every negative is paired with a positive, and that pairing is the design rather than a courtesy.</strong> A battery of nothing-is-reachable checks passes identically on a worker with no network at all, on one whose DNS is down, and on a step that ran somewhere it was never meant to: a green verdict from an instrument that could not have failed.</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Probe</th>
+<th>Passes when</th>
+<th>Why it is in the battery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mirror-reachable</code></td>
+<td><code>GET http://&lt;hub mirror&gt;/v2/</code></td>
+<td>200</td>
+<td>Control: without it every blocked check below is unfalsifiable</td>
+</tr>
+<tr>
+<td><code>github-reachable</code></td>
+<td><code>GET https://api.github.com/</code></td>
+<td>any HTTP status</td>
+<td>Control: the managed rule still admits the one upstream that stays reachable</td>
+</tr>
+<tr>
+<td><code>mirror-readonly</code></td>
+<td><code>POST</code> to a blob upload</td>
+<td>405</td>
+<td><a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s read-only property, from the worker rather than from a probe pod</td>
+</tr>
+<tr>
+<td><code>docker-mirror-pull</code></td>
+<td><code>docker pull</code> the rewritten <code>gcr.io</code> ref</td>
+<td>exit 0</td>
+<td>Control for the row below: dockerd works, and works through the mirror</td>
+</tr>
+<tr>
+<td><code>upstream-blocked</code></td>
+<td><code>GET https://gcr.io/v2/</code></td>
+<td>no HTTP status</td>
+<td>A mirrored upstream, reached by its own hostname</td>
+</tr>
+<tr>
+<td><code>internet-blocked</code></td>
+<td><code>GET https://example.com</code></td>
+<td>no HTTP status</td>
+<td>Neither GitHub nor a registry</td>
+</tr>
+<tr>
+<td><code>metadata-blocked</code></td>
+<td><code>GET http://169.254.169.254/computeMetadata/v1/</code></td>
+<td>no HTTP status</td>
+<td>The link-local DNS rule admits 169.254.0.0/16 on <strong>port 53 only</strong>; this is port 80</td>
+</tr>
+<tr>
+<td><code>docker-upstream-blocked</code></td>
+<td><code>docker pull gcr.io/distroless/static:nonroot</code></td>
+<td>non-zero exit</td>
+<td>The same image as <code>docker-mirror-pull</code>, direct, and the pair is what makes either mean something</td>
+</tr>
+</tbody>
+</table>
+<p><code>gcr.io</code> rather than Docker Hub for the pull pair, because dockerd's <code>registry-mirrors</code> redirects Hub and only Hub: a Hub ref rides the mirror transparently and could never be the negative.
+<code>distroless/static</code> because it is the smallest ref in the <a href="#22-the-inventory">§2.2</a> inventory.</p>
+<p><strong>A dropped packet has no error that distinguishes it from a slow one</strong>, so a blocked probe spends its whole timeout and the step takes minutes when the posture holds.
+That is also the one way this battery reports a false PASS: shortening the timeouts makes a slow upstream look blocked.
+They are named constants for that reason.</p>
+<p><strong>It runs on every run of the lane, not once in the session that ships the deletion.</strong> The posture is a property to hold rather than a milestone to reach, and a policy that stops selecting the worker is invisible in a green suite, the same reason Phase 3's wiring needed a reading of its own.
+The step carries no <code>if:</code>: <code>REGISTRY_MIRRORS</code> is set on the runner process by the cluster, so the <code>env</code> context cannot see it, and the script reports a skip wherever the map is absent (the hosted lane, a developer's <code>make e2e</code>).
+A map that is <em>present but missing</em> an upstream the battery names is not a skip, since it would drop a control rather than the whole battery, so it fails loudly.</p>
+<p><strong>Deleting the manifest does not delete the object, and the cluster is the proof.</strong> <code>kubectl apply -k</code> does not prune, and <code>e2e-stop.sh</code> deliberately leaves the tenant's NetworkPolicies standing so a window can reopen without re-deriving them, so the <code>e2e-open-egress</code> applied by an earlier window survives every later apply.
+Measured on <code>gag-dogfood</code> before this session's run: the object was still there, 28 days old, with the manifests that would create it already gone from the branch.
+Nothing off the cluster can see that, and the consequence is not a failed run but a passed one: the negatives would have reported the posture unenforced, correctly, for a reason that has nothing to do with the deliverable.
+So <code>e2e-start.sh</code> deletes it on the Kata lane, <code>--ignore-not-found</code> because the steady state is that it is already gone, and the dind lane is left alone because that overlay owns the policy.
+This is a property of the recipe rather than of this cluster: an operator adopting the mirror on a cluster that already ran open-egress CI meets the same gap.</p>
+<p><strong>The session sequence</strong>, so the booked run is a command list rather than improvisation.
+<code>start.sh</code>, then <code>e2e-start.sh</code> with the Kata overlay of this branch, then <a href="#37-the-phase-2-validation-battery">§3.7</a>'s battery (its reachability checks stop being ambiguous here: the open path they could also have ridden is gone), then one dispatched run of <code>e2e-test.yml</code> against this branch with <code>runner='"gag-ci-e2e"'</code>, then <code>scripts/dogfood/e2e-mirror-hits.sh</code> before <code>e2e-stop.sh</code> takes the access logs with the pods.
+The negatives need no separate invocation: they are a step of that run, and a red step is the run's verdict.
+The battery still writes into the same access log the hit counts read, which is the <a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a> hazard; it no longer needs a mirror restart to clear, because the hit counter discounts the probe by its user agent.</p>
+<p><strong>One Phase 4 check from <a href="#4-phases">§4</a> is dropped rather than built, and the plan's own §3.2 is why.</strong> That bullet asked for a kind-side pull of a non-local-registry image succeeding via the mirror.
+The inner kind containerd is not wired to the mirror, deliberately: <a href="#22-the-inventory">§2.2</a> measured zero upstream pulls from it, every image being <code>kind load</code>ed or served from the in-job <code>127.0.0.1:5000</code> registry, and a grep of <code>cmd/gmc/test/e2e/</code> finds no upstream ref in any spec.
+So the check as written could only pass by adding <code>containerdConfigPatches</code>, which <a href="#32-wiring-the-clients">§3.2</a> sequences as a fallback for a preload that goes missing rather than a deliverable, and <a href="#7-success-criteria">§7</a> asks for negative probes, which this is not.
+What the tight policy does to that path is make a missing preload fail closed instead of silently pulling upstream, which is the better of the two behaviours and needs nothing built.</p>
+<h3 id="313-phase-4-validation-graded-2026-08-28">3.13 Phase 4 validation: graded (2026-08-28)<a class="headerlink" href="#313-phase-4-validation-graded-2026-08-28" title="Permanent link">&para;</a></h3>
+<p>Run against <code>gag-dogfood</code> (<code>us-east1-b</code>, <code>actions-gateway-dogfood</code>), Kata overlay, ephemeral mirror caches, from a cluster at its at-rest zero nodes.
+Sequence: <code>e2e-start.sh</code>, the <a href="#37-the-phase-2-validation-battery">§3.7</a> battery, one dispatched run of <code>e2e-test.yml</code> against this phase's branch with <code>runner='"gag-ci-e2e"'</code>, then <code>scripts/dogfood/e2e-mirror-hits.sh</code>, then <code>e2e-stop.sh</code>.
+<code>start.sh</code> was not used: it dispatches unit and integration bursts this phase has no use for, and <code>e2e-start.sh</code> sizes the system pool itself.</p>
+<p><strong>The e2e run is green</strong>: <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33223143842">33223143842</a>, 75 of 75 specs, 62 passed, 0 failed, 13 skipped, 7m42s in the suite.
+It ran at <code>33b6578</code>, a SHA a later rebase onto <code>origin/main</code> rewrote, so read the run rather than the hash.
+Everything executable is byte-identical to what ran: <code>git diff</code> against that commit returns two comments, the measured 78 s replacing a guess in <code>egress-negatives.sh</code> and in the workflow step, plus prose in the mirror README.
+No probe, expectation, manifest or policy moved.
+Identical to <a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>'s counts, so removing the open-egress policy cost the suite nothing.</p>
+<p><strong>The worker was a Kata worker, and it carried the label the policies select.</strong> <code>runtimeClassName: kata</code> on the e2e node pool, with <code>actions-gateway/component=workload</code>, which is what both the GMC-managed default-deny and <code>e2e-mirror-egress</code> match on.
+Worth stating because it is the premise the whole phase rests on: a battery that ran on an ordinary pod would prove nothing about the guest.</p>
+<p><strong>The tenant's egress set, read off the live objects</strong>, is <code>dogfood-e2e-workload</code> and <code>e2e-mirror-egress</code> and nothing else, with <strong>zero allow-all rules</strong> between them: port 53 to the three cluster-DNS peers, port 443 to 7,304 GitHub CIDR blocks, port 8080 to the proxy pods, port 5000 to the mirror pods.</p>
+<p><strong>The negatives all pass</strong>, in 78 seconds, as a step of the run itself:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mirror-reachable</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><code>github-reachable</code></td>
+<td>PASS, HTTP 200</td>
+</tr>
+<tr>
+<td><code>mirror-readonly</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><code>docker-mirror-pull</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><code>upstream-blocked</code></td>
+<td>PASS, no HTTP status</td>
+</tr>
+<tr>
+<td><code>internet-blocked</code></td>
+<td>PASS, no HTTP status</td>
+</tr>
+<tr>
+<td><code>metadata-blocked</code></td>
+<td>PASS, no HTTP status</td>
+</tr>
+<tr>
+<td><code>docker-upstream-blocked</code></td>
+<td>PASS</td>
+</tr>
+</tbody>
+</table>
+<p>The four controls are what make the four negatives readable: GitHub answered 200, and the same <code>gcr.io/distroless/static:nonroot</code> that could not be pulled directly was pulled through the mirror in the same battery, so the three silent destinations were silent because of the policy rather than because the worker had no network.</p>
+<p><strong>The step's exit status was not taken as the reading.</strong> <code>egress-negatives.sh</code> exits 0 on a skip too, so a green step is consistent with <code>REGISTRY_MIRRORS</code> never being set — an instrument that measured nothing, which is the failure this plan has now hit once per phase.
+Two independent readings settle it: the step's own PASS lines, quoted above, and the mirror access log, where the runner image's <code>curl/8.5.0</code> appears exactly twice on <code>mirror-docker-io</code>, which is the battery's <code>/v2/</code> and blob-upload pair.
+The <a href="#37-the-phase-2-validation-battery">§3.7</a> probe pod is <code>curlimages/curl:8.10.1</code>, so the two writers cannot be confused.</p>
+<p><strong>Phase 2's battery re-run under the tight policy: 25 of 25.</strong> Its probe pod carries the workload label, so this is a stronger reading than <a href="#38-phase-2-validation-graded-2026-08-28">§3.8</a>'s: with no open path to ride, reaching an upstream manifest through the mirror can only have gone through the mirror.</p>
+<p><strong>The hit counts: five of five, 178 served content requests</strong>, up from Phase 3's 161.</p>
+<table>
+<thead>
+<tr>
+<th>Instance</th>
+<th>Content requests</th>
+<th>Served</th>
+<th>Repositories</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mirror-docker-io</code></td>
+<td>58</td>
+<td>58</td>
+<td><code>kindest/node</code>, <code>library/registry</code>, <code>curlimages/curl</code>, <code>hashicorp/vault</code>, <code>moby/buildkit</code>, <code>library/golang</code>, <code>docker/dockerfile</code></td>
+</tr>
+<tr>
+<td><code>mirror-ghcr-io</code></td>
+<td>36</td>
+<td>36</td>
+<td><code>actions-gateway/charts/actions-gateway</code>, <code>actions-gateway/gmc</code>, <code>actions/actions-runner</code></td>
+</tr>
+<tr>
+<td><code>mirror-quay-io</code></td>
+<td>33</td>
+<td>33</td>
+<td>the three <code>jetstack/cert-manager-*</code></td>
+</tr>
+<tr>
+<td><code>mirror-registry-k8s-io</code></td>
+<td>17</td>
+<td>17</td>
+<td><code>metrics-server/metrics-server</code></td>
+</tr>
+<tr>
+<td><code>mirror-gcr-io</code></td>
+<td>34</td>
+<td>34</td>
+<td><code>distroless/static</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>mirror-gcr-io</code> is the one instance that moved, 17 to 34, which is the negatives' own <code>docker-mirror-pull</code> added to the bake's resolutions.
+No mirror restart was needed this time: the hit counter discounts the <a href="#37-the-phase-2-validation-battery">§3.7</a> probe by its user agent, which is the fix <a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a> asked for, working.</p>
+<p><strong>One failure, and it was the bring-up rather than the posture.</strong> The first <code>e2e-start.sh</code> failed its tenant apply with <code>No agent available</code> from the conversion webhook, a third variant of that error which <a href="../../operations/troubleshooting/#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service">troubleshooting.md</a> does not cover: the GMC was <code>1/1 Running</code> and the <code>webhook-service</code> EndpointSlice was populated, but GKE's konnectivity agent had not connected, so the control plane could reach no in-cluster webhook at all.
+Re-running the same script unchanged succeeded.
+Filed as <a href="../../queue/Q1016/">Q1016</a> rather than fixed here, since it is bring-up sequencing and this phase is egress.</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
 Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
@@ -3512,11 +3736,13 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   Validation: a green Kata e2e run <strong>with open egress still present</strong>, then <code>scripts/dogfood/e2e-mirror-hits.sh</code> reporting a served content request per instance (<a href="#310-the-phase-3-validation-reading">§3.10</a>), so the wiring is proven before enforcement changes.
   Graded 2026-08-28 at five of five instances over 161 served content requests, against a zero baseline measured on the same cluster (<a href="#311-phase-3-validation-graded-2026-08-28">§3.11</a>).
   The run was cold without arranging it: the self-hosted lane has had no <code>actions/cache</code> step since Phase 1.</li>
-<li><strong>Phase 4 — enforcement.</strong> Delete <code>e2e-open-egress</code> from the Kata overlay.
+<li><strong>Phase 4 — enforcement. ✅ Done (built and validated 2026-08-28).</strong> Delete <code>e2e-open-egress</code> from the Kata overlay.
   A deletion rather than a swap: Phase 2 shipped <code>e2e-mirror-egress</code>, where it is a no-op under the allow-all policy (<a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>, decision 3).
-  The overlay's own comment on that policy names Phase 3 as the replacing phase, which is wrong and needs no separate fix: that file holds this one object, so the deletion takes the comment with it.
-  Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) negatives from inside a job — <code>docker pull</code> of a host with no mirror instance fails, <code>curl https://example.com</code> times out, a push to the mirror is refused; (c) kind-side pull of a non-local-registry image succeeds via the mirror.
-  Re-run <a href="#37-the-phase-2-validation-battery">§3.7</a>'s battery here too: under the tight policy its reachability checks stop being ambiguous, since the open path they could also have ridden is gone.</li>
+  The overlay's own comment on that policy named Phase 3 as the replacing phase, which was wrong and needed no separate fix: that file held this one object, so the deletion took the comment with it.
+  What was built, and the one check of the three below that is dropped rather than built, is <a href="#312-phase-4-build-notes-2026-08-28">§3.12</a>.
+  Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) the negatives from inside a job, meaning a mirrored upstream reached by its own hostname, the plain internet and the metadata server all unreachable, each against a control that must answer, plus a push to the mirror refused; (c) <strong>dropped</strong> — a kind-side pull of a non-local-registry image cannot succeed via the mirror, because the inner containerd is deliberately not wired to it (<a href="#312-phase-4-build-notes-2026-08-28">§3.12</a>).
+  Re-run <a href="#37-the-phase-2-validation-battery">§3.7</a>'s battery here too: under the tight policy its reachability checks stop being ambiguous, since the open path they could also have ridden is gone.
+  Graded 2026-08-28 at eight of eight negatives, 25 of 25 on that battery, and 178 served content requests across the five instances (<a href="#313-phase-4-validation-graded-2026-08-28">§3.13</a>).</li>
 <li><strong>Phase 5 — docs + close-out.</strong> <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> caveat "validated posture is trusted CI" flips to the how-to; <a href="../../operations/security-operations/">security-operations.md</a> mirror section links the concrete manifests; <a href="../../operations/in-runner-image-builds/">in-runner image builds</a> and <a href="../../design/network-architecture/">network-architecture.md</a> cross-refs; G.14 marked shipped; <a href="../../roadmap/">roadmap.md</a> entry moves out of "exploring"; Q408 row deleted.</li>
 </ul>
 <h2 id="5-alternatives-considered">5. Alternatives considered<a class="headerlink" href="#5-alternatives-considered" title="Permanent link">&para;</a></h2>

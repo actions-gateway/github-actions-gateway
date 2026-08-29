@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.7/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1019/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Release 1.7 Milestone Definition - GitHub Actions Gateway</title>
+        <title>Dogfood scripts write shared kubeconfig state on every run - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-17-milestone-definition" class="md-skip">
+        <a href="#dogfood-scripts-write-shared-kubeconfig-state-on-every-run" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release 1.7 Milestone Definition
+              Dogfood scripts write shared kubeconfig state on every run
             
           </span>
         </div>
@@ -2579,119 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this is a release rather than a row that lands whenever
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-gating-row-q408-phases-2-to-5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The gating row: Q408, Phases 2 to 5
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-three-questions-16-left-for-this-scope" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The three questions 1.6 left for this scope
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The three questions 1.6 left for this scope">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q215's trigger has not fired, and the row now says which reading it takes
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q986-is-in-scope-and-it-is-what-definition-of-done-5-actually-costs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q986 is in scope, and it is what Definition of Done #5 actually costs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The default-versus-opt-in conflict is real and is this release's to resolve
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explicitly out of scope
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Definition of done
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#critical-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Critical path
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2710,128 +2597,28 @@
   
 
 
-<h1 id="release-17-milestone-definition">Release 1.7 Milestone Definition<a class="headerlink" href="#release-17-milestone-definition" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status: scope opened 2026-08-26</strong>, the day <code>v1.6.0</code> tagged, which is the trigger the <a href="../release-ladder/">ladder</a> recorded for writing this doc.
-1.7 is the untrusted-PR CI release: <a href="../../queue/Q408/">Q408</a> Phases 2 to 5 build the in-cluster registry pull-through mirror, wire the job-side clients to it, and delete the e2e tenant's open-egress NetworkPolicy.
-Phase 1 validated 2026-08-24, so the non-registry residual is measured gone rather than argued away; what is left is registry egress.
-Q408 is the only <code>1.7-gate</code> row, and it is an <code>L</code> with a phased plan doc already written (<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>).
-The bump is unforced so far, and measured rather than assumed: <code>semver-floor.sh v1.6.0</code> reads six commits and reports <strong>FLOOR: NONE</strong>.
-Four of them carry a <code>feat</code> or <code>fix</code> subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.</p>
-</blockquote>
-<h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
-<p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md § Why untrusted-PR CI on Kata is 1.7</a> recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
-Neither advances the other, because Kata already makes Docker-in-Docker unprivileged.</p>
-<p>What makes the axis a release is Phase 5, not Phase 4.
-The enforcement swap is a NetworkPolicy change in one overlay; the release is the sentence it retires.
-"Kata-isolated runners are only suitable for trusted CI" appears in <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> as a caveat, and a tag is what lets an adopter cite the version it stopped being true in.</p>
-<h2 id="the-gating-row-q408-phases-2-to-5">The gating row: Q408, Phases 2 to 5<a class="headerlink" href="#the-gating-row-q408-phases-2-to-5" title="Permanent link">&para;</a></h2>
-<p>Phases and their validation are in <a href="../q408-untrusted-pr-egress/#4-phases">q408-untrusted-pr-egress.md § 4</a> and are not restated here.
-What this scope adds is the release's read of them.</p>
-<table>
-<thead>
-<tr>
-<th>Phase</th>
-<th>State</th>
-<th>What the release needs from it</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>0. Measured egress inventory</td>
-<td>✅ 2026-08-03</td>
-<td>The upstream set, corrected to five by Phase 1's grading</td>
-</tr>
-<tr>
-<td>1. Shrink the non-registry residual to GitHub</td>
-<td>✅ implemented 2026-08-05, validated 2026-08-24</td>
-<td>Nothing further; it is the evidence the residual is gone</td>
-</tr>
-<tr>
-<td>2. Mirror manifests</td>
-<td>❌</td>
-<td><code>deploy/registry-mirror/</code>, one instance per upstream, applied from the e2e setup path</td>
-</tr>
-<tr>
-<td>3. Wiring</td>
-<td>❌</td>
-<td>A green Kata e2e run <strong>with open egress still present</strong> and mirror hit counts &gt; 0, so wiring is proven before enforcement changes</td>
-</tr>
-<tr>
-<td>4. Enforcement</td>
-<td>✅ built and validated 2026-08-28</td>
-<td>The deletion plus the negative probes; this is where the posture becomes real</td>
-</tr>
-<tr>
-<td>5. Docs and close-out</td>
-<td>❌</td>
-<td>The caveat flips to a how-to; G.14 marked shipped; the roadmap entry leaves "exploring"</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Phases 2, 3 and 4 each needed a live dogfood session</strong>, prod-guarded and operator-driven, and all three have now run (2026-08-27 and 2026-08-28).
-That was the schedule risk in this release and it was not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
-Phase 5 needs no cluster, so nothing gating 1.7 is waiting on one.</p>
-<p><strong>Phase 3 had to run with the image caches cold</strong>, so the <code>quay.io</code> and <code>registry.k8s.io</code> prepulls were exercised rather than skipped.
-A warm run would have reported hit counts that prove nothing about the paths a fresh tenant takes.
-Nothing had to be arranged for it: Phase 1 removed every <code>actions/cache</code> step from the self-hosted lane, so that lane has been cold since, which is why Phase 4's run reported the same five instances serving too.</p>
-<h2 id="the-three-questions-16-left-for-this-scope">The three questions 1.6 left for this scope<a class="headerlink" href="#the-three-questions-16-left-for-this-scope" title="Permanent link">&para;</a></h2>
-<p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md</a> named these rather than deciding them, on the ground that they were not that release's to settle.
-Two are settled here; the third is a real conflict and is scoped as work.</p>
-<h3 id="q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes">Q215's trigger has not fired, and the row now says which reading it takes<a class="headerlink" href="#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes" title="Permanent link">&para;</a></h3>
-<p><strong>Settled 2026-08-26.</strong> <a href="../../queue/Q215/">Q215</a>'s revive trigger is an in-cluster cache ask <strong>or</strong> Q408 Phase 1 landing and removing the working one, and 1.6 could not tell whether "the working one" meant GAG's own self-hosted lane or a tenant's.</p>
-<p>It means a tenant's, and the row's own next sentence is what decides it: "<code>actions/cache</code> reaches its store today, so the gap is local."
-That is a claim about what GAG offers a tenant, not about this repo's CI, and it is true: the tenant egress proxy's implicit GitHub allowlist carries <code>*.blob.core.windows.net</code>, the Azure-blob store the Actions cache runs on (<code>githubEgressFQDNs</code>, <code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code>).
-A tenant routed through the proxy reaches the cache today.</p>
-<p>What Phase 1 removed was this repo's own self-hosted e2e lane, by gating every <code>actions/cache</code> step and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e-reusable.yml</a>.
-That is GAG dogfooding its own posture, not a tenant losing a capability, so the trigger's second clause is unfired and Q215 stays deferred.</p>
-<p>The row has been rewritten to say so, because an ambiguous trigger is a standing query nobody can re-run, which is the failure mode <a href="../release-ladder/#the-rule-this-establishes">release-ladder.md</a> names.</p>
-<p><strong>One asymmetry is worth recording rather than leaving to be rediscovered.</strong> The direct-egress form admits GitHub CIDRs, and the Azure blob store is not in them, so a tenant on that form has no working <code>actions/cache</code> now and never did.
-The trigger reads on the proxy form because that is where the capability exists to lose.</p>
-<h3 id="q986-is-in-scope-and-it-is-what-definition-of-done-5-actually-costs">Q986 is in scope, and it is what Definition of Done #5 actually costs<a class="headerlink" href="#q986-is-in-scope-and-it-is-what-definition-of-done-5-actually-costs" title="Permanent link">&para;</a></h3>
-<p><a href="../../queue/Q986/">Q986</a> is the gap under <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #5, a per-tenant and per-job record of which host each job reached.
-Q564 shipped the egress audit record in 1.6 and attributes per pool, so the tenant half holds only on an unshared pool and the job half holds nowhere.</p>
-<p><strong>It is admitted to 1.7 but does not gate the tag.</strong> The reasoning is that an untrusted-PR claim without attribution is a claim about controls with no evidence behind them, which argues for the gate; and against it, that Q986's own row says neither half closes on a source identifier alone: tenant needs IP to namespace, job needs IP to pod to the AGC's mapping, and Q564 already declined the client IP as a per-worker movement log nothing has weighed.
-A gate on a row whose first step is a declined design is a gate on a decision, not on a build.</p>
-<p>So Q986 is ranked into the release and reviewed at the candidate: if it has landed, Definition of Done #5 is claimed; if it has not, the docs say which half of the record exists, and the claim stays narrowed to an unshared pool.
-It takes no <code>1.7-gate</code> label, which keeps the label meaning "blocks the tag" rather than "belongs to the release".</p>
-<h3 id="the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve">The default-versus-opt-in conflict is real and is this release's to resolve<a class="headerlink" href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" title="Permanent link">&para;</a></h3>
-<p><a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #1 requires the isolated posture to be the default rather than an opt-in.
-<a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a> declines exactly that, because a shipped default template would silently hand a privileged pod shape to sets that never asked for one.</p>
-<p>Both are defensible and they cannot both stand as written, so 1.7 rewrites one of them.
-The resolution is not pre-empted here, but the shape the evidence points at is worth stating: the library's objection is to shipping a <em>template</em> as a default, and the goal doc's requirement is that the <em>posture</em> be the default, which is a NetworkPolicy and a mirror rather than a pod shape.
-If that distinction holds, both survive with the goal doc's criterion re-worded to name the posture; if it does not, the criterion is the one that changes, because the library's rationale is a security argument and the criterion is an aspiration.</p>
-<p><strong>This is a docs decision with a gate attached, not a build</strong>, and it belongs in Phase 5 rather than ahead of it, because Phase 4 is what establishes whether the posture is deployable without a template change at all.</p>
-<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong><a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a>.</strong> Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before Dragonfly and the composed stack are graded against it (<a href="../q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a>).
-  They are the follow-on validations of this release's deliverable, so they cannot also be in it.</li>
-<li><strong><a href="../../queue/Q215/">Q215</a> as a build.</strong> Deferred with an unfired trigger, per the section above.</li>
-<li><strong>Controller or API changes.</strong> Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.
-  A 1.7 that grows an API field has lost the plot of what the release is.</li>
-<li><strong>The remaining proxy-hardening cluster.</strong> <a href="../../queue/Q565/">Q565</a>, <a href="../../queue/Q566/">Q566</a> and <a href="../../queue/Q567/">Q567</a> keep their demand triggers, unchanged since <a href="../release-1.4/#deferred-out-of-14-and-why">release-1.4.md</a> shelved them.</li>
-</ul>
-<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>Q408 closed</strong>, which by its own <a href="../q408-untrusted-pr-egress/#7-success-criteria">§7</a> means the dogfood Kata e2e variant runs green with <code>e2e-open-egress</code> deleted, the negative probes confirm enforcement, and the Phase 5 docs make the recipe the supported posture.</li>
-<li><strong>The trusted-CI caveat is gone</strong> from <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>, replaced by the reference architecture, with <a href="../../operations/security-operations/">security-operations.md</a> linking the concrete manifests it has recommended in the abstract since before they existed.</li>
-<li><strong>The default-versus-opt-in conflict is resolved</strong> in whichever direction Phase 4's evidence supports, and the losing text is rewritten rather than left standing.</li>
-<li><strong>G.14 and the roadmap reflect it</strong>: <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a> marked shipped, the <a href="../../roadmap/">roadmap</a> entry moved out of "exploring".</li>
-<li><strong>Q986 reviewed at the candidate</strong>, per the section above: landed and claimed, or not landed and the docs narrowed to what the record actually attributes.</li>
-<li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.6.0..&lt;rc commit&gt;</code>.
-   This release expects it to be empty, which makes a non-empty result a finding rather than a formality.</li>
-<li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
-</ol>
-<h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
-<p>Phase 2 → Phase 3 → Phase 4 → Phase 5, strictly, because each phase's validation is the next one's precondition: manifests must serve before wiring can be proven to ride them, and wiring must be proven before enforcement can be distinguished from breakage.
-Phases 2, 3 and 4 book dogfood sessions.
-Nothing else in the release is on that path: Q986 runs beside it, and the docs decision resolves inside Phase 5.</p>
+<h1 id="dogfood-scripts-write-shared-kubeconfig-state-on-every-run">Dogfood scripts write shared kubeconfig state on every run<a class="headerlink" href="#dogfood-scripts-write-shared-kubeconfig-state-on-every-run" title="Permanent link">&para;</a></h1>
+<p><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> unconditionally, then asserts the resulting context is the expected one.
+The assertion is the valuable half and it needs no fetch: when the current context already equals <code>gke_&lt;project&gt;_&lt;zone&gt;_&lt;cluster&gt;</code>, the fetch rewrites the identical entry.</p>
+<p>prod-guard denies that write, and correctly — the kubeconfig is shared by every session on this machine, so a session that switches it silently moves any parallel session relying on ambient context.
+Its message names the fix: prefer per-command pinning over switching shared state.</p>
+<p>Every dogfood script calls this function, so every dogfood session pays the prompt.
+Measured 2026-08-28: the Q408 Phase 4 session ran five of them (<code>e2e-start.sh</code> twice, <code>e2e-mirror-validate.sh</code>, <code>e2e-mirror-hits.sh</code>, <code>e2e-stop.sh</code>, <code>stop.sh</code>) and carried a <code>PROD_GUARD_OVERRIDE</code> on each.</p>
+<p><strong>The decision to override rather than fix was taken deliberately</strong> in that session, to spend the booked cluster window on the validation rather than on a shared library function.
+This row is the record of what that deferred, not a re-opening of it.</p>
+<p><strong>The change, if it is taken:</strong> verify first, fetch only on a mismatch.
+Idempotent, removes a shared-state write from every dogfood script, and leaves the guard in force for the case that matters, which is switching to a <em>different</em> cluster.
+The risk to weigh is a kubeconfig entry that is present but stale (a rebuilt cluster reusing the name), where skipping the fetch turns a working refresh into a confusing failure on the next call; a cheap mitigation is to fetch when the entry is older than some age, or to keep the fetch behind an opt-out rather than removing it.</p>
+<p>An override is the wrong long-term shape here for the reason overrides usually are: used routinely it stops being a decision and becomes a prefix nobody reads.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
