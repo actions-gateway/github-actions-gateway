@@ -106,3 +106,19 @@ The criterion now also records the decline, so a later reading cannot revive the
 Phase 2 → Phase 3 → Phase 4 → Phase 5, strictly, because each phase's validation is the next one's precondition: manifests must serve before wiring can be proven to ride them, and wiring must be proven before enforcement can be distinguished from breakage.
 Phases 2, 3 and 4 book dogfood sessions.
 Nothing else in the release is on that path: Q986 ran beside it and has landed, and the docs decision resolves inside Phase 5.
+
+## Pre-flight verdicts
+
+Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../operations/release.md#1-pre-flight)).
+Re-run any whose window has moved before the stable tag.
+
+| Check | Measured at | Verdict |
+|---|---|---|
+| Gating rows | `c54b712a9` | **PASS.** No `1.7-gate` row remains, and no `X.Y-gate` label survives anywhere in the store. The pattern was confirmed against a label that does exist before the empty result was trusted. |
+| `main` green | `c54b712a9` | **PASS.** All nine required gates ran and passed on the SHA — none path-skipped, so no `check-artifact-unchanged.sh` proof is owed. |
+| Semver floor | `c54b712a9` | **MINOR**, over 56 commits, set by eight touching the released surface. `v1.7.0` is forced by merged work rather than chosen. |
+| API surface | `c54b712a9` | **PASS, ship as-is.** Exactly what [Definition of done #6](#definition-of-done) predicted and nothing else: one added wire field `auditLogging`, the `Off;Connections;ConnectionsWithSource` enum on `EgressProxy`, a new `Off;WorkerAddresses` enum on `ActionsGateway`, defaulting `Off`. No new condition types, Event reasons, labels or annotations. |
+
+Both `auditLogging` fields default `Off` and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is ([q986-egress-attribution.md](q986-egress-attribution.md)).
+
+**Deferred to the stable tag, deliberately.** The marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
