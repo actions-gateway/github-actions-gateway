@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q879/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1027/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Assert at publish that a stable tag ships what a candidate validated - GitHub Actions Gateway</title>
+        <title>A patch line's e2e leg dispatches from main, not the candidate - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#assert-at-publish-that-a-stable-tag-ships-what-a-candidate-validated" class="md-skip">
+        <a href="#a-patch-lines-e2e-leg-dispatches-from-main-not-the-candidate" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Assert at publish that a stable tag ships what a candidate validated
+              A patch line's e2e leg dispatches from main, not the candidate
             
           </span>
         </div>
@@ -2597,9 +2597,16 @@
   
 
 
-<h1 id="assert-at-publish-that-a-stable-tag-ships-what-a-candidate-validated">Assert at publish that a stable tag ships what a candidate validated<a class="headerlink" href="#assert-at-publish-that-a-stable-tag-ships-what-a-candidate-validated" title="Permanent link">&para;</a></h1>
-<p>The validated candidate is named only in prose, and newest-RC is unsafe: rc.2 was tagged, never validated.
-Needs a marker the dogfood gate writes and publish reads.</p>
+<h1 id="a-patch-lines-e2e-leg-dispatches-from-main-not-the-candidate">A patch line's e2e leg dispatches from main, not the candidate<a class="headerlink" href="#a-patch-lines-e2e-leg-dispatches-from-main-not-the-candidate" title="Permanent link">&para;</a></h1>
+<p><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (validate-release.sh:472), so the e2e matrix leg runs <code>main</code>'s copy of <code>e2e-test.yml</code> and its test code against the candidate's GAG runners.
+For a minor cut from <code>main</code>'s head those are near enough the same tree.
+For a patch cut off an older tag they are not, and Q879 made validating a patch line compulsory, so the case now happens by design rather than never.</p>
+<p>Decide what a patch line should dispatch, and whether the default should be the candidate's ref rather than <code>main</code>.
+The same tension is already documented at release.md's "A release line carries its own validation harness": the gate runs the scripts in your checkout against the artifacts of the tag, deliberately, so pinning the dispatch to the candidate is not obviously right either.
+It may be that <code>main</code> is correct and only the runbook needs to say so.</p>
+<p>Unmeasured: nobody has run the gate on a patch line.
+The mechanism above is read off the source, not observed, and no patch release has ever been cut here (all seven stable tags are <code>.0</code>).
+Surfaced by the review of #1788.</p>
 
 
 

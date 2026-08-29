@@ -3381,20 +3381,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The one double that does not hold the poll, against this repo's own rule.</td>
 </tr>
 <tr>
-<td><a href="Q879/">Q879</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Assert at publish that a stable tag ships what a candidate validated</a></td>
-<td><code>ci</code> <code>dogfood</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>The validated candidate is named only in prose, and newest-RC is unsafe: rc.2 was tagged, never validated.</td>
-</tr>
-<tr>
 <td><a href="Q880/">Q880</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Validate release candidates in CI instead of a local dogfood gate</a></td>
 <td><code>ci</code> <code>dogfood</code> <code>retro</code></td>
 <td>🔲</td>
 <td>L</td>
-<td>Auditable, keyed to the tag, and supersedes Q879.</td>
+<td>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker a maintainer's local gate writes today.</td>
+</tr>
+<tr>
+<td><a href="Q1027/">Q1027</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">A patch line's e2e leg dispatches from main, not the candidate</a></td>
+<td><code>ci</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (validate-release.sh:472), so the e2e matrix leg runs <code>main</code>'s copy of …</td>
 </tr>
 <tr>
 <td><a href="Q883/">Q883</a></td>
