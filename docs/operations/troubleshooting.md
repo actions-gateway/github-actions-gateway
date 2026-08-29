@@ -3159,6 +3159,7 @@ Consequences an operator should know:
   The recovery scan reads the worker pods once per reconcile, so a drained worker is only judged if a reconcile begins between the kubelet publishing the terminal phase and removing the object.
   If none does, the pod is never seen: no claim, no metric, no Event, and no log line naming it.
   The tell is the absence: an unrecovered drain whose pod appears nowhere in the AGC log, against a recovered one that appears twice.
+  **That reading needs `spec.logLevel: debug` on the ActionsGateway.** The scan logs the terminating workers it judged and *declined* at `Debug`, and the default is `info` ([observability-logging.md](observability-logging.md)), so at the default a declined pod is silent too and the absence no longer separates the two.
   Same remedy as above: the AGC's reconcile loop is not turning over fast enough.
 - **The first re-run call may be refused.** GitHub's conclusion on this path takes 15–26s while `evictionRetryDelay` defaults to 5s, so the first `rerun-failed-jobs` can land while the run is still in progress and be answered `403 This workflow is already running`.
   The Q503 retry loop absorbs that — the re-run is retried on a 30s pace until accepted — so no action is needed; see [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) for the loop's own failure modes.
@@ -3198,8 +3199,9 @@ kubectl logs -n <namespace> deploy/<agc-deployment> \
 kubectl logs -n <namespace> deploy/<agc-deployment> \
   | grep 'disruption was lost before it could be claimed'
 
-# Scale-set tier: every verdict the scan reached, by pod. A drained worker that
-# appears nowhere here was never judged: the scan did not see it (Debug verbosity).
+# Scale-set tier: every verdict the scan reached, by pod. Needs spec.logLevel:
+# debug, because two of the six verdicts log at Debug: at the default info a pod
+# the scan judged and declined is as silent as one it never saw.
 kubectl logs -n <namespace> deploy/<agc-deployment> \
   | grep -E 'disrupt' | grep '<worker-pod>'
 ```

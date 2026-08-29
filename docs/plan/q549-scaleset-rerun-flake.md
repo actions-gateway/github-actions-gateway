@@ -45,7 +45,7 @@ The instrument can show both answers.
 A zero rules out every claim verdict at once: `Forbidden` (the role), `Conflict`, `NotFound`, and identity-unknown all log with the pod's name.
 The claim patch was never attempted, so **the chart role was never exercised** and the deletion-mark discriminator was never consulted.
 
-**The scan had no opportunity, and the reconcile timestamps say so.** `RecoverEvictedScaleSetWorkers` is step 2 of `Reconcile`, ahead of the listener bootstrap that produces this tenant's `Reconciler error` on every pass, so every logged error is a reconcile that ran the scan, and the scan reads the informer cache at the reconcile's start.
+**On the calico run the scan had no opportunity, and the reconcile timestamps say so.** `RecoverEvictedScaleSetWorkers` is step 2 of `Reconcile`, ahead of the listener bootstrap that produces this tenant's `Reconciler error` on every pass, so every logged error is a reconcile that ran the scan, and the scan reads the informer cache at the reconcile's start.
 
 | Run | Delete requested | Pod gone | Reconcile errors around the window |
 |---|---|---|---|
@@ -55,6 +55,11 @@ The claim patch was never attempted, so **the chart role was never exercised** a
 
 On the calico run the pod's entire 3.4-second existence-after-delete falls inside an 8-second gap with no reconcile at all.
 The recovered run is the opposite: reconciles every second across the window.
+
+**33185281929 is not that shape, and the difference is worth keeping.** Three reconciles completed inside its interval, so the gap does not explain its zero.
+What is measured there is the zero verdict itself, which is what the mitigation keys on; the mechanism behind it is not.
+Two candidates, neither verified: a `Reconciler error` stamps a reconcile's *completion* rather than its cache read, so the one logging at 15:33:39 may have listed before the terminal phase published; and the spec's 1-second poll bounds "gone" loosely, so the object may have been removed well before 15:33:41.33.
+Do not read the calico run's mechanism onto this one.
 
 **Why the gap opens is not measured.** Nothing logs a reconcile's duration.
 The reconciler runs at controller-runtime's default `MaxConcurrentReconciles: 1` and never reconciles one key concurrently, and the listener bootstrap does a DNS lookup and an HTTP POST inside `Reconcile`, so a slow bootstrap would delay the next scan.
