@@ -2598,48 +2598,20 @@
 
 
 <h1 id="e2e_agc_scalesetdrainedworkerclaimandrerunlandunderchartrbac-times-out"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out<a class="headerlink" href="#e2e_agc_scalesetdrainedworkerclaimandrerunlandunderchartrbac-times-out" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Escalated 2026-08-28: the fix did not hold, and two of the three new sightings are the shape the spec exists to catch rather than a re-staging.</p>
-<p>Three failures on <code>main</code> or in the merge queue in three days, all after the 228-run soak this row was parked on:</p>
-<table>
-<thead>
-<tr>
-<th>When</th>
-<th>Lane</th>
-<th>Run</th>
-<th>Failed at</th>
-<th>Shape</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2026-08-26 05:25 UTC</td>
-<td><code>e2e-calico</code> merge_group</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32933225396">32933225396</a></td>
-<td><code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:299</code></td>
-<td>no re-run, AGC unchanged</td>
-</tr>
-<tr>
-<td>2026-08-26 05:41 UTC</td>
-<td><code>e2e-test</code> merge_group</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934571793">32934571793</a></td>
-<td><code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:264</code></td>
-<td>the sampler saw nothing</td>
-</tr>
-<tr>
-<td>2026-08-28 15:35 UTC</td>
-<td><code>e2e-test</code> push to <code>main</code></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33185281929">33185281929</a></td>
-<td><code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:299</code></td>
-<td>no re-run, AGC unchanged</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Neither known mode covers any of them, which is what the trigger asked for.</strong> Mode A was the AGC replaced inside the claim window; the two line-299 failures reach <code>Fail</code> only after <code>agcPodIdentity() == pinnedAGC</code>, so the control plane that observed the disruption was still running: in the 08-28 run a single <code>ssrec-agc</code> pod, 114 s old, zero restarts.
-Mode B was Q809's lost claim; those same two failures reach <code>Fail</code> only after <code>evictionRecoveryEvidenceLost()</code> returns false, so the pod's disruption record was still there to claim.
-That is the spec's designed catch: the chart role is missing a verb the recovery path needs, or the deletion-mark discriminator regressed.
-The 08-26 line-264 failure is a third shape again, <code>Expect(seq).NotTo(BeEmpty())</code>, the sampler never observed the probe pod at all, so the attempt never reached the claim window.</p>
-<p>Start from the AGC logs the failing runs captured, grepping <code>could not claim scale-set worker disruption</code>, and attribute per the <a href="../../plan/q549-scaleset-rerun-flake/">triage table</a> before any code change, since the two line-299 sightings are one hypothesis and the line-264 sighting is another.
-It costs a merge-queue eviction each time it fires, so the two lanes are both exposed.</p>
+<p><strong>Event:</strong> recurs on <code>main</code> after the fix.</p>
+<p>Three failures on <code>main</code> or in the merge queue between 2026-08-26 and 2026-08-28, in two shapes, neither of them the mode the row's own escalation guessed at.
+Attributed 2026-08-28 from the AGC logs the failing runs captured; the <a href="../../plan/q549-scaleset-rerun-flake/">triage table</a> carries the timings.</p>
+<p><strong>Neither previously-known mode fired, and neither cause the spec's failure text names is real.</strong> The two line-299 failures (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32933225396">32933225396</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33185281929">33185281929</a>) carry <strong>zero</strong> AGC log lines naming the probe pod: no claim, no <code>Forbidden</code>, no <code>Conflict</code>, no <code>NotFound</code>.
+So the chart role is not short a verb and the deletion-mark discriminator did not regress: the scan reached no verdict on the pod, so the claim patch was never attempted.
+Why it reached none is measured for 32933225396 only, where the pod's whole window falls in an 8-second reconcile gap; on 33185281929 three reconciles completed inside the interval and nothing here says why they produced nothing.
+The line-264 failure (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934571793">32934571793</a>) is the opposite: the AGC claimed the disruption and called rerun-failed-jobs, and the spec failed anyway, on <code>Expect(seq).NotTo(BeEmpty())</code> over a sampler its own comment calls diagnostics.</p>
+<p>Mitigated by two changes.
+The sampler is no longer asserted on; an empty sequence is a fact about a <code>kubectl</code>-per-sample sampler racing a fast teardown, not about the AGC.
+And the scan now logs the terminating workers it judged and declined, which gives the spec a third "this attempt proves nothing" discriminator beside a replaced control plane and a lost claim: no verdict at all means the claim patch was never attempted, so the chart role was never exercised, and the attempt re-stages under the same <code>maxAttempts</code> budget.</p>
+<p>Reaching <code>Fail</code> now means the AGC judged the pod, so the two causes the failure text names are the two that remain.
+The product gap underneath is <a href="../Q1029/">Q1029</a>, which this row does not close: a drain's recovery is reachable only if a reconcile <em>begins</em> inside the pod's teardown window.
+Residual: a regression in the scan's own List selector still presents as silence and would re-stage rather than fail.
+Soak clock runs from the fix; blast radius is both e2e lanes, which are merge-group-only (<a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">Q675</a>).</p>
 
 
 

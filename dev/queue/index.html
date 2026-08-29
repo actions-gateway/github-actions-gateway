@@ -2685,14 +2685,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
-<td><a href="Q549/">Q549</a></td>
-<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Escalated 2026-08-28: the fix did …</td>
-</tr>
-<tr>
 <td><a href="Q1008/">Q1008</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2741,6 +2733,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown</code> or <code>TestStopListeners_ThenEnsure_DoesNotLeaveASessionBehind</code> …</td>
 </tr>
 <tr>
+<td><a href="Q549/">Q549</a></td>
+<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>💤</td>
+<td>M</td>
+<td><strong>Event:</strong> recurs on <code>main</code> after the fix.</td>
+</tr>
+<tr>
 <td><a href="Q929/">Q929</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">The lint gate returns two verdicts on one tree</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2771,6 +2771,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>scripts/ci/run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 …</td>
+</tr>
+<tr>
+<td><a href="Q1029/">Q1029</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go">A drain's recovery is lost when no reconcile starts inside its window</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>L</td>
+<td><code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a RunnerSet reconcile, so a gracefully deleted worker is only …</td>
 </tr>
 <tr>
 <td><a href="Q977/">Q977</a></td>
@@ -2955,6 +2963,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-18: it names <code>scripts/docs/lint-backlog.sh</code>, which <a href="../plan/q889-backlog-item-store/">Q889</a> deleted, and twice a …</td>
+</tr>
+<tr>
+<td><a href="Q1032/">Q1032</a></td>
+<td><a href="../development/maintaining-backlog/#flake-fixes-go-first">maintaining-backlog quotes a flake trigger 8 of 10 rows do not use</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><a href="../development/maintaining-backlog/#flake-fixes-go-first">maintaining-backlog.md:528</a> says a flake-watch row's trigger "is always" …</td>
 </tr>
 <tr>
 <td><a href="Q372/">Q372</a></td>

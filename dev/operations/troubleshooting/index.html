@@ -7854,6 +7854,12 @@ Consequences an operator should know:</p>
   It is reported rather than silent: <code>actions_gateway_eviction_recovery_evidence_lost_total{cause="deletion"}</code> increments and an <code>EvictionRecoveryEvidenceLost</code> Warning Event is recorded on the <code>RunnerSet</code>.
   Those runs need a manual re-run.
   A sustained rate means the AGC is not reaching the window — check whether it is CPU-starved or its work queue is backlogged, not whether the policy or role is wrong.</li>
+<li><strong>A smaller fraction is not reported by any metric</strong> (scale-set tier only).
+  The recovery scan reads the worker pods once per reconcile, so a drained worker is only judged if a reconcile begins between the kubelet publishing the terminal phase and removing the object.
+  If none does, the pod is never seen: no claim, no metric, no Event, and no log line naming it.
+  The tell is the absence: an unrecovered drain whose pod appears nowhere in the AGC log, against a recovered one that appears twice.
+  <strong>That reading needs <code>spec.logLevel: debug</code> on the ActionsGateway.</strong> The scan logs the terminating workers it judged and <em>declined</em> at <code>Debug</code>, and the default is <code>info</code> (<a href="../observability-logging/">observability-logging.md</a>), so at the default a declined pod is silent too and the absence no longer separates the two.
+  Same remedy as above: the AGC's reconcile loop is not turning over fast enough.</li>
 <li><strong>The first re-run call may be refused.</strong> GitHub's conclusion on this path takes 15–26s while <code>evictionRetryDelay</code> defaults to 5s, so the first <code>rerun-failed-jobs</code> can land while the run is still in progress and be answered <code>403 This workflow is already running</code>.
   The Q503 retry loop absorbs that — the re-run is retried on a 30s pace until accepted — so no action is needed; see <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a> for the loop's own failure modes.</li>
 </ul>
@@ -7889,6 +7895,12 @@ Consequences an operator should know:</p>
 <a id="__codelineno-130-23" name="__codelineno-130-23" href="#__codelineno-130-23"></a><span class="c1"># manual re-run.</span>
 <a id="__codelineno-130-24" name="__codelineno-130-24" href="#__codelineno-130-24"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-130-25" name="__codelineno-130-25" href="#__codelineno-130-25"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'disruption was lost before it could be claimed'</span>
+<a id="__codelineno-130-26" name="__codelineno-130-26" href="#__codelineno-130-26"></a>
+<a id="__codelineno-130-27" name="__codelineno-130-27" href="#__codelineno-130-27"></a><span class="c1"># Scale-set tier: every verdict the scan reached, by pod. Needs spec.logLevel:</span>
+<a id="__codelineno-130-28" name="__codelineno-130-28" href="#__codelineno-130-28"></a><span class="c1"># debug, because two of the six verdicts log at Debug: at the default info a pod</span>
+<a id="__codelineno-130-29" name="__codelineno-130-29" href="#__codelineno-130-29"></a><span class="c1"># the scan judged and declined is as silent as one it never saw.</span>
+<a id="__codelineno-130-30" name="__codelineno-130-30" href="#__codelineno-130-30"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-130-31" name="__codelineno-130-31" href="#__codelineno-130-31"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'disrupt'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'&lt;worker-pod&gt;'</span>
 </code></pre></div>
 <p>If a drain of running workers produced no re-run, check whether the pods carried the <code>actions-gateway.com/deletion-reason</code> stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (<code>eviction_retries_exhausted_total</code>), and — scale-set tier only — whether the AGC was down across the teardown window, lost the pod before it could claim it (<code>eviction_recovery_evidence_lost_total</code>), or the pods carried no run identity (see <a href="#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a>, whose scale-set failure modes apply to drains identically).</p>
 <p><strong>Resolution / how to drain safely.</strong>

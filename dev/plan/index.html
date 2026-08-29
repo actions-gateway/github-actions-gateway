@@ -2900,8 +2900,8 @@ The durable design rationale for what the unit/integration/e2e layers cover live
 </tr>
 <tr>
 <td><a href="q549-scaleset-rerun-flake/">q549-scaleset-rerun-flake.md</a></td>
-<td>The two failure modes behind one <code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> timeout: the AGC being replaced inside the claim window, and an undisturbed window whose re-run still never fires</td>
-<td>⚠️ A third mode is open as of 2026-08-28 — A is mitigated by the UID pin + re-stage (PR #1120) and B was attributed 2026-08-12 and fixed under Q809, but three failures since 2026-08-26 clear both discriminators, two of them on the spec's own <code>Fail()</code> branch. <a href="../queue/Q549/">Q549</a> is out of Flake watch and back at the top of the Queue</td>
+<td>The four failure modes behind one <code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> timeout, three of which mean the attempt never exercised the chart role at all</td>
+<td>✅ All four attributed and mitigated as of 2026-08-28. C (the scan never observed the disruption) and D (the spec failing on its own sampler) join A (PR #1120) and B (Q809). <a href="../queue/Q549/">Q549</a> is back in Flake watch; the product gap under C is <a href="../queue/Q1029/">Q1029</a></td>
 </tr>
 <tr>
 <td><a href="q300-gmc-kindnet-e2e-flake/">q300-gmc-kindnet-e2e-flake.md</a></td>
