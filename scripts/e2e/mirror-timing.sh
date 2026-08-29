@@ -49,6 +49,13 @@
 # the corner. An OVERLAPPING run says the arms did not separate HERE. It does
 # not say there is no channel.
 #
+# CARRY THAT CAVEAT WHEREVER THE VERDICT GOES. When a window's reading is folded
+# into docs/operations/kata-dind-workloads.md#choosing-a-mirror-topology, the
+# result without "OVERLAPPING is the weaker reading" is worse than no result: an
+# operator reads a null as "no channel" and takes the shared topology on it. The
+# operator page is the long-lived copy and this header is not, so the caveat has
+# to travel rather than be looked up.
+#
 # THE PROBE WARMS ITS OWN REFERENCES, so it is single-shot per mirror pod. The
 # cache is an emptyDir on a long-lived Deployment and these four references are
 # cold only until this runs once. A second run against a surviving pod has a
