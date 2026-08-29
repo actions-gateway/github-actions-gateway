@@ -30,12 +30,27 @@ kind: Component
 # base renders exactly one, for `gag-dogfood-e2e`. Rendering this does NOT render
 # the others -- ../../README.md#the-shared-set has the copy.
 #
-# THE PEER IS NAMESPACE-SCOPED AND NOT POD-SCOPED, which the shared topology
-# widens: the base admits any pod in ONE tenant namespace, this admits any pod in
-# EVERY managed tenant namespace, workload-labelled or not. ANDing a
-# `podSelector: {matchLabels: {actions-gateway/component: workload}}` into the
-# peer below would narrow it to workers, and whether that leaves every client's
-# pulls working is a cluster measurement nobody has taken. Q1026.
+# THE PEER IS POD-SCOPED AS WELL AS NAMESPACE-SCOPED (Q1026). The two selectors
+# below are keys of ONE `from` element, which ANDs them: a managed tenant
+# namespace AND a pod carrying the workload label. Split across two elements they
+# would OR, and the result is strictly wider -- rendered and read both ways.
+#
+# The narrowing matters here in a way it does not in the base. The base admits any
+# pod in ONE tenant namespace; without the podSelector this admits any pod in
+# EVERY managed tenant namespace, and the GMC's default-deny selects only
+# workload-labelled pods (actionsgateway_v2_builder.go), so an unlabelled pod is
+# governed by no egress policy at all and reaches whatever it likes.
+#
+# It also makes the two halves agree: the worker-side `e2e-mirror-egress` in
+# ../../base/networkpolicy.yaml already selects exactly this label.
+#
+# THE FAILURE IS FAIL-CLOSED AND TOTAL: a client that does not carry the label
+# cannot pull at all, and the four wired clients read four different
+# configurations. Every client in this repository is a container of an
+# AGC-provisioned worker pod, which sets the label unconditionally
+# (cmd/agc/internal/provisioner/pod.go), but an adopter running its own
+# non-worker puller must label that pod. `scripts/dogfood/e2e-mirror-clients.sh`
+# is the reading that says who is actually connecting, taken BEFORE narrowing.
 #
 # V1-DOMAIN TENANTS ARE NOT ADMITTED. A namespace still marked
 # `actions-gateway.github.com/tenant: "true"` (the v1alpha1 domain, which the
@@ -66,6 +81,9 @@ patches:
               - namespaceSelector:
                   matchLabels:
                     actions-gateway.com/tenant: managed
+                podSelector:
+                  matchLabels:
+                    actions-gateway/component: workload
             ports:
               - protocol: TCP
                 port: 5000

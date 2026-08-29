@@ -337,7 +337,7 @@ Each instance is pinned to exactly one upstream in its pod spec, and refuses upl
 | Part | Where it lives | What it does |
 |---|---|---|
 | The mirrors | [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md) | One [CNCF Distribution](https://github.com/distribution/distribution) instance in pull-through cache mode per upstream registry your jobs pull from, each fronted by a proxy that refuses `GET /v2/_catalog` |
-| The mirror's policies | [`base/networkpolicy.yaml`](../../deploy/registry-mirror/base/networkpolicy.yaml) | Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else |
+| The mirror's policies | [`base/networkpolicy.yaml`](../../deploy/registry-mirror/base/networkpolicy.yaml) | Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else. Under the shared topology the ingress is narrowed further, to workload-labelled pods |
 | The worker wiring | [`overlays/kata/mirror-wiring.yaml`](../../deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml) | Points the job's image clients at the mirrors, in the two forms those clients can read |
 | The absence of an allow-all | your tenant namespace | No additive egress policy, so the gateway's default-deny is the whole story |
 
@@ -350,7 +350,7 @@ One mirror set can serve every tenant, or each tenant can have its own.
 [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md#two-topologies-one-shared-set-or-one-set-per-tenant) renders both, and the choice is a platform administrator's rather than a default this project can pick for you.
 It turns on your tenant count, your disk budget, and whether your tenants are mutually hostile.
 
-**A shared set is one line of difference.** The mirror-side ingress admits any namespace carrying the managed-tenant marker instead of one namespace named literally, and `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` renders it.
+**A shared set is one peer of difference.** The mirror-side ingress admits workload-labelled pods in any namespace carrying the managed-tenant marker, instead of any pod in one namespace named literally, and `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` renders it.
 The worker-side egress policy sits in the tenant's own namespace and is per-tenant under either topology, so that half is unchanged.
 
 **An isolated set costs a whole set per tenant.** Read off the rendered manifests, one set is 5 Deployments and 5 Services requesting 175m of CPU and 480Mi of memory, with limits of 3000m and 3200Mi; the persistent overlay adds 5 PVCs holding 50Gi, which the deployment README prices at about $5 a month.
