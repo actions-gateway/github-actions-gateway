@@ -17,6 +17,7 @@ All of it lives in [operations/release.md § Writing the curated notes](../opera
 
 | Release | Notes |
 |---|---|
+| v1.7.0 | [v1.7.0.md](v1.7.0.md) |
 | v1.6.0 | [v1.6.0.md](v1.6.0.md) |
 | v1.5.0 | [v1.5.0.md](v1.5.0.md) |
 | v1.4.0 | [v1.4.0.md](v1.4.0.md) |
