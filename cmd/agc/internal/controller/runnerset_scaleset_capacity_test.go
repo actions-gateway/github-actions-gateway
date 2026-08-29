@@ -18,6 +18,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
 // The scale-set tier's expression of the admission ladder (Q443). Before this, a
@@ -242,4 +243,64 @@ func TestScaleSetMetrics_DeleteRunnerSet(t *testing.T) {
 	assert.Zero(t, testutil.CollectAndCount(sm.AdvertisedCapacity))
 	assert.Zero(t, testutil.CollectAndCount(sm.CapacityWithheld))
 	assert.Zero(t, testutil.CollectAndCount(sm.AvailableJobs), "the demand gauge outlived the set it describes")
+}
+
+// TestCapacityRecord_ChangeDetection pins what "changed" means to the poll loop: the
+// two fields status publishes, and nothing else. Ceiling moves without a republish
+// because status does not carry it, and an unchanged poll must stay silent — the wake
+// it drives runs on every poll of every set, so a record that always reported a change
+// would turn the long-poll cadence into a reconcile cadence.
+func TestCapacityRecord_ChangeDetection(t *testing.T) {
+	adv := func(total, ceiling int32, withheld map[string]int32) provisioner.CapacityAdvertisement {
+		return provisioner.CapacityAdvertisement{Total: total, Ceiling: ceiling, Withheld: withheld}
+	}
+
+	rec := &capacityRecord{}
+	assert.True(t, rec.record(adv(8, 8, map[string]int32{runnercore.AdmitReasonQuota: 0})),
+		"the first advertisement is a change: status held no value at all")
+	assert.False(t, rec.record(adv(8, 8, map[string]int32{runnercore.AdmitReasonQuota: 0})),
+		"an identical poll must not wake the reconciler")
+	assert.False(t, rec.record(adv(8, 20, map[string]int32{runnercore.AdmitReasonQuota: 0})),
+		"ceiling is not on status, so moving it alone republishes nothing")
+	assert.True(t, rec.record(adv(4, 20, map[string]int32{runnercore.AdmitReasonQuota: 4})),
+		"a rung binding changes both fields")
+	assert.True(t, rec.record(adv(4, 20, map[string]int32{runnercore.AdmitReasonQuota: 2})),
+		"the same total withheld under a different slot count is still a change")
+	assert.True(t, rec.record(adv(4, 20, map[string]int32{
+		runnercore.AdmitReasonQuota: 2, runnercore.AdmitReasonCapacity: 0})),
+		"a newly evaluated rung changes the published set even at zero slots")
+
+	last, ok := rec.last()
+	require.True(t, ok)
+	assert.Equal(t, int32(4), last.Total, "the record keeps the latest advertisement, not a history")
+}
+
+// TestScaleSetCapacityFunc_WakesReconcilerOnChange is the fix for Q1035: an idle set
+// requeues after nothing — no worker pods to reap, no pending workers, no projected
+// proxy share to re-check — so a capacity change observed by the poll loop reached status
+// only on controller-runtime's 10h default resync. The release gate's capacity leg
+// measured it: withheldCapacity still read 2 half an hour after the quota was restored.
+func TestScaleSetCapacityFunc_WakesReconcilerOnChange(t *testing.T) {
+	const ns = "team-a"
+	ctx := context.Background()
+	key := types.NamespacedName{Namespace: ns, Name: "set"}
+
+	r, _, target := capacityReconciler(t, ns,
+		rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }),
+		gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "4", "4"))
+	r.wakeCh = make(chan event.GenericEvent, 8)
+	capacity := r.scaleSetCapacityFunc(key, target, &capacityRecord{})
+
+	require.Zero(t, capacity(ctx))
+	require.Len(t, r.wakeCh, 1, "the first advertisement must reach status")
+	woken := <-r.wakeCh
+	assert.Equal(t, ns, woken.Object.GetNamespace())
+	assert.Equal(t, "set", woken.Object.GetName())
+
+	require.Zero(t, capacity(ctx))
+	assert.Empty(t, r.wakeCh, "a poll that changed nothing must not enqueue a reconcile")
+
+	require.NoError(t, r.Client.Update(ctx, quotaRS(ns, "4", "2")))
+	require.Equal(t, 4, capacity(ctx))
+	assert.Len(t, r.wakeCh, 1, "released headroom must wake the reconciler so status follows it")
 }

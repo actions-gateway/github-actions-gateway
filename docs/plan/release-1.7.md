@@ -143,13 +143,14 @@ A negative control against a wrong signer workflow exited 1, so the check could 
 The gate's own discriminator is whether the headroom came back rather than the rung.
 It did, at `hard.pods=6` against `used.pods=1`, so this is not a namespace that had grown.
 
-**The mechanism is undetermined, and the two candidates need different fixes.** [`applyAdvertisedCapacity`](../../cmd/agc/internal/controller/runnerset_scaleset.go) publishes the listener's *most recent* advertisement, so a stale status is the expected reading when no advertisement has been made since, and the e2e suite had drained by then, which is exactly when demand stops.
-Against that, a scale-set listener long-polls continuously, so 300s should have spanned several.
-Settling it needs the AGC's own logs or its demand gauge, and both went with the cluster at teardown.
-So this is a product defect only if the listener was still advertising, and a gate defect otherwise, waiting on a refresh it supplies no demand to trigger.
+**Settled as a product defect (Q1035).** The two candidates were "the listener stopped advertising" (a gate defect, since the leg supplies no demand) and "the listener kept advertising and nothing published it" (a product defect).
+Reading the controller answers it without the cluster: the poll loop recomputes the advertisement every long-poll and records it, and only a reconcile publishes it, but on an idle set every input to the scale-set branch's `RequeueAfter` is 0 (no worker pods to reap, no pending workers, and no projected proxy share to re-check).
+The advertisement was therefore current and unpublished, and the only refresh available was controller-runtime's 10h default resync.
+The fix wakes the reconciler from the poll loop when the advertisement changes, over the channel Q333 already built for listener-pushed conditions.
+That closes the gate leg too: the leg was waiting on a refresh the controller had no path to make.
 
 **Read the leg's newness as part of the finding.** Q637 added this leg on 2026-08-29, hours before the cut, so `rc.1` is the first candidate any quota-rung check has run against and it failed on its first outing.
-That is the leg working, whichever way the mechanism resolves.
+That is the leg working: its first run found a real product defect.
 
 **The host slept through the run.** It changed nothing about the verdict, but it changed how the run read.
 `pmset` records maintenance sleeps from 08:25 to 08:56 with two 45-second dark wakes, so the gate's 300s poll budget, which counts `sleep` rather than wall clock, took 35 minutes of wall clock to spend.

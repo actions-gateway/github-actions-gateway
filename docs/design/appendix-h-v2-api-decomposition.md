@@ -508,8 +508,11 @@ So the reconciler publishes the same accounting on `status.advertisedCapacity` a
 Its `reason` is deliberately **not** a CRD enum.
 The ladder is designed to grow a rung at a time and every rung must land in both acquisition tiers at once, so a closed enum would couple each new rung to a CRD change; the field is controller-written status a tenant cannot author, so validation buys nothing against anybody.
 
-Two properties keep it from costing what high-frequency status usually costs.
-The value is recomputed per poll but published per reconcile, on a status write that already happens unconditionally, so it adds no API writes and lags the live number by at most one reconcile.
+The value is recomputed per poll but published per reconcile, on a status write that already happens anyway, so the cost is one reconcile per *change* rather than one per poll.
+A poll whose advertisement matches the published one wakes nothing (Q1035): the record compares the two fields status carries, and the reconciler is woken only when they move, through the same best-effort channel a listener-pushed condition uses (Q333).
+That wake is what makes the field usable at all.
+An idle set requeues after nothing at all: no worker pods to reap, no pending workers, no projected proxy share to re-check.
+So before Q1035 a released rung reached status only on controller-runtime's 10h default resync, and the tenant who cannot read Prometheus, the reader the field exists for, was the one who got the stale answer.
 And the GMC's rollup watch is unaffected: `runnerSetImpairmentChanged` derives its signature from `status.conditions` alone, an allowlist rather than a list of fields to ignore, so an update carrying only a new advertisement is dropped without anyone having to remember to exclude it.
 
 **Measured sizing recommendation on the `RunnerSet` (Q359 Phase 2).** The AGC's usage sampler aggregates per-job CPU/memory peaks per worker container (Phase 1's metrics), and the `RunnerSet` reconciler surfaces the derived per-container recommendation in `status.sizingRecommendation`: recommended `requests` (p95 of per-job peaks), a recommended memory `limit` (observed max × headroom, never a CPU limit), the observed p95/max, a `sampleCount` confidence signal, and the window start.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"sort"
 	"sync"
@@ -120,11 +121,19 @@ type capacityRecord struct {
 	seen bool
 }
 
-// record stores the advertisement this poll produced, replacing any earlier one.
-func (c *capacityRecord) record(adv provisioner.CapacityAdvertisement) {
+// record stores the advertisement this poll produced, replacing any earlier one, and
+// reports whether it changed what status would publish — the first advertisement of
+// all, or a different Total or Withheld set. Ceiling is deliberately not compared: it
+// is not on status, so a poll that moved only the ceiling has nothing to republish.
+//
+// The caller uses the verdict to wake the reconciler, so status follows a capacity
+// change instead of waiting for the next natural reconcile (Q1035).
+func (c *capacityRecord) record(adv provisioner.CapacityAdvertisement) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	changed := !c.seen || c.adv.Total != adv.Total || !maps.Equal(c.adv.Withheld, adv.Withheld)
 	c.adv, c.seen = adv, true
+	return changed
 }
 
 // last returns the most recent advertisement and whether one has been made at all. A
@@ -464,6 +473,10 @@ func (r *RunnerSetReconciler) claimedRunnerNames(ctx context.Context, key types.
 // over-provisions.
 func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, target *runnerSetTarget, rec *capacityRecord) scalesetlistener.CapacityFunc {
 	advertise := r.Provisioner.AdvertiseCapacity(target, defaultScaleSetMaxCapacity)
+	// Read once here, in the reconcile goroutine that built this closure, rather than
+	// per poll from the listener's: the field is assigned by ensureMaps and the poll
+	// loop must not race it. Same capture channelConditionUpdater makes (Q333).
+	wake := r.wakeCh
 	return func(ctx context.Context) int {
 		adv := advertise(ctx)
 		r.ScaleSetMetrics.SetAdvertisedCapacity(key.Namespace, key.Name, adv.Total)
@@ -474,7 +487,15 @@ func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, tar
 		// Recorded here rather than published here: status belongs to the reconcile
 		// goroutine, and a poll that wrote it directly would race every other status
 		// write on the object.
-		rec.record(adv)
+		//
+		// A change wakes that goroutine (Q333's channel, same non-blocking send). An
+		// idle set requeues after nothing — no pods to reap, no pending workers, no
+		// projected proxy share to re-check — so without the wake the record sits unread
+		// until controller-runtime's 10h default resync, and status keeps reporting
+		// intake as withheld long after the rung released (Q1035).
+		if rec.record(adv) {
+			wakeReconciler(wake, key.Namespace, key.Name)
+		}
 		return int(adv.Total)
 	}
 }
