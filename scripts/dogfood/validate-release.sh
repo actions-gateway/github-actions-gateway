@@ -183,9 +183,14 @@ WORKERS_MAX_RESTORE=""
 #
 # All three rungs are asserted PRESENT rather than zero: withhold() writes an
 # explicit zero for every rung it evaluates, so an absent reason means the rung
-# was not evaluated at all, which is the regression this leg exists to catch
-# (a rung landing in one acquisition tier only — how the quota rung came to be
-# classic-only until Q443).
+# was not evaluated at all.
+#
+# This sees the SCALE-SET tier only, because status.withheldCapacity is written
+# by that path alone — it cannot observe a rung missing from the classic tier.
+# The rung roster itself is already gated in both directions by
+# TestAdmissionRungParity_CoversEveryAdmitReason (Q973), which reads the
+# AdmitReason* declarations from source. What this adds is that the ladder was
+# evaluated at all against a live cluster, which no unit test can say.
 E2E_QUOTA="dogfood-e2e-quota"
 CAPACITY_RUNGS="quota capacity scaleup"
 
@@ -795,17 +800,16 @@ capacity_wait_quota_slots() {
 # Without this the gate can pass having exercised NONE of the ladder. Every
 # other leg builds an autoscaling cluster with headroom and asks for two
 # workers, which is the one shape under which no rung ever binds — so a ladder
-# that silently stopped being evaluated, or a rung that shipped to one
-# acquisition tier only, would leave every leg here green. Same failure shape as
-# the sizing leg above, and as Q400/Q404: a gate that cannot observe the thing
-# it gates.
+# that silently stopped being evaluated against real infra would leave every leg
+# here green. Same failure shape as the sizing leg above, and as Q400/Q404: a
+# gate that cannot observe the thing it gates.
 #
 # The two halves assert different things ON PURPOSE:
-#   evaluated — hard failure, and cheap. withhold() writes an explicit zero for
-#               every rung it evaluates, so an ABSENT reason means the rung was
-#               skipped entirely. That is the regression that ships a rung to
-#               one tier (the quota rung was classic-only until Q443), and it
-#               needs no constraint to detect.
+#   evaluated — hard failure, and cheap: it needs no constraint to detect.
+#               withhold() writes an explicit zero for every rung it evaluates,
+#               so an ABSENT reason means the rung was skipped entirely. Q973's
+#               parity test already gates the rung ROSTER both ways in unit
+#               tests; this says the ladder ran here, on this cluster.
 #   binding   — hard failure, quota rung only. Driven by tightening the tenant's
 #               own ResourceQuota to zero headroom, which is reversible, costs
 #               no nodes, and needs no scale-up.
@@ -845,12 +849,31 @@ capacity_leg() {
 		echo "error: admission-ladder rung(s) absent from status.withheldCapacity:${missing}" >&2
 		echo "  Every rung that is EVALUATED publishes an explicit zero, so an absent reason" >&2
 		echo "  means the rung was not evaluated on this tier — not that it is not binding." >&2
-		echo "  A rung reaching one acquisition tier only is exactly that defect (Q443)." >&2
+		echo "  Two causes reach this, and the status cannot tell them apart: a rung that is" >&2
+		echo "  genuinely not evaluated on the scale-set path, or the AGC-wide quota-admission" >&2
+		echo "  kill switch, which skips the quota rung wholesale. Check the AGC's" >&2
+		echo "  --quota-admission flag before reading this as a ladder defect." >&2
 		return 1
 	fi
 
-	local hard
+	# The drive only proves something from a clean baseline. A tenant already at
+	# its quota ceiling is withholding before this leg touches anything, so the
+	# bind would assert a state it did not cause, and the release could never come
+	# back to zero — reported as a latch, which is a false alarm about the product
+	# rather than a reading of the tenant.
+	local baseline
+	baseline="$(capacity_withheld_slots quota)"
+	if [[ "${baseline}" != "0" ]]; then
+		echo "  quota rung: already withholding ${baseline} slot(s) before this leg ran, so the"
+		echo "              drive is NOT run — it would assert a state it did not cause. The"
+		echo "              tenant is at its ResourceQuota ceiling; drain ${E2E_NAMESPACE} or"
+		echo "              raise the quota to exercise the rung on the next run."
+		return 0
+	fi
+
+	local hard used
 	hard="$(e2e_quota_pods hard)"
+	used="$(e2e_quota_pods used)"
 	if [[ -z "${hard}" ]]; then
 		echo "error: could not read the pods dimension of ${E2E_QUOTA} in ${E2E_NAMESPACE}." >&2
 		echo "  deploy/dogfood-e2e/base/resources.yaml declares it, so this is a deploy gap." >&2
@@ -887,6 +910,10 @@ capacity_leg() {
 		echo "error: the quota rung is still withholding ${released:-<absent>} slot(s) ${CAPACITY_POLL_TIMEOUT}s after" >&2
 		echo "  the ResourceQuota was restored to ${hard} pods. The rung is a per-poll read, not" >&2
 		echo "  a latch, so intake should recover on the next long-poll without an AGC restart." >&2
+		echo "  It withheld nothing before this leg tightened anything, with ${used:-<unread>} pod(s) then" >&2
+		echo "  in use. If ${E2E_NAMESPACE} has grown since, what did not come back is the" >&2
+		echo "  headroom rather than the rung — compare that count against ${hard} before" >&2
+		echo "  reading this as a product defect." >&2
 		return 1
 	fi
 	echo "  quota rung: released after the quota was restored — withheldCapacity[quota]=0, advertisedCapacity=$(capacity_advertised)"

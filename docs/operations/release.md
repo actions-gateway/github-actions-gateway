@@ -495,8 +495,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    **Node contention:** the on-demand e2e AGC (~500m CPU) does not fit on the single `e2-standard-2` system node beside the always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and scale it back after.
    **CPU budget:** running the legs by hand skips the reservation the gate applies, so if the e2e pool reports `FailedScaleUp` here, read [the reservation section above](#the-gate-reserves-the-e2e-pools-cpu-budget) rather than the family quotas.
    Require the matrix **green** — this is GAG running its own CI end-to-end on the RC images.
-3. **Smoke the signed v2 CRD asset.** Download the RC release's `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the publish identity (step 3 below), `kubectl apply --server-side` it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
-4. **Assert the sizing profiles actuated.** A profile that silently falls back to `Static` still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert.
+3. **Assert the sizing profiles actuated.** A profile that silently falls back to `Static` still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert.
    `sizing_leg` treats the two profiles differently on purpose:
 
    | Profile | Tenant | Behaviour |
@@ -514,13 +513,13 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    Sample history needs no advance planning: the sampler tracks every worker pod regardless of `spec.sizing`, and the aggregate re-seeds from the persisted `status.sizingRecommendation` — so samples accrue without the profile configured and survive a stop/start rather than being re-earned.
 
-5. **Drive the admission ladder's quota rung.** Every other leg builds an autoscaling cluster with headroom and asks for two workers, which is the one shape under which no rung of the pre-acquisition gate ever binds.
+4. **Drive the admission ladder's quota rung.** Every other leg builds an autoscaling cluster with headroom and asks for two workers, which is the one shape under which no rung of the pre-acquisition gate ever binds.
    So without this leg a ladder that stopped being evaluated, or a rung that shipped to one acquisition tier only, leaves the whole gate green.
    `capacity_leg` asserts two different things:
 
    | Assertion | Behaviour |
    |---|---|
-   | **Every rung is evaluated** | **Hard failure.** `status.withheldCapacity` on `ci-e2e` must carry `quota`, `capacity` and `scaleup`. Each rung publishes an *explicit zero* when it does not bind, so an **absent** reason means the rung was never evaluated on this tier, which is exactly how the quota rung came to be classic-only until Q443. Needs no constraint to detect. |
+   | **Every rung is evaluated** | **Hard failure.** `status.withheldCapacity` on `ci-e2e` must carry `quota`, `capacity` and `scaleup`. Each rung publishes an *explicit zero* when it does not bind, so an **absent** reason means the rung was never evaluated on this tier. Needs no constraint to detect. This observes the scale-set path only, and the rung *roster* is already gated both ways by `TestAdmissionRungParity_CoversEveryAdmitReason` (Q973). What this adds is that the ladder ran at all against a live cluster. |
    | **The quota rung binds, then releases** | **Hard failure.** The leg patches the tenant's own `ResourceQuota` down to zero pods headroom, requires `withheldCapacity[quota]` to rise above zero, restores the ceiling, and requires it to fall back to zero. Reversible, costs no nodes, and needs no scale-up. |
 
    The release half matters as much as the bind: the advertisement is recomputed per long-poll rather than latched, so a rung that kept withholding after a quota was raised would throttle a tenant indefinitely.
@@ -536,6 +535,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    It should read `6` (`deploy/dogfood-e2e/base/resources.yaml`).
    The next run's `e2e-start.sh` reapplies the overlay and repairs it anyway, so this is a backstop rather than the plan.
+5. **Smoke the signed v2 CRD asset.** Download the RC release's `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the publish identity (step 3 below), `kubectl apply --server-side` it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
 6. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
 7. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
    `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
