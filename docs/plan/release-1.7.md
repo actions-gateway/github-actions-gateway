@@ -125,6 +125,37 @@ Both `auditLogging` fields default `Off` and are additive, so the shape is chose
 
 ## Candidate validation
 
+### `v1.7.0-rc.2`: PASSED, 2026-08-29
+
+Tagged at `49b35a41a`, which is `044b383f2`'s Q1035 fix plus two commits that touch nothing shipped.
+
+**Pre-flight, re-measured at the tag target rather than carried forward.** No `X.Y-gate` row survives, and the anchored pattern was confirmed against a label that does exist before the empty result was trusted.
+`make check` green.
+The floor reads **MINOR** over 60 commits, nine touching the released surface, so `v1.7.0` stays forced by merged work.
+The API surface re-run over `v1.6.0..HEAD` returns exactly the `c54b712a9` verdict — one added wire field `auditLogging`, its two enums, `default=Off`, and no new condition types, Event reasons, labels or annotations — so that verdict's window had not moved.
+
+**Both e2e lanes path-skipped on the target, and neither skip is a gap.** `e2e-test` ran in full at `044b383f2` and `check-artifact-unchanged.sh 044b383f2 49b35a41a` exits 0.
+`e2e-calico` ran in full at `c54b712a9` and none of its filter paths moved since: the only released-surface change in that window is under `cmd/agc/**`, which that lane excludes by design because it cannot affect NetworkPolicy enforcement.
+
+**Publish verified by content.** 9 of 9 assets with `draft: false` and `immutable: true`, all eight signatures OK, and the provenance digest reported `publish.yml@refs/tags/v1.7.0-rc.2` with `sourceRepositoryDigest` equal to `49b35a41a`.
+A negative control against `unit-test.yml` as the signer workflow exited 1.
+
+| Leg | Result |
+|---|---|
+| e2e (Kata, mirrors) | **PASS**, 75/75 specs, 62 ok, 0 failed, 13 skipped |
+| sizing | **PASS**, NodeShare and Throughput both Active; the RC ran CI on derived sizing (`sampleCounts=[246]`) |
+| capacity (quota rung) | **PASS**, bound at zero headroom and **released** |
+| crd-smoke | **PASS**, signature OK, all five CRDs applied |
+
+**The capacity leg is the verdict this candidate exists for.** rc.1 bound the rung correctly and never released it, and the leg's own discriminator is the release rather than the bind.
+Here the rung bound at `withheldCapacity[quota]=2, advertisedCapacity=0` and, once the quota was restored, reported `withheldCapacity[quota]=0, advertisedCapacity=2`.
+That is Q1035's fix observed end to end on a real cluster: the poll loop's wake reached the reconciler, and status followed the capacity change instead of waiting on the 10h resync.
+The leg passed on its second outing after finding a real product defect on its first.
+
+**Teardown left one node up, and the gate's own exit status does not say so.** The gate exited 0 and printed `Teardown complete`, while the cluster still had one `n2-standard-8` e2e-pool node running with its MIG targeting 1.
+That is the documented division rather than a teardown failure — the teardown scales `default-pool` explicitly and says the e2e pool drains on the cluster autoscaler's schedule — but it is why at-rest is confirmed by asking the cluster and not by reading the teardown line.
+`default-pool`, `workers` and `workers-od` were all at 0 immediately.
+
 ### `v1.7.0-rc.1`: FAILED, 2026-08-29
 
 Tagged at `c54b712a9`, published and artifact-verified; the dogfood gate failed its capacity leg.
