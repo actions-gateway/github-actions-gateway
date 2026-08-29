@@ -742,6 +742,16 @@ capacity_advertised() {
 		-o jsonpath='{.status.advertisedCapacity}' 2>/dev/null || true
 }
 
+# capacity_gate_field status|reason|message — one field of the set's
+# WorkerCapacityDeclined condition, the placeability rung's own verdict. Empty
+# means the condition is ABSENT, which is what mode Off publishes: the rung is
+# removed rather than reported False, so absence reads as "did not opt in"
+# rather than "opted in and found capacity".
+capacity_gate_field() {
+	kubectl get runnerset ci-e2e -n "${E2E_NAMESPACE}" \
+		-o "jsonpath={.status.conditions[?(@.type=='WorkerCapacityDeclined')].$1}" 2>/dev/null || true
+}
+
 # e2e_quota_pods hard|used — one side of the `pods` dimension of the e2e
 # tenant's ResourceQuota, read from status so `hard` is what the apiserver is
 # actually enforcing rather than what was last applied.
@@ -810,7 +820,7 @@ capacity_wait_quota_slots() {
 # here green. Same failure shape as the sizing leg above, and as Q400/Q404: a
 # gate that cannot observe the thing it gates.
 #
-# The two halves assert different things ON PURPOSE:
+# The three assert different things ON PURPOSE:
 #   evaluated — hard failure, and cheap: it needs no constraint to detect.
 #               withhold() writes an explicit zero for every rung it evaluates,
 #               so an ABSENT reason means the rung was skipped entirely. Q973's
@@ -819,10 +829,16 @@ capacity_wait_quota_slots() {
 #   binding   — hard failure, quota rung only. Driven by tightening the tenant's
 #               own ResourceQuota to zero headroom, which is reversible, costs
 #               no nodes, and needs no scale-up.
+#   verdict   — hard failure, placeability rung only. The rung's withheldCapacity
+#               zero says the LADDER ran; it does not say the GATE did, because
+#               withhold() writes that zero whether or not the set opted in. The
+#               WorkerCapacityDeclined condition is the opt-in's own evidence, and
+#               mode Off removes it rather than publishing False. See
+#               capacity_gate_verdict.
 #
-# The placeability rung is deliberately NOT driven: binding it needs a worker pod
-# the cluster cannot place, and an autoscaling cluster answers that by growing a
-# node. Q1025 tracks it.
+# The placeability rung's NEGATIVE verdict is still not driven: binding it needs a
+# worker pod the cluster cannot place, and an autoscaling cluster answers that by
+# growing a node. Q1025 tracks that half.
 #
 # Runs AFTER the e2e matrix, never during it: the tenant is idle by then, so
 # tightening its quota starves nothing, and `used` is stable enough that zero
@@ -929,9 +945,79 @@ capacity_leg() {
 	echo "  quota rung: released after the quota was restored — withheldCapacity[quota]=0, advertisedCapacity=$(capacity_advertised)"
 
 	CAPACITY_DRIVEN="quota rung driven: bound at zero headroom, released on restore"
-	echo "  Placeability rung: evaluated, NOT driven this run. Binding it needs a worker"
-	echo "                     pod the cluster cannot place, which an autoscaling cluster"
-	echo "                     answers by growing a node. Q1025 tracks driving it."
+
+	capacity_gate_verdict
+}
+
+# capacity_gate_verdict — assert the placeability rung published a real verdict for
+# this tenant, which is the half of Q1025 that needs no unplaceable pod.
+#
+# The rung's withheldCapacity zero, asserted above, says the LADDER ran. It does not
+# say the gate did: withhold() writes that zero whether or not the set opted in, and
+# mode Off REMOVES WorkerCapacityDeclined rather than publishing it False. So the
+# condition's presence is the only evidence on this cluster that the opt-in path
+# evaluates end to end — that the CRD carries the field, the AGC implements the mode,
+# and the gateway's clusterCapacity reached the verdict.
+#
+# The NEGATIVE verdict is still not driven: it needs a worker pod the cluster cannot
+# place, and this pool autoscales, so it answers unplaceability by growing a node.
+# Q1025 tracks that half.
+#
+# What is asserted is PRESENCE, which is what survives Q1035: the condition shares
+# applyWorkerCapacityConditions with withheldCapacity, so on an idle set its VALUE
+# can be up to a resync stale. Presence cannot be — the condition is only ever
+# written by a set that opted in, and nothing clears it while the opt-in stands, so
+# a stale CapacityAvailable still proves the path evaluated. The decline branch is
+# the one that reads a value, and it reports rather than asserts.
+capacity_gate_verdict() {
+	local status reason message
+	status="$(capacity_gate_field status)"
+	reason="$(capacity_gate_field reason)"
+	message="$(capacity_gate_field message)"
+
+	if [[ -z "${reason}" ]]; then
+		echo "error: RunnerSet ci-e2e publishes no WorkerCapacityDeclined condition." >&2
+		echo "  The condition is ABSENT, not False — which is exactly what mode Off does, so" >&2
+		echo "  the set is not opted in to the placeability rung on this cluster. Two causes" >&2
+		echo "  reach this and the status cannot tell them apart: spec.capacityGate.mode is" >&2
+		echo "  missing from the applied manifest (deploy/dogfood-e2e/base/resources.yaml sets" >&2
+		echo "  it to Observe), or the applied CRD predates the field and silently pruned it." >&2
+		echo "  Compare the live spec against the manifest before reading this as a gate defect:" >&2
+		echo "    kubectl get runnerset ci-e2e -n ${E2E_NAMESPACE} -o jsonpath='{.spec.capacityGate}'" >&2
+		return 1
+	fi
+
+	if [[ "${reason}" == "GateModeUnsupported" ]]; then
+		echo "error: the placeability rung reports GateModeUnsupported for mode Observe." >&2
+		echo "  The gate fails OPEN on a mode it does not implement, so intake is ungated and" >&2
+		echo "  this is not starving the tenant — but the rung is unproven for this release." >&2
+		echo "  The CRDs ship as their own chart and can be upgraded ahead of the AGC, so the" >&2
+		echo "  reading is an AGC older than the CRD that accepted the field: check the" >&2
+		echo "  deployed AGC image is the RC under validation." >&2
+		return 1
+	fi
+
+	if [[ "${status}" == "True" ]]; then
+		# Not a failure: this is the negative verdict the rung exists to produce, and
+		# the one this leg cannot manufacture. It is reported rather than asserted
+		# because a decline here is a fact about the cluster, not about the release —
+		# and on a pool with budget headroom it is unexpected enough to want a human.
+		CAPACITY_DRIVEN="${CAPACITY_DRIVEN}; placeability rung DECLINED (${reason})"
+		echo "  Placeability rung: DECLINED — reason=${reason}"
+		echo "                     ${message}"
+		echo "                     Unexpected on an autoscaling pool with headroom. The set is"
+		echo "                     idle by now, so per Q1035 this may be up to a resync stale:"
+		echo "                     check the metric before reading it as live. Either way the"
+		echo "                     rung bound on real infra, which is the verdict Q1025 cannot"
+		echo "                     otherwise drive."
+		return 0
+	fi
+
+	CAPACITY_DRIVEN="${CAPACITY_DRIVEN}; placeability rung verdict=${reason}"
+	echo "  Placeability rung: verdict published — WorkerCapacityDeclined=${status}, reason=${reason}"
+	echo "                     The opt-in path evaluates end to end here. The negative verdict"
+	echo "                     stays undriven: it needs a pod this autoscaling pool cannot"
+	echo "                     place. Q1025 tracks it."
 }
 
 # preflight_cosign — resolve the cosign binary the CRD smoke needs and set
