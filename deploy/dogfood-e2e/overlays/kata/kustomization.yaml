@@ -18,14 +18,22 @@ kind: Kustomization
 # prerequisites (nested-virt node pool, Kata DaemonSet, the `kata` RuntimeClass,
 # Workload Identity) are set up by scripts/dogfood/e2e-setup.sh, not kustomize.
 #
-# The delta vs ../dind is exactly: which library entry is the base, plus this
-# variant's block-volume StorageClass. The namespace gates are IDENTICAL — see
-# ../../../templates/kata-dind/template.yaml for why Kata still needs the
-# privileged PSA level despite the unprivileged pod.
+# The delta vs ../dind is exactly: which library entry is the base, this
+# variant's block-volume StorageClass, and the egress posture. The namespace
+# gates are IDENTICAL — see ../../../templates/kata-dind/template.yaml for why
+# Kata still needs the privileged PSA level despite the unprivileged pod.
+#
+# THIS OVERLAY SHIPS NO ADDITIVE EGRESS POLICY, and the absence is the Q408
+# deliverable. ../dind still carries an allow-all `e2e-open-egress`, because it
+# is the explicit trusted-CI fallback; deleting Kata's is what leaves a worker
+# here with the GMC-managed default-deny alone — cluster DNS, GitHub, and the
+# pull-through mirrors admitted by ../../../registry-mirror's
+# `e2e-mirror-egress`. Nothing else, the metadata server's service ports
+# included. scripts/e2e/egress-negatives.sh is what proves it, from inside a
+# job, on every run of this lane.
 resources:
   - ../../base
   - ../../../templates/kata-dind
-  - resources.yaml
   - mirror-wiring.yaml
 patches:
   # Namespace -> privileged PSA, same four gates as ../dind. NOT because the pod

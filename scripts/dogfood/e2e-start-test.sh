@@ -355,6 +355,36 @@ check_not_contains "never applies the tenant without the conversion webhook" \
 check_not_contains "never routes e2e jobs when GMC is down" \
 	"variable set" "$(cat "${CALL_LOG}")"
 
+# --- the Kata lane's open-egress policy is deleted, not merely unmanifested ---
+#
+# Q408 Phase 4. The Kata overlay ships no additive egress policy, and an absent
+# manifest deletes nothing: `kubectl apply -k` does not prune and e2e-stop.sh
+# leaves the tenant's NetworkPolicies standing between windows. So a cluster
+# that ran this lane before the phase keeps allow-all egress forever while the
+# manifests claim otherwise, and no gate off the cluster can see it.
+#
+# Both directions are asserted. The dind overlay OWNS that policy, so deleting
+# it there would revoke the trusted-CI fallback's egress one line after the
+# apply created it.
+
+reset_stubs gag-dogfood gag-dogfood-ci
+run_main
+check_contains "deletes the allow-all egress policy on the Kata lane" \
+	"delete networkpolicy e2e-open-egress" "$(cat "${CALL_LOG}")"
+check_contains "scopes that delete to the e2e tenant" \
+	"--namespace gag-dogfood-e2e" "$(call_line 'delete networkpolicy')"
+check_contains "tolerates the policy already being gone" \
+	"--ignore-not-found" "$(call_line 'delete networkpolicy')"
+check_before "deletes it after the apply, which cannot recreate it" \
+	"apply -k" "delete networkpolicy"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_VARIANT=dind
+run_main
+check "the dind bring-up succeeds" 0 "${MAIN_RC}"
+check_not_contains "never deletes the dind lane's own egress policy" \
+	"delete networkpolicy" "$(cat "${CALL_LOG}")"
+
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2
 	exit 1

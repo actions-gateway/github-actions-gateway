@@ -5,10 +5,10 @@
 #
 # Why it is tested. Three consumers share this map (the docker pulls, helm's OCI
 # chart pull, buildkit's generated config), and both directions of a mistake here
-# are quiet: a rewrite that does not happen leaves the client talking to its
-# upstream, which is green until Phase 4 deletes `e2e-open-egress` and then fails
-# a booked dogfood session; a rewrite that mangles the ref fails the run at pull
-# time with an error naming a host nobody wrote down. So both are asserted, and
+# are quiet: a rewrite that does not happen leaves the client talking to an
+# upstream the Kata tenant's policy set no longer admits (Q408 Phase 4), so it
+# fails a booked dogfood session at pull time; a rewrite that mangles the ref
+# fails the same way, with an error naming a host nobody wrote down. So both are asserted, and
 # so is the no-map case — the hosted lane, publish.yml and a developer's `make
 # e2e` all run with REGISTRY_MIRRORS unset and must be untouched by any of it.
 #

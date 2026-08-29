@@ -27,14 +27,16 @@ What this scope adds is the release's read of them.
 | 1. Shrink the non-registry residual to GitHub | ✅ implemented 2026-08-05, validated 2026-08-24 | Nothing further; it is the evidence the residual is gone |
 | 2. Mirror manifests | ❌ | `deploy/registry-mirror/`, one instance per upstream, applied from the e2e setup path |
 | 3. Wiring | ❌ | A green Kata e2e run **with open egress still present** and mirror hit counts > 0, so wiring is proven before enforcement changes |
-| 4. Enforcement | ❌ | The swap plus the negative probes; this is where the posture becomes real |
+| 4. Enforcement | ✅ built and validated 2026-08-28 | The deletion plus the negative probes; this is where the posture becomes real |
 | 5. Docs and close-out | ❌ | The caveat flips to a how-to; G.14 marked shipped; the roadmap entry leaves "exploring" |
 
-**Phases 2, 3 and 4 need live dogfood sessions**, which are prod-guarded and operator-driven.
-That is the schedule risk in this release and it is not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
+**Phases 2, 3 and 4 each needed a live dogfood session**, prod-guarded and operator-driven, and all three have now run (2026-08-27 and 2026-08-28).
+That was the schedule risk in this release and it was not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
+Phase 5 needs no cluster, so nothing gating 1.7 is waiting on one.
 
-**Phase 3 must run with the image caches cold**, so the `quay.io` and `registry.k8s.io` prepulls are exercised rather than skipped.
-A warm run would report hit counts that prove nothing about the paths a fresh tenant takes.
+**Phase 3 had to run with the image caches cold**, so the `quay.io` and `registry.k8s.io` prepulls were exercised rather than skipped.
+A warm run would have reported hit counts that prove nothing about the paths a fresh tenant takes.
+Nothing had to be arranged for it: Phase 1 removed every `actions/cache` step from the self-hosted lane, so that lane has been cold since, which is why Phase 4's run reported the same five instances serving too.
 
 ## The three questions 1.6 left for this scope
 

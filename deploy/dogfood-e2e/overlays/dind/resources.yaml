@@ -1,14 +1,17 @@
 # Privileged-DinD isolation delta, e2e-tenant half. The worker pod shape itself
 # is NOT here any more: it is the shipped library entry
 # deploy/templates/privileged-dind, which this overlay consumes as a base and
-# patches with the cluster specifics (kustomization.yaml). See ../kata/resources.yaml
-# for why the relationship runs that way (Q554).
+# patches with the cluster specifics (kustomization.yaml). See
+# ../kata/kustomization.yaml for why the relationship runs that way (Q554).
 #
 # Open egress (additive; unions with GAG's managed default-deny). TRUSTED-ONLY:
 # e2e pulls from Docker Hub / quay / registry.k8s.io / get.helm.sh, all CDN-fronted
 # (a CIDR allowlist would rot; an FQDN allowlist isn't enforceable on GKE DPv2 —
-# Q245). Durable hardening = an in-cluster pull-through mirror. This variant is
-# for trusted CI; untrusted jobs use the Kata variant with tighter egress.
+# Q245). The durable hardening is the in-cluster pull-through mirror, which is
+# built (../../../registry-mirror) and wired on the Kata overlay, where this
+# policy is deliberately absent (Q408). It stays here because this variant is the
+# explicit trusted-CI fallback: privileged DinD was never a candidate for
+# untrusted code, so tightening its egress would buy nothing.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -224,6 +224,28 @@ jobs:
             echo "no REGISTRY_MIRRORS configured; buildkit resolves upstream directly"
           fi
 
+      - name: Prove the worker's egress is mirror-only
+        # Q408 Phase 4. The Kata overlay ships no additive egress policy, so a
+        # worker on the dogfood lane reaches cluster DNS, GitHub and the
+        # in-cluster mirrors and nothing else. This is what says so: three
+        # destinations that must NOT answer, each paired with a control that
+        # must, since a battery of unreachable checks passes identically on a
+        # worker with no network at all.
+        #
+        # It runs on every run rather than once, because the posture is a
+        # property to hold rather than a milestone to reach: a policy that stops
+        # selecting the worker is invisible in a green suite.
+        #
+        # No `if:` — the script reads REGISTRY_MIRRORS, which only the dogfood
+        # Kata tenant sets, and reports a skip everywhere else. A step condition
+        # cannot express that: the variable is set on the runner process by the
+        # cluster, and the `env` context holds only what a workflow declares.
+        # Placed before the build so a lost posture fails here rather than after
+        # the suite. Each blocked probe spends its whole timeout, so the step
+        # costs ~80 s even when everything holds (78 s measured on the dogfood
+        # Kata lane, 2026-08-28).
+        run: scripts/e2e/egress-negatives.sh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:

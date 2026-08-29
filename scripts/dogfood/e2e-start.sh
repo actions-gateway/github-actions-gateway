@@ -81,9 +81,34 @@ E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
 # Idempotent server-side apply. The Kata overlay wires dockerd, the docker-client
 # refs, buildkit and helm to these instances (Q408 Phase 3,
 # deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml), and the dind overlay does
-# not, so both variants are safe to bring up either way: the mirror's additive
-# policy is a no-op while the Kata overlay's allow-all e2e-open-egress is still
-# in place, and an unwired client simply reaches its upstream.
+# not, so both variants are safe to bring up either way: on the dind overlay,
+# whose allow-all e2e-open-egress remains, the mirror's additive policy is a
+# no-op and an unwired client simply reaches its upstream. On the Kata overlay it
+# is the whole of a worker's registry reach (Q408 Phase 4).
+# enforce_kata_egress — remove the allow-all `e2e-open-egress` policy when the
+# Kata overlay is selected (Q408 Phase 4).
+#
+# The Kata overlay ships no additive egress policy, and an absent manifest is
+# not a deletion: `kubectl apply -k` does not prune, and e2e-stop.sh leaves the
+# tenant's NetworkPolicies standing on purpose so a window can be reopened
+# without re-deriving them. So a cluster that ran the Kata lane before this
+# phase keeps the old policy indefinitely, and every worker keeps open egress
+# while the manifests say otherwise — the exact drift the posture cannot
+# tolerate, and one no gate off the cluster can see.
+#
+# Deleting it here rather than by hand is what makes the recipe reproducible:
+# an operator adopting the mirror on their own cluster hits the same gap.
+# --ignore-not-found because the steady state is that it is already gone.
+#
+# The dind variant is deliberately untouched: that overlay OWNS the policy, and
+# the apply above has just (re)created it.
+enforce_kata_egress() {
+	[[ "${E2E_VARIANT}" == "kata" ]] || return 0
+	echo "Removing any allow-all e2e-open-egress (Kata is mirror-only, Q408)..."
+	kubectl delete networkpolicy e2e-open-egress \
+		--namespace gag-dogfood-e2e --ignore-not-found
+}
+
 apply_registry_mirror() {
 	# Ephemeral caches by default (emptyDir — $0 at rest, cold on the first pull
 	# of each e2e window). Set REGISTRY_MIRROR_PERSISTENT=1 to render the
@@ -150,11 +175,14 @@ main() {
 
 	# Spin up the on-demand e2e tenant. Idempotent server-side apply of the
 	# selected isolation overlay (namespace + quota + ClusterRunnerTemplate +
-	# ActionsGateway + RunnerSet + open-egress NetworkPolicy). The GitHub App
-	# Secret is created out-of-band by e2e-setup.sh and is NOT re-applied here.
-	# Applying the ActionsGateway is what brings the per-tenant AGC pod up.
+	# ActionsGateway + RunnerSet, plus the dind overlay's open-egress
+	# NetworkPolicy). The GitHub App Secret is created out-of-band by
+	# e2e-setup.sh and is NOT re-applied here. Applying the ActionsGateway is
+	# what brings the per-tenant AGC pod up.
 	echo "Spinning up the on-demand e2e tenant (v2beta1 ${E2E_VARIANT} overlay)..."
 	kubectl apply -k "${REPO_ROOT}/deploy/dogfood-e2e/overlays/${E2E_VARIANT}"
+
+	enforce_kata_egress
 
 	echo "Waiting for the e2e gateway's AGC to become Ready..."
 	kubectl wait --namespace gag-dogfood-e2e \

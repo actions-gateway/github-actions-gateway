@@ -4,13 +4,19 @@
 #
 # Phase 3 wires the clients (dockerd's daemon.json, the rewritten non-Hub refs,
 # helm's OCI ref, buildkit's config) while the Kata overlay's allow-all
-# `e2e-open-egress` is STILL in place. That is deliberate — wiring proven before
-# enforcement changes — and it is also why a green e2e run proves nothing here:
+# `e2e-open-egress` is still in place. That is deliberate — wiring proven before
+# enforcement changes — and it is also why a green e2e run proves nothing there:
 # a client that ignored its wiring reaches the upstream and the suite passes
 # exactly the same. The reading that discriminates is the mirror's own access
 # log, which no unmirrored pull can write into.
 #
 # So: one non-zero hit count per declared instance, or the phase is not done.
+#
+# Phase 4 deleted that policy, so an unwired client now fails the run outright
+# and this script is no longer the only signal. It stays the one that ATTRIBUTES:
+# the repositories each instance was asked for name which client rode it, and
+# they are the plan's §3.4 audit point. Its negative twin, the half that says a
+# path is absent rather than used, is scripts/e2e/egress-negatives.sh.
 #
 # WHAT COUNTS AS A HIT. Distribution's access log is Combined Log Format, one
 # line per request, alongside the structured logrus lines. Measured on
@@ -228,9 +234,10 @@ main() {
 		echo "deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml." >&2
 		return 1
 	fi
-	echo "Q408 Phase 3 validation: PASS — every declared instance served content."
-	echo "Open egress is still in place, so this proves the wiring rides the mirror,"
-	echo "not that anything is enforced. Enforcement remains Phase 4's."
+	echo "Q408: PASS — every declared instance served content."
+	echo "This says the pulls rode the mirror, and the repositories above say which"
+	echo "client rode which. It does not say the upstreams were unreachable: that is"
+	echo "scripts/e2e/egress-negatives.sh, a step of the run itself on the Kata lane."
 }
 
 [[ -n "${E2E_MIRROR_HITS_LIB_ONLY:-}" ]] || main "$@"

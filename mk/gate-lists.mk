@@ -278,4 +278,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-vendored-skills-test \
                  docs/doc-blocks-test \
                  dogfood/e2e-mirror-hits-test lib/registry-mirror-test \
-                 manifest/check-registry-mirror-wiring-test
+                 manifest/check-registry-mirror-wiring-test \
+                 e2e/egress-negatives-test
