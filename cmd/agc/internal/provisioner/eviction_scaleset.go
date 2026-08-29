@@ -109,6 +109,15 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 			recoverable = append(recoverable, disrupted{pod: pod, cause: cause})
 		case abandonedAwaitingRecovery(pod):
 			recoverable = append(recoverable, disrupted{pod: pod, cause: recoveryCauseAbandoned, abandoned: true})
+		case externallyDeletedTerminalWorker(pod):
+			// Declined, and saying so is the point: an unrecovered pod looks the same
+			// whether a scan judged it or no scan ever saw it (Q549). Debug because
+			// declining is usually right — a cleanup delete of an already-failed pod is
+			// exactly what the ordering check exists to reject.
+			log.Debug("externally deleted scale-set worker did not qualify as a recoverable disruption; no automatic re-run",
+				"podName", pod.Name,
+				"deletionRequestedAt", deletionRequestedAt(pod).UTC().Format(time.RFC3339),
+				"terminatedAt", podTerminationRecordTime(pod).UTC().Format(time.RFC3339))
 		}
 	}
 	if len(recoverable) == 0 {
@@ -252,6 +261,27 @@ func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 	default:
 		return "", false
 	}
+}
+
+// externallyDeletedTerminalWorker reports whether pod is an unclaimed scale-set worker
+// that something other than the AGC deleted and that reached PodFailed — the
+// preconditions the two deletion-driven arms share (disruptionAwaitingRecovery's
+// deletion case, and abandonedAwaitingRecovery). A pod matching it that neither arm
+// accepted has been judged and declined.
+//
+// The scan lists from the informer cache at the top of a reconcile, so it sees a drained
+// worker only if a reconcile begins inside the seconds between the kubelet publishing
+// the terminal phase and removing the object. Without a line for the declined case, a
+// regressed discriminator and a scan that never got that look are the same silence,
+// which is what left Q549 unattributable across three sightings.
+func externallyDeletedTerminalWorker(pod *corev1.Pod) bool {
+	if _, claimed := pod.Annotations[AnnotationEvictionHandledAt]; claimed {
+		return false
+	}
+	if pod.DeletionTimestamp.IsZero() || deletedByAGC(pod) {
+		return false
+	}
+	return pod.Status.Phase == corev1.PodFailed
 }
 
 // podReasonEvicted is the Pod.Status.Reason the kubelet sets when it evicts a pod

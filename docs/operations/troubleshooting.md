@@ -3155,6 +3155,11 @@ Consequences an operator should know:
   It is reported rather than silent: `actions_gateway_eviction_recovery_evidence_lost_total{cause="deletion"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded on the `RunnerSet`.
   Those runs need a manual re-run.
   A sustained rate means the AGC is not reaching the window — check whether it is CPU-starved or its work queue is backlogged, not whether the policy or role is wrong.
+- **A smaller fraction is not reported by any metric** (scale-set tier only).
+  The recovery scan reads the worker pods once per reconcile, so a drained worker is only judged if a reconcile begins between the kubelet publishing the terminal phase and removing the object.
+  If none does, the pod is never seen: no claim, no metric, no Event, and no log line naming it.
+  The tell is the absence: an unrecovered drain whose pod appears nowhere in the AGC log, against a recovered one that appears twice.
+  Same remedy as above: the AGC's reconcile loop is not turning over fast enough.
 - **The first re-run call may be refused.** GitHub's conclusion on this path takes 15–26s while `evictionRetryDelay` defaults to 5s, so the first `rerun-failed-jobs` can land while the run is still in progress and be answered `403 This workflow is already running`.
   The Q503 retry loop absorbs that — the re-run is retried on a 30s pace until accepted — so no action is needed; see [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) for the loop's own failure modes.
 
@@ -3192,6 +3197,11 @@ kubectl logs -n <namespace> deploy/<agc-deployment> \
 # manual re-run.
 kubectl logs -n <namespace> deploy/<agc-deployment> \
   | grep 'disruption was lost before it could be claimed'
+
+# Scale-set tier: every verdict the scan reached, by pod. A drained worker that
+# appears nowhere here was never judged: the scan did not see it (Debug verbosity).
+kubectl logs -n <namespace> deploy/<agc-deployment> \
+  | grep -E 'disrupt' | grep '<worker-pod>'
 ```
 
 If a drain of running workers produced no re-run, check whether the pods carried the `actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was down across the teardown window, lost the pod before it could claim it (`eviction_recovery_evidence_lost_total`), or the pods carried no run identity (see [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run), whose scale-set failure modes apply to drains identically).

@@ -92,10 +92,11 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 
 		probePodBase = "ssrec-drain-probe"
 
-		// A disruption whose claim was won by an AGC that then went away is not
-		// recoverable by any later AGC, so the spec re-stages instead of asserting on
-		// it. Bounded: two control-plane replacements in two consecutive claim windows
-		// is not churn, it is a defect worth failing on.
+		// An attempt that never exercised the chart role is re-staged rather than
+		// asserted on: the AGC was replaced inside the claim window, the pod was gone
+		// before the claim could land (Q809), or the recovery scan never saw the
+		// disruption at all (Q549). Bounded — the same miss in every one of three
+		// consecutive windows is not churn, it is a defect worth failing on.
 		maxAttempts = 3
 
 		// The recovery-relevant shape ProvisionScaleSetWorker stamps, restated as
@@ -234,11 +235,14 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 					"mark-before-exit ordering cannot be produced")
 
 			By("sampling the pod's phase, deletion mark, and claim annotation across the teardown")
-			// Diagnostics, not evidence: a sampler bounds what was observed, never what
-			// happened (testing.md § negative assertions), so nothing below asserts on
-			// this sequence beyond it being non-empty. The claim's proof is the rerun —
-			// the reconciler calls GitHub only after the claim patch succeeds, so a rerun
-			// landing IS the claim landing.
+			// Diagnostics, not evidence, and asserted on nowhere: a sampler bounds what
+			// was observed, never what happened (testing.md § negative assertions). It
+			// shells out to kubectl per sample, so a teardown that completes inside one
+			// invocation leaves it empty — a fact about the sampler, not about the AGC.
+			// Requiring it non-empty reddened run 32934571793, whose AGC had already
+			// claimed the disruption and called rerun-failed-jobs (Q549). The claim's
+			// proof is the rerun — the reconciler calls GitHub only after the claim patch
+			// succeeds, so a rerun landing IS the claim landing.
 			observed := newFieldRecorder(tenantNS, probePod,
 				`{.status.phase}/{.metadata.deletionTimestamp}/`+
 					`{.metadata.annotations['actions-gateway\.com/eviction-handled-at']}`)
@@ -258,10 +262,12 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 			}, 2*time.Minute, time.Second).Should(Succeed())
 
 			stopSampling()
-			seq := observed.sequence()
+			observedSeq := strings.Join(observed.sequence(), " -> ")
+			if observedSeq == "" {
+				observedSeq = "(nothing: the pod was gone before a sample returned)"
+			}
 			AddReportEntry(fmt.Sprintf("Q519 attempt %d observed phase/deletionTimestamp/%s", attempt, annotationClaim),
-				strings.Join(seq, " -> "))
-			Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")
+				observedSeq)
 
 			By("waiting for the disrupted run to be re-run automatically")
 			// The whole point. If the chart role were missing a verb the recovery path
@@ -295,20 +301,36 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 				continue
 			}
 
-			if agcPodIdentity(tenantNS, agcDeploy) == pinnedAGC {
-				Fail("a deleted scale-set worker's run was never re-run under the chart role, and the AGC " +
-					"that observed the disruption is still running; either the role lost a verb the recovery " +
-					"path needs (check the AGC logs for 'could not claim scale-set worker disruption') or the " +
-					"deletion-mark discriminator regressed")
+			if nowAGC := agcPodIdentity(tenantNS, agcDeploy); nowAGC != pinnedAGC {
+				AddReportEntry("Q549 re-staging", fmt.Sprintf(
+					"attempt %d: the AGC control plane was replaced inside the claim window (pinned %q, now %q); "+
+						"the claim is durable and the re-run is not, so this disruption is unrecoverable by any "+
+						"later AGC and proves nothing either way",
+					attempt, pinnedAGC, nowAGC))
+				Expect(attempt).To(BeNumerically("<", maxAttempts),
+					"the AGC control plane was replaced inside the claim window on every one of %d attempts; "+
+						"the spec never got an undisturbed window to test in", maxAttempts)
+				continue
 			}
-			AddReportEntry("Q549 re-staging", fmt.Sprintf(
-				"attempt %d: the AGC control plane was replaced inside the claim window (pinned %q, now %q); "+
-					"the claim is durable and the re-run is not, so this disruption is unrecoverable by any "+
-					"later AGC and proves nothing either way",
-				attempt, pinnedAGC, agcPodIdentity(tenantNS, agcDeploy)))
-			Expect(attempt).To(BeNumerically("<", maxAttempts),
-				"the AGC control plane was replaced inside the claim window on every one of %d attempts; "+
-					"the spec never got an undisturbed window to test in", maxAttempts)
+
+			// The pinned AGC is still running and never judged this pod, so its recovery
+			// scan did not see the disruption and the claim patch was never attempted —
+			// the chart role is no more exercised than under a replaced control plane.
+			if agcReachedNoDisruptionVerdict(tenantNS, agcDeploy, probePod) {
+				AddReportEntry("Q549 re-staging (no verdict)", fmt.Sprintf(
+					"attempt %d: the AGC logged no verdict on %s, so its recovery scan never observed the "+
+						"disruption and the chart role was never exercised", attempt, probePod))
+				Expect(attempt).To(BeNumerically("<", maxAttempts),
+					"the AGC's recovery scan never observed the disruption on any of %d attempts; the "+
+						"drain-recovery window is not reachable on this cluster at all", maxAttempts)
+				continue
+			}
+
+			Fail("a deleted scale-set worker's run was never re-run under the chart role: the AGC that " +
+				"observed the disruption is still running AND reached a verdict on the pod, so either the " +
+				"role lost a verb the recovery path needs (the AGC log carries 'could not claim scale-set " +
+				"worker disruption') or the deletion-mark discriminator regressed (it carries 'did not " +
+				"qualify as a recoverable disruption')")
 		}
 
 		By("asserting the run was re-run exactly once")
@@ -347,6 +369,36 @@ func evictionRecoveryEvidenceLost(ns, deploy, probePod string) bool {
 		}
 	}
 	return false
+}
+
+// agcReachedNoDisruptionVerdict reports whether the AGC never adjudicated probePod's
+// disruption at all — it neither claimed it, nor declined it, nor failed to claim it.
+// Every verdict the recovery scan emits names the pod and carries "disrupt"; nothing
+// else the AGC logs about a worker pod does.
+//
+// It is the third "this attempt proves nothing" discriminator, beside a replaced control
+// plane and a claim lost to the deletion (Q549). The scan lists from the informer cache
+// at the top of a reconcile, so a drained worker is judged only if a reconcile begins
+// inside the seconds between the kubelet publishing the terminal phase and the kubelet
+// removing the object. Measured on the two sightings that reached Fail: runs
+// 32933225396 and 33185281929 carried zero AGC lines naming the probe pod, while run
+// 32934571793 — same spec, same day, recovery ran — carried two.
+//
+// Unreadable logs answer false, so a log-read failure fails the spec rather than
+// re-staging past a real defect.
+func agcReachedNoDisruptionVerdict(ns, deploy, probePod string) bool {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "logs",
+		"-n", ns, "-l", "app="+deploy, "--tail=-1", "--prefix"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "disrupt") && strings.Contains(line, probePod) {
+			return false
+		}
+	}
+	return true
 }
 
 // scaleSetRecoveryManifest renders the tenant: one gateway, one template, one
