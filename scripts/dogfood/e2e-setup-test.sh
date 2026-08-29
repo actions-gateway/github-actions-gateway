@@ -286,7 +286,11 @@ check_not_contains "never passes the private key through argv" \
 check_not_contains "never puts key material on a command line" \
 	"0123456789abcdef" "$(cat "${CALL_LOG}")"
 # The temp file the key was written to is removed on the way out.
+# Read the path back rather than asserting on it directly: an empty capture
+# would make the removal check below pass against `ls ""`, so it is checked
+# first — otherwise a cascade from the assertion above turns this one vacuous.
 pem_file="$(printf '%s\n' "${secret_call}" | sed -n 's/.*--from-file=privateKey=\([^ ]*\).*/\1/p')"
+check_contains "names the key file it created the Secret from" "/" "${pem_file}"
 check "cleans up the key temp file" "" "$(ls "${pem_file}" 2>/dev/null || true)"
 
 # --- the namespace carries the tenant marker and nothing isolation-specific --
@@ -336,7 +340,7 @@ run_main
 check "a declined confirmation fails the setup" 1 "${MAIN_RC}"
 check_not_contains "creates nothing when the confirmation is declined" \
 	"node-pools create" "$(cat "${CALL_LOG}")"
-check_not_contains "reads no keychain when the confirmation is declined" \
+check_not_contains "creates no Secret when the confirmation is declined" \
 	"create secret" "$(cat "${CALL_LOG}")"
 
 # --- missing configuration aborts before anything runs -----------------------

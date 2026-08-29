@@ -33,6 +33,13 @@
 # confirm_or_exit and gke_get_credentials_and_verify run for real against those
 # stubs — they are the two gates standing between a fat-fingered run and someone
 # else's cluster.
+#
+# What that repoint costs, so the next reader does not assume otherwise: the
+# chart path, the git-archive directory and the Athens overlay are all arguments
+# to stubbed commands under the fake root, so the helm render itself is out of
+# scope here. Deliberately untested as a result: the CRD apply's --server-side
+# --force-conflicts, `helm template --namespace gmc-system`, the chart's install
+# namespace, and apply_quota's pod count.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -115,6 +122,8 @@ kubectl() {
 		cat >>"${MANIFESTS}.in"
 		grep -q '^kind: ActionsGateway$' "${MANIFESTS}.in" \
 			&& printf 'apply-tenant-cr\n' >>"${CALL_LOG}"
+		grep -q 'name: gmc-system-critical-pods' "${MANIFESTS}.in" \
+			&& printf 'apply-priorityclass-quota\n' >>"${CALL_LOG}"
 		cat "${MANIFESTS}.in" >>"${MANIFESTS}"
 		: >"${MANIFESTS}.in"
 		;;
@@ -341,17 +350,14 @@ run_main
 # pins the chart to the image's ref rather than the local worktree.
 check_contains "archives the CRD chart at the image ref" \
 	"archive feedface charts/actions-gateway-crds-v2" "$(call_line 'archive')"
+# wrapper is in this loop for a reason of its own: the chart's wrapper tag
+# defaults to empty, which renders ghcr.io/.../wrapper:latest, a tag this
+# registry never publishes, so worker injection would ImagePullBackOff.
 for component in gmc agc proxy wrapper; do
 	check_contains "pins the ${component} image to the same ref" \
 		"tag: feedface" "$(grep -A2 "^${component}:" "${HELM_VALUES}")"
 done
 GAG_IMAGE_TAG=abc1234
-
-# The chart's wrapper tag defaults to empty, which renders
-# ghcr.io/.../wrapper:latest — a tag this registry never publishes — so worker
-# injection would ImagePullBackOff without an explicit pin.
-check_contains "never leaves the wrapper tag to the chart default" \
-	"wrapper:" "$(cat "${HELM_VALUES}")"
 
 # --- the chart overrides dogfood cannot run without -------------------------
 
@@ -438,14 +444,25 @@ check_not_contains "never applies a CR through an unverified webhook" \
 # permitting quota existed; restarting clears it instead of waiting the backoff
 # out.
 reset_stubs
+# Exit-code-valued, like every describe knob above: 1 is the failure status
+# gmc_ready returns when the rollout has NOT completed.
 GMC_IS_READY=1
 run_main
 check_contains "restarts a GMC that is not ready" \
 	"rollout restart" "$(call_line 'rollout restart')"
-# GKE only permits system-cluster-critical in a namespace with a quota scoped to
-# it; without one the GMC ReplicaSet cannot create pods at all.
-check_before "permits the system-critical PriorityClass before waiting" \
-	"upgrade --install gag" "wait_for_gmc"
+# GKE — and any cluster with the restricted PriorityClass admission — only
+# permits system-cluster-critical in a namespace holding a quota scoped to it;
+# without one the GMC ReplicaSet fails pod creation outright. Assert the quota
+# itself, not the two calls either side of it: an earlier revision compared
+# `upgrade --install gag` against `wait_for_gmc`, an order install_gag's body
+# guarantees whether or not the quota is applied at all, so deleting the whole
+# block left the suite green.
+check_contains "permits the system-critical PriorityClass in gmc-system" \
+	"scopeName: PriorityClass" "$(cat "${MANIFESTS}")"
+check_contains "scopes that permission to the GMC's own quota" \
+	"name: gmc-system-critical-pods" "$(cat "${MANIFESTS}")"
+check_before "permits the PriorityClass before waiting on the rollout" \
+	"apply-priorityclass-quota" "wait_for_gmc"
 
 reset_stubs
 GMC_IS_READY=0
@@ -474,7 +491,11 @@ check_not_contains "never passes the private key through argv" \
 	"--from-literal=privateKey" "${secret_call}"
 check_not_contains "never puts key material on a command line" \
 	"0123456789abcdef" "$(cat "${CALL_LOG}")"
+# Read the path back rather than asserting on it directly: an empty capture
+# would make the removal check below pass against `ls ""`, so it is checked
+# first — otherwise a cascade from the assertion above turns this one vacuous.
 pem_file="$(printf '%s\n' "${secret_call}" | sed -n 's/.*--from-file=privateKey=\([^ ]*\).*/\1/p')"
+check_contains "names the key file it created the Secret from" "/" "${pem_file}"
 check "cleans up the key temp file" "" "$(ls "${pem_file}" 2>/dev/null || true)"
 
 # --- the runner image, whose default is a footgun ----------------------------
