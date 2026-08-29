@@ -515,17 +515,20 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
 4. **Drive the admission ladder's quota rung.** Every other leg builds an autoscaling cluster with headroom and asks for two workers, which is the one shape under which no rung of the pre-acquisition gate ever binds.
    So without this leg a ladder that stopped being evaluated, or a rung that shipped to one acquisition tier only, leaves the whole gate green.
-   `capacity_leg` asserts two different things:
+   `capacity_leg` asserts several different things:
 
    | Assertion | Behaviour |
    |---|---|
    | **Every rung is evaluated** | **Hard failure.** `status.withheldCapacity` on `ci-e2e` must carry `quota`, `capacity` and `scaleup`. Each rung publishes an *explicit zero* when it does not bind, so an **absent** reason means the rung was never evaluated on this tier. Needs no constraint to detect. This observes the scale-set path only, and the rung *roster* is already gated both ways by `TestAdmissionRungParity_CoversEveryAdmitReason` (Q973). What this adds is that the ladder ran at all against a live cluster. |
    | **The quota rung binds, then releases** | **Hard failure.** The leg patches the tenant's own `ResourceQuota` down to zero pods headroom, requires `withheldCapacity[quota]` to rise above zero, restores the ceiling, and requires it to fall back to zero. Reversible, costs no nodes, and needs no scale-up. |
    | **A dirty baseline declines the drive** | **Pass, and said out loud.** A rung already withholding before the leg tightens anything would have a bind asserted for a state the leg did not cause, and its release could never return to zero, which the leg would report as a latch. It skips the drive instead. That is a green leg which proved evaluation only, the same shape as `NOT VALIDATED THIS RUN` above: read the phase detail (`quota rung NOT driven: …`) before taking a green capacity leg as a driven rung. |
+   | **The placeability rung publishes a verdict** | **Hard failure.** `ci-e2e` opts in at `spec.capacityGate.mode: Observe`, and its `WorkerCapacityDeclined` condition must be present and must not read `GateModeUnsupported`. The rung's `withheldCapacity` zero above says the *ladder* ran; it does not say the *gate* did, because that zero is written whether or not the set opted in, and mode `Off` **removes** the condition rather than publishing it `False`. So the condition is the only evidence here that the opt-in path evaluates end to end: the CRD carries the field, the AGC implements the mode, and the gateway's `clusterCapacity` reached the verdict. An absent condition points at the applied manifest or a CRD that predates the field; `GateModeUnsupported` points at an AGC older than the CRD. |
+   | **The placeability rung declines** | **Pass, and said out loud.** A decline is a fact about the cluster rather than about the release, and it is the verdict this leg cannot manufacture, so it is reported with the rung's own message rather than failing the gate. It is unexpected on a pool with budget headroom, so read the message before the next release. The set is idle by then, so per Q1035 the *value* may be up to a resync stale; check the metric before reading it as live. Presence is what the row above asserts, and that cannot go stale: nothing clears the condition while the opt-in stands. |
 
    The release half matters as much as the bind: the advertisement is recomputed per long-poll rather than latched, so a rung that kept withholding after a quota was raised would throttle a tenant indefinitely.
 
-   **The placeability rung is deliberately not driven.** Binding it needs a worker pod the cluster cannot place, and an autoscaling cluster answers that by growing a node; Q1025 tracks it.
+   **The placeability rung's negative verdict is deliberately not driven.** Binding it needs a worker pod the cluster cannot place, and an autoscaling cluster answers that by growing a node; Q1025 tracks it.
+   Opting in cannot starve the tenant, because the gateway leaves `clusterCapacity.nodeAutoscaling` at its `Present` default, under which a decline needs the autoscaler's own declination.
    The leg says so out loud rather than reporting only what it proved.
 
    **If the gate died mid-leg, check the tenant's ceiling before re-running.** Teardown restores it on every exit, but a killed process reaches no teardown:

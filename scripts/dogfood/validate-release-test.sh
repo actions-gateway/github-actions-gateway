@@ -875,12 +875,23 @@ CAP_RUNGS="quota capacity scaleup"
 CAP_QUOTA_BINDS=1   # 0 => the rung is evaluated but never binds
 CAP_QUOTA_LATCHES=0 # 1 => it keeps withholding after the headroom returns
 
+# The placeability rung's own verdict, published as the WorkerCapacityDeclined
+# condition. An EMPTY reason models the condition being absent, which is what mode
+# Off does — the set did not opt in — and is deliberately distinct from a False
+# condition carrying CapacityAvailable, which is the opt-in's evidence.
+CAP_GATE_STATUS="False"
+CAP_GATE_REASON="CapacityAvailable"
+CAP_GATE_MESSAGE="the cluster can place this runner set's worker pods; job intake is not gated"
+
 # cap_reset — put the modelled tenant back to its manifest shape and zero the
 # patch counter. Called before each case so one case cannot inherit another's.
 cap_reset() {
 	printf '6' >"${CAP_HARD_FILE}"
 	printf '0' >"${CAP_PATCHES_FILE}"
 	CAPACITY_DRIVEN=""
+	CAP_GATE_STATUS="False"
+	CAP_GATE_REASON="CapacityAvailable"
+	CAP_GATE_MESSAGE="the cluster can place this runner set's worker pods; job intake is not gated"
 	# Cleared here too, or "a declined drive leaves nothing to undo" can only
 	# redden off a leak from the happy path above it. Isolated, it asserts what
 	# it names: the declined path returns before anything sets the flag, so
@@ -924,6 +935,9 @@ kubectl() {
 	*resourcequota*status.hard.pods*) cap_hard ;;
 	*advertisedCapacity*) printf '%s' "${CAP_ADVERTISED}" ;;
 	*withheldCapacity*) capacity_model_withheld ;;
+	*WorkerCapacityDeclined*.status\}*) printf '%s' "${CAP_GATE_STATUS}" ;;
+	*WorkerCapacityDeclined*.reason\}*) printf '%s' "${CAP_GATE_REASON}" ;;
+	*WorkerCapacityDeclined*.message\}*) printf '%s' "${CAP_GATE_MESSAGE}" ;;
 	esac
 }
 
@@ -949,9 +963,11 @@ check_contains "the leg reports the bind" "bound at zero headroom" "${out}"
 check_contains "the leg reports the release" "released after the quota was restored" "${out}"
 check "the happy path puts the ceiling back" "6" "$(cap_hard)"
 check "the happy path leaves nothing to undo" "" "${E2E_QUOTA_RESTORE}"
-# The rung it cannot drive must be named, not silently skipped: a leg that
+# The half it cannot drive must still be named, not silently skipped: a leg that
 # reported only what it proved would read as having covered the whole ladder.
-check_contains "the undriven placeability rung is called out" "NOT driven this run" "${out}"
+# The rung's verdict IS now asserted (see capacity_gate_verdict below); its
+# negative verdict is what remains undriven, and the two must not be conflated.
+check_contains "the undriven negative verdict is called out" "stays undriven" "${out}"
 # A driven pass and a declined pass are both exit 0, so the phase event alone
 # cannot separate them — the detail is what a release-sentinel.sh reader gets.
 check_contains "a driven rung is recorded for the progress stream" "quota rung driven" "${CAPACITY_DRIVEN}"
@@ -1048,6 +1064,87 @@ fi
 check_contains "the failure says the rung is not a latch" "per-poll read, not" "${out}"
 check "a latched rung still restores the ceiling" "6" "$(cap_hard)"
 CAP_QUOTA_LATCHES=0
+
+# --- capacity_gate_verdict: the placeability rung published a real verdict ---
+#
+# The rung's withheldCapacity zero, asserted above, says the ladder ran; it does
+# not say the set opted in, because that zero is written either way. These cover
+# the condition that does say it, in both directions: the two shapes that mean
+# the opt-in is not in force must fail the gate, and the two real verdicts must
+# not — a decline least of all, since it is the verdict the leg cannot drive.
+
+# Absent: mode Off removes the condition rather than publishing it False, so an
+# empty reason is "did not opt in" and not "opted in and found capacity".
+cap_reset
+CAP_GATE_STATUS=""
+CAP_GATE_REASON=""
+CAP_GATE_MESSAGE=""
+rc=0
+capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+out="$(cat "${CAP_OUT}")"
+if ((rc == 0)); then
+	echo "FAIL an absent WorkerCapacityDeclined condition must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   an absent WorkerCapacityDeclined condition fails the gate"
+fi
+check_contains "the failure says absent is not False" "ABSENT, not False" "${out}"
+check "an unopted-in set still restores the ceiling" "6" "$(cap_hard)"
+
+# Unsupported: the CRD accepted the field but this AGC does not implement the
+# mode, so the gate fails open and the rung ships unproven for the release.
+cap_reset
+CAP_GATE_REASON="GateModeUnsupported"
+rc=0
+capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+out="$(cat "${CAP_OUT}")"
+if ((rc == 0)); then
+	echo "FAIL GateModeUnsupported must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   GateModeUnsupported fails the gate"
+fi
+check_contains "the failure points at the AGC image, not the CRD" \
+	"AGC older than the CRD" "${out}"
+
+# The happy verdict: opted in, evaluated, capacity available.
+cap_reset
+rc=0
+capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+out="$(cat "${CAP_OUT}")"
+if ((rc == 0)); then
+	echo "ok   a published CapacityAvailable verdict passes the leg"
+else
+	echo "FAIL a published CapacityAvailable verdict must pass the leg" >&2
+	fails=$((fails + 1))
+fi
+check_contains "the leg reports the verdict" "reason=CapacityAvailable" "${out}"
+check_contains "the leg still says the negative verdict is undriven" \
+	"stays undriven" "${out}"
+
+# Declined: the rung bound on real infra. Not a failure — it is a fact about the
+# cluster rather than the release, and it is the verdict this leg cannot
+# manufacture — but it must be reported loudly rather than passing silently.
+cap_reset
+CAP_GATE_STATUS="True"
+CAP_GATE_REASON="PodsUnschedulable"
+CAP_GATE_MESSAGE="job intake is gated: no node can place the worker"
+rc=0
+capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+out="$(cat "${CAP_OUT}")"
+if ((rc == 0)); then
+	echo "ok   a declined placeability rung passes the leg"
+else
+	echo "FAIL a declined placeability rung must not fail the gate" >&2
+	fails=$((fails + 1))
+fi
+check_contains "a decline is reported" "DECLINED — reason=PodsUnschedulable" "${out}"
+check_contains "the decline is qualified as possibly stale (Q1035)" "stale" "${out}"
+check_contains "the decline carries the rung's own message" \
+	"no node can place the worker" "${out}"
+check_contains "the decline is recorded as driven" \
+	"placeability rung DECLINED" "${CAPACITY_DRIVEN}"
+cap_reset
 
 # restore_e2e_quota is what teardown reaches for after a gate killed mid-leg, so
 # it has to put the ceiling back from nothing but the recorded value.

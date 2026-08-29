@@ -48,6 +48,18 @@ spec:
   # to it. Q726 permits more, which this tenant has no use for. (Q231)
   runnerLabels: ["gag-ci-e2e"]
   maxWorkers: 2
+  # Opt in to the placeability rung (Q405) so the release gate observes it produce a
+  # real verdict on real infra. Off — the default — REMOVES WorkerCapacityDeclined
+  # rather than publishing it False, so without this the gate can only see the rung's
+  # withheldCapacity zero, never that the opt-in path evaluates end to end here.
+  #
+  # Observe is not report-only: it gates intake. It cannot starve this tenant, because
+  # the gateway leaves clusterCapacity.nodeAutoscaling at its Present default, and
+  # under Present a decline needs the autoscaler's OWN declination — which a pool with
+  # budget headroom does not produce. That is also why the NEGATIVE verdict stays
+  # undriven here; Q1025 tracks it.
+  capacityGate:
+    mode: Observe
   # NodeShare sizing (Q359 Phase 3). This tenant validates the profile the
   # release gate can actually reach in a single run: NodeShare needs NO usage
   # history, so it actuates on the first job, unlike Binpack/Throughput which
