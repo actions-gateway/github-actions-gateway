@@ -3,7 +3,7 @@
 # Phase event stream for the release-validation gate, and the status renderer
 # over it (Q615, Q616).
 #
-# The gate is an hour-long walk-away command with eight phases. This records
+# The gate is an hour-long walk-away command with a phase per leg. This records
 # each transition as one JSON line so a renderer can answer "where is it" at any
 # moment without replaying the terminal. Same shape and the same reasons as the
 # e2e suite's spec stream (docs/development/testing.md § Watching an e2e run in

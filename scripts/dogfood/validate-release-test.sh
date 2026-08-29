@@ -842,6 +842,171 @@ check "the orphaned case really is orphaned" "orphaned" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 check "an orphaned gate's stream is emptied" "" "$(cat "${STALE_STREAM}")"
 
+# --- capacity_leg: the admission ladder is evaluated, and its quota rung binds ---
+#
+# The leg drives a MUTATION on the live tenant (it tightens the ResourceQuota to
+# zero headroom), so both directions are asserted here: that the constrained path
+# is really entered, and that the ceiling is put back on every exit — including
+# the failure exits, where a gate that stopped at the error would leave the next
+# run's e2e tenant throttled.
+#
+# Withholding is DERIVED from the modelled ceiling rather than scripted, so a
+# test cannot assert a bind that the patch never caused: the stub recomputes
+# headroom from whatever the leg last patched, exactly as the rung reads it.
+
+# capacity_leg is exercised through $(...) — a SUBSHELL — so the stub's state
+# has to live in files. A shell variable would be mutated inside the subshell and
+# lost on exit, leaving every "the ceiling went back" assertion reading the value
+# it was set to and passing without observing anything (measured: with the state
+# in variables, deleting the leg's rung check changed no ceiling assertion).
+CAP_HARD_FILE="${SCRATCH}/cap-hard"     # the tenant's pods ceiling, as patched
+CAP_PATCHES_FILE="${SCRATCH}/cap-patch" # how many patches the leg has issued
+
+CAP_USED="2"       # pods already counted against the quota (headroom = hard - used)
+CAP_ADVERTISED="2" # X-ScaleSetMaxCapacity when nothing withholds
+CAP_RUNGS="quota capacity scaleup"
+CAP_QUOTA_BINDS=1   # 0 => the rung is evaluated but never binds
+CAP_QUOTA_LATCHES=0 # 1 => it keeps withholding after the headroom returns
+
+# cap_reset — put the modelled tenant back to its manifest shape and zero the
+# patch counter. Called before each case so one case cannot inherit another's.
+cap_reset() {
+	printf '6' >"${CAP_HARD_FILE}"
+	printf '0' >"${CAP_PATCHES_FILE}"
+}
+
+cap_hard() { cat "${CAP_HARD_FILE}"; }
+cap_patches() { cat "${CAP_PATCHES_FILE}"; }
+
+capacity_model_withheld() {
+	local rung slots headroom
+	headroom=$(($(cap_hard) - CAP_USED))
+	((headroom >= 0)) || headroom=0
+	for rung in ${CAP_RUNGS}; do
+		slots=0
+		if [[ "${rung}" == "quota" ]]; then
+			if ((CAP_QUOTA_LATCHES)); then
+				slots="${CAP_ADVERTISED}"
+			elif ((CAP_QUOTA_BINDS)) && ((headroom == 0)); then
+				slots="${CAP_ADVERTISED}"
+			fi
+		fi
+		printf '%s=%s\n' "${rung}" "${slots}"
+	done
+}
+
+kubectl() {
+	case "$*" in
+	*patch*resourcequota*)
+		printf '%s' "$*" | awk -F'"pods":"' '{print $2}' | awk -F'"' '{print $1}' \
+			>"${CAP_HARD_FILE}"
+		printf '%s' "$(($(cap_patches) + 1))" >"${CAP_PATCHES_FILE}"
+		;;
+	*resourcequota*status.hard.pods*) cap_hard ;;
+	*advertisedCapacity*) printf '%s' "${CAP_ADVERTISED}" ;;
+	*withheldCapacity*) capacity_model_withheld ;;
+	esac
+}
+
+# Short enough that the two timeout cases below cost three stubbed iterations
+# rather than five real minutes.
+CAPACITY_POLL_TIMEOUT=3
+E2E_QUOTA_RESTORE=""
+cap_reset
+
+# The happy path: every rung evaluated, the rung binds at zero headroom, and it
+# releases once the ceiling goes back.
+if out="$(capacity_leg 2>&1)"; then
+	echo "ok   an evaluated, binding, releasing quota rung passes the leg"
+else
+	echo "FAIL an evaluated, binding, releasing quota rung must pass the leg" >&2
+	fails=$((fails + 1))
+fi
+check_contains "the leg reports the advertisement" "advertisedCapacity=2" "${out}"
+check_contains "the leg reports the bind" "bound at zero headroom" "${out}"
+check_contains "the leg reports the release" "released after the quota was restored" "${out}"
+check "the happy path puts the ceiling back" "6" "$(cap_hard)"
+check "the happy path leaves nothing to undo" "" "${E2E_QUOTA_RESTORE}"
+# The rung it cannot drive must be named, not silently skipped: a leg that
+# reported only what it proved would read as having covered the whole ladder.
+check_contains "the undriven placeability rung is called out" "NOT driven this run" "${out}"
+
+# A rung missing from withheldCapacity is the regression this leg exists for —
+# an absent reason means the rung was never evaluated on this tier (Q443), which
+# is a different statement from it not binding.
+CAP_RUNGS="capacity scaleup"
+cap_reset
+if out="$(capacity_leg 2>&1)"; then
+	echo "FAIL an unevaluated quota rung must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   an unevaluated quota rung fails the gate"
+fi
+check_contains "the failure names the absent rung" "withheldCapacity: quota" "${out}"
+check_contains "the failure distinguishes absent from zero" "explicit zero" "${out}"
+# It fails BEFORE tightening anything: the ladder is not evaluated, so driving it
+# would prove nothing and would spend a mutation to learn it.
+check "an unevaluated rung tightens nothing" "0" "$(cap_patches)"
+CAP_RUNGS="quota capacity scaleup"
+
+# No advertisement at all: the listener never polled, or the set is not on the
+# scale-set tier — either way the ladder never ran.
+CAP_ADVERTISED=""
+cap_reset
+if out="$(capacity_leg 2>&1)"; then
+	echo "FAIL an unpublished advertisedCapacity must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   an unpublished advertisedCapacity fails the gate"
+fi
+check_contains "the failure names the empty advertisement" "no advertisedCapacity" "${out}"
+CAP_ADVERTISED="2"
+
+# Evaluated but not binding at zero headroom: the tenant would keep claiming jobs
+# whose pods the quota cannot admit. The gate must fail AND must still restore.
+CAP_QUOTA_BINDS=0
+cap_reset
+if out="$(capacity_leg 2>&1)"; then
+	echo "FAIL a non-binding quota rung must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a non-binding quota rung fails the gate"
+fi
+check_contains "the failure names the claim-and-stall it allows" "claim-and-stall" "${out}"
+check "a non-binding rung still restores the ceiling" "6" "$(cap_hard)"
+CAP_QUOTA_BINDS=1
+
+# Latched: the rung keeps withholding after the ceiling is restored. The
+# advertisement is a per-poll read rather than a latch, so this would throttle a
+# tenant indefinitely on a quota that has already been raised.
+CAP_QUOTA_LATCHES=1
+cap_reset
+if out="$(capacity_leg 2>&1)"; then
+	echo "FAIL a latched quota rung must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a latched quota rung fails the gate"
+fi
+check_contains "the failure says the rung is not a latch" "per-poll read, not" "${out}"
+check "a latched rung still restores the ceiling" "6" "$(cap_hard)"
+CAP_QUOTA_LATCHES=0
+
+# restore_e2e_quota is what teardown reaches for after a gate killed mid-leg, so
+# it has to put the ceiling back from nothing but the recorded value.
+printf '2' >"${CAP_HARD_FILE}"
+E2E_QUOTA_RESTORE="6"
+restore_e2e_quota
+check "teardown restores a ceiling a killed gate left tight" "6" "$(cap_hard)"
+check "a completed restore leaves nothing to undo" "" "${E2E_QUOTA_RESTORE}"
+
+# And it is a no-op when the gate never tightened anything — teardown runs it on
+# every exit, including the ones that never reached the leg.
+cap_reset
+E2E_QUOTA_RESTORE=""
+restore_e2e_quota
+check "an untightened ceiling is left alone" "6" "$(cap_hard)"
+check "a no-op restore issues no patch" "0" "$(cap_patches)"
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1

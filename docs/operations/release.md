@@ -261,7 +261,7 @@ A patch line cuts and validates its own candidate like any other release: `publi
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
 **One command runs the whole gate**, and it runs for the better part of an hour — a green `v1.3.0-rc.4` run took 39 minutes end to end — with nothing to type at it after the first confirmation.
-`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
+`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the `Failure diagnostics` section of a failed run's log (e.g. the `FailedScheduling` events) instead of re-running the gate to watch it fail again.
 The [legs it runs](#the-legs-the-gate-runs) are documented at the end of this section, and are the recovery path if one needs re-running by hand.
 
@@ -514,11 +514,33 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    Sample history needs no advance planning: the sampler tracks every worker pod regardless of `spec.sizing`, and the aggregate re-seeds from the persisted `status.sizingRecommendation` — so samples accrue without the profile configured and survive a stop/start rather than being re-earned.
 
-5. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
-6. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
+5. **Drive the admission ladder's quota rung.** Every other leg builds an autoscaling cluster with headroom and asks for two workers, which is the one shape under which no rung of the pre-acquisition gate ever binds.
+   So without this leg a ladder that stopped being evaluated, or a rung that shipped to one acquisition tier only, leaves the whole gate green.
+   `capacity_leg` asserts two different things:
+
+   | Assertion | Behaviour |
+   |---|---|
+   | **Every rung is evaluated** | **Hard failure.** `status.withheldCapacity` on `ci-e2e` must carry `quota`, `capacity` and `scaleup`. Each rung publishes an *explicit zero* when it does not bind, so an **absent** reason means the rung was never evaluated on this tier, which is exactly how the quota rung came to be classic-only until Q443. Needs no constraint to detect. |
+   | **The quota rung binds, then releases** | **Hard failure.** The leg patches the tenant's own `ResourceQuota` down to zero pods headroom, requires `withheldCapacity[quota]` to rise above zero, restores the ceiling, and requires it to fall back to zero. Reversible, costs no nodes, and needs no scale-up. |
+
+   The release half matters as much as the bind: the advertisement is recomputed per long-poll rather than latched, so a rung that kept withholding after a quota was raised would throttle a tenant indefinitely.
+
+   **The placeability rung is deliberately not driven.** Binding it needs a worker pod the cluster cannot place, and an autoscaling cluster answers that by growing a node; Q1025 tracks it.
+   The leg says so out loud rather than reporting only what it proved.
+
+   **If the gate died mid-leg, check the tenant's ceiling before re-running.** Teardown restores it on every exit, but a killed process reaches no teardown:
+
+   ```bash
+   kubectl get resourcequota dogfood-e2e-quota -n gag-dogfood-e2e -o jsonpath='{.status.hard.pods}'
+   ```
+
+   It should read `6` (`deploy/dogfood-e2e/base/resources.yaml`).
+   The next run's `e2e-start.sh` reapplies the overlay and repairs it anyway, so this is a backstop rather than the plan.
+6. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
+7. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
    `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
-A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
+A red matrix, a failed CRD smoke, a dead `NodeShare` profile, or an admission ladder that does not withhold under zero quota headroom is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
 
 ### 2. Tag and push
 

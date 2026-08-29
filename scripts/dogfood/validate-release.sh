@@ -175,6 +175,33 @@ E2E_POOL="e2e"
 WORKERS_MAX_CAP=""
 WORKERS_MAX_RESTORE=""
 
+# The e2e tenant's ResourceQuota, and the rungs of the pre-acquisition admission
+# ladder its RunnerSet must publish (Q59, Q443, Q721). ci-e2e is authored at
+# v2beta1, which is ScaleSet-only, so it advertises a capacity per long-poll and
+# attributes every withheld slot in status.withheldCapacity — the surface the
+# capacity leg reads. A classic-tier set would publish neither.
+#
+# All three rungs are asserted PRESENT rather than zero: withhold() writes an
+# explicit zero for every rung it evaluates, so an absent reason means the rung
+# was not evaluated at all, which is the regression this leg exists to catch
+# (a rung landing in one acquisition tier only — how the quota rung came to be
+# classic-only until Q443).
+E2E_QUOTA="dogfood-e2e-quota"
+CAPACITY_RUNGS="quota capacity scaleup"
+
+# E2E_QUOTA_RESTORE holds the `pods` hard limit capacity_leg tightened away from,
+# set only while the quota is constrained — teardown puts it back, and an empty
+# value means there is nothing to undo. A gate killed between the patch and the
+# restore leaves the tenant throttled until the next run's e2e-start.sh reapplies
+# deploy/dogfood-e2e/overlays/<variant> (kubectl apply -k), which is the backstop
+# rather than the plan.
+E2E_QUOTA_RESTORE=""
+
+# How long the quota rung gets to bind and then to release, each way. The
+# advertisement is recomputed once per listener long-poll, so this is bounded by
+# the poll interval and not by anything the gate controls.
+CAPACITY_POLL_TIMEOUT="${CAPACITY_POLL_TIMEOUT:-300}"
+
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
 
@@ -680,6 +707,195 @@ sizing_leg() {
 	fi
 }
 
+# capacity_withheld — the e2e RunnerSet's withheld-capacity attribution as
+# `reason=slots` lines, one per rung the last long-poll evaluated. One read
+# rather than a jsonpath filter per rung, so every rung is sampled at the same
+# instant and a rung that vanishes between reads cannot look present.
+capacity_withheld() {
+	kubectl get runnerset ci-e2e -n "${E2E_NAMESPACE}" \
+		-o jsonpath='{range .status.withheldCapacity[*]}{.reason}={.slots}{"\n"}{end}' \
+		2>/dev/null || true
+}
+
+# capacity_withheld_slots REASON — one rung's slots, empty when that rung is
+# absent. Empty and "0" are deliberately different answers: absent means the
+# rung was never evaluated, 0 means it was and did not bind.
+capacity_withheld_slots() {
+	capacity_withheld | awk -F= -v r="$1" '$1 == r { print $2 }'
+}
+
+# capacity_advertised — the X-ScaleSetMaxCapacity the set most recently
+# advertised. Empty means no advertisement has been published at all.
+capacity_advertised() {
+	kubectl get runnerset ci-e2e -n "${E2E_NAMESPACE}" \
+		-o jsonpath='{.status.advertisedCapacity}' 2>/dev/null || true
+}
+
+# e2e_quota_pods hard|used — one side of the `pods` dimension of the e2e
+# tenant's ResourceQuota, read from status so `hard` is what the apiserver is
+# actually enforcing rather than what was last applied.
+e2e_quota_pods() {
+	kubectl get resourcequota "${E2E_QUOTA}" -n "${E2E_NAMESPACE}" \
+		-o "jsonpath={.status.$1.pods}" 2>/dev/null || true
+}
+
+# set_e2e_quota_pods N — move the `pods` hard limit. Merge-patched rather than
+# reapplied so nothing else in the tenant manifest is disturbed.
+set_e2e_quota_pods() {
+	kubectl patch resourcequota "${E2E_QUOTA}" -n "${E2E_NAMESPACE}" \
+		--type=merge -p "{\"spec\":{\"hard\":{\"pods\":\"$1\"}}}" >/dev/null
+}
+
+# restore_e2e_quota — put the tenant's pods ceiling back. Best-effort for the
+# same reason as restore_cpu_budget: a quota left tight throttles the next e2e
+# run, but a teardown that stops here strands billable nodes, which is worse.
+restore_e2e_quota() {
+	[[ -n "${E2E_QUOTA_RESTORE}" ]] || return 0
+	echo "Restoring ${E2E_QUOTA} pods to ${E2E_QUOTA_RESTORE}..."
+	if ! set_e2e_quota_pods "${E2E_QUOTA_RESTORE}"; then
+		echo "warning: ${E2E_NAMESPACE} ResourceQuota ${E2E_QUOTA} is still tightened, which" >&2
+		echo "  caps the e2e tenant below its manifest. Put it back with:" >&2
+		echo "    kubectl patch resourcequota ${E2E_QUOTA} -n ${E2E_NAMESPACE} \\" >&2
+		echo "      --type=merge -p '{\"spec\":{\"hard\":{\"pods\":\"${E2E_QUOTA_RESTORE}\"}}}'" >&2
+		return 0
+	fi
+	E2E_QUOTA_RESTORE=""
+}
+
+# capacity_wait_quota_slots PREDICATE — poll the quota rung until its slots
+# satisfy PREDICATE ("bind" = above zero, "release" = exactly zero), printing
+# the final reading. Returns non-zero on timeout. The advertisement is
+# recomputed per listener long-poll, so the wait is a poll interval or two in
+# the ordinary case and CAPACITY_POLL_TIMEOUT is the ceiling, not the budget.
+capacity_wait_quota_slots() {
+	local want="$1" waited=0 slots=""
+	while ((waited < CAPACITY_POLL_TIMEOUT)); do
+		slots="$(capacity_withheld_slots quota)"
+		if [[ "${want}" == "bind" ]]; then
+			if [[ -n "${slots}" ]] && ((slots > 0)); then
+				printf '%s' "${slots}"
+				return 0
+			fi
+		else
+			if [[ "${slots}" == "0" ]]; then
+				printf '%s' "${slots}"
+				return 0
+			fi
+		fi
+		sleep "${E2E_POLL_INTERVAL}"
+		waited=$((waited + E2E_POLL_INTERVAL))
+	done
+	printf '%s' "${slots}"
+	return 1
+}
+
+# capacity_leg — assert the pre-acquisition admission ladder (Q59) is evaluated
+# on real infra, and drive its quota rung through bind and release.
+#
+# Without this the gate can pass having exercised NONE of the ladder. Every
+# other leg builds an autoscaling cluster with headroom and asks for two
+# workers, which is the one shape under which no rung ever binds — so a ladder
+# that silently stopped being evaluated, or a rung that shipped to one
+# acquisition tier only, would leave every leg here green. Same failure shape as
+# the sizing leg above, and as Q400/Q404: a gate that cannot observe the thing
+# it gates.
+#
+# The two halves assert different things ON PURPOSE:
+#   evaluated — hard failure, and cheap. withhold() writes an explicit zero for
+#               every rung it evaluates, so an ABSENT reason means the rung was
+#               skipped entirely. That is the regression that ships a rung to
+#               one tier (the quota rung was classic-only until Q443), and it
+#               needs no constraint to detect.
+#   binding   — hard failure, quota rung only. Driven by tightening the tenant's
+#               own ResourceQuota to zero headroom, which is reversible, costs
+#               no nodes, and needs no scale-up.
+#
+# The placeability rung is deliberately NOT driven: binding it needs a worker pod
+# the cluster cannot place, and an autoscaling cluster answers that by growing a
+# node. Q1025 tracks it.
+#
+# Runs AFTER the e2e matrix, never during it: the tenant is idle by then, so
+# tightening its quota starves nothing, and `used` is stable enough that zero
+# headroom is exactly zero.
+capacity_leg() {
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	echo "Asserting the admission ladder is evaluated, and driving the quota rung..."
+
+	local advertised
+	advertised="$(capacity_advertised)"
+	if [[ -z "${advertised}" ]]; then
+		echo "error: RunnerSet ci-e2e has published no advertisedCapacity." >&2
+		echo "  The scale-set listener states a capacity every long-poll, so an empty field" >&2
+		echo "  means the ladder never ran: either no poll completed, or the set is not on" >&2
+		echo "  the scale-set tier at all (it is authored at v2beta1, which is ScaleSet-only)." >&2
+		return 1
+	fi
+	echo "  ladder: ci-e2e advertisedCapacity=${advertised}"
+
+	local rung slots missing=""
+	for rung in ${CAPACITY_RUNGS}; do
+		slots="$(capacity_withheld_slots "${rung}")"
+		if [[ -z "${slots}" ]]; then
+			missing="${missing} ${rung}"
+		else
+			echo "  ladder: rung ${rung} evaluated, withholding ${slots} slot(s)"
+		fi
+	done
+	if [[ -n "${missing}" ]]; then
+		echo "error: admission-ladder rung(s) absent from status.withheldCapacity:${missing}" >&2
+		echo "  Every rung that is EVALUATED publishes an explicit zero, so an absent reason" >&2
+		echo "  means the rung was not evaluated on this tier — not that it is not binding." >&2
+		echo "  A rung reaching one acquisition tier only is exactly that defect (Q443)." >&2
+		return 1
+	fi
+
+	local hard
+	hard="$(e2e_quota_pods hard)"
+	if [[ -z "${hard}" ]]; then
+		echo "error: could not read the pods dimension of ${E2E_QUOTA} in ${E2E_NAMESPACE}." >&2
+		echo "  deploy/dogfood-e2e/base/resources.yaml declares it, so this is a deploy gap." >&2
+		echo "  Without it the constrained path cannot be driven and the rung ships unproven." >&2
+		return 1
+	fi
+
+	# To 0 rather than to the live `used`: the two give the rung the same zero
+	# headroom, but `used` has to be read first and a pod reaped between that read
+	# and the patch reopens the headroom, which surfaces as the rung failing to
+	# bind — a real defect and a stale read reported identically. 0 needs no read.
+	echo "  Tightening ${E2E_QUOTA} pods ${hard} -> 0 (zero headroom)..."
+	E2E_QUOTA_RESTORE="${hard}"
+	set_e2e_quota_pods 0
+
+	local bound
+	if ! bound="$(capacity_wait_quota_slots bind)"; then
+		echo "error: the quota rung withheld nothing (slots='${bound:-<absent>}') after ${CAPACITY_POLL_TIMEOUT}s" >&2
+		echo "  at zero ResourceQuota headroom. The rung is evaluated but not binding, so the" >&2
+		echo "  tenant would keep claiming jobs whose worker pods the quota cannot admit —" >&2
+		echo "  the claim-and-stall the Q59 gate exists to prevent." >&2
+		restore_e2e_quota
+		return 1
+	fi
+	echo "  quota rung: bound at zero headroom — withheldCapacity[quota]=${bound}, advertisedCapacity=$(capacity_advertised)"
+
+	restore_e2e_quota
+
+	# Release matters as much as bind: the advertisement is recomputed per poll
+	# rather than latched, so a rung that keeps withholding after the headroom
+	# returns would throttle a tenant indefinitely on a quota that has been raised.
+	local released
+	if ! released="$(capacity_wait_quota_slots release)"; then
+		echo "error: the quota rung is still withholding ${released:-<absent>} slot(s) ${CAPACITY_POLL_TIMEOUT}s after" >&2
+		echo "  the ResourceQuota was restored to ${hard} pods. The rung is a per-poll read, not" >&2
+		echo "  a latch, so intake should recover on the next long-poll without an AGC restart." >&2
+		return 1
+	fi
+	echo "  quota rung: released after the quota was restored — withheldCapacity[quota]=0, advertisedCapacity=$(capacity_advertised)"
+
+	echo "  Placeability rung: evaluated, NOT driven this run. Binding it needs a worker"
+	echo "                     pod the cluster cannot place, which an autoscaling cluster"
+	echo "                     answers by growing a node. Q1025 tracks driving it."
+}
+
 # preflight_cosign — resolve the cosign binary the CRD smoke needs and set
 # COSIGN_BIN. Called BEFORE any billable work: the smoke is the LAST leg, so a
 # missing binary discovered there aborts the gate ~25 minutes in, after a full
@@ -782,6 +998,9 @@ teardown() {
 	fi
 	progress_phase teardown "Scaling dogfood back to 0 nodes at rest"
 	echo "=== Teardown (self-cleaning; runs on success and failure) ==="
+	# Before the stop scripts, and unconditionally: a gate that died mid-leg left
+	# the tenant's pods ceiling tightened, and nothing else here puts it back.
+	restore_e2e_quota || echo "restoring the e2e quota failed — continuing teardown" >&2
 	bash "${SCRIPT_DIR}/e2e-stop.sh" || echo "e2e-stop failed — continuing teardown" >&2
 	bash "${SCRIPT_DIR}/stop.sh" || echo "stop failed — continuing teardown" >&2
 	restore_cpu_budget || echo "restoring the workers ceiling failed — continuing teardown" >&2
@@ -1001,6 +1220,10 @@ main() {
 	progress_phase sizing "Asserting the derived worker sizing profiles"
 	sizing_leg
 	progress_event sizing "done"
+
+	progress_phase capacity "Driving the admission ladder's quota rung"
+	capacity_leg
+	progress_event capacity "done"
 
 	progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
 	crd_smoke
