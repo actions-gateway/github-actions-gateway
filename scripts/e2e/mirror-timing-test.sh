@@ -136,6 +136,113 @@ check "unrecognised lines do not become samples" 0 "${V_RC}"
 check_contains "the hit arm holds one sample" "hit   n=1" "${V_OUT}"
 check_contains "the miss arm holds one sample" "miss  n=1" "${V_OUT}"
 
+# --- main(), which nothing above reaches ---------------------------------------
+#
+# Everything before this exercises the two pure helpers. main() holds the parts
+# the probe is actually FOR -- the interleave, the pairing, the trailing hit, and
+# the formatting of a fetch that produced nothing -- and none of it was covered.
+# That is not hypothetical: the `timeoutms` defect lived here and shipped, caught
+# by a reader rather than by this file.
+#
+# mirror_for, blob_digest and fetch_ms are replaced, so no network and no mirror.
+# fetch_ms answers from a per-reference queue, which is what lets a run be given
+# a faithful cache (first fetch slow, repeat fast) or a flat one.
+
+# THE PLAN LIVES IN A FILE, not a variable, and that is not incidental. main()
+# calls `ms="$(fetch_ms ...)"`, so the fake runs in a SUBSHELL and any state it
+# mutates in memory is discarded when that subshell exits -- every fetch would
+# then replay the queue's first row and a faithful cache would read as flat. The
+# first version of this file did exactly that and reported OVERLAPPING for an
+# input that separates cleanly.
+PLAN="$(mktemp)"
+trap 'rm -f "${PLAN}"' EXIT
+
+# THE PLAN IS KEYED ON THE DIGEST, not the repository, because PROBE_REFS holds
+# two references per repository (alpine:3.18 and :3.19, busybox:1.35 and :1.36).
+# The real blob_digest returns a different digest per tag, so those are four
+# independent cache states; a fake returning one digest for all four collapses
+# them into one queue and a faithful plan then reads as flat. The first version
+# of this file did that and reported OVERLAPPING for an input that separates.
+mirror_for() { printf 'mirror.invalid:5000'; }
+blob_digest() { printf 'sha256:%s-%s' "$2" "$3"; }
+fetch_ms() {
+	local digest="$3" line rest
+	line="$(awk -v d="${digest}" '$1 == d { print $2; exit }' "${PLAN}")"
+	# Drop the row just consumed so a second fetch of the same blob gets the next.
+	rest="$(awk -v d="${digest}" 'BEGIN { used = 0 }
+		$1 == d && !used { used = 1; next } { print }' "${PLAN}")"
+	printf '%s\n' "${rest}" > "${PLAN}"
+	[[ "${line}" == "-" ]] && return 0
+	printf '%s' "${line}"
+}
+
+# plan_write TIMES... — one row per reference per fetch, in the order that
+# reference's blob is fetched. `plan_write 500 20` is a faithful cache (first
+# fetch slow, repeat fast), `300 300` a flat one, `- -` a run that timed out.
+plan_write() {
+	local ref t
+	: > "${PLAN}"
+	for ref in "${PROBE_REFS[@]}"; do
+		for t in "$@"; do printf 'sha256:%s-%s %s\n' "${ref%:*}" "${ref##*:}" "${t}" >> "${PLAN}"; done
+	done
+}
+
+run_main() {
+	set +e
+	MAIN_OUT="$(main 2>&1)"
+	MAIN_RC=$?
+	set -e
+}
+
+plan_write 500 20; run_main
+check "a faithful cache runs clean" 0 "${MAIN_RC}"
+check_contains "and reads SEPARATED" "SEPARATED" "${MAIN_OUT}"
+check "one miss line per reference" "${#PROBE_REFS[@]}" "$(grep -c '^  miss ' <<<"${MAIN_OUT}")"
+check "one hit line per reference" "${#PROBE_REFS[@]}" "$(grep -c '^  hit ' <<<"${MAIN_OUT}")"
+check "the arms are equal and complete" "n=${#PROBE_REFS[@]}" \
+	"$(grep -o 'hit   n=[0-9]*' <<<"${MAIN_OUT}" | sed 's/hit   //')"
+
+# The trailing hit: the last reference has no later iteration to be re-fetched
+# in, so it is fetched again after the loop. Without that the last reference
+# contributes a miss and no hit, and the arms come out uneven -- which the
+# equality check above would catch only because it is asserted per arm.
+check "the last reference gets its hit too" 1 \
+	"$(grep -c "^  hit   ${PROBE_REFS[-1]} " <<<"${MAIN_OUT}")"
+
+# Every hit is one whole miss away from its own miss. Read off the emitted order
+# rather than asserted from the source.
+check "no hit is timed immediately after its own miss" "" \
+	"$(awk '/^  (miss|hit) /{ a[++n] = $1 " " $2 }
+	       END { for (i = 2; i <= n; i++)
+	               if (a[i] ~ /^hit/ && a[i-1] ~ /^miss/) {
+	                   split(a[i], h, " "); split(a[i-1], m, " ")
+	                   if (h[2] == m[2]) print "adjacent: " h[2]
+	               } }' <<<"${MAIN_OUT}")"
+
+# A flat cache: every fetch the same, so the arms cannot separate. Same code
+# path, opposite verdict -- which is what makes the verdict a reading rather
+# than a fixed string.
+plan_write 300 300; run_main
+check "a flat cache runs clean" 0 "${MAIN_RC}"
+check_contains "and reads OVERLAPPING" "OVERLAPPING" "${MAIN_OUT}"
+
+# Every fetch times out: no samples at all, so the reading was not taken. This
+# is the route from main() to the refusal, which the helper tests reach only by
+# calling separation_verdict directly.
+plan_write - -; run_main
+check "a run that timed out throughout refuses" 1 "${MAIN_RC}"
+check_contains "and says the reading was not taken" "the reading was not taken" "${MAIN_OUT}"
+# The formatting of a fetch that produced nothing. `timeoutms` shipped here.
+check_contains "a timed-out fetch prints a bare timeout" " timeout" "${MAIN_OUT}"
+check "and never concatenates ms onto it" 0 "$(grep -c 'timeoutms' <<<"${MAIN_OUT}")"
+
+# No mirror wired is a skip, not a failure: the hosted lane and a developer's
+# `make e2e` both land here.
+mirror_for() { printf ''; }
+run_main
+check "no mirror wired skips cleanly" 0 "${MAIN_RC}"
+check_contains "and says why" "no mirror wired" "${MAIN_OUT}"
+
 echo
 if ((fails)); then
 	echo "${fails} check(s) failed" >&2
