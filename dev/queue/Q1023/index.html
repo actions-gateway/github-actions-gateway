@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q962/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1023/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Condition transition Events fire once per object, never on a later flip - GitHub Actions Gateway</title>
+        <title>expect_rc reports a signal death as a wrong verdict - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#condition-transition-events-fire-once-per-object-never-on-a-later-flip" class="md-skip">
+        <a href="#expect_rc-reports-a-signal-death-as-a-wrong-verdict" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Condition transition Events fire once per object, never on a later flip
+              expect_rc reports a signal death as a wrong verdict
             
           </span>
         </div>
@@ -2597,11 +2597,20 @@
   
 
 
-<h1 id="condition-transition-events-fire-once-per-object-never-on-a-later-flip">Condition transition Events fire once per object, never on a later flip<a class="headerlink" href="#condition-transition-events-fire-once-per-object-never-on-a-later-flip" title="Permanent link">&para;</a></h1>
-<p><code>prev := meta.FindStatusCondition(...)</code> returns a pointer INTO the slice, and the <code>SetStatusCondition</code> below it overwrites that element, so the <code>prev.Status != status</code> guard reads the value just written.
-Measured: <code>Ready</code> True→False→True emits 1 Event, not 3; a <code>workerImage</code> downgrade to below-minimum emits 0.
-Six sites share the shape (<code>runnerset_controller.go</code> 836/905/936, <code>runnergroup_controller.go</code> 717/743, <code>runnerset_capacity.go</code> 117); fix by copying <code>prev</code> by value.
-Found while measuring Q795.</p>
+<h1 id="expect_rc-reports-a-signal-death-as-a-wrong-verdict"><code>expect_rc</code> reports a signal death as a wrong verdict<a class="headerlink" href="#expect_rc-reports-a-signal-death-as-a-wrong-verdict" title="Permanent link">&para;</a></h1>
+<p><code>expect_rc</code> compares the command's status numerically against the wanted one, so a status of 128+n means a killed process rather than a verdict, and it is reported as the gate having answered wrongly.
+<code>run-parallel.sh</code> already draws that line one level up and says so in its own output: SIGTERM (143) under host contention is not a gate failure, while 137 is the OOM killer and is.
+The nested suites do not, so a contention kill inside <code>scripts-test</code> reddens <code>make check</code> as a failed assertion and reads as a defect in the gate under test.</p>
+<p>Measured 2026-08-28 under local <code>make check</code> (18 cores, load 22-33, 48 gates fanned out with ~106 script suites nested inside one of them): <code>check-endpoint-parity-test</code> reported <code>FAIL a fake missing the endpoint fails: expected rc=1, got rc=143</code>.
+The captured output on that same failure carries the gate's correct report (<code>the e2e fake serves no GET /repos/x/x/actions/runs/x</code>, then <code>endpointparity: 1 finding(s) across 1 request site(s)</code>), so the checker had already reached the verdict the assertion wanted and was killed before it could exit 1.
+The suite passed four times standalone straight afterwards on the same tree.</p>
+<p>The fix is to treat <code>rc &gt;= 128</code> as a kill rather than a mismatch: name the signal, and either fail with that distinction stated or hand it back the way <code>run-parallel.sh</code> does.</p>
+<p><strong>Key the fix on the compare, not on <code>expect_rc</code>.</strong> The name is the obvious handle and it under-reaches: <code>expect_rc</code> is copied into eight suites, but the defect is any numeric comparison of a captured status against a wanted one, and that shape appears 51 times across 31 suites under a spread of names (<code>expect_rc</code>, <code>expect_retry</code> at <code>scripts/e2e/validate-cluster-test.sh:140</code>, <code>want_rc</code>, <code>want</code>, and bare inline compares).
+Measured 2026-08-28 over <code>scripts/**/*-test.sh</code> for <code>((rc [!=]= …))</code> and <code>[[ "$rc" [!=]= … ]]</code>.
+A pass that greps for the helper's name fixes eight and leaves twenty-three suites able to report the same false finding.
+A shared assertion helper the suites source would close it once rather than 51 times, and that is the larger change to weigh.</p>
+<p>Distinct from <a href="../Q912/">Q912</a>, whose mechanism is the endpoint-parity fake failing to start inside its bound; here the fake started, served, and was reported on.
+Distinct from <a href="../Q822/">Q822</a>, which is about the uncapped fan-out that produces the contention; this row is about what the suites do with a kill once it lands, and is worth having whether or not the fan-out is ever capped.</p>
 
 
 

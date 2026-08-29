@@ -2757,20 +2757,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.</td>
 </tr>
 <tr>
+<td><a href="Q1023/">Q1023</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/check-endpoint-parity-test.sh"><code>expect_rc</code> reports a signal death as a wrong verdict</a></td>
+<td><code>ci</code> <code>tests</code> <code>flake</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>expect_rc</code> compares the command's status numerically against the wanted one, so a status of 128+n means a killed process rather than a …</td>
+</tr>
+<tr>
 <td><a href="Q970/">Q970</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test</code> asserts a one-second ceiling on an instant command</a></td>
 <td><code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>scripts/ci/run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 …</td>
-</tr>
-<tr>
-<td><a href="Q962/">Q962</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">Condition transition Events fire once per object, never on a later flip</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>prev := meta.FindStatusCondition(...)</code> returns a pointer INTO the slice, and the <code>SetStatusCondition</code> below it overwrites that element, so …</td>
 </tr>
 <tr>
 <td><a href="Q977/">Q977</a></td>
@@ -3083,14 +3083,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>make check</code> runs targets over the tree, and no target enters a workflow step's shell, so a <code>run:</code> body is first executed by the runner on …</td>
-</tr>
-<tr>
-<td><a href="Q637/">Q637</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about capacity or the quota rung</a></td>
-<td><code>dogfood</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke.</td>
 </tr>
 <tr>
 <td><a href="Q1028/">Q1028</a></td>
@@ -4163,6 +4155,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1025/">Q1025</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate cannot drive the placeability rung on real infra</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>💤</td>
+<td>L</td>
+<td><strong>Event:</strong> <code>spec.capacityGate.mode</code> gains a value that yields a negative placeability verdict without a scale-up: the <code>Probe</code> mode sketched …</td>
 </tr>
 </tbody>
 </table>

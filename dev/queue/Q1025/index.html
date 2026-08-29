@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q637/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1025/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>The release gate asserts nothing about capacity or the quota rung - GitHub Actions Gateway</title>
+        <title>The release gate cannot drive the placeability rung on real infra - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-release-gate-asserts-nothing-about-capacity-or-the-quota-rung" class="md-skip">
+        <a href="#the-release-gate-cannot-drive-the-placeability-rung-on-real-infra" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The release gate asserts nothing about capacity or the quota rung
+              The release gate cannot drive the placeability rung on real infra
             
           </span>
         </div>
@@ -2597,9 +2597,22 @@
   
 
 
-<h1 id="the-release-gate-asserts-nothing-about-capacity-or-the-quota-rung">The release gate asserts nothing about capacity or the quota rung<a class="headerlink" href="#the-release-gate-asserts-nothing-about-capacity-or-the-quota-rung" title="Permanent link">&para;</a></h1>
-<p><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke.
-It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</p>
+<h1 id="the-release-gate-cannot-drive-the-placeability-rung-on-real-infra">The release gate cannot drive the placeability rung on real infra<a class="headerlink" href="#the-release-gate-cannot-drive-the-placeability-rung-on-real-infra" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> <code>spec.capacityGate.mode</code> gains a value that yields a negative placeability verdict without a scale-up: the <code>Probe</code> mode sketched in <a href="../../design/appendix-g-future-enhancements/">appendix-g</a>.</p>
+<p>Q637 added <code>capacity_leg</code>, which drives the admission ladder's <strong>quota</strong> rung through bind and release by patching the e2e tenant's <code>ResourceQuota</code> to zero pods headroom.
+The same leg asserts all three rungs are <em>evaluated</em>: <code>quota</code>, <code>capacity</code> and <code>scaleup</code> must each appear in <code>status.withheldCapacity</code>, because a rung that publishes no entry was never evaluated on that tier.
+So the placeability rung is covered for evaluation and not for binding.</p>
+<p>Binding it needs a worker pod the cluster cannot place, and the dogfood cluster autoscales: the autoscaler answers unplaceability by growing a node, which is the opposite of the verdict the rung acts on.
+Defeating that means pinning the <code>workers</code> ceiling for the leg's duration, which collides with the CPU reservation <code>quota_preflight</code> already derives across the same budget.</p>
+<p>Two further gaps, both measured 2026-08-28:</p>
+<ul>
+<li>The e2e tenant does not opt in.
+  <code>grep capacityGate deploy/dogfood-e2e/</code> returns nothing, so the rung reports <code>CapacityAvailable</code> or <code>GateModeUnsupported</code> rather than a placeability verdict.
+  Opting in is cheap; it is the drive that is not.</li>
+<li><code>nodeAutoscaling</code>, the <code>ScaleUpDeclined</code> source (Q406), needs the autoscaler to decline a scale-up it <em>could</em> satisfy, which no cluster with budget headroom will do.</li>
+</ul>
+<p>Appendix-g already argues the negative verdict this rung acts on needs no scale-up to reproduce <strong>once <code>Probe</code> exists</strong>, which is why this is an Event rather than ready work: building a bespoke unplaceability harness now would be defeated by the same <code>Probe</code> mode landing.</p>
+<p>Until then <code>capacity_leg</code> says out loud that the rung is undriven rather than reporting only what it proved, so the gap is visible in every gate run instead of inferred from this row.</p>
 
 
 
