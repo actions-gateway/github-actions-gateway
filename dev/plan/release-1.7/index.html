@@ -2714,6 +2714,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#v170-rc3-passed-2026-08-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.7.0-rc.3: PASSED, 2026-08-29
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#v170-rc2-passed-2026-08-29" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2914,6 +2925,56 @@ Re-run any whose window has moved before the stable tag.</p>
 <p>Both <code>auditLogging</code> fields default <code>Off</code> and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is (<a href="../q986-egress-attribution/">q986-egress-attribution.md</a>).</p>
 <p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the operator-caveat pass, the roadmap and <code>features.md</code> reconciliation, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
+<h3 id="v170-rc3-passed-2026-08-29"><code>v1.7.0-rc.3</code>: PASSED, 2026-08-29<a class="headerlink" href="#v170-rc3-passed-2026-08-29" title="Permanent link">&para;</a></h3>
+<p>Tagged at <code>f93d4164d</code>, the release-notes draft on top of Q1020's mirror-timing probe.</p>
+<p><strong>Why a third candidate, when the artifacts did not move.</strong> <code>check-artifact-unchanged.sh 49b35a41a f93d4164d</code> exits 0, so rc.3 ships bytes identical to rc.2's.
+What moved is the published reference recipe: Q1026 narrowed <code>deploy/registry-mirror/components/shared-tenants/kustomization.yaml</code>'s shared ingress peer to worker pods.
+That is a NetworkPolicy change the dogfood Kata e2e is the only thing that exercises, and it reaches no image and no chart, so the artifact check cannot see it and rc.2's verdict does not carry.
+A candidate is validated against a tree, not against a digest.</p>
+<p><strong>Pre-flight, re-measured at the tag target.</strong> No <code>X.Y-gate</code> row survives; the anchored pattern was positive-controlled against <code>retro</code> (35 rows) and <code>debt</code> (86) before the empty result was trusted, because no <code>-gate</code> label exists anywhere in the store now and a pattern that matches nothing looks identical to a clean release.
+<code>make check</code> green.
+The floor reads <strong>MINOR</strong> over 65 commits, nine touching the released surface.
+The API surface re-run over <code>v1.6.0..HEAD</code> returns exactly the <code>c54b712a9</code> verdict, so that window had not moved.</p>
+<p><strong>All nine required gates path-skipped on the target, and the skip is not a gap.</strong> Every one ran in full at <code>fb48eb5be</code>, and <code>check-artifact-unchanged.sh fb48eb5be f93d4164d</code> exits 0, with two files changed and neither on the released surface.
+That is the commit this candidate's green rests on.</p>
+<p><strong>Publish verified by content.</strong> 9 of 9 assets with <code>draft: false</code> and <code>immutable: true</code>, all eight signatures OK, and the provenance digest reported <code>publish.yml@refs/tags/v1.7.0-rc.3</code> with <code>sourceRepositoryDigest</code> equal to <code>f93d4164d</code>.
+A negative control against <code>unit-test.yml</code> as the signer workflow exited 1.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>e2e (Kata, mirrors)</td>
+<td><strong>PASS</strong>, 75/75 specs, 62 ok, 0 failed, 13 skipped, in 7m24s</td>
+</tr>
+<tr>
+<td>sizing</td>
+<td><strong>PASS</strong>, NodeShare and Throughput both Active; the RC ran CI on derived sizing (<code>sampleCounts=[258]</code>), worker CPU request <code>1500m</code></td>
+</tr>
+<tr>
+<td>capacity (quota rung)</td>
+<td><strong>PASS</strong>, bound at zero headroom and <strong>released</strong></td>
+</tr>
+<tr>
+<td>capacity (placeability rung)</td>
+<td><strong>PASS</strong>, <code>WorkerCapacityDeclined=False</code>, reason <code>CapacityAvailable</code></td>
+</tr>
+<tr>
+<td>crd-smoke</td>
+<td><strong>PASS</strong>, signature OK, all five CRDs applied</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The quota rung released, which is the second clean reading of Q1035's fix.</strong> It bound at <code>withheldCapacity[quota]=2, advertisedCapacity=0</code> and, once the quota was restored, reported <code>0</code> and <code>2</code>. rc.1 is what makes this leg worth running: it bound identically and never released, and the leg's discriminator is the release rather than the bind.</p>
+<p><strong>The verdict is recorded</strong> as <code>refs/validated/v1.7.0-rc.3 -&gt; f93d4164d</code>, which is what <code>publish.yml</code> reads before it will accept a stable tag.</p>
+<p><strong>Teardown left the same e2e node up as rc.2, and the gate's exit status again does not say so.</strong> The gate exited 0 and printed <code>Teardown complete</code>, while one <code>n2-standard-8</code> e2e-pool node was still RUNNING with its MIG at <code>size=1, targetSize=1</code>; <code>default-pool</code>, <code>workers</code> and <code>workers-od</code> were all at 0 immediately.
+That is the documented division rather than a teardown failure, since the teardown scales <code>default-pool</code> explicitly and the e2e pool drains on the cluster autoscaler's schedule.
+It has now recurred on two consecutive candidates, so it is a standing cost of a run rather than an incident.
+It is why at-rest is confirmed by asking the cluster and never by reading the teardown line.</p>
 <h3 id="v170-rc2-passed-2026-08-29"><code>v1.7.0-rc.2</code>: PASSED, 2026-08-29<a class="headerlink" href="#v170-rc2-passed-2026-08-29" title="Permanent link">&para;</a></h3>
 <p>Tagged at <code>49b35a41a</code>, which is <code>044b383f2</code>'s Q1035 fix plus two commits that touch nothing shipped.</p>
 <p><strong>Pre-flight, re-measured at the tag target rather than carried forward.</strong> No <code>X.Y-gate</code> row survives, and the anchored pattern was confirmed against a label that does exist before the empty result was trusted.
