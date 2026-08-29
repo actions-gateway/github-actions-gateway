@@ -2714,6 +2714,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#v170-rc2-passed-2026-08-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.7.0-rc.2: PASSED, 2026-08-29
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#v170-rc1-failed-2026-08-29" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2903,6 +2914,49 @@ Re-run any whose window has moved before the stable tag.</p>
 <p>Both <code>auditLogging</code> fields default <code>Off</code> and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is (<a href="../q986-egress-attribution/">q986-egress-attribution.md</a>).</p>
 <p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the operator-caveat pass, the roadmap and <code>features.md</code> reconciliation, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
+<h3 id="v170-rc2-passed-2026-08-29"><code>v1.7.0-rc.2</code>: PASSED, 2026-08-29<a class="headerlink" href="#v170-rc2-passed-2026-08-29" title="Permanent link">&para;</a></h3>
+<p>Tagged at <code>49b35a41a</code>, which is <code>044b383f2</code>'s Q1035 fix plus two commits that touch nothing shipped.</p>
+<p><strong>Pre-flight, re-measured at the tag target rather than carried forward.</strong> No <code>X.Y-gate</code> row survives, and the anchored pattern was confirmed against a label that does exist before the empty result was trusted.
+<code>make check</code> green.
+The floor reads <strong>MINOR</strong> over 60 commits, nine touching the released surface, so <code>v1.7.0</code> stays forced by merged work.
+The API surface re-run over <code>v1.6.0..HEAD</code> returns exactly the <code>c54b712a9</code> verdict — one added wire field <code>auditLogging</code>, its two enums, <code>default=Off</code>, and no new condition types, Event reasons, labels or annotations — so that verdict's window had not moved.</p>
+<p><strong>Both e2e lanes path-skipped on the target, and neither skip is a gap.</strong> <code>e2e-test</code> ran in full at <code>044b383f2</code> and <code>check-artifact-unchanged.sh 044b383f2 49b35a41a</code> exits 0.
+<code>e2e-calico</code> ran in full at <code>c54b712a9</code> and none of its filter paths moved since: the only released-surface change in that window is under <code>cmd/agc/**</code>, which that lane excludes by design because it cannot affect NetworkPolicy enforcement.</p>
+<p><strong>Publish verified by content.</strong> 9 of 9 assets with <code>draft: false</code> and <code>immutable: true</code>, all eight signatures OK, and the provenance digest reported <code>publish.yml@refs/tags/v1.7.0-rc.2</code> with <code>sourceRepositoryDigest</code> equal to <code>49b35a41a</code>.
+A negative control against <code>unit-test.yml</code> as the signer workflow exited 1.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>e2e (Kata, mirrors)</td>
+<td><strong>PASS</strong>, 75/75 specs, 62 ok, 0 failed, 13 skipped</td>
+</tr>
+<tr>
+<td>sizing</td>
+<td><strong>PASS</strong>, NodeShare and Throughput both Active; the RC ran CI on derived sizing (<code>sampleCounts=[246]</code>)</td>
+</tr>
+<tr>
+<td>capacity (quota rung)</td>
+<td><strong>PASS</strong>, bound at zero headroom and <strong>released</strong></td>
+</tr>
+<tr>
+<td>crd-smoke</td>
+<td><strong>PASS</strong>, signature OK, all five CRDs applied</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The capacity leg is the verdict this candidate exists for.</strong> rc.1 bound the rung correctly and never released it, and the leg's own discriminator is the release rather than the bind.
+Here the rung bound at <code>withheldCapacity[quota]=2, advertisedCapacity=0</code> and, once the quota was restored, reported <code>withheldCapacity[quota]=0, advertisedCapacity=2</code>.
+That is Q1035's fix observed end to end on a real cluster: the poll loop's wake reached the reconciler, and status followed the capacity change instead of waiting on the 10h resync.
+The leg passed on its second outing after finding a real product defect on its first.</p>
+<p><strong>Teardown left one node up, and the gate's own exit status does not say so.</strong> The gate exited 0 and printed <code>Teardown complete</code>, while the cluster still had one <code>n2-standard-8</code> e2e-pool node running with its MIG targeting 1.
+That is the documented division rather than a teardown failure — the teardown scales <code>default-pool</code> explicitly and says the e2e pool drains on the cluster autoscaler's schedule — but it is why at-rest is confirmed by asking the cluster and not by reading the teardown line.
+<code>default-pool</code>, <code>workers</code> and <code>workers-od</code> were all at 0 immediately.</p>
 <h3 id="v170-rc1-failed-2026-08-29"><code>v1.7.0-rc.1</code>: FAILED, 2026-08-29<a class="headerlink" href="#v170-rc1-failed-2026-08-29" title="Permanent link">&para;</a></h3>
 <p>Tagged at <code>c54b712a9</code>, published and artifact-verified; the dogfood gate failed its capacity leg.</p>
 <p><strong>Publish verified by content, not by green jobs.</strong> 9 of 9 assets with <code>draft: false</code>, all eight signatures OK (six images, both charts), and the provenance digest reported <code>publish.yml@refs/tags/v1.7.0-rc.1</code> with <code>sourceRepositoryDigest</code> equal to the tag target.
