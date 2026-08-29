@@ -3945,7 +3945,7 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
 <ol>
 <li><strong>Drive the admission ladder's quota rung.</strong> Every other leg builds an autoscaling cluster with headroom and asks for two workers, which is the one shape under which no rung of the pre-acquisition gate ever binds.
    So without this leg a ladder that stopped being evaluated, or a rung that shipped to one acquisition tier only, leaves the whole gate green.
-   <code>capacity_leg</code> asserts two different things:</li>
+   <code>capacity_leg</code> asserts several different things:</li>
 </ol>
 <table>
 <thead>
@@ -3967,10 +3967,19 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
 <td><strong>A dirty baseline declines the drive</strong></td>
 <td><strong>Pass, and said out loud.</strong> A rung already withholding before the leg tightens anything would have a bind asserted for a state the leg did not cause, and its release could never return to zero, which the leg would report as a latch. It skips the drive instead. That is a green leg which proved evaluation only, the same shape as <code>NOT VALIDATED THIS RUN</code> above: read the phase detail (<code>quota rung NOT driven: …</code>) before taking a green capacity leg as a driven rung.</td>
 </tr>
+<tr>
+<td><strong>The placeability rung publishes a verdict</strong></td>
+<td><strong>Hard failure.</strong> <code>ci-e2e</code> opts in at <code>spec.capacityGate.mode: Observe</code>, and its <code>WorkerCapacityDeclined</code> condition must be present and must not read <code>GateModeUnsupported</code>. The rung's <code>withheldCapacity</code> zero above says the <em>ladder</em> ran; it does not say the <em>gate</em> did, because that zero is written whether or not the set opted in, and mode <code>Off</code> <strong>removes</strong> the condition rather than publishing it <code>False</code>. So the condition is the only evidence here that the opt-in path evaluates end to end: the CRD carries the field, the AGC implements the mode, and the gateway's <code>clusterCapacity</code> reached the verdict. An absent condition points at the applied manifest or a CRD that predates the field; <code>GateModeUnsupported</code> points at an AGC older than the CRD.</td>
+</tr>
+<tr>
+<td><strong>The placeability rung declines</strong></td>
+<td><strong>Pass, and said out loud.</strong> A decline is a fact about the cluster rather than about the release, and it is the verdict this leg cannot manufacture, so it is reported with the rung's own message rather than failing the gate. It is unexpected on a pool with budget headroom, so read the message before the next release. The set is idle by then, so per Q1035 the <em>value</em> may be up to a resync stale; check the metric before reading it as live. Presence is what the row above asserts, and that cannot go stale: nothing clears the condition while the opt-in stands.</td>
+</tr>
 </tbody>
 </table>
 <p>The release half matters as much as the bind: the advertisement is recomputed per long-poll rather than latched, so a rung that kept withholding after a quota was raised would throttle a tenant indefinitely.</p>
-<p><strong>The placeability rung is deliberately not driven.</strong> Binding it needs a worker pod the cluster cannot place, and an autoscaling cluster answers that by growing a node; Q1025 tracks it.
+<p><strong>The placeability rung's negative verdict is deliberately not driven.</strong> Binding it needs a worker pod the cluster cannot place, and an autoscaling cluster answers that by growing a node; Q1025 tracks it.
+   Opting in cannot starve the tenant, because the gateway leaves <code>clusterCapacity.nodeAutoscaling</code> at its <code>Present</code> default, under which a decline needs the autoscaler's own declination.
    The leg says so out loud rather than reporting only what it proved.</p>
 <p><strong>If the gate died mid-leg, check the tenant's ceiling before re-running.</strong> Teardown restores it on every exit, but a killed process reaches no teardown:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>dogfood-e2e-quota<span class="w"> </span>-n<span class="w"> </span>gag-dogfood-e2e<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.hard.pods}'</span>

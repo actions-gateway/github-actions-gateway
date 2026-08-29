@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1035/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1036/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>status.withheldCapacity freezes on an idle set until the 10h resync - GitHub Actions Gateway</title>
+        <title>record-launch.sh sees a concurrent same-command run and says nothing - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#statuswithheldcapacity-freezes-on-an-idle-set-until-the-10h-resync" class="md-skip">
+        <a href="#record-launchsh-sees-a-concurrent-same-command-run-and-says-nothing" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              status.withheldCapacity freezes on an idle set until the 10h resync
+              record-launch.sh sees a concurrent same-command run and says nothing
             
           </span>
         </div>
@@ -2597,22 +2597,15 @@
   
 
 
-<h1 id="statuswithheldcapacity-freezes-on-an-idle-set-until-the-10h-resync"><code>status.withheldCapacity</code> freezes on an idle set until the 10h resync<a class="headerlink" href="#statuswithheldcapacity-freezes-on-an-idle-set-until-the-10h-resync" title="Permanent link">&para;</a></h1>
-<p>Found by the <code>v1.7.0-rc.1</code> capacity leg, which failed on it 2026-08-29 (<a href="../../plan/release-1.7/#candidate-validation">release-1.7.md</a>).</p>
-<p>The listener records an advertisement on <strong>every poll</strong> (<code>scaleSetCapacityFunc</code> calls <code>rec.record(adv)</code> and <code>ScaleSetMetrics.SetCapacityWithheld</code>), but status is written only by the reconcile goroutine, which reads <code>rec.last()</code> in <code>applyAdvertisedCapacity</code>.
-The two are decoupled on purpose: a poll that wrote status directly would race every other status write.</p>
-<p>Nothing requeues on an advertisement changing.
-<code>RequeueAfter</code> is assembled from <code>reapAfter</code> (0 with no worker pods), <code>capacityRequeue</code> (<code>applyWorkerCapacityConditions</code> returns 0 with nothing pending or starting), a baseline recheck that applies only while <code>mux.ActiveCount() &lt; spec.maxListeners</code>, and a proxy-share recheck that applies only to a projected share.
-An idle set satisfies none, so <code>RequeueAfter</code> is 0 and the only fallback is controller-runtime's default <code>SyncPeriod</code>, which this project does not configure: <strong>10 hours</strong>.</p>
-<p>So once a set goes idle, <code>status.withheldCapacity</code> and <code>status.advertisedCapacity</code> hold whatever the last reconcile wrote, for up to 10 hours, while Prometheus carries the live value.</p>
-<p><strong>Measured.</strong> After the release gate restored the e2e tenant's <code>ResourceQuota</code> to 6 pods with 1 in use, <code>withheldCapacity[quota]</code> still read 2 and <code>advertisedCapacity</code> 0 more than 30 minutes later, on an AGC that had been Running 60m with 0 restarts.</p>
-<p>This inverts what the field is for.
-Q721 added it so a tenant can read why intake is throttled <strong>without</strong> Prometheus; a reader who cannot see the metric is exactly the reader who gets the stale answer, and the answer says intake is throttled when it is open.</p>
-<p>Fix candidates, unmeasured: requeue when <code>rec.record</code> observes a changed advertisement, or fold a bounded re-check into <code>RequeueAfter</code> whenever withholding is non-zero.
-The second is cheaper and self-limiting, since a set withholding nothing needs no poll.</p>
-<p><strong>A second, separable defect is in the gate.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a>'s <code>capacity_leg</code> waits 300s for the rung to release by polling that status field, and supplies no demand that would trigger a reconcile.
-On a drained post-suite cluster there is none to be had, so the leg can only pass if some unrelated event fires a reconcile inside the window.
-Fixing the controller closes both; fixing only the gate (assert on the metric, or drive a reconcile) leaves the operator-facing defect live.</p>
+<h1 id="record-launchsh-sees-a-concurrent-same-command-run-and-says-nothing"><code>record-launch.sh</code> sees a concurrent same-command run and says nothing<a class="headerlink" href="#record-launchsh-sees-a-concurrent-same-command-run-and-says-nothing" title="Permanent link">&para;</a></h1>
+<p>Measured 2026-08-29 (Q1035): two <code>make check</code> runs were live in one worktree at once, both redirected to the same <code>tmp/</code> log.
+The second launch's <code>rm -f</code> truncated the file the first was still writing, and the interleaved result still read as one coherent gate run — a green <code>EXIT=0</code> beside a log describing a different tree.</p>
+<p><code>--list</code> already holds what a warning needs: every live record carries <code>pid</code>, <code>command</code>, and <code>worktree</code>, so a launch whose command and worktree both match a live record is detectable at launch time and is almost always a mistake.
+Nothing consults it; the script writes its own record and exits.</p>
+<p>The log path is the half it cannot see — that is the caller's redirect, so <code>record-launch.sh</code> is never told where output goes.
+A warning naming the live run's pid and stop command is enough: the caller then knows to pick a different log or kill the other run.</p>
+<p>The script's own header cites Q690, where two verification runs in one worktree recorded two contaminated results as genuine red, so the concern is established and only the trigger is missing.
+Distinct from <a href="../Q739/">Q739</a>, which is that nothing makes the script fire at all, and from <a href="../Q841/">Q841</a>, which is editing under a running gate.</p>
 
 
 

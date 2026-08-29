@@ -8338,8 +8338,9 @@ That is a different statement, and for <code>quota</code> it means the AGC-wide 
 Absent means no advertisement has been made: a classic-tier set, a listener that has not completed its first poll, or a set whose references do not resolve (check <code>Ready</code>).</p>
 <p><strong>Resolution.</strong> Act on the binding rung, not on the total.
 Raising <code>maxWorkers</code> while <code>quota</code> is withholding changes nothing, because the ceiling is not what is binding: the advertisement is already below it.</p>
-<p><strong>One caveat when reading it.</strong> The value is recomputed every long-poll and published every reconcile, so it lags the live number by up to one reconcile and is a snapshot rather than a live feed.
-A set whose capacity is oscillating is better watched through <code>actions_gateway_scaleset_advertised_capacity</code> and <code>actions_gateway_scaleset_capacity_withheld</code>, which carry the same numbers at metric resolution (<a href="../observability-metrics/#scale-set-acquisition-tier-q264">observability: metrics</a>).</p>
+<p><strong>One caveat when reading it.</strong> The value is recomputed every long-poll, and a poll that changes it wakes a reconcile to publish it, so the field follows a capacity change within roughly one long-poll.
+That holds on an idle set with no jobs and no worker pods, which nothing else would have reconciled.
+It is still a snapshot rather than a live feed: a set whose capacity is oscillating is better watched through <code>actions_gateway_scaleset_advertised_capacity</code> and <code>actions_gateway_scaleset_capacity_withheld</code>, which carry the same numbers at metric resolution (<a href="../observability-metrics/#scale-set-acquisition-tier-q264">observability: metrics</a>).</p>
 <h2 id="worker-pod-fails-to-start-after-secure-by-default-securitycontext">Worker Pod Fails to Start After Secure-by-Default SecurityContext<a class="headerlink" href="#worker-pod-fails-to-start-after-secure-by-default-securitycontext" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> A worker pod that previously ran now stays in <code>CreateContainerConfigError</code> or <code>Pending</code>, or is rejected at admission.
 <code>kubectl describe pod</code> shows one of:

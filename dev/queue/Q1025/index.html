@@ -2604,15 +2604,17 @@ The same leg asserts all three rungs are <em>evaluated</em>: <code>quota</code>,
 So the placeability rung is covered for evaluation and not for binding.</p>
 <p>Binding it needs a worker pod the cluster cannot place, and the dogfood cluster autoscales: the autoscaler answers unplaceability by growing a node, which is the opposite of the verdict the rung acts on.
 Defeating that means pinning the <code>workers</code> ceiling for the leg's duration, which collides with the CPU reservation <code>quota_preflight</code> already derives across the same budget.</p>
-<p>Two further gaps, both measured 2026-08-28:</p>
+<p>The cheap half of that is now done (2026-08-29).
+The e2e tenant opts in at <code>spec.capacityGate.mode: Observe</code>, and <code>capacity_leg</code> asserts the rung publishes a real verdict: absent <code>WorkerCapacityDeclined</code> and <code>GateModeUnsupported</code> both fail the gate.
+That matters because the rung's <code>withheldCapacity</code> zero is written whether or not the set opted in, and mode <code>Off</code> <em>removes</em> the condition rather than publishing it <code>False</code> — so the condition is the only evidence on this cluster that the opt-in path evaluates end to end.
+It cannot starve the tenant: the gateway leaves <code>clusterCapacity.nodeAutoscaling</code> at its <code>Present</code> default, under which a decline needs the autoscaler's own declination.</p>
+<p>One gap remains, measured 2026-08-28:</p>
 <ul>
-<li>The e2e tenant does not opt in.
-  <code>grep capacityGate deploy/dogfood-e2e/</code> returns nothing, so the rung reports <code>CapacityAvailable</code> or <code>GateModeUnsupported</code> rather than a placeability verdict.
-  Opting in is cheap; it is the drive that is not.</li>
 <li><code>nodeAutoscaling</code>, the <code>ScaleUpDeclined</code> source (Q406), needs the autoscaler to decline a scale-up it <em>could</em> satisfy, which no cluster with budget headroom will do.</li>
 </ul>
 <p>Appendix-g already argues the negative verdict this rung acts on needs no scale-up to reproduce <strong>once <code>Probe</code> exists</strong>, which is why this is an Event rather than ready work: building a bespoke unplaceability harness now would be defeated by the same <code>Probe</code> mode landing.</p>
-<p>Until then <code>capacity_leg</code> says out loud that the rung is undriven rather than reporting only what it proved, so the gap is visible in every gate run instead of inferred from this row.</p>
+<p>Until then <code>capacity_leg</code> says out loud that the <em>negative verdict</em> is undriven rather than reporting only what it proved, so the gap is visible in every gate run instead of inferred from this row.
+A decline it does observe is reported loudly and passes: on a headroom pool that is a fact about the cluster rather than the release, and it is the verdict the leg cannot manufacture.</p>
 
 
 

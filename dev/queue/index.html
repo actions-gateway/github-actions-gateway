@@ -2693,14 +2693,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>claude-go-throttle-hook-test</code> fails its <code>safety: -race not throttled by rewrite</code> case when the machine is loaded, and the hook it …</td>
 </tr>
 <tr>
-<td><a href="Q1035/">Q1035</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>status.withheldCapacity</code> freezes on an idle set until the 10h resync</a></td>
-<td><code>bug</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Found by the <code>v1.7.0-rc.1</code> capacity leg, which failed on it 2026-08-29 (<a href="../plan/release-1.7/#candidate-validation">release-1.7.md</a>).</td>
-</tr>
-<tr>
 <td><a href="Q1008/">Q1008</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3147,6 +3139,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a …</td>
+</tr>
+<tr>
+<td><a href="Q1036/">Q1036</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>record-launch.sh</code> sees a concurrent same-command run and says nothing</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-29 (Q1035): two <code>make check</code> runs were live in one worktree at once, both redirected to the same <code>tmp/</code> log.</td>
 </tr>
 <tr>
 <td><a href="Q841/">Q841</a></td>
