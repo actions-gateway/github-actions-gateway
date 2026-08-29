@@ -153,10 +153,20 @@ def main():
 
     problems = []
 
+    # Directives only. This file argues for its own rules at length in comments,
+    # and every needle below appears in that prose as well, so matching the whole
+    # text would grade a config whose rule had been deleted and whose comment
+    # about it survived.
+    directives = "\n".join(
+        line for line in config.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    )
+
     # Read once, before the per-instance loop: every deny container must probe
-    # the path this config answers itself.
-    monitor_found = MONITOR_RE.findall(config)
-    monitor_path = monitor_found[0] if len(monitor_found) == 1 else None
+    # the path this config answers itself. Off `directives` rather than the raw
+    # text, for the reason directly above -- a needle that can match prose is the
+    # trap this file's own url_dec rule records.
+    monitor_paths = MONITOR_RE.findall(directives)
+    monitor_path = monitor_paths[0] if len(monitor_paths) == 1 else None
 
     if base_port != service_port:
         problems.append(
@@ -182,7 +192,7 @@ def main():
             continue
 
         deny_probes = set(PROBE_RE.findall(found[DENY_CONTAINER]))
-        if deny_probes != {monitor_path}:
+        if monitor_path is not None and deny_probes != {monitor_path}:
             problems.append(
                 f"{name}: the {DENY_CONTAINER} container probes "
                 f"{sorted(deny_probes) or 'nothing'}, but {DENY_CONFIG.name} answers "
@@ -240,14 +250,6 @@ def main():
     if f"name: {CONFIGMAP}" not in kustomization:
         problems.append(f"{KUSTOMIZATION}: the generated ConfigMap is not named {CONFIGMAP}")
 
-    # Directives only. This file argues for its own rules at length in comments,
-    # and every needle below appears in that prose as well, so matching the whole
-    # text would grade a config whose rule had been deleted and whose comment
-    # about it survived.
-    directives = "\n".join(
-        line for line in config.splitlines() if line.strip() and not line.lstrip().startswith("#")
-    )
-
     if CATALOG_PATH not in directives:
         problems.append(
             f"{DENY_CONFIG}: carries no {CATALOG_PATH} rule, so it forwards the catalog "
@@ -260,7 +262,6 @@ def main():
             f"route is matched, so {CATALOG_PATH} is reachable as /v2/%5Fcatalog "
             "(measured); the rule must read the path through url_dec"
         )
-    monitor_paths = MONITOR_RE.findall(directives)
     if len(monitor_paths) != 1:
         problems.append(
             f"{DENY_CONFIG}: declares {len(monitor_paths)} monitor-uri paths, want exactly "

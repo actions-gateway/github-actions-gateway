@@ -78,6 +78,13 @@ check_contains() {
 # The curl lines are verbatim from that capture and are exactly what the Phase 2
 # battery writes; the docker line is the shape a real pull writes. Keeping both
 # in one fixture is what makes the probe exclusion testable at all.
+#
+# THEIR CLIENT ADDRESS IS HISTORY, not the current shape. That capture predates
+# the catalog-deny proxy, so a mirror now logs 127.0.0.1 for every request and
+# the source survives only in the proxy's own log. The lines are left verbatim
+# rather than restamped -- a capture edited to look current is a measurement
+# nobody took -- and nothing here reads the address anyway: what discriminates
+# is the request path and the user agent.
 measured_log() {
 	cat <<'LOG'
 time="2026-08-28T15:22:58.1Z" level=info msg="using inmemory blob descriptor cache" environment=development go.version=go1.25.9 instance.id=01a048f7 service=registry version=3.1.1

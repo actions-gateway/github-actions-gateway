@@ -160,7 +160,8 @@ spec:
           # only the registry container is probed, and since its probes traverse
           # this one, a proxy that hangs rather than exits restarts the registry
           # indefinitely while the broken container is never touched. The path is
-          # the same /v2/ and so covers both processes.
+          # /haproxy-up, which catalog-deny.cfg answers and never forwards, so
+          # this probe reports on THIS process alone -- see the header.
           readinessProbe:
             httpGet:
               path: /haproxy-up
@@ -291,7 +292,8 @@ spec:
           # only the registry container is probed, and since its probes traverse
           # this one, a proxy that hangs rather than exits restarts the registry
           # indefinitely while the broken container is never touched. The path is
-          # the same /v2/ and so covers both processes.
+          # /haproxy-up, which catalog-deny.cfg answers and never forwards, so
+          # this probe reports on THIS process alone -- see the header.
           readinessProbe:
             httpGet:
               path: /haproxy-up
@@ -422,7 +424,8 @@ spec:
           # only the registry container is probed, and since its probes traverse
           # this one, a proxy that hangs rather than exits restarts the registry
           # indefinitely while the broken container is never touched. The path is
-          # the same /v2/ and so covers both processes.
+          # /haproxy-up, which catalog-deny.cfg answers and never forwards, so
+          # this probe reports on THIS process alone -- see the header.
           readinessProbe:
             httpGet:
               path: /haproxy-up
@@ -553,7 +556,8 @@ spec:
           # only the registry container is probed, and since its probes traverse
           # this one, a proxy that hangs rather than exits restarts the registry
           # indefinitely while the broken container is never touched. The path is
-          # the same /v2/ and so covers both processes.
+          # /haproxy-up, which catalog-deny.cfg answers and never forwards, so
+          # this probe reports on THIS process alone -- see the header.
           readinessProbe:
             httpGet:
               path: /haproxy-up
@@ -684,7 +688,8 @@ spec:
           # only the registry container is probed, and since its probes traverse
           # this one, a proxy that hangs rather than exits restarts the registry
           # indefinitely while the broken container is never touched. The path is
-          # the same /v2/ and so covers both processes.
+          # /haproxy-up, which catalog-deny.cfg answers and never forwards, so
+          # this probe reports on THIS process alone -- see the header.
           readinessProbe:
             httpGet:
               path: /haproxy-up
