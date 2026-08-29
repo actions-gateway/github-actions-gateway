@@ -671,7 +671,7 @@ scripts/dogfood/stop.sh
 ```
 
 The script resets `GAG_RUNNER`, **waits for in-flight worker pods to drain**, and only then scales the system pool to 0.
-Worker nodes autoscale to 0 on their own within ~10 min after that.
+Worker nodes then scale to 0 on the cluster autoscaler's own schedule, which no script here drives or waits for; read the managed instance groups rather than a clock (measured 2026-08-28: an e2e node took ~35 minutes).
 
 #### Why the drain wait is not optional (Q434)
 
