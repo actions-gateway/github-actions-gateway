@@ -599,6 +599,24 @@ jobs:
           E2E_SKIP_TEARDOWN: "true"
         run: make e2e KIND_CLUSTER=actions-gateway-e2e
 
+      - name: Mirror cache hit/miss timing, from inside the guest (Q1020)
+        # Reports, never fails on what the numbers said: a timing threshold
+        # enforced in CI is a flake generator, and this is a reading to sharpen
+        # the topology guidance rather than a gate. Only a reading it could not
+        # take at all is non-zero.
+        #
+        # No `if:`, for egress-negatives.sh's reason: the script reads
+        # REGISTRY_MIRRORS, which only the dogfood Kata tenant sets, and reports
+        # a skip everywhere else. `if: always()` so a failed suite still yields
+        # the reading — the booked window is the scarce resource, and the cache
+        # state a failing run leaves is as informative as a passing one's.
+        #
+        # After the suite rather than before it: the probe's own fetches would
+        # otherwise sit on the critical path, and the cache it measures should be
+        # the one a window actually ends with.
+        if: always()
+        run: scripts/e2e/mirror-timing.sh
+
       - name: Chart helm-upgrade check
         # The ONLY coverage of `helm upgrade` over a live release (Q475). Every
         # other path installs into a cluster that has never had the chart —

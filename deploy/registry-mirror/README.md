@@ -174,7 +174,8 @@ Measured on 2026-08-28 against `registry:3.1.1` at the digest [`base/deployment.
   A pull-through cache revalidates a manifest upstream on every request, so a manifest hit still pays a round trip.
 
 That was taken from a laptop over the public internet, not from inside a Kata guest across the bridge NAT, which is where an attacker actually sits, so the figures bound the channel rather than measure it.
-[Q1020](../../docs/queue/Q1020.md) holds the guest measurement, and it is now the whole of what a shared set gives away rather than the smaller half of it.
+[`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) takes it from that position, in the job on the Kata lane, and reports whether the two arms overlap rather than how far apart their medians sit.
+With the catalog closed, this timing is the whole of what a shared set gives away rather than the smaller half of it.
 
 ## Adopting this outside the dogfood cluster
 

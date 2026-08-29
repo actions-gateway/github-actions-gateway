@@ -89,7 +89,8 @@ The most important section.
   The mirror contract in [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) is what bounds this, and it is a contract rather than an enforcement.
 - **A shared mirror set exposes cache timing to every tenant that can reach it.** Whether a repository is already warm says that some other tenant pulled it.
   The repository *list* is no longer part of this: `GET /v2/_catalog` answered 200 with every cached repository named, `catalog.maxentries=0` did not close it, and every instance is now fronted by a proxy that refuses the path under both topologies ([how, and what it was measured against](../../deploy/registry-mirror/README.md#closing-the-repository-catalog)).
-  What is left is timing, measured on a laptop rather than from inside a Kata guest, so the channel is bounded rather than measured where an attacker sits ([Q1020](../queue/Q1020.md)).
+  What is left is timing.
+  The reading that counts is taken from inside the guest by [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) on the Kata lane; until a window has run it, the only figures are a laptop's, which bound the channel rather than measure it where an attacker sits.
   It is an accepted risk only for an adopter who chose the shared topology knowing it, which is what [Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology) exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.
 - **This is not a claim about arbitrary hostile input at scale.** The goal is that a fork pull request on an adopter's own repositories is safe to run.
   A public, unauthenticated build service is a different product with different economics.
@@ -105,7 +106,7 @@ Down to earth, current state only:
 Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
 Item 5 closed with Q986.
 Item 4 is open on [Q215](../queue/Q215.md), and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and [Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology) is what they choose on.
-[Q1020](../queue/Q1020.md) holds only the guest timing measurement that guidance does not rest on.
+The guest timing measurement the probe now takes sharpens that guidance rather than settling it: it can narrow what a shared set costs and cannot widen it past what a timing channel carries.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.
 
