@@ -1,11 +1,10 @@
 # Release 1.7 Milestone Definition
 
-> **Status: scope opened 2026-08-26**, the day `v1.6.0` tagged, which is the trigger the [ladder](release-ladder.md) recorded for writing this doc.
-> 1.7 is the untrusted-PR CI release: [Q408](../queue/Q408.md) Phases 2 to 5 build the in-cluster registry pull-through mirror, wire the job-side clients to it, and delete the e2e tenant's open-egress NetworkPolicy.
-> Phase 1 validated 2026-08-24, so the non-registry residual is measured gone rather than argued away; what is left is registry egress.
-> Q408 is the only `1.7-gate` row, and it is an `L` with a phased plan doc already written ([q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md)).
-> The bump is unforced so far, and measured rather than assumed: `semver-floor.sh v1.6.0` reads six commits and reports **FLOOR: NONE**.
-> Four of them carry a `feat` or `fix` subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.
+> **Status: the gating row is closed as of 2026-08-28.** Q408 built the in-cluster registry pull-through mirror, wired the job-side clients to it, deleted the e2e tenant's open-egress NetworkPolicy, and published the recipe as the supported posture; all five phases are done and the row is gone ([q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md)).
+> It was the only `1.7-gate` row, so nothing now blocks the tag.
+> What remains is release mechanics plus the two reviews below that run at the candidate rather than before it: Q986's state, and the API surface diff.
+> The bump is measured rather than assumed, and it has moved since this scope opened: `semver-floor.sh v1.6.0` read six commits and **FLOOR: NONE** on 2026-08-26, and reads 45 commits and **FLOOR: MINOR** on 2026-08-28, set by five AGC changes that touch the released surface.
+> Fifteen more carry a `feat` or `fix` subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains, and Q408's own commits are all in that group: the deliverable is manifests, wiring and docs.
 
 ## Why this is a release rather than a row that lands whenever
 
@@ -25,14 +24,14 @@ What this scope adds is the release's read of them.
 |---|---|---|
 | 0. Measured egress inventory | ✅ 2026-08-03 | The upstream set, corrected to five by Phase 1's grading |
 | 1. Shrink the non-registry residual to GitHub | ✅ implemented 2026-08-05, validated 2026-08-24 | Nothing further; it is the evidence the residual is gone |
-| 2. Mirror manifests | ❌ | `deploy/registry-mirror/`, one instance per upstream, applied from the e2e setup path |
-| 3. Wiring | ❌ | A green Kata e2e run **with open egress still present** and mirror hit counts > 0, so wiring is proven before enforcement changes |
+| 2. Mirror manifests | ✅ authored 2026-08-27, validated 2026-08-28 | `deploy/registry-mirror/`, one instance per upstream, applied from the e2e setup path |
+| 3. Wiring | ✅ built and validated 2026-08-28 | A green Kata e2e run **with open egress still present** and mirror hit counts > 0, so wiring is proven before enforcement changes |
 | 4. Enforcement | ✅ built and validated 2026-08-28 | The deletion plus the negative probes; this is where the posture becomes real |
-| 5. Docs and close-out | ❌ | The caveat flips to a how-to; G.14 marked shipped; the roadmap entry leaves "exploring" |
+| 5. Docs and close-out | ✅ 2026-08-28 | The caveat became a how-to; G.14 marked shipped; the roadmap bullet deleted and the capability moved to Features |
 
-**Phases 2, 3 and 4 each needed a live dogfood session**, prod-guarded and operator-driven, and all three have now run (2026-08-27 and 2026-08-28).
+**Phases 2, 3 and 4 each needed a live dogfood session**, prod-guarded and operator-driven, and all three ran (2026-08-27 and 2026-08-28).
 That was the schedule risk in this release and it was not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
-Phase 5 needs no cluster, so nothing gating 1.7 is waiting on one.
+Phase 5 needed no cluster, so the release never waited on one after 2026-08-28.
 
 **Phase 3 had to run with the image caches cold**, so the `quay.io` and `registry.k8s.io` prepulls were exercised rather than skipped.
 A warm run would have reported hit counts that prove nothing about the paths a fresh tenant takes.
@@ -75,11 +74,9 @@ It takes no `1.7-gate` label, which keeps the label meaning "blocks the tag" rat
 [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md) Definition of Done #1 requires the isolated posture to be the default rather than an opt-in.
 [runner-template-library.md § Nothing ships as a cluster default](../operations/runner-template-library.md#nothing-ships-as-a-cluster-default) declines exactly that, because a shipped default template would silently hand a privileged pod shape to sets that never asked for one.
 
-Both are defensible and they cannot both stand as written, so 1.7 rewrites one of them.
-The resolution is not pre-empted here, but the shape the evidence points at is worth stating: the library's objection is to shipping a *template* as a default, and the goal doc's requirement is that the *posture* be the default, which is a NetworkPolicy and a mirror rather than a pod shape.
-If that distinction holds, both survive with the goal doc's criterion re-worded to name the posture; if it does not, the criterion is the one that changes, because the library's rationale is a security argument and the criterion is an aspiration.
-
-**This is a docs decision with a gate attached, not a build**, and it belongs in Phase 5 rather than ahead of it, because Phase 4 is what establishes whether the posture is deployable without a template change at all.
+**Resolved 2026-08-28, in the direction the evidence pointed at.** The distinction holds, and Phase 4 is what established it: enforcement shipped as the **deletion** of an additive allow-all policy, with no template change of any kind, so the network posture is what an operator gets by not acting while the pod shape stays a deliberate `templateRef`.
+Definition of Done #1 is re-worded to say that, and [runner-template-library.md](../operations/runner-template-library.md#nothing-ships-as-a-cluster-default) stands unedited: its objection was to shipping a *template* as a default and nothing here asks for one.
+The criterion now also records the decline, so a later reading cannot revive the demand without re-arguing the security case against it.
 
 ## Explicitly out of scope
 

@@ -93,7 +93,7 @@ An **external contributor** to a public repository can cause code to run on your
 For every other role above, this one is part of the **threat model** rather than an audience.
 
 That asymmetry is why isolation is a separate concern from access control: the question is not what this person is permitted to do, but what their code can reach if it tries.
-GAG's stance today is [Kata micro-VM workers](kata-dind-workloads.md) for trusted CI, with the untrusted-pull-request posture still in progress.
+GAG's stance today is [Kata micro-VM workers](kata-dind-workloads.md) for the kernel boundary, paired with [the tight-egress posture](kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture) for the network one: an in-cluster registry mirror and a tenant carrying no allow-all rule, so this person's code reaches cluster DNS, GitHub, and the mirror, and nothing else.
 The threat model, the layer map, and what is explicitly out of scope are in the [secure multi-tenant OSS CI goal](../plan/secure-multi-tenant-oss-ci.md).
 
 ## How personas are recorded

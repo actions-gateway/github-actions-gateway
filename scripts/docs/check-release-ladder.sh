@@ -25,6 +25,11 @@
 #      page states all three in words, so each is a claim that outlives the
 #      edit that falsified it.
 #
+# The revived paragraph may legitimately name nobody, once the last revived item
+# ships. That is spelled "None of the original N are back", and only the spelled
+# count makes the emptiness legal: a page naming no ID while still claiming one
+# has drifted, which is the case the emptiness check exists for.
+#
 # Assertion 1 alone would pass a tree where every punted row is correctly
 # deferred and the revived paragraph still named one of them.
 #
@@ -114,6 +119,7 @@ revived_ids() {
 # by digit. An unmapped word is a refusal, not a zero.
 word_to_number() {
 	case "$1" in
+	none | zero) printf '0' ;;
 	one) printf '1' ;;
 	two) printf '2' ;;
 	three) printf '3' ;;
@@ -136,11 +142,6 @@ if ((${#punted[@]} == 0)); then
 		"$PUNTED_HEADING" "$PAGE" >&2
 	exit 2
 fi
-if ((${#revived[@]} == 0)); then
-	printf 'release-ladder: no Q-ID found in the revived paragraph of %s, so half this gate would verify nothing\n' "$PAGE" >&2
-	exit 2
-fi
-
 # `status:` for one item, or the empty string when the item has no file.
 item_status() {
 	local f="$STORE/$1.md"
@@ -228,6 +229,17 @@ total_n="$(word_to_number "$(tr '[:upper:]' '[:lower:]' <<<"$total_word")")" || 
 if ((still_n != ${#punted[@]})); then
 	fail "$PAGE says $still_word of the punted items are still deferred, but its table names ${#punted[@]}"
 fi
+# An empty revived paragraph is legal only when the prose says so. Every revived
+# item eventually ships, and the last one to do it leaves the paragraph naming
+# nobody -- Q408 was that item. Reading the emptiness as a shape change would
+# then make the page ungateable at exactly the moment the ladder is working. So
+# the declared count decides: a page claiming "None ... are back" has said the
+# set is empty, and a page claiming a number while naming no ID has drifted.
+if ((${#revived[@]} == 0 && back_n != 0)); then
+	printf 'release-ladder: no Q-ID found in the revived paragraph of %s, so half this gate would verify nothing\n' "$PAGE" >&2
+	exit 2
+fi
+
 if ((back_n != ${#revived[@]})); then
 	fail "$PAGE says $back_word of the original set are back, but its revived paragraph names ${#revived[@]}"
 fi

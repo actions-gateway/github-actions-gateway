@@ -18,17 +18,13 @@ Every open item, in priority order, is in the [working backlog](https://actions-
 
 ## In progress / near-term
 
-Scoped work, none of it waiting on an outside signal.
+**Nothing is scoped here at the moment.** The last entry, CI for untrusted pull requests on Kata workers, shipped on 2026-08-28 and moved to [Features](features.md#security-posture).
+An empty section is the honest state between one piece of scoped work finishing and the next being picked, and the fastest way to fill it is to [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues) describing what you hit first.
+
+What lands here is scoped work, none of it waiting on an outside signal.
 Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the event that revives it.
-
-Some of this is committed to a named release, and a pill beside the title says which.
-The pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
-No pill means the item is on the near-term plan with no release decided for it yet.
-
-
-- **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 --> [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted* CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.
-  Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.
-  Phase 1 gates hosted-only egress; a measurement grades the posture before Phase 2 builds the mirrors.
+Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
+No pill means no release is decided for that item yet.
 
 ## Exploring / longer-term
 

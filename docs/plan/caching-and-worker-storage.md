@@ -26,7 +26,7 @@ Do not read this table as three deployments.
 
 | | What it holds | Where it lives today | Row |
 |---|---|---|---|
-| **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | [Q408](../queue/Q408.md), [Q539](../queue/Q539.md), [Q540](../queue/Q540.md) |
+| **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | Q408, [Q539](../queue/Q539.md), [Q540](../queue/Q540.md) |
 | **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works** | [Q215](../queue/Q215.md) |
 | **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere. Workers are storage-less | [Q215](../queue/Q215.md) |
 
@@ -82,7 +82,7 @@ Stating it the current way concedes a loss that has not happened, and it hides t
 
 **This is the reason the two goals cannot be planned separately.**
 
-[Q408](../queue/Q408.md) Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
+Q408 Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
 The Actions cache data plane is a **non-GitHub host**, so closing that egress removes `actions/cache`.
 This is already the measured state of GAG's own self-hosted CI lane, where every `actions/cache` step is skipped because the hardened egress rule does not admit it ([testing.md](../development/testing.md#the-e2e-workflows-kindnet-and-calico), and [q408 §3](q408-untrusted-pr-egress.md) has the measurement).
 
@@ -139,9 +139,9 @@ Do not repeat that `actions/cache` has no home.
 
 ## Deliverables
 
-Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)).
+Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).
 
-Open, with rows: [Q408](../queue/Q408.md) (mirror design and phases), [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.

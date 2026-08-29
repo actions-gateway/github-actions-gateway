@@ -81,4 +81,4 @@ Flagged as a Queue follow-up for first-class Vault egress (a `vaultPeer` selecto
 - [x] GMC unit + envtest; AGC unit (provider build); no-PEM chain covered by Q197 vaultsigner tests
 - [x] kind e2e (in-cluster test Vault, no-PEM round-trip) + CI image mirror
 - [x] docs (05-security §5.7, tenant-onboarding, this plan); Queue follow-up for Vault egress
-- [x] `make check` green; e2e gate must RUN in CI (verify after PR opens) </content> </invoke>
+- [x] `make check` green; e2e gate must RUN in CI (verify after PR opens)

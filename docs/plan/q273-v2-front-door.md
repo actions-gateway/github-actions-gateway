@@ -46,4 +46,4 @@ Positioning stays true whether or not the sibling P5 ScaleSet-default flip has m
 - `docs/STATUS.md` edit is an ISOLATED commit (keep Q273 row; note do-now routing done, full v2-only still gated on Q74).
 - Human docs never link to `CLAUDE.md`.
   `make check` (+ docs build if touched) green before PR.
-  No Claude attribution. </content> </invoke>
+  No Claude attribution.

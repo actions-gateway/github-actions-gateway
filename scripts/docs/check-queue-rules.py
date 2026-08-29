@@ -138,15 +138,27 @@ def rule8(base_items, head_items, ledger_text, failures):
             f"QUEUE_ALLOW_FLAKE_DELETE={qid} for a deliberate drop.")
 
 
+def plan_file_of(body):
+    """The plan file a target names, with any `#anchor` dropped.
+
+    A target may point at a section rather than the whole doc, and that is
+    still a reference to the doc: Q539 and Q540 both target
+    q408-untrusted-pr-egress.md#6-follow-on-validations-q539-q540. Comparing
+    raw target strings made those invisible, so closing Q408 read as the
+    plan's last item leaving while two live rows still pointed at it.
+    """
+    target = target_of(body)
+    return Path(target.split("#", 1)[0]).name if target else ""
+
+
 def rule9(base_items, head_items, index_text, failures):
     """Deleting a plan's last item obliges its index row to stop reading open."""
     excused = allow("QUEUE_ALLOW_PROGRESS_STALE")
-    live = {target_of(b) for b in head_items.values() if target_of(b)}
+    live = {plan_file_of(b) for b in head_items.values() if plan_file_of(b)}
     for qid, body in sorted(base_items.items()):
-        target = target_of(body)
-        if qid in head_items or not target or target in live:
+        name = plan_file_of(body)
+        if qid in head_items or not name or name in live:
             continue
-        name = Path(target).name
         if name in excused:
             continue
         for line in index_text.splitlines():

@@ -17,7 +17,7 @@ That is a page telling adopters nine things are in progress when they are waitin
 | **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](release-1.4.md) |
 | **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
 | **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](release-1.6.md) |
-| **1.7** | Untrusted-PR CI on Kata: [Q408](../queue/Q408.md) Phases 2 to 5, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
+| **1.7** | Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
 | **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
@@ -51,11 +51,12 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 | An unbuilt prerequisite | [Q555](../queue/Q555.md) flaky-job retry, which needs a real job outcome |
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
-Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it has left this accounting and six of the original seven remain in it, which is the set the sentence below counts against.
+Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, so five of the original seven remain in it, which is the set the sentence below counts against.
 Its demand was [Q725](../queue/Q725.md), which had sat in the Queue the whole time.
 
-**One of the original six are back.** [Q408](../queue/Q408.md) waited on an operator ask plus a measurement, and its trigger fired by 2026-08-13: the maintainer is the operator asking for untrusted-PR CI.
-That is the trigger list working rather than a rule being bent, and it is what narrowed the rule above.
+**None of the original five are back.** The last one that was has since shipped: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
+That is the trigger list working twice rather than a rule being bent, and it is what narrowed the rule above.
+The five left in the table have never been revived.
 
 The proxy cluster is the clearest case and the one most likely to be re-litigated.
 [release-1.4.md](release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none had demand recorded against it**.
@@ -70,7 +71,7 @@ This is enforceable rather than aspirational: `roadmapcheck` already binds each 
 Parking an item moves the row to Deferred, which moves the bullet, which the gate checks.
 
 **Narrowed 2026-08-18.** This rule originally read *"committed to a named release"*, which is a stronger claim than the gate makes and than the ladder can keep.
-The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: [Q408](../queue/Q408.md) and Q564 came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name (Q564 has since shipped, taking its bullet off the roadmap).
+The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: Q408 and Q564 came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name (Q564 has since shipped, taking its bullet off the roadmap).
 Restoring the stronger reading needs either an invented gate label, which publishes a commitment nobody made, or a re-parked row whose trigger has fired, which is the dishonesty this page exists to remove, pointed the other way.
 The release commitment is the narrower claim the `X.Y-gate` label carries on its own, so near-term holds both gated and ungated work (Q843).
 
@@ -85,7 +86,7 @@ That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
 [release-1.6.md](release-1.6.md) was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.
 
-**1.7 was added on the same day, and it is a re-theme rather than a new rung.** Untrusted-PR CI on Kata ([Q408](../queue/Q408.md), [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
+**1.7 was added on the same day, and it is a re-theme rather than a new rung.** Untrusted-PR CI on Kata (Q408, [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
 Q408 takes the `1.7-gate` label, which publishes that commitment the same way the 1.6 labels did.
 
 The one hard constraint the ladder encoded — Q726 landing before `v2.0.0`, since 2.0 removes the `v2alpha1` escape hatch its godoc pointed at — is satisfied: it landed in 1.5.

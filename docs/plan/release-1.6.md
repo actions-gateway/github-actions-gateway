@@ -88,7 +88,7 @@ A release cannot close this one by deciding to, so it is not a gate.
 Weighed for this release and moved, so the reasoning is recorded rather than lost.
 
 The goal is [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md): open-source CI running fork pull requests on shared nodes with reasonable isolation.
-Its critical path is [Q408](../queue/Q408.md) Phases 2 to 5, which build the in-cluster registry pull-through mirror, wire the job-side clients to it, and delete the e2e tenant's open-egress NetworkPolicy.
+Its critical path is Q408 Phases 2 to 5, which build the in-cluster registry pull-through mirror, wire the job-side clients to it, and delete the e2e tenant's open-egress NetworkPolicy.
 Phase 1 validated on 2026-08-24 against four green self-hosted Kata runs, graded with a control that fires on both signals, so the non-registry residual is measured gone rather than argued away.
 Phase 5 is where "Kata-isolated runners are only suitable for trusted CI" leaves the docs.
 

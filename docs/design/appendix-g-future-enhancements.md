@@ -405,13 +405,17 @@ If it does **not** conflict, the primary motivation for this item evaporates and
 
 ## G.14. Kata e2e untrusted-PR posture — tight egress + in-cluster pull-through mirror
 
-The Kata worker variant (the dogfood e2e default since Q286) hardens the kernel-escape axis, but its egress stays trusted-CI-shaped: the e2e tenant runs an additive open-egress NetworkPolicy because the suite pulls from Docker Hub / quay / registry.k8s.io / get.helm.sh — all CDN-fronted, so a CIDR allowlist would rot, and an FQDN allowlist is not enforceable on GKE Dataplane V2 (Q245).
-Until that changes, Kata-isolated runners are still only suitable for *trusted* CI.
+The Kata worker variant (the dogfood e2e default since Q286) hardened the kernel-escape axis, but its egress stayed trusted-CI-shaped: the e2e tenant ran an additive open-egress NetworkPolicy because the suite pulls from Docker Hub, quay, registry.k8s.io and get.helm.sh, all CDN-fronted, so a CIDR allowlist would rot and an FQDN allowlist is not enforceable on GKE Dataplane V2 (Q245).
+While that held, Kata-isolated runners were only suitable for *trusted* CI.
 
-**The durable answer** that would let the variant carry untrusted / OSS-PR CI: an in-cluster pull-through registry mirror (so workers need no direct registry egress) plus a tight egress policy scoped to the mirror, GitHub, and DNS.
-Operator-facing context: [kata-dind-workloads.md](../operations/kata-dind-workloads.md).
+**The durable answer**, and what shipped: an in-cluster pull-through registry mirror, so workers need no direct registry egress, plus a tight egress policy scoped to the mirror, GitHub, and DNS.
 
-**Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving [Q408](../queue/Q408.md) into the Queue with a phased plan: [q408-untrusted-pr-egress.md](../plan/q408-untrusted-pr-egress.md).** Published on the [public roadmap](../roadmap.md#exploring--longer-term) as the named path to untrusted-PR CI.
+**Status — ✅ implemented (Q408).** Delivered as manifests, job-side wiring and validation scripts rather than as a controller or API change: [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md) is one Distribution instance in pull-through cache mode per upstream, with the NetworkPolicy pair that makes it a worker's only registry path, and the Kata overlay ships no additive egress policy at all, so the deliverable is a deletion rather than a swap.
+Measured on the dogfood cluster on 2026-08-28: a green Kata run of 75 specs whose in-job negatives passed all eight checks on a `runtimeClassName: kata` worker, three destinations silent against controls that answered, the mirror battery at 25 of 25, and 178 content requests served across the five instances.
+The upstream set is five rather than four because Phase 0's inventory was measured off a real run instead of assumed.
+Operator guidance: [kata-dind-workloads.md § Untrusted pull requests](../operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture); design record: [q408-untrusted-pr-egress.md](../plan/q408-untrusted-pr-egress.md).
+
+**Related.** Q539 (Dragonfly substituted as the mirror backend) and Q540 (the composed node-layer plus guest-layer stack) are both sequenced behind this one by design: the mirror contract is validated on the simple implementation before variants are graded against it.
 
 ---
 
