@@ -788,4 +788,4 @@ main() {
 	echo "pre-warms on first request — expect a slower first run per module."
 }
 
-main "$@"
+[[ -n "${SETUP_LIB_ONLY:-}" ]] || main "$@"

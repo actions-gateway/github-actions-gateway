@@ -177,4 +177,4 @@ main() {
 	echo "  Disable + tear the AGC back down: scripts/dogfood/e2e-stop.sh"
 }
 
-main "$@"
+[[ -n "${E2E_SETUP_LIB_ONLY:-}" ]] || main "$@"
