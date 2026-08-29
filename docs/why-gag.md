@@ -94,7 +94,7 @@ Three capabilities that only pay off together, and what they unlock:
     <div class="gag-flow__node gag-flow__node--wip">
       <span class="gag-flow__tier">Capability · partly shipped</span>
       <span class="gag-flow__title">Isolation by default</span>
-      <span class="gag-flow__sub">PSA, default-deny egress, and Kata micro-VM workers ship today; <a href="../roadmap/">untrusted-PR network isolation</a> does not yet</span>
+      <span class="gag-flow__sub">PSA, default-deny egress, and Kata micro-VM workers ship today; <a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">untrusted-PR network isolation</a> ships as a recipe you apply, not a default</span>
     </div>
   </div>
   <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; together they remove the reasons sharing is risky</div>
@@ -296,6 +296,6 @@ GAG's default-deny NetworkPolicies close that path.
 
 **GAG's own CI runs this way**, building a `kind` cluster inside a worker pod with **zero** `privileged: true` ([how, and what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you)).
 
-**Not yet a claim about untrusted pull requests**, which need the egress work on the [roadmap](roadmap.md#in-progress--near-term).
+**Untrusted pull requests need one more step**, the tight-egress recipe that ships in 1.7: an in-cluster pull-through registry mirror, and your own allow-all egress rule deleted ([how](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)).
 
 Threat model and abuse-response playbooks: [Security](design/05-security.md), [Security operations](operations/security-operations.md).
