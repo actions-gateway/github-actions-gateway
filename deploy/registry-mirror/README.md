@@ -72,6 +72,72 @@ Bounding that by network is not available here: the upstreams are CDN-fronted, G
 What bounds it instead is `proxy.remoteurl`, one upstream per instance, fixed in the pod spec.
 That is content control rather than host control, and it is why the mirror is stronger than allowlisting the five registries would have been: `docker.io` allowlisted is `docker.io/<anyone>/<anything>`, in both directions.
 
+## Two topologies: one shared set, or one set per tenant
+
+What this tree renders is **one mirror set serving one tenant**.
+`base/networkpolicy.yaml` names the tenant namespace twice: as `e2e-mirror-egress`'s own `metadata.namespace`, and as the mirror-side ingress policy's `kubernetes.io/metadata.name` peer.
+On a cluster with one tenant that is the whole story, and the dogfood cluster has one.
+On a cluster with several it is a fork, and the platform administrator owns which way to take it, because it trades disk and upstream bandwidth against what one tenant can learn about another.
+The decision itself, with the tenant count and the tenant relationship that settle it, is on the operator page: [kata-dind-workloads.md § Choosing a mirror topology](../../docs/operations/kata-dind-workloads.md#choosing-a-mirror-topology).
+
+| Topology | Render | Mirror sets | What one tenant learns about another |
+|---|---|---|---|
+| **Shared** | `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` | one, admitting every managed tenant | the list of repositories every other tenant pulled, [below](#what-a-shared-cache-exposes) |
+| **Isolated** (what the default renders) | `kubectl apply -k deploy/registry-mirror`, retargeted once per tenant | one per tenant | nothing through the mirror |
+
+Storage is the other axis and composes with either.
+The topology itself lives in [`components/shared-tenants/`](components/shared-tenants/kustomization.yaml), so `overlays/shared-tenants` is it over the ephemeral base and [`overlays/shared-tenants-persistent`](overlays/shared-tenants-persistent/kustomization.yaml) is it over the PVC-backed one; the patch is written once and the two cannot drift.
+Under the shared topology the persistent cost does not multiply: one set means five PVCs whatever the tenant count.
+
+Only the mirror-side ingress differs between them.
+The worker-side `e2e-mirror-egress` policy lives in the tenant's own namespace, so each tenant needs its own copy under both.
+
+### The shared set
+
+[`components/shared-tenants/`](components/shared-tenants/kustomization.yaml) swaps the mirror-side ingress peer for the GMC's managed-tenant marker:
+
+```yaml
+- namespaceSelector:
+    matchLabels:
+      actions-gateway.com/tenant: managed
+```
+
+That marker is what the GMC's own confinement ValidatingAdmissionPolicies key on ([`api/v2beta1/shared_types.go`](../../api/v2beta1/shared_types.go)), so the mirror reads the same label a platform admin already sets rather than a list of its own.
+It is not the same tenant set as those policies while v1 and v2 coexist: they accept the v2 marker **or** the legacy `actions-gateway.github.com/tenant: "true"`, and this accepts only v2, so the mirror's set is a strict subset of theirs until the window closes.
+It also admits tenants created later, automatically: a namespace becomes a mirror client the moment the administrator marks it.
+That is the point on a cluster whose tenant set churns and the risk on one where it must not, so the overlay's header carries the `matchExpressions` form that admits a fixed subset instead.
+A namespace still on the v1alpha1 marker (`actions-gateway.github.com/tenant: "true"`) matches nothing here and its pulls stop, which is the fail-closed direction; migrate the namespace rather than widening the selector.
+
+Each tenant still needs its own worker-side rule.
+Copy the `e2e-mirror-egress` document out of [`base/networkpolicy.yaml`](base/networkpolicy.yaml) once per tenant and change `metadata.namespace`; it names no other tenant-specific value.
+
+### Isolated sets
+
+Render this tree once per tenant, giving each its own mirror namespace and retargeting the two namespace values by hand, as [Adopting this outside the dogfood cluster](#adopting-this-outside-the-dogfood-cluster) sets out.
+
+**Do not reach for kustomize's `namespace:` field to do it.** It renders a broken set at exit 0.
+Measured on kubectl 1.36.3 / kustomize v5.8.1, an overlay setting `namespace: gag-registry-mirror-tenant-a` over `base`:
+
+- moves `e2e-mirror-egress` into the *mirror* namespace, where it selects no worker, so that tenant gets no egress rule at all;
+- leaves both policies' `kubernetes.io/metadata.name` peers naming `gag-registry-mirror` and `gag-dogfood-e2e`, because a namespace named in a label *value* is not a field any transformer rewrites.
+
+The result applies cleanly and the tenant cannot pull anything.
+
+### What a shared cache exposes
+
+Measured on 2026-08-28 against `registry:3.1.1` at the digest [`base/deployment.yaml`](base/deployment.yaml) pins, run as a pull-through cache with the same proxy configuration, on a laptop rather than on the cluster:
+
+- **The repository list is readable outright.** `GET /v2/_catalog` answers 200 on port 5000, the port the worker policy admits, and names every repository in the cache.
+  One manifest fetch is enough to add a repository to it: cold it returned `{"repositories":[]}`, and after a single fetch of `library/alpine:3.20`, `{"repositories":["library/alpine"]}`.
+  This is a documented registry API endpoint rather than a side channel, and `catalog.maxentries=0` does not close it: the endpoint still answered with the repository listed.
+- **Blob timing separates a hit from a miss by an order of magnitude, on two cold samples.** First fetch of `library/alpine`'s layer took 637 ms; the three after it took 13, 11 and 10 ms. `library/busybox` gave 419 ms, then 61, 44 and 70 ms. The miss arm is those two fetches, against the manifest arm's ten, so read the separation rather than the range.
+- **Manifest timing does not.** Ten distinct repositories fetched cold and then warm gave medians near 430 ms and 360 ms, with the distributions overlapping (a warm 445 ms against a cold 407 ms).
+  A pull-through cache revalidates a manifest upstream on every request, so a manifest hit still pays a round trip.
+
+Two things that does not establish.
+It was taken from a laptop over the public internet, not from inside a Kata guest across the bridge NAT, which is where an attacker actually sits, so the timing figures bound the channel rather than measure it; [Q1020](../../docs/queue/Q1020.md) holds the guest measurement.
+And `/v2/_catalog` needs no timing at all, so on the shared topology the repository list is exposed whatever that measurement returns.
+
 ## Adopting this outside the dogfood cluster
 
 Three values are specific to this cluster, all of them in [`base/networkpolicy.yaml`](base/networkpolicy.yaml), [`base/namespace.yaml`](base/namespace.yaml) and the persistent overlay:

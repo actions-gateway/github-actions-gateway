@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Shared mirror set, persistent caches: the two opt-ins composed. The topology is
+# ../../components/shared-tenants and the storage is ../persistent, so neither is
+# restated here and neither can drift from the variant that ships it alone.
+#
+# Cost is the persistent overlay's, not multiplied: one shared set means five
+# PVCs whatever the tenant count, which is the arithmetic
+# ../../../../docs/operations/kata-dind-workloads.md#choosing-a-mirror-topology
+# turns on. See ../../README.md#two-topologies-one-shared-set-or-one-set-per-tenant.
+resources:
+  - ../persistent
+components:
+  - ../../components/shared-tenants

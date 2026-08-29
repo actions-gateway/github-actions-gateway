@@ -1,0 +1,71 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# The shared-mirror-set topology, as a component so it composes with either
+# storage variant: ../../overlays/shared-tenants renders it over the ephemeral
+# base, ../../overlays/shared-tenants-persistent over the PVC-backed one. The
+# patch lives here once rather than in each, so the two cannot drift.
+#
+# WHAT IT CHANGES. The mirror-side ingress stops naming a single namespace and
+# admits any namespace carrying the GMC's managed-tenant marker
+# (api/v2beta1/shared_types.go: TenantNamespaceMarkerLabel/Value). The default
+# (../../base) is the isolated topology: one set serving one tenant, named
+# literally in both policies. Which one an adopter wants is a cost-against-risk
+# call only they can make -- see ../../README.md#two-topologies-one-shared-set-or-one-set-per-tenant
+# and ../../../../docs/operations/kata-dind-workloads.md#choosing-a-mirror-topology.
+#
+# WHAT THAT BUYS AND COSTS. It admits tenants created LATER, automatically: a
+# namespace becomes a mirror client the moment the platform admin marks it.
+# That is the point on a cluster whose tenant set churns, and it is the risk on
+# one where it must not. To admit a fixed subset instead, replace the peer below
+# with a matchExpressions form naming them:
+#
+#     - namespaceSelector:
+#         matchExpressions:
+#           - key: kubernetes.io/metadata.name
+#             operator: In
+#             values: [tenant-a, tenant-b]
+#
+# THE WORKER SIDE IS STILL PER-TENANT, under either topology: `e2e-mirror-egress`
+# lives in the tenant's own namespace, so each tenant needs its own copy. The
+# base renders exactly one, for `gag-dogfood-e2e`. Rendering this does NOT render
+# the others -- ../../README.md#the-shared-set has the copy.
+#
+# THE PEER IS NAMESPACE-SCOPED AND NOT POD-SCOPED, which the shared topology
+# widens: the base admits any pod in ONE tenant namespace, this admits any pod in
+# EVERY managed tenant namespace, workload-labelled or not. ANDing a
+# `podSelector: {matchLabels: {actions-gateway/component: workload}}` into the
+# peer below would narrow it to workers, and whether that leaves every client's
+# pulls working is a cluster measurement nobody has taken. Q1026.
+#
+# V1-DOMAIN TENANTS ARE NOT ADMITTED. A namespace still marked
+# `actions-gateway.github.com/tenant: "true"` (the v1alpha1 domain, which the
+# GMC's confinement policies dual-read through the coexistence window) carries no
+# v2 marker and so matches nothing here. matchLabels cannot OR, so admitting both
+# means a SECOND peer under `from:` rather than a second key. The failure is
+# closed -- that tenant's pulls stop rather than an unmarked namespace being
+# admitted -- so migrate the namespace (docs/operations/migration-v1-to-v2.md) in
+# preference to widening this.
+patches:
+  # Strategic merge REPLACES `ingress` wholesale: NetworkPolicyIngressRule has no
+  # patch merge key, so the list is atomic. That is what is wanted -- the base's
+  # single-namespace peer must GO, not be joined by a second one -- and it is
+  # also the hazard: anything else the base's ingress declares is dropped here
+  # silently, at exit 0. A second ingress rule added to the base, or a change to
+  # the port restated below, does not reach this render. Re-read the base's
+  # ingress when you touch it. A RENAME is the safe direction: retargeting
+  # `registry-mirror-worker-access` fails loudly with "no matches for Id".
+  - patch: |
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: registry-mirror-worker-access
+        namespace: gag-registry-mirror
+      spec:
+        ingress:
+          - from:
+              - namespaceSelector:
+                  matchLabels:
+                    actions-gateway.com/tenant: managed
+            ports:
+              - protocol: TCP
+                port: 5000
