@@ -23,8 +23,20 @@
 # field is `<address>:<port>` and the proxy's own startup NOTICE lines share the
 # stream.
 #
+#   3. Grading a PARTIAL read as a whole one. Measured on the first version: with
+#      one instance's log unreadable, the output was byte-identical to a
+#      five-of-five read, because all five were pooled through one `sort -u`.
+#      That satisfied this script's own draft-exit condition. Every instance is
+#      now graded by name, and the case is asserted below in both directions.
+#
+# The distinction that makes the per-instance grade usable is `read` vs `clients
+# seen`: an instance that was read and saw nobody is legitimate, since not every
+# mirror gets traffic in every window, while one that could not be read is a
+# hole. Keying on an empty address list would conflate them and refuse a
+# perfectly good window; keying on `kubectl logs`' exit status does not.
+#
 # The script is sourced with E2E_MIRROR_CLIENTS_LIB_ONLY=1 so main() does not
-# run; nothing here touches kubectl or a cluster.
+# run; `kubectl` is stubbed for the collector's cases, so no cluster.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -124,6 +136,81 @@ grade "10.4.9.44 unresolved -
 10.4.3.9 pod-unlabelled tenant-b/helper-job-xyz"
 check "an unlabelled client outranks an unresolved one" 1 "${GRADE_RC}"
 check_contains "both are still reported" "REFUSE  10.4.9.44" "${GRADE_OUT}"
+
+# --- every declared instance is graded by name ------------------------------
+#
+# The HOLD this fix answers. Pooling the five instances made an unread log
+# invisible; the reading now names each one.
+
+reads() { grade_instance_reads <<<"$1"; }
+
+ALL_OK="$(for i in "${MIRROR_INSTANCES[@]}"; do printf 'read %s ok\n' "$i"; done)"
+
+set +e
+OUT="$(reads "${ALL_OK}")"; RC=$?
+set -e
+check "five readable instances pass" 0 "${RC}"
+check "each is named" "${#MIRROR_INSTANCES[@]}" "$(grep -c '^READ ' <<<"${OUT}")"
+
+# One instance unreadable. Under the old collector this was indistinguishable
+# from a clean read; it must now refuse and name the instance.
+set +e
+OUT="$(reads "$(grep -v 'mirror-gcr-io' <<<"${ALL_OK}"; echo 'read mirror-gcr-io failed')")"; RC=$?
+set -e
+check "one unreadable instance refuses" 2 "${RC}"
+check_contains "and is named" "REFUSE  mirror-gcr-io: its catalog-deny log could not be read" "${OUT}"
+check "the other four still read" 4 "$(grep -c '^READ ' <<<"${OUT}")"
+
+# An instance that reported nothing at all is the same hole as one that reported
+# `failed`. Walking the transcript rather than the table would find neither.
+set +e
+OUT="$(reads "$(grep -v 'mirror-quay-io' <<<"${ALL_OK}")")"; RC=$?
+set -e
+check "an instance with no record refuses" 2 "${RC}"
+check_contains "and says no read was reported" "no read was attempted or reported at all" "${OUT}"
+
+# --- read, but idle, is NOT a refusal ----------------------------------------
+#
+# The distinction the union could not make. A mirror nobody pulled through in a
+# given window is ordinary; refusing on it would make the reading unusable in
+# any window where traffic did not touch all five.
+set +e
+OUT="$(reads "${ALL_OK}")"; RC=$?
+set -e
+check "five read, zero clients seen, still passes the read grade" 0 "${RC}"
+
+# --- the collector distinguishes them, keyed on exit status ------------------
+
+LINE='10.4.2.17:51234 [29/Aug/2026:07:02:22.008] mirror registry/local 0/0/0/2/2 200 155 - - ---- 1/1/0/0/0 0/0 "GET /v2/ HTTP/1.1"'
+UNREADABLE=""
+kubectl() {
+	if [[ -n "${UNREADABLE}" && "$*" == *"${UNREADABLE}"* ]]; then
+		return 1
+	fi
+	[[ -n "${SILENT_OK:-}" ]] || printf '%s\n' "${LINE}"
+}
+
+UNREADABLE="" SILENT_OK="" records="$(collect_client_addresses)"
+check "a full read reports five ok" 5 "$(grep -c '^read .* ok$' <<<"${records}")"
+check "and one client record per instance" 5 "$(grep -c '^client ' <<<"${records}")"
+
+UNREADABLE="mirror-gcr-io" SILENT_OK="" records="$(collect_client_addresses)"
+check "an unreadable instance is recorded as failed" 1 "$(grep -c '^read mirror-gcr-io failed$' <<<"${records}")"
+check "and contributes no client record" 0 "$(grep -c '^client mirror-gcr-io ' <<<"${records}")"
+
+# The case that must NOT refuse: every log read, none of them holding a client.
+UNREADABLE="" SILENT_OK=1 records="$(collect_client_addresses)"
+check "an idle-but-readable fleet reports five ok" 5 "$(grep -c '^read .* ok$' <<<"${records}")"
+check "and no failed record" 0 "$(grep -c 'failed$' <<<"${records}")"
+
+# --- a hostNetwork pod sharing a node address is not silently resolved -------
+#
+# Both lookups match, and neither answer is right: as a pod it is graded on a
+# label no selector usefully applies to it, as a node it is waved through.
+grade "10.128.0.31 ambiguous kube-system/anetd-abc+node/gke-pool-1"
+check "an ambiguous address refuses" 2 "${GRADE_RC}"
+check_contains "naming both sides" "kube-system/anetd-abc+node/gke-pool-1" "${GRADE_OUT}"
+check_contains "and saying why it is not decidable" "not decidable from here" "${GRADE_OUT}"
 
 echo
 if ((fails)); then

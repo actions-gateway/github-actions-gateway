@@ -53,7 +53,10 @@ MIRROR_NAMESPACE="${MIRROR_NAMESPACE:-gag-registry-mirror}"
 
 # The instance set, as data rather than derived from the live Deployments, for
 # the reason e2e-mirror-validate.sh gives: derived, a missing instance shrinks
-# the reading instead of failing it.
+# the reading instead of failing it. That only holds because every instance is
+# graded BY NAME below -- an earlier version pooled all five through one
+# `sort -u`, and a four-of-five read was then byte-identical to a five-of-five
+# one.
 MIRROR_INSTANCES=(
 	mirror-docker-io
 	mirror-ghcr-io
@@ -120,6 +123,10 @@ grade_clients() {
 		node)
 			echo "EXEMPT  ${addr} node/${detail} — the kubelet's probes, which no pod selector governs"
 			;;
+		ambiguous)
+			echo "REFUSE  ${addr} ${detail} — a hostNetwork pod shares this node's address, so whether the narrowing keeps this client is not decidable from here"
+			unresolved=1
+			;;
 		*)
 			echo "REFUSE  ${addr} resolves to no pod and no node — most likely a worker that has already been deleted, so this client cannot be graded"
 			unresolved=1
@@ -137,46 +144,111 @@ grade_clients() {
 
 # --- cluster-side ------------------------------------------------------------
 
-# collect_client_addresses — print each distinct client address seen across every
-# instance's proxy log. An instance whose log cannot be read contributes nothing,
-# which the caller's own count turns into a refusal rather than a shrunken set.
+# collect_client_addresses — emit two record kinds, one line each:
+#
+#   read   <instance> ok|failed   whether that instance's proxy log was readable
+#   client <instance> <address>   one per distinct address that instance saw
+#
+# The `read` record is the whole point, and keying it on `kubectl logs`' EXIT
+# STATUS rather than on an empty address list is what makes it usable. An
+# instance that was read and saw nobody is legitimate -- not every mirror gets
+# traffic in every window -- while an instance that could not be read at all is
+# a hole in the reading. An empty address list cannot tell those apart, and the
+# earlier version could not either: it pooled all five instances through one
+# `sort -u`, so one unreadable log left no trace whatever and a four-of-five
+# read produced byte-identical output to a five-of-five one.
 collect_client_addresses() {
-	local instance
+	local instance logs rc addr
 	for instance in "${MIRROR_INSTANCES[@]}"; do
-		kubectl logs "deployment/${instance}" --namespace "${MIRROR_NAMESPACE}" \
-			--container "${PROXY_CONTAINER}" --tail=-1 2>/dev/null | client_addresses || true
-	done | sort -u
+		set +e
+		logs="$(kubectl logs "deployment/${instance}" --namespace "${MIRROR_NAMESPACE}" \
+			--container "${PROXY_CONTAINER}" --tail=-1 2>/dev/null)"
+		rc=$?
+		set -e
+		if ((rc != 0)); then
+			printf 'read %s failed\n' "${instance}"
+			continue
+		fi
+		printf 'read %s ok\n' "${instance}"
+		while read -r addr; do
+			[[ -n "${addr}" ]] || continue
+			printf 'client %s %s\n' "${instance}" "${addr}"
+		done < <(client_addresses <<<"${logs}")
+	done
+}
+
+# grade_instance_reads — read collect_client_addresses' records and report one
+# line per DECLARED instance, refusing for any whose log was not read.
+#
+# The expected set is the table rather than the transcript, for the reason every
+# battery here gives: an instance that produced no record at all is the same
+# hole as one that produced `failed`, and walking what arrived would find
+# neither. Returns 2 when any instance is unread, which is a refusal and never a
+# verdict about labels.
+grade_instance_reads() {
+	local kind instance state seen_line unread=0
+	local -A state_of=()
+	while read -r kind instance state; do
+		[[ "${kind}" == "read" ]] || continue
+		state_of["${instance}"]="${state}"
+	done
+	for instance in "${MIRROR_INSTANCES[@]}"; do
+		seen_line="${state_of["${instance}"]:-}"
+		case "${seen_line}" in
+		ok) echo "READ    ${instance}" ;;
+		failed)
+			echo "REFUSE  ${instance}: its ${PROXY_CONTAINER} log could not be read, so any client that reached only this mirror is invisible to this reading"
+			unread=1
+			;;
+		*)
+			echo "REFUSE  ${instance}: no read was attempted or reported at all"
+			unread=1
+			;;
+		esac
+	done
+	((unread)) && return 2
+	return 0
 }
 
 # resolve_addresses — read addresses on stdin, print `<address> <kind> <detail>`.
 # Two cluster reads, both taken once: every pod IP with its component label, and
 # every node address. A pod whose label is absent renders as an empty third
 # field, which is what distinguishes pod-unlabelled from pod-workload.
+#
+# BOTH LOOKUPS ARE TAKEN, and a collision is reported rather than resolved by
+# ordering. A hostNetwork pod's `status.podIP` IS its node's address, so an
+# address can genuinely match both, and neither answer is right: as a pod it
+# would be graded on a label that no selector can usefully apply to it, and as a
+# node it would be waved through as the kubelet. Checking pods first would have
+# graded the kubelet's own probes as an unlabelled pod wherever a hostNetwork
+# pod holds that address, which on a Dataplane V2 cluster is routine. Whichever
+# way it were ordered the wrong answer would be silent, so the collision is its
+# own kind and a human settles it.
 resolve_addresses() {
-	local pods nodes addr line
+	local pods nodes addr pod_line node_line
 	pods="$(kubectl get pods --all-namespaces \
 		-o 'jsonpath={range .items[*]}{.status.podIP}{" "}{.metadata.namespace}/{.metadata.name}{" "}{.metadata.labels.actions-gateway\/component}{"\n"}{end}' 2>/dev/null || true)"
 	nodes="$(kubectl get nodes \
 		-o 'jsonpath={range .items[*]}{range .status.addresses[*]}{.address}{" "}{end}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
 	while read -r addr; do
 		[[ -n "${addr}" ]] || continue
-		line="$(awk -v a="${addr}" '$1 == a { print $2 " " $3; exit }' <<<"${pods}")"
-		if [[ -n "${line}" ]]; then
-			local name component
-			read -r name component <<<"${line}"
+		pod_line="$(awk -v a="${addr}" '$1 == a { print $2 " " $3; exit }' <<<"${pods}")"
+		node_line="$(awk -v a="${addr}" '{ for (i = 1; i < NF; i++) if ($i == a) { print $NF; exit } }' <<<"${nodes}")"
+		local name component
+		read -r name component <<<"${pod_line}"
+		if [[ -n "${pod_line}" && -n "${node_line}" ]]; then
+			printf '%s ambiguous %s+node/%s\n' "${addr}" "${name}" "${node_line}"
+		elif [[ -n "${pod_line}" ]]; then
 			if [[ "${component}" == "workload" ]]; then
 				printf '%s pod-workload %s\n' "${addr}" "${name}"
 			else
 				printf '%s pod-unlabelled %s\n' "${addr}" "${name}"
 			fi
-			continue
+		elif [[ -n "${node_line}" ]]; then
+			printf '%s node %s\n' "${addr}" "${node_line}"
+		else
+			printf '%s unresolved -\n' "${addr}"
 		fi
-		line="$(awk -v a="${addr}" '{ for (i = 1; i < NF; i++) if ($i == a) { print $NF; exit } }' <<<"${nodes}")"
-		if [[ -n "${line}" ]]; then
-			printf '%s node %s\n' "${addr}" "${line}"
-			continue
-		fi
-		printf '%s unresolved -\n' "${addr}"
 	done
 }
 
@@ -196,10 +268,24 @@ main() {
 		die "namespace '${MIRROR_NAMESPACE}' is absent — apply the mirror first (scripts/dogfood/e2e-start.sh)"
 	fi
 
-	step "Clients that reached the mirrors (${MIRROR_NAMESPACE}, ${PROXY_CONTAINER} logs)"
-	local resolved rc=0
-	resolved="$(collect_client_addresses | resolve_addresses)"
-	grade_clients <<<"${resolved}" || rc=$?
+	step "Proxy logs read, per declared instance (${MIRROR_NAMESPACE})"
+	local records read_rc=0 client_rc=0 rc=0
+	records="$(collect_client_addresses)"
+	grade_instance_reads <<<"${records}" || read_rc=$?
+
+	step "Clients that reached the mirrors (${PROXY_CONTAINER} logs)"
+	local addresses resolved
+	addresses="$(awk '$1 == "client" { print $3 }' <<<"${records}" | sort -u)"
+	resolved="$(resolve_addresses <<<"${addresses}")"
+	grade_clients <<<"${resolved}" || client_rc=$?
+
+	# An unlabelled client outranks any refusal beside it: it is the finding this
+	# whole reading exists for, and one unread instance must not bury it.
+	if ((client_rc == 1)); then
+		rc=1
+	elif ((read_rc != 0 || client_rc != 0)); then
+		rc=2
+	fi
 
 	echo
 	case "${rc}" in

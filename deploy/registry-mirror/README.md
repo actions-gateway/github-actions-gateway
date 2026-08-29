@@ -145,6 +145,7 @@ With it, the mirror's ingress and the worker's egress name the same label.
 A client that does not carry the label loses the path entirely and cannot pull, and the four wired clients read four separate configurations ([below](#how-the-job-is-wired-to-these-instances)).
 Every client in this repository is a container of an AGC-provisioned worker pod, which sets the label unconditionally, but a source read only covers the clients somebody thought of.
 [`e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh) reads who actually connected, from the deny proxy's log, and resolves each address to a pod or a node; an address that resolves to nothing is a refusal rather than a pass, because a worker is deleted at the end of its job.
+It grades every declared instance by name on whether its log was readable, so a window read over four of five mirrors refuses instead of passing as a whole reading.
 
 Each tenant still needs its own worker-side rule.
 Copy the `e2e-mirror-egress` document out of [`base/networkpolicy.yaml`](base/networkpolicy.yaml) once per tenant and change `metadata.namespace`; it names no other tenant-specific value.
