@@ -255,7 +255,8 @@ The point of doing it here rather than at the tag is that the answers are free b
 
 Before promoting a release-candidate line to a **stable** `vX.Y.Z` tag, validate the *latest RC* functionally on the dogfood cluster.
 `main`-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
-Run it before every GA (`vX.Y.Z`) cut; skip it only for an RC-to-RC or a patch tag that changes nothing an operator runs.
+Run it before every stable (`vX.Y.Z`) cut, patch releases included; skip it only for an RC-to-RC.
+A patch line cuts and validates its own candidate like any other release: `publish.yml` refuses a stable tag whose line has no recorded validation, and there is no patch exemption ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
@@ -274,6 +275,32 @@ Past that the gate fails with exit 124, names the run, and tears the cluster bac
 A healthy leg finishes in 25–33 minutes; raise the variable rather than removing the bound if yours is legitimately slower.
 
 The gate also checks every local tool it needs up front — including the pinned `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to `.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run before it spends anything, not 25 minutes in.
+
+##### The gate records its verdict, and publish reads it
+
+A passing run writes `refs/validated/<rc-tag>` on the remote, pointing at the commit that tag resolves to.
+That marker is the only machine-readable record that a candidate was validated: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes, and [`publish.yml`](../../.github/workflows/publish.yml) can read none of those.
+
+**A stable tag whose release line has no marker does not publish.** `publish.yml`'s `validated-candidate` job refuses it before any image is pushed, and it takes the newest *validated* candidate as its reference rather than the newest candidate tag.
+Those differ, which is the point: `v1.5.0-rc.2` was tagged and published having spent no validation at all ([postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md)), so a gate keyed on the newest prerelease would have waved it through.
+
+It is a record, not an attestation.
+Anyone who can push a tag can push the marker, so it proves the gate was run and reported to, never that a green verdict was earned.
+What it closes is a promote with no validation anywhere behind it.
+
+**If the record fails, nothing needs re-validating.** The gate reports the pass, says the verdict is unrecorded, and exits non-zero.
+Re-run the recorder alone.
+It is idempotent, and refuses only when a marker already names a different commit:
+
+```bash
+REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N
+```
+
+Read the markers the same way you read any other ref:
+
+```bash
+git ls-remote origin 'refs/validated/*'
+```
 
 ##### The gate reserves the e2e pool's CPU budget
 
@@ -488,6 +515,8 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    Sample history needs no advance planning: the sampler tracks every worker pod regardless of `spec.sizing`, and the aggregate re-seeds from the persisted `status.sizingRecommendation` — so samples accrue without the profile configured and survive a stop/start rather than being re-earned.
 
 5. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
+6. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
+   `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
 
@@ -508,6 +537,10 @@ scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/mai
 Exit 1 means the stable tag would ship something no candidate validated.
 Revert it, or cut and validate a new candidate.
 Exit 2 is different and is never a finding about the release: the check itself could not run, so nothing has been measured and the window is still an open question.
+
+**`publish.yml` asks the same question at the tag, and it asks the other half too.** The pre-flight above takes the validated commit as an argument, so it is only as good as whichever candidate you name; the `validated-candidate` job derives that commit from `refs/validated/`, so it also refuses a release line where *no* candidate was ever validated ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
+Both halves fail before an image is pushed.
+Running the pre-flight is still worth it, because failing here costs a command and failing there costs a burned tag.
 
 **You should already know, because the watch says so at the merge.** [`release-freeze-watch.yml`](../../.github/workflows/release-freeze-watch.yml) runs this same question after every push to `main`, and opens an issue labelled `release-freeze` naming the candidate the window invalidated.
 It closes that issue when a newer candidate covers `main` again, so an open one means a freeze is broken right now and the check above is about to exit 1.
@@ -1151,9 +1184,21 @@ A patch release (`vX.Y.Z+1`) is **bugfix-only** by SemVer.
 That has a release- engineering consequence: **do not tag a patch from `main` once `main` has merged features headed for the next minor** — doing so ships those unreleased features in the patch's images *and* chart, and advertises them in the patch's docs (the site builds each version from its tag).
 Tag a patch from the released line instead:
 
-- **Ephemeral branch off the tag (branchless-friendly).** For a one-off patch: `git switch --detach vX.Y.Z`, `git switch -c release-X.Y`, cherry-pick the fix, tag `vX.Y.(Z+1)`, push the tag.
+- **Ephemeral branch off the tag (branchless-friendly).** For a one-off patch: `git switch --detach vX.Y.Z`, `git switch -c release-X.Y`, cherry-pick the fix, tag and push `vX.Y.(Z+1)-rc.1`, [validate it on dogfood](#validate-the-release-candidate-on-dogfood), then tag `vX.Y.(Z+1)` and push that.
   Delete the branch afterward if you don't maintain the line.
 - **Long-lived release branch.** If you support multiple minor lines at once, keep a `release-X.Y` branch at the minor's tag and land backported fixes on it.
+
+**The candidate is not optional on a patch line, and this is the one place that surprises people.** A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: six signed images and a chart.
+`publish.yml`'s `validated-candidate` job asks the same question of `v1.2.1` that it asks of `v2.0.0`, so a patch tag with no `v1.2.1-rc.*` marker fails before anything is pushed.
+Budget the dogfood run into the patch, or the tag fails at the end instead of the start.
+
+One thing a patch line's run does not inherit: the e2e leg dispatches `e2e-test.yml` from `main` unless `E2E_DISPATCH_REF` says otherwise, so the workflow and its test code come from `main` while the runners come from the candidate.
+That is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.
+On a patch cut off an older tag `main` can be several releases ahead of what you are validating; for a minor cut from `main`'s head the two nearly coincide, which is why this has not bitten before.
+
+Note the asymmetry with `announce-bar`, the other pre-publish gate, which *does* exempt a backport: the banner advertises the newest release, so a `v1.2.5` cut after `v1.3.0` correctly renders `v1.3.0`.
+That is a question about what the docs site says.
+Whether the images were validated is a question about the artifact, and every artifact gets asked.
 
 You only need a branch/backport **when `main` isn't itself the intended patch** — i.e. when it has diverged past the release with content you don't want in the patch.
 If `main` is clean and ready to ship, that's the next **minor** (`vX.(Y+1).0`), not a patch.
@@ -1205,8 +1250,9 @@ The `worker` image has no chart `image` block — it is the optional batteries-i
 
 PR CI proves the image builds and the SBOM generates so those paths can't silently break; signing, SBOM attestation, and build-provenance attestation are all first exercised on a real `v*` tag, which is why step 3 verification matters on every release.
 
-`publish.yml` also runs one **pre-publish gate**, `announce-bar`, that every publishing job depends on.
-It builds the docs site at the tag and asserts the rendered banner names it (see [Pre-flight](#1-pre-flight)), so a docs-site banner advertising the wrong version stops the release before an image, chart, or GitHub Release exists, rather than after.
+`publish.yml` also runs two **pre-publish gates** that every publishing job depends on: `announce-bar`, and `validated-candidate` ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
+`announce-bar` builds the docs site at the tag and asserts the rendered banner names it (see [Pre-flight](#1-pre-flight)), so a docs-site banner advertising the wrong version stops the release before an image, chart, or GitHub Release exists, rather than after.
+`validated-candidate` refuses a stable tag no dogfood-validated candidate covers, so an unvalidated release stops at the same point.
 
 ## Supply-chain integrity of the pipeline itself
 

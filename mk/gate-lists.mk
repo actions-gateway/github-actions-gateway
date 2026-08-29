@@ -250,6 +250,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  dogfood/delete-test dogfood/e2e-run-watch-test \
                  dogfood/release-status-test dogfood/release-sentinel-test \
                  dogfood/lease-test \
+                 dogfood/record-validated-candidate-test \
                  e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \
                  e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
@@ -265,6 +266,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  release/verify-release-test release/verify-published-docs-test \
                  release/check-artifact-unchanged-test release/check-gates-green-test \
                  release/check-candidate-covers-main-test \
+                 release/check-validated-candidate-test \
                  release/render-release-body-test release/check-release-notes-test \
                  release/check-release-digests-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
