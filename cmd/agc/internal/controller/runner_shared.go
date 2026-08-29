@@ -165,6 +165,18 @@ func (p *pendingConditions) apply(key types.NamespacedName, conds *[]metav1.Cond
 	}
 }
 
+// conditionValue returns a copy of the named condition, or the zero Condition when it
+// is absent. Read the prior condition through this rather than retaining the pointer
+// meta.FindStatusCondition returns: that pointer aliases the slice element
+// meta.SetStatusCondition then mutates in place, so a transition guard reading it after
+// the write sees the value just written and can only fire on a first observation (Q962).
+func conditionValue(conds []metav1.Condition, condType string) metav1.Condition {
+	if c := meta.FindStatusCondition(conds, condType); c != nil {
+		return *c
+	}
+	return metav1.Condition{}
+}
+
 // forget drops all retained conditions for key. Call it when the owner is deleted or
 // falls out of scope so no entry leaks after its last reconcile.
 func (p *pendingConditions) forget(key types.NamespacedName) {
