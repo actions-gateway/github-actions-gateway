@@ -344,6 +344,37 @@ Each instance is pinned to exactly one upstream in its pod spec, and refuses upl
 The first three are additive.
 The fourth is the one that turns the recipe into enforcement, and it is a deletion rather than an object you apply.
 
+### Choosing a mirror topology
+
+One mirror set can serve every tenant, or each tenant can have its own.
+[`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md#two-topologies-one-shared-set-or-one-set-per-tenant) renders both, and the choice is a platform administrator's rather than a default this project can pick for you.
+It turns on your tenant count, your disk budget, and whether your tenants are mutually hostile.
+
+**A shared set is one line of difference.** The mirror-side ingress admits any namespace carrying the managed-tenant marker instead of one namespace named literally, and `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` renders it.
+The worker-side egress policy sits in the tenant's own namespace and is per-tenant under either topology, so that half is unchanged.
+
+**An isolated set costs a whole set per tenant.** Read off the shipped manifests, one set is 5 Deployments and 5 Services requesting 125m of CPU and 320Mi of memory, with limits of 2500m and 2560Mi; the persistent overlay adds 5 PVCs holding 50Gi, which the deployment README prices at about $5 a month.
+Multiply all of it by tenant count.
+The cache also stops being shared, so each tenant pulls `kindest/node` cold on its own and pays that upstream bandwidth separately.
+
+**Where the cost starts to bite.** The ephemeral default is $0 at rest under either topology, so disk enters the arithmetic only if you chose persistence, which composes with either (`overlays/persistent` isolated, `overlays/shared-tenants-persistent` shared). There, isolation is 50Gi and roughly $5 a month per tenant: four tenants is 200Gi and about $20, ten is 500Gi and about $50.
+Check the requests before the dollars, because they are the figure that has to fit a node pool you already sized: 125m of CPU and 320Mi of memory per tenant, and 2500m and 2560Mi of limit per tenant if the instances ever run hot together.
+The repeated cold pulls are the third cost and the one this project has not measured per tenant, so size it from your own registry egress rather than from a number here.
+
+**Where isolation stops being optional.** If your tenants must not learn what each other build, a shared set cannot give you that, and no amount of tuning makes it.
+`GET /v2/_catalog` names every repository in the cache, answers 200 on the same port 5000 the worker policy admits, and needs one manifest fetch to list a repository.
+That is a documented registry API endpoint rather than a side channel, so it is not closed by making a cache hit slower, and the one setting that looks as though it would close it does not: measured locally against `registry:3.1.1` at the pinned digest, run as a pull-through cache with the deployed proxy configuration, `catalog.maxentries=0` still answered with the repository listed.
+That is the image's behaviour rather than a cluster reading; what has not been exercised anywhere is the join to the policy, that a worker reaches the endpoint on the port `e2e-mirror-egress` admits.
+Tenants who are teams inside one organisation, already able to read each other's repositories, lose nothing to that.
+Unrelated organisations on one cluster, or tenants held apart by contract or regulation, do.
+Isolation also narrows the blast radius of a compromised mirror from every tenant to one.
+[The multi-tenant goal](../plan/secure-multi-tenant-oss-ci.md#explicitly-out-of-scope-and-residual-risk-accepted) accepts that risk whole, and it does not arise on the dogfood cluster, which runs one tenant.
+
+**What is still unmeasured, and why it does not hold up the choice.** Whether a cache hit is distinguishable from a miss *from inside a Kata guest*, across the bridge NAT, on this Deployment shape, is not measured.
+A laptop measurement against the pinned image put blob hits at 10 to 70 ms against two cold misses of 637 and 419 ms, and left manifest hits and misses overlapping over ten repositories, which bounds that channel rather than measuring it where an attacker sits.
+The guidance above does not rest on it: `/v2/_catalog` exposes the same repository list with no timing involved, so a refuted timing channel would not make a shared set private.
+[Q1020](../queue/Q1020.md) holds the guest measurement.
+
 ### Wiring the job's image clients
 
 No two image clients read the same configuration, so one endpoint set has to reach them four ways.
@@ -369,6 +400,7 @@ The mirror is trusted for tag-to-digest resolution, exactly as the upstream regi
    The upstream set is the instance set, because proxy mode takes exactly one upstream per instance.
    GAG's own count went from four to five on a measurement.
 2. **Render the mirrors** for your upstreams, retargeting the three cluster-specific values the [README](../../deploy/registry-mirror/README.md#adopting-this-outside-the-dogfood-cluster) names: your tenant namespace, the mirror namespace, and your storage class.
+   With more than one tenant, pick a topology first ([above](#choosing-a-mirror-topology)); the retargeting is per tenant under the isolated one, and the per-tenant worker policy is needed under both.
 3. **Wire the clients**, which means the ConfigMap above plus the two patches that mount it.
 4. **Delete any allow-all egress policy** from the tenant namespace, and confirm it is gone from the live rules rather than only from your manifests.
    `kubectl apply -k` does not prune, so a policy whose manifest you deleted is still standing.
@@ -395,7 +427,8 @@ Run the negatives on **every** run rather than once: a policy that stops selecti
   What bounds it is the pinned upstream per instance, not a network rule.
 - **The metadata server needs Workload Identity anyway.** The policy closes that path only because the DNS rule admits port 53 alone, and widening it reopens the path.
   Enable Workload Identity, as [the security rationale](#the-security-rationale) sets out.
-- **Two things a full untrusted-PR posture wants are still open here.** A cache an untrusted job shares with another tenant, and a per-job record of which host each job reached, are both unbuilt.
+- **A per-job record of which host each job reached is not this posture's to give**, and where that stands is tracked in the goal's Definition of Done rather than here.
+  The other thing it asks for, a cache an untrusted job shares with another tenant, is now a decision rather than a gap: both topologies ship, the shared one exposes its repository list and the isolated one does not, and [Choosing a mirror topology](#choosing-a-mirror-topology) is where an administrator settles it.
   This posture is the network layer, not the whole story: the layer map and what each layer still owes are in [the secure multi-tenant OSS CI goal](../plan/secure-multi-tenant-oss-ci.md#definition-of-done).
 
 **Measured on the dogfood cluster on 2026-08-28**: a green Kata run of 75 specs whose in-job negatives passed all eight checks, with the mirror battery at 25 of 25 and 178 content requests served across the five instances, on a tenant whose live rules carried zero allow-all.

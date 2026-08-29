@@ -87,6 +87,9 @@ The most important section.
   Speculative-execution and shared-cache side channels between guests on one node are a hardware and hypervisor concern, not one this milestone closes.
 - **The mirror is a trusted component.** A compromised pull-through mirror reaches every job that pulls through it.
   The mirror contract in [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) is what bounds this, and it is a contract rather than an enforcement.
+- **A shared mirror set exposes its repository list to every tenant that can reach it.** `GET /v2/_catalog` names every repository in the cache and answers on the port the worker policy admits, so on a shared set one tenant can enumerate what every other tenant pulled.
+  Measured locally against `registry:3.1.1` at the pinned digest on 2026-08-28, not on a cluster; `catalog.maxentries=0` does not close it.
+  This is an accepted risk only for an adopter who chose the shared topology knowing it, which is what [Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology) exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.
 - **This is not a claim about arbitrary hostile input at scale.** The goal is that a fork pull request on an adopter's own repositories is safe to run.
   A public, unauthenticated build service is a different product with different economics.
 
@@ -99,7 +102,9 @@ Down to earth, current state only:
 > What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.
 
 Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
-Item 5 closed with Q986; item 4 is open on [Q215](../queue/Q215.md), and [Q1020](../queue/Q1020.md) is the part of it the mirror itself introduced: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses and the docs owe them the basis for it.
+Item 5 closed with Q986.
+Item 4 is open on [Q215](../queue/Q215.md), and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and [Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology) is what they choose on.
+[Q1020](../queue/Q1020.md) holds only the guest timing measurement that guidance does not rest on.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.
 
