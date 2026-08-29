@@ -881,6 +881,11 @@ cap_reset() {
 	printf '6' >"${CAP_HARD_FILE}"
 	printf '0' >"${CAP_PATCHES_FILE}"
 	CAPACITY_DRIVEN=""
+	# Cleared here too, or "a declined drive leaves nothing to undo" can only
+	# redden off a leak from the happy path above it. Isolated, it asserts what
+	# it names: the declined path returns before anything sets the flag, so
+	# moving that assignment above the baseline guard is caught.
+	E2E_QUOTA_RESTORE=""
 }
 
 cap_hard() { cat "${CAP_HARD_FILE}"; }
