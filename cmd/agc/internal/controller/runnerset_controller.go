@@ -914,7 +914,7 @@ func (r *RunnerSetReconciler) setReadyCondition(rs *v2alpha1.RunnerSet, ready bo
 	if ready {
 		status = metav1.ConditionTrue
 	}
-	prev := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionReady)
+	prev := conditionValue(rs.Status.Conditions, v2alpha1.ConditionReady)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 		Type:               v2alpha1.ConditionReady,
 		Status:             status,
@@ -922,7 +922,7 @@ func (r *RunnerSetReconciler) setReadyCondition(rs *v2alpha1.RunnerSet, ready bo
 		Message:            msg,
 		ObservedGeneration: rs.Generation,
 	})
-	if prev == nil || prev.Status != status {
+	if prev.Status != status {
 		etype := corev1.EventTypeNormal
 		if !ready {
 			etype = corev1.EventTypeWarning
@@ -983,7 +983,7 @@ func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSe
 		msg = fmt.Sprintf("worker pod sidecar container(s) %s are regular containers that may keep the pod from reaping after the runner exits, stranding the runner slot; declare them as native sidecars (restartPolicy: Always init containers, Kubernetes >= 1.29) or acknowledge them in the %s annotation",
 			strings.Join(names, ", "), v2alpha1.SelfExitingSidecarsAnnotation)
 	}
-	prev := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+	prev := conditionValue(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 		Type:               v2alpha1.ConditionPossibleReapBlockingSidecar,
 		Status:             status,
@@ -993,7 +993,7 @@ func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSe
 	})
 	// Warn once on a genuine False→True transition so the misconfiguration lands in the
 	// event stream, not only in status.
-	if status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
+	if status == metav1.ConditionTrue && prev.Status != metav1.ConditionTrue {
 		r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", msg)
 	}
 }
@@ -1014,19 +1014,19 @@ func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, tem
 	cond := runnercore.WorkerRunnerVersionCondition(
 		r.Provisioner.EffectiveWorkerImage(template.WorkerImage), rs.Generation)
 
-	prev := meta.FindStatusCondition(rs.Status.Conditions, cond.Type)
+	prev := conditionValue(rs.Status.Conditions, cond.Type)
 	// The two producers of this condition report different facts through one type. A
 	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
 	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
 	// healthy image reading therefore does not refute it, and writing over it would
 	// drop a live rejection from status.
-	if prev != nil && prev.Status == metav1.ConditionTrue && prev.Reason == v2alpha1.ReasonVersionTooOld {
+	if prev.Status == metav1.ConditionTrue && prev.Reason == v2alpha1.ReasonVersionTooOld {
 		return
 	}
 	meta.SetStatusCondition(&rs.Status.Conditions, cond)
 	// Warn once on a genuine transition into too-old so the deadline lands in the event
 	// stream while there is still time to change the image.
-	if cond.Status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
+	if cond.Status == metav1.ConditionTrue && prev.Status != metav1.ConditionTrue {
 		r.recordEvent(rs, corev1.EventTypeWarning, cond.Reason, "Reconcile", cond.Message)
 	}
 }

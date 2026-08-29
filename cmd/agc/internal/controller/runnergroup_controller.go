@@ -726,19 +726,19 @@ func (r *RunnerGroupReconciler) setRunnerVersionStatus(rg *v1alpha1.RunnerGroup)
 	cond := runnercore.WorkerRunnerVersionCondition(
 		r.Provisioner.EffectiveWorkerImage(rg.Spec.WorkerImage), rg.Generation)
 
-	prev := meta.FindStatusCondition(rg.Status.Conditions, cond.Type)
+	prev := conditionValue(rg.Status.Conditions, cond.Type)
 	// The two producers of this condition report different facts through one type. A
 	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
 	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
 	// healthy image reading therefore does not refute it, and writing over it would
 	// drop a live rejection from status.
-	if prev != nil && prev.Status == metav1.ConditionTrue && prev.Reason == v1alpha1.ReasonVersionTooOld {
+	if prev.Status == metav1.ConditionTrue && prev.Reason == v1alpha1.ReasonVersionTooOld {
 		return
 	}
 	r.mergeCondition(rg, cond)
 	// Warn once on a genuine transition into too-old so the deadline lands in the event
 	// stream while there is still time to change the image.
-	if cond.Status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
+	if cond.Status == metav1.ConditionTrue && prev.Status != metav1.ConditionTrue {
 		r.recordEvent(rg, corev1.EventTypeWarning, cond.Reason, "Reconcile", cond.Message)
 	}
 }
@@ -752,7 +752,7 @@ func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, read
 		reason = v1alpha1.ReasonListenerActive
 		msg = "At least one listener goroutine is running."
 	}
-	prev := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionReady)
+	prev := conditionValue(rg.Status.Conditions, v1alpha1.ConditionReady)
 	r.mergeCondition(rg, metav1.Condition{
 		Type:               v1alpha1.ConditionReady,
 		Status:             status,
@@ -762,7 +762,7 @@ func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, read
 	})
 	// Emit an Event only on a genuine Ready transition (or first observation),
 	// never on every reconcile, to avoid event spam.
-	if prev == nil || prev.Status != status {
+	if prev.Status != status {
 		etype := corev1.EventTypeNormal
 		if !ready {
 			etype = corev1.EventTypeWarning
