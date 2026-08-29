@@ -98,7 +98,7 @@ Down to earth, current state only:
 > What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.
 
 Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
-Items 4 and 5 are open, on [Q215](../queue/Q215.md) and [Q986](../queue/Q986.md), and [Q1020](../queue/Q1020.md) is the part of item 4 the mirror itself introduced.
+Items 4 and 5 are open, on [Q215](../queue/Q215.md) and [Q986](../queue/Q986.md), and [Q1020](../queue/Q1020.md) is the part of item 4 the mirror itself introduced: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses and the docs owe them the basis for it.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.
 
