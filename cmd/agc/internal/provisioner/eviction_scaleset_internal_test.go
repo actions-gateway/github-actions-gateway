@@ -1,10 +1,13 @@
 package provisioner
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -560,6 +563,107 @@ func TestRunIdentityFromPod(t *testing.T) {
 			assert.Equal(t, tc.wantOwner, owner)
 			assert.Equal(t, tc.wantRepo, repo)
 			assert.Equal(t, tc.wantRunID, runID)
+		})
+	}
+}
+
+// cleanupDeletedWorker builds the shape the deletion arm exists to REJECT: a scale-set
+// worker whose container exited on its own and which was deleted afterwards. It is
+// externally deleted, terminal and unclaimed — every precondition the drain arm shares —
+// so the only thing separating it from a real drain is the ordering of the delete
+// against the exit.
+func cleanupDeletedWorker(name string) *corev1.Pod {
+	pod := drainedWorker(name)
+	requested := pod.DeletionTimestamp.Add(-time.Duration(*pod.DeletionGracePeriodSeconds) * time.Second)
+	pod.Status.ContainerStatuses[0].State.Terminated.FinishedAt = metav1.NewTime(requested.Add(-10 * time.Second))
+	return pod
+}
+
+// debugLogger points p's logger at a buffer at Debug verbosity and returns a reader over
+// what it captured.
+func debugLogger(p *Provisioner) func() string {
+	var buf bytes.Buffer
+	var mu sync.Mutex
+	p.Log = slog.New(slog.NewJSONHandler(&lockedWriter{w: &buf, mu: &mu}, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return buf.String()
+	}
+}
+
+type lockedWriter struct {
+	w  *bytes.Buffer
+	mu *sync.Mutex
+}
+
+func (l *lockedWriter) Write(b []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(b)
+}
+
+// TestRecoverEvictedScaleSetWorkers_DeclinedDisruptionIsLogged pins the Q549 signal: a
+// scan that judged a terminating worker and declined must say so, because an
+// unrecovered pod looks identical whether a scan judged it or no scan ever saw it. The
+// e2e drain spec re-stages on the second and fails on the first, and before this line
+// both were the same silence — three sightings on main and in the merge queue were
+// unattributable to either.
+func TestRecoverEvictedScaleSetWorkers_DeclinedDisruptionIsLogged(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, rerunCount, _ := recoveryFixture(t, cleanupDeletedWorker("runner-gpu-cleanup"))
+	logged := debugLogger(p)
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(), "a job that failed on its own must not be re-run")
+	assert.Contains(t, logged(), "did not qualify as a recoverable disruption")
+	assert.Contains(t, logged(), "runner-gpu-cleanup")
+}
+
+// TestRecoverEvictedScaleSetWorkers_DeclineIsNotLoggedForNonCandidates keeps the line
+// above narrow. It fires only for the ambiguous shape; every pod the scan skips for a
+// reason already visible elsewhere stays silent, so the e2e spec's "no verdict" reading
+// means what it says and an operator's Debug log does not fill with reaped workers.
+func TestRecoverEvictedScaleSetWorkers_DeclineIsNotLoggedForNonCandidates(t *testing.T) {
+	reapedByAGC := func() *corev1.Pod {
+		pod := cleanupDeletedWorker("runner-gpu-reaped")
+		pod.Annotations[AnnotationDeletionReason] = "completed_ttl"
+		return pod
+	}
+	alreadyClaimed := func() *corev1.Pod {
+		pod := cleanupDeletedWorker("runner-gpu-claimed")
+		pod.Annotations[AnnotationEvictionHandledAt] = time.Now().UTC().Format(time.RFC3339)
+		return pod
+	}
+	stillRunning := func() *corev1.Pod {
+		pod := cleanupDeletedWorker("runner-gpu-running")
+		pod.Status.Phase = corev1.PodRunning
+		return pod
+	}
+	recoverable := func() *corev1.Pod { return drainedWorker("runner-gpu-drained") }
+
+	for _, tc := range []struct {
+		name string
+		pod  func() *corev1.Pod
+	}{
+		{"the AGC's own reap", reapedByAGC},
+		{"a recovery already claimed", alreadyClaimed},
+		{"a worker still terminating", stillRunning},
+		{"a genuine drain, which is recovered instead", recoverable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			p, target, _, _, _ := recoveryFixture(t, tc.pod())
+			logged := debugLogger(p)
+
+			done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+			require.NoError(t, err)
+			<-done
+
+			assert.NotContains(t, logged(), "did not qualify as a recoverable disruption")
 		})
 	}
 }

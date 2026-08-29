@@ -463,6 +463,12 @@ Two things follow, and both are deliberate:
 * **It is not recovered from the cached copy.** The claim is what makes recovery at-most-once, and acting on an in-memory pod after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption.
   A visible manual re-run is the better trade than a silently doubled budget.
 
+An earlier loss has no report at all, and cannot: the scan runs once per reconcile, so a drained worker whose window opens and closes between two reconciles is never listed and never judged.
+There is no pod to count and no Event to attach.
+What the scan *can* say is the other half.
+It logs the terminating workers it did judge and decline, at `Debug`, so an unrecovered drain that appears nowhere in the log is separable from one the discriminator rejected.
+Closing the gap itself means observing the disruption from the worker-pod watch rather than from a cached List a reconcile later ([Q1029](../queue/Q1029.md)).
+
 A conflict on that patch is a different thing and *is* retried.
 The optimistic lock exists to arbitrate between claimants, but the apiserver raises the same conflict for any concurrent write, and the kubelet publishing the terminal phase is guaranteed to be racing, since that transition is the edge that triggers the reconcile.
 Only a re-read showing the claim annotation already set ends the attempt.

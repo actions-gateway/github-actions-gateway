@@ -1,15 +1,14 @@
-# Q549 — the drained scale-set worker's re-run never fires: two modes
+# Q549: the drained scale-set worker's re-run never fires, in four modes
 
 `E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC` ([worker_scaleset_recovery_test.go](../../cmd/gmc/test/e2e/worker_scaleset_recovery_test.go)) deletes a running scale-set worker and waits 90 s for the AGC to re-run its disrupted run under the chart role.
-Two distinct failure modes now sit behind that one timeout.
+Four distinct failure modes now sit behind that one timeout, and only one of them is the defect the spec exists to catch.
 This file exists so the next occurrence is classified before anything is changed.
 
-**Status:** escalated 2026-08-28, with a third mode open, and the two known ones do not cover it.
+**Status:** the 2026-08-26 and 2026-08-28 sightings are attributed, as **two** further shapes rather than one, and both are mitigated.
 Mode A is diagnosed and mitigated (PR #1120).
 **Mode B is diagnosed as of 2026-08-12 and fixed under Q809**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
-Three failures since 2026-08-26 clear both discriminators, so classification per the table below returns neither mode: see [What the 2026-08-26 and 2026-08-28 sightings show](#what-the-2026-08-26-and-2026-08-28-sightings-show).
-It recurred three times that day, once on `main`, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
-Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) to **2026-08-12**: count green runs from the claim fix, not from PR #1120.
+Mode C (the recovery scan never observed the disruption) and mode D (the spec failing on its own sampler) are attributed below: see [What the 2026-08-26 and 2026-08-28 sightings show](#what-the-2026-08-26-and-2026-08-28-sightings-show).
+Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) to **2026-08-28**: count green runs from the mode-C/D mitigation.
 
 ## What the 2026-08-26 and 2026-08-28 sightings show
 
@@ -26,21 +25,93 @@ Reaching `Fail()` requires `evictionRecoveryEvidenceLost()` to be false (so mode
 The 08-28 run confirms the second directly: one `ssrec-agc` pod, 114 s old, zero restarts, at the moment of the dump.
 Neither run recorded a `Q549 re-staging` or a `Q809 re-staging` entry.
 
-So the spec is now saying exactly what its own message says it would: a chart role short a verb the recovery path needs, or a regressed deletion-mark discriminator.
-The 2026-08-12 evidence ruled both out *for mode B*, and that finding does not transfer: it was taken on runs where the claim was made and lost, which these are not.
-Start from the AGC logs the failing runs captured, grepping `could not claim scale-set worker disruption`.
+So the spec was saying exactly what its own message says it would: a chart role short a verb the recovery path needs, or a regressed deletion-mark discriminator.
+**Both are refuted**, by the same AGC logs the escalation pointed at.
 
-**The 08-26 line-264 failure is a fourth shape and wants attributing separately.** It is `Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")`, and the staging never got as far as a claim window, so it says nothing about the role.
+## Mode C, attributed (2026-08-28): the scan never saw the disruption
 
-## The two modes
+The AGC captured its own logs on every one of the three runs, over the whole window, at `debug` (the tenant sets `logLevel: debug`).
+Counting the JSON log lines that name the probe pod separates the runs cleanly:
+
+| Run | AGC JSON lines | Naming `ssrec-drain-probe-1` |
+|---|---|---|
+| [32933225396](https://github.com/actions-gateway/github-actions-gateway/actions/runs/32933225396) (line 299) | 230 | **0** |
+| [33185281929](https://github.com/actions-gateway/github-actions-gateway/actions/runs/33185281929) (line 299) | 259 | **0** |
+| [32934571793](https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934571793) (line 264) | 275 | **2** |
+
+The third run is the control that makes the two zeros mean something: same spec, same day, and its two lines are `worker pod disrupted; scheduling auto-retry` at 05:41:28 and `disruption auto-retry triggered … "rerunCalls":1` at 05:41:33.
+The instrument can show both answers.
+
+A zero rules out every claim verdict at once: `Forbidden` (the role), `Conflict`, `NotFound`, and identity-unknown all log with the pod's name.
+The claim patch was never attempted, so **the chart role was never exercised** and the deletion-mark discriminator was never consulted.
+
+**On the calico run the scan had no opportunity, and the reconcile timestamps say so.** `RecoverEvictedScaleSetWorkers` is step 2 of `Reconcile`, ahead of the listener bootstrap that produces this tenant's `Reconciler error` on every pass, so every logged error is a reconcile that ran the scan, and the scan reads the informer cache at the reconcile's start.
+
+| Run | Delete requested | Pod gone | Reconcile errors around the window |
+|---|---|---|---|
+| 32933225396 | 05:24:24.95 | 05:24:28.37 | 05:24:21 ×3, **then 05:24:29 ×4** |
+| 33185281929 | 15:33:34.62 | 15:33:41.33 | 15:33:34, **then 15:33:39 ×2, 15:33:40** |
+| 32934571793 (recovered) | 05:41:27.58 | before 05:41:28.51 | 05:41:27 ×2, 05:41:28 ×2, 05:41:29 |
+
+On the calico run the pod's entire 3.4-second existence-after-delete falls inside an 8-second gap with no reconcile at all.
+The recovered run is the opposite: reconciles every second across the window.
+
+**33185281929 is not that shape, and the difference is worth keeping.** Three reconciles completed inside its interval, so the gap does not explain its zero.
+What is measured there is the zero verdict itself, which is what the mitigation keys on; the mechanism behind it is not.
+Two candidates, neither verified: a `Reconciler error` stamps a reconcile's *completion* rather than its cache read, so the one logging at 15:33:39 may have listed before the terminal phase published; and the spec's 1-second poll bounds "gone" loosely, so the object may have been removed well before 15:33:41.33.
+Do not read the calico run's mechanism onto this one.
+
+**Why the gap opens is not measured.** Nothing logs a reconcile's duration.
+The reconciler runs at controller-runtime's default `MaxConcurrentReconciles: 1` and never reconciles one key concurrently, and the listener bootstrap does a DNS lookup and an HTTP POST inside `Reconcile`, so a slow bootstrap would delay the next scan.
+That is a hypothesis read off timestamps, not a reading.
+The gap is [Q1029](../queue/Q1029.md).
+
+### What mode C changes
+
+An unrecovered pod looked identical whether a scan judged it and declined or no scan ever saw it: both are silence.
+The scan now says which.
+`externallyDeletedTerminalWorker` names the preconditions the two deletion-driven arms share (externally deleted, terminal, unclaimed), and a pod matching it that neither arm accepted is logged at `Debug` as `did not qualify as a recoverable disruption`, with the two times the ordering check turns on.
+`Debug` because declining is usually right: a cleanup delete of an already-failed pod is exactly what the ordering exists to reject.
+
+The spec gains the matching discriminator, `agcReachedNoDisruptionVerdict`, checked after the mode-A pin (a replaced AGC has no logs to read, so it must be excluded first).
+No verdict means the attempt proves nothing about the role, so it re-stages under the same `maxAttempts` budget as modes A and B rather than failing.
+Reaching `Fail()` now means the AGC judged the pod, which is what puts the two causes its message names back in scope.
+
+**Residual:** a regression in the scan's own List selector also presents as silence, and would re-stage rather than fail.
+The envtest pair covers the selector.
+
+## Mode D, attributed (2026-08-28): the spec failed on its own diagnostics
+
+The 08-26 line-264 failure is `Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")`, and that run is the one where **recovery worked**.
+
+Its timeline, from the spec's own step stamps and the AGC log:
+
+| Time (UTC) | Event |
+|---|---|
+| 05:41:22.685 | the spec stages the worker |
+| 05:41:27.576 | the sampler starts, and the delete is issued, on the same stamp |
+| 05:41:28 | the AGC claims the disruption: `worker pod disrupted; scheduling auto-retry`, `cause: deletion` |
+| 05:41:28.512 | the pod is already gone; the spec moves to the sampler assertion and fails |
+| 05:41:33 | the AGC's re-run lands: `disruption auto-retry triggered`, `rerunCalls: 1` |
+
+The sampler shells out to `kubectl get` per sample and skips every empty or failed read, so a teardown that completes inside one invocation leaves the sequence empty.
+That is a fact about the sampler racing a fast teardown, not about the AGC, and the spec's own comment above it already said the sequence is diagnostics rather than evidence.
+The assertion is removed; the report entry stays, and says so when nothing was observed.
+
+## The four modes
+
+The first three are all "this attempt never exercised the chart role", and the spec re-stages on each rather than failing.
+They are checked in this order, because each later one depends on reading something an earlier one has invalidated.
 
 | Mode | Discriminator in the spec | State |
 |---|---|---|
-| **A** — the AGC control plane was replaced inside the claim window | `agcPodIdentity() != pinnedAGC` at the wait's expiry: the spec records a `Q549 re-staging` report entry and retries the whole staging | Diagnosed on run [30658951388](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30658951388), mitigated by the UID pin + re-stage (PR #1120). Worked case in [testing.md § Pin the process when the signal comes out of its memory](../development/testing.md#pin-the-process-when-the-signal-comes-out-of-its-memory) |
-| **B**: the window was undisturbed and the re-run still never fired | the pin is **unchanged**, so the spec takes its `Fail()` branch, with zero `Q549 re-staging` entries | **Diagnosed 2026-08-12**: the disruption was detected and the *claim* failed. Fixed under Q809; the spec now re-stages on the unwinnable half |
+| **B**: the pod was gone before the claim could land | `evictionRecoveryEvidenceLost()`: the AGC logged `disruption was lost before it could be claimed` for this pod. Records a `Q809 re-staging` entry | **Diagnosed 2026-08-12**: the disruption was detected and the *claim* failed. Fixed under Q809; the spec re-stages on the unwinnable half |
+| **A**: the AGC control plane was replaced inside the claim window | `agcPodIdentity() != pinnedAGC` at the wait's expiry. Records a `Q549 re-staging` entry | Diagnosed on run [30658951388](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30658951388), mitigated by the UID pin + re-stage (PR #1120). Worked case in [testing.md § Pin the process when the signal comes out of its memory](../development/testing.md#pin-the-process-when-the-signal-comes-out-of-its-memory) |
+| **C**: the recovery scan never observed the disruption | `agcReachedNoDisruptionVerdict()`: no AGC line names the pod alongside `disrupt`. Records a `Q549 re-staging (no verdict)` entry. Must be checked **after** A, since a replaced AGC has no logs to read | **Diagnosed 2026-08-28**, [below](#mode-c-attributed-2026-08-28-the-scan-never-saw-the-disruption). The product gap underneath is [Q1029](../queue/Q1029.md) |
+| **D**: the spec failed on its own sampler | none: the assertion is removed | **Diagnosed 2026-08-28**, [below](#mode-d-attributed-2026-08-28-the-spec-failed-on-its-own-diagnostics). The run it reddened had already been recovered |
 
-The spec's own failure text names two candidate causes for the `Fail()` branch — a chart role missing a verb, or a regressed deletion-mark discriminator.
-**Both are wrong**, and the 2026-08-12 evidence rules them out directly: detection reached `cause: deletion` every time, so the discriminator was working, and the claim never returned a `Forbidden`, so the role was not short a verb.
+What is left when all three re-stage arms decline is the defect the spec exists to catch: the AGC judged this pod, under the pinned control plane, and no re-run fired.
+Its failure text names two causes, a chart role missing a verb or a regressed deletion-mark discriminator, and each now has its own AGC log line, so the next `Fail()` is attributable from the log alone.
 
 ## Mode B: what run 30724186342 shows
 
@@ -168,8 +239,9 @@ The real teardown window is what distinguishes this spec from its envtest twin, 
 
 ## Open questions
 
-1. **Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?** Still unchecked, and now much less likely to matter: the 2026-08-12 runs show the scan running and reaching the claim while that error is the tenant's steady state.
-   The listener error itself is settled: it is deliberate (`ghes.invalid`, see the 2026-08-04 section), so it is normal and discriminates nothing.
+1. ~~**Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?**~~ **Settled 2026-08-28: yes.** `RecoverEvictedScaleSetWorkers` is step 2 of `Reconcile`, ahead of the protocol routing that reaches `reconcileScaleSetListener`, so every reconcile that logs the listener error ran the scan first.
+   What is *not* guaranteed is that a reconcile begins inside the pod's teardown window: [mode C](#mode-c-attributed-2026-08-28-the-scan-never-saw-the-disruption).
+   The listener error itself is settled too: it is deliberate (`ghes.invalid`, see the 2026-08-04 section), so it is normal and discriminates nothing.
 2. **Is the AGC's silence after the disruption the reconcile loop going quiet, or something broader?** Unknown from the 2026-08-01 dump alone.
    The 2026-08-12 runs were not silent, so this may have been an artifact of that one run's log capture rather than a property of the mode.
 
@@ -177,7 +249,8 @@ The real teardown window is what distinguishes this spec from its envtest twin, 
 
 - Whether the failure is mode A or mode B — read the pin and the presence of a `Q549 re-staging` entry first, before anything else.
 - Whether it is the mode B **above**: grep the AGC log for `disruption was lost before it could be claimed` and for `already claimed elsewhere`, and note that a `Q809 re-staging` entry means the spec classified it and kept going.
-  A mode-B failure with neither line is a genuinely new shape.
+- **Count the AGC log lines that name the probe pod, first.** Zero is mode C and the spec re-stages on it; a `did not qualify as a recoverable disruption` line is the discriminator regression; a `could not claim` line is the role.
+  A failure with none of those and no zero is a genuinely new shape.
 - The AGC log **for the full wait window**, not just up to the failure dump.
 - The claim annotation's fate: the sampler sequence, plus which claim line the AGC emitted.
   All three of `Forbidden` (the role), `Conflict`, and `NotFound` now say so distinctly.
