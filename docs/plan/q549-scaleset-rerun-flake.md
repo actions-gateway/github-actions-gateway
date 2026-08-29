@@ -4,11 +4,33 @@
 Two distinct failure modes now sit behind that one timeout.
 This file exists so the next occurrence is classified before anything is changed.
 
-**Status:** watching.
+**Status:** escalated 2026-08-28, with a third mode open, and the two known ones do not cover it.
 Mode A is diagnosed and mitigated (PR #1120).
 **Mode B is diagnosed as of 2026-08-12 and fixed under Q809**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
+Three failures since 2026-08-26 clear both discriminators, so classification per the table below returns neither mode: see [What the 2026-08-26 and 2026-08-28 sightings show](#what-the-2026-08-26-and-2026-08-28-sightings-show).
 It recurred three times that day, once on `main`, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
 Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) to **2026-08-12**: count green runs from the claim fix, not from PR #1120.
+
+## What the 2026-08-26 and 2026-08-28 sightings show
+
+Three failures on `main` or in the merge queue in three days, after the 228-run soak this row had been parked on:
+
+| When | Lane | Run | Failed at | Reaches |
+|---|---|---|---|---|
+| 2026-08-26 05:25 UTC | `e2e-calico` merge_group | [32933225396](https://github.com/actions-gateway/github-actions-gateway/actions/runs/32933225396) | `cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:299` | the `Fail()` branch |
+| 2026-08-26 05:41 UTC | `e2e-test` merge_group | [32934571793](https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934571793) | `cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:264` | the sampler assertion, before the claim window |
+| 2026-08-28 15:35 UTC | `e2e-test` push to `main` | [33185281929](https://github.com/actions-gateway/github-actions-gateway/actions/runs/33185281929) | `cmd/gmc/test/e2e/worker_scaleset_recovery_test.go:299` | the `Fail()` branch |
+
+**The two line-299 failures clear both discriminators**, which is what makes them a new mode rather than a recurrence of either.
+Reaching `Fail()` requires `evictionRecoveryEvidenceLost()` to be false (so mode B's unwinnable half did not apply and the disruption record was still there to claim) and then `agcPodIdentity() == pinnedAGC` (so mode A's replaced control plane did not apply).
+The 08-28 run confirms the second directly: one `ssrec-agc` pod, 114 s old, zero restarts, at the moment of the dump.
+Neither run recorded a `Q549 re-staging` or a `Q809 re-staging` entry.
+
+So the spec is now saying exactly what its own message says it would: a chart role short a verb the recovery path needs, or a regressed deletion-mark discriminator.
+The 2026-08-12 evidence ruled both out *for mode B*, and that finding does not transfer: it was taken on runs where the claim was made and lost, which these are not.
+Start from the AGC logs the failing runs captured, grepping `could not claim scale-set worker disruption`.
+
+**The 08-26 line-264 failure is a fourth shape and wants attributing separately.** It is `Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")`, and the staging never got as far as a claim window, so it says nothing about the role.
 
 ## The two modes
 
