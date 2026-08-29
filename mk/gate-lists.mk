@@ -285,4 +285,4 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  lib/registry-mirror-test \
                  manifest/check-registry-mirror-wiring-test \
                  manifest/check-registry-mirror-catalog-deny-test \
-                 e2e/egress-negatives-test
+                 e2e/egress-negatives-test e2e/mirror-timing-test

@@ -375,8 +375,12 @@ Isolation also narrows the blast radius of a compromised mirror from every tenan
 
 **What is still unmeasured, and why it does not hold up the choice.** Whether a cache hit is distinguishable from a miss *from inside a Kata guest*, across the bridge NAT, on this Deployment shape, is not measured.
 A laptop measurement against the pinned image put blob hits at 10 to 70 ms against two cold misses of 637 and 419 ms, and left manifest hits and misses overlapping over ten repositories, which bounds that channel rather than measuring it where an attacker sits.
-With the catalog closed this is now the whole of what a shared set exposes rather than the smaller half of it, so [Q1020](../queue/Q1020.md) sharpens the guidance above rather than settling the choice: it can narrow what a shared set costs, and it cannot widen it past what a timing channel carries.
-Tenants who must not learn what each other build should take isolation without waiting for that reading.
+[`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) takes the reading where it counts: it runs in the job on the Kata lane, times each reference's blob once cold and once warm so the pair differs only in cache state, and reports whether the two arms **overlap** rather than how far apart their medians are.
+An attacker times one fetch, so arms whose ranges touch leak nothing however wide the median gap.
+It reports and never fails the run.
+
+With the catalog closed this timing is now the whole of what a shared set exposes rather than the smaller half of it, which raises what the reading is worth without inverting the guidance: it can narrow what a shared set costs, and it cannot widen it past what a timing channel carries.
+Tenants who must not learn what each other build should take isolation without waiting for it.
 
 ### Wiring the job's image clients
 
@@ -417,6 +421,7 @@ Three readings, and none of them substitutes for another:
 - **The job's pulls ride them.** [`e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reads each mirror's access log, which is the one place a pull that went upstream instead cannot appear.
   Take a baseline first: a count means nothing without one.
 - **Nothing else is reachable.** [`egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) probes from inside the job, on the worker whose posture is being claimed, because a plain pod cannot answer whether policy still binds at the end of a path that leaves a micro-VM guest through a bridge NAT.
+  [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) runs there too, for the same reason and to a different end: it reports what the cache's own timing gives away from that position, and grades nothing.
 
 **Every negative is paired with a positive.** A battery of nothing-is-reachable checks passes identically when the pod has no network at all, so half of the eight checks are controls that must answer: the mirror over HTTP, GitHub, an upload the mirror refuses, and a `docker pull` through the mirror.
 Only then does the silence of the other four mean the policy.
