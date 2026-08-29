@@ -133,6 +133,28 @@ git -C "$R" rm -q docs/queue/Q1.md
 git -C "$R" commit -qm "complete one of two"
 expect 0 "$R" "rule 9 control: a plan with an item left stays open"
 
+# An anchored target still points at the plan, so a live item carrying one keeps
+# the row legal. Q408 closing while Q539 and Q540 targeted its section 6 is the
+# case: raw string comparison made those two invisible.
+R="$TMP/r9c"; newrepo "$R"
+item "$R" Q1 "ci" "../plan/thing.md"
+item "$R" Q2 "ci" "../plan/thing.md#6-follow-on"
+printf '| [thing.md](thing.md) | A thing | \u26a0\ufe0f Open |\n' >> "$R/docs/plan/README.md"
+seal "$R"
+git -C "$R" rm -q docs/queue/Q1.md
+git -C "$R" commit -qm "complete the item with the unanchored target"
+expect 0 "$R" "rule 9 control: an anchored target still counts as live"
+
+# The other direction: the anchor must not excuse a plan whose last item goes.
+R="$TMP/r9d"; newrepo "$R"
+item "$R" Q1 "ci" "../plan/thing.md#6-follow-on"
+item "$R" Q2 "docs"
+printf '| [thing.md](thing.md) | A thing | \u26a0\ufe0f Open |\n' >> "$R/docs/plan/README.md"
+seal "$R"
+git -C "$R" rm -q docs/queue/Q1.md
+git -C "$R" commit -qm "complete the plan's last item, anchored"
+expect 1 "$R" "rule 9: an anchored last item still obliges the flip" "rule 9: Q1"
+
 # --- rule 11: the label vocabulary is closed -------------------------------
 
 R="$TMP/r11"; newrepo "$R"
