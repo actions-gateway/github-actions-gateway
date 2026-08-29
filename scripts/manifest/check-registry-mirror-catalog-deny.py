@@ -162,9 +162,11 @@ def main():
     )
 
     # Read once, before the per-instance loop: every deny container must probe
-    # the path this config answers itself. Off `directives` rather than the raw
-    # text, for the reason directly above -- a needle that can match prose is the
-    # trap this file's own url_dec rule records.
+    # the path this config answers itself. Off `directives` for consistency with
+    # every other needle below, NOT because this one needs it: unlike the bare
+    # substring the url_dec rule uses, this pattern is anchored, so a `#` before
+    # it already breaks the match and the raw text would read the same. Measured
+    # over the shipped file and four comment forms, both reads agree.
     monitor_paths = MONITOR_RE.findall(directives)
     monitor_path = monitor_paths[0] if len(monitor_paths) == 1 else None
 

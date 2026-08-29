@@ -61,6 +61,27 @@ open(path, "w").write(s.replace(old, new))
 PY
 }
 
+# expect_absent NAME RC NEEDLE — like expect, but the needle must NOT appear.
+# For a fix whose whole effect is that output goes away: `expect` can only assert
+# a substring is present, so a guard that suppresses noise has nothing it can
+# fail on and the case beside it passes on the unfixed script too.
+expect_absent() {
+	local name="$1" want_rc="$2" needle="$3"
+	if [[ "${rc}" != "${want_rc}" ]]; then
+		echo "FAIL ${name}: want rc ${want_rc}, got ${rc}" >&2
+		echo "     output: ${out}" >&2
+		fails=$((fails + 1))
+		return
+	fi
+	if [[ "${out}" == *"${needle}"* ]]; then
+		echo "FAIL ${name}: '${needle}' unexpectedly present" >&2
+		echo "     output: ${out}" >&2
+		fails=$((fails + 1))
+		return
+	fi
+	echo "ok   ${name}"
+}
+
 expect() {
 	local name="$1" want_rc="$2" needle="$3"
 	if [[ "${rc}" != "${want_rc}" ]]; then
@@ -171,6 +192,10 @@ edit "${root}" "${BASE}/catalog-deny.cfg" '    monitor-uri /haproxy-up
 ' ''
 run_checker "${root}"
 expect 'a config answering no monitor path fails' 1 'declares 0 monitor-uri paths'
+# The case above passes on the pre-fix script too, so it cannot see the guard
+# that stops the per-instance check naming a Python None at an operator when
+# there is no path to name. This is the assertion that can.
+expect_absent 'and does not render a Python None at an operator' 1 'answers None itself'
 
 # The two files hold one string. Moving either alone must fail, so this mutates
 # the config side where the case above mutated the Deployment side.
