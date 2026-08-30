@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/install/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/install/">
       
       
         <link rel="prev" href="../personas/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3042,7 +3042,7 @@ For the full end-to-end walkthrough that continues past the GMC install into the
 <p>The Helm chart installs the GMC and its cluster prerequisites <strong>only</strong> — CRDs, RBAC, the validating webhook, the <code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>, and <code>priorityclass-allowlist-guard</code> admission policies, and NetworkPolicies.
 Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are <strong>not</strong> chart resources; the GMC provisions them at runtime from each tenant's <code>ActionsGateway</code> CR.
 The chart is the <strong>sole</strong> install path — there is no kustomize overlay; the plain-YAML files under <code>cmd/gmc/config/</code> are the controller-gen codegen + test substrate, not an install vehicle.
-For the full chart reference (every value, the templates it renders, offline validation), see the <a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
+For the full chart reference (every value, the templates it renders, offline validation), see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md">chart README</a>.</p>
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3121,20 +3121,20 @@ Set <code>VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0</code> to restore 
 <hr />
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Current release — <code>v1.6.0</code>.</strong> The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
-Pin <code>--version 1.6.0</code> (the chart version is the release tag without the leading <code>v</code>).
-Newer patch releases publish as <code>1.6.z</code>; pin the version you have verified.</p>
+<p><strong>Current release — <code>v1.7.0</code>.</strong> The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
+Pin <code>--version 1.7.0</code> (the chart version is the release tag without the leading <code>v</code>).
+Newer patch releases publish as <code>1.7.z</code>; pin the version you have verified.</p>
 </blockquote>
 <p>Install the published, signed chart straight from the registry — no source checkout needed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.6.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.7.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
-<p>Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.6.0">release notes</a> (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
+<p>Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.7.0">release notes</a> (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
 Verify the chart and image signatures before installing — see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a> and <a href="../security-operations/#image-provenance-signature--sbom-verification">security-operations.md § Image provenance</a>.</p>
 <blockquote>
 <p><strong>Installing from a source checkout</strong> (dev/CI, or to install an unreleased chart) still works — substitute the local <code>charts/actions-gateway</code> path for the <code>oci://…</code> ref in any command on this page:</p>
@@ -3172,7 +3172,7 @@ This is the secure default: a digest is immutable, so neither the controller nor
 Digest pinning is preserved throughout (relocation is content-addressed).</p>
 <h3 id="without-cert-manager">Without cert-manager<a class="headerlink" href="#without-cert-manager" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.6.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.7.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--set<span class="w"> </span>certManager.enabled<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
@@ -3326,7 +3326,7 @@ The knobs an operator is most likely to override:</p>
 </tbody>
 </table>
 <p>A <code>values.schema.json</code> validates these at install/lint time (digest format, enum values, etc.).
-The <strong>full reference</strong> — every value with its default and description — lives in the <a href="../../charts/actions-gateway/README.md#values">chart README</a>; this table is only the common subset, not a duplicate.</p>
+The <strong>full reference</strong> — every value with its default and description — lives in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md#values">chart README</a>; this table is only the common subset, not a duplicate.</p>
 <h3 id="the-policy-parameter-is-a-crd-not-a-configmap-q492">The policy parameter is a CRD, not a ConfigMap (Q492)<a class="headerlink" href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" title="Permanent link">&para;</a></h3>
 <p>The guard reads its allowlist from a cluster-scoped <code>PriorityClassAllowlist</code> CR (<code>&lt;release&gt;-priorityclass-allowlist</code>), which the chart renders from <code>allowedPriorityClasses</code> and the GMC also watches.
 One object, two consumers, so the webhook and the policy cannot disagree.</p>

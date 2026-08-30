@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/upgrade/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/upgrade/">
       
       
         <link rel="prev" href="../gitops/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1671,6 +1671,17 @@
   
     <nav class="md-nav" aria-label="Migration Notes">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a spec.scaleUp token is now charged per worker pod, not per delivered job
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" class="md-nav__link">
@@ -3332,6 +3343,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a spec.scaleUp token is now charged per worker pod, not per delivered job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3981,6 +4003,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job</a></li>
 <li><a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed</a></li>
 <li><a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)</a></li>
 <li><a href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job">Non-breaking: deleting a cancelled run's worker no longer re-queues the job</a></li>
@@ -4054,6 +4077,38 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job<a class="headerlink" href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every runner group or runner set that sets <code>spec.scaleUp</code> on the classic acquisition tier.
+It is off by default, so a tenant that never configured a ramp sees nothing.
+<code>ScaleSet</code> sets are unaffected: that tier states its capacity per long-poll and never charged per delivery.</p>
+<p><strong>What changed.</strong> The rate rung takes its token before the job is claimed, which is what lets it bind on a simultaneously-delivered burst (Q717).
+GitHub fans a queued job out to several sibling sessions at once, and only one of them provisions: the rest recognise the duplicate after <code>acquirejob</code> and return without creating anything (Q260).
+Each of those took a token and never gave it back, so a job delivered to N sessions spent N tokens for one worker pod.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Effective ramp under an N-way fan-out</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before</td>
+<td><code>maxPerSecond / N</code>, because every duplicate delivery charged a token for a pod it never created</td>
+</tr>
+<tr>
+<td>Now</td>
+<td><code>maxPerSecond</code>: a delivery that returns before asking for a worker pod hands its token back</td>
+</tr>
+</tbody>
+</table>
+<p>A failed <code>acquirejob</code> refunds on the same rule.
+The refund stops at pod creation and never fires on job completion, so the bucket stays a rate limit rather than becoming a second concurrency ceiling.</p>
+<p><strong>What to expect at upgrade.</strong> A set whose deliveries fan out will ramp at the rate it configured, which may be faster than what it has been doing.
+Nothing else moves: <code>burst</code> still bounds the instantaneous batch, and a refund into a full bucket adds nothing.
+<code>actions_gateway_worker_scaleup_throttled_total</code> and <code>actions_gateway_jobs_admission_rejected_total{reason="scaleup"}</code> should fall for an affected set, because fewer deliveries now find the bucket empty.</p>
+<p><strong>Action required:</strong> none.
+If you raised <code>maxPerSecond</code> to compensate for a ramp that ran slower than configured, the value you first chose is now the one that applies, so re-check it against the egress path you were protecting.</p>
 <h3 id="non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed<a class="headerlink" href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every runner group or runner set that sets <code>spec.scaleUp</code>.
 It is off by default, so a tenant that never configured a ramp sees nothing.</p>
@@ -4765,16 +4820,16 @@ Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, 
 <p><strong>Do not hand-edit a GMC-managed AGC <code>Deployment</code>.</strong> The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a <code>kubectl set image</code> — or any other direct edit — is reverted within seconds.
 <code>kubectl rollout restart</code> is the one exception, and its history is a trap of its own: see <a href="../troubleshooting/#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts"><code>kubectl rollout restart</code> of a Managed Deployment Reports Success but Nothing Restarts</a>.</p>
 <h3 id="gmc-install-and-upgrade-via-helm-recommended">GMC install and upgrade via Helm (recommended)<a class="headerlink" href="#gmc-install-and-upgrade-via-helm-recommended" title="Permanent link">&para;</a></h3>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong>, published and cosign-signed to the GHCR OCI registry (<code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>); the <a href="../../charts/actions-gateway/README.md"><code>charts/actions-gateway/</code></a> source path is the dev/CI copy of the same chart.
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong>, published and cosign-signed to the GHCR OCI registry (<code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>); the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md"><code>charts/actions-gateway/</code></a> source path is the dev/CI copy of the same chart.
 The chart is the <strong>sole</strong> install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of the local chart with floating image tags.</p>
 <blockquote>
-<p><strong>Current release — <code>v1.6.0</code></strong> (chart version = release tag without the leading <code>v</code>).
-Pin <code>--version 1.6.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.6.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
+<p><strong>Current release — <code>v1.7.0</code></strong> (chart version = release tag without the leading <code>v</code>).
+Pin <code>--version 1.7.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.7.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
 <a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.6.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.7.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>

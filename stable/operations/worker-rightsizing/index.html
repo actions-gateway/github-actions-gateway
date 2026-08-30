@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/worker-rightsizing/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/worker-rightsizing/">
       
       
         <link rel="prev" href="../cost-attribution/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2964,7 +2964,7 @@ Then, per container (the runner container is named <code>runner</code>):</p>
 </code></pre></div>
 <p>The histogram quantiles are bucket-interpolated — read them as the bucket range, not an exact figure, and cross-check against the max-peak gauges.</p>
 <h2 id="step-2--derive-requestslimits">Step 2 — derive <code>requests</code>/<code>limits</code><a class="headerlink" href="#step-2--derive-requestslimits" title="Permanent link">&para;</a></h2>
-<p>Apply the resource-model rules (proven in the <a href="../../plan/dogfood-runner-rightsizing/#resource-model-principles">dogfood right-sizing exercise</a> that this feature automates the measurement half of):</p>
+<p>Apply the resource-model rules (proven in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/dogfood-runner-rightsizing.md#resource-model-principles">dogfood right-sizing exercise</a> that this feature automates the measurement half of):</p>
 <table>
 <thead>
 <tr>
@@ -2999,7 +2999,7 @@ Then, per container (the runner container is named <code>runner</code>):</p>
 <p>Update the tenant's <code>RunnerTemplate.spec.podTemplate</code> container resources with the derived values, then validate: watch for <code>OOMKilled</code> events in the tenant namespace over the next few days, and confirm the derived requests still fit the node shape and namespace <code>ResourceQuota</code> (see <a href="../../design/appendix-e-capacity-planning/">capacity planning</a>).</p>
 <p><strong>Sizing the trade deliberately:</strong> packing tighter (requests ≈ p95) maximizes workers per node — the right call on expensive nodes (GPUs, large VMs) where worker count per node is the cost driver.
 Sizing up (requests ≈ max) buys burst headroom so jobs finish faster.
-The <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a> tracks automating this choice; today it is a per-<code>RunnerTemplate</code> decision.</p>
+The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a> tracks automating this choice; today it is a per-<code>RunnerTemplate</code> decision.</p>
 <h2 id="sizing-profiles-opt-in-auto-apply">Sizing profiles (opt-in auto-apply)<a class="headerlink" href="#sizing-profiles-opt-in-auto-apply" title="Permanent link">&para;</a></h2>
 <p>Instead of copying the recommendation into the <code>RunnerTemplate</code> by hand, a <code>RunnerSet</code> can opt into a <strong>sizing profile</strong> (Q359 Phase 3): the AGC derives the worker containers' CPU/memory at pod-build time, per acquired job, so a spec edit or newly confident history takes effect on the next job with no restart.
 The template stays authoritative unless you opt in.</p>
@@ -3138,7 +3138,7 @@ Use the <code>kubectl get limitrange</code> check above if you want an answer be
 Either metrics-server is not installed (the <a href="../install/#preflight-the-cluster-required-first-step">install pre-flight</a> warns about this) or the AGC's RoleBinding predates the <code>pods.metrics.k8s.io</code> grant (re-render from the current chart: the <code>agc-tenant-role</code> ClusterRole must contain a <code>metrics.k8s.io</code> rule).
 The AGC log line <code>list PodMetrics (is metrics-server installed?)</code> carries the underlying error, throttled to roughly one line per ten minutes.</p>
 <p><strong>All jobs land in <code>…_jobs_unsampled_total</code></strong> — the workload's jobs finish faster than the sampling interval.
-There is no per-job signal to size from at 15s resolution; size such a RunnerSet by its node-shape share instead (see the <code>NodeShare</code> idea in the <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a>).</p>
+There is no per-job signal to size from at 15s resolution; size such a RunnerSet by its node-shape share instead (see the <code>NodeShare</code> idea in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a>).</p>
 <p><strong><code>Throughput</code> is <code>Active</code> but jobs still run at the old CPU ceiling</strong> — read <code>SizingProfileOverridden</code> on the <code>RunnerSet</code>.
 <code>True/CPULimitInjected</code> means a pod the profile built without a CPU limit was admitted with one; the message names the pod and the limit, and <a href="#when-something-re-injects-the-cpu-limit-throughput-removes">the three ways out</a> start with the namespace <code>LimitRange</code>.
 If that comes back clean, the injector is a mutating webhook or policy engine — <code>kubectl get mutatingwebhookconfiguration</code> and your policy engine's rules are the next stop.</p>

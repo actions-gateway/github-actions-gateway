@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/observability-logging/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/observability-logging/">
       
       
         <link rel="prev" href="../observability-dashboards/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2220,6 +2220,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#attributing-a-record-to-a-tenant-and-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributing a record to a tenant and a job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-never-appears-in-logs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2771,6 +2782,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#attributing-a-record-to-a-tenant-and-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributing a record to a tenant and a job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-never-appears-in-logs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2922,6 +2944,8 @@ The apiserver attaches such a warning to every read and write of a deprecated AP
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">auditLogging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Connections</span><span class="w">   </span><span class="c1"># Off (default) writes no per-connection record</span>
 </code></pre></div>
+<p><code>ConnectionsWithSource</code> writes the same record with the client's source address added, which is what makes a connection attributable to one consumer namespace and one job rather than to the pool.
+It needs a second opt-in on the consuming side to be useful: see <a href="#attributing-a-record-to-a-tenant-and-a-job">attributing a record to a tenant and a job</a> below.</p>
 <p>Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.
 See <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding: per-pool egress audit record</a> for when to turn it on and what it costs.</p>
 <p>A record looks like this (one JSON object per line, on the same stdout stream as everything else the pool logs):</p>
@@ -2969,6 +2993,10 @@ The fields:</p>
 <td><code>durationSeconds</code></td>
 <td>How long the tunnel was open</td>
 </tr>
+<tr>
+<td><code>sourceIP</code> / <code>sourcePort</code></td>
+<td>The client address the CONNECT arrived from. <strong>Only under <code>auditLogging: ConnectionsWithSource</code></strong>, absent entirely under <code>Connections</code>. Read from the accepted connection, never from a request header, so a worker cannot forge it</td>
+</tr>
 </tbody>
 </table>
 <p>Three properties worth knowing before you build on it:</p>
@@ -2978,6 +3006,77 @@ The fields:</p>
 <li><strong>One line per connection.</strong> Under load that is the pool's dominant log volume, which is the cost the opt-in is asking you to accept, so size the pipeline before turning it on.</li>
 </ul>
 <p>What the record deliberately does <em>not</em> carry, and why, is in the <a href="../../design/05-security/#proxy-egress-audit-record">security design</a>.</p>
+<h3 id="attributing-a-record-to-a-tenant-and-a-job">Attributing a record to a tenant and a job<a class="headerlink" href="#attributing-a-record-to-a-tenant-and-a-job" title="Permanent link">&para;</a></h3>
+<p>The record above names the destination and the <strong>pool</strong>.
+On a pool shared via <code>spec.sharing.allowedNamespaces</code> it cannot say which consumer reached that destination, and on any pool it cannot say which job did.
+Closing both takes two records, from two processes, joined on the source address.</p>
+<p><strong>Turn on both halves.</strong> Either alone records something nothing asks about:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">auditLogging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConnectionsWithSource</span><span class="w">   </span><span class="c1"># adds sourceIP/sourcePort to the egress record</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nn">---</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">auditLogging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WorkerAddresses</span><span class="w">         </span><span class="c1"># says which job holds each address</span>
+</code></pre></div>
+<p>Both roll their workload, the same as <code>logLevel</code>, so records start once the new pods are up.</p>
+<p>The AGC's half is a second stream on that gateway's own stdout, selected on <code>msg == "worker address audit"</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">"time"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-08-24T19:57:11.882Z"</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">"level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"INFO"</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">"msg"</span><span class="p">:</span><span class="w"> </span><span class="s2">"worker address audit"</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">"namespace"</span><span class="p">:</span><span class="w"> </span><span class="s2">"team-a"</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">"event"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bind"</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">"podIP"</span><span class="p">:</span><span class="w"> </span><span class="s2">"10.44.3.17"</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">"pod"</span><span class="p">:</span><span class="w"> </span><span class="s2">"gag-worker-7c9f2"</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">"owner"</span><span class="p">:</span><span class="w"> </span><span class="s2">"default"</span><span class="p">,</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nt">"runID"</span><span class="p">:</span><span class="w"> </span><span class="s2">"12345678"</span><span class="p">,</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">"repository"</span><span class="p">:</span><span class="w"> </span><span class="s2">"owner/repo"</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>namespace</code></td>
+<td>The namespace the <strong>worker pod</strong> runs in, so the consuming tenant, including on a shared pool, because it is read from the pod rather than from a CONNECT</td>
+</tr>
+<tr>
+<td><code>event</code></td>
+<td><code>bind</code> when the address becomes live, <code>release</code> when the pod goes away and the address may be reused</td>
+</tr>
+<tr>
+<td><code>podIP</code></td>
+<td>The worker's address, which is what a proxy record's <code>sourceIP</code> matches</td>
+</tr>
+<tr>
+<td><code>pod</code> / <code>owner</code></td>
+<td>The worker pod and the RunnerSet it belongs to</td>
+</tr>
+<tr>
+<td><code>runID</code> / <code>repository</code></td>
+<td>The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose payload carried no run identity</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The join is address plus time.</strong> A <code>bind</code> opens a window and the matching <code>release</code> closes it; an egress record whose <code>sourceIP</code> equals that <code>podIP</code>, with a <code>time</code> inside the window, is that job's connection.
+The window matters because addresses are reused: a worker pod is deleted when its job ends and its address returns to the CNI's pool, which is also why the binding has to be recorded live rather than looked up afterwards.</p>
+<p>Three things to know before you build on it:</p>
+<ul>
+<li><strong>Two switches, and half-on is legal.</strong> <code>ConnectionsWithSource</code> without <code>WorkerAddresses</code> gives addresses nothing names; <code>WorkerAddresses</code> without it gives bindings nothing asks about.
+  Neither is an error, and neither attributes anything.</li>
+<li><strong>It assumes the proxy sees the worker's own address.</strong> Pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path, so <code>sourceIP</code> is the worker's <code>podIP</code>.
+  A CNI that SNATs it breaks the join, so check yours before relying on the records.</li>
+<li><strong>The gateway's own egress has no binding.</strong> The AGC reaches GitHub through the same pool, so its connections carry a <code>sourceIP</code> no <code>bind</code> record ever names.
+  That is how you tell control-plane traffic from a job's, not a gap.</li>
+</ul>
 <h3 id="what-never-appears-in-logs">What never appears in logs<a class="headerlink" href="#what-never-appears-in-logs" title="Permanent link">&para;</a></h3>
 <p>Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: <strong>credential material is redacted before a log line is emitted</strong>, not by the log stack afterward.</p>
 <p>Every GitHub response body — broker and runner-scale-set protocol alike — passes through a single redaction path before it can reach a log line or an error message.
@@ -3037,22 +3136,22 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <p>On shutdown the AGC flushes buffered spans (5 s budget) before exiting.</p>
 <h3 id="enabling-tracing-on-gmc-managed-agcs">Enabling tracing on GMC-managed AGCs<a class="headerlink" href="#enabling-tracing-on-gmc-managed-agcs" title="Permanent link">&para;</a></h3>
 <p>The GMC builds the AGC Deployment, so for a GMC-provisioned tenant you do <strong>not</strong> set these env vars by hand — you declare tracing on the <code>ActionsGateway</code> CR and the GMC translates <code>spec.tracing</code> into the standard <code>OTEL_*</code> env on the AGC Deployment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
 </code></pre></div>
 <table>
 <thead>

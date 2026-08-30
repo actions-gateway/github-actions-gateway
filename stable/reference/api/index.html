@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/reference/api/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/reference/api/">
       
       
         <link rel="prev" href="../">
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3880,6 +3880,12 @@ docs/operations/security-operations.md.</p>
 <td>Enum: [info debug]<br />Optional: {}</td>
 </tr>
 <tr>
+<td><code>auditLogging</code> <em>string</em></td>
+<td>AuditLogging selects the worker-address audit record this tenant's AGC writes to its log stream. Off (the default) writes none. WorkerAddresses writes one structured line when a worker pod's address is first observed and one when the pod goes away, each carrying the pod's namespace, its address, and the GitHub run ID and repository of the job it runs.<br />Its only purpose is to make the proxy's per-connection audit record attributable. That record names a destination and, under EgressProxy.spec.auditLogging: ConnectionsWithSource, a source address; this one says which tenant and which job held that address, and names no destination itself. Neither is a movement log alone, the join of the two is, so each half is opted into separately and both default off. Enabling this without the proxy half records addresses nothing ever asks about (Q986).<br />It is written at info, so it never depends on logLevel: debug, and debug adds no field to it. Two lines per worker pod, which is why it is opt-in rather than a widening of the per-pod lines the AGC already writes at debug.<br />Changing it is a rolling restart of the AGC, not a hot reload, the same as logLevel.</td>
+<td>Off</td>
+<td>Enum: [Off WorkerAddresses]<br />Optional: {}</td>
+</tr>
+<tr>
 <td><code>tracing</code> <em><a href="#tracingconfig">TracingConfig</a></em></td>
 <td>Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's AGC. Tracing stays off unless tracing.endpoint is set.</td>
 <td></td>
@@ -4353,9 +4359,9 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 </tr>
 <tr>
 <td><code>auditLogging</code> <em>string</em></td>
-<td>AuditLogging selects the per-connection egress audit record this proxy pool writes to its log stream. Off (the default) writes none. Connections writes one structured line per ACCEPTED CONNECT, at tunnel close, carrying the pool's namespace, the destination host and port, the bytes transferred each way, and the tunnel duration. It carries nothing from the request headers or the tunneled bytes, which the proxy never inspects. On a pool shared via spec.sharing the namespace is the pool's, not the consumer's, so attribution there is per pool rather than per tenant.<br />It is opt-in per pool because the record is data about a tenant's egress: which destination their workers reached and when. Turning it on is a deliberate decision to retain that, and to size the log pipeline for one line per connection. Off is what an unset field, an unrecognized value, and a proxy image older than this field all resolve to.<br />It is a logging setting only. No value changes what the proxy forwards: destination enforcement is destinationFQDNs/destinationCIDRs plus the pod-egress NetworkPolicy, and enabling this relaxes none of it. "audit" here does NOT carry the report-only-instead-of-enforce sense it has in Pod Security Admission and Gatekeeper.<br />Changing it is a rolling restart of the pool, not a hot reload, the same as logLevel. Design appendix G.3 / Q564.</td>
+<td>AuditLogging selects the per-connection egress audit record this proxy pool writes to its log stream. Off (the default) writes none. Connections writes one structured line per ACCEPTED CONNECT, at tunnel close, carrying the pool's namespace, the destination host and port, the bytes transferred each way, and the tunnel duration. It carries nothing from the request headers or the tunneled bytes, which the proxy never inspects. On a pool shared via spec.sharing the namespace is the pool's, not the consumer's, so attribution there is per pool rather than per tenant.<br />ConnectionsWithSource adds the client's source address to that record, which is what makes a connection attributable to one consumer namespace and one job rather than to the pool. The address is read from the accepted connection, never from a request header, so a worker cannot forge it. It resolves to a tenant and a job only against the worker-address records the consuming AGC writes under its own ActionsGateway.spec.auditLogging, since a worker pod and its address are both gone by the time anything could look them up; enabling one half without the other yields addresses nothing names. Recording where a tenant's individual workers went is a further retention decision beyond Connections, which is why it is a separate value and not a widening of that one (Q986).<br />It is opt-in per pool because the record is data about a tenant's egress: which destination their workers reached and when. Turning it on is a deliberate decision to retain that, and to size the log pipeline for one line per connection. Off is what an unset field, an unrecognized value, and a proxy image older than this field all resolve to.<br />It is a logging setting only. No value changes what the proxy forwards: destination enforcement is destinationFQDNs/destinationCIDRs plus the pod-egress NetworkPolicy, and enabling this relaxes none of it. "audit" here does NOT carry the report-only-instead-of-enforce sense it has in Pod Security Admission and Gatekeeper.<br />Changing it is a rolling restart of the pool, not a hot reload, the same as logLevel. Design appendix G.3 / Q564.</td>
 <td>Off</td>
-<td>Enum: [Off Connections]<br />Optional: {}</td>
+<td>Enum: [Off Connections ConnectionsWithSource]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>noProxyCIDRs</code> <em>string array</em></td>

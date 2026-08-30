@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/why-gag/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/why-gag/">
       
       
         <link rel="prev" href="..">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2943,7 +2943,7 @@ That is a reasonable product for a single-tenant cluster, and the same gap from 
     <div class="gag-flow__node gag-flow__node--wip">
       <span class="gag-flow__tier">Capability · partly shipped</span>
       <span class="gag-flow__title">Isolation by default</span>
-      <span class="gag-flow__sub">PSA, default-deny egress, and Kata micro-VM workers ship today; <a href="../roadmap/">untrusted-PR network isolation</a> does not yet</span>
+      <span class="gag-flow__sub">PSA, default-deny egress, and Kata micro-VM workers ship today; <a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">untrusted-PR network isolation</a> ships as a recipe you apply, not a default</span>
     </div>
   </div>
   <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; together they remove the reasons sharing is risky</div>
@@ -3072,7 +3072,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <tr>
 <td>Per-connection egress audit record</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no proxy of its own to record from</strong><br><span class="gag-cont">it points at a proxy you already run, so any record is that proxy's and carries no tenant identity</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/observability-logging/#proxy-egress-audit-record">per-pool record</a></strong><br><span class="gag-cont">one line per accepted CONNECT at tunnel close: destination, bytes each way, duration. Off by default, and on a pool shared by consent it attributes per pool rather than per consumer</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/observability-logging/#proxy-egress-audit-record">per-pool record</a></strong><br><span class="gag-cont">one line per accepted CONNECT at tunnel close: destination, bytes each way, duration. Off by default; a second opt-in on each side attributes it to the consuming tenant and the job, on a shared pool too</span></td>
 </tr>
 <tr>
 <td>GitHub App private key kept out of the cluster</td>
@@ -3147,7 +3147,7 @@ two dates because there were two passes: the original column on
 still the newest published chart. The tag is what
 the stamp names; the commit is what makes it re-checkable, since a link to a
 branch drifts out from under the claim it was cited for. Per-cell evidence,
-file by file, is in the <a href="../plan/competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
+file by file, is in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
 <p>If you are evaluating on a later ARC than a cell names, re-check that cell
 rather than trusting it, and
 <a href="https://github.com/actions-gateway/github-actions-gateway/issues">tell us what changed</a>.</p>
@@ -3236,7 +3236,7 @@ The differentiator is the layer underneath.</p>
 <p><strong>Kata bounds the kernel, not the pod network</strong>, so cloud metadata still answers from inside the guest.
 GAG's default-deny NetworkPolicies close that path.</p>
 <p><strong>GAG's own CI runs this way</strong>, building a <code>kind</code> cluster inside a worker pod with <strong>zero</strong> <code>privileged: true</code> (<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">how, and what Kata does not buy you</a>).</p>
-<p><strong>Not yet a claim about untrusted pull requests</strong>, which need the egress work on the <a href="../roadmap/#in-progress--near-term">roadmap</a>.</p>
+<p><strong>Untrusted pull requests need one more step</strong>, the tight-egress recipe that ships in 1.7: an in-cluster pull-through registry mirror, and your own allow-all egress rule deleted (<a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">how</a>).</p>
 <p>Threat model and abuse-response playbooks: <a href="../design/05-security/">Security</a>, <a href="../operations/security-operations/">Security operations</a>.</p>
 
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.6.0/design/05-security/">
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/design/05-security/">
       
       
         <link rel="prev" href="../04-operational-flows/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.6.0",
+    "url": "https://actions-gateway.com/1.7.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.6.0"
+      "url": "https://actions-gateway.com/1.7.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.6.0",
-    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3584,7 +3584,7 @@ The secure default <code>--fqdn-policy-backend=none</code> <strong>rejects</stro
 <p><strong>The <code>gke</code> backend is additive-allow, so the base default-deny NetworkPolicy is a required invariant.</strong> Unlike Cilium/Calico FQDN policies (self-default-denying), a GKE <code>FQDNNetworkPolicy</code> composes with a NetworkPolicy on the same pod as a <strong>union</strong> — it only <em>adds</em> an allow, it denies nothing on its own.
 GAG's fail-closed guarantee for <code>gke</code> therefore depends on the base standard NetworkPolicy (always emitted; GitHub-CIDR rule dropped, DNS-only allow kept) staying present alongside it: the <code>FQDNNetworkPolicy</code> only widens the union to permit GitHub, and if it is absent or unenforced GitHub egress stays denied by the base NP.
 A future refactor must not drop the base NP for the <code>gke</code> backend, or it opens egress.
-(<code>gke</code>-backend enforcement is not yet live-validated; see the <a href="../../plan/q245-fqdn-intent-backend-split/">Q245 plan</a>.)
+(<code>gke</code>-backend enforcement is not yet live-validated; see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.)
 See <a href="../network-architecture/#cni-native-fqdn-egress-mode-opt-in-q208-q245">network-architecture.md § CNI-native FQDN egress mode</a> and the operator runbook <a href="../../operations/security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations.md § Expressing GitHub egress by FQDN</a>.</p>
 <p><strong>Pod placement is CR-author-settable, so per-tenant egress-IP <em>attribution</em> is a property of the cluster's policy layer, not of GAG alone (Q282).</strong> A per-tenant egress IP is realized by pinning a tenant's pods to a node pool whose egress path (cloud NAT gateway, dedicated subnet) owns that IP — so the pod's <strong>node</strong> decides which IP its traffic leaves by.
 GAG passes placement through to the CR author in three places: <code>RunnerTemplate.spec.podTemplate</code> (a full <code>PodTemplateSpec</code>, always has), and — since Q282 — <code>EgressProxy.spec.scheduling</code> and <code>ActionsGateway.spec.scheduling</code>, each carrying <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>.
@@ -3603,7 +3603,7 @@ Because the <code>EgressProxy</code> is tenant-authorable, the destinations are 
 <strong>Both empty ⇒ deny-all-non-GitHub</strong>, identical in spirit to the empty <code>--allowed-priority-classes</code> default (Q132/Q188).
 The destinations widen one source into two enforcement surfaces (CIDR <code>ipBlock</code> / FQDN <code>toFQDNs</code> on the pod-egress policy, and the proxy CONNECT allowlist as defense-in-depth with DNS-rebinding revalidation on the CIDR path); GitHub stays implicit.
 This is a <strong>deliberate, bounded relaxation</strong> of the GitHub-only posture, accepted with the trade-offs recorded — the residual is that a compromised worker can exfiltrate to an allowlisted destination, which the allowlist bounds but does not eliminate; the docs therefore steer operators to an <strong>in-cluster caching mirror</strong> first and reserve the allowlist for what a mirror can't proxy.
-See the threat row below, <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, the operator runbook <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the design <a href="../../plan/archive/q242-g1-proxy-destination-allowlist/">Q242 plan</a>.</p>
+See the threat row below, <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, the operator runbook <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the design <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a>.</p>
 <p><strong>A <code>noProxyCIDRs</code> entry must never route GitHub around the proxy.</strong> <code>noProxyCIDRs</code> (v1 <code>ActionsGateway.spec.proxy</code>, v2 <code>EgressProxy.spec</code>) is threaded verbatim into the AGC/worker <code>NO_PROXY</code> env var, where a hostname entry is a domain-suffix match — so a tenant-authored entry like <code>github.com</code> (or an over-broad <code>.com</code>) would silently exclude GitHub from the proxy and defeat per-tenant egress-IP attribution.
 Both GMC validating webhooks reject any entry that NO_PROXY-matches a protected GitHub host (shared guard: <code>gmc/internal/webhook/noproxy</code>), while still admitting the legitimate internal-destination entries (CIDRs, bare IPs, non-GitHub domain suffixes such as <code>svc.cluster.local</code>).
 On the v2 <code>EgressProxy</code> — which carries no <code>gitHubURL</code> of its own — the protected set is the public GitHub hosts <strong>plus the <code>gitHubURL</code> host (a GitHub Enterprise Server host included) of every referrer</strong>, resolved through the uncached API reader from both directions (Q322): the <code>EgressProxy</code> write checks the gateways/RunnerSets that reference it, and the <code>ActionsGateway</code>/<code>RunnerSet</code> write checks the referenced proxy's <code>noProxyCIDRs</code>, so the bypass pair is rejected regardless of creation order (<code>gmc/internal/webhook/v2alpha1/noproxy_referrers.go</code>; unresolvable reads fail closed).
@@ -3639,7 +3639,7 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <tr>
 <td><strong>Unauthorized Cross-Namespace Proxy Use</strong> (egress through another tenant's pool)</td>
 <td>High</td>
-<td>A cross-namespace <code>proxyRef</code> resolves only with <strong>provider consent</strong> (<code>EgressProxy.spec.sharing.allowedNamespaces</code>); absent or empty sharing denies, so the pre-M4 same-namespace-only posture is both the default and the unset case. A consumer-side name alone never authorizes the reference: it fails closed with <code>ProxyShareNotGranted</code> and the controller wires nothing. Enforcement is dual-side and independent: the provider's NetworkPolicy ingress admits only workload pods in granted namespaces (both selectors in <strong>one</strong> peer, so they AND), and the consumer's egress peer is emitted only for a consented reference; traffic needs both. The proxy's <strong>public certificate only</strong> is distributed, as a ConfigMap, into granted namespaces. The private key never leaves the provider namespace, so a shared proxy cannot be impersonated by a consumer. Revoking a grant deletes the projection and drops the ingress peer. Residual, and inherent to the feature: sharing surrenders per-tenant egress-IP <strong>attribution</strong> between the cooperating namespaces, which is why the field is documented for cooperating tenants and platform pools rather than mutually-distrusting ones.</td>
+<td>A cross-namespace <code>proxyRef</code> resolves only with <strong>provider consent</strong> (<code>EgressProxy.spec.sharing.allowedNamespaces</code>); absent or empty sharing denies, so the pre-M4 same-namespace-only posture is both the default and the unset case. A consumer-side name alone never authorizes the reference: it fails closed with <code>ProxyShareNotGranted</code> and the controller wires nothing. Enforcement is dual-side and independent: the provider's NetworkPolicy ingress admits only workload pods in granted namespaces (both selectors in <strong>one</strong> peer, so they AND), and the consumer's egress peer is emitted only for a consented reference; traffic needs both. The proxy's <strong>public certificate only</strong> is distributed, as a ConfigMap, into granted namespaces. The private key never leaves the provider namespace, so a shared proxy cannot be impersonated by a consumer. Revoking a grant deletes the projection and drops the ingress peer, both on the GMC's <code>EgressProxy</code> watch, so no new connection from the consumer's workers is admitted from that moment. The consumer's own <code>Ready</code>/<code>Degraded</code> conditions are bounded rather than instant where the AGC owns them: a <code>RunnerSet</code>'s <code>proxyRef</code> is resolved against a ConfigMap the AGC may <code>get</code> but not <code>watch</code> (RBAC has no label selector, so a watch could not be narrowed to the labelled shares), so it re-checks on a one-minute cadence instead. Enforcement leads and reporting follows (Q999). Residual, and inherent to the feature: sharing surrenders per-tenant egress-IP <strong>attribution</strong> between the cooperating namespaces, which is why the field is documented for cooperating tenants and platform pools rather than mutually-distrusting ones.</td>
 </tr>
 <tr>
 <td><strong>Host Namespace Escape via Malicious Workflow</strong> (Container Breakout)</td>
@@ -3786,10 +3786,10 @@ Digest pinning eliminates the "update the tag, get a different binary" attack cl
 Operators are expected to restrict the set of permitted registries via cluster admission policy (e.g.
 Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because registry policy is a cluster-wide concern.</p>
 <h4 id="ci-scans-every-image-on-every-pr">CI scans every image on every PR<a class="headerlink" href="#ci-scans-every-image-on-every-pr" title="Permanent link">&para;</a></h4>
-<p>The gateway's own CI runs two supply-chain gates on every PR (<code>security-scan.yml</code>): <code>govulncheck</code> across all Go modules and <code>trivy</code> image scans of all seven built images — see <a href="../../development/testing/#security-scanning">testing.md § Security scanning</a>.
+<p>The gateway's own CI runs two supply-chain gates on every PR (<code>security-scan.yml</code>): <code>govulncheck</code> across all Go modules and <code>trivy</code> image scans of all seven built images — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/testing.md#security-scanning">testing.md § Security scanning</a>.
 The five images built from a minimal/distroless or scratch base block on fixable HIGH/CRITICAL findings.
 The two built <code>FROM</code> the upstream actions-runner (the default worker image and <code>build-runner</code>) are scanned report-only, because their CVEs live in upstream components that cannot be fixed without forking the runner.
-That report-only posture assumes the base is kept current, and today nothing does so automatically: the dependabot <code>docker</code> ecosystem is scoped to directories that hold no Dockerfile, tracked in <a href="../../queue/Q976/">Q976</a>.
+That report-only posture assumes the base is kept current, and today nothing does so automatically: the dependabot <code>docker</code> ecosystem is scoped to directories that hold no Dockerfile, tracked in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/queue/Q976.md">Q976</a>.
 Tenants supplying their own <code>WorkerImage</code> are still expected to scan it themselves.
 <code>imagePullPolicy: IfNotPresent</code> (digest) or <code>Always</code> (tag) ensures the kubelet does not serve a stale, possibly tampered local copy.</p>
 <h4 id="first-party-digests-are-enforced-at-chart-render-time">First-party digests are enforced at chart render time<a class="headerlink" href="#first-party-digests-are-enforced-at-chart-render-time" title="Permanent link">&para;</a></h4>
@@ -3834,11 +3834,11 @@ The residual is honestly stated: a compromised worker (malicious dependency, job
 <p>The properties the cheap alternatives throw away are <strong>preserved</strong>: traffic still exits the per-tenant proxy IPs (attribution intact) and DNS still resolves on the in-cluster path (no new exfil channel).
 Enforcement is dual-surface from one source of truth — CIDR <code>ipBlock</code> / FQDN <code>toFQDNs</code> on the pod-egress policy (the hard gate; fail-closed if the CNI can't enforce an FQDN rule, same as Q208) <strong>and</strong> the proxy CONNECT allowlist as defense-in-depth (with resolve-and-dial-the-validated-IP closing the DNS-rebinding window on the CIDR path; denials counted on <code>actions_gateway_proxy_connect_denied_total</code>).</p>
 <p>The admin footgun (a too-broad suffix/CIDR — <code>*.googleapis.com</code>, a CDN, the IMDS endpoint) is bounded by guidance, not code: the docs <strong>lead with an in-cluster caching mirror</strong> as the recommended path and reserve the allowlist for what a mirror genuinely can't proxy.
-See <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the <a href="../../plan/archive/q242-g1-proxy-destination-allowlist/">Q242 plan</a> for the full trade-off record.</p>
+See <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a> for the full trade-off record.</p>
 <h3 id="proxy-egress-audit-record">Proxy egress audit record<a class="headerlink" href="#proxy-egress-audit-record" title="Permanent link">&para;</a></h3>
 <p>The proxy's per-connection record (<code>EgressProxy.spec.auditLogging: Connections</code>, Q564 / <a href="../appendix-g-future-enhancements/#g3-proxy-side-audit-logging">appendix G.3</a>) is the one place the platform deliberately writes down where a tenant's workers went.
 That makes both halves of it a security decision: whether it runs at all, and what a line is allowed to carry.</p>
-<p><strong>It is not the per-tenant audit attribution claimed elsewhere in this design.</strong> That property is a source-IP one at GitHub's end: GitHub's own audit log groups by source IP, and a per-tenant egress IP is what keeps a tenant's activity separable there (<a href="../../plan/q243-egress-ip-reference-arch/">q243 reference architecture</a>).
+<p><strong>It is not the per-tenant audit attribution claimed elsewhere in this design.</strong> That property is a source-IP one at GitHub's end: GitHub's own audit log groups by source IP, and a per-tenant egress IP is what keeps a tenant's activity separable there (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/q243-egress-ip-reference-arch.md">q243 reference architecture</a>).
 This record is a line on the pool's own stdout, keyed on <code>msg == "egress audit"</code>, and it is off unless enabled.
 The two are easy to conflate because a shared pool breaks both, for unrelated reasons: one because every consumer leaves from the same addresses, the other because a CONNECT carries no namespace.</p>
 <p><strong>It is off by default, and that is a requirement rather than a convenience.</strong> A record naming the destination a tenant reached and when is data the platform must choose to retain, for a period it has decided on and in a pipeline it has sized, so it is opted into per pool.
@@ -3869,10 +3869,14 @@ Neither relies on the other, so a GMC newer than the proxy image, which is the s
 <td>Tunnel duration</td>
 <td>A number</td>
 </tr>
+<tr>
+<td>Client source address, under <code>ConnectionsWithSource</code> only</td>
+<td>Read off the accepted connection, never a request header, so a worker cannot forge it. See the attribution section below for why it is a separate value rather than a widening of <code>Connections</code></td>
+</tr>
 </tbody>
 </table>
 <p>Not in it, and unreachable from the code path that writes it: <strong>any request header</strong> (<code>Proxy-Authorization</code> above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
-The client's source IP is omitted deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
+The client's source IP is omitted under <code>Connections</code>, deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
 The record is written at <strong>info</strong>, so it never depends on raising a pool to <code>debug</code>, and raising a pool to <code>debug</code> never adds a field to it.</p>
 <p><strong>The authority is capped wherever it is logged, not only in the record.</strong> It is tenant-controlled text and <code>http.Server</code> admits a request line up to <code>MaxHeaderBytes</code> (1 MiB by default), so an uncapped log site is a volume amplifier a worker drives on demand: measured at 400,167 bytes written for one 200,000-byte authority, because the dial-failure path logged it twice (the <code>host</code> attribute, and the dial error, which embeds the address).
 The GMC-built configuration is where that bites.
@@ -3881,10 +3885,26 @@ All four sites in <code>handleConnect</code> that log the authority are therefor
 Splitting is why the record needs both: a cap on the host alone leaves the port unbounded, and Go's port parser ignores leading zeros without saturating, so a zero-padded port dials the real port and carries arbitrary length into the line.
 The dial error is bounded separately too, since capping only the <code>host</code> attribute would leave half that volume in place.
 One policy for one field, so a reader here does not have to work out which log line it covers.</p>
-<p><strong>A shared pool attributes per pool, not per tenant.</strong> <code>spec.sharing.allowedNamespaces</code> lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
-The record is still un-forgeable and still says which destination was reached; what it cannot do on a shared pool is say by whom.
-Nothing is added to close that here: the only field that would is the client's source IP, and adding it to every record is the movement-log trade above, which no measurement settles.
-A pool whose audit trail has to name the tenant should not be shared.</p>
+<p><strong>A shared pool attributes per pool, not per tenant under <code>Connections</code>.</strong> <code>spec.sharing.allowedNamespaces</code> lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
+The record is still un-forgeable and still says which destination was reached; what it cannot do under that value is say by whom.
+Closing it is <code>ConnectionsWithSource</code> plus the consuming gateway's own opt-in, below.
+A pool left on <code>Connections</code> and shared has an audit trail that cannot name the tenant, and should not be shared.</p>
+<p><strong>Attribution is two opted-in records, not one wider one (Q986).</strong> The source address is what ties a connection to a consumer and to a job, and it is what turns an egress record into a per-worker movement log, so it is a further retention decision rather than a wider view of the one <code>Connections</code> already made.
+That is why it is a separate enum value rather than a field added to the record everyone on <code>Connections</code> already gets: an image upgrade must not start recording where a tenant's individual workers went.</p>
+<p>The address alone still resolves to nothing.
+A worker pod is <strong>deleted when its job ends</strong> and its address returns to the CNI's pool, so nothing can look up afterwards which pod held it.
+The binding has to be written down while the pod exists, which is <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code>: the AGC writes one record when a worker's address becomes live and one when the pod goes away, each carrying the pod's namespace and the run ID and repository of its job, and <strong>no destination at all</strong>.</p>
+<p>Neither record is a movement log by itself.
+The proxy's says where a pool went; the AGC's says which job held an address.
+So each half is opted into on its own object and both default <code>Off</code>.
+Two switches rather than one is also what keeps an <code>EgressProxy</code> edit from rolling every gateway that references it across namespaces.
+An operator can enable half, which records addresses nothing names or bindings nothing asks about; that degrades to no attribution rather than to anything false.</p>
+<p>The join rests on the proxy seeing the worker's own address, which holds because pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path.
+A CNI that SNATs it breaks attribution, which is why the operator docs say to check.
+The gateway's own control-plane egress shares the pool and is bound by nothing, so an auditor separates it from a job's by finding no binding for its address.</p>
+<p>The AGC record is written at <strong>info</strong> for the same reason the proxy's is, and it does not resolve anything the AGC does not already hold: the run ID and repository are annotations it stamps on every worker pod at creation, and the shared pod informer already watches every worker pod on both acquisition tiers.
+Notably the <strong>proxy</strong> resolves nothing.
+It has no Kubernetes client at all, and it is the one component untrusted worker code talks to directly, so giving it cross-namespace pod read to save a join the log pipeline is already doing was rejected.</p>
 <p>Only <strong>accepted</strong> CONNECTs produce a record.
 A refusal and a failed dial already have their warn/error line and their counter (<code>actions_gateway_proxy_connect_denied_total</code>, <code>actions_gateway_proxy_dial_errors_total</code>); recording them here would double-count a connection that carried no egress.</p>
 <p>See <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a> for the shape, and <a href="../../operations/tenant-onboarding/#per-pool-egress-audit-record">tenant-onboarding.md § Per-pool egress audit record</a> for turning it on.</p>
@@ -3934,8 +3954,8 @@ With a <em>core</em>-type <code>paramKind</code> (a ConfigMap, as shipped before
 <p>Because <code>parameterNotFoundAction: Deny</code> resolves params before per-object matching, that denied <em>every</em> matched write cluster-wide, recoverable only by a kube-apiserver restart — unavailable on a managed control plane.
 It could also fail <strong>open</strong>, silently enforcing a stale allowlist from the torn-down informer's frozen cache, which is the more dangerous half.
 The trigger is deleting the policy's <em>binding</em> (what <code>helm uninstall</code> does): the apiserver keys one shared param informer per <code>paramKind</code>, tears it down once no binding names that kind, and never restarts it.</p>
-<p>A CRD <code>paramKind</code> gets a fresh dynamic informer per context and survives the same transition — measured against a ConfigMap on one apiserver by <a href="../../scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, and guarded end to end by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
-Mechanism: <a href="../../plan/archive/q444-vap-param-resolution/"><code>../plan/archive/q444-vap-param-resolution.md</code></a>.</p>
+<p>A CRD <code>paramKind</code> gets a fresh dynamic informer per context and survives the same transition — measured against a ConfigMap on one apiserver by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, and guarded end to end by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
+Mechanism: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q444-vap-param-resolution.md"><code>../plan/archive/q444-vap-param-resolution.md</code></a>.</p>
 <h4 id="deletion-only-updates-are-exempt-from-re-validation-q518">Deletion-only updates are exempt from re-validation (Q518)<a class="headerlink" href="#deletion-only-updates-are-exempt-from-re-validation-q518" title="Permanent link">&para;</a></h4>
 <p>Stored-object re-validation has one legitimate write it must not deny: the teardown write.
 Once a class is removed from the allowlist while stored objects still name it, <em>every</em> later write to those objects is denied — including the AGC's finalizer-removal update — so a tenant deleted in that state wedged permanently: the finalizer could never clear and the namespace hung in <code>Terminating</code> (Q499).
@@ -4002,7 +4022,7 @@ Three properties make it a boundary rather than a hint:</p>
 <p><strong>What stays outside GAG's control, and must stay documented.</strong> GAG never creates a runner group and never edits which repositories one admits; both are the platform admin's, at GitHub.
 So the guarantee is exactly "the tenant's runners live in the group you named" and never "only your repositories can reach them" — a named group whose access policy is <em>All repositories</em> is the default group with extra steps.
 See <a href="../../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a>.</p>
-<p>The field is tenant-authored, and the <a href="../../development/api-review/#ask-whose-fact-it-is">whose-fact</a> question resolves benignly: a tenant naming a group that is not theirs volunteers <em>its own</em> runners to that group's repositories.
+<p>The field is tenant-authored, and the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/api-review.md#ask-whose-fact-it-is">whose-fact</a> question resolves benignly: a tenant naming a group that is not theirs volunteers <em>its own</em> runners to that group's repositories.
 It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way <code>priorityClassName</code> is.
 <strong>Closed (Q712).</strong></p>
 <h3 id="cross-tenant-job-acquisition-via-a-shared-scale-set-name">Cross-tenant job acquisition via a shared scale-set name<a class="headerlink" href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name" title="Permanent link">&para;</a></h3>
@@ -4091,7 +4111,7 @@ This is the same trust model as the <code>actions-gateway.github.com/tenant</cod
 The GMC never sets it itself.</p>
 <p>The granting value is the enum keyword <code>allowed</code>, <strong>not</strong> <code>true</code>, deliberately: a boolean-looking label value invites the YAML coercion footgun (<code>privileged-profile: true</code> parses as a boolean, which a string label value then rejects or mishandles — and YAML 1.1 coerces <code>yes</code>/<code>no</code>/<code>on</code>/<code>off</code> too), so a non-boolean keyword is both safer to author and self-documenting.
 The value is matched exactly.
-This is the project-wide convention for new operator-set labels and annotations — see <a href="../../development/kubernetes-conventions/#label--annotation-value-conventions">Kubernetes API conventions</a>.</p>
+This is the project-wide convention for new operator-set labels and annotations — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/kubernetes-conventions.md#label--annotation-value-conventions">Kubernetes API conventions</a>.</p>
 <p>The gate is <strong>fail-closed</strong>: an absent label, any value other than <code>allowed</code>, or a namespace the webhook cannot read all leave privileged <strong>ineligible</strong> and the request is rejected.
 Non-privileged profiles (<code>baseline</code>, <code>restricted</code>, and the empty default) never consult the label and are unaffected.</p>
 <p>The two privileged gates are independent and both must pass: the namespace must be labelled eligible (this check), <em>and</em> on an update the rank-downgrade guard still requires the <code>actions-gateway.github.com/allow-profile-downgrade</code> annotation (anything → <code>privileged</code> is a downgrade in rank).
