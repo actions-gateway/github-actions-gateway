@@ -1897,6 +1897,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#where-the-arithmetic-comes-from-and-what-pins-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the arithmetic comes from, and what pins it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pod-overhead-needs-a-cluster-scoped-read" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2908,6 +2919,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#where-the-arithmetic-comes-from-and-what-pins-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the arithmetic comes from, and what pins it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pod-overhead-needs-a-cluster-scoped-read" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3012,7 +3034,7 @@ Kubernetes composes it from four parts, and two of them are easy to miss on exac
 </tr>
 </tbody>
 </table>
-<p>Verified on Kubernetes v1.36.1 by applying one pod at a time into a quota'd namespace and reading the <code>.status.used</code> delta.
+<p>Measured 2026-07-26 on Kubernetes v1.36.1 by applying one pod at a time into a quota'd namespace and reading the <code>.status.used</code> delta.
 Reproduce it on any cluster:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>&lt;QUOTA_NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.used}'</span>
 </code></pre></div>
@@ -3455,6 +3477,21 @@ them <code>Pending</code> on an unbound volume. The condition just reports it up
 instead of leaving it to show up as burnt lock time. A quota already sized with
 the arithmetic on this page is unaffected; re-derive any that were not.</p>
 </div>
+<h3 id="where-the-arithmetic-comes-from-and-what-pins-it">Where the arithmetic comes from, and what pins it<a class="headerlink" href="#where-the-arithmetic-comes-from-and-what-pins-it" title="Permanent link">&para;</a></h3>
+<p>Neither half of the footprint is this project's own derivation.
+The compute sum mirrors <code>PodRequests</code> / <code>PodLimits</code> in <code>k8s.io/component-helpers/resource</code>, the upstream helpers implementing <a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>'s init-container formula.
+The storage keys mirror the PVC evaluator in <code>pkg/quota/v1/evaluator/core</code>, which charges a claim's count and its <code>requests.storage</code> as separate keys, class-scoped ones included.
+Both are hand-written here rather than imported, because neither package is in this repo's vendor tree.</p>
+<p>Two things pin them:</p>
+<ul>
+<li><strong>Unit tests assert each rule against the shapes this repo ships.</strong> The <code>privileged-dind</code> case asserts the per-pod and <code>maxWorkers: 12</code> totals the <a href="#worked-example--a-dind-tenant-at-12-concurrent-jobs">worked example</a> above derives, so this page and the code cannot drift apart quietly.
+  The Kata case pins the overhead asymmetry, and further cases pin the plain-init floor, a native sidecar raising that floor, and the claim count staying a cardinality rather than a quantity.</li>
+<li><strong>envtest proves the footprint reaches the conditions against a real apiserver</strong>, each case against a quota that only the extra term can exhaust, so a condition trips only if the sidecar, the overhead, or the per-worker PVC was actually counted.</li>
+</ul>
+<p>One thing does not pin them: no test compares the gateway's number against the one Kubernetes computes.
+There is no <code>resourcequota</code> controller in envtest, so nothing there computes the number a test could check against; the tests write <code>.status.used</code> themselves.
+The equivalence rests on the measurement stamped at the top of this page.
+Take that <code>kubectl</code> reading on your own cluster before sizing a quota with no headroom, especially on a Kubernetes far from v1.36.1.</p>
 <h3 id="pod-overhead-needs-a-cluster-scoped-read">Pod overhead needs a cluster-scoped read<a class="headerlink" href="#pod-overhead-needs-a-cluster-scoped-read" title="Permanent link">&para;</a></h3>
 <p>Overhead lives on the cluster-scoped <code>RuntimeClass</code>, not on the pod template, so the AGC reads it to size a Kata worker.
 The chart grants this through the per-gateway <code>agc-clusterrunnertemplate-reader</code> <code>ClusterRole</code>; a cluster whose AGC image is upgraded ahead of its chart has no such grant.</p>
