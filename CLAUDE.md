@@ -233,7 +233,8 @@ When in doubt, write the detail in `docs/` and link it; prefer tightening an exi
   Test and build targets also regenerate tracked files as prerequisites (`make test-integration` → `config/crd`), so a directory add silently ships someone else's codegen drift; #847 broke CI that way.
 - **`git commit --amend -- <path>` rewrites `HEAD`, never the commit owning the path**, so amending to fix an *earlier* commit silently folds it into the newest one.
   Use `git commit --fixup=<sha>` + `GIT_SEQUENCE_EDITOR=true git rebase --autosquash origin/main` for that (autosquash works though interactive rebase does not).
-  Amending `HEAD` itself is fine while unpushed: fix up the message or staged changes without asking.
+  Amending `HEAD` itself is fine while unpushed, but a **bare** `--amend` commits whatever is already staged, which is the `git add` trap arriving through amend: a backlog deletion staged for its own commit lands in the code commit instead.
+  `--amend -- <paths>` does not undo that, because unlisted paths keep `HEAD`'s tree; `git reset --soft HEAD~1` and re-commit by pathspec (caught pre-push in the Q1042 session).
   Once pushed (but before a PR exists), prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
 - **Merges go through the merge queue, which only the web UI can enqueue into** — `gh pr merge` routes a queue enqueue through `enablePullRequestAutoMerge`, and this repo sets `allow_auto_merge: false`, so every form of it fails `Auto merge is not allowed for this repository` (measured 2026-08-14 on #1525, gh 2.96.0).
   The queue validates the candidate merge result and a failing entry is kicked back to its PR with the failure attached (the signal pr-sentinel reacts to).
