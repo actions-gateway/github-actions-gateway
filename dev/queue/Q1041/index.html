@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1037/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1041/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Two of the five release-note surfaces have no enumerator - GitHub Actions Gateway</title>
+        <title>A pages deploy can succeed while the site never serves the version - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#two-of-the-five-release-note-surfaces-have-no-enumerator" class="md-skip">
+        <a href="#a-pages-deploy-can-succeed-while-the-site-never-serves-the-version" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Two of the five release-note surfaces have no enumerator
+              A pages deploy can succeed while the site never serves the version
             
           </span>
         </div>
@@ -2597,24 +2597,23 @@
   
 
 
-<h1 id="two-of-the-five-release-note-surfaces-have-no-enumerator">Two of the five release-note surfaces have no enumerator<a class="headerlink" href="#two-of-the-five-release-note-surfaces-have-no-enumerator" title="Permanent link">&para;</a></h1>
-<p><a href="../../operations/release/#writing-the-curated-notes">release.md § Writing the curated notes</a> names five surfaces an operator can see and requires each be diffed mechanically between the two tags: CRD fields, metric names, Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
-Three of them have a scanner behind them — <code>api-surface-since.sh</code> covers CRD fields, condition types and reasons, and Event reasons via <code>devtools/docs/reasontiers</code>.
-Metric names and configuration have prose instructions and nothing else, so each release re-derives them by hand.</p>
-<p>That section's own argument is the case for closing this: the Event reasons and the metrics "had no enumeration at all until they were diffed, and the notes had already been through several reviews".
-The Event reasons got <code>reasontiers</code> out of that finding.
-The metrics were named in the same sentence and did not.</p>
-<p>Measured 2026-08-29 drafting the 1.7.0 notes: a hand-rolled CLI-flag query matched the wrong declaration shape and returned zero on both sides of the window.
-Two zeros and an empty diff are indistinguishable from a real "nothing changed", and the reading survives to the notes as a claim; a corrected query then found 33 flags on each side.
-The metric diff came back genuinely empty for this window, which is only trustworthy because the same query over <code>v1.5.0..v1.6.0</code> surfaces two additions, a control the runbook does not ask for and a hand pass will not always run.</p>
-<p>Both surfaces are enumerable the way the CRD one is: metric names from the <code>actions_gateway_*</code> literals the exporters register, configuration from the flag declarations plus <code>charts/*/values.yaml</code> plus the env tunables.
-The natural home is a new section in <code>api-surface-since.sh</code>, so one command answers the whole checklist and an unenumerable surface reports <code>COULD NOT ENUMERATE</code> and blocks the claim, as the Event-reason scanner already does, rather than reporting a silent empty.</p>
-<p><strong>A sixth claim has no enumerator either, and it fails differently.</strong> The notes' "Everything since v1.6.0" line asserts a commit count and a <code>feat</code>/<code>fix</code>/<code>perf</code> subject count, and <code>check-release-notes.sh</code> is deliberately narrow enough not to read them.
-Measured across the 1.7.0 cycle, that line was wrong at three separate points: drafted as <code>61 commits, 27</code> when <code>3540b89f1</code> was the tip, corrected to <code>65 and 29</code> at the rc.3 target, and corrected again to <code>68 and 29</code> at the tag.
-Each correction was right when it was made.</p>
-<p>The other five surfaces go stale when the <em>product</em> changes; this one goes stale when <strong>anything</strong> merges, including the pull request carrying the correction, so enumerating it once is not a fix.
-Whatever lands here has to run at tag time rather than at draft time: either the renderer substitutes the count as it builds the body, or a check refuses a note whose count disagrees with <code>git rev-list</code> at the tag being published.
-Treat it as the same defect class and a different fix shape.</p>
+<h1 id="a-pages-deploy-can-succeed-while-the-site-never-serves-the-version">A pages deploy can succeed while the site never serves the version<a class="headerlink" href="#a-pages-deploy-can-succeed-while-the-site-never-serves-the-version" title="Permanent link">&para;</a></h1>
+<p><code>verify-pages-live</code> failed on the <code>v1.7.0</code> tag after its 300s budget, and the artifact was not the problem.
+<code>mike</code> had written <code>1.7.0</code> into <code>gh-pages</code> twice from <code>837f3d230</code>, and <code>https://actions-gateway.com/versions.json</code> still listed only up to <code>1.6.0</code> forty minutes later, so this was not propagation lag inside a budget that was merely too short.
+The deploy step succeeded and the serving layer did not take it.</p>
+<p><strong>The gate did its job and there is nothing to fix in it.</strong> The gap is what happens next: recovery is a hand-run <code>workflow_dispatch</code> with <code>version</code>, <code>alias</code> and <code>set_default</code> retyped from the error text, so a release stalls until a human reads the failure.
+Re-dispatched unchanged as run 33293076832, the same content published and <code>verify-published-docs VERSION=v1.7.0</code> passed, which is what says the deploy was never the defect.</p>
+<p>Two candidate fixes, and the row does not pick between them:</p>
+<ul>
+<li>Retry the publish once from inside the job when <code>verify-pages-live</code> exhausts its budget, then re-verify.
+  Cheapest, and it matches what the manual recovery does.</li>
+<li>Give the budget an adaptive tail rather than a fixed 300s, so a slow-but-working publish is not reported as a failure at all.
+  Riskier: it trades a false red for a longer window in which a genuinely dead publish reads as pending.</li>
+</ul>
+<p><strong>One observed occurrence, and the population is small.</strong> The <code>pages.yml</code> run history reachable at 40 runs spans 2026-08-29 10:44Z to 2026-08-30 04:47Z, which is this release cycle and no earlier one, so whether <code>v1.6.0</code> hit this is unmeasured.
+The three prerelease tag deploys in that window succeeded, but they add no version entry to <code>versions.json</code>, so they are not a control for what a stable tag does.
+Confirm against a wider window before treating one retry as a proven fix.</p>
+<p>Distinct from <a href="../Q1034/">Q1034</a>, which is <code>verify-pages-live-test</code>'s own clock flakiness rather than the publish path.</p>
 
 
 

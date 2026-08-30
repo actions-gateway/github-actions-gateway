@@ -3205,6 +3205,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Searches the backlog only, so "known and accepted" is invisible: Q692's session nearly filed the merge-driver gap this page already states.</td>
 </tr>
 <tr>
+<td><a href="Q1041/">Q1041</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">A pages deploy can succeed while the site never serves the version</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>verify-pages-live</code> failed on the <code>v1.7.0</code> tag after its 300s budget, and the artifact was not the problem.</td>
+</tr>
+<tr>
 <td><a href="Q737/">Q737</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md">Align the shipped DinD templates on one docker:NN-dind version</a></td>
 <td><code>docs</code> <code>debt</code></td>
