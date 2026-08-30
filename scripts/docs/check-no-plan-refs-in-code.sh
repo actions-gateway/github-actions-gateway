@@ -13,8 +13,11 @@
 # Two rules, because the languages differ in what they legitimately do with a
 # plan file:
 #
-#   Go            no legitimate use at all, so any path into the plan tree is
-#                 rejected anywhere in the file — comment or string literal.
+#   Go            no legitimate citation, so any path into the plan tree is
+#                 rejected anywhere in the file, comment or string literal.
+#                 The one exception is the plan index README, which never
+#                 moves: the merge driver that resolves it is Go and names it
+#                 as the file it merges.
 #
 #   Shell and     tooling reads plan files as data: a workflow `paths:` filter
 #   workflows     names one, and a script may rewrite one. Those are values,
@@ -65,9 +68,15 @@ if [[ -n "$selected" ]]; then
     mapfile -t comment_files <<<"$selected"
 fi
 
+# The plan index is exempt in Go for the same reason it is in a shell comment,
+# below: it never moves, archival only re-bases a row inside it, so naming it
+# cannot rot. Everything else in the plan tree stays rejected in Go anywhere in
+# the file, comment or string literal. The merge driver for that index is Go
+# (Q1046), which is what first needed this.
 go_hits=""
 if (( ${#go_files[@]} > 0 )); then
-    go_hits="$(grep -nE 'docs/plan/|\.\./plan/' -- "${go_files[@]}" || true)"
+    go_hits="$(grep -nE 'docs/plan/|\.\./plan/' -- "${go_files[@]}" \
+        | grep -vE '(docs|\.\.)/plan/README\.md' || true)"
 fi
 
 # The regexes are literal inside the awk program on purpose: passing one

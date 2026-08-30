@@ -98,7 +98,23 @@ new_repo
 printf 'package p\n\nconst planDoc = "%s"\n' "$plan_ref" >"$WORK/a.go"
 expect 'Go string literal naming a plan doc is still rejected' 1
 
+# The index carve-out must not become a hole: an archived plan reached through
+# the index's own directory is still a plan file, so it stays rejected.
+new_repo
+printf 'package p\n\nconst planDoc = "docs/plan/archive/old.md"\n' >"$WORK/a.go"
+expect 'Go: an archived plan doc is rejected despite the index exemption' 1
+
 # --- green: the exceptions that must survive -------------------------------
+
+# The plan index never moves, and the merge driver that resolves it is Go and
+# names it as the file it merges. Both shapes a driver actually uses.
+new_repo
+printf 'package p\n\nconst target = "docs/plan/README.md"\n' >"$WORK/a.go"
+expect 'Go naming the plan index as a value is allowed' 0
+
+new_repo
+printf 'package p\n\n// The index this driver merges: docs/plan/README.md\n' >"$WORK/a.go"
+expect 'Go citing the plan index in a comment is allowed' 0
 
 new_repo
 mkdir -p "$WORK/.github/workflows"
