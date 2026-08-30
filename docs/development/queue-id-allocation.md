@@ -13,7 +13,8 @@ The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-
 Claim an ID when you file the row, use it, and move on.
 There is nothing to release and nothing to clean up.
 
-**Every path through the target claims, and an ID you did not claim will not lint.** Those are the two halves of the same rule: the only way to learn an ID is to hold it, and a row carrying an ID nobody holds fails [`lint-backlog`](maintaining-backlog.md) rule 12 at the commit that files it.
+**Every path through the target claims, and an ID you did not claim is one `queue.py claims` rejects.** Those are the two halves of the same rule: the only way to learn an ID is to hold it, and an item carrying an ID nobody holds fails that check, which is rule 12 of the retired table-era linter, moved into `queue.py` by [Q889](../plan/q889-backlog-item-store.md).
+No gate runs that check today ([Q1042](../queue/Q1042.md)), so the second half holds only where someone runs it by hand.
 Both are below, under [Reserving, not reporting](#reserving-not-reporting).
 
 **The title is mandatory, and there is no untitled batch form.** This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through.
@@ -51,8 +52,9 @@ There were two ways to hold an ID without reserving it, and both are closed:
   That is the `**Next ID:** QN` counter this mechanism replaced, behind a flag: two sessions reading it concurrently read the same answer.
   **Removed.** Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.
 - **Reading the file's highest ID and adding one.** No tool can prevent that, so it fails loudly instead.
-  `lint-backlog` rule 12 requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, and it runs in the pre-commit hook, `make check`, and CI — so an unreserved ID is caught at the commit that files it rather than at the rebase that collides.
-  The message names the fix, and `BACKLOG_ALLOW_UNCLAIMED_ID="Q1 Q2"` is there for an ID claimed from another clone.
+  `queue.py claims` requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, measured against the merge base rather than `origin/main`'s tip, and skips rather than fails when the remote cannot be read unless `--strict` is passed.
+  The message names the fix, and `QUEUE_CLAIMS_ALLOW="Q1 Q2"` (or `--allow`) is there for an ID claimed from another clone.
+  No gate points it at this store: `queue-test.sh` drives it inside `make check`, but only ever against a fixture, so an unreserved ID here surfaces at the rebase that collides rather than at the commit that files it ([Q1042](../queue/Q1042.md)).
 
 What rule 12 costs and what it still misses:
 
@@ -60,7 +62,7 @@ What rule 12 costs and what it still misses:
   That baseline is the merge base with `origin/main`, not its tip: against the tip a row `main` deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).
 - IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.
 - When `git ls-remote` cannot reach the remote it skips rather than fails, so an offline clone still lints.
-  CI re-runs it with a network.
+  `--strict` is what turns that skip into a failure, and no gate passes it, because none runs the check over this store.
 - **It cannot catch a hand-picked ID that another session has already claimed but not yet filed.** That is the narrow residual: the ref exists, so the row looks reserved.
   Closing it needs the claim to record *who* holds it, which no one has needed yet.
 
@@ -95,12 +97,12 @@ Measured on a 10-row table, resolving two branches against a common base:
 
 Adjacency is the whole story: one untouched row of separation is enough to merge cleanly.
 
-**Row conflicts are unchanged by this.** They are also concentrated where the process puts them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too.
-A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.
+**Row conflicts were unchanged by this.** They were also concentrated where the process put them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too.
+A four-worker dispatch batch took rows 1 through 4 and every pair was adjacent.
 
 What the ref allocator removes is the *expensive* class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental.
-Row conflicts remain, are two lines, and resolve obviously.
-Their real danger is a botched resolution — a done row silently restored — not the conflict itself; `lint-backlog` rule 10 now catches that ([why](maintaining-backlog.md#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it)).
+Row conflicts remained, were two lines, and resolved obviously.
+Their real danger was a botched resolution — a done row silently restored — not the conflict itself; one file per item ends it, because a relocated item and a deleted one become a modify and a delete of one path, which git refuses rather than resolves ([why](maintaining-backlog.md#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it)).
 
 Every row in the table above is a *line-position* verdict.
 The [merge driver](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position) re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
@@ -121,8 +123,9 @@ It does not help GitHub's server-side squash-merge.
 The same `make merge-driver` installs a [sibling for `docs/plan/README.md`](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which has the same contention keyed on the plan path (Q611), and [one for `docs/roadmap.md`](maintaining-backlog.md#and-for-docsroadmapmd), keyed on each bullet's backlog annotation (Q799).
 
 **One file per item** (`docs/queue/Q423.md`).
+Shipped ([Q889](../plan/q889-backlog-item-store.md)).
 The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict.
-Held in reserve: it rewrites `lint-backlog.sh`, this process, the shared `session-backlog` skill, and costs the single-file read of the prioritized queue.
+It cost what this entry predicted: `lint-backlog.sh` retired in favour of `lint-queue.sh` and `check-queue-rules.sh`, this process and the shared `session-backlog` skill followed, and the single-file read of the prioritized queue became `queue.py render`.
 
 **Dispatcher-owned row removal.** Rejected.
 It only works when a dispatcher session exists, and items are also spawned by ID directly or as "start the next one", which have no serialization point.

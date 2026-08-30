@@ -50,7 +50,7 @@ Overall: **A**.
 Each dimension below lists the grade and the concrete evidence behind it.
 
 ### Sensor coverage — A
-Type checking (Go compiler + `go vet`), three test tiers (unit/integration/e2e), formatting and linting (`gofmt -s`, `golangci-lint` with govet/staticcheck/ ineffassign/unused per [`.golangci.yml`](../../.golangci.yml)), supply-chain scanning (`govulncheck`, `trivy`), and custom structural eval scripts (`scripts/docs/lint-backlog.sh`, `scripts/docs/queue-unblock.sh`).
+Type checking (Go compiler + `go vet`), three test tiers (unit/integration/e2e), formatting and linting (`gofmt -s`, `golangci-lint` with govet/staticcheck/ ineffassign/unused per [`.golangci.yml`](../../.golangci.yml)), supply-chain scanning (`govulncheck`, `trivy`), and custom structural eval scripts (`scripts/docs/lint-queue.sh`, `scripts/docs/check-queue-rules.sh`, `scripts/docs/queue-unblock.sh`).
 Browser/screenshot sensors are correctly absent — there is no user interface.
 
 ### Layer by speed — A

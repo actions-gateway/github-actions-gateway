@@ -908,7 +908,7 @@ It fails when:
 - a gate runs in `make check` but in no workflow, so it gates nothing on a PR.
   `make check` is then the only thing enforcing it, and the failure reports as a clean gate list — every rule above stays green (Q831).
   `comparison-stamps-check` shipped that way, and by the time the rule was written five gates were unwired: `license-header-check`, `page-density-check`, `semver-floor-sources-check`, `md-reflow-check` and `promql-check`.
-  A gate counts as wired when a workflow runs its own `make` target, or when every `scripts/` file its recipe runs is run by CI another way — through a different make target a workflow invokes (`manifest-validate` runs the three `chart-*-check` scripts) or invoked directly (`status-lint.yml` runs `lint-backlog.sh` without make).
+  A gate counts as wired when a workflow runs its own `make` target, or when every `scripts/` file its recipe runs is run by CI another way — through a different make target a workflow invokes (`manifest-validate` runs the three `chart-*-check` scripts) or invoked directly (`status-lint.yml` runs `lint-queue.sh` without make).
   Workflow **comments are excluded** from that match: these files explain themselves in prose that names their own targets, so a gate merely mentioned would read as covered.
   A gate that is deliberately local-only declares `# ci-scope: none` with its reason directly above its `.PHONY`, the same shape the rule above uses;
 - a gate runs in CI but in no workflow the merge queue evaluates, so the candidate merge is never held to it (Q942).
@@ -1500,7 +1500,8 @@ Two shapes produced that here on 2026-08-16, both cheap to check and neither che
 
 **Provenance, read off resemblance.** A cut of the agent process playbooks rested on the sentence "the tooling is vendored", meaning copied in from the globally-installed skills, and shipped it to three doc sites and a PR body as the justification for keeping prose thin: the gates hold the rules even where the docs no longer do.
 The direction was backwards.
-`lint-backlog.sh` over `backloglint` (Go, 13 rules, a GFM AST) has no counterpart in the skill, which ships bash over a smaller set; the ID allocator is the one the skill cites as *its* proof point at 460+ live claims here; the four merge drivers and `check-status-isolation.sh` exist only here.
+`lint-backlog.sh` over `backloglint` (Go, 13 rules, a GFM AST) had no counterpart in the skill, which ships bash over a smaller set; the ID allocator is the one the skill cites as *its* proof point at 460+ live claims here; the merge drivers and `check-status-isolation.sh` existed only here.
+`lint-backlog.sh`, `backloglint` and `check-status-isolation.sh` all retired with the table ([Q889](../plan/q889-backlog-item-store.md)), and the store's rules are now `lint-queue.sh` and `check-queue-rules.sh`; the reading stands as taken, and it is the direction it establishes that matters.
 One `git log` per side answers it, and none was run, because nothing in the sentence looked like a measurement.
 The claim survived into a merged PR and was corrected only after the maintainer asked whether it was true.
 

@@ -226,7 +226,7 @@ Strategy is the loop that keeps the whole codebase from accumulating debt faster
 
 1. **Prevent.** The cheapest debt is the kind that never lands.
    Layered [backpressure](backpressure.md) — the pre-commit hook, `make check`, and CI — rejects whole classes of debt at authoring time.
-   The guiding habit is **correct it twice, then automate it**: a mistake worth catching once is worth a gate (this is why `scripts/docs/lint-backlog.sh` and the [bucket-F gates](#quality-gates-as-debt-brakes) exist).
+   The guiding habit is **correct it twice, then automate it**: a mistake worth catching once is worth a gate (this is why `scripts/docs/check-queue-rules.sh` and the [bucket-F gates](#quality-gates-as-debt-brakes) exist).
 2. **Detect.** What prevention misses, a periodic **review pass** finds: read the code for the taxonomy above, scan for stale markers, and check whether new work re-introduced a class a gate was supposed to hold.
    Flaky CI is itself a detection signal (see below).
 3. **Triage and track.** Classify the item, decide its disposition with the [policy](#policy) above, and record it.

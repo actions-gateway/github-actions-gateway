@@ -205,7 +205,7 @@ write_workflow "$WF_NO_BETA" '      - run: make alpha\n      - run: make heavy-o
 WF_COMMENT="$FIXTURE_DIR/wf-comment"
 write_workflow "$WF_COMMENT" '      # run: make beta\n      - run: make alpha\n      - run: make heavy-one\n'
 # beta covered by its script rather than its target — the status-lint shape,
-# which runs lint-backlog.sh without going through make.
+# which runs lint-queue.sh without going through make.
 WF_SCRIPT="$FIXTURE_DIR/wf-script"
 write_workflow "$WF_SCRIPT" '      - run: scripts/one/beta.sh\n      - run: make alpha\n      - run: make heavy-one\n'
 # beta covered through another make target that runs its script.

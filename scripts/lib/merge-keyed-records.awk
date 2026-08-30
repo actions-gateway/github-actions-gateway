@@ -63,8 +63,9 @@ function row_id(line) {
 	return row_key_anchor(line)
 }
 
-# row_key_anchor LINE — the backlog ID. Mirrors scripts/docs/lint-backlog.sh's
-# parse_id: the ID cell is field 2 of the pipe-split row, and its
+# row_key_anchor LINE — the backlog ID. Mirrored scripts/docs/lint-backlog.sh's
+# parse_id; both served the Queue table Q889 retired, so no caller passes this
+# mode any more (Q1043). The ID cell is field 2 of the pipe-split row, and its
 # `<a id="QN"></a>` anchor must match the visible ID, because every
 # cross-reference in the file resolves through the anchor.
 function row_key_anchor(line,    n, f, cell, anchor, visible) {
