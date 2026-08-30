@@ -3342,7 +3342,7 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
   The supported posture is to opt the GAG tenant namespace out of the mesh; if mesh membership is mandatory, use native sidecars or an ambient/sidecar-less data plane plus egress exclusions.
   Decide this before provisioning — see <a href="../service-mesh-coexistence/">Running GAG Alongside a Service Mesh</a>.</li>
 <li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>.
-  Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
+  Install it with the <a href="../../charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
 <li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.github.com &amp;&amp; kubectl get crd runnergroups.actions-gateway.github.com</code>.</li>
 <li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with at least <code>Actions: Read</code> and <code>Administration: Read</code> permissions.
   The platform team has the <code>appId</code>, <code>installationId</code>, and private key <code>.pem</code> file.
@@ -3449,7 +3449,7 @@ The web-UI URL above is the reliable path; the <code>gh api /app/installations</
 <h3 id="0d-generate-and-download-the-private-key-pem">0d. Generate and download the private key (<code>.pem</code>)<a class="headerlink" href="#0d-generate-and-download-the-private-key-pem" title="Permanent link">&para;</a></h3>
 <p>On the App's <strong>General</strong> page → <strong>Private keys</strong> → <strong>Generate a private key</strong>.
 The browser downloads a <code>.pem</code> file <strong>once</strong> — GitHub never shows it again, so store it safely and treat it as a high-value secret.</p>
-<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
+<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="../../githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
 <table>
 <thead>
 <tr>
@@ -3821,7 +3821,7 @@ Because the AGC injects the wrapper on top of <strong>any</strong> base, your im
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
 <a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">USER</span><span class="w"> </span><span class="s">runner   # keep the non-root UID 1001 the AGC expects</span>
 </code></pre></div>
-<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
+<p>A working reference you can copy and extend lives at <a href="../../scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="../../scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
 <strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its six first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently <code>2.329.0</code>, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.</p>

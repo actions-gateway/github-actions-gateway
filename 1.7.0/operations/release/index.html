@@ -3525,7 +3525,7 @@
 </blockquote>
 <p>How a maintainer cuts a release: tag → publish (build, push, sign, attest, and package + push + sign the chart) → verify → record digests.
 This is the <strong>maintainer</strong> runbook for <em>producing</em> a release.
-Operators <em>consuming</em> a release pin the published digests at install time — see <a href="../tenant-onboarding/">tenant-onboarding.md</a> and the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md">chart README</a>.</p>
+Operators <em>consuming</em> a release pin the published digests at install time — see <a href="../tenant-onboarding/">tenant-onboarding.md</a> and the <a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
 <h2 id="what-a-release-produces">What a release produces<a class="headerlink" href="#what-a-release-produces" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>Operators <em>installing</em> a release pin the published digests at install time — see <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a>.</p>
@@ -3542,7 +3542,7 @@ Operators <em>consuming</em> a release pin the published digests at install time
   Consumers verify it with <code>gh attestation verify</code> or <code>cosign verify-attestation</code> (see step 3).</li>
 <li>The <strong>Helm chart</strong>, packaged and pushed as an OCI artifact to <code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>, with its <code>version</code> and <code>appVersion</code> set to the release tag and a keyless <strong>cosign signature</strong> from the same Fulcio/Rekor flow as the images.
   Operators install it straight from the registry (<code>helm install … oci://…</code>) with the published image <strong>digests</strong> pinned — no <code>git clone</code> of the chart.
-  OCI (over a <code>gh-pages</code> chart repo) is chosen so the chart reuses the images' registry, login, and keyless-signing path; Artifact Hub (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations) indexes the OCI ref for discoverability.</li>
+  OCI (over a <code>gh-pages</code> chart repo) is chosen so the chart reuses the images' registry, login, and keyless-signing path; Artifact Hub (see <a href="../../charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations) indexes the OCI ref for discoverability.</li>
 <li>The <strong>opt-in v2 CRD chart</strong>, packaged and pushed alongside the main chart to <code>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2</code>, with the same version derivation and keyless signature.
   It ships only the v2alpha1 (<code>actions-gateway.com</code>) CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
   Operators install it only when adopting the v2 API.
@@ -3556,7 +3556,7 @@ Operators <em>consuming</em> a release pin the published digests at install time
 <li>The <strong>GitHub Release</strong> itself (Q293), composed by <code>chart-publish</code>: the six image index digests, the <code>make verify-release</code> command, a generated changelog, and a tag-derived <code>--prerelease</code> flag.
   It is created only if the tag has no Release yet, so a maintainer's pre-tag curated notes are never clobbered.</li>
 </ul>
-<p>Both the image and chart work are automated by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
+<p>Both the image and chart work are automated by the <a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
 The maintainer's job is to cut the tag and verify the result.</p>
 <blockquote>
 <p><strong>Signing and chart publish are exercised for the first time on the first real <code>v*</code> tag.</strong> Pull-request CI builds each image and generates its SBOM, but it does <strong>not</strong> push, sign, attest, or publish the chart (those need a registry push and the publish workflow's OIDC identity).
@@ -3606,7 +3606,7 @@ A published field whose type changed or whose enum narrowed, and the non-CRD con
 <ul>
 <li><strong>A security fix users cannot get any other way.</strong> Cut promptly, as a patch off the release branch if <code>main</code> carries unrelated risk (<a href="#patch-releases-and-backports">Patch releases and backports</a>).</li>
 <li><strong>A headline capability landed.</strong> Scope a minor around it — one thing an adopter would upgrade <em>for</em>, with the rest of the window riding along.
-  That is the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/release-1.3.md">1.3</a> pattern: worker right-sizing was the headline, and three dozen other changes shipped underneath it.</li>
+  That is the <a href="../../plan/release-1.3/">1.3</a> pattern: worker right-sizing was the headline, and three dozen other changes shipped underneath it.</li>
 <li><strong>User-visible fixes accumulated with no feature.</strong> A patch release.
   The bar is that an operator running the current tag is hitting something already fixed, not that the fix count crossed a number.</li>
 <li><strong>Internal-only churn.</strong> Wait.
@@ -3614,7 +3614,7 @@ A published field whose type changed or whose enum narrowed, and the non-CRD con
 </ul>
 <p><strong>The counterweight — a tag is not free.</strong> Every GA cut spends the <a href="#validate-the-release-candidate-on-dogfood">release-candidate dogfood validation</a>: a real GKE cluster, a live e2e matrix, and a maintainer watching it.
 That cost is what makes "enough" a real bar rather than a formality — it is also why the answer to a thin delta is <em>wait</em>, not <em>cut a small one</em>.</p>
-<p><strong>Once you decide to cut, the question changes.</strong> From that point the report stops being the view: write the release plan doc, open it with a <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/maintaining-backlog.md#cutting-a-release-the-scope-ledger">scope ledger</a>, and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.</p>
+<p><strong>Once you decide to cut, the question changes.</strong> From that point the report stops being the view: write the release plan doc, open it with a <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope ledger</a>, and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.</p>
 <h2 id="release-sequence">Release sequence<a class="headerlink" href="#release-sequence" title="Permanent link">&para;</a></h2>
 <h3 id="1-pre-flight">1. Pre-flight<a class="headerlink" href="#1-pre-flight" title="Permanent link">&para;</a></h3>
 <p><strong>A recorded verdict covers the commit it was measured at, so record that commit with it.</strong> Each step below ends in a verdict written to the release's plan doc, and a verdict reads as done long after the scope it covered has moved.
@@ -3632,13 +3632,13 @@ Its deadline really is the stable tag, but the RC is the artifact that gets vali
 Reviewing it at the first RC and recording the verdict then is what keeps that cheap.</p>
 <p><strong>A draft of the notes belongs at the first RC too, for the same reason and a stronger one.</strong> Writing the notes is what forces the release's claims to be <em>stated</em>, and a stated claim is the only kind anyone can check.
 Reviewing that draft is therefore a discovery step, not a formatting pass: it is reliably where the release's remaining defects surface, because nothing else in pre-flight asks the product to describe itself.</p>
-<p>Interrogate the draft with three questions, through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/skills.md#verify-claims"><code>verify-claims</code></a>; the other three prose passes bind at the stable tag, when the text publishes.
+<p>Interrogate the draft with three questions, through <a href="../../development/skills/#verify-claims"><code>verify-claims</code></a>; the other three prose passes bind at the stable tag, when the text publishes.
 Each of them found something real in the 1.5 cycle, and each found it <em>after</em> the candidate was cut, which is what made it expensive:</p>
 <ol>
 <li><strong>Does every claim in it still hold?</strong> The 1.5 draft said multi-label registration closed a gap, and checking the neighbouring claims found <code>why-gag.md</code> asserting a capability was classic-only that had reached both tiers a release earlier.</li>
 <li><strong>What does this release leave as a landmine for an operator who never reads these notes?</strong> The best answers are the ones no caveat report can produce, because nothing changed in a file: 1.5's sharpest was that <code>helm upgrade</code> never applies CRDs and a structural schema prunes unknown fields silently, so a skipped step leaves a declared security boundary inert.
    The two caveats that were <em>not</em> landmines each shipped a condition or Event that fires exactly when an operator would otherwise be confused, which is the shape to aim for.</li>
-<li><strong>Is every completeness or parity claim backed by something derived, or by a list someone maintains?</strong> A curated inventory answers "nothing that someone recorded is missing" (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/testing.md#generate-a-fixture-with-the-producers-own-code-never-by-hand">testing.md</a>), and a release note is where that distinction becomes a published promise.</li>
+<li><strong>Is every completeness or parity claim backed by something derived, or by a list someone maintains?</strong> A curated inventory answers "nothing that someone recorded is missing" (<a href="../../development/testing/#generate-a-fixture-with-the-producers-own-code-never-by-hand">testing.md</a>), and a release note is where that distinction becomes a published promise.</li>
 </ol>
 <p>Record the verdict in the release's plan doc as with the other pre-flight steps, and file what it turns up as gating rows.
 The point of doing it here rather than at the tag is that the answers are free before a candidate exists and cost a new RC afterwards: in 1.5 they arrived after <code>rc.1</code> had been cut, published and validated, and superseded it.</p>
@@ -3648,7 +3648,7 @@ The point of doing it here rather than at the tag is that the answers are free b
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release/check-gates-green.sh<span class="w"> </span>origin/main
 </code></pre></div>
 <p>It asks by commit across every lane, because <code>gh run list --branch main</code> hides merge-queue runs and so reports "not validated" about a commit that is.
-  It reads <strong>job</strong> conclusions rather than the run's, because each <code>&lt;workflow&gt;-gate</code> job passes on <code>skipped</code> as readily as on <code>success</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md</a>).</p>
+  It reads <strong>job</strong> conclusions rather than the run's, because each <code>&lt;workflow&gt;-gate</code> job passes on <code>skipped</code> as readily as on <code>success</code> (<a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md</a>).</p>
 <p><strong>Expect <code>SKIPPED</code>, and do not read it as red.</strong> It is the ordinary shape of a release tip: docs-only merges sit on top of the last code change, so the heavy jobs path-gate themselves away.
   All nine required workflows had skipped their heavy job on the commit <code>v1.5.0</code> was tagged at, and the release was sound, because the code was the tree an earlier commit had validated in full.
   Prove exactly that, and say which commit you are relying on:</p>
@@ -3664,7 +3664,7 @@ The point of doing it here rather than at the tag is that the answers are free b
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
 <p>It needs Go on <code>PATH</code>: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds <code>devtools/docs/reasontiers</code> first.
-  Apply the checklist in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/api-review.md#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
+  Apply the checklist in <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
   <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is that the shape is chosen rather than frozen by default.</p>
 <p>This step exists because it nearly did not happen: Q476 renamed <code>capacityGate.mode: On</code> days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.</p>
 <ul>
@@ -3696,7 +3696,7 @@ The point of doing it here rather than at the tag is that the answers are free b
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scripts/release/operator-caveats-since.sh
 </code></pre></div>
-<p>It needs no bookkeeping to stay current: the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/doc-update-matrix.md">doc-update matrix</a> already requires an operator-visible change to land in <code>docs/operations/</code>, so the diff of those pages since the last tag already <em>is</em> the list — this only makes it scannable (added sections, bold-lead bullets, anything marked <code>BREAKING</code>) instead of a release-sized raw diff.</p>
+<p>It needs no bookkeeping to stay current: the <a href="../../development/doc-update-matrix/">doc-update matrix</a> already requires an operator-visible change to land in <code>docs/operations/</code>, so the diff of those pages since the last tag already <em>is</em> the list — this only makes it scannable (added sections, bold-lead bullets, anything marked <code>BREAKING</code>) instead of a release-sized raw diff.</p>
 <p>Reading it is judgement: a clarification is not a caveat, and the script cannot tell them apart.
   What it guarantees is that you have <strong>seen</strong> them.
   Carry the real ones into a curated body:</p>
@@ -3709,8 +3709,8 @@ The point of doing it here rather than at the tag is that the answers are free b
   <code>make roadmap-check</code> catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
   What it cannot catch is the move itself: <strong>work that shipped this cycle needs a <code>docs/features.md</code> line</strong>, and a Deferred row describing a capability an adopter would ask about belongs in <em>Exploring</em>.
   A 2026-07-25 audit found six of seven near-term items already shipped.</li>
-<li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip at the top of every page on the site.
-  Its <strong>version needs no action</strong>: it is derived from the git tags at build time, so a stable tag names itself automatically (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/website.md#the-announce-bar">website.md § The announce bar</a>).
+<li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip at the top of every page on the site.
+  Its <strong>version needs no action</strong>: it is derived from the git tags at build time, so a stable tag names itself automatically (<a href="../../development/website/#the-announce-bar">website.md § The announce bar</a>).
   What you may want to update is the one-line highlight after it, and the <code>highlight_for</code> version that guards it.
   Leave both alone and the banner reads <em>"vX.Y.Z is here.
   Read the release notes."</em>, which is correct but plainer; update them together and it leads with this release's headline.
@@ -3723,7 +3723,7 @@ The point of doing it here rather than at the tag is that the answers are free b
 <p><strong><code>publish.yml</code> enforces the result</strong> via its <code>announce-bar</code> job, which every publishing job depends on: it builds the site at the tag and fails the release if the <em>rendered</em> banner does not name it, before any image is pushed.
   Prereleases are exempt (they publish no docs), as is a backport tag cut after a newer minor, since the banner advertises the newest release by design.</p>
 <p>(A <code>docs_ref</code> seed of an already-cut release pins <code>overrides/</code> to the current checkout, so re-seeding refreshes the highlight on past tags too.
-  See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/website.md#seeding-already-released-versions">website.md § Seeding</a>.)</p>
+  See <a href="../../development/website/#seeding-already-released-versions">website.md § Seeding</a>.)</p>
 <h4 id="validate-the-release-candidate-on-dogfood">Validate the release candidate on dogfood<a class="headerlink" href="#validate-the-release-candidate-on-dogfood" title="Permanent link">&para;</a></h4>
 <p>Before promoting a release-candidate line to a <strong>stable</strong> <code>vX.Y.Z</code> tag, validate the <em>latest RC</em> functionally on the dogfood cluster.
 <code>main</code>-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
@@ -3744,9 +3744,9 @@ A healthy leg finishes in 25–33 minutes; raise the variable rather than removi
 <p>The gate also checks every local tool it needs up front — including the pinned <code>cosign</code> the final CRD-smoke leg verifies with (<code>make cosign</code> downloads it to <code>.build/cosign</code>; <code>COSIGN=&lt;path&gt;</code> overrides) — so a missing binary fails the run before it spends anything, not 25 minutes in.</p>
 <h5 id="the-gate-records-its-verdict-and-publish-reads-it">The gate records its verdict, and publish reads it<a class="headerlink" href="#the-gate-records-its-verdict-and-publish-reads-it" title="Permanent link">&para;</a></h5>
 <p>A passing run writes <code>refs/validated/&lt;rc-tag&gt;</code> on the remote, pointing at the commit that tag resolves to.
-That marker is the only machine-readable record that a candidate was validated: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/publish.yml"><code>publish.yml</code></a> can read none of those.</p>
+That marker is the only machine-readable record that a candidate was validated: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes, and <a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> can read none of those.</p>
 <p><strong>A stable tag whose release line has no marker does not publish.</strong> <code>publish.yml</code>'s <code>validated-candidate</code> job refuses it before any image is pushed, and it takes the newest <em>validated</em> candidate as its reference rather than the newest candidate tag.
-Those differ, which is the point: <code>v1.5.0-rc.2</code> was tagged and published having spent no validation at all (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md">postmortem</a>), so a gate keyed on the newest prerelease would have waved it through.</p>
+Those differ, which is the point: <code>v1.5.0-rc.2</code> was tagged and published having spent no validation at all (<a href="../../postmortems/2026-08-15-rc2-tagged-a-stale-commit/">postmortem</a>), so a gate keyed on the newest prerelease would have waved it through.</p>
 <p>It is a record, not an attestation.
 Anyone who can push a tag can push the marker, so it proves the gate was run and reported to, never that a green verdict was earned.
 What it closes is a promote with no validation anywhere behind it.</p>
@@ -3877,7 +3877,7 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
    The cluster sits at <strong>0 nodes at rest</strong>, so <code>setup.sh</code>'s GMC-rollout wait has nothing to schedule on and <strong>times out</strong> — that is expected; <code>scripts/dogfood/start.sh</code> then scales the system pool to one node and completes the rollout.
    So: <code>GAG_IMAGE_TAG=vX.Y.Z-rc.N APP_ID=… INSTALLATION_ID=… ASSUME_YES=1 scripts/dogfood/setup.sh</code> (a timed-out rollout wait here is fine), then <code>scripts/dogfood/start.sh</code>.
    Run the one-time <code>scripts/dogfood/e2e-setup.sh</code> first if the e2e node pool / GitHub App Secret aren't set up yet.
-   The cluster, context pinning, and prod-guard cautions are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/gke-dogfood.md">gke-dogfood.md</a>.</li>
+   The cluster, context pinning, and prod-guard cautions are in <a href="../../plan/gke-dogfood/">gke-dogfood.md</a>.</li>
 <li><strong>Run the e2e job matrix on GAG runners.</strong> This is two moves, not one.
    <code>scripts/dogfood/e2e-start.sh</code> spins up the on-demand e2e tenant's AGC — it does <strong>not</strong> start a run and does <strong>not</strong> touch routing.
    Trigger the matrix by <strong>dispatching a run with routing scoped to it</strong>:</li>
@@ -4005,7 +4005,7 @@ Exit 2 is different and is never a finding about the release: the check itself c
 <p><strong><code>publish.yml</code> asks the same question at the tag, and it asks the other half too.</strong> The pre-flight above takes the validated commit as an argument, so it is only as good as whichever candidate you name; the <code>validated-candidate</code> job derives that commit from <code>refs/validated/</code>, so it also refuses a release line where <em>no</em> candidate was ever validated (<a href="#the-gate-records-its-verdict-and-publish-reads-it">the marker</a>).
 Both halves fail before an image is pushed.
 Running the pre-flight is still worth it, because failing here costs a command and failing there costs a burned tag.</p>
-<p><strong>You should already know, because the watch says so at the merge.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/release-freeze-watch.yml"><code>release-freeze-watch.yml</code></a> runs this same question after every push to <code>main</code>, and opens an issue labelled <code>release-freeze</code> naming the candidate the window invalidated.
+<p><strong>You should already know, because the watch says so at the merge.</strong> <a href="../../.github/workflows/release-freeze-watch.yml"><code>release-freeze-watch.yml</code></a> runs this same question after every push to <code>main</code>, and opens an issue labelled <code>release-freeze</code> naming the candidate the window invalidated.
 It closes that issue when a newer candidate covers <code>main</code> again, so an open one means a freeze is broken right now and the check above is about to exit 1.
 Until Q1001 nothing said so: <code>v1.6.0-rc.1</code> was tagged, three Dependabot pull requests merged on top of it, and the first anybody heard was this pre-flight the next morning.
 The watch never blocks a merge, because the merge is not the problem: those bumps were good changes and the answer was a new candidate.</p>
@@ -4027,7 +4027,7 @@ It accepts the <em>current</em> release too, so a green gate is not on its own e
 </code></pre></div>
 <p>The check is here because creating a tag and pushing it are two moments, and anything can happen between them.
 A tag left over from an earlier attempt makes <code>git tag -a</code> fail, so a <code>&amp;&amp;</code> chain skips the push and does nothing — while a bare <code>git push</code> sends the <strong>stale</strong> tag instead.
-That is how <code>v1.5.0-rc.2</code> published from a commit three merges behind, and a published immutable Release locks its tag, so the only repair was to burn the candidate number (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md">postmortem</a>).
+That is how <code>v1.5.0-rc.2</code> published from a commit three merges behind, and a published immutable Release locks its tag, so the only repair was to burn the candidate number (<a href="../../postmortems/2026-08-15-rc2-tagged-a-stale-commit/">postmortem</a>).
 Cutting from a worktree makes the gap wider, since the tag is created against <code>origin/main</code> rather than a checked-out branch.</p>
 <p>Pushing the tag starts <code>publish.yml</code>.
 Watch it:</p>
@@ -4035,11 +4035,11 @@ Watch it:</p>
 </code></pre></div>
 <blockquote>
 <p>A <code>workflow_dispatch</code> run with a <code>tag</code> input publishes the same way without a git tag — use it to dry-run the pipeline against a throwaway <code>vX.Y.Z-rc1</code> tag.</p>
-<p><strong>The docs site publishes this release too (Q238).</strong> A <strong>stable</strong> <code>vX.Y.Z</code> tag also triggers <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the release's docs as a new version on <a href="https://actions-gateway.com">actions-gateway.com</a> and moves the <code>stable</code> alias + the site's default root redirect to it — so the public docs default to this release, with the unreleased <code>main</code> docs kept behind an opt-in <code>dev</code> version.
+<p><strong>The docs site publishes this release too (Q238).</strong> A <strong>stable</strong> <code>vX.Y.Z</code> tag also triggers <a href="../../.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the release's docs as a new version on <a href="https://actions-gateway.com">actions-gateway.com</a> and moves the <code>stable</code> alias + the site's default root redirect to it — so the public docs default to this release, with the unreleased <code>main</code> docs kept behind an opt-in <code>dev</code> version.
 Prerelease tags (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) do <strong>not</strong> deploy the site.
 Because each version builds from <strong>its own tag</strong>, the version pins in this tree are what the release publishes as its landing page, and they still name the previous release.
 <a href="#the-bump-on-main-does-not-reach-the-published-release">Step 7</a> republishes them.
-The versioned-docs model, and the one-time <code>mike</code> seeding of releases cut before it landed, are documented in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
+The versioned-docs model, and the one-time <code>mike</code> seeding of releases cut before it landed, are documented in <a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
 </blockquote>
 <h3 id="3-verify-the-publish">3. Verify the publish<a class="headerlink" href="#3-verify-the-publish" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -4047,14 +4047,14 @@ The versioned-docs model, and the one-time <code>mike</code> seeding of releases
 The first attempt is therefore masked and a "Rebuild and push" step follows it; a second failure is unmasked and reds the job.
 Because the release build is <code>no-cache: true</code> the retry's index digest differs from the first attempt's, so a "Resolve the published index digest" step picks the attempt that actually published and every signature, SBOM, and recorded pin binds to that one.
 Nothing signs the superseded index, and the digest in the run summary is the digest the tag serves.
-See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/testing.md#image-builds-retry-the-transport-never-the-pin">testing.md § Image builds: retry the transport, never the pin</a>.</p>
+See <a href="../../development/testing/#image-builds-retry-the-transport-never-the-pin">testing.md § Image builds: retry the transport, never the pin</a>.</p>
 </blockquote>
 <p>Confirm every image <strong>and the chart</strong> was signed by <em>this</em> workflow before announcing the release.
 The one-command check uses the pinned cosign (<code>make</code> downloads <code>COSIGN_VERSION</code> — the same version <code>publish.yml</code> signs with — into <code>.build/</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
 <blockquote>
-<p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong> CI's released-chart upgrade gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/testing.md#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>) discovers the highest stable <code>vX.Y.Z</code> tag on the repo and <code>helm pull</code>s that chart version from GHCR on every e2e run.
+<p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong> CI's released-chart upgrade gate (<a href="../../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>) discovers the highest stable <code>vX.Y.Z</code> tag on the repo and <code>helm pull</code>s that chart version from GHCR on every e2e run.
 Pushing a stable tag whose <code>chart-publish</code> job failed therefore fails e2e on <strong>every subsequent PR</strong> until the publish is repaired (re-run the <code>publish.yml</code> run for the tag) or the tag is removed.
 Prerelease (<code>-rc</code>) tags are ignored by the gate.</p>
 </blockquote>
@@ -4138,7 +4138,7 @@ Publish from it:</p>
 By the time they were right they had been through a wrong count, a dead anchor, 46 forced line breaks, two mismatched PR numbers, and a caveat that never said "GHES" — every one caught by hand, none by review, and none of it reviewable because the text was not in a diff.
 In-repo makes each fix a diff and each published body reproducible from a commit.</p>
 <p>These files are excluded from the docs site on <strong>every</strong> version, dev included: they are written for github.com's renderer, which the site is not.
-The exclusion is spelled out in four places that must agree — <code>mkdocs.yml</code>, two <code>env:</code> blocks and one <code>export</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, and <code>scripts/docs/docs-preview.sh</code>.</p>
+The exclusion is spelled out in four places that must agree — <code>mkdocs.yml</code>, two <code>env:</code> blocks and one <code>export</code> in <a href="../../.github/workflows/pages.yml"><code>pages.yml</code></a>, and <code>scripts/docs/docs-preview.sh</code>.</p>
 <p><strong>Past bodies are retrievable, so the previous release is your template:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>gh<span class="w"> </span>release<span class="w"> </span>view<span class="w"> </span>vX.Y.Z<span class="w"> </span>--json<span class="w"> </span>body<span class="w"> </span>--jq<span class="w"> </span>.body
 </code></pre></div>
@@ -4154,7 +4154,7 @@ Fold the lists (below) and the length costs nothing.</p>
 <p><strong>A caveat that says a number moves is re-derived from the code, never paraphrased from the change that moved it.</strong> <code>v1.5.0</code>'s job-duration caveat said the classic tier's old span <em>excluded</em> the pre-creation window, and that cost attribution had been reading <em>low</em>.
 Both are inverted.
 The span ran from job acquisition to the pod going terminal, so it charged the staging, quota-retry and <code>spec.scaleUp</code> throttle window, and attribution read high.
-What let it through is that the commit and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/release-1.5.md">the plan doc</a> were both correct: the note was written from a sibling artifact instead of from <code>provisioner.go</code>, and a paraphrase can reverse a direction while keeping every noun in place.
+What let it through is that the commit and <a href="../../plan/release-1.5/">the plan doc</a> were both correct: the note was written from a sibling artifact instead of from <code>provisioner.go</code>, and a paraphrase can reverse a direction while keeping every noun in place.
 It then survived a full pre-flight and <code>rc.1</code>, because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/operator-caveats-since.sh"><code>operator-caveats-since.sh</code></a> reports what changed and never judges a claim, by design.
 So for any caveat asserting that a value rises, falls, widens or narrows, open the diff that moved it and read both states before writing which way (#1529).</p>
 <h5 id="the-section-skeleton">The section skeleton<a class="headerlink" href="#the-section-skeleton" title="Permanent link">&para;</a></h5>
@@ -4297,7 +4297,7 @@ Paths settle all nine, and <code>--notes</code> puts each on the correct side of
 <p><strong>Read the residue anyway.
 A release publishes things no image and no chart carries.</strong> The surface is derived from <code>publish.yml</code>, so it sees only what that pipeline packages, and an artifact published any other way is invisible to it.
 The runner template library (Q554) was one of <code>v1.4.0</code>'s three headline features and ships as <code>deploy/templates/</code>; it lands in the residue, not in Ships.
-So the residue is ordered rather than dumped: commits that also changed <code>docs/operations/</code> come first, an added page ahead of an edited one, because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/doc-update-matrix.md">doc-update-matrix.md</a> requires an operator-visible change to land there.
+So the residue is ordered rather than dumped: commits that also changed <code>docs/operations/</code> come first, an added page ahead of an edited one, because <a href="../../development/doc-update-matrix/">doc-update-matrix.md</a> requires an operator-visible change to land there.
 At <code>v1.4.0</code> that ranks Q554 first of 43: ten rows carry the flag and thirty-three do not.
 Read the ten, and treat the rest as dev tooling only after the flag has had its say.</p>
 <p><strong>Cite the commit that did the work, not the one that filed it.</strong> A Q-numbered backlog row and its implementation have near-identical subjects, so a <code>docs(plan)</code> commit reads exactly like the fix.
@@ -4397,11 +4397,11 @@ This makes the tagged copy of the notes file permanently one section behind the 
 <p>Release notes are the most-read prose the project ships, and four skills run over the draft before publishing.
 Each owns a different defect class, so none of them substitutes for another, and the order is load-bearing: the first can change what the notes <em>say</em>, the rest change how they say it.</p>
 <ol>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/skills.md#verify-claims"><code>verify-claims</code></a>, which re-derives every count, version, coverage statement and direction-of-change instead of carrying it forward.
+<li><a href="../../development/skills/#verify-claims"><code>verify-claims</code></a>, which re-derives every count, version, coverage statement and direction-of-change instead of carrying it forward.
    Same pass as the <a href="#1-pre-flight">pre-flight interrogation</a>, re-run over the text that will actually publish, because the draft has been edited since.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/skills.md#readability"><code>readability</code></a>, for structure: what a reader meets before the truncation cut, whether a caveat survives being read alone, whether a term is explained where it is introduced.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/skills.md#deslop"><code>deslop</code></a>, for vocabulary and sentence mechanics.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/skills.md#semantic-remediation"><code>semantic-remediation</code></a> last, over the edited text: sentences that read fluently and fall apart on a literal read.
+<li><a href="../../development/skills/#readability"><code>readability</code></a>, for structure: what a reader meets before the truncation cut, whether a caveat survives being read alone, whether a term is explained where it is introduced.</li>
+<li><a href="../../development/skills/#deslop"><code>deslop</code></a>, for vocabulary and sentence mechanics.</li>
+<li><a href="../../development/skills/#semantic-remediation"><code>semantic-remediation</code></a> last, over the edited text: sentences that read fluently and fall apart on a literal read.
    It runs after the other three rather than beside them, because editing is what introduces the defects it looks for.</li>
 </ol>
 <p>The mechanical checks below settle what a machine can settle.
@@ -4463,13 +4463,13 @@ And <strong>report the negative when it is true</strong>: "16 metrics added, non
 The <strong>prerelease annotation is likewise derived from the tag</strong> now, so nothing here needs a hand-flip.
 The remaining items below are one-time setup or guardrails, not per-release steps:</p>
 <ul>
-<li><strong>Prerelease annotation — derived, not hand-flipped (Q293).</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries <code>artifacthub.io/prerelease</code>, but its committed value is a <strong>dev placeholder</strong>: <code>publish.yml</code> overrides it with <code>yq</code> before <code>helm package</code>, setting <code>"true"</code> for a <code>0.x</code> or <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> tag and <code>"false"</code> for a stable <code>≥1.0.0</code> tag (same test that sets the Release's <code>--prerelease</code> flag).
+<li><strong>Prerelease annotation — derived, not hand-flipped (Q293).</strong> <a href="../../charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries <code>artifacthub.io/prerelease</code>, but its committed value is a <strong>dev placeholder</strong>: <code>publish.yml</code> overrides it with <code>yq</code> before <code>helm package</code>, setting <code>"true"</code> for a <code>0.x</code> or <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> tag and <code>"false"</code> for a stable <code>≥1.0.0</code> tag (same test that sets the Release's <code>--prerelease</code> flag).
   There is <strong>no flip PR</strong> to land before or after a cut.
   The v2 CRD chart is stamped the same way.</li>
 <li><strong>Artifact Hub listing.</strong> Discoverability metadata (description, keywords, prerelease flag) ships in the chart's own annotations.
-  Ownership verification uses <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root — register the OCI repository in the Artifact Hub control panel, copy the assigned <code>repositoryID</code> into that file, and push it to the registry as the repository-metadata OCI artifact (the file's header documents the exact steps).
+  Ownership verification uses <a href="../../artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root — register the OCI repository in the Artifact Hub control panel, copy the assigned <code>repositoryID</code> into that file, and push it to the registry as the repository-metadata OCI artifact (the file's header documents the exact steps).
   This is a one-time control-panel action, not part of <code>publish.yml</code>.</li>
-<li><strong>Empty <code>values.yaml</code> digests.</strong> <strong>Do not</strong> commit real <code>sha256:…</code> digests into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/values.yaml"><code>values.yaml</code></a>.
+<li><strong>Empty <code>values.yaml</code> digests.</strong> <strong>Do not</strong> commit real <code>sha256:…</code> digests into <a href="../../charts/actions-gateway/values.yaml"><code>values.yaml</code></a>.
   The empty <code>digest</code> fields are the <em>secure default</em>: an unconfigured install fails closed (the GMC rejects floating AGC/proxy tags at startup) until the operator pins a real digest at install time.
   Baking a digest into the shipped chart would defeat that fail-closed posture and immediately go stale.
   The published digests belong in the <strong>release notes</strong> (step 5), which is where the operator copies them from.</li>
@@ -4482,11 +4482,11 @@ A gate runs the bump instead of remembering it:</p>
 </code></pre></div>
 <p>It resolves the newest stable <code>vX.Y.Z</code> tag and fails with the file and line of every pin that still names an older one, across the five pages that tell a reader which version to install — <code>README.md</code>, <code>docs/index.md</code>, and <code>docs/operations/</code>'s <code>install.md</code>, <code>upgrade.md</code>, and <code>gitops.md</code>.
 Bump each site it reports (charts drop the leading <code>v</code>; <code>gitops.md</code> carries the Argo <code>targetRevision</code> and both Flux forms) and re-run until it is green.</p>
-<p>Two things it deliberately leaves alone, both documented alongside the extractor it shares with the published-site check in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>: a line beginning <code>Measured on kind</code>, whose version records what was actually installed for a measurement — bumping it would falsify the record — and <code>v2.0.0</code>, the announced <code>v1alpha1</code>/<code>v2alpha1</code> removal release.
+<p>Two things it deliberately leaves alone, both documented alongside the extractor it shares with the published-site check in <a href="../../scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>: a line beginning <code>Measured on kind</code>, whose version records what was actually installed for a measurement — bumping it would falsify the record — and <code>v2.0.0</code>, the announced <code>v1alpha1</code>/<code>v2alpha1</code> removal release.
 A page that yields <em>no</em> pin at all is a failure rather than a pass, so a pin that moves out of the scan's reach is reported instead of silently going unchecked.</p>
 <p>Landing the bump is a normal PR; the gate is part of <code>make check</code> and of the <code>doc-links</code> CI workflow, so a stale pin reddens every subsequent PR until it is fixed.
 This step exists because <code>v1.3.0</code> shipped without it: <code>README.md</code>, <code>docs/index.md</code>, and <code>install.md</code> were fixed by hand while <code>upgrade.md</code> and <code>gitops.md</code> kept pointing at <code>1.2.0</code>, and <code>install.md</code>'s own patch-line hint still read <code>1.2.z</code> (Q638).</p>
-<p>The release plan's own row in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/README.md"><code>docs/plan/README.md</code></a> is the other hand-written claim the tag falsifies, and it is gated the same way:</p>
+<p>The release plan's own row in <a href="../../plan/"><code>docs/plan/README.md</code></a> is the other hand-written claim the tag falsifies, and it is gated the same way:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make<span class="w"> </span>plan-index-check
 </code></pre></div>
 <p>Once <code>vX.Y.0</code> is published, that gate rejects an open marker (❌, 🔲, 🚧) on the <code>release-X.Y.md</code> row.
@@ -4498,7 +4498,7 @@ The site builds each version from its tag (<a href="#2-tag-and-push">step 2</a>)
 So are <code>stable</code> and the root redirect a visitor lands on.
 <code>make release-pins-check</code> cannot catch this: it reads the working tree, not the published site.
 <code>make verify-published-docs</code> is the half that reads the site, and it is the last thing this step does.</p>
-<p>The publish run does its own, narrower live check first: after deploying, it polls until the site actually serves the version, and fails with the republish command when it does not (Q1000, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/website.md#what-the-publish-job-verifies-and-why-it-takes-two-checks">website.md</a>).
+<p>The publish run does its own, narrower live check first: after deploying, it polls until the site actually serves the version, and fails with the republish command when it does not (Q1000, <a href="../../development/website/#what-the-publish-job-verifies-and-why-it-takes-two-checks">website.md</a>).
 That answers <em>did the deploy reach the site</em>, which is what <code>v1.6.0</code> got wrong.
 It cannot answer <em>do the published pages pin the right release</em>, because a tag's own tree carries the previous release's pins until the republish below.
 So a green publish run is not a substitute for the command at the end of this step.</p>
@@ -4506,7 +4506,7 @@ So a green publish run is not a substitute for the command at the end of this st
 Three of the four releases cut since <code>1.0.0</code> published the previous version's install command as their landing page.
 Measured on the live site 2026-08-10: <code>/1.1.0/</code> and <code>/1.2.0/</code> both advertise <code>--version 1.0.0</code>, and <code>/1.4.0/</code> advertised <code>1.3.0</code> together with the <code>v1.3.0</code> CRD manifest URL, as did <code>stable</code> and the root redirect, for the three hours until it was reported.
 <code>v1.3.0</code> is correct only because Q638's hand-fix happened to land before that tag.</p>
-<p>Nor can the bump simply move ahead of the tag: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> compares each pin for <strong>equality</strong> with the newest stable tag, so a pin naming the release about to be cut fails exactly as loudly as one naming the release before it, reddening <code>make check</code> and <code>doc-links</code> for every PR in the window.
+<p>Nor can the bump simply move ahead of the tag: <a href="../../scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> compares each pin for <strong>equality</strong> with the newest stable tag, so a pin naming the release about to be cut fails exactly as loudly as one naming the release before it, reddening <code>make check</code> and <code>doc-links</code> for every PR in the window.
 The <code>GAG_RELEASE_TAG</code> override is a gate-testing hook, set nowhere in CI.</p>
 <p>So the bump lands twice, and the release's own docs are republished from the second copy:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>git<span class="w"> </span>switch<span class="w"> </span>-c<span class="w"> </span>release-X.Y<span class="w"> </span>vX.Y.Z
@@ -4520,13 +4520,13 @@ The <code>GAG_RELEASE_TAG</code> override is a gate-testing hook, set nowhere in
 <p><code>release-X.Y</code> is the tag plus the pin bump and nothing else — verify with <code>git diff --stat vX.Y.Z..release-X.Y</code> before pushing, because anything else on it publishes as documentation of a release that never shipped it.
 Keep the branch: it is the backport line <a href="#patch-releases-and-backports">patch releases</a> already want, and <code>GAG_DOCS_SOURCE_REF</code> points the published version's source links at it.</p>
 <p>For a backport patch to an older line, drop <code>-f alias=stable -f set_default=true</code>.
-Those belong to the highest release, and a dispatch applies them verbatim rather than checking (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/pages.yml">pages.yml</a>).</p>
+Those belong to the highest release, and a dispatch applies them verbatim rather than checking (<a href="../../.github/workflows/pages.yml">pages.yml</a>).</p>
 <p>Then confirm the published pages, not the branch:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>make<span class="w"> </span>verify-published-docs<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
 <p>It reads the four site pages that pin a version (the landing page, and <code>operations/</code>'s <code>install</code>, <code>upgrade</code> and <code>gitops</code>), plus the <code>stable</code> alias and the root redirect, and fails with the page and the version each one actually advertises.
 Add <code>ARGS=--no-stable</code> for a backport to an older line, whose dispatch above drops the alias.
-This is the same comparison <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> makes against the working tree, run against what the tree published; the two share one literal extractor so a pin shape the source gate catches cannot slip past this one.</p>
+This is the same comparison <a href="../../scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> makes against the working tree, run against what the tree published; the two share one literal extractor so a pin shape the source gate catches cannot slip past this one.</p>
 <p>Do not spot-check it with <code>curl … | grep</code>: the theme wraps the leading digit of a highlighted version in its own <code>&lt;span&gt;</code>, so <code>--version 1.0.0</code> is not one string in the served HTML and a grep for it matches nothing, which is exactly what a correct page returns too.
 <code>/1.1.0/</code> and <code>/1.2.0/</code> still advertise <code>--version 1.0.0</code> today and both read as clean that way.</p>
 <h3 id="8-hand-off-to-operators">8. Hand off to operators<a class="headerlink" href="#8-hand-off-to-operators" title="Permanent link">&para;</a></h3>
@@ -4587,11 +4587,11 @@ If <code>main</code> is clean and ready to ship, that's the next <strong>minor</
 A <code>release-X.Y</code> branch cut from <code>vX.Y.0</code> therefore inherits whatever harness that commit had — so a fix to the gate only reaches a patch line if it was in the minor tag, or is cherry-picked like any other fix.</p>
 <p>The consequence is a rule for the <strong>minor</strong> cut, not the patch: tag <code>vX.Y.0</code> from a commit that carries the harness fixes you want the line to keep.
 Cutting it from an older RC's commit to make the tag byte-match the validated artifact is the trap — it strands every gate fix found <em>during</em> that release's validation, which is exactly when gate fixes tend to be found.
-<code>v1.3.0</code> is the worked example: rc.5's validation produced two harness fixes (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/release-1.3.md#Q627">Q627</a> and the e2e watch deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both on every future <code>v1.3.x</code>.</p>
+<code>v1.3.0</code> is the worked example: rc.5's validation produced two harness fixes (<a href="../../plan/release-1.3/#Q627">Q627</a> and the e2e watch deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both on every future <code>v1.3.x</code>.</p>
 <p>Validating an RC whose product code matches <code>main</code> is unaffected: the images and CRDs come from the tag, the harness from your checkout, so the two move independently by design.</p>
 </blockquote>
 <p>The <strong>docs site follows automatically</strong>: <code>mike</code> builds each version from its own tag, so a patch tagged off the release line publishes docs with only that line's content — no unreleased features.
-And the site's <code>stable</code> alias + default root redirect move <strong>only to the highest released version</strong>, so a backport patch released <em>after</em> a newer minor updates its own version's docs without demoting the site (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>).
+And the site's <code>stable</code> alias + default root redirect move <strong>only to the highest released version</strong>, so a backport patch released <em>after</em> a newer minor updates its own version's docs without demoting the site (see <a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>).
 No docs-specific branch is ever required beyond what the release itself needs.</p>
 <h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
 <p>A release is just a tag and a set of immutable, digest-addressed images — nothing is destructive.
@@ -4602,7 +4602,7 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
 <ul>
 <li><strong><code>ghcr.io/actions-gateway/wrapper</code></strong> — a ~2 MB <code>FROM scratch</code> image with just the wrapper binary.
   The GMC forwards it to every AGC (<code>WRAPPER_IMAGE</code>), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the <strong>unmodified upstream <code>ghcr.io/actions/actions-runner</code></strong> (or any tenant <code>workerImage</code>).
-  This is what makes <code>DefaultWorkerImage</code> (still the digest-pinned upstream <code>actions-runner</code>, runner version locked to <code>agent.version</code> — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/building.md#runner-version-pin-lockstep">building.md</a>) actually run jobs (Q235, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q235-worker-wrapper-injection.md">plan</a>).</li>
+  This is what makes <code>DefaultWorkerImage</code> (still the digest-pinned upstream <code>actions-runner</code>, runner version locked to <code>agent.version</code> — see <a href="../../development/building/#runner-version-pin-lockstep">building.md</a>) actually run jobs (Q235, <a href="../../plan/archive/q235-worker-wrapper-injection/">plan</a>).</li>
 <li><strong><code>ghcr.io/actions-gateway/worker</code></strong> — the full upstream <code>actions-runner</code> + the wrapper as <code>ENTRYPOINT</code> (~520 MB).
   Kept as an optional batteries-included image; unnecessary once injection is enabled, since the runner image is the upstream one with the wrapper injected.
   Retiring it is tracked separately.</li>
@@ -4661,16 +4661,16 @@ The comment is not decoration: it is what Dependabot reads to know which release
 <p><code>make uses-pinned-check</code> enforces both halves, and the CI <code>uses-pinned</code> job (<code>unit-test.yml</code>) runs it on any workflow change.
 Exempt shapes, because neither is a mutable third-party reference: a local <code>./…</code> action or reusable workflow, which is in-tree code the same PR reviews, and a <code>docker://</code> image, which must carry an <code>@sha256:</code> digest instead.
 An unparseable workflow fails the gate rather than being skipped.</p>
-<p>The runtime tool downloads in the publish path are pinned the same way: <code>cosign</code> via <code>sigstore/cosign-installer</code> with an explicit <code>cosign-release</code> (held in step with <code>COSIGN_VERSION</code> in the Makefile by <code>make cosign-pin-check</code>, so a local <code>make verify-release</code> uses the same version that signed), and <code>syft</code> by <code>SYFT_VERSION</code> plus the <code>SYFT_SHA256</code> of its release tarball, downloaded through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/fetch/download-verified.sh"><code>scripts/fetch/download-verified.sh</code></a>.
+<p>The runtime tool downloads in the publish path are pinned the same way: <code>cosign</code> via <code>sigstore/cosign-installer</code> with an explicit <code>cosign-release</code> (held in step with <code>COSIGN_VERSION</code> in the Makefile by <code>make cosign-pin-check</code>, so a local <code>make verify-release</code> uses the same version that signed), and <code>syft</code> by <code>SYFT_VERSION</code> plus the <code>SYFT_SHA256</code> of its release tarball, downloaded through <a href="../../scripts/fetch/download-verified.sh"><code>scripts/fetch/download-verified.sh</code></a>.
 That download used to go through <code>anchore/sbom-action/download-syft</code>, which fetches anchore's <code>install.sh</code> and runs it with no retry, so one transient CDN denial failed the step outright (Q806).
 The helper retries and refuses to write bytes that miss the pinned digest, so absorbing the flake tightened the pin rather than loosening it: the release now names the exact syft bytes instead of trusting an installer to resolve them.</p>
-<p><strong>Bumping a pinned action.</strong> Dependabot's <code>github-actions</code> ecosystem (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and merge those like any dependency PR.
+<p><strong>Bumping a pinned action.</strong> Dependabot's <code>github-actions</code> ecosystem (<a href="../../.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and merge those like any dependency PR.
 To pin or bump by hand, resolve the tag to its commit SHA and keep the comment in sync:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.sha'</span>
 <a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
 </code></pre></div>
 <p><code>SYFT_VERSION</code>/<code>SYFT_SHA256</code> are <strong>not</strong> Dependabot-managed (a tool download, not an action ref).
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a> bumps the pair weekly, in <code>publish.yml</code> and <code>security-scan.yml</code> together, so the released images and the PR-time scan are described by the same syft.</p>
+<a href="../../updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a> bumps the pair weekly, in <code>publish.yml</code> and <code>security-scan.yml</code> together, so the released images and the PR-time scan are described by the same syft.</p>
 <p>The two workflow gates divide the work, and it is worth knowing which answers what.
 <code>actionlint</code> checks that a <code>uses:</code> ref is present and well formed, so a pin edited down to a bare <code>owner/repo</code> fails the PR.
 But measured against v1.7.12, the version <code>tools/</code> pins, it accepts <code>@v7.0.1</code>, <code>@v4</code> and <code>@main</code> at exit 0, resolving the action's inputs off the tag while doing so.
@@ -4681,7 +4681,7 @@ It reads the ref and never asserts it is a SHA.
 Two layers enforce that a signature can only ever be a tag signature:</p>
 <ul>
 <li><strong>publish.yml refuses to run from a non-tag ref.</strong> Both publish jobs' "Resolve publish tag" step rejects any <code>GITHUB_REF</code> that isn't <code>refs/tags/…</code>, so a <code>workflow_dispatch</code> run from a branch can't even reach the sign step.</li>
-<li><strong><code>make verify-release</code> only accepts a tags identity.</strong> The <code>--certificate-identity-regexp</code> is anchored to <code>…/publish\.yml@refs/tags/v.*$</code> (sourced from <code>release_identity_regexp</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted from <code>refs/heads/…</code> is rejected even if one were somehow produced.
+<li><strong><code>make verify-release</code> only accepts a tags identity.</strong> The <code>--certificate-identity-regexp</code> is anchored to <code>…/publish\.yml@refs/tags/v.*$</code> (sourced from <code>release_identity_regexp</code> in <a href="../../scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted from <code>refs/heads/…</code> is rejected even if one were somehow produced.
   The <code>scripts/release/verify-release-test.sh</code> assertions (run by <code>make check</code> and CI) guard that the regexp stays tags-only.</li>
 </ul>
 <p>Together these close the hole where repo-write could dispatch <code>publish.yml</code> from a scratch branch, overwrite a released GHCR version tag, and still pass verification.</p>
@@ -4691,12 +4691,12 @@ Two layers enforce that a signature can only ever be a tag signature:</p>
 <li><strong>Vendored dependencies are gated against <code>go.sum</code>.</strong> Images build with <code>go build -mod=vendor</code>, but <code>-mod=vendor</code> only checks <code>vendor/modules.txt</code> consistency — it never verifies that the vendored <em>source</em> matches the hashes in <code>go.sum</code>.
   A malicious or accidental edit under <code>vendor/</code> (or <code>tools/vendor/</code>) would otherwise compile straight into the signed release images.
   The <code>vendor-check</code> job (in <code>unit-test.yml</code>, single source of truth <code>make vendor-check</code> → <code>scripts/go/vendor-check.sh</code>) re-runs the workspace-vendor flow — which re-fetches every module verified against <code>go.sum</code> — and fails on any diff against the committed trees.
-  A Dependabot <code>go.mod</code> bump legitimately fails this gate until a follow-up vendor sync lands; that is the intended signal (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/go-workspaces.md#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
+  A Dependabot <code>go.mod</code> bump legitimately fails this gate until a follow-up vendor sync lands; that is the intended signal (see <a href="../../development/go-workspaces/#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
 <li><strong>The cosign verify binary is checksummed.</strong> GitHub release assets are mutable for an existing tag, so a raw download of the release verifier can't be trusted on its own.
   The publish pipeline obtains cosign via the SHA-pinned <code>sigstore/cosign-installer</code> action (which performs its own signature verification); the <em>local</em> verify path (<code>make verify-release</code> → <code>scripts/release/download-cosign.sh</code>) pins the expected SHA256 per platform in-repo and refuses to install a binary whose bytes don't match.
   Bumping <code>COSIGN_VERSION</code> must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as <code>KIND_BINARY_SHA256</code> in <code>e2e-test.yml</code>.
   It must also carry the same version into publish.yml's <code>cosign-release</code>, which <code>make cosign-pin-check</code> enforces (Q903): a one-sided bump leaves <code>make verify-release</code> running a verifier the publish job never signed with, and cosign verifies across versions until it doesn't.
-  All three sites move together on the weekly <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/dependency-updates.md#the-manifests">updatecli</a> run rather than by hand (Q927), and the digests it writes come from the release's sigstore-signed <code>cosign_checksums.txt</code>, verified against a pinned identity by the cosign the repo already pins.
+  All three sites move together on the weekly <a href="../../development/dependency-updates/#the-manifests">updatecli</a> run rather than by hand (Q927), and the digests it writes come from the release's sigstore-signed <code>cosign_checksums.txt</code>, verified against a pinned identity by the cosign the repo already pins.
   Automating the copy without automating the trust would pin whatever the releases CDN served.
   The <code>$(COSIGN)</code> make rule keys on the pinned version, so a bump re-downloads instead of serving whatever <code>.build/cosign</code> already holds (Q857).</li>
 </ul>

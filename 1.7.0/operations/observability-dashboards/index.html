@@ -2762,7 +2762,7 @@
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Three reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+<p><strong>Import as code.</strong> Three reference dashboards ship under <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
 The layouts below document what each contains.</p>
 </blockquote>
 <table>
@@ -2775,17 +2775,17 @@ The layouts below document what each contains.</p>
 </thead>
 <tbody>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="../../deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="../../deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
 <td>Platform engineer running the GMC / the fleet</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
+<td><a href="../../deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
 <td>a tenant's AGC (per-tenant mTLS)</td>
 <td>Budget owner paying for the fleet</td>
 </tr>
@@ -2795,7 +2795,7 @@ The layouts below document what each contains.</p>
 <p>The <strong>budget</strong> dashboard splits on a different axis: it reads the same tenant scrape as the tenant dashboard, and exists because the question is different rather than the data.
 A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="../../deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>

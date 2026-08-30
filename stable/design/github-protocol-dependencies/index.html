@@ -2828,7 +2828,7 @@ A protocol GAG assumed was stable had already drifted.</p>
 <tr>
 <td><strong>Classic per-runner broker</strong></td>
 <td>Today's acquisition path: <code>CreateSession</code> / <code>GetMessage</code> / <code>AcquireJob</code> / <code>RenewJob</code> / <code>CompleteJob</code> per virtual runner session.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/broker/client.go"><code>broker/client.go</code></a>; brokertest fake</td>
+<td><a href="../../broker/client.go"><code>broker/client.go</code></a>; brokertest fake</td>
 <td>Reverse-engineered from <code>actions/runner</code> + ARC (Milestone 1 wire probe); GAG documents it in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">03-api-contracts §3.3</a>.</td>
 <td><strong>T3</strong></td>
 <td>Being retired (Q264): the classic machinery is removed at the v2beta1 graduation. Until then, the dogfood e2e is the early-warning for a silent broker change; a live wedge that is <em>not</em> an on-our-side seam is the signal (the fan-out saga was one such investigation).</td>
@@ -2836,7 +2836,7 @@ A protocol GAG assumed was stable had already drifted.</p>
 <tr>
 <td><strong>Runner scale-set</strong></td>
 <td>Q264 acquisition path: one session per scale set, capacity-gated long-poll, per-job JIT config; single-acquirer, kills the fan-out.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.7.0/scaleset"><code>scaleset/</code></a> client + fake; <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.7.0/cmd/agc/internal/scalesetlistener"><code>cmd/agc/internal/scalesetlistener/</code></a>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/cmd/probe/scaleset.go"><code>cmd/probe/scaleset.go</code></a> live probe</td>
+<td><a href="../../scaleset/"><code>scaleset/</code></a> client + fake; <a href="../../cmd/agc/internal/scalesetlistener/"><code>cmd/agc/internal/scalesetlistener/</code></a>; <a href="../../cmd/probe/scaleset.go"><code>cmd/probe/scaleset.go</code></a> live probe</td>
 <td>Official <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> Go client (Public Preview, MIT) as the <em>reference</em>, cross-checked against ARC and live probes. GAG owns its own client (Q264 §5a-U6-C) rather than vendoring. <strong>No wire-spec document</strong>; the auto-assign backend contract is undocumented (upstream <a href="https://github.com/actions/scaleset/issues/107">actions/scaleset#107</a>, unanswered).</td>
 <td><strong>T2</strong></td>
 <td><strong>Q270</strong>: <code>actions/scaleset</code> reaching GA/v1.0, <em>or</em> the auto-assign contract (#107) being documented. Either fires a revisit of the U6 vendor-vs-own decision and lifts the Preview caveat. The <code>PROBE_SCALESET_*</code> scenarios in <code>cmd/probe</code> are the live drift probe; run them before relying on a wire assumption — the probe drives the <code>scaleset</code> package itself (Q362), so a live run is evidence about the shipped client, and it reports the raw wire through the client's <code>ResponseObserver</code> hook rather than issuing its own requests.</td>

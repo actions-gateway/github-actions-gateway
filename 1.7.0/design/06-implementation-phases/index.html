@@ -2816,7 +2816,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </table>
 <hr />
 <h2 id="milestone-1-wire-protocol-probe-days-14">Milestone 1: Wire Protocol Probe (Days 1–4)<a class="headerlink" href="#milestone-1-wire-protocol-probe-days-14" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-1.md">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
+<p>See <a href="../../plan/milestone-1/">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A standalone Go binary under <code>cmd/probe/</code> that runs the full pre-execution sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds.
   The probe prints the decrypted job payload to stdout and continues renewing until cancelled.
@@ -2849,7 +2849,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-2-agc-controller--reconciler-days-510">Milestone 2: AGC Controller &amp; Reconciler (Days 5–10)<a class="headerlink" href="#milestone-2-agc-controller--reconciler-days-510" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-2.md">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
+<p>See <a href="../../plan/milestone-2/">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A deployable AGC scaffolded with <code>controller-runtime</code>/<code>kubebuilder</code> that reconciles <code>RunnerGroup</code> CRs into adaptive listener goroutine pools: one permanent goroutine at rest, spawning additional goroutines on demand up to <code>maxListeners</code> during bursts, with idle goroutines shutting down once the queue drains.
   Includes the Token Manager (mutex-protected installation token with T-5min proactive refresh), the per-job RenewJob loop, the <code>maxWorkers</code> simple pod-count ceiling (enforced without PriorityClass when <code>priorityTiers</code> is absent), and the polling implementation lifted from the Milestone 1 probe.
@@ -2860,7 +2860,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-3-worker-pod--pipe-handoff-days-1116">Milestone 3: Worker Pod &amp; Pipe Handoff (Days 11–16)<a class="headerlink" href="#milestone-3-worker-pod--pipe-handoff-days-1116" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-3.md">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
+<p>See <a href="../../plan/milestone-3/">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A worker container image plus the pod-provisioning logic in the AGC: Dockerfile, entrypoint wrapper (Go binary that reads the mounted payload Secret and writes to Named Pipes), Secret mount logic, and the <code>AcquireJob</code> → pod-create handoff sequence.
   The Named Pipe handoff is the underdocumented part of this milestone — start by validating the wrapper with the static decrypted payload from Milestone 1 before wiring it into pod creation, so the pipe semantics can be debugged without a live GitHub trigger in the loop.</li>
@@ -2869,7 +2869,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-4-gateway-manager-controller--proxy-days-1722">Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)<a class="headerlink" href="#milestone-4-gateway-manager-controller--proxy-days-1722" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-4.md">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
+<p>See <a href="../../plan/milestone-4/">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A second operator (<code>cmd/gmc/</code>) sharing the repo with the AGC, reconciling <code>ActionsGateway</code> CRs into the full tenant resource set: ServiceAccount, Role, RoleBinding, NetworkPolicy, proxy Deployment, proxy Service, PodDisruptionBudget, HPA, AGC Deployment, and bootstrap RunnerGroups.
   (The namespace <code>ResourceQuota</code> is platform-owned — the GMC operates within it but never creates or mutates it; see Q130.)
@@ -2881,7 +2881,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-5-hardening--load-testing-days-2326">Milestone 5: Hardening &amp; Load Testing (Days 23–26)<a class="headerlink" href="#milestone-5-hardening--load-testing-days-2326" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-5.md">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
+<p>See <a href="../../plan/milestone-5/">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, optional gVisor <code>RuntimeClass</code> configuration (see <a href="../appendix-b-worker-isolation/">Appendix B</a>), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under <code>test/load/</code> that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running.
   (The per-tenant namespace <code>ResourceQuota</code> is provisioned out-of-band by the platform admin — the GAG chart does not ship it; the GMC operates within it but never creates or mutates it.

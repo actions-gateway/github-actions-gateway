@@ -2844,7 +2844,7 @@
 <h1 id="kata-on-gke-runbook">Kata-on-GKE runbook<a class="headerlink" href="#kata-on-gke-runbook" title="Permanent link">&para;</a></h1>
 <p>Reproduce the Q226 result: a GitHub Actions runner running <code>dockerd</code> + <code>kind</code> inside a Kata Containers micro-VM on GKE, with <strong>no</strong> <code>privileged: true</code> on the runner pod.</p>
 <p><strong>This was run live and passed</strong> (GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04 / containerd 2.1.5, <code>c2-standard-4</code> nested-virt, Kata 3.32.0 / QEMU).
-Results and the full constraint list are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/kata-on-gke.md">Kata Containers on GKE</a>; the cluster-side how-to for operators is <a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
+Results and the full constraint list are in <a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a>; the cluster-side how-to for operators is <a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
 <p>Steps below mutate cloud resources.
 Use a <strong>throwaway project or cluster</strong> — never a production one — and tear it down when finished.</p>
 <h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
@@ -2994,7 +2994,7 @@ A <code>Delete</code> reclaim policy only fires when the <em>PVC</em> is deleted
 <h2 id="what-is-still-outstanding">What is still outstanding<a class="headerlink" href="#what-is-still-outstanding" title="Permanent link">&para;</a></h2>
 <p><code>make e2e</code> inside the runner (acceptance criterion #5) has <strong>not</strong> been run: it needs a GAG e2e runner image bundling <code>dockerd</code>, <code>kind</code> and the Go/test toolchain, which does not exist yet.
 Everything beneath it — Docker, <code>kind</code>, image loading, pod scheduling in the inner cluster — is proven above.
-See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/kata-on-gke.md#ci-integration--the-follow-up">CI integration</a>.</p>
+See <a href="../../plan/archive/kata-on-gke/#ci-integration--the-follow-up">CI integration</a>.</p>
 
 
 

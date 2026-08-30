@@ -5417,7 +5417,7 @@ Edits to the allowlist appear to apply and silently do nothing.
 After any event that could have tripped this, confirm the guard sees your current allowlist rather than assuming it does: change the allowlist and check that a <code>RunnerGroup</code> naming a newly removed class is actually rejected.</p>
 <p>Observed on Kubernetes 1.35.5 and 1.36.1.
 Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
-Full mechanism and the reproducer: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
+Full mechanism and the reproducer: <a href="../../plan/archive/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
 <p><strong>Resolution.</strong></p>
 <ul>
 <li><strong>Upgrade the release.</strong> The parameter is now a cluster-scoped <code>PriorityClassAllowlist</code> CR, and the apiserver allocates a fresh dynamic informer per context for a CRD <code>paramKind</code> — so the transition that breaks a ConfigMap parameter is survivable.
@@ -7203,7 +7203,7 @@ Two ways in, and the condition message says which labels are affected either way
 </li>
 <li>
 <p><strong>Otherwise, give the set a new scale set.</strong> Labels are fixed when the scale set is created, and the AGC finds the scale set by name.
-  There is no in-place fix to wait for: the Actions Service accepts a labels <code>PATCH</code>, discards it, and answers 200 (measured 2026-08-24, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q793-labels-patch.md">Q793</a>).
+  There is no in-place fix to wait for: the Actions Service accepts a labels <code>PATCH</code>, discards it, and answers 200 (measured 2026-08-24, <a href="../../plan/archive/q793-labels-patch/">Q793</a>).
   So neither editing <code>spec.runnerLabels</code> nor deleting and re-creating the <code>RunnerSet</code> under the same first label will add them: the second re-adopts the same scale set with the same old labels.</p>
 <p>Two ways out, and both cost the old scale set:</p>
 <ul>
@@ -7405,7 +7405,7 @@ When a lock is <em>definitively</em> lost, current versions self-cancel the work
 - The repo/org runner list (<code>gh api .../actions/runners</code>) loses one runner after each completed job, and the registrations never come back.
 - <code>RunnerGroup</code> <code>status.activeSessions</code> decays over time; after roughly <code>maxListeners</code> completed jobs, queued workflow jobs wait forever even though the AGC pod is healthy.</p>
 <p><strong>Cause.</strong> GitHub deletes a JIT-registered runner record once it acquires a job (single-use runners).
-Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12, bug 2</a>).</p>
+Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot (<a href="../../plan/milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12, bug 2</a>).</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a><span class="c1"># Repeating EOF/401 poll errors</span>
 <a id="__codelineno-116-2" name="__codelineno-116-2" href="#__codelineno-116-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"decode response: EOF|unauthorized"</span>
@@ -7501,7 +7501,7 @@ The mitigation (<code>AGC_FANOUT_COMPLETION</code>, Q260 Option A) is <strong>on
 The dogfood re-route #5 experiment (2026-07-04) live-confirmed it: the run service's completion is <strong>per-delivery, not plan-ID-scoped</strong> — <code>completejob</code> on a sibling's own job ID resolves only that assignment (returns OK), while the winner's own delivery still carries the real workflow result reported by its runner binary, so a green sibling proxy cannot mask a red workflow.
 Previously-wedged concurrent jobs concluded green, the recycle 422 cleared per job on winner completion, and no job cancelled at the ~15-minute timeout.
 Opt out with <code>AGC_FANOUT_COMPLETION=false</code>.
-See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q260-fanout-completion-reconciliation.md"><code>docs/plan/q260-fanout-completion-reconciliation.md</code></a>.</p>
+See <a href="../../plan/archive/q260-fanout-completion-reconciliation/"><code>docs/plan/q260-fanout-completion-reconciliation.md</code></a>.</p>
 <p><strong>Related failure mode — deduped-loser slot stranding (Q266).</strong> Because a deduped sibling already ran <code>acquirejob</code>, GitHub holds <em>its</em> runner as assigned to the job.
 That runner's recycle therefore <code>422</code>s ("runner is currently running a job and cannot be deleted") for the <strong>winner's entire runtime</strong> — the loser's <code>422</code> only clears when the winner fans <code>completejob</code> out to that delivery on completion (above).
 On gateway versions before Q266 the loser recycled <em>eagerly</em>, blew through the bounded recycle backoff (which is sized for the seconds-long Q259 post-job race, not a whole job runtime), gave up, and <strong>exited the listener</strong> — and a non-permanent replacement is never restarted, so under sustained fan-out burst enough losers stranded and exited to collapse the pool (observed 2/8 online at dogfood re-route #5).
@@ -7620,7 +7620,7 @@ This is the port-axis equivalent of the <code>ipBlock: &lt;ClusterIP&gt;/32</cod
 <p><strong>Resolution.</strong> Ensure <code>buildAGCNetworkPolicy</code> allows both port 443 (production Service shape) <em>and</em> port 6443 (kind / Endpoints-on-6443 clusters).
 The shipped policy does this.
 If you see this on a custom build or a hand-edited NP, add the 6443 rule.
-The diagnosis writeup at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/networkpolicy-port-matching.md"><code>docs/development/networkpolicy-port-matching.md</code></a> has a minimal repro and the reasoning behind allowing both ports.</p>
+The diagnosis writeup at <a href="../../development/networkpolicy-port-matching/"><code>docs/development/networkpolicy-port-matching.md</code></a> has a minimal repro and the reasoning behind allowing both ports.</p>
 <p>If you see the same symptom for an <em>ingress</em>-type rule or for a different Service whose backend port differs from the Service port, the same fix applies: list both ports, or omit the port restriction on that rule.</p>
 <hr />
 <h2 id="dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)<a class="headerlink" href="#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache" title="Permanent link">&para;</a></h2>
@@ -7996,7 +7996,7 @@ The composed chain has not been observed end to end for a job with a live worker
 - <strong>Delete the worker pod to reclaim the capacity.</strong> <code>kubectl delete pod -n &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
   The cancel stands, and the job is <strong>not</strong> re-queued.</p>
 <blockquote>
-<p><strong>Why the delete no longer undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC would otherwise ask GitHub to re-run the run's failed jobs, and GitHub honours that for a <code>cancelled</code> conclusion, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
+<p><strong>Why the delete no longer undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC would otherwise ask GitHub to re-run the run's failed jobs, and GitHub honours that for a <code>cancelled</code> conclusion, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="../../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
 Since Q811 that arm reads the run's conclusion first and stands down on <code>cancelled</code>, counting <code>actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}</code> and emitting a Normal <code>EvictionRerunWithheld</code> Event on the owner instead of calling.
 Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately, and the conclusion check is what separates the two.
 It applies on ScaleSet too: the tier's own reclaim carries the <code>actions-gateway.com/deletion-reason</code> stamp and is excluded, while a hand-delete carries no stamp and takes the recovery path.

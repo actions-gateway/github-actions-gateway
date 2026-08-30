@@ -4012,7 +4012,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 </tr>
 <tr>
 <td><strong>AGC overpermissioned Secret access</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, H-2 residual) — compromised AGC binary issuing a full-body Secret <code>list</code></td>
-<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/security.md">security.md H-2</a>)</td>
+<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="../../plan/security/">security.md H-2</a>)</td>
 <td>Audit log</td>
 <td>Page</td>
 </tr>
@@ -4170,7 +4170,7 @@ If your scrape config does not add it, drop the interpolation.</p>
 <hr />
 <h2 id="audit-log-abuse-detections">Audit-log abuse detections<a class="headerlink" href="#audit-log-abuse-detections" title="Permanent link">&para;</a></h2>
 <p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
-The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/security.md">H-2</a>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
+The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="../../plan/security/">H-2</a>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
 <p>Detecting these requires an <strong>API-server audit policy</strong> that logs the relevant verbs at <code>Metadata</code> level or higher, shipped to a security information and event management (SIEM) system or log-based alerting backend.
 A ready-to-adapt sample policy ships at <a href="../examples/apiserver-audit-policy.yaml"><code>examples/apiserver-audit-policy.yaml</code></a>; <a href="#api-server-audit-policy-sample">§ API server audit policy (sample)</a> below covers installing it and reading the events.
 The table specifies <em>what to alert on</em> once that policy is in place.</p>
@@ -4187,7 +4187,7 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <tr>
 <td><strong>AGC full-body Secret list</strong></td>
 <td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:actions-gateway-controller</code>) returning object bodies</td>
-<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/security.md">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
+<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="../../plan/security/">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
 <td>Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image.</td>
 </tr>
 <tr>
@@ -4380,13 +4380,13 @@ The abuse-specific first moves:</p>
 Two scanners catch posture regressions <em>before</em> they reach a cluster — one in CI on every chart change, one a pre-production manual step against the live cluster.</p>
 <p>If your cluster runs a policy engine (Kyverno / OPA Gatekeeper), see <a href="../admission-policies/">admission-policies.md</a> for whether GAG pods comply with common admission policies and for sample policies that <em>enforce</em> GAG's posture at admission time.</p>
 <h3 id="manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)<a class="headerlink" href="#manifest-posture--polaris-automated-in-ci" title="Permanent link">&para;</a></h3>
-<p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes security/best-practice posture of the <strong>shipped install artifact</strong>: the CI <code>polaris</code> job (in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>) renders the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.7.0/charts/actions-gateway">Helm chart</a> and checks the rendered manifests.
+<p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes security/best-practice posture of the <strong>shipped install artifact</strong>: the CI <code>polaris</code> job (in <a href="../../.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>) renders the <a href="../../charts/actions-gateway">Helm chart</a> and checks the rendered manifests.
 It runs on every PR that touches the chart or the <code>Makefile</code>, and on every push to <code>main</code>.</p>
 <ul>
 <li><strong>What it gates.</strong> The scan fails the PR on any <code>danger</code> finding — a privileged container, a host namespace, dangerous capabilities, a missing <code>securityContext</code>, a floating <code>:latest</code> image tag, and similar real regressions.
   A change that weakens the chart's hardened defaults cannot merge.</li>
 <li><strong>What it reports but does not block.</strong> <code>warning</code>-level findings are printed for visibility.
-  The handful that are false positives against a Helm-packaged operator chart (the controller's required ServiceAccount-token automount, the cross-document NetworkPolicy match polaris can't resolve statically, the <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>, each with a justifying comment.
+  The handful that are false positives against a Helm-packaged operator chart (the controller's required ServiceAccount-token automount, the cross-document NetworkPolicy match polaris can't resolve statically, the <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in <a href="../../charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>, each with a justifying comment.
   <strong>Never relax a <code>danger</code> check to silence a finding — fix the chart instead</strong> (secure-by-default).</li>
 <li><strong>Run it yourself.</strong> <code>make polaris-scan</code> (needs <code>helm</code> and <code>polaris</code> on <code>PATH</code>) runs the exact CI gate locally.
   It renders with a placeholder image digest so the audit reflects the production, digest-pinned posture — a digest is also required for the chart to render at all (an empty digest on any of the four images — <code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code> — fails the render; <code>make manifest-validate</code> asserts each rejection), so the placeholder cannot mask a fail-open default.</li>
@@ -4425,7 +4425,7 @@ Those are the province of the <a href="https://www.cisecurity.org/benchmark/kube
   If your node-local-dns cache listens on a non-default address <em>outside</em> <code>169.254.0.0/16</code>, set <code>spec.proxy.managedNetworkPolicy: false</code> and supply your own DNS egress rule, or add an additive NetworkPolicy — see <a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a>.</li>
 <li><strong>Findings that don't apply</strong> (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.</li>
 </ul>
-<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/milestone-5.md#3-posture-audit-kube-bench--polaris">milestone-5.md § 3</a>).</p>
+<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="../../plan/milestone-5/#3-posture-audit-kube-bench--polaris">milestone-5.md § 3</a>).</p>
 <h2 id="job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group<a class="headerlink" href="#job-intake-bind-every-tenant-to-a-github-runner-group" title="Permanent link">&para;</a></h2>
 <p>Everything else on this page bounds what a tenant's workers may reach.
 This bounds who may reach <em>them</em>, and it is the one control that lives at GitHub, outside anything the cluster can enforce.</p>
@@ -4595,7 +4595,7 @@ Full reasoning and the coupling to the other clocks: <a href="../v1alpha1-deprec
 <p><strong>Managed "Cilium" platforms usually do NOT accept the <code>cilium</code> backend.</strong> The CRD test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does not install it</strong> (dropped since GKE 1.21.5-gke.1300) — use <code>--fqdn-policy-backend=gke</code> there, not <code>cilium</code>.
 If a selected backend's CRD is absent, the GMC's apply fails loudly and the <code>EgressProxy</code> goes <code>Degraded</code>; GitHub egress stays <strong>denied</strong> (the base NetworkPolicy default-denies it), never silently opened.
-The still-deferred cluster-scoped backends (AKS <code>CiliumClusterwideNetworkPolicy</code>, EKS <code>ClusterNetworkPolicy</code>) and OpenShift OVN <code>EgressFirewall</code> are tracked in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.</p>
+The still-deferred cluster-scoped backends (AKS <code>CiliumClusterwideNetworkPolicy</code>, EKS <code>ClusterNetworkPolicy</code>) and OpenShift OVN <code>EgressFirewall</code> are tracked in the <a href="../../plan/q245-fqdn-intent-backend-split/">Q245 plan</a>.</p>
 <p><strong>The <code>gke</code> backend is additive-allow, so the base NetworkPolicy is load-bearing.</strong> Unlike Cilium/Calico policies (which are self-default-denying), a GKE <code>FQDNNetworkPolicy</code> only <em>adds</em> an allow — it is a union with any NetworkPolicy on the same pod, not a default-deny.
 GAG's fail-closed guarantee therefore depends on the base standard NetworkPolicy (always emitted, GitHub-CIDR rule dropped in FQDN mode) staying present: the FQDN object widens the union to permit GitHub, and if it is absent or unenforced, GitHub egress stays denied by the base NP.
 <strong><code>gke</code>-backend enforcement is not yet live-validated on a real GKE cluster</strong> (see the Q245 plan's live-validation follow-up); also note GKE's ~50-IP-per-FQDN resolution ceiling can intermittently drop egress for a wide wildcard like <code>*.blob.core.windows.net</code> under load — reserve FQDN egress for what an in-cluster caching mirror can't proxy.</p>
@@ -4689,7 +4689,7 @@ It is a cluster-wide, cross-tenant preemption lever, not a choice about the tena
 <code>spec.scheduling.priorityClassName</code> raises these infra pods above best-effort workloads under node pressure.
 Because a <code>PriorityClass</code> is a cluster-wide preemption lever — and <code>system-*</code> classes are nameable from <em>any</em> namespace, not just <code>kube-system</code> — this field is gated against a <strong>separate, infra-only</strong> allowlist (<code>--allowed-infra-priority-classes</code>) that must stay <strong>disjoint</strong> from the worker allowlist.
 See <a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the two allowlists</a>.</p>
-<p>The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives, cost model, and the live-validated GKE recipe — is in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/q243-egress-ip-reference-arch.md">Q243 plan</a>.</p>
+<p>The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives, cost model, and the live-validated GKE recipe — is in the <a href="../../plan/q243-egress-ip-reference-arch/">Q243 plan</a>.</p>
 <hr />
 <h2 id="worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist<a class="headerlink" href="#worker-egress-destinations-the-egress-allowlist" title="Permanent link">&para;</a></h2>
 <p>By default a worker can reach <strong>only GitHub</strong> through its per-tenant egress proxy — the proxy pool's NetworkPolicy permits the GitHub endpoints and nothing else.
@@ -4705,7 +4705,7 @@ The egress allowlist (Q242 G.1) lets a <strong>platform admin</strong> open a sm
 <li><strong>Better behavior</strong> — caching cuts repeat fetches, survives upstream outages, and gives a single audit point.</li>
 </ul>
 <p>Per-ecosystem mirrors: <strong>Athens</strong> (Go module proxy), <strong>Verdaccio</strong> (npm), a registry <strong>pull-through cache</strong> (container images).
-Two of those are built here as reference manifests: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/athens/README.md"><code>deploy/athens/</code></a> for Go modules, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a> for container images.
+Two of those are built here as reference manifests: <a href="../../deploy/athens/README.md"><code>deploy/athens/</code></a> for Go modules, and <a href="../../deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a> for container images.
 The registry mirror is one <a href="https://github.com/distribution/distribution">CNCF Distribution</a> instance per upstream, shipped with the NetworkPolicies that make it a worker's only registry path.
 Both are dogfood-shaped; each README names the handful of cluster-specific values to retarget.
 With more than one tenant the registry mirror needs a topology decision as well as retargeting, one shared set or one per tenant: <a href="../kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a>.
@@ -5227,7 +5227,7 @@ Observed on Kubernetes 1.35.5 and 1.36.1.</p>
 <p><strong>What fixes it.</strong> For a <em>CRD</em> <code>paramKind</code> the apiserver allocates a fresh dynamic informer per context, so the same transition is survivable.
 Moving the parameter to the cluster-scoped <code>PriorityClassAllowlist</code> CR (Q492) therefore removes the exposure at its root rather than mitigating it.
 The contrast is measured directly — the same empty-binding-set transition, one GVK apart — by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, and the uninstall/reinstall cycle is now a CI gate (<code>scripts/e2e/chart-reinstall-check.sh</code>).
-Mechanism and measurements: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
+Mechanism and measurements: <a href="../../plan/archive/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
 <p><strong>If you are still on an affected release</strong>, upgrade in place — <code>helm upgrade</code> never removes the binding and is safe — and see <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.
 If you are already in the broken state, restart kube-apiserver where you can; otherwise set <code>admissionPolicy.enabled=false</code> to restore writes (you lose the backstop until the apiserver recycles), then upgrade.</p>
 <p><strong>The benign window is not this defect.</strong> A reinstall removes the parameter object and recreates it, and for a second or two in between the guard correctly fails closed with the same message.
@@ -5254,12 +5254,12 @@ Each of the four production images therefore ships its license attribution under
 <a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
 </code></pre></div>
 <ul>
-<li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is <strong>generated and committed</strong> by <code>make third-party-notices</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>), which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under the committed, version-pinned <code>vendor/</code> tree — offline, no network or module cache.
+<li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is <strong>generated and committed</strong> by <code>make third-party-notices</code> (<a href="../../scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>), which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under the committed, version-pinned <code>vendor/</code> tree — offline, no network or module cache.
   The CI <code>license-notices</code> workflow runs <code>make third-party-notices-check</code> on every change to <code>vendor/**</code> (or the generator) and fails the PR if the committed file is stale, so a dependency add/remove/bump cannot ship without refreshed attribution.</li>
 </ul>
 <hr />
 <h2 id="image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification<a class="headerlink" href="#image-provenance-signature--sbom-verification" title="Permanent link">&para;</a></h2>
-<p>The six first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>) are published to GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in <a href="../release/">release.md</a>).
+<p>The six first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>) are published to GHCR by the <a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in <a href="../release/">release.md</a>).
 Each one is:</p>
 <ul>
 <li><strong>Multi-arch</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>): the published ref is an OCI image <strong>index</strong>; the digest you pin at install time is the index digest, and the kubelet resolves the node's per-arch manifest from it at pull time.</li>
@@ -5331,7 +5331,7 @@ To pull and inspect one from the registry, resolve the per-arch digest from the 
 <a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
 <a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.packages[].name'</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
-<p>PR CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds each image and generates the same SBOM as a build artifact, so SBOM generation is exercised on every code PR — but <strong>signing and attestation run only on publish</strong> (they need a registry push and the publish workflow's OIDC identity).
+<p>PR CI (<a href="../../.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds each image and generates the same SBOM as a build artifact, so SBOM generation is exercised on every code PR — but <strong>signing and attestation run only on publish</strong> (they need a registry push and the publish workflow's OIDC identity).
 A green PR therefore proves the image builds and the SBOM generates; it does not exercise the cosign sign/attest path.</p>
 <hr />
 <h2 id="reference-links">Reference Links<a class="headerlink" href="#reference-links" title="Permanent link">&para;</a></h2>
@@ -5340,7 +5340,7 @@ A green PR therefore proves the image builds and the SBOM generates; it does not
 <li><a href="../observability/">observability.md</a> — full metrics reference and SLO alerting</li>
 <li><a href="../runbook/">runbook.md</a> — incident response and day-2 operations</li>
 <li><a href="../troubleshooting/">troubleshooting.md</a> — symptom → diagnosis → remediation</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/security.md">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
+<li><a href="../../plan/security/">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
 </ul>
 
 

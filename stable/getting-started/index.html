@@ -2834,7 +2834,7 @@ Already on v1?
 <li>Go 1.26+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md">reference</a>).
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="../charts/actions-gateway/README.md">reference</a>).
 It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.</p>
@@ -2849,7 +2849,7 @@ They are not installed by the chart.</p>
 <p>All four images must be <strong>pinned by digest</strong>.
 The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too).
 Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only.
-See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
+See the <a href="../charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
 <blockquote>
 <p><strong>Dev/CI.</strong> The Helm chart is the single install path.
 There is no kustomize alternative.
@@ -2873,7 +2873,7 @@ For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosig
 The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code>).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>).
-See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
+See the <a href="../charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
 <p>Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>

@@ -2938,7 +2938,7 @@ Listed because the docs index tags it, not because adopters need it.</p>
 For every other role above, this one is part of the <strong>threat model</strong> rather than an audience.</p>
 <p>That asymmetry is why isolation is a separate concern from access control: the question is not what this person is permitted to do, but what their code can reach if it tries.
 GAG's stance today is <a href="../kata-dind-workloads/">Kata micro-VM workers</a> for the kernel boundary, paired with <a href="../kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a> for the network one: an in-cluster registry mirror and a tenant carrying no allow-all rule, so this person's code reaches cluster DNS, GitHub, and the mirror, and nothing else.
-The threat model, the layer map, and what is explicitly out of scope are in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/secure-multi-tenant-oss-ci.md">secure multi-tenant OSS CI goal</a>.</p>
+The threat model, the layer map, and what is explicitly out of scope are in the <a href="../../plan/secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI goal</a>.</p>
 <h2 id="how-personas-are-recorded">How personas are recorded<a class="headerlink" href="#how-personas-are-recorded" title="Permanent link">&para;</a></h2>
 <p>A doc's audience is recorded in two places, deliberately:</p>
 <ol>
