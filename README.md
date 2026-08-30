@@ -156,6 +156,9 @@ Only templates CI exercises are allowed to ship, and `make template-library-chec
 **Consent-gated cross-namespace egress proxy sharing.** One proxy pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.
 Consent is provider-side, so naming a proxy from the consumer side grants nothing, an absent or empty `sharing` denies, and only the proxy's public certificate crosses the namespace boundary ([guide](docs/operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)).
 
+**A tight-egress posture for untrusted pull requests.** Pulling images was the reason worker egress had to be opened up, so an in-cluster pull-through registry mirror serves them instead, and deleting your own allow-all rule leaves a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
+Each mirror instance is pinned to one upstream and refuses uploads, which is a narrower thing to permit than five hostnames a CDN keeps renumbering; both topologies ship, one shared set or one per tenant ([recipe](docs/operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)).
+
 ## Architecture
 
 A four-tier system:
@@ -215,12 +218,12 @@ GAG ships as the **`actions-gateway` Helm chart**, which installs the Gateway Ma
 The GMC then provisions per-tenant gateways at runtime from each `ActionsGateway` CR.
 
 The chart is published to the GHCR OCI registry and signed with cosign.
-The current release is **`1.6.0`** (GA; charts carry no leading `v`, images are tagged `v1.6.0`).
+The current release is **`1.7.0`** (GA; charts carry no leading `v`, images are tagged `v1.7.0`).
 Install it straight from the registry:
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.6.0 \
+  --version 1.7.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -228,12 +231,12 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.6.0) and verify the signatures before installing.
+Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.7.0) and verify the signatures before installing.
 The [Installation guide](docs/operations/install.md) covers prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall; the [chart README](charts/actions-gateway/README.md) is the full values reference.
 
 > [!IMPORTANT]
 > **Upgrading is not `helm upgrade` alone.** Helm installs the chart-root `crds/` directory on a fresh install only, so every upgrade starts by piping `helm show crds` for the target version into `kubectl apply`.
-> The 1.6.0 upgrade also moves a `priorityClassAllowlist.configMapName` into the new cluster-scoped `PriorityClassAllowlist` CR, which fails closed.
+> The 1.7.0 upgrade also moves a `priorityClassAllowlist.configMapName` into the new cluster-scoped `PriorityClassAllowlist` CR, which fails closed.
 > Both steps are guarded, and the [upgrade guide](docs/operations/upgrade.md) covers rolling back.
 
 For day-2 operations (`helm upgrade` and rollback, per-component upgrades, runbooks) see the [operations docs](docs/operations/).
