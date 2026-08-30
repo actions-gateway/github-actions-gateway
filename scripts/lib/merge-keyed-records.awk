@@ -1,12 +1,12 @@
 # merge-keyed-records.awk — three-way merge of one block of keyed Markdown
-# records by key set-semantics. Driven by scripts/docs/git-merge-status.sh
-# (docs/STATUS.md's Queue table), scripts/docs/git-merge-plan-index.sh
-# (docs/plan/README.md's index tables) and scripts/docs/git-merge-roadmap.sh
+# records by key set-semantics. Driven by scripts/docs/git-merge-plan-index.sh
+# (docs/plan/README.md's index tables), scripts/docs/git-merge-script-index.sh
+# (scripts/README.md's group tables) and scripts/docs/git-merge-roadmap.sh
 # (docs/roadmap.md's annotated bullets); see those scripts' headers for the why,
 # and docs/development/queue-id-allocation.md for the conflict classes this
 # exists to absorb.
 #
-#   awk -v key_mode=anchor -f merge-keyed-records.awk BASE OURS THEIRS
+#   awk -v key_mode=link -f merge-keyed-records.awk BASE OURS THEIRS
 #
 # One record per line, and each input holds only one block of them, already
 # split out by the caller. A record that spans several source lines is the
@@ -14,15 +14,15 @@
 # and decodes the merged result, so nothing here has to know that.
 #
 # key_mode selects how a record's stable key is read, which is the only
-# file-specific knowledge here:
+# file-specific knowledge here. It is required, so a new driver that forgets it
+# is refused rather than keyed by whichever mode happened to be the default:
 #
-#   anchor  the `<a id="QN"></a>QN` backlog anchor in cell 1 (default)
 #   link    a Markdown link's target in cell 1, e.g. `[foo.md](foo.md)` -> `foo.md`
 #   marker  the `<!-- q:QN[,QM…] -->` backlog annotations on a `- ` bullet,
 #           normalized to a comma-joined ID list
 #
-# The two table modes read cell 1 alone, so an escaped `\|` in a later cell
-# cannot shift the key.
+# The table mode reads cell 1 alone, so an escaped `\|` in a later cell cannot
+# shift the key.
 #
 # Exit 0: the merged record block is on stdout and the result is certain.
 # Exit 2: the merge is NOT certain; a one-line reason is on stderr and the
@@ -59,29 +59,7 @@ function side_name(s) {
 # unparseable record a fallback rather than a guess.
 function row_id(line) {
 	if (key_mode == "link") return row_key_link(line)
-	if (key_mode == "marker") return row_key_marker(line)
-	return row_key_anchor(line)
-}
-
-# row_key_anchor LINE — the backlog ID. Mirrored scripts/docs/lint-backlog.sh's
-# parse_id; both served the Queue table Q889 retired, so no caller passes this
-# mode any more (Q1043). The ID cell is field 2 of the pipe-split row, and its
-# `<a id="QN"></a>` anchor must match the visible ID, because every
-# cross-reference in the file resolves through the anchor.
-function row_key_anchor(line,    n, f, cell, anchor, visible) {
-	if (line !~ /^\|/) return ""
-	n = split(line, f, "|")
-	if (n < 3) return ""
-	cell = f[2]
-	if (!match(cell, "<a id=\"Q[0-9]+\"></a>")) return ""
-	anchor = substr(cell, RSTART, RLENGTH)
-	gsub(/[^0-9]/, "", anchor)
-	visible = cell
-	gsub(/<[^>]*>/, "", visible)
-	gsub(/^[ \t]+/, "", visible)
-	gsub(/[ \t]+$/, "", visible)
-	if (visible != "Q" anchor) return ""
-	return visible
+	return row_key_marker(line)
 }
 
 # row_key_link LINE — the first cell's Markdown link target, which is what keys
@@ -154,6 +132,11 @@ function push(id) {
 BEGIN {
 	if (ARGC != 4) {
 		fail("usage: awk -f merge-keyed-records.awk BASE OURS THEIRS")
+		exit 2
+	}
+
+	if (key_mode != "link" && key_mode != "marker") {
+		fail("key_mode must be link or marker")
 		exit 2
 	}
 
