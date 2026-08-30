@@ -16,11 +16,11 @@
       With no version available (a build with no git history), the banner drops the
       version claim entirely rather than guessing. -#}
   {%- set release = config.extra.release | default({}, true) -%}
-  {%- set highlight_for = "v1.6.0" -%}
+  {%- set highlight_for = "v1.7.0" -%}
   {%- if release.version -%}
     <strong>{{ release.version }} is here.</strong>
     {%- if release.version == highlight_for %}
-      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
     {%- else %}
       <a href="{{ config.repo_url }}/releases/tag/{{ release.version }}">Read the release notes.</a>
     {%- endif %}
