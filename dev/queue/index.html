@@ -2837,14 +2837,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Two sites decide which reasons the classic listener owns on this condition type, at different widths, and neither is derived from what the …</td>
 </tr>
 <tr>
-<td><a href="Q987/">Q987</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">Point live <code>lint-backlog.sh</code> references at <code>lint-queue.sh</code></a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>scripts/docs/lint-backlog.sh</code> retired with the table (Q889) and the store's lint is <code>scripts/docs/lint-queue.sh</code> behind <code>make queue-lint</code> …</td>
-</tr>
-<tr>
 <td><a href="Q988/">Q988</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Read the worker runner version from the registry, not the container</a></td>
 <td><code>feature</code> <code>security</code></td>
@@ -2918,11 +2910,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q922/">Q922</a></td>
-<td><a href="../development/maintaining-backlog/">Docs name the retired <code>lint-backlog.sh</code> as the live backlog linter</a></td>
+<td><a href="../development/queue-id-allocation/">Docs name the retired <code>lint-backlog.sh</code> as the live backlog linter</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q889 retired it with the table; <code>queue.py lint</code> and <code>check-queue-rules.py</code> carry its rules now.</td>
+<td>Q889 retired it with the table; <code>queue.py lint</code> (<code>make queue-lint</code>) and <code>check-queue-rules.py</code> (<code>make queue-rules-check</code>) carry its rules …</td>
 </tr>
 <tr>
 <td><a href="Q401/">Q401</a></td>
@@ -2971,14 +2963,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still …</td>
-</tr>
-<tr>
-<td><a href="Q924/">Q924</a></td>
-<td><a href="../development/maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md's flake gate references are stale post-Q889</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-18: it names <code>scripts/docs/lint-backlog.sh</code>, which <a href="../plan/q889-backlog-item-store/">Q889</a> deleted, and twice a …</td>
 </tr>
 <tr>
 <td><a href="Q372/">Q372</a></td>

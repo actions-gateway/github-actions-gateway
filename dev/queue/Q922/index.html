@@ -2598,8 +2598,24 @@
 
 
 <h1 id="docs-name-the-retired-lint-backlogsh-as-the-live-backlog-linter">Docs name the retired <code>lint-backlog.sh</code> as the live backlog linter<a class="headerlink" href="#docs-name-the-retired-lint-backlogsh-as-the-live-backlog-linter" title="Permanent link">&para;</a></h1>
-<p>Q889 retired it with the table; <code>queue.py lint</code> and <code>check-queue-rules.py</code> carry its rules now.
-Four docs and CLAUDE.md still name it live, one attributing rule 8 to it.
+<p>Q889 retired it with the table; <code>queue.py lint</code> (<code>make queue-lint</code>) and <code>check-queue-rules.py</code> (<code>make queue-rules-check</code>) carry its rules now.</p>
+<p>Measured 2026-08-30 by reading each file rather than a merged grep, after Q924 cleared <a href="../../development/maintaining-backlog/">maintaining-backlog.md</a>: six docs still describe it as live, so this row's original count of four was low.</p>
+<ul>
+<li><a href="../../development/queue-id-allocation/">queue-id-allocation.md</a> has four, attributing rules 10 and 12 to it.
+  Both attributions are wrong beyond the name: <code>check-queue-rules.py</code>'s own docstring records rule 10 as deliberately absent, dropped on measurement at the cutover, and rule 12 as <code>queue.py claims</code>.</li>
+<li><a href="../../development/parallel-dispatch/">parallel-dispatch.md</a> has three, two of them naming it as a <code>make check</code> sub-gate to read by name in the output.</li>
+<li><a href="../../development/skills/">skills.md</a> has two, one also naming the equally deleted <code>check-status-isolation.sh</code>.</li>
+<li><a href="../../development/testing/">testing.md</a> has two, one asserting <code>status-lint.yml</code> runs it without make; that workflow runs <code>lint-queue.sh</code> and <code>check-queue-rules.sh</code>, both as scripts.</li>
+<li><a href="../../development/backpressure/">backpressure.md</a> and <a href="../../development/technical-debt/">technical-debt.md</a> have one each.</li>
+</ul>
+<p>Three code comments repeat it and are not covered above: <code>scripts/ci/gate-list-test.sh</code>, <code>scripts/lib/merge-keyed-records.awk</code> and <code>.github/workflows/status-lint.yml</code>.</p>
+<p>Nothing executable is broken, so this is a naming defect rather than a rename.</p>
+<p>The test that yields six is whether a sentence would send a reader to run the script today; a sentence recording what the script did is history and stays.
+<code>git grep -l lint-backlog</code> returns 20 files at the head that measured this, so 14 are not the defect: <code>CONTRIBUTING.md</code>, <code>Makefile</code>, <code>mk/gate-lists.mk</code>, <code>scripts/README.md</code> and <code>maintaining-backlog.md</code>, all past tense; the three code comments above; five under <code>docs/plan/</code>, not the two an earlier reading of this row claimed; and this row.
+Two of those five carry a present-tense sentence and still pass the test, because each describes the table era from inside a plan about it: <a href="../../plan/docs-page-boundaries/">docs-page-boundaries.md</a> on rules spanning both tables, and <a href="../../plan/archive/local-gate-throughput/">archive/local-gate-throughput.md</a> listing it in <code>CHECK_FAST_GATES</code>.
+Re-derive against the test rather than against tense, or the count comes back eight.</p>
+<p>Absorbs Q987, deleted 2026-08-30 with both sites it named already clean: <code>CLAUDE.md</code> by #1730, which repointed it at <code>make queue-lint</code>, and <code>maintaining-backlog.md</code> by Q924.
+Q987 carried one observation worth keeping: a reviewer who runs the path a doc gives gets exit 127, which reads like a lint failure rather than a missing file.
 Distinct from <a href="../Q830/">Q830</a>: a dead name, not a stale number.</p>
 
 
