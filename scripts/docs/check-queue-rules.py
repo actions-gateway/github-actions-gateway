@@ -13,6 +13,18 @@ the *branch changed* rather than of what the store holds:
   9. Deleting the last item targeting a plan obliges that plan's index row to
      stop reading as open work.
  11. Every label an item wears is declared, so a typo cannot stick silently.
+ 13. An item this branch files cites any near-duplicate the matcher flagged, so
+     a warning that fired is a warning somebody answered.
+
+Rule 13 is the one rule here that shells out. `find-duplicate-rows.sh` already
+scores a candidate title against a store, and `make queue-id` prints its verdict
+at filing time, but that verdict was advisory and left no trace: Q987 was filed
+while the matcher scored Q922 at 0.50 and shipped citing it zero times, which is
+how three rows came to describe one defect and two sessions collided on it
+(Q1045). The matcher is quiet enough to gate on: 25 flagged pairs out of 17,955
+across the 190 items at 2eec06d51, measured 2026-08-31 with `--audit`. It names
+a commit rather than "the merge base", which is what a rebase moves underneath
+it -- this figure was already stale once that way.
 
 Rule 10 of the table-era linter is deliberately absent. It guarded a
 *relocated* row outvoting a *deleted* one, which a line-position merge cannot
@@ -33,6 +45,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 STORE = "docs/queue"
@@ -43,6 +56,8 @@ OPEN_MARKERS = ("⚠️", "🚧", "❌", "🔲")
 LABELS_LINE = re.compile(r"^\*\*Labels:\*\*(.*)$", re.M)
 LABEL = re.compile(r"`([^`]+)`")
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+TITLE = re.compile(r"^#\s+(.+?)\s*$", re.M)
+MATCHER = "scripts/docs/find-duplicate-rows.sh"
 
 
 class Unreadable(Exception):
@@ -184,6 +199,66 @@ def rule11(head_items, vocabulary, failures):
                     f"deliberate edit to that line, so a typo cannot stick.")
 
 
+def prose_of(body):
+    """The item minus its frontmatter, which is metadata rather than an answer."""
+    m = FRONTMATTER.search(body or "")
+    return (body or "")[m.end():] if m else (body or "")
+
+
+def title_of(body):
+    m = TITLE.search(body or "")
+    return m.group(1).strip() if m else ""
+
+
+def flagged_for(root, base_dir, body):
+    """Ids the matcher scores against the store as it stood at the merge base."""
+    title = title_of(body)
+    if not title:
+        return []
+    cmd = [str(root / MATCHER), "--porcelain", "--store", str(base_dir)]
+    target = target_of(body)
+    if target:
+        cmd += ["--target", target]
+    try:
+        p = subprocess.run(cmd + [title], capture_output=True, text=True)
+    except OSError as e:
+        raise Unreadable(f"{MATCHER}, which rule 13 scores against: {e}")
+    if p.returncode != 0:
+        raise Unreadable(f"{MATCHER}: {p.stderr.strip() or p.returncode}")
+    hits = []
+    for line in p.stdout.splitlines():
+        f = line.split("\t")
+        if len(f) >= 2 and re.fullmatch(r"Q\d+", f[1]):
+            hits.append(f[1])
+    return hits
+
+
+def rule13(base_items, head_items, root, base_dir, failures):
+    """An item this branch files answers any near-duplicate the matcher found."""
+    excused = allow("QUEUE_ALLOW_UNCITED_DUPLICATE")
+    for qid, body in sorted(head_items.items()):
+        if qid in base_items or qid in excused:
+            continue
+        hits = [h for h in flagged_for(root, base_dir, body) if h != qid]
+        if not hits:
+            continue
+        # Citing any one is enough. What this asks is that the warning was read,
+        # not that every candidate is a duplicate: the matcher's own calibration
+        # expects false positives, and Q922 answering Q830 is the shape wanted.
+        #
+        # Prose only. A `target:` naming the flagged item would otherwise clear
+        # the rule without a word written, and a target is chosen for where the
+        # work lands rather than to answer a warning.
+        if any(re.search(rf"\b{re.escape(h)}\b", prose_of(body)) for h in hits):
+            continue
+        failures.append(
+            f"rule 13: {qid} is filed while the near-duplicate search flags "
+            f"{', '.join(hits)}, and its body names none of them. Say how it "
+            f"differs, or fold it into that row -- `make queue-id` prints the "
+            f"same verdict at filing time. Set "
+            f"QUEUE_ALLOW_UNCITED_DUPLICATE={qid} for a deliberate pass.")
+
+
 def main(argv=None):
     root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"],
                                capture_output=True, text=True).stdout.strip() or ".")
@@ -210,6 +285,20 @@ def main(argv=None):
     rule8(base_items, head_items, ledger, failures)
     rule9(base_items, head_items, index, failures)
     rule11(head_items, vocabulary, failures)
+    # Rule 13 scores against the store as it stood at the base, so a row filed
+    # by this branch is not scored against its own siblings -- two items filed
+    # together are one editorial act, and the matcher would pair them with each
+    # other rather than with what was already there.
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            for qid, body in base_items.items():
+                (base_dir / f"{qid}.md").write_text(body)
+            rule13(base_items, head_items, root, base_dir, failures)
+    except Unreadable as e:
+        print(f"check-queue-rules: could not read {e}; refusing to guess",
+              file=sys.stderr)
+        return 2
 
     for f in failures:
         print(f)
@@ -217,7 +306,7 @@ def main(argv=None):
         print(f"check-queue-rules: FAILED - {len(failures)} finding(s)")
         return 1
     print(f"check-queue-rules: ok ({len(head_items)} item(s), "
-          f"{len(base_items)} at the merge base, rules 8, 9 and 11)")
+          f"{len(base_items)} at the merge base, rules 8, 9, 11 and 13)")
     return 0
 
 
