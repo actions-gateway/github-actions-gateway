@@ -2681,7 +2681,7 @@ The script is <a href="https://github.com/actions-gateway/github-actions-gateway
 <p>Claim an ID when you file the row, use it, and move on.
 There is nothing to release and nothing to clean up.</p>
 <p><strong>Every path through the target claims, and an ID you did not claim is one <code>queue.py claims</code> rejects.</strong> Those are the two halves of the same rule: the only way to learn an ID is to hold it, and an item carrying an ID nobody holds fails that check, which is rule 12 of the retired table-era linter, moved into <code>queue.py</code> by <a href="../../plan/q889-backlog-item-store/">Q889</a>.
-No gate runs that check today (<a href="../../queue/Q1042/">Q1042</a>), so the second half holds only where someone runs it by hand.
+<code>make queue-claims-check</code> runs it over this store, and the <code>status-lint</code> workflow runs it with <code>--strict</code> (Q1042).
 Both are below, under <a href="#reserving-not-reporting">Reserving, not reporting</a>.</p>
 <p><strong>The title is mandatory, and there is no untitled batch form.</strong> This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through.
 <code>-n &lt;count&gt;</code> used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate.
@@ -2710,7 +2710,8 @@ The one that did held the ID legitimately, merged second, and paid the renumber 
 <li><strong>Reading the file's highest ID and adding one.</strong> No tool can prevent that, so it fails loudly instead.
   <code>queue.py claims</code> requires every Q-ID a branch <em>adds</em> to hold a <code>refs/queue-ids/QN</code> claim, measured against the merge base rather than <code>origin/main</code>'s tip, and skips rather than fails when the remote cannot be read unless <code>--strict</code> is passed.
   The message names the fix, and <code>QUEUE_CLAIMS_ALLOW="Q1 Q2"</code> (or <code>--allow</code>) is there for an ID claimed from another clone.
-  No gate points it at this store: <code>queue-test.sh</code> drives it inside <code>make check</code>, but only ever against a fixture, so an unreserved ID here surfaces at the rebase that collides rather than at the commit that files it (<a href="../../queue/Q1042/">Q1042</a>).</li>
+  <code>scripts/docs/check-queue-claims.sh</code> points it at this store, backing <code>make queue-claims-check</code> in <code>make check</code> and <code>make queue-gates</code>, and the <code>status-lint</code> workflow runs the same script with <code>--strict</code> (Q1042).
+  It reads the working tree rather than <code>HEAD</code>, so a row that has been written and not yet committed is already its subject, which is when a hand-picked ID is cheapest to fix.</li>
 </ul>
 <p>What the check costs and what it still misses:</p>
 <ul>
@@ -2718,7 +2719,7 @@ The one that did held the ID legitimately, merged second, and paid the renumber 
   That baseline is the merge base with <code>origin/main</code>, not its tip: against the tip a row <code>main</code> deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).</li>
 <li>IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.</li>
 <li>When <code>git ls-remote</code> cannot reach the remote it skips rather than fails, so an offline clone still lints.
-  <code>--strict</code> is what turns that skip into a failure, and no gate passes it, because none runs the check over this store.</li>
+  <code>--strict</code> turns that skip into a failure, and CI is the only caller that passes it: a network is guaranteed there, so a skip in the one place the check is relied on would be a silent non-run.</li>
 <li><strong>It cannot catch a hand-picked ID that another session has already claimed but not yet filed.</strong> That is the narrow residual: the ref exists, so the row looks reserved.
   Closing it needs the claim to record <em>who</em> holds it, which no one has needed yet.</li>
 </ul>
