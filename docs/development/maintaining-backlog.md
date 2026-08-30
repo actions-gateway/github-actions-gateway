@@ -126,9 +126,9 @@ Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement 
 - **The cross-link was care, not mechanism.** #1441 named Q549 by hand.
   Passing the new title to `make queue-id` returns Q549 at 0.43 on the same target, which is the prompt [nothing else supplies](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
 
-**Rule 8 pushes toward the repurpose, which is worth knowing before it does.** It keys on the ID being present *anywhere* in the file, so a `flake` row whose defect is swapped out reads as correctly preserved.
-Measured on a two-commit probe against the shipped linter: the repurpose passes, and deleting the same row fails with rule 8 naming `BACKLOG_ALLOW_FLAKE_DELETE`, so the honest closure is the one that hits a red gate and the shortcut is the one that goes green.
-For a flake row whose defect was **refuted rather than fixed**, that override is the correct move: retire the row to [the ledger](flake-watch-retired.md) with no fix PR, which is a third route out of Flake watch alongside [soaked and obsolete](#retiring-a-flake-watch-row).
+**Rule 8 pushes toward the repurpose, which is worth knowing before it does.** It keys on the item file still being there, so a `flake` item whose defect is swapped out reads as correctly preserved.
+Measured 2026-08-30 on a two-arm probe against the shipped checker: the repurpose passes, and deleting the same item fails with rule 8 naming `QUEUE_ALLOW_FLAKE_DELETE`, so the honest closure is the one that hits a red gate and the shortcut is the one that goes green.
+For a flake item whose defect was **refuted rather than fixed**, retire it to [the ledger](flake-watch-retired.md) with no fix PR, which is a third route out of flake watch alongside [soaked and obsolete](#retiring-a-flake-watch-row).
 
 **Nothing gates this, and a title check is the wrong gate to reach for.** Scoring every item's before/after title across the backlog's whole history with the same matcher `make queue-id` uses (1,108 commits touching `docs/STATUS.md`, 80 title changes) leaves 27 whose new title does not match its old one.
 One is this repurpose.
@@ -541,8 +541,9 @@ A sighting on a **PR branch** does not meet the trigger, so the row stays in Fla
 Record *which mode* failed, too, where the row's fix addressed a specific one: [Q549](../queue/Q549.md)'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.
 
 This is the one place the general "done rows are deleted" rule does **not** apply, which makes it easy to miss when a flake fix otherwise looks like a routine change.
-`scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against the [merge base](#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it) with `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here.
-Retiring a row per the ledger rules below is the deliberate exception: `BACKLOG_ALLOW_FLAKE_DELETE="Q123"` lets specific IDs through.
+[`check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) enforces it (rule 8), behind `make queue-rules-check` in `make check` and `make queue-gates`: a `flake`-labelled item that disappears entirely — measured against the [merge base](#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it) with `origin/main`, never its tip — fails the gate, naming the item and pointing here.
+It keys on the label alone, so an item already parked in flake watch is protected exactly as a `status: ready` one is.
+Retiring per the ledger rules below needs no exception: the ledger entry clears rule 8 by itself, and `QUEUE_ALLOW_FLAKE_DELETE="Q123"` is for the other case, a deliberate drop that reaches no ledger at all.
 
 ### Retiring a flake-watch row
 
@@ -669,7 +670,7 @@ A product change to the AGC or GMC takes no area label at all — `bug`/`feature
 
 Apply the same bar to any new label: if you can't name the question it answers, or it would land on more than a third of rows, it belongs in the item title instead.
 
-`lint-backlog.sh` rule 11 holds the vocabulary closed: every label on a Progress, Queue, or Deferred row must appear on the `**Labels:**` line, so adding one is a deliberate edit to that line rather than a typo that sticks.
+[`check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) rule 11 holds the vocabulary closed: every label an item wears must appear on the `**Labels:**` line in [`docs/queue/README.md`](../queue/README.md), so adding one is a deliberate edit to that line rather than a typo that sticks.
 This is what a retirement needs — Q592 was filed wearing `infra` from a branch cut before the split and merged without a conflict, because the two edits touched different rows.
 
 ## Don't pre-assign release versions to backlog items
