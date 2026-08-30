@@ -1,0 +1,3819 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.7.0/design/appendix-g-future-enhancements/">
+      
+      
+        <link rel="prev" href="../appendix-f-cost-model/">
+      
+      
+        <link rel="next" href="../appendix-h-v2-api-decomposition/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Appendix G — Future enhancements - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.7.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.7.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.7.0",
+    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#appendix-g--optional-future-enhancements" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Appendix G — Future enhancements
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#g1-proxy-enforced-destination-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.1. Proxy-Enforced Destination Allowlist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g2-proxy-enforced-per-tenant-rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.2. Proxy-Enforced Per-Tenant Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g3-proxy-side-audit-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.3. Proxy-Side Audit Logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g4-tls-between-agcworkers-and-the-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.4. TLS Between AGC/Workers and the Proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g5-per-runnergroup-dedicated-proxy-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.5. Per-RunnerGroup Dedicated Proxy Pool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g6-x25519-ecdh-session-key-exchange" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.6. X25519 ECDH Session Key Exchange
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.7. ValidatingAdmissionPolicy for direct RunnerGroup PriorityClass enforcement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g8-optional-disable-able-egress-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.8. Optional (Disable-able) Egress Proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g10-controller-discovered-apiserver-cidr-auto-narrowing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.10. Controller-Discovered apiserver-CIDR Auto-Narrowing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g11-worker-scale-up-rate-limiting-anti-stampede" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.11. Worker Scale-Up Rate Limiting (anti-stampede)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="G.11. Worker Scale-Up Rate Limiting (anti-stampede)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example--multi-site-shared-egress-nat--firewall--vpn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example — multi-site shared egress (NAT / firewall / VPN)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g12-warm-worker-pool-minidleworkers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.12. Warm Worker Pool (minIdleWorkers)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g13-server-side-apply-for-the-gmcs-child-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.13. Server-Side Apply for the GMC's Child Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.14. Kata e2e untrusted-PR posture — tight egress + in-cluster pull-through mirror
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.15. Extract the Batch Right-Sizer into a Standalone / Reusable Tool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.16. ProvisioningRequest Pre-Acquire Capacity Probe (check-capacity)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.17. Opt-In Auto-Retry for Flaky Jobs (beyond disruptions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#g1-proxy-enforced-destination-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.1. Proxy-Enforced Destination Allowlist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g2-proxy-enforced-per-tenant-rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.2. Proxy-Enforced Per-Tenant Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g3-proxy-side-audit-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.3. Proxy-Side Audit Logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g4-tls-between-agcworkers-and-the-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.4. TLS Between AGC/Workers and the Proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g5-per-runnergroup-dedicated-proxy-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.5. Per-RunnerGroup Dedicated Proxy Pool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g6-x25519-ecdh-session-key-exchange" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.6. X25519 ECDH Session Key Exchange
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.7. ValidatingAdmissionPolicy for direct RunnerGroup PriorityClass enforcement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g8-optional-disable-able-egress-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.8. Optional (Disable-able) Egress Proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g10-controller-discovered-apiserver-cidr-auto-narrowing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.10. Controller-Discovered apiserver-CIDR Auto-Narrowing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g11-worker-scale-up-rate-limiting-anti-stampede" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.11. Worker Scale-Up Rate Limiting (anti-stampede)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="G.11. Worker Scale-Up Rate Limiting (anti-stampede)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example--multi-site-shared-egress-nat--firewall--vpn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example — multi-site shared egress (NAT / firewall / VPN)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g12-warm-worker-pool-minidleworkers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.12. Warm Worker Pool (minIdleWorkers)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g13-server-side-apply-for-the-gmcs-child-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.13. Server-Side Apply for the GMC's Child Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.14. Kata e2e untrusted-PR posture — tight egress + in-cluster pull-through mirror
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.15. Extract the Batch Right-Sizer into a Standalone / Reusable Tool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.16. ProvisioningRequest Pre-Acquire Capacity Probe (check-capacity)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G.17. Opt-In Auto-Retry for Flaky Jobs (beyond disruptions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="appendix-g--optional-future-enhancements">Appendix G — Optional Future Enhancements<a class="headerlink" href="#appendix-g--optional-future-enhancements" title="Permanent link">&para;</a></h1>
+<p>← <a href="../appendix-f-cost-model/">Cost Model</a> | <a href="../">Back to index</a></p>
+<hr />
+<p>This appendix records features that have been considered, deliberately left out of the current design, and may be revisited later.
+Each entry states the current behavior, the gap it would close, the cost of adding it, and the trigger that would justify the work.</p>
+<p>These are not commitments.
+An item appearing here means "we know about it, we chose not to build it for v1, and we know what we'd do if the constraints changed."</p>
+<hr />
+<h2 id="g1-proxy-enforced-destination-allowlist">G.1. Proxy-Enforced Destination Allowlist<a class="headerlink" href="#g1-proxy-enforced-destination-allowlist" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>✅ Implemented (Q242).</strong> This enhancement was promoted to committed work and shipped — it is the attribution-preserving answer to the most common operator ask (letting CI jobs reach their build dependencies without forfeiting the per-tenant egress model).
+It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.</p>
+</blockquote>
+<p>A platform admin can allow a v2 <code>EgressProxy</code> to forward worker traffic to a small, explicit set of <strong>non-GitHub</strong> destinations — by DNS host suffix (<code>spec.destinationFQDNs</code>) and by CIDR (<code>spec.destinationCIDRs</code>) — while keeping per-tenant egress-IP attribution and the DNS-exfil containment.
+The destinations are gated by a <strong>platform-owned</strong> allowlist (GMC <code>--allowed-egress-fqdns</code> / <code>--allowed-egress-cidrs</code> + an optional watched ConfigMap) enforced by a validating webhook; <strong>both empty = deny-all-non-GitHub</strong> (the secure default).
+They widen one source into two enforcement surfaces — <code>ipBlock</code> / <code>toFQDNs</code> on the pod-egress policy (the hard gate) and the proxy CONNECT allowlist as defense-in-depth (with DNS-rebinding revalidation on the CIDR path).
+The docs <strong>lead with an in-cluster caching mirror</strong> as the recommended path and reserve the allowlist for what a mirror can't proxy.</p>
+<ul>
+<li>Trade-offs and threat model: <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a> (Worker Exfiltration via an Allowlisted Non-GitHub Destination).</li>
+<li>Network shape: <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>.</li>
+<li>Operator runbook: <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>.</li>
+<li>Full design + deliverables: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a>.</li>
+</ul>
+<p><strong>Related security finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/security.md">docs/plan/security.md</a> M-2.</p>
+<hr />
+<h2 id="g2-proxy-enforced-per-tenant-rate-limiting">G.2. Proxy-Enforced Per-Tenant Rate Limiting<a class="headerlink" href="#g2-proxy-enforced-per-tenant-rate-limiting" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The proxy does not rate-limit.
+GitHub's own per-installation rate limits are the only ceiling on call volume.</p>
+<p><strong>Gap.</strong> If a tenant's runners go into a tight loop (misconfigured workflow, broken retry policy), the only feedback is GitHub's <code>429 Too Many Requests</code> and the Actions Gateway Controller (AGC) exponential backoff.
+There is no way to slow a single misbehaving RunnerGroup before it hits the GitHub ceiling.</p>
+<p><strong>What "added" would look like.</strong> A token-bucket per-tenant (and optionally per-RunnerGroup) at the proxy.
+Configured via a new field on <code>ProxyConfig</code> or <code>RunnerGroupSpec</code>.
+Bucket state stays in-process on each proxy pod; for accurate global limits a shared backend (Redis, etcd) would be required — out of scope for v1.</p>
+<p><strong>What would trigger building it.</strong> A real incident where one tenant saturates the GitHub rate limit and the platform team needs a sub-tenant kill switch finer than "drain the proxy pool."</p>
+<hr />
+<h2 id="g3-proxy-side-audit-logging">G.3. Proxy-Side Audit Logging<a class="headerlink" href="#g3-proxy-side-audit-logging" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>✅ Implemented (Q564).</strong> The recorded demand this entry waited on arrived as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/queue/Q725.md">Q725</a>, the audit-persona dashboard, so the enhancement was promoted to committed work and shipped.
+It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.</p>
+</blockquote>
+<p>An <code>EgressProxy</code> pool writes one structured line per <strong>accepted</strong> CONNECT (pool namespace, destination host and port, bytes each way, tunnel duration) to the same stdout JSON stream the pool already logs to.
+It is <strong>off by default</strong> and opted into per pool with <code>spec.auditLogging: Connections</code>; <code>Off</code> is the default and is what an unset field, an unrecognized value, and a proxy image older than the field all resolve to.</p>
+<p>Two deltas from the sketch this entry originally carried, both recorded so a reader is not left looking for what it described:</p>
+<ul>
+<li><strong>The field is <code>EgressProxy.spec.auditLogging</code>, not <code>spec.proxy.auditLogging</code>.</strong> The inline <code>ActionsGateway.spec.proxy</code> this entry predates was decomposed into the standalone <code>EgressProxy</code> kind (§H.4), and a proxy pool is what the record attributes.</li>
+<li><strong>It is a string enum, not a bool.</strong> What gets recorded is a policy, so the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/development/api-review.md#prefer-a-string-enum-to-a-bool">API design rules</a> put it on an enum whose values name the method, which is what let <code>ConnectionsWithSource</code> join <code>Connections</code> later without widening what an existing pool records.</li>
+</ul>
+<p>Attribution (Q986) is a third value plus a second record, not a wider first one.
+<code>ConnectionsWithSource</code> adds the client address to the egress record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> has the AGC write which job holds each worker address while its pod lives.
+That second record is necessary because a worker pod is deleted with its job, so the binding cannot be resolved afterwards.
+Both default <code>Off</code> and are opted into separately: neither record is a movement log alone, the join of the two is.</p>
+<ul>
+<li>Field contract and what the record deliberately omits: <a href="../05-security/#proxy-egress-audit-record">05-security.md § Proxy egress audit record</a>.</li>
+<li>Record shape and how to select it: <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a>, and the attribution join in <a href="../../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">§ Attributing a record to a tenant and a job</a>.</li>
+<li>Turning it on: <a href="../../operations/tenant-onboarding/#per-pool-egress-audit-record">tenant-onboarding.md § Per-pool egress audit record</a>.</li>
+</ul>
+<hr />
+<h2 id="g4-tls-between-agcworkers-and-the-proxy">G.4. TLS Between AGC/Workers and the Proxy<a class="headerlink" href="#g4-tls-between-agcworkers-and-the-proxy" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The AGC and worker pods reach the proxy at <code>http://actions-gateway-proxy.&lt;ns&gt;.svc.cluster.local:8080</code>.
+The CONNECT-tunneled payload is itself TLS to GitHub; only the CONNECT request line is in cleartext on the in-cluster hop.</p>
+<p><strong>Gap.</strong> On clusters with eBPF taps, sidecar meshes, or shared-CNI visibility, the CONNECT target host:port is observable.
+The actual payload remains encrypted.
+No bearer token is sent on the outer hop today, so credential exposure is not on the table.</p>
+<p><strong>What "added" would look like.</strong> cert-manager-managed cert mounted into proxy pods, AGC and workers use <code>https://</code> proxy URL.
+Adds one in-cluster handshake per upstream connection.
+Adds operational cost of managing per-tenant proxy certs.</p>
+<p><strong>What would trigger building it.</strong> A compliance requirement for in-cluster encryption-in-transit beyond what an mTLS service mesh already provides, or a future change that puts authentication on the outer hop.</p>
+<hr />
+<h2 id="g5-per-runnergroup-dedicated-proxy-pool">G.5. Per-RunnerGroup Dedicated Proxy Pool<a class="headerlink" href="#g5-per-runnergroup-dedicated-proxy-pool" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> One proxy pool per <code>ActionsGateway</code> (i.e., per tenant).
+All RunnerGroups within a tenant share the pool.</p>
+<p><strong>Gap.</strong> A bandwidth-heavy GPU RunnerGroup can saturate the proxy pool and slow a co-tenant's CPU-bound RunnerGroup.
+The HPA scales the shared pool, but bursts can outrun reaction time.</p>
+<p><strong>What "added" would look like.</strong> An optional <code>spec.proxy.dedicated: true</code> field on <code>RunnerGroupSpec</code> that causes the GMC to provision a separate proxy <code>Deployment</code> + <code>Service</code> + <code>HPA</code> for that group.
+The AGC's <code>HTTP_PROXY</code> env var would need to become per-RunnerGroup rather than per-AGC.</p>
+<p><strong>What would trigger building it.</strong> A tenant report showing the shared proxy pool saturating and the HPA failing to keep up with a single RunnerGroup's bursts.</p>
+<hr />
+<h2 id="g6-x25519-ecdh-session-key-exchange">G.6. X25519 ECDH Session Key Exchange<a class="headerlink" href="#g6-x25519-ecdh-session-key-exchange" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The GitHub Actions broker sends each listener session an AES-256-CBC key encrypted with the agent's RSA public key (RSA-OAEP).
+The agent decrypts it and uses it to decrypt subsequent job message bodies.
+This requires the agent key to be RSA.
+Ed25519 agents cannot participate — they receive job messages without the AES layer and rely on TLS as the sole protection for the session payload.</p>
+<p><strong>Why it was left out.</strong> This is a broker-protocol change, not an AGC-side change.
+We do not control the GitHub broker.
+The current code exposes Ed25519 as an operator opt-in (<code>--agent-key-type=ed25519</code>) for deployments that want faster JWT signing and accept the loss of the AES defense-in-depth layer, but the default is RSA-3072 specifically because of this limitation.</p>
+<p><strong>Gap.</strong> Ed25519 is preferable for JWT signing: smaller keys, faster operations, deterministic signatures, no padding oracle surface.
+But making it the secure default requires the broker to support a key- exchange mechanism compatible with Curve25519 keys.
+X25519 ECDH (Diffie-Hellman over Curve25519) would allow the broker to establish a shared AES session key with an Ed25519 agent without RSA-OAEP: the broker generates an ephemeral X25519 keypair, the agent uses its Curve25519 key (derived from the Ed25519 private key via standard clamping), and both sides derive the same session secret.
+The AES message-encryption layer would be fully preserved for Ed25519 agents.</p>
+<p><strong>What "added" would look like.</strong></p>
+<p>This requires a change to the broker protocol, not to this codebase.
+On the GitHub side:</p>
+<ul>
+<li><code>CreateSession</code> response includes an ephemeral X25519 public key and a nonce instead of (or in addition to) the RSA-OAEP-encrypted blob.</li>
+<li>The client performs X25519 key agreement and derives the AES session key via HKDF.</li>
+</ul>
+<p>On the AGC side, once the broker supports this:</p>
+<ul>
+<li><code>goroutine.go</code> <code>createSession</code> detects the X25519 key-agreement path in the <code>CreateSession</code> response and performs ECDH derivation instead of RSA-OAEP decryption.
+  (~30 LoC using <code>golang.org/x/crypto/curve25519</code>.)</li>
+<li><code>cmd/agc/main.go</code> changes the default from <code>--agent-key-type=rsa</code> to <code>--agent-key-type=ed25519</code>.</li>
+<li>RSA key support is retained for backward compatibility with existing Secrets.</li>
+</ul>
+<p><strong>What would trigger building it.</strong> GitHub updates the broker protocol to include X25519 ECDH session key exchange, or publishes an API allowing Ed25519 agents to participate in encrypted sessions.
+The probe binary (<code>cmd/probe</code>, configured entirely through its <code>GITHUB_RUNNER_*</code> environment — it takes no command-line flags) is the detection harness: pointed at an Ed25519 agent's credentials, a <code>session OK</code> result with a non-empty <code>EncryptionKey</code> would indicate the broker is sending a key the agent can use.</p>
+<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/security.md">docs/plan/security.md</a> M-11, D-5.</p>
+<hr />
+<h2 id="g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement">G.7. ValidatingAdmissionPolicy for direct RunnerGroup PriorityClass enforcement<a class="headerlink" href="#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>✅ Implemented (Q289).</strong> The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> ships with the chart (on by default under <code>admissionPolicy.enabled</code>) and in <code>cmd/gmc/config/admission-policy/</code>.
+It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.</p>
+</blockquote>
+<p>The GMC webhooks gate every tenant-facing CR's PriorityClass references (Q132/Q289), but RunnerGroup CRs have no webhook of their own — they are normally authored only by the GMC from an already-validated <code>ActionsGateway</code> — so a tenant granted <strong>direct <code>runnergroups</code> write RBAC</strong> bypassed the allowlist entirely, and webhooks never re-validate <strong>already-stored</strong> objects.
+The policy closes both: it rejects any <code>runnergroups</code> create/update (from <em>any</em> writer, GMC included) whose <code>priorityTiers[].priorityClassName</code> or <code>podTemplate.spec.priorityClassName</code> is not in the allowlist supplied via its <code>paramKind</code> ConfigMap, and re-validates on every write to an existing object.
+A <code>paramKind</code> carries the allowlist because CRD CEL <code>XValidation</code> cannot read external config — the same reason the webhook, not a CRD rule, enforces it on the other kinds.</p>
+<ul>
+<li>Threat model and enforcement matrix: <a href="../05-security/#cross-tenant-pod-preemption-via-priorityclass">05-security.md § Cross-tenant pod preemption via PriorityClass</a>.</li>
+<li>Operator runbook, param-ConfigMap contract, and failure modes: <a href="../../operations/security-operations/#priority-classes-the-allowed-priority-classes-allowlist">security-operations.md § Priority classes</a>.</li>
+<li>Stored-object upgrade sweep: <a href="../../operations/security-operations/#upgrading-previously-ungated-priorityclassname-fields-are-now-gated">security-operations.md § Upgrading</a>.</li>
+</ul>
+<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q132-priorityclass-allowlist.md">docs/plan/q132-priorityclass-allowlist.md</a>.</p>
+<hr />
+<h2 id="g8-optional-disable-able-egress-proxy">G.8. Optional (Disable-able) Egress Proxy<a class="headerlink" href="#g8-optional-disable-able-egress-proxy" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The per-tenant egress proxy pool (<a href="../02-architecture/#23-tier-3--egress-proxy-pool">§2.3</a>) is provisioned unconditionally for every <code>ActionsGateway</code>.
+The Gateway Manager Controller (GMC) always emits the proxy <code>Deployment</code>, <code>Service</code>, <code>HPA</code>, <code>PodDisruptionBudget</code>, and TLS cert <code>Secret</code>, and the workload <code>NetworkPolicy</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/cmd/gmc/internal/controller/builder.go"><code>buildWorkloadNetworkPolicy</code></a>) grants Actions Gateway Controller (AGC) and worker pods egress to <em>only</em> cluster DNS and the proxy on port 8080 — so with no proxy, those pods have no network path to GitHub at all.
+<code>spec.proxy</code> is <code>+optional</code>, but only its <em>tuning</em> (replica counts, resources) is; the pool itself cannot be turned off.
+<code>spec.proxy.managedNetworkPolicy: false</code> is <strong>not</strong> a disable switch — it only drops the GitHub-CIDR rule from the proxy's own NetworkPolicy (for FQDN-based CNI policies); the proxy still runs and still carries all traffic.</p>
+<p><strong>Why it was left out.</strong> Routing <em>all</em> GitHub-bound traffic — AGC control-plane and worker data-plane alike — through the per-tenant proxy is what makes the gateway's differentiating claim coherent: stable per-tenant egress IPs at GitHub.
+Four downstream capabilities rest on it (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a>): GitHub-side IP allowlisting, per-tenant audit attribution, GitHub-side incident containment (a rate-limit / abuse-flag / IP-ban hits one tenant, not whoever shares the node), and the one-operation per-tenant kill-switch (drain the pool).
+These are network-attribution, compliance, and operability properties — <strong>not</strong> a security boundary against a compromised worker, which the installation token already scopes.
+Making the proxy optional therefore forfeits attribution and containment without breaching the token boundary.
+For the multi-tenant deployments the design targets, that trade is not worth a default, so the proxy stays mandatory.</p>
+<p><strong>Gap.</strong> Niche deployments pay for a property they may not need: cost-sensitive single-tenant or dev clusters that don't require per-tenant egress IPs, and clusters that already attribute egress at the node or cloud layer (per-namespace NAT, a cloud NAT gateway per tenant).
+For these, the always-on floor of <code>minReplicas: 2</code> proxy pods per tenant is pure overhead.</p>
+<p><strong>What "added" would look like.</strong></p>
+<ul>
+<li>A new field on <code>ProxyConfig</code>, e.g. <code>mode: Required</code> (default) <code>| Disabled</code> (or <code>enabled: true</code> default-true).</li>
+<li>When disabled, the GMC skips the proxy <code>Deployment</code> / <code>Service</code> / <code>HPA</code> / <code>PDB</code> / cert <code>Secret</code>, and does not inject <code>HTTP(S)_PROXY</code> onto the AGC (workers already no-op the proxy-CA mount on an empty <code>ProxyTLSSecretName</code>).</li>
+<li><code>buildWorkloadNetworkPolicy</code> swaps its <code>→ proxy:8080</code> egress rule for direct egress to the GitHub CIDRs on 443, reusing the IP-range refresh loop that already feeds <code>buildProxyNetworkPolicy</code>.
+  DNS stays confined to cluster DNS (an independent control — the exfiltration side-channel mitigation in <a href="../05-security/">§5.2</a> is unaffected).</li>
+<li><code>updateStatus</code> drops <code>ProxyAvailable</code> from the <code>Ready</code> computation when the proxy is disabled.</li>
+<li>The validating webhook emits a <em>warning</em> (not a rejection) on create/update that the attribution / containment / kill-switch properties are forfeited.</li>
+</ul>
+<p>Estimated cost: an M-sized change across GMC provisioning, the workload NetworkPolicy, env injection, status, and the webhook, plus CRD docs.</p>
+<p><strong>Secure-by-default constraint.</strong> Disabling the proxy is a security and isolation regression, so per the project's secure-by-default rule it must default to <code>Required</code>, be reachable only as an explicit opt-in to the less-secure mode, and carry the forfeited properties prominently in the operator-facing docs.
+It must never become the default or a silent behavior.</p>
+<p><strong>What would trigger building it.</strong> A concrete operator ask for a single-tenant / dev / cost-sensitive deployment, or a deployment that already provides per-tenant egress attribution at the node or cloud layer and wants to shed the proxy's always-on cost.</p>
+<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a> (the four properties forfeited); <a href="../02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md §2.3</a>.</p>
+<hr />
+<h2 id="g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies">G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)<a class="headerlink" href="#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The GMC reconciles three default-deny per-tenant NetworkPolicies (§5.2, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>).
+The <strong>AGC</strong> policy permits egress to cluster DNS + the kube API server (+ the GitHub CIDR allowlist in direct mode), and — once the Vault egress work landed — a <em>scoped</em> AGC→Vault rule when a workload-identity gateway declares <code>signer.vault.networkPolicy</code> (a pod/namespace selector or a CIDR; the rule targets only that peer, on the Vault API port from the signer address, and only the AGC pod selects into it).
+The <strong>workload</strong> policy permits worker pods egress to cluster DNS + the proxy on 8080 (+ the GitHub CIDRs in direct mode) and nothing else.
+The link-local block <code>169.254.0.0/16</code> is permitted on <strong>port 53 only</strong> (NodeLocal DNSCache), not for anything else.</p>
+<p>The Vault work established the reusable pattern for opening a hole in the default-deny envelope: a peer the <strong>tenant names in its own CR</strong>, that the <strong>GMC scopes</strong> to a single peer + port, attached to the <strong>AGC policy only</strong> so untrusted worker pods never inherit it.
+That peer descriptor is now the shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR + optional explicit port), extracted from the Vault-specific shape before the v2 freeze so future consumers reuse one descriptor (Q204; see the pre-v2 analysis below).
+The entries below are the other egress holes we can foresee wanting, the governance each needs, and — the load-bearing question — confirmation that none of them forces a breaking API change before v2.</p>
+<p><strong>Gap — the egress holes we can foresee.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Use case</th>
+<th>Who needs egress</th>
+<th>Governance</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cloud KMS signers</strong> (AWS/GCP/Azure KMS as additive <code>signer.provider</code> members)</td>
+<td>AGC</td>
+<td>Tenant-delegated for the signer endpoint (tenant names its own KMS); <strong>admin-governed</strong> for any cloud-metadata leg</td>
+<td>The metadata/credential path varies by provider: <strong>GKE Workload Identity</strong> and <strong>EC2 IMDS / EKS Pod Identity</strong> reach a link-local address (<code>169.254.169.254</code> / <code>169.254.170.23</code>) on :80 — a <em>new</em> hole distinct from the existing :53-only <code>169.254/16</code> rule; <strong>AWS IRSA</strong> and <strong>Azure Workload Identity</strong> instead call a <em>public</em> STS/AAD host (the same opaque-URL problem the Vault rule already solves).</td>
+</tr>
+<tr>
+<td><strong>AGC telemetry</strong> (<code>spec.tracing.endpoint</code>, and any future metrics/log push)</td>
+<td>AGC</td>
+<td>Tenant-delegated, AGC-only</td>
+<td>A scoped rule is derivable from the <em>already-existing</em> <code>tracing.endpoint</code>; today that endpoint is not auto-permitted on a policy-enforcing CNI.</td>
+</tr>
+<tr>
+<td><strong>Worker job dependencies</strong> (container/package registries, build caches, internal services the CI job legitimately calls)</td>
+<td>Worker</td>
+<td><strong>Through the proxy → tenant-delegated</strong> (attribution preserved); <strong>direct → admin-governed</strong></td>
+<td>The single most common operator ask. The attribution-preserving answer is the proxy destination allowlist (<a href="#g1-proxy-enforced-destination-allowlist">G.1</a>); a <em>direct</em> worker egress hole forfeits per-tenant IP attribution and the DNS-exfil containment, so it must stay an explicit admin opt-in, never tenant-openable by default.</td>
+</tr>
+<tr>
+<td><strong>Cloud metadata for worker OIDC</strong> (<code>configure-aws-credentials</code> etc.)</td>
+<td>Worker</td>
+<td><strong>Admin-governed, default-deny</strong></td>
+<td>Metadata-server reach from untrusted job code is a classic credential-theft / SSRF vector; the common OIDC path uses GitHub's token → public STS, which needs no metadata at all.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The governance principle (the durable decision).</strong> A tenant may self-declare egress, in its own CR, <strong>only</strong> to peers it names and controls that are reached <strong>either</strong> by its AGC control plane <strong>or</strong> through the attribution-preserving proxy.
+Egress that originates <strong>directly from worker pods</strong> (bypassing the proxy) or targets a <strong>shared / sensitive surface</strong> (cloud metadata, cluster infrastructure, arbitrary internet) stays <strong>platform-admin-governed</strong> — a GMC flag or cluster policy, never a tenant-settable default.
+The rationale is the trust split the whole design rests on: worker pods run untrusted GitHub Actions job code, the AGC is trusted control plane, and the proxy is the per-tenant attribution boundary.
+The Vault <code>signer.vault.networkPolicy</code> is the canonical tenant-delegated case (AGC-only, tenant-named, GMC-scoped); the worker-direct and metadata cases are the canonical admin-governed ones.</p>
+<p><strong>Pre-v2 API-compatibility analysis (no breaking change required).</strong> Every hole above is reachable additively under the frozen v2 shape:</p>
+<ul>
+<li>Cloud KMS signers join as <strong>new <code>signer.provider</code> union members</strong>, each carrying its <em>own</em> optional peer descriptor — exactly the additive contract the union was built for; existing members are untouched.</li>
+<li>AGC telemetry and worker-direct egress would be <strong>new optional fields</strong> on existing structs (<code>ActionsGateway</code> / <code>RunnerSet</code> / <code>RunnerTemplate</code>) or new GMC flags.
+  Optional CRD fields don't prune and old clients ignore them, so adding them later is non-breaking.</li>
+<li>The worker-through-proxy case extends the proxy allowlist (<a href="#g1-proxy-enforced-destination-allowlist">G.1</a>), not the CRD egress shape.</li>
+</ul>
+<p>The <strong>one</strong> pre-v2 hygiene decision worth settling deliberately was: the Vault work shipped a per-feature peer descriptor (<code>VaultNetworkPolicy</code>: selector | CIDR, port derived from the address).
+If KMS, telemetry, and worker-egress had each grown their own near-duplicate descriptor, v2 would freeze three inconsistent shapes.
+<strong>Resolved (Q204):</strong> the descriptor is now the shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
++ an optional explicit port), and <code>signer.vault.networkPolicy</code> references it.
+  The extraction is serialization-compatible — the field keys (<code>podSelector</code>, <code>namespaceSelector</code>, <code>cidr</code>) are unchanged, so the v2alpha1 shape already shipped is preserved; only the additive optional <code>port</code> is new, with the Vault builder still deriving the port from the address when <code>port</code> is unset.
+  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/queue/README.md">Q74</a>) than after.</p>
+<p><strong>What would trigger building any of it.</strong> A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.</p>
+<p><strong>Related.</strong> <a href="../05-security/">05-security.md</a> (the per-tenant NetworkPolicy isolation model); <a href="#g1-proxy-enforced-destination-allowlist">G.1 Proxy-Enforced Destination Allowlist</a>; <a href="#g8-optional-disable-able-egress-proxy">G.8 Optional Egress Proxy</a>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>.</p>
+<hr />
+<h2 id="g10-controller-discovered-apiserver-cidr-auto-narrowing">G.10. Controller-Discovered apiserver-CIDR Auto-Narrowing<a class="headerlink" href="#g10-controller-discovered-apiserver-cidr-auto-narrowing" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The AGC NetworkPolicy's Kubernetes API server egress rule (443/6443) is <strong>any-destination by default</strong>.
+An operator whose platform exposes a stable apiserver CIDR can opt in to scoping it via the GMC's <code>--apiserver-cidrs</code> flag (Helm value <code>apiServerCIDRs</code>), which attaches an <code>ipBlock</code> peer per CIDR (Q145).
+The default is broad because the post-DNAT apiserver IP is provider- and topology-specific and a wrong <code>ipBlock</code> silently severs apiserver access (the PR #59 trap).
+This is the <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a> residual; per-cloud narrowing guidance is in <a href="../../operations/security-operations/#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">security-operations.md § Tightening AGC apiserver egress</a>.</p>
+<p><strong>Gap — could the controller discover and narrow it automatically?</strong> The GMC could read the <code>kubernetes</code> Service endpoints in the <code>default</code> namespace (the real post-DNAT apiserver IPs) and scope every tenant's AGC policy itself, making the tightening the default and removing the operator step.
+The Q183 feasibility review concluded this <strong>must not be a default</strong>, for three reasons:</p>
+<ol>
+<li><strong>Stale-snapshot regression.</strong> On managed control planes (EKS/GKE/AKS) the endpoint IPs rotate on scaling, upgrades, and maintenance without notice.
+   A one-time discovery tightens to a set that later stops matching and breaks the AGC — a silent reachability regression, which secure-by-default forbids.</li>
+<li><strong>Self-lockout under a live watch.</strong> Staying correct requires watching <code>endpoints/kubernetes</code> and re-reconciling every AGC policy on each change.
+   There is always a race window where the policy lags a real rotation; during it the AGC — and the GMC, which reaches the apiserver over the same path — can be locked out of the very apiserver it needs to <em>repair</em> the policy.
+   A tightening that can strand the controller maintaining it is not a safe default.</li>
+<li><strong>CNI rewrites.</strong> Some CNIs apply further SNAT/encapsulation, so even the discovered endpoint IPs are not guaranteed to be what the policy evaluator matches.</li>
+</ol>
+<p><strong>What would trigger building it.</strong> A design that closes the lockout window — e.g. always-union the freshly-observed endpoints with the prior set and only <em>remove</em> an IP after a confirmed drain, plus a fail-open watchdog that reverts to any-destination if the GMC loses apiserver contact — and evidence that it holds across the managed-CP rotation behaviours above.
+Until then, narrowing stays the operator-confirmed, per-cluster <code>apiServerCIDRs</code> opt-in.</p>
+<p><strong>Related.</strong> <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md §5.2</a>; <a href="../../operations/security-operations/#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">security-operations.md § Tightening AGC apiserver egress</a>; <a href="../network-architecture/#policy-2-actions-gateway-controller--agc--kubernetes-api-server">network-architecture.md § Policy 2</a>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>shared_networkpolicy.go</code></a>.</p>
+<hr />
+<h2 id="g11-worker-scale-up-rate-limiting-anti-stampede">G.11. Worker Scale-Up Rate Limiting (anti-stampede)<a class="headerlink" href="#g11-worker-scale-up-rate-limiting-anti-stampede" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>Not the same as <a href="#g2-proxy-enforced-per-tenant-rate-limiting">G.2</a>.</strong> G.2 rate-limits the <em>egress proxy</em> (GitHub API call volume).
+This is about the rate at which <strong>new worker pods are created</strong> when a burst of jobs is acquired — a cold-start stampede control, not an egress control.</p>
+</blockquote>
+<p><strong>Current behavior.</strong> Worker pods are created <strong>reactively, run-to-completion</strong>: the Actions Gateway Controller (AGC) provisions a pod the moment a job is acquired from the broker long-poll and releases it on completion (<a href="../02-architecture/">§2 architecture</a>).
+There is no warm pool and no pre-scaled replica count to "ramp" — pod-creation rate tracks GitHub job arrival directly.
+The only ceiling today is the <strong>worker quota</strong> (per-RunnerGroup capacity, surfaced via the <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> conditions with <code>maxQuotaRetries</code>/<code>quotaRetryDelay</code> backoff).
+That bounds <em>how many</em> run at once; it does not bound <em>how fast</em> they start.</p>
+<p><strong>Gap.</strong> A burst of simultaneously-acquired jobs creates a thundering herd of cold-starting workers.
+When those workers all hit the same rate-sensitive shared resource at t=0, the simultaneity — not the steady-state count — is what causes damage.
+A creation-rate limit (a ramp / token bucket on pod admission) would let the herd start in waves instead of all at once.</p>
+<p><strong>When a rate limit is the right tool (and when it is not).</strong> This is the "when to use it vs. other solutions" decision.
+Reach for a scale-up rate limit <strong>only</strong> when simultaneous cold-starts stampede a rate-sensitive shared resource that the alternatives below do not already cover:</p>
+<table>
+<thead>
+<tr>
+<th>Symptom at a burst</th>
+<th>Right tool</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every cold node re-pulls the large runner <strong>image</strong></td>
+<td><strong>Peer-to-peer image mirror</strong> (Spegel/Dragonfly — see the Q211 P2P image-distribution guide)</td>
+<td>Makes N concurrent pulls cost ~1 back-to-source pull with <strong>no added latency</strong>. A ramp still pulls N times, just spread out — strictly worse. The storm scales with distinct cold nodes, not pod count.</td>
+</tr>
+<tr>
+<td>Cold nodes re-pull the <strong>same image</strong> but no P2P</td>
+<td>kubelet <code>maxParallelImagePulls</code>/<code>serializeImagePulls</code>; pre-pull DaemonSet</td>
+<td>Per-node pull throttle / pre-warming is the node-layer fix; keeps cold-start off the critical path.</td>
+</tr>
+<tr>
+<td>Workers stampede a shared <strong>downstream dependency</strong> at startup (artifact registry, license server, internal API, DB, Vault)</td>
+<td><strong>Scale-up rate limit</strong> <em>(this item)</em> — or workflow-level <code>concurrency:</code></td>
+<td>This is the genuine case for a ramp: the resource isn't the image and isn't cluster-internal. Often pushable to the workflow author via GitHub's native <code>concurrency:</code> groups first.</td>
+</tr>
+<tr>
+<td>Bursting workers saturate a shared <strong>network egress</strong> path (internet uplink, NAT/SNAT gateway, stateful firewall, site-to-site VPN) — e.g. a multi-site network</td>
+<td><strong>Scale-up rate limit</strong> for the <em>onset</em> <strong>+ concurrency ceiling</strong> for <em>sustained</em> load</td>
+<td>Mixed (see <a href="#worked-example--multi-site-shared-egress-nat--firewall--vpn">worked example</a>): a ramp smooths connection-establishment / conntrack / SNAT-port churn; sustained-bandwidth saturation is a <em>ceiling</em> problem a ramp only defers.</td>
+</tr>
+<tr>
+<td>Mass node provisioning trips <strong>cloud/control-plane API</strong> throttling</td>
+<td>Scale-up rate limit <em>(this item)</em>; or autoscaler-side limits (Karpenter/CA)</td>
+<td>Smoothing pod-admission rate eases the node-scale-up burst; autoscalers also expose their own rate controls.</td>
+</tr>
+<tr>
+<td>One tenant/workflow drains the <strong>whole shared quota</strong> and starves others</td>
+<td><strong>Worker quota / concurrency ceiling</strong> (already shipped)</td>
+<td>A fairness/blast-radius problem — a <em>ceiling</em>, not a <em>rate</em>. The existing quota model largely covers it.</td>
+</tr>
+<tr>
+<td>Limited-seat external system (K concurrent consumers)</td>
+<td><strong>Concurrency cap</strong> (ceiling), not a rate</td>
+<td>You want a hard in-flight cap, not a ramp.</td>
+</tr>
+</tbody>
+</table>
+<p>In short: <strong>image</strong> pull storms → P2P + node pull controls; <strong>shared-dependency or control-plane</strong> stampedes → a rate limit (or workflow <code>concurrency:</code>); <strong>fairness / limited seats</strong> → the quota/ceiling GAG already has.
+A scale-up rate limit earns its latency cost only in the middle rows.</p>
+<h3 id="worked-example--multi-site-shared-egress-nat--firewall--vpn">Worked example — multi-site shared egress (NAT / firewall / VPN)<a class="headerlink" href="#worked-example--multi-site-shared-egress-nat--firewall--vpn" title="Permanent link">&para;</a></h3>
+<p>A new environment scales runners up and job runs slow down because the simultaneously starting workers hammer a shared egress path — an internet uplink, a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN tunnel (a failure mode also seen with Actions Runner Controller).
+This is a real motivator for the ramp, but diagnose <em>which</em> limit binds, because a rate limit and a ceiling fix different halves:</p>
+<ul>
+<li><strong>Onset / connection-establishment burst</strong> — NAT/SNAT port-allocation spikes, firewall conntrack-table churn, TCP slow-start synchronization, VPN/IKE renegotiation.
+  Symptom: slowest <em>right as the burst starts</em>, recovering once it settles. → a <strong>scale-up rate limit (ramp)</strong> helps directly, by spreading connection setup over time.</li>
+<li><strong>Sustained saturation</strong> — uplink bandwidth, total NAT ports in use, conntrack table size, VPN tunnel throughput.
+  Symptom: slow for the <em>whole duration</em> of the concurrent load. → a <strong>concurrency ceiling</strong> is the right tool; a ramp only <em>defers</em> the cliff, because it bounds the start <em>rate</em>, not the running <em>count</em>.
+  Also raise capacity (more NAT gateways / SNAT IPs) or cut per-job egress with a caching pull-through proxy / P2P mirror.</li>
+</ul>
+<p><strong>Diagnostic:</strong> does the slowness peak during scale-up and recover, or stay flat while many jobs run?
+Former → ramp; latter → ceiling.
+Multi-site setups are often <strong>both</strong>, so the ramp <strong>complements</strong> GAG's existing worker-quota ceiling rather than replacing it.</p>
+<p><strong>What "added" would look like.</strong> An <strong>opt-in, per-RunnerGroup</strong> creation-rate limit on the provisioner — a token bucket bounding new worker pods per unit time (e.g.
+<code>scaleUp.maxPerSecond</code> + <code>scaleUp.burst</code>), default <strong>off</strong>.
+When the bucket is empty, excess acquired jobs wait in the same admission path the quota backoff already uses, so it composes with <code>WorkerQuotaPressure</code> rather than adding a new state machine.
+Metrics: a <code>worker_scaleup_throttled_total</code> counter so operators can see when it bites.</p>
+<p><strong>Why it is default-off.</strong> GAG's core value is zero-idle, immediate provisioning on job acquisition; a ramp deliberately delays <em>already-claimed</em> jobs, directly trading time-to-pickup.
+It also overlaps the cluster autoscaler/Karpenter, which are making their own node-scaling decisions.
+So it stays an explicit opt-in for the narrow stampede cases above, never a default.</p>
+<p><strong>Status — ✅ implemented (Q223).</strong> Shipped as an opt-in, default-off per-RunnerGroup token bucket on worker-pod creation: <code>spec.scaleUp.maxPerSecond</code> (required, ≥1) + <code>spec.scaleUp.burst</code> (optional, defaults to <code>maxPerSecond</code>), on both the v1 <code>RunnerGroup</code> and v2 <code>RunnerSet</code>.
+The limiter gates pod creation in the AGC provisioner (<code>golang.org/x/time/rate</code>), so a throttled job <strong>waits</strong> for a token — holding its GitHub lock, renewed in the background — composing with the <code>WorkerQuotaPressure</code> / quota-retry wait rather than adding a new state machine; it coexists with the node autoscaler (bounding pod-admission rate eases the node-scale-up burst, and the autoscaler keeps its own rate controls).
+Each throttle increments <code>actions_gateway_worker_scaleup_throttled_total</code>.
+Operator guidance: <a href="../../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">tenant-onboarding.md § worker scale-up rate limit</a>; design record: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/archive/q223-worker-scaleup-rate-limit.md">archive/q223-worker-scaleup-rate-limit.md</a>.</p>
+<p><strong>Related.</strong> The Q211 P2P image-distribution operations guide (image-pull storms); <a href="#g2-proxy-enforced-per-tenant-rate-limiting">G.2</a> (proxy egress rate limiting — distinct); <a href="../appendix-e-capacity-planning/">appendix-e-capacity-planning.md</a> (worker quota / capacity model).</p>
+<hr />
+<h2 id="g12-warm-worker-pool-minidleworkers">G.12. Warm Worker Pool (<code>minIdleWorkers</code>)<a class="headerlink" href="#g12-warm-worker-pool-minidleworkers" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>Not the same as node-/workspace-layer warmth.</strong> This is about holding <strong>pre-created worker pods</strong> so a job skips pod scheduling.
+It is <em>not</em> image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> and the Q211 guide) and <em>not</em> build-/model-cache warmth (a cache volume mounted in the worker <code>podTemplate</code> — a raw PVC works today; a <em>managed</em> backend is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/queue/Q215.md">Q215</a>).
+Those cheaper layers should be exhausted first; this item is the residual.</p>
+</blockquote>
+<p><strong>Current behavior.</strong> Worker pods are created <strong>reactively</strong> the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion (<a href="../02-architecture/">§2 architecture</a>).
+There is no pool of pre-created pods.
+Job-acquisition latency is therefore bounded by pod scheduling + image pull, <strong>not</strong> runner registration — the goroutine session multiplexer already holds a standing pool of pre-registered virtual sessions at negligible cost (<a href="../appendix-d-alternatives-considered/">appendix-d §KEDA</a>, <a href="../appendix-a-capacity-slos/">appendix-a SLOs</a>).
+So GAG is already "warm" at the layer ARC's <code>minRunners &gt; 0</code> exists to warm; only the compute is cold, by design.</p>
+<p><strong>What it would add.</strong> A bounded, per-RunnerGroup pool of <strong>pre-scheduled, image-warm worker pods</strong> kept idle so an acquired job binds to a waiting pod instead of creating one — eliminating the pod-schedule (and, on those nodes, image-pull) latency for the first <em>N</em> concurrent jobs.</p>
+<p><strong>Why it is a narrow, last-resort layer.</strong> Decompose the cold start and each layer has a <em>cheaper</em> fix that does not hold idle compute:</p>
+<table>
+<thead>
+<tr>
+<th>Cold-start layer</th>
+<th>Cheaper fix (no idle pods)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runner <strong>registration</strong></td>
+<td>Already eliminated — goroutine session pool.</td>
+</tr>
+<tr>
+<td><strong>Image</strong> pull</td>
+<td>P2P image mirror (Spegel/Dragonfly) / pre-pull DaemonSet.</td>
+</tr>
+<tr>
+<td>Build cache / <strong>model weights</strong> (the real GPU/ML startup cost)</td>
+<td>Cache volume in the <code>podTemplate</code> (raw PVC works today; managed backend = <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/queue/Q215.md">Q215</a>).</td>
+</tr>
+<tr>
+<td><strong>Pod scheduling</strong></td>
+<td><em>This item</em> — the only layer a warm pod pool uniquely addresses.</td>
+</tr>
+</tbody>
+</table>
+<p>Only teams for whom pod-schedule latency is a large fraction of job time (sub-minute, high-frequency, human-waited CPU jobs) <em>after</em> exhausting the rows above are candidates.</p>
+<p><strong>Why GPU/ML is explicitly a zero.</strong> Holding idle <strong>GPU</strong> pods is exactly the idle-accelerator cost GAG sells against (<a href="../appendix-f-cost-model/">appendix-f cost model §Zero idle</a>).
+And GPU cold-start is dominated by image + model-weight loading (the cache-volume row), not scheduling.
+So the segment that most often <em>feels</em> cold is the one this feature should <strong>not</strong> serve — point it at P2P + cache volumes + warm node capacity (Karpenter/CA) instead.</p>
+<p><strong>Design tension.</strong> Today pod creation and JIT binding are coupled to acquisition; a warm pool decouples them — pre-create an <strong>unbound</strong> pod, then inject the JIT config into a waiting one at acquisition.
+That partially re-adopts the ARC pre-registered-idle-runner model GAG deliberately replaced with goroutines, and must preserve the single-use invariant (<strong>1 job per pod</strong>, <a href="../05-security/">§5.2 security</a>): a never-run warm pod may accept a fresh JIT config, but a pod must never be reused across jobs.
+Open questions: the knob surface (<code>minIdleWorkers</code> scope/naming, per RunnerGroup), how the pool composes with the worker quota ceiling and <code>WorkerQuotaPressure</code> backoff, and pod TTL/recycle for idle warm pods.</p>
+<p><strong>Why it would be default-off.</strong> It reintroduces the idle-compute cost GAG's core value removes — a speed-for-idle-cost trade.
+Per the <a href="../05-security/">secure-/cost-by-default principle</a>, the zero-idle default stays; this is an explicit per-RunnerGroup opt-in, documented as a trade, and <em>not</em> recommended for GPU groups.</p>
+<p><strong>Status — parked (Deferred), demand-pull only.</strong> No Queue row and no priority position.
+Trigger: a self-hosted, multi-tenant CPU-CI team hits pod-schedule latency after exhausting P2P/pre-pull + cache volumes.
+Rationale for parking: the eligible audience is a single-digit fraction of GAG adopters (every filter above compounds, and GPU — a flagship segment — is excluded), and the cheaper layers absorb most real "GAG feels cold" reports.</p>
+<p><strong>Related.</strong> <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> (scale-up <em>rate</em> limit — a ceiling on how fast pods start, the inverse concern); <a href="../appendix-d-alternatives-considered/">appendix-d §KEDA</a> (why the goroutine pool replaces pre-registered idle runners); <a href="../appendix-f-cost-model/">appendix-f cost model</a> (the idle-floor argument this trades against).</p>
+<hr />
+<h2 id="g13-server-side-apply-for-the-gmcs-child-resources">G.13. Server-Side Apply for the GMC's Child Resources<a class="headerlink" href="#g13-server-side-apply-for-the-gmcs-child-resources" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The GMC's per-reconcile <code>apply*</code> helpers write child resources with <code>controllerutil.CreateOrPatch</code> and a mutate closure that replaces the whole <code>Spec</code> — see the rationale in <a href="../02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">§2 architecture</a>.
+Only <code>applyNamespacePSA</code> uses Server-Side Apply (SSA), because PSA labels are a security control whose out-of-band edits must be <em>detected</em>, not silently re-asserted.</p>
+<p><strong>The gap it would close — conflict surfacing, not churn.</strong> Whole-<code>Spec</code> replacement is correct only where the GMC is the sole writer of every field in that spec.
+Two children break that, and today the exceptions are hand-maintained:</p>
+<table>
+<thead>
+<tr>
+<th>Child</th>
+<th>Second writer</th>
+<th>How the exception is encoded</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proxy <code>Service</code></td>
+<td>apiserver (<code>.spec.clusterIP</code>)</td>
+<td><code>applyService</code> assigns <code>type</code>/<code>selector</code>/<code>ports</code> only</td>
+</tr>
+<tr>
+<td>Proxy <code>Deployment</code></td>
+<td>the pool's HPA (<code>.spec.replicas</code>)</td>
+<td><code>assignHPATargetDeploymentSpec</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>Deployment</code> exception was found the hard way (Q283): the reconciler reverted every HPA scale-out within milliseconds, capping each tenant's egress capacity at <code>minReplicas</code>, and it did so <em>silently</em> for the project's whole lifetime.
+Under SSA the same mistake is loud — applying a field another manager owns returns a <code>409 Conflict</code> naming the field and the manager, so the reconciler errors on the first pass instead of ping-ponging.
+<strong>That, not patch-traffic reduction, is the case for migrating.</strong> (The steady-state churn SSA also removes is already a no-op: the apiserver dedups it, verified by the <code>apply_nochurn</code> envtest.)</p>
+<p><strong>What it would cost.</strong> SSA cannot be handed a typed <code>*appsv1.Deployment</code>.
+A typed Go struct cannot distinguish "field unset" from "field == zero value", so applying one claims ownership of every zero-valued field (<code>strategy: {}</code>, <code>resources: {}</code>) and fights the apiserver's defaulters.
+Doing it correctly means rewriting the ten <code>build*</code> functions into a parallel set of applyconfiguration builders (<code>appsv1ac.Deployment(...)</code>), of which the proxy <code>Deployment</code>'s full <code>PodSpec</code> — containers, probes, volumes, affinity, security contexts — is by far the largest.</p>
+<p><strong>What it would <em>not</em> buy.</strong> SSA gives "never own <code>.spec.replicas</code>" for free: omit <code>WithReplicas(...)</code> from the apply configuration and the field is never claimed.
+Omission <em>is</em> un-ownership; no follow-up patch to disown a field is needed, and attempting one is a footgun — <strong>SSA deletes a field that drops out of your apply set unless another manager owns it.</strong> An "apply with <code>replicas</code>, then un-own it" sequence would therefore strip <code>.spec.replicas</code> on the second reconcile whenever the HPA has not yet written the <code>scale</code> subresource (no metrics-server, or simply <code>ScalingActive=False</code> on a cold cluster), and the apiserver would re-default the pool to <strong>1 replica</strong>.
+Q283's failure mode, re-entered through a different door.</p>
+<p>Nor does SSA remove the floor logic.
+"Seed <code>minReplicas</code> at create" and "restore a pool found at zero" are imperative writes under a separate field manager either way.
+SSA relocates the special case; it does not delete it.</p>
+<p><strong>Open question to settle first.</strong> The HPA takes ownership of <code>.spec.replicas</code> via an <code>Update</code> on the <code>scale</code> <em>subresource</em>, which records a <code>managedFields</code> entry scoped to that subresource.
+Whether that entry produces a conflict against an <code>Apply</code> on the parent resource is not obvious from the SSA spec and must be confirmed by envtest before the conflict-surfacing argument can be relied on.
+If it does <strong>not</strong> conflict, the primary motivation for this item evaporates and the hand-maintained exceptions above are the right answer permanently.</p>
+<p><strong>Status — parked, no Queue row.</strong> Trigger: a <em>third</em> child resource acquires a second writer, or the envtest above confirms subresource-scoped ownership does conflict on parent applies — at which point the migration converts a class of silent correctness bugs into loud reconcile errors, and the builder rewrite starts paying for itself.</p>
+<p><strong>Related.</strong> <a href="../02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">§2 architecture</a> (why <code>CreateOrPatch</code> was chosen, and the two exceptions it forces); <a href="../05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3 security</a> (<code>applyNamespacePSA</code>, the one place SSA is already the right tool).</p>
+<hr />
+<h2 id="g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">G.14. Kata e2e untrusted-PR posture — tight egress + in-cluster pull-through mirror<a class="headerlink" href="#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror" title="Permanent link">&para;</a></h2>
+<p>The Kata worker variant (the dogfood e2e default since Q286) hardened the kernel-escape axis, but its egress stayed trusted-CI-shaped: the e2e tenant ran an additive open-egress NetworkPolicy because the suite pulls from Docker Hub, quay, registry.k8s.io and get.helm.sh, all CDN-fronted, so a CIDR allowlist would rot and an FQDN allowlist is not enforceable on GKE Dataplane V2 (Q245).
+While that held, Kata-isolated runners were only suitable for <em>trusted</em> CI.</p>
+<p><strong>The durable answer</strong>, and what shipped: an in-cluster pull-through registry mirror, so workers need no direct registry egress, plus a tight egress policy scoped to the mirror, GitHub, and DNS.</p>
+<p><strong>Status — ✅ implemented (Q408).</strong> Delivered as manifests, job-side wiring and validation scripts rather than as a controller or API change: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a> is one Distribution instance in pull-through cache mode per upstream, with the NetworkPolicy pair that makes it a worker's only registry path, and the Kata overlay ships no additive egress policy at all, so the deliverable is a deletion rather than a swap.
+Measured on the dogfood cluster on 2026-08-28: a green Kata run of 75 specs whose in-job negatives passed all eight checks on a <code>runtimeClassName: kata</code> worker, three destinations silent against controls that answered, the mirror battery at 25 of 25, and 178 content requests served across the five instances.
+The upstream set is five rather than four because Phase 0's inventory was measured off a real run instead of assumed.
+Operator guidance: <a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">kata-dind-workloads.md § Untrusted pull requests</a>; design record: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/q408-untrusted-pr-egress.md">q408-untrusted-pr-egress.md</a>.</p>
+<p><strong>Related.</strong> Q539 (Dragonfly substituted as the mirror backend) and Q540 (the composed node-layer plus guest-layer stack) are both sequenced behind this one by design: the mirror contract is validated on the simple implementation before variants are graded against it.</p>
+<hr />
+<h2 id="g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">G.15. Extract the Batch Right-Sizer into a Standalone / Reusable Tool<a class="headerlink" href="#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The worker right-sizing loop (Q359) ships <strong>inside</strong> the AGC: <code>cmd/agc/internal/usage/</code> samples per-job CPU/memory peaks from <code>metrics.k8s.io</code>, aggregates fixed-bucket peak histograms per RunnerSet × container, and the RunnerSet reconciler surfaces derived recommendations in <code>status.sizingRecommendation</code> and applies them at pod-build time under the opt-in <code>spec.sizing</code> profiles.
+The full analysis of why the native design won over external tooling is <a href="../appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D §D.7</a>; the short version is that actuation must happen at pod creation and the AGC's provisioner already is the pod creator, so native actuation avoids the mutating admission webhook — and its fail-open/fail-closed availability dilemma — that any external tool would need.</p>
+<p><strong>The deferred generality.</strong> Almost none of the measurement/derivation core is GAG-specific.
+Peak-per-pod-lifetime sampling, the per-job-peak histograms and quantile interpolation, the p95-requests / max-plus-headroom-limit derivation, and the confidence gating all apply to any one-pod-one-unit-of-work workload: Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's ephemeral runners share the shape, and no good open-source batch right-sizer exists (stock VPA is structurally unfit for run-to-completion pods — §D.7).
+The implementation deliberately keeps the extraction seams narrow: the <code>usage</code> package touches GAG at exactly two points — the worker-pod owner label (<code>provisioner.LabelRunnerSet</code>) it selects on, and the <code>v2alpha1</code> recommendation status types it emits.</p>
+<p><strong>What extraction would look like.</strong> Two increments, either stoppable:</p>
+<ol>
+<li><strong>Library extraction</strong> — lift sampler + histogram + derivation into a neutral module (selector-and-types parameterized).
+   GAG consumes it unchanged, keeping its in-process actuation advantage; other controllers embed it the same way.</li>
+<li><strong>Standalone tool</strong> — a <code>PodSizingPolicy</code>-style CRD (label selector for grouping, profile + clamps mirroring <code>spec.sizing</code>), recommendations in the policy status, and a mutating admission webhook as the generic pod-creation actuator for workloads whose controller does not embed the library.
+   This is the piece with real new cost: webhook TLS/cert lifecycle, the <code>failurePolicy</code> availability trade, its own chart/release/signing pipeline, and a Tier-0 security posture (a cluster-wide pod-mutating webhook).</li>
+</ol>
+<p><strong>Why deferred.</strong> Three reasons, in order: (1) the sizing <em>model</em> (p95 of per-job peaks, 1.4× memory headroom, whole-pod confidence gating) is not yet validated against a live workload — freezing an unproven model into a general-purpose tool's public contract would be premature (the Q359 residual tracks live dogfood validation); (2) a standalone tool is a second product with its own maintenance and security budget, which would have delayed and diluted the GAG-native feature it was carved from; (3) GAG's adoption story wants the capability built in — "install one thing" — even though, as a pure-adoption OSS project, a general tool could plausibly reach a wider audience later.</p>
+<p><strong>Triggers to revisit.</strong> Both of: the model is live-validated on dogfood (the Q359 residual closes with the derivation confirmed or corrected), <strong>and</strong> concrete external demand appears (an issue asking to size non-GAG batch workloads, or another controller wanting to embed the recommender).
+Start with increment 1; only build increment 2's webhook if a consumer exists that cannot embed the library.</p>
+<hr />
+<h2 id="g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16. <code>ProvisioningRequest</code> Pre-Acquire Capacity Probe (<code>check-capacity</code>)<a class="headerlink" href="#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The admission gate refuses to claim a job when the declared worker ceiling is reached (Q59) or the namespace <code>ResourceQuota</code> has no headroom (#784).
+It has no rung for <em>placeability</em>: a tenant whose worker shape cannot be scheduled keeps claiming jobs, each spending a JIT runner record and holding a GitHub lock until <code>pendingPodDeadline</code> reaps the pod.
+<code>WorkersUnschedulable</code> (Q157/Q303) reports the scheduler's verdict but never reaches the gate, and <a href="../appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">§D.8</a> records why it cannot be gated on directly wherever a cluster autoscaler is running: the Pending pod <em>is</em> the scale-up request.</p>
+<p><strong>The gap this closes.</strong> cluster-autoscaler's <code>ProvisioningRequest</code> (<code>autoscaling.x-k8s.io/v1</code>) resolves that conflict.
+Class <code>check-capacity.autoscaling.x-k8s.io</code> is a one-off feasibility question for a pod shape <em>without creating the pods</em>; <code>best-effort-atomic-scale-up.autoscaling.x-k8s.io</code> provisions the capacity atomically instead.
+Either way the answer arrives before the claim, with no GitHub lock ticking, and asking is itself the request for capacity, so the autoscaler trigger is not forfeited.
+No CI runner controller appears to use this primitive.</p>
+<p><strong>Sketch.</strong> Two further values of the <code>spec.capacityGate.mode</code> enum introduced by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/capacity-aware-intake.md">capacity-aware-intake plan</a> (<code>Probe</code>, <code>Provision</code>), reusing that plan's rung, condition, rejection-metric label, rate-limiting behavior, and fail-open contract unchanged.
+A negative answer refuses the claim, leaving the job queued at GitHub for redelivery.
+Off by default, per-RunnerSet (which is per-pod-shape, since a set resolves to exactly one <code>RunnerTemplate</code>), with a short-TTL cached verdict because a probe per job would be far too chatty.</p>
+<p><strong>Cost, including the parts that are easy to miss.</strong> The plan estimates ~2,400 to 3,400 lines across five or more PRs, dominated by four things:</p>
+<ol>
+<li><strong>It cannot be synchronous.</strong> <code>Admit</code> runs inline before <code>AcquireJob</code>; <code>ProvisioningRequest</code> is create-object-then-await-conditions.
+   So this needs a background prober plus a verdict cache, not a <code>Target</code> method that blocks.
+   The quota rung was cheap precisely because it is a cached informer read.</li>
+<li><strong>Each <code>podSet</code> must reference a real <code>core/v1</code> <code>PodTemplate</code> object</strong> in the namespace, so the AGC has to create, hash-name, refresh, and garbage-collect one per worker shape, kept consistent with the pod the provisioner would actually build.
+   The Q359 sizing profile mutates that shape from status, so the shape is not stable.</li>
+<li><strong><code>check-capacity</code> reserves, it does not merely answer.</strong> Upstream v1 is self-contradictory (the <code>provisioningClassName</code> field doc says it does not reserve; the class constant says it reserves for a specified time) and ships <code>BookingExpired</code>/<code>CapacityRevoked</code> conditions plus a <code>autoscaling.x-k8s.io/consume-provisioning-request</code> pod annotation.
+   A TTL-cached "yes" reused for <em>N</em> jobs is therefore either stale feasibility or a single-use booking spent many times, and <code>Provision</code> mode additionally has to annotate worker pods to consume what it reserved.
+   The condition to read also drifts by version (<code>CapacityAvailable</code> in the field docs, absent from the v1 condition constants, which carry <code>Provisioned</code>), so a reader must tolerate both.</li>
+<li><strong>No test estate answers a probe today, but a local one is plausible.</strong> envtest can install the CRD and no autoscaler stamps conditions, so it needs a fake-CA condition stamper. kind runs no autoscaler <em>by default</em>, but upstream ships a <a href="https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok">kwok cloud provider</a> whose stated purpose is running real CA against fake nodes, naming a local kind cluster as a use case — and <code>check-capacity</code> needs no cloud-provider integration at all, since <a href="https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/proposals/provisioning-request.md">it is a scheduling simulation against existing capacity</a> that reserves nothing (provider APIs matter only for <code>best-effort-atomic-scale-up</code>).
+   The negative verdict this rung acts on — <em>cannot place, do not claim</em> — therefore needs no scale-up to reproduce.
+   <strong>The kwok harness now exists</strong> — Q474 shipped it as the capacity gate's live drift gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>, <code>make autoscaler-cluster</code>), so a cluster with a real cluster-autoscaler in it is one <code>--enable-provisioning-requests</code> away.
+   Still unverified end-to-end: the kwok provider is <code>v1alpha1</code> and its docs are silent on ProvisioningRequests, so proving that pairing remains the first step of this item rather than a prerequisite it lacks a place to run.
+   Provider support is a separate axis from implementation: <code>check-capacity</code> ships in the OSS cluster-autoscaler (1.30.1+, behind <code>--enable-provisioning-requests</code>), so any self-managed CA can serve it, and the gap is <em>managed</em> control planes.
+   GKE serves the <code>ProvisioningRequest</code> API (<code>v1</code>, from <code>1.32.2-gke.1652000</code>) but <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/provisioningrequest">documents only its own <code>queued-provisioning.gke.io</code> class</a> for flex-start: GPU/TPU-oriented, one <code>podSet</code> per request, no documented <code>check-capacity</code> support as of 2026-07.
+   The dogfood cluster therefore cannot validate this class today, which is exactly the provider-support half of the trigger below.
+   Validation still dominates code, but a working kind harness would move most of it in-house.</li>
+</ol>
+<p>Plus the ordinary surface: a new API dependency (vendor <code>k8s.io/autoscaler/cluster-autoscaler/apis</code>, or hand-roll ~120 lines of local types, which is the recommendation), startup CRD detection mirroring <code>RunnerSetInstalled</code>, RBAC on both <code>provisioningrequests</code> and <code>podtemplates</code> in the AGC markers <em>and</em> the GMC-granted tenant role, and an operator prerequisite (cluster-autoscaler run with provisioning requests enabled).</p>
+<p><strong>Why deferred.</strong> The cheaper rungs cover most of the harm at a fraction of the cost and are prerequisites rather than detours: gating on the scheduler's verdict where the cluster cannot grow, and on the autoscaler's own declination where it can, both feed the same rung this would later reuse.
+Building the <code>ProvisioningRequest</code> machinery first would also mean choosing a caching and booking model with no measurement of how much residual claim-burn is actually left after rate-bounding.</p>
+<p><strong>Triggers to revisit.</strong> Any one of: an operator finds the measured residual burn of the latched gate — ~1 claim per deadline window (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/docs/plan/capacity-aware-intake.md#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">plan §9h</a>) — still unacceptable (the GPU/spot case, where one wasted claim per window is expensive); an operator asks with a cluster already running cluster-autoscaler with provisioning requests enabled; or provider support for <code>check-capacity</code> broadens enough that the fail-open path stops being the common one.</p>
+<hr />
+<h2 id="g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">G.17. Opt-In Auto-Retry for Flaky Jobs (beyond disruptions)<a class="headerlink" href="#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The auto-re-run machinery fires only for infrastructure disruptions — eviction, preemption, drain, hand-delete — and a genuine job failure is deliberately never re-run (<a href="../../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">the boundary</a>), because re-running a legitimate failure masks real breakage.
+That leaves the most common CI annoyance untouched: a <em>flaky</em> test fails the run for reasons unrelated to the change, and a human clicks re-run.</p>
+<p><strong>The gap this closes.</strong> GitHub Actions has no native job-level auto-retry — the ask sits in open community discussions (<a href="https://github.com/orgs/community/discussions/72195">#72195</a>, <a href="https://github.com/orgs/community/discussions/27121">#27121</a>) and the workarounds are marketplace step wrappers that require editing every workflow.
+GAG can retry at the platform layer with the <code>rerun-failed-jobs</code> machinery it already runs for disruptions (Q503's paced retry loop, the per-run budget, the <code>cause</code>-labelled counters), keeping the "nothing in your workflows changes" property no in-workflow retry action can offer.
+ARC has neither the re-run machinery nor the metrics plumbing, so this extends an existing moat.</p>
+<p><strong>Prior art.</strong> Every major CI system has a variant; none operates at the runner-platform layer for GitHub Actions:</p>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Mechanism</th>
+<th>The idea worth farming</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://docs.gitlab.com/ci/yaml/#retry">GitLab <code>retry:</code></a></td>
+<td>per-job max 2, scoped by failure class (<code>runner_system_failure</code>, <code>stuck_or_timeout_failure</code>, …)</td>
+<td>retry scoped to a <em>failure taxonomy</em>, not blanket</td>
+</tr>
+<tr>
+<td><a href="https://buildkite.com/docs/pipelines/configure/retry">Buildkite automatic retries</a></td>
+<td>exit status / signal / signal-reason matchers with per-rule limits</td>
+<td>spot-instance signals as first-class retry causes</td>
+</tr>
+<tr>
+<td><a href="https://buildkite.com/docs/test-engine/flaky-test-management">Buildkite Test Engine</a></td>
+<td>flags a flake when the same test on the same SHA yields different results; quarantine (mute/skip) via workflows</td>
+<td>detection from retry outcomes; quarantine as the <em>end state</em>, retry as the evidence collector</td>
+</tr>
+<tr>
+<td><a href="https://circleci.com/docs/guides/orchestrate/automatic-reruns/">CircleCI automatic reruns</a></td>
+<td><code>max-auto-reruns</code> 1–5, re-runs failed jobs only</td>
+<td>bounded workflow-level auto-rerun of just the failed subset — the closest shape to what GAG would do</td>
+</tr>
+<tr>
+<td><a href="https://learn.microsoft.com/en-us/azure/devops/pipelines/test/flaky-test-management">Azure Pipelines</a></td>
+<td><code>retryCountOnTaskFailure</code>; VSTest reruns failed tests, marks pass-on-rerun as flaky, can suppress their effect on the build verdict</td>
+<td>rerun-then-pass <strong>is</strong> the flake detector; "don't fail the build on a known flake" as a separate switch</td>
+</tr>
+<tr>
+<td><a href="https://docs.datadoghq.com/tests/flaky_tests/auto_test_retries/">Datadog Auto Test Retries</a></td>
+<td>tracer-level retry up to 5, optional <em>only-known-flakes</em> mode, org-wide flake states + remediation flows</td>
+<td>retry only what history says is flaky — needs a detection corpus first</td>
+</tr>
+<tr>
+<td>Bazel / Argo / Tekton</td>
+<td><code>--flaky_test_attempts</code>, <code>retryStrategy</code></td>
+<td>declarative retry budgets at the orchestrator layer</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Sketch — detection before actuation, two phases.</strong></p>
+<ol>
+<li><strong>Flaky-job detection (no behavior change).</strong> Record re-run-then-pass transitions per job name (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs metric, K8s events, and an advisory condition.
+   This is pure observability, zero masking risk, and no CI product offers it per <em>tenant</em> on shared runners.
+   It also builds the history an only-known-flakes mode needs.
+   Its prerequisite is a real per-job outcome, which the AGC does not read today — see the signal note below.</li>
+<li><strong>Opt-in retry (<code>spec.flakyRetry</code> on the <code>RunnerSet</code>).</strong> Bounded per-run budget separate from <code>maxEvictionRetries</code>, its own <code>cause</code> value on the existing counters, driven by the same paced <code>rerun-failed-jobs</code> loop.
+   Candidate scoping knobs, cheapest first: max retries per run, per-window cap per set (a stampede guard, like the Q512 latch), and later a known-flakes-only mode fed by phase 1.</li>
+</ol>
+<p><strong>Cost, including the parts that are easy to miss.</strong></p>
+<ol>
+<li><strong>Granularity is the run, not the job.</strong> <code>rerun-failed-jobs</code> re-runs <em>all</em> failed jobs of a concluded run.
+   Test-level retry (Datadog/VSTest style) is out of reach without entering the test framework — explicitly out of scope; this is job-level.</li>
+<li><strong>It argues with our own marketing.</strong> The re-run boundary is documented as "a genuine failure is never re-run, re-running would mask real breakage" — the <a href="../../why-gag/">why-gag box</a> says exactly this.
+   The feature must be off by default, per-set opt-in, loudly metered, and framed as "retry <em>and</em> surface" — detection metrics keep the flake visible while retry buys throughput.
+   Never silent.</li>
+<li><strong>Cost attribution.</strong> A retried job spends the tenant's own quota and compute; per-set counters must make the spend visible (the <a href="../../operations/cost-attribution/">cost-attribution doc</a> would gain a flake-spend line).</li>
+<li><strong>Failure classification is thin at the platform layer, but less thin than it looks.</strong> The AGC polls no jobs API; its only outcome signal is the pod phase, used as a proxy (<code>PodFailed</code>→failed, else succeeded).
+   One layer down there is more: <code>Runner.Worker</code> encodes the job's real <code>TaskResult</code> as exit code <code>100 + result</code>, and the wrapper flattens only 100/101 (the two GitHub concludes as <code>success</code>) to 0, passing 102 failed / 103 canceled / 104 skipped through verbatim (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.7.0/cmd/worker/main.go"><code>translateWorkerExitCode</code></a>).
+   Nothing in the AGC reads <code>ContainerStatuses[].State.Terminated.ExitCode</code>.
+   Reading it is the cheap prerequisite for phase 1's detector; a GitLab-style taxonomy past that still needs log or annotation heuristics.
+   Phase 2 ships without matchers first: budget and scope knobs only.</li>
+</ol>
+<p><strong>Signals, and why an explicit one from the job is a separate question.</strong></p>
+<p>The three retry arms all decide from Kubernetes pod facts alone: phase, <code>reason: Evicted</code>, the <code>DisruptionTarget</code> condition, a <code>deletionTimestamp</code>.
+Nothing from inside the job reaches the decision.
+A tenant-supplied "this failure was flaky, retry it" verdict is a different signal class from the static per-set opt-in phase 2 sketches, and needs its own channel.
+Four candidates, and only one is both expressive and safe:</p>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Carries</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container exit code</td>
+<td>The runner's real <code>TaskResult</code></td>
+<td>Free (already propagated, unread), but the runner owns it and no step can set it. Fidelity, not intent.</td>
+</tr>
+<tr>
+<td>Termination message (<code>/dev/termination-log</code> → <code>State.Terminated.Message</code>)</td>
+<td>Anything the job writes, 4 KiB</td>
+<td>The workable one, with one hole: the log is per-container, so a step running in a workflow <code>container:</code> job writes to a different filesystem than the kubelet reads. The wrapper must also make the path writable by the job's user.</td>
+</tr>
+<tr>
+<td>A <code>runs-on</code> label (e.g. <code>gag-flaky-retry</code>)</td>
+<td>Per-job opt-in</td>
+<td>Free, since the listener sees job labels at acquisition, but static policy rather than a per-failure verdict.</td>
+</tr>
+<tr>
+<td>Pod self-annotation</td>
+<td>Anything</td>
+<td>Rejected. Grants tenant-controlled workflow code patch permission on its own pod.</td>
+</tr>
+</tbody>
+</table>
+<p>Two objections bound the value.
+First, the moment a tenant writes a signal into their workflow, the "nothing in your workflows changes" property this enhancement is sold on is gone, and a job that can emit "retry me" can equally wrap the step in a retry loop.
+What survives: an in-workflow wrapper retries steps <em>on the same worker</em>, while a platform signal re-runs the whole job on a fresh pod — new node, new network, clean runner — which is a flake class a step wrapper structurally cannot fix.
+Second, <code>rerun-failed-jobs</code> is run-granular and fires only after the run concludes, so a signal from one job re-runs its siblings too; the waiting machinery exists (<code>rerunUntilAccepted</code> already holds through <code>errRunNotConcluded</code>), the fan-out is the cost.</p>
+<p>Whichever channel wins, the writer is tenant-controlled code, often an untrusted PR's workflow.
+Gating is not optional: an operator-set <code>RunnerSet</code> opt-in (a workflow author's signal must never enable retry on its own), the existing per-run budget plus a per-window cap, and its own <code>cause</code> label so the spend is attributable.</p>
+<p><strong>What the isolation shapes do and do not change.</strong> Neither Docker-in-Docker nor Kata interposes on the exit code.
+In both shipped shapes <code>dockerd</code> is a nested process of the runner container or a native sidecar reachable over localhost (<a href="../../operations/kata-dind-workloads/">Kata + DinD</a>), so the wrapper is still PID 1 of the runner container and still owns its exit code; what DinD changes is reaping (Q249), which is phase <em>timing</em>, not outcome fidelity.
+Kata reports exit status through the ordinary <code>kata-agent</code> → shim → containerd → kubelet path.</p>
+<p>Two things are worth stating plainly before anything is built on this:</p>
+<ul>
+<li><strong>Nothing has measured that a runner-produced non-zero exit reaches <code>PodFailed</code>.</strong> <code>translateWorkerExitCode</code>'s 102 passthrough is unit-tested; the e2e sites that assert <code>PodFailed</code> are all external-kill shapes (evicted, deleted), not a job that failed on its own merits.
+  A green e2e run cannot settle it either, because a <em>successful</em> job exits 0 whether or not the runtime propagates codes faithfully.
+  The measurement is a single dogfood turn-up on the Kata overlay: fail a step deliberately, then read <code>.status.containerStatuses[0].state.terminated.exitCode</code> and <code>.status.phase</code>.</li>
+<li><strong>A workflow <code>container:</code> job is the real boundary</strong>, and it splits the two channels.
+  The exit code survives it, because the runner execs into the job container, reads the step status, and computes <code>TaskResult</code> itself.
+  A signal <em>file</em> does not: the workspace is bind-mounted across that boundary and <code>/dev/termination-log</code> is not, so the obvious implementation vanishes silently for exactly the tenants most likely to want it.</li>
+</ul>
+<p>That argues for the wrapper as the translator rather than the job writing a pod-visible file directly.
+It sits on the runner-container side of every one of these boundaries, already owns the exit code, and can read a workspace-relative marker the job wrote from wherever it ran.</p>
+<p><strong>Trigger.</strong> Q555 tracks the design decision.
+Promote when a design session commits the CRD shape, or an operator asks for it (the demand signal that reorders everything else on the roadmap).</p>
+<hr />
+<p>← <a href="../appendix-f-cost-model/">Cost Model</a> | <a href="../">Back to index</a></p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../appendix-f-cost-model/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Appendix F — Cost model">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Appendix F — Cost model
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../appendix-h-v2-api-decomposition/" class="md-footer__link md-footer__link--next" aria-label="Next: Appendix H — v2 API decomposition">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Appendix H — v2 API decomposition
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>
