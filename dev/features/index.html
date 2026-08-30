@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.6.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.6.0">Read the release notes.</a>
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
           </div>
           
         </aside>
@@ -2815,7 +2815,7 @@
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
 <p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see <a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
-<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the <code>actions-gateway.com/v2beta1</code> API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.5</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the <code>actions-gateway.com/v2beta1</code> API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.7</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.</p>
 <div class="admonition tip">
 <p class="admonition-title">Check the version you're running</p>
@@ -2827,7 +2827,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
   The default in v2.</li>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
-<li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
+<li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
@@ -2857,9 +2857,9 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 </ul>
 <h2 id="tenant-isolation-and-egress">Tenant isolation and egress<a class="headerlink" href="#tenant-isolation-and-egress" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Bound GitHub runner group</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: <code>runnerGroup</code>, or <code>defaultRunnerGroup</code> once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
+<li><strong><a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Bound GitHub runner group</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: <code>runnerGroup</code>, or <code>defaultRunnerGroup</code> once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
   An unknown group fails the set closed.</li>
-<li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">Cross-tenant scale-set name guard</a></strong> <span class="gag-new-badge">new in 1.5</span>: a set's first <code>runnerLabel</code> names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
+<li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">Cross-tenant scale-set name guard</a></strong>: a set's first <code>runnerLabel</code> names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
   Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.</li>
 <li><strong><a href="../design/network-architecture/">Per-tenant egress IPs</a></strong>: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Standalone <code>EgressProxy</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays <code>NetworkPolicy</code>-restricted.</li>
@@ -2913,8 +2913,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/air-gapped-install/">Air-gapped install</a></strong>: relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.</li>
 <li><strong><a href="../operations/gitops/">GitOps install</a></strong>: declarative Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples, with the CustomResourceDefinition (CRD) pruning gotcha handled.</li>
 <li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong>: versioned upgrade procedures and the rollback path for each release.</li>
-<li><strong><a href="../operations/troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">Stale-CRD startup check</a></strong> <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave <code>runnerGroup</code> accepted and silently pruned.</li>
-<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong> <span class="gag-new-badge">new in 1.5</span>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
+<li><strong><a href="../operations/troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">Stale-CRD startup check</a></strong>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave <code>runnerGroup</code> accepted and silently pruned.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
 <li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Observed runner version</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
   A self-report from the tenant's own container, not an attestation.</li>
 <li><strong><a href="../operations/backup-restore/">Backup and restore</a></strong>: backup posture and a recovery runbook, with a <a href="../operations/velero-backup-restore/">Velero-specific how-to</a>.</li>
