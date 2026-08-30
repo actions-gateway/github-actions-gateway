@@ -22,8 +22,9 @@ If one of those pages ever reads as though the skill is required to follow it, t
 A contributor reading those two pages gets what is true *here*: the caps, the allocator, the gate, the merge queue, the tooling, the measurements.
 What they do not get is the process those deltas modify.
 
-What holds the rules for that reader is that the **tooling is in-tree and gate-enforced, where the prose is not**: `lint-backlog.sh`, the ID allocator, the merge drivers, `check-status-isolation.sh` and the dispatch hooks all run in `make check` and the pre-commit hook whether or not any skill is installed.
-Those five were written here rather than copied in, and the skill has no counterpart for most of them, so "vendored" would read the dependency backwards.
+What holds the rules for that reader is that the **tooling is in-tree and gate-enforced, where the prose is not**: `lint-queue.sh`, `check-queue-rules.sh`, the ID allocator, the merge drivers and the dispatch hooks all run in `make check` and CI whether or not any skill is installed.
+Four of those five were written here rather than copied in, and the skill has no counterpart for most of them, so "vendored" reads the dependency backwards for them.
+`lint-queue.sh` is the exception: its checker is the `queue.py` this repo vendors from the skill, which [`scripts/ci/vendored-skills.tsv`](../../scripts/ci/vendored-skills.tsv) records and `make vendored-skills-check` holds.
 A contributor cannot violate a rule that matters without a gate saying so.
 That is the trade this repo took, and the reader it accepts losing is the drive-by contributor who would groom the backlog or run a dispatch by hand, which nobody outside the maintainer does.
 Restoring the prose is what would have to change if that stops being true.
@@ -76,7 +77,7 @@ Last of the four prose passes over a release note, after the other three, becaus
 ### `session-backlog`
 
 The format and grooming process for the backlog in [docs/queue/](../queue/README.md).
-[maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and this repo's own tooling (`lint-backlog.sh` over the `backloglint` rules, the ID allocator, the merge drivers) enforces the format with or without the skill installed.
+[maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and this repo's own tooling (`lint-queue.sh` and `check-queue-rules.sh` over the vendored `queue.py`, the ID allocator, the merge drivers) enforces the format with or without the skill installed.
 
 ### `session-orchestrator`
 

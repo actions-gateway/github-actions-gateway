@@ -60,9 +60,9 @@ What follows is only what that skill cannot know.
 
 - **The gate is `make check`**, and the fast prose gate is `make docs-gates`.
   Run `docs-gates` the moment prose is written rather than waiting on the ten-minute gate; `em-dash-check` and `md-reflow-check` are the two it catches that nothing else does until then.
-  The sub-gates worth reading by name in `make check`'s output are `doc-links`, `lint-backlog`, `plan-index-check`, `no-plan-refs-check` and `em-dash-check`.
+  The sub-gates worth reading by name in `make check`'s output are `doc-links`, `queue-lint`, `queue-rules-check`, `plan-index-check`, `no-plan-refs-check` and `em-dash-check`.
 - **Allocate every new Queue ID with `make queue-id TITLE="…"`**, never by hand — it searches for near-duplicates before it claims, and concurrent workers otherwise pick the same number.
-- **A `flake` row is not deleted when it is fixed.** It moves to Deferred § Flake watch with a revive trigger, per `lint-backlog.sh` rule 8.
+- **A `flake` row is not deleted when it is fixed.** It moves to Deferred § Flake watch with a revive trigger, per `check-queue-rules.sh` rule 8.
   Match the rows already there.
 - **The e2e lanes are exempt from "prove the gate ran".** Both are merge-group-only (Q675), so they never run on a PR and their absence there is expected rather than a skipped gate.
   Everything else follows [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
@@ -254,7 +254,7 @@ Its three heavy phases (`build-tags-check`, `lint`, `cover-check`) each take one
 **How much that costs is a property of the machine, and the two we have measured differ by an order of magnitude.** A cold gate is dominated by `cover-check`: ~19 of ~21 min on the small dev machine the original baseline was taken on, but **102 s end-to-end** on the M5 Max replacement (18 physical cores, 128 GB) with a fully cold build cache and no slot contention ([measurements](../plan/archive/local-gate-throughput.md)).
 Take your own number before reasoning about the wall clock; the rule is right either way, but on a wide machine its payoff is seconds rather than the better part of an hour.
 
-The confirming run `session-worker` §3 requires is cheap here for a specific reason: the gates that validate the doc and backlog work done while the first run was going — `lint-backlog`, `doc-links`, `plan-index-check`, `no-plan-refs-check`, `shellcheck` — are the *fast* gates, which take **no** heavy-build slot and run concurrently.
+The confirming run `session-worker` §3 requires is cheap here for a specific reason: the gates that validate the doc and backlog work done while the first run was going — `queue-lint`, `queue-rules-check`, `doc-links`, `plan-index-check`, `no-plan-refs-check`, `shellcheck` — are the *fast* gates, which take **no** heavy-build slot and run concurrently.
 Only the three heavy phases re-queue, and they are cache-warm.
 A *code* change during that window is what voids the head start, and here that means anything the gate compiles or lints: a `scripts/*.sh` or `Makefile` edit counts, not only Go.
 
