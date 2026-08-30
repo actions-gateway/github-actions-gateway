@@ -56,6 +56,7 @@ CHECK_FAST_GATES := roadmap-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
                     script-docs-check script-modes-check queue-rules-check queue-lint \
+                    queue-claims-check \
                     getting-started-check \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
@@ -100,7 +101,8 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # status-isolation-check took docs/STATUS.md as their subject rather than as a
 # source; queue-drift-check held the table and the store to the same items
 # through the migration and has nothing left to compare.
-QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
+QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
+                 roadmap-check plan-index-check \
                  conflict-markers-check doc-links em-dash-check md-reflow-check \
                  page-density-check \
                  release-ladder-check

@@ -14,7 +14,7 @@ Claim an ID when you file the row, use it, and move on.
 There is nothing to release and nothing to clean up.
 
 **Every path through the target claims, and an ID you did not claim is one `queue.py claims` rejects.** Those are the two halves of the same rule: the only way to learn an ID is to hold it, and an item carrying an ID nobody holds fails that check, which is rule 12 of the retired table-era linter, moved into `queue.py` by [Q889](../plan/q889-backlog-item-store.md).
-No gate runs that check today ([Q1042](../queue/Q1042.md)), so the second half holds only where someone runs it by hand.
+`make queue-claims-check` runs it over this store, and the `status-lint` workflow runs it with `--strict` (Q1042).
 Both are below, under [Reserving, not reporting](#reserving-not-reporting).
 
 **The title is mandatory, and there is no untitled batch form.** This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through.
@@ -54,7 +54,8 @@ There were two ways to hold an ID without reserving it, and both are closed:
 - **Reading the file's highest ID and adding one.** No tool can prevent that, so it fails loudly instead.
   `queue.py claims` requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, measured against the merge base rather than `origin/main`'s tip, and skips rather than fails when the remote cannot be read unless `--strict` is passed.
   The message names the fix, and `QUEUE_CLAIMS_ALLOW="Q1 Q2"` (or `--allow`) is there for an ID claimed from another clone.
-  No gate points it at this store: `queue-test.sh` drives it inside `make check`, but only ever against a fixture, so an unreserved ID here surfaces at the rebase that collides rather than at the commit that files it ([Q1042](../queue/Q1042.md)).
+  `scripts/docs/check-queue-claims.sh` points it at this store, backing `make queue-claims-check` in `make check` and `make queue-gates`, and the `status-lint` workflow runs the same script with `--strict` (Q1042).
+  It reads the working tree rather than `HEAD`, so a row that has been written and not yet committed is already its subject, which is when a hand-picked ID is cheapest to fix.
 
 What rule 12 costs and what it still misses:
 
@@ -62,7 +63,7 @@ What rule 12 costs and what it still misses:
   That baseline is the merge base with `origin/main`, not its tip: against the tip a row `main` deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).
 - IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.
 - When `git ls-remote` cannot reach the remote it skips rather than fails, so an offline clone still lints.
-  `--strict` is what turns that skip into a failure, and no gate passes it, because none runs the check over this store.
+  `--strict` turns that skip into a failure, and CI is the only caller that passes it: a network is guaranteed there, so a skip in the one place the check is relied on would be a silent non-run.
 - **It cannot catch a hand-picked ID that another session has already claimed but not yet filed.** That is the narrow residual: the ref exists, so the row looks reserved.
   Closing it needs the claim to record *who* holds it, which no one has needed yet.
 

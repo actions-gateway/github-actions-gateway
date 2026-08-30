@@ -24,6 +24,7 @@ on:
       - 'docs/features.md'
       - 'scripts/docs/check-roadmap.sh'
       - 'scripts/docs/check-queue-rules.py'
+      - 'scripts/docs/check-queue-claims.sh'
       - 'scripts/docs/queue.py'
       - 'docs/queue/**'
       # The roadmap gate reads its rows through the shared parse layer in
@@ -66,6 +67,7 @@ jobs:
               - 'docs/features.md'
               - 'scripts/docs/check-roadmap.sh'
               - 'scripts/docs/check-queue-rules.py'
+              - 'scripts/docs/check-queue-claims.sh'
               - 'scripts/docs/queue.py'
               - 'docs/queue/**'
               - 'devtools/**'
@@ -82,10 +84,10 @@ jobs:
     if: needs.changes.outputs.status == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     # 5, not 2: the roadmap gate builds devtools/docs/roadmapcheck, and a cold
-    # module build has to fit inside the budget alongside the two checks.
+    # module build has to fit inside the budget alongside the store checks.
     timeout-minutes: 5
     steps:
-      # fetch-depth: 0 for the store rules below — rule 8 and rule 9 are
+      # fetch-depth: 0 for the store rules below — rules 8, 9 and 12 are
       # functions of what the branch changed, so they read the merge base,
       # which a shallow checkout does not carry.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -120,6 +122,18 @@ jobs:
         # cause wearing two faces, 'No rule to make target' for the make form
         # and exit 127 for the script.
         run: scripts/docs/check-queue-rules.sh
+
+      - name: check the backlog store id claims
+        # Rule 12 (Q889, wired by Q1042): every id this branch adds holds a
+        # refs/queue-ids claim, which is what `alloc-queue-id.sh` cannot enforce
+        # on its own — an id incremented by hand reserves nothing.
+        #
+        # --strict here and nowhere else. The default turns an unreadable remote
+        # into a skip so an offline clone still runs the gate, and this is the
+        # one place a network is guaranteed, so it is the one place that skip
+        # must be a failure — otherwise the check can silently not run exactly
+        # where it is relied on.
+        run: scripts/docs/check-queue-claims.sh --strict
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated

@@ -312,6 +312,16 @@ queue-lint: ## Fail when the backlog store breaks its own format rules
 queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9 or 11
 	scripts/docs/check-queue-rules.sh
 
+# Rule 12, the half `alloc-queue-id.sh` cannot enforce alone: an id read off the
+# store and incremented by hand allocates nothing, so it surfaces at the rebase
+# that collides rather than at the commit that files the row. Local runs take
+# the skip-on-unreadable-remote default, which is what keeps an offline clone
+# green; status-lint.yml passes --strict, so the one place with a guaranteed
+# network is the one place a skip is a failure (Q1042).
+.PHONY: queue-claims-check
+queue-claims-check: ## Fail when a backlog id this branch adds holds no refs/queue-ids claim
+	scripts/docs/check-queue-claims.sh
+
 # Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as
 # green checks and red X's, and eleven of them shipped with no ARC version and no
 # date because the format had nowhere to put "unverified" — two then went false
