@@ -525,7 +525,10 @@ That one never flaked: its positive assertion held whether or not the listener e
 
 **A campaign that pins a flake often measures a production defect too, and a flake filed later often turns out to be one already on the Queue.** Either way the pair gets cross-linked the moment it is recognised, with [one row owning the measurement](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
 
-**Once the mitigation ships, move the row to [flake watch](../queue/README.md)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always `**Event:** recurs on main after the fix`, and on recurrence the row returns to the **top** of the Queue, escalated (the first mitigation didn't hold).
+**Once the mitigation ships, move the row to [flake watch](../queue/README.md)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger names the recurrence that would show the fix didn't hold, observed on `main`, and on recurrence the row returns to the **top** of the Queue, escalated.
+Write it against the flake's own signature (the failing test, the job, the symptom) rather than to a fixed string; *recurs on `main` after the fix* is the fallback for a flake with no narrower one.
+Measured 2026-08-30 over the ten parked rows: seven name a test or a symptom, two use that fallback ([Q549](../queue/Q549.md), [Q912](../queue/Q912.md)), and one delegates to a sibling whose class-wide trigger covers it ([Q797](../queue/Q797.md) → [Q1007](../queue/Q1007.md)).
+Escalation is the mechanic rather than something a row has to restate, though writing it into the trigger is harmless; two of the ten do.
 Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find.
 The lifecycle:
 
