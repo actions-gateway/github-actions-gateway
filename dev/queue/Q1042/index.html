@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q922/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1042/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Docs name the retired lint-backlog.sh as the live backlog linter - GitHub Actions Gateway</title>
+        <title>No gate runs queue.py claims over this repo's own store - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#docs-name-the-retired-lint-backlogsh-as-the-live-backlog-linter" class="md-skip">
+        <a href="#no-gate-runs-queuepy-claims-over-this-repos-own-store" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Docs name the retired lint-backlog.sh as the live backlog linter
+              No gate runs queue.py claims over this repo's own store
             
           </span>
         </div>
@@ -2597,26 +2597,19 @@
   
 
 
-<h1 id="docs-name-the-retired-lint-backlogsh-as-the-live-backlog-linter">Docs name the retired <code>lint-backlog.sh</code> as the live backlog linter<a class="headerlink" href="#docs-name-the-retired-lint-backlogsh-as-the-live-backlog-linter" title="Permanent link">&para;</a></h1>
-<p>Q889 retired it with the table; <code>queue.py lint</code> (<code>make queue-lint</code>) and <code>check-queue-rules.py</code> (<code>make queue-rules-check</code>) carry its rules now.</p>
-<p>Measured 2026-08-30 by reading each file rather than a merged grep, after Q924 cleared <a href="../../development/maintaining-backlog/">maintaining-backlog.md</a>: six docs still describe it as live, so this row's original count of four was low.</p>
-<ul>
-<li><a href="../../development/queue-id-allocation/">queue-id-allocation.md</a> has four, attributing rules 10 and 12 to it.
-  Both attributions are wrong beyond the name: <code>check-queue-rules.py</code>'s own docstring records rule 10 as deliberately absent, dropped on measurement at the cutover, and rule 12 as <code>queue.py claims</code>.</li>
-<li><a href="../../development/parallel-dispatch/">parallel-dispatch.md</a> has three, two of them naming it as a <code>make check</code> sub-gate to read by name in the output.</li>
-<li><a href="../../development/skills/">skills.md</a> has two, one also naming the equally deleted <code>check-status-isolation.sh</code>.</li>
-<li><a href="../../development/testing/">testing.md</a> has two, one asserting <code>status-lint.yml</code> runs it without make; that workflow runs <code>lint-queue.sh</code> and <code>check-queue-rules.sh</code>, both as scripts.</li>
-<li><a href="../../development/backpressure/">backpressure.md</a> and <a href="../../development/technical-debt/">technical-debt.md</a> have one each.</li>
-</ul>
-<p>Three code comments repeat it and are not covered above: <code>scripts/ci/gate-list-test.sh</code>, <code>scripts/lib/merge-keyed-records.awk</code> and <code>.github/workflows/status-lint.yml</code>.</p>
-<p>Nothing executable is broken, so this is a naming defect rather than a rename.</p>
-<p>The test that yields six is whether a sentence would send a reader to run the script today; a sentence recording what the script did is history and stays.
-<code>git grep -l lint-backlog</code> returns 20 files at the head that measured this, so 14 are not the defect: <code>CONTRIBUTING.md</code>, <code>Makefile</code>, <code>mk/gate-lists.mk</code>, <code>scripts/README.md</code> and <code>maintaining-backlog.md</code>, all past tense; the three code comments above; five under <code>docs/plan/</code>, not the two an earlier reading of this row claimed; and this row.
-Two of those five carry a present-tense sentence and still pass the test, because each describes the table era from inside a plan about it: <a href="../../plan/docs-page-boundaries/">docs-page-boundaries.md</a> on rules spanning both tables, and <a href="../../plan/archive/local-gate-throughput/">archive/local-gate-throughput.md</a> listing it in <code>CHECK_FAST_GATES</code>.
-Re-derive against the test rather than against tense, or the count comes back eight.</p>
-<p>Absorbs Q987, deleted 2026-08-30 with both sites it named already clean: <code>CLAUDE.md</code> by #1730, which repointed it at <code>make queue-lint</code>, and <code>maintaining-backlog.md</code> by Q924.
-Q987 carried one observation worth keeping: a reviewer who runs the path a doc gives gets exit 127, which reads like a lint failure rather than a missing file.
-Distinct from <a href="../Q830/">Q830</a>: a dead name, not a stale number.</p>
+<h1 id="no-gate-runs-queuepy-claims-over-this-repos-own-store">No gate runs <code>queue.py claims</code> over this repo's own store<a class="headerlink" href="#no-gate-runs-queuepy-claims-over-this-repos-own-store" title="Permanent link">&para;</a></h1>
+<p><a href="../../plan/q889-backlog-item-store/">Q889</a> moved the table-era linter's rule 12 (every Q-ID a branch <em>adds</em> holds a <code>refs/queue-ids/QN</code> claim) into <code>queue.py claims</code>, and the subcommand is complete: a merge-base baseline, a <code>QUEUE_CLAIMS_ALLOW</code>/<code>--allow</code> escape, and a <code>--strict</code> that turns an unreadable remote from a skip into a failure.</p>
+<p>It is also exercised.
+Measured 2026-08-30: <code>scripts/docs/queue-test.sh</code> invokes it twelve times, <code>docs/queue-test</code> is in <code>SCRIPTS_TESTS</code> and <code>scripts-test</code> is in <code>CHECK_FAST_GATES</code>, so <code>make check</code> runs it on every gate.</p>
+<p>Every one of those invocations passes <code>--store</code> a fixture (<code>$TMP/claims/work/docs/queue</code>, or <code>$TMP/clean</code>).
+None is pointed at <code>docs/queue/</code>, and no <code>make</code> target, workflow or hook points it there either: it is absent from <code>QUEUE_GATES</code>, <code>status-lint.yml</code> runs <code>lint-queue.sh</code> and <code>check-queue-rules.sh</code> only, and the pre-commit hook runs <code>gofmt</code> and <code>check-em-dash.sh</code>.</p>
+<p>So the checker is well tested and this repo's store is never its subject, which is the gap: the one property <code>alloc-queue-id.sh</code> cannot enforce on its own, that an ID read off the store and incremented never reaches a commit, is asserted nowhere against the real ids.
+An unreserved ID surfaces at the rebase that collides.</p>
+<p>The subcommand's own header says of <code>--strict</code> that CI, which always has a network, is where it is passed.
+Nothing passes it, so that records design intent rather than behaviour.</p>
+<p>Wiring it needs a decision the code already frames: the skip-on-unreadable-remote default is what keeps an offline clone green, so a local <code>make</code> target wants the default and the workflow step wants <code>--strict</code>.
+<code>queue.py claims</code> reads the working tree rather than <code>HEAD</code>, so unlike <code>check-queue-rules.sh</code> it is not subject to <a href="../Q909/">Q909</a>'s staged-edit blind spot; that row is about which gate set <code>make docs-gates</code> runs and does not reach this.</p>
+<p>Found while closing Q922, Q924 and Q987, whose docs asserted rule 12 "runs in the pre-commit hook, <code>make check</code>, and CI".</p>
 
 
 

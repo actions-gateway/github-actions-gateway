@@ -2803,8 +2803,9 @@ If one of those pages ever reads as though the skill is required to follow it, t
 <p><strong>The three process skills are different: they own the process, and this tree keeps only its deltas.</strong> <a href="#session-backlog"><code>session-backlog</code></a>, <a href="#session-orchestrator"><code>session-orchestrator</code></a> and <a href="#session-worker"><code>session-worker</code></a> carry the portable backlog format and the dispatch contract, and <a href="../maintaining-backlog/">maintaining-backlog.md</a> and <a href="../parallel-dispatch/">parallel-dispatch.md</a> deliberately do not restate them.
 A contributor reading those two pages gets what is true <em>here</em>: the caps, the allocator, the gate, the merge queue, the tooling, the measurements.
 What they do not get is the process those deltas modify.</p>
-<p>What holds the rules for that reader is that the <strong>tooling is in-tree and gate-enforced, where the prose is not</strong>: <code>lint-backlog.sh</code>, the ID allocator, the merge drivers, <code>check-status-isolation.sh</code> and the dispatch hooks all run in <code>make check</code> and the pre-commit hook whether or not any skill is installed.
-Those five were written here rather than copied in, and the skill has no counterpart for most of them, so "vendored" would read the dependency backwards.
+<p>What holds the rules for that reader is that the <strong>tooling is in-tree and gate-enforced, where the prose is not</strong>: <code>lint-queue.sh</code>, <code>check-queue-rules.sh</code>, the ID allocator, the merge drivers and the dispatch hooks all run in <code>make check</code> and CI whether or not any skill is installed.
+Four of those five were written here rather than copied in, and the skill has no counterpart for most of them, so "vendored" reads the dependency backwards for them.
+<code>lint-queue.sh</code> is the exception: its checker is the <code>queue.py</code> this repo vendors from the skill, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/vendored-skills.tsv"><code>scripts/ci/vendored-skills.tsv</code></a> records and <code>make vendored-skills-check</code> holds.
 A contributor cannot violate a rule that matters without a gate saying so.
 That is the trade this repo took, and the reader it accepts losing is the drive-by contributor who would groom the backlog or run a dispatch by hand, which nobody outside the maintainer does.
 Restoring the prose is what would have to change if that stops being true.</p>
@@ -2860,7 +2861,7 @@ Everything under <code>docs/</code> publishes to <a href="https://actions-gatewa
 Last of the four prose passes over a release note, after the other three, because editing is what introduces the defects it looks for: <a href="../../operations/release/#the-prose-passes">release.md § The prose passes</a>.</p>
 <h3 id="session-backlog"><code>session-backlog</code><a class="headerlink" href="#session-backlog" title="Permanent link">&para;</a></h3>
 <p>The format and grooming process for the backlog in <a href="../../queue/">docs/queue/</a>.
-<a href="../maintaining-backlog/">maintaining-backlog.md</a> is authoritative wherever the two overlap, and this repo's own tooling (<code>lint-backlog.sh</code> over the <code>backloglint</code> rules, the ID allocator, the merge drivers) enforces the format with or without the skill installed.</p>
+<a href="../maintaining-backlog/">maintaining-backlog.md</a> is authoritative wherever the two overlap, and this repo's own tooling (<code>lint-queue.sh</code> and <code>check-queue-rules.sh</code> over the vendored <code>queue.py</code>, the ID allocator, the merge drivers) enforces the format with or without the skill installed.</p>
 <h3 id="session-orchestrator"><code>session-orchestrator</code><a class="headerlink" href="#session-orchestrator" title="Permanent link">&para;</a></h3>
 <p>The dispatcher half of a parallel run: deciding whether a batch is worth parallelizing, spawning workers as full sessions, and carrying every PR to ready without merging any.
 See <a href="../parallel-dispatch/">parallel-dispatch.md</a>.</p>
