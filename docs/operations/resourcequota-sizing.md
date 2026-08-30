@@ -35,7 +35,7 @@ Kubernetes composes it from four parts, and two of them are easy to miss on exac
 | Plain init containers | **`max()` against the regular-container sum** | The AGC-injected `gag-wrapper-install` init container declares no resources, so it contributes nothing. A tenant-authored init container only matters if it out-asks the runner. |
 | `RuntimeClass` pod overhead (`overhead.podFixed`) | **Added** to requests in full; added to limits **only for a key the pod already limits** with a non-zero value | Kata workers carry `250m` CPU / `160Mi` memory per pod on top of their containers. The asymmetry matters: a shape with no CPU limit gets no overhead on `limits.cpu`. |
 
-Verified on Kubernetes v1.36.1 by applying one pod at a time into a quota'd namespace and reading the `.status.used` delta.
+Measured 2026-07-26 on Kubernetes v1.36.1 by applying one pod at a time into a quota'd namespace and reading the `.status.used` delta.
 Reproduce it on any cluster:
 
 ```sh
@@ -314,6 +314,24 @@ A worker shape that declares no `ephemeral-storage` and no ephemeral volumes is 
     them `Pending` on an unbound volume. The condition just reports it up front now
     instead of leaving it to show up as burnt lock time. A quota already sized with
     the arithmetic on this page is unaffected; re-derive any that were not.
+
+### Where the arithmetic comes from, and what pins it
+
+Neither half of the footprint is this project's own derivation.
+The compute sum mirrors `PodRequests` / `PodLimits` in `k8s.io/component-helpers/resource`, the upstream helpers implementing [KEP-753](https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers)'s init-container formula.
+The storage keys mirror the PVC evaluator in `pkg/quota/v1/evaluator/core`, which charges a claim's count and its `requests.storage` as separate keys, class-scoped ones included.
+Both are hand-written here rather than imported, because neither package is in this repo's vendor tree.
+
+Two things pin them:
+
+- **Unit tests assert each rule against the shapes this repo ships.** The `privileged-dind` case asserts the per-pod and `maxWorkers: 12` totals the [worked example](#worked-example--a-dind-tenant-at-12-concurrent-jobs) above derives, so this page and the code cannot drift apart quietly.
+  The Kata case pins the overhead asymmetry, and further cases pin the plain-init floor, a native sidecar raising that floor, and the claim count staying a cardinality rather than a quantity.
+- **envtest proves the footprint reaches the conditions against a real apiserver**, each case against a quota that only the extra term can exhaust, so a condition trips only if the sidecar, the overhead, or the per-worker PVC was actually counted.
+
+One thing does not pin them: no test compares the gateway's number against the one Kubernetes computes.
+There is no `resourcequota` controller in envtest, so nothing there computes the number a test could check against; the tests write `.status.used` themselves.
+The equivalence rests on the measurement stamped at the top of this page.
+Take that `kubectl` reading on your own cluster before sizing a quota with no headroom, especially on a Kubernetes far from v1.36.1.
 
 ### Pod overhead needs a cluster-scoped read
 
