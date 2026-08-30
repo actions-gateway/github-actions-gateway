@@ -56,7 +56,7 @@ There were two ways to hold an ID without reserving it, and both are closed:
   The message names the fix, and `QUEUE_CLAIMS_ALLOW="Q1 Q2"` (or `--allow`) is there for an ID claimed from another clone.
   No gate points it at this store: `queue-test.sh` drives it inside `make check`, but only ever against a fixture, so an unreserved ID here surfaces at the rebase that collides rather than at the commit that files it ([Q1042](../queue/Q1042.md)).
 
-What rule 12 costs and what it still misses:
+What the check costs and what it still misses:
 
 - It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all.
   That baseline is the merge base with `origin/main`, not its tip: against the tip a row `main` deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).
@@ -83,7 +83,7 @@ Q382 recorded three such renumberings across a single PR's rebases.
 
 ## What this fixes, and what it does not
 
-Measured on a 10-row table, resolving two branches against a common base:
+Measured on the single-table backlog this store replaced, 10 rows, resolving two branches against a common base:
 
 | Concurrent edit | Result |
 |---|---|
@@ -95,7 +95,8 @@ Measured on a 10-row table, resolving two branches against a common base:
 | Insert at top vs delete row 1 | **conflict** |
 | Both delete the **same** row | clean |
 
-Adjacency is the whole story: one untouched row of separation is enough to merge cleanly.
+Adjacency was the whole story: one untouched row of separation was enough to merge cleanly.
+The finding outlived its subject, which is why [the registry drivers](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position) cite it: any file carrying one row per thing collides the same way.
 
 **Row conflicts were unchanged by this.** They were also concentrated where the process put them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too.
 A four-worker dispatch batch took rows 1 through 4 and every pair was adjacent.
@@ -104,31 +105,34 @@ What the ref allocator removes is the *expensive* class (duplicate IDs and the r
 Row conflicts remained, were two lines, and resolved obviously.
 Their real danger was a botched resolution — a done row silently restored — not the conflict itself; one file per item ends it, because a relocated item and a deleted one become a modify and a delete of one path, which git refuses rather than resolves ([why](maintaining-backlog.md#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it)).
 
-Every row in the table above is a *line-position* verdict.
-The [merge driver](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position) re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
-It is opt-in per clone (`make merge-driver`) and applies to local merges and rebases only, so the numbers above are still what an uninstalled clone — and GitHub's squash-merge — will do.
+Every verdict in that table is a *line-position* one, which is an artifact of storing the backlog as lines in one file.
+A merge driver re-decided the same cases by row ID and made all of them clean, but it was opt-in per clone, never reached GitHub's server-side squash-merge, and retired with the table it served ([Q889](../plan/q889-backlog-item-store.md)).
+`.gitattributes` routes no backlog path today, and adding one would rebuild the contention the store exists to remove.
+One file per item deletes the line positions rather than resolving them, so none of these cases arises in the backlog now.
+They arise in the registry files, which is where the drivers went.
 
 ## Alternatives considered
 
 **Move the backlog to GitHub issues.** Rejected.
-Issues would give free IDs, no backlog conflicts, and a native in-flight signal, but they cannot express *position is priority*: a single total ordering, readable in one file read and changeable in one reviewable diff.
+Issues would give free IDs, no backlog conflicts, and a native in-flight signal, but they cannot express a total ordering that lives in the repo and changes in one reviewable diff: a line position under the table, the `rank` key under the store.
 Projects v2 has a position field, but it lives outside the repo and cannot be diffed.
-Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work.
+Issues would also cost the atomicity of deleting the item in the same diff as the work, and the lintable write path that `queue.py lint` reads off the tree: frontmatter shape, the 72-character title cap, unresolvable targets.
 Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.
 
-**A custom merge driver for the backlog table.** Shipped, then retired with the table it served (Q889); the surviving registry drivers are documented in [maintaining-backlog.md](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position).
-It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack.
-It needs a one-time `git config` per clone (`make merge-driver`; git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain.
-It does not help GitHub's server-side squash-merge.
-The same `make merge-driver` installs a [sibling for `docs/plan/README.md`](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which has the same contention keyed on the plan path (Q611), and [one for `docs/roadmap.md`](maintaining-backlog.md#and-for-docsroadmapmd), keyed on each bullet's backlog annotation (Q799).
+**A custom merge driver for the backlog table.** Shipped, then retired with the table it served ([Q889](../plan/q889-backlog-item-store.md)).
+It resolved the table by ID set-semantics during merge and rebase, which was where the pain was, and it kept the whole tooling stack of the day.
+It needed a one-time `git config` per clone (`make merge-driver`; git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degraded to ordinary conflict markers both when unconfigured and whenever the resolution was not certain.
+It never helped GitHub's server-side squash-merge.
+The mechanism outlived the backlog: the same `make merge-driver` installs [the four drivers the registry files still use](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position), keyed on a plan path (Q611), a bullet's backlog annotation (Q799), a script path, and a gate-list entry.
 
 **One file per item** (`docs/queue/Q423.md`).
-Shipped ([Q889](../plan/q889-backlog-item-store.md)).
-The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict.
+Shipped ([Q889](../plan/q889-backlog-item-store.md)), and the layout this doc now describes.
+It was the permanent answer to row conflicts, since adds and removes became file creates and deletes, which cannot conflict.
 It cost what this entry predicted: `lint-backlog.sh` retired in favour of `lint-queue.sh` and `check-queue-rules.sh`, this process and the shared `session-backlog` skill followed, and the single-file read of the prioritized queue became `queue.py render`.
 
-**Dispatcher-owned row removal.** Rejected.
-It only works when a dispatcher session exists, and items are also spawned by ID directly or as "start the next one", which have no serialization point.
+**Dispatcher-owned row removal.** Rejected, and moot since Q889.
+It only worked when a dispatcher session existed, and items are also spawned by ID directly or as "start the next one", which have no serialization point.
+Closing an item now deletes its own file, so there is no shared line for two removals to contend for.
 
 ## Operational notes
 
