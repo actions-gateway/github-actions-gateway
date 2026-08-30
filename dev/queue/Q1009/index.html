@@ -2604,7 +2604,7 @@ Practice departs from that deliberately, and the departure is sound.</p>
 <p>Q982 was retired at fix time: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1747">#1747</a> deleted the row and added its ledger line in the same commit.
 Q968 was parked: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1754">#1754</a> shipped the fix and left the row standing.</p>
 <p>Q982 carried <code>flake</code> when it was deleted, so this is the governed case rather than an unlabelled row slipping past.
-Its ledger entry states the reasoning outright: retired at fix time rather than after a soak, because the flake-watch trigger is <em>recurs on <code>main</code> after the fix</em>, and that trigger could neither fire nor be falsified for a path <code>main</code> never ran.
+Its ledger entry states the reasoning outright: retired at fix time rather than after a soak, because a flake-watch trigger turns on recurrence observed on <code>main</code>, which could neither happen nor be falsified for a path <code>main</code> never ran.
 A row whose trigger cannot fire has nothing to wait for, so parking it buys a soak against an event that is already impossible.</p>
 <p>The gate permits both outcomes and cannot tell them apart.
 <code>rule8</code> checks only that a deleted <code>flake</code> id appears in the ledger, which is a reachability test, not a timing one, and it has no way to know whether a groom made the call.

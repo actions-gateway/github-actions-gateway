@@ -2605,7 +2605,7 @@ The assertion therefore encodes that four forks never take a second.
 Measured 2026-08-24 with ~18 sessions live: it failed inside <code>make check</code> beside <code>claude-go-throttle-hook-test</code> (throttle probe killed) and <code>queue-test</code>, all three passing on individual rerun with no code change.
 <strong>Not observed on a runner, and no docs-only PR can show otherwise:</strong> <code>make scripts-test</code> runs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">unit-test.yml</a>'s path-gated <code>shellcheck</code> job, which skips on a docs-only diff, so the runner evidence is the push-to-main runs (32836906076, <code>ubuntu-latest</code>, success) rather than any PR's green.
 The fix touches <code>scripts/ci/</code>, so that job <strong>does</strong> run on the fixing PR: read it there rather than assuming this gap persists.
-Deliberately not labelled <code>flake</code>: the fix is deterministic and the defect was never seen on <code>main</code>, so the flake-watch trigger (<em>recurs on main after the fix</em>) could never fire or be falsified, and completion should delete this row rather than park it.
+Deliberately not labelled <code>flake</code>: the fix is deterministic and the defect was never seen on <code>main</code>, so a flake-watch trigger, which turns on recurrence observed there, could never fire or be falsified, and completion should delete this row rather than park it.
 It keeps its rank beside the flake rows anyway, because it fails <code>make check</code> locally today and that is what the position is for.
 Also a contention datum for <a href="../Q822/">Q822</a>, whose cause is still unproven; one fix does not close both.</p>
 
