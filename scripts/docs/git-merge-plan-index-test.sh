@@ -16,6 +16,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# The fixture repos symlink this in so the copied entry point can cache the Go
+# driver it builds; a dangling symlink would fail the build instead.
+mkdir -p "$REPO_ROOT/.build"
 DRIVER="$REPO_ROOT/scripts/docs/git-merge-plan-index.sh"
 INDEX_CHECK="$REPO_ROOT/scripts/docs/check-plan-index.sh"
 TARGET='docs/plan/README.md'
@@ -147,8 +150,13 @@ merge_repo() {
 	repo="$(plain_repo "$1")"
 	mkdir -p "$repo/scripts/lib" "$repo/scripts/docs"
 	cp "$DRIVER" "$repo/scripts/docs/git-merge-plan-index.sh"
-	cp "$REPO_ROOT/scripts/lib/merge-keyed-records.awk" "$repo/scripts/lib/"
 	cp "$REPO_ROOT/scripts/lib/merge-driver-common.sh" "$repo/scripts/lib/"
+	# The merge is Go now, so the copied entry point needs the module it builds
+	# and somewhere to cache the binary. Symlinks rather than copies: the point
+	# of the throwaway repo is an isolated .git and .gitattributes, not an
+	# isolated toolchain.
+	ln -s "$REPO_ROOT/devtools" "$repo/devtools"
+	ln -s "$REPO_ROOT/.build" "$repo/.build"
 	chmod +x "$repo/scripts/docs/git-merge-plan-index.sh"
 	(cd "$repo" && ./scripts/docs/git-merge-plan-index.sh --install >/dev/null)
 	printf '%s\n' "$repo"
@@ -621,8 +629,11 @@ for gate_input in ${GATE_INPUTS+"${GATE_INPUTS[@]}"}; do
 done
 cp "$DRIVER" "$gate_repo/scripts/docs/git-merge-plan-index.sh"
 cp "$INDEX_CHECK" "$gate_repo/scripts/docs/check-plan-index.sh"
-cp "$REPO_ROOT/scripts/lib/merge-keyed-records.awk" "$gate_repo/scripts/lib/"
 cp "$REPO_ROOT/scripts/lib/merge-driver-common.sh" "$gate_repo/scripts/lib/"
+# Same reason as merge_repo: the entry point builds the Go driver, so it needs
+# the module and somewhere to cache the binary.
+ln -s "$REPO_ROOT/devtools" "$gate_repo/devtools"
+ln -s "$REPO_ROOT/.build" "$gate_repo/.build"
 # The gate sources common.sh for resolve_release_tag (Q812), and resolves it from
 # its own location, so the copy has to come along or it dies before it checks
 # anything — which the baseline below reads as a red tree.
