@@ -178,26 +178,33 @@ run_coverage() {
 		exit 1
 	}
 
-	# Modules outside go.work get no baseline row — their profile cannot join the
-	# workspace one — but their tests must still RUN here: `make check` uses
-	# cover-check in place of `make test`, so without this pass they would only
-	# execute under `make test`/`make test-race`.
+	# Modules outside go.work cannot join the invocation above — they are a
+	# separate build list, hence GOWORK=off and a run of their own — but they are
+	# measured and ratcheted like any other. Each keeps its own profile rather
+	# than merging into the one above, because totalling a profile compiles the
+	# packages it names: `go tool cover -func` over a devtools line from the repo
+	# root fails to resolve the import at all (the root is a workspace with a
+	# vendor tree), so the total has to be taken from inside the module, with
+	# GOWORK=off, which is what measure_all does.
 	for dir in $(firstparty_nonworkspace_modules); do
-		echo "==> go test ./$dir/... (GOWORK=off, unmeasured)" >&2
+		local nwprofile="$RUN_TMP/nonworkspace-${dir//\//_}.out"
+		echo "==> go test -coverprofile ./$dir/... (GOWORK=off)" >&2
 		(
 			cd "$dir"
 			export GOWORK=off
 			# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-			$THROTTLE_PREFIX go test -trimpath -timeout 5m $p_flag $verbose_flag ./... >&2
+			$THROTTLE_PREFIX go test -trimpath -timeout 5m $p_flag $verbose_flag \
+				-coverprofile="$nwprofile" ./... >&2
 		) || {
 			echo "coverage: 'go test' failed in $dir (output above)" >&2
 			exit 1
 		}
 	done
+	return 0
 }
 
-# measure_all — echo "DIR<TAB>PCT<TAB>NSTMT" per go.work module, in go.work
-# order. PCT is "n/a" when the module has no statements covered by any test (e.g.
+# measure_all — echo "DIR<TAB>PCT<TAB>NSTMT" per measured module: the go.work
+# modules in go.work order, then the first-party modules outside it. PCT is "n/a" when the module has no statements covered by any test (e.g.
 # a module with no _test.go files, or one whose every profiled file is excluded),
 # and NSTMT is then 0. NSTMT is the module's statement denominator, which is what
 # sizes the gate's tolerance (see effective_tolerance); the baseline file records
@@ -206,7 +213,7 @@ measure_all() {
 	local profile="$RUN_TMP/merged.out"
 	run_coverage "$profile"
 
-	local dir modpath filtered pct nstmt
+	local dir modpath filtered
 	for dir in $(workspace_modules); do
 		if [[ ! -s "$profile" ]]; then
 			printf '%s\t%s\t%s\n' "$dir" "n/a" 0
@@ -215,16 +222,40 @@ measure_all() {
 		modpath="$(module_import_path "$dir")"
 		filtered="$RUN_TMP/$(tr '/.' '__' <<<"$dir").filtered"
 		module_profile "$modpath" "$profile" >"$filtered"
-		if [[ "$(wc -l <"$filtered")" -le 1 ]]; then
-			# Header only — the module has no profiled lines, or every covered
-			# statement was in an excluded file.
-			printf '%s\t%s\t%s\n' "$dir" "n/a" 0
-			continue
-		fi
-		pct="$(go tool cover -func="$filtered" | tail -n1 | awk '{print $NF}' | tr -d '%')"
-		nstmt="$(awk 'NR > 1 { n += $(NF - 1) } END { print n + 0 }' "$filtered")"
-		printf '%s\t%s\t%s\n' "$dir" "$pct" "$nstmt"
+		report_module "$dir" "$filtered" ""
 	done
+
+	# Same reporting, one directory in, because the total compiles the packages.
+	for dir in $(firstparty_nonworkspace_modules); do
+		modpath="$(module_import_path "$dir")"
+		filtered="$RUN_TMP/$(tr '/.' '__' <<<"$dir").filtered"
+		module_profile "$modpath" "$RUN_TMP/nonworkspace-${dir//\//_}.out" >"$filtered"
+		# Reported as ./DIR to match workspace_modules, which is the form the
+		# baseline is keyed by; the bare DIR is the directory to total from.
+		report_module "./$dir" "$filtered" "$dir"
+	done
+}
+
+# report_module DIR FILTERED [TOTAL_IN] — echo DIR<TAB>PCT<TAB>NSTMT for one
+# already-filtered profile. TOTAL_IN is the directory to total from, empty for a
+# workspace module; a non-workspace module is totalled inside itself with
+# GOWORK=off, since `go tool cover -func` resolves the imports it reads.
+report_module() {
+	local dir="$1" filtered="$2" total_in="$3" pct nstmt
+	if [[ ! -s "$filtered" ]] || [[ "$(wc -l <"$filtered")" -le 1 ]]; then
+		# Header only, or no profile at all — the module has no profiled lines, or
+		# every covered statement was in an excluded file.
+		printf '%s\t%s\t%s\n' "$dir" "n/a" 0
+		return 0
+	fi
+	if [[ -n "$total_in" ]]; then
+		pct="$(cd "$total_in" && GOWORK=off go tool cover -func="$REPO_ROOT/${filtered#"$REPO_ROOT/"}" |
+			tail -n1 | awk '{print $NF}' | tr -d '%')"
+	else
+		pct="$(go tool cover -func="$filtered" | tail -n1 | awk '{print $NF}' | tr -d '%')"
+	fi
+	nstmt="$(awk 'NR > 1 { n += $(NF - 1) } END { print n + 0 }' "$filtered")"
+	printf '%s\t%s\t%s\n' "$dir" "$pct" "$nstmt"
 }
 
 cmd_report() {

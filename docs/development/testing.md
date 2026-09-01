@@ -467,6 +467,10 @@ make cover-update  # re-record the baseline floor in coverage-baseline.txt
 ```
 
 **How it runs.** One workspace-wide `go test -coverprofile` over an explicit `./<module>/...` pattern per go.work module — the same shape [`scripts/go/go-test.sh`](../../scripts/go/go-test.sh) uses for `make test` — and the merged profile is then split back per module by import path.
+A first-party module *outside* `go.work` (today only `devtools/`) is a separate build list, so it gets a run and a profile of its own under `GOWORK=off`, and is then measured and ratcheted exactly like a workspace module.
+Its profile stays separate rather than merging into the workspace one because totalling a profile compiles the packages it names: `go tool cover -func` over a `devtools` line from the repo root cannot resolve the import at all, since the root is a workspace with a vendor tree, so the total is taken from inside the module.
+`coverage-test.sh` asserts that every module `firstparty_nonworkspace_modules` yields has a baseline row, in both directions.
+A non-workspace module added without one would run its tests and ratchet nothing, which is a green that defends nothing rather than a loud failure.
 The script used to loop the modules, one `go test` each; a single invocation lets Go schedule the whole workspace as one build graph, so the small modules overlap with the big `cmd/agc`/`cmd/gmc` dependency compiles instead of queueing behind them.
 Measured on an 18-core M5 Max, two interleaved trials per regime: cold `GOCACHE` **92.5 s → 55.7 s (1.66×)**, warm build cache with `-count=1` **74.0 s → 42.5 s (1.74×)**.
 Mean CPU rose 274 % → 439 % cold and 84 % → 129 % warm, so the serial loop's idle time was inter-module barriers, not throttle headroom.
