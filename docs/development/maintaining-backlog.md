@@ -153,8 +153,21 @@ Single-quote it: these titles are full of backticks, which double quotes would h
 A title carrying an apostrophe as well is easier to pass straight to `scripts/docs/alloc-queue-id.sh`, which takes it as a plain argument.
 
 It searches first and claims second, so recognising a duplicate costs no ID.
-Candidates print to stderr, so `ID=$(make queue-id TITLE="…")` still works, and **nothing is blocked**: the filer routinely knows something the matcher cannot, such as that two rows sharing a file are genuinely separate defects.
+Candidates print to stderr, so `ID=$(make queue-id TITLE="…")` still works, and **the allocator blocks nothing**: the filer routinely knows something the matcher cannot, such as that two rows sharing a file are genuinely separate defects.
 Say which, in the new row's Notes.
+
+**Saying which is rule 13, and it is a gate.** `check-queue-rules.sh` re-scores every item a branch adds against the store as it stood at the merge base, and fails when the matcher flags a candidate the new row names nowhere.
+Naming any one of them clears it, because what the rule asks is that the warning was read rather than that every candidate is a duplicate: [Q830](../queue/Q830.md) was a false positive and answering it was still the right move.
+`QUEUE_ALLOW_UNCITED_DUPLICATE="Q123"` is the deliberate pass.
+
+**What it cannot reach**: scoring against the merge base means two rows filed on concurrent branches never see each other, since neither branch's base holds the other.
+Q922 and Q924 were exactly that, filed three hours apart on 2026-08-18, so rule 13 could not have caught that pair; only the Q987 filing a week later, which is the one that made three.
+Rows filed in one commit are also unscored against each other, and on the matcher's own verdict some of those are duplicates rather than one editorial act; that is a deliberate trade for not reddening every retro, not a claim they are all distinct.
+
+It exists because the advisory left no trace.
+[Q987](https://github.com/actions-gateway/github-actions-gateway/pull/1812) was filed while the matcher scored Q922 at 0.50, named it zero times, and became the third row describing one defect; two sessions then picked different rows and collided at review.
+The matcher is quiet enough to gate on: over the store at `2eec06d51`, 25 flagged pairs out of 17,955 across 190 items, measured 2026-08-31 with `find-duplicate-rows.sh --audit`.
+The reading names a commit because it moves with the store: the same figure was 26 of 18,336 one merge earlier, and closing two items changed it.
 
 **The title is mandatory, and there is no untitled batch form.** An optional argument is a gate nobody passes through, and `-n 3` was one: it claimed IDs without naming a single row.
 Several rows at once means several titles: `scripts/docs/alloc-queue-id.sh` takes one argument per ID and searches each on its own, which is what a retro filing four rows actually wants.
@@ -164,7 +177,7 @@ Nothing automated calls the target, so making the title mandatory changed only t
 It is gone, and rule 12 catches the other way to obtain an unreserved ID (reading the file's highest and adding one) at the commit that files the row rather than at the rebase that collides.
 What that cost in practice, and the one case rule 12 still cannot see: [queue-id-allocation.md § Reserving, not reporting](queue-id-allocation.md#reserving-not-reporting).
 
-`TARGET=<link>` is optional and worth passing when the Item cell's link is already decided.
+`TARGET=<link>` is optional and worth passing when the Item cell's link is already decided; it is a second matcher signal, and rule 13 reads it from the filed row's `target:` either way.
 
 ### Escalating a class observation is filing, so search first
 

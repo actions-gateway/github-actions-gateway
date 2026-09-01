@@ -45,6 +45,7 @@
 #   find-duplicate-rows.sh "<the item title you are about to file>"
 #   find-duplicate-rows.sh --target <item-link> "<title>"
 #   find-duplicate-rows.sh --store <dir> "<title>"
+#   find-duplicate-rows.sh --porcelain "<title>"   # TSV for a caller, not a reader
 #   find-duplicate-rows.sh --audit    # score every existing pair; how noisy is it?
 #
 # Calibration against the shipped backlog: docs/development/maintaining-backlog.md
@@ -219,6 +220,10 @@ main() {
 			[[ -n "$store" ]] || die '--store wants a directory'
 			shift 2
 			;;
+		--porcelain)
+			mode=porcelain
+			shift
+			;;
 		-h | --help)
 			usage
 			exit 0
@@ -253,6 +258,17 @@ main() {
 
 	local hits
 	hits=$(QUERY="$query" QUERY_TARGET="$target" score_rows "$rows_file" | sort -rn)
+
+	# A caller parsing the block below would be reading a display format: the awk
+	# there pads columns and brackets "same target", both for a human. Rule 13 in
+	# check-queue-rules.py consumes this instead, so these columns are an
+	# interface. Fields: score, id, section, same-target flag, title.
+	if [[ "$mode" == porcelain ]]; then
+		[[ -n "$hits" ]] || return 0
+		printf '%s\n' "$hits"
+		return 0
+	fi
+
 	[[ -n "$hits" ]] || return 0
 
 	printf 'Possible near-duplicates of "%s" — advisory, nothing is blocked:\n\n' "$query"

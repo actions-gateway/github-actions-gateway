@@ -4,7 +4,7 @@
 #
 # Every rule is paired: a store that must pass, and the same store carrying one
 # introduced violation that must fail. A rule never shown failing is not
-# evidence that it checks anything, and each of these three guards a loss that
+# evidence that it checks anything, and each of these four guards a loss that
 # is silent by construction, so a vacuous pass would look identical to a real
 # one.
 #
@@ -45,6 +45,20 @@ newrepo() {  # newrepo <dir>  -> a repo with a store, a vocabulary and a base re
     printf '**Labels:** `flake` `ci` `docs` `debt`\n' > "$r/docs/queue/README.md"
     printf '# Retired flake watch\n\nNothing yet.\n' > "$r/docs/development/flake-watch-retired.md"
     printf '| Plan | Scope | Status |\n|---|---|---|\n' > "$r/docs/plan/README.md"
+    # Rule 13 shells out to the matcher, which resolves from the repo root, so
+    # a fixture needs the real one rather than a stub -- the rule's whole claim
+    # is about what that script scores.
+    mkdir -p "$r/scripts/docs"
+    cp "$HERE/find-duplicate-rows.sh" "$r/scripts/docs/"
+}
+
+titled() {  # titled <repo> <id> <title> [target] — an item with a chosen title
+    mkdir -p "$1/docs/queue"
+    {
+        printf -- '---\nid: %s\nrank: a0\nlabels: [docs]\nstatus: ready\nsize: S\n' "$2"
+        if [[ -n "${4:-}" ]]; then printf 'target: %s\n' "$4"; fi
+        printf -- '---\n\n# %s\n\nA note.\n' "$3"
+    } > "$1/docs/queue/$2.md"
 }
 
 seal() {  # seal <repo> — commit the base and make it the merge base
@@ -208,6 +222,104 @@ R="$TMP/empty"; newrepo "$R"
 rm -f "$R/docs/queue/README.md"
 seal "$R"
 expect 0 "$R" "an absent store reports 0 checked" "0 checked"
+
+# --- rule 13: a filed item answers the near-duplicate search ---------------
+#
+# The pair is the one that bought the rule. Q987 was filed while the matcher
+# scored Q922 at 0.50 and named it zero times, so three rows described one
+# defect and two sessions collided (Q1045). These are those two titles.
+#
+# Every case commits: the checker reads HEAD, so an uncommitted file is not an
+# added item and the red case would pass for the wrong reason.
+# shellcheck disable=SC2016  # the backticks are markdown code spans in the
+# titles as filed, and the scorer's stemmer sees them, so expanding them
+# would score a different pair than the one this replays.
+Q922T='Docs name the retired `lint-backlog.sh` as the live backlog linter'
+# shellcheck disable=SC2016  # as above.
+Q987T='Point live `lint-backlog.sh` references at `lint-queue.sh`'
+
+R="$TMP/r13"
+newrepo "$R"
+titled "$R" Q1 "$Q922T" ../development/maintaining-backlog.md
+seal "$R"
+titled "$R" Q2 "$Q987T" ../development/maintaining-backlog.md
+git -C "$R" add -A && git -C "$R" commit -qm "file the second row"
+expect 1 "$R" "rule 13: a filed item naming no flagged candidate fails" "rule 13: Q2"
+
+# The fix the message asks for: name it. Nothing else about the store changes,
+# so a pass here is the citation and nothing else.
+printf 'Distinct from [Q1](Q1.md): a narrower scope.\n' >> "$R/docs/queue/Q2.md"
+git -C "$R" commit -qam "cite the candidate"
+expect 0 "$R" "rule 13: citing the candidate clears it"
+
+# The override, for a filing that read the warning and rejected it.
+titled "$R" Q2 "$Q987T" ../development/maintaining-backlog.md
+git -C "$R" commit -qam "drop the citation again"
+expect 1 "$R" "rule 13: dropping the citation fails again" "rule 13: Q2"
+QUEUE_ALLOW_UNCITED_DUPLICATE=Q2 expect 0 "$R" "rule 13: the override excuses one id"
+
+# Control: an unrelated title must not be flagged, or the rule would demand a
+# citation from every filing and the store would learn to set the override.
+R="$TMP/r13-control"
+newrepo "$R"
+titled "$R" Q1 "$Q922T" ../development/maintaining-backlog.md
+seal "$R"
+titled "$R" Q2 'Worker pods leak when the reaper races a drain' ../design/05-security.md
+git -C "$R" add -A && git -C "$R" commit -qm "file an unrelated row"
+expect 0 "$R" "rule 13 control: an unrelated filing is not flagged"
+
+# The frontmatter is metadata, not an answer: a `target:` naming the flagged
+# item must not clear the rule. Targets are chosen for where the work lands, and
+# one that happens to name a candidate would satisfy the gate with nothing read.
+#
+# The flag has to come from shared words here, not from the target, because the
+# target is itself a matcher signal: pointing it at the candidate to test the
+# evasion would stop the pair being flagged at all.
+R="$TMP/r13-frontmatter"
+newrepo "$R"
+titled "$R" Q1 "$Q922T" ../development/maintaining-backlog.md
+seal "$R"
+titled "$R" Q2 'Docs name the retired backlog linter as a live linter' ../queue/Q1.md
+git -C "$R" add -A && git -C "$R" commit -qm "file a row whose target names the candidate"
+expect 1 "$R" "rule 13: a target naming the candidate does not clear it" "rule 13: Q2"
+
+# It shells out, so a matcher it cannot run is a read it cannot take. That is
+# exit 2 and never a pass: a rule that silently returns "no candidates" when its
+# instrument is missing reports exactly what a clean store reports.
+R="$TMP/r13-unreadable"
+newrepo "$R"
+titled "$R" Q1 "$Q922T" ../development/maintaining-backlog.md
+seal "$R"
+titled "$R" Q2 "$Q987T" ../development/maintaining-backlog.md
+git -C "$R" add -A && git -C "$R" commit -qm "file a row the matcher would flag"
+rm -f "$R/scripts/docs/find-duplicate-rows.sh"
+expect 2 "$R" "rule 13: an absent matcher refuses rather than passing"
+
+# Two mutually-duplicate rows filed in ONE branch stay green, because the score
+# runs against the base rather than against what the branch is adding. That is
+# the retro case -- a session filing three findings at once -- so a regression
+# here reddens every retro rather than a rare filing. Without this the base
+# scoping is untested: dropping `--store base_dir` and letting the matcher read
+# the live store leaves the rest of this suite fully green.
+R="$TMP/r13-together"
+newrepo "$R"
+titled "$R" Q1 'An unrelated row that anchors the store' ../design/05-security.md
+seal "$R"
+titled "$R" Q2 "$Q922T" ../development/maintaining-backlog.md
+titled "$R" Q3 "$Q987T" ../development/maintaining-backlog.md
+# shellcheck disable=SC2016  # a markdown code span, as in the filed title.
+titled "$R" Q4 'Point live `lint-backlog.sh` references at the store gates' ../development/maintaining-backlog.md
+git -C "$R" add -A && git -C "$R" commit -qm "file three findings at once"
+expect 0 "$R" "rule 13: rows filed together are not scored against each other"
+
+# Control: only what this branch ADDS is scored, so pairs already on main cannot
+# redden it. Same two titles as the red case, both present at the base.
+R="$TMP/r13-base"
+newrepo "$R"
+titled "$R" Q1 "$Q922T" ../development/maintaining-backlog.md
+titled "$R" Q2 "$Q987T" ../development/maintaining-backlog.md
+seal "$R"
+expect 0 "$R" "rule 13 control: a pair already at the base is not this branch's"
 
 if (( fail )); then
     printf '\ncheck-queue-rules-test: FAILED\n'

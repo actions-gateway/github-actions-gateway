@@ -188,6 +188,46 @@ run_status() {
 	printf '%s' "$got"
 }
 
+# --- porcelain: the interface rule 13 parses --------------------------------
+#
+# check-queue-rules.py consumes this, so the columns are an interface rather
+# than a layout. The human block is padded and brackets "same target"; a caller
+# reading it would break on a cosmetic change. Assert both directions: the TSV
+# carries the id in field 2, and it carries none of the prose the reader gets.
+
+porcelain_out() { "$SEARCH" --store "$WORK/queue" --porcelain "$@" >"$WORK/pout" 2>&1 || true; }
+
+# Own the store state: earlier cases rebuild it, so a query aimed at whatever
+# happens to be there last is a test of the ordering rather than of the mode.
+backlog "Q440|[GMC CRD manifest drifts from the AGC types it embeds]($crd_link)|infra"
+porcelain_out --target "$crd_link" 'The GMC CRD manifests are stale and no gate notices'
+if awk -F'\t' '$2 ~ /^Q[0-9]+$/ { found = 1 } END { exit !found }' "$WORK/pout"; then
+	printf 'ok   porcelain puts the id in field 2\n'
+else
+	printf 'FAIL porcelain puts the id in field 2\n'
+	awk '{ print "    " $0 }' "$WORK/pout"
+	fails=$((fails + 1))
+fi
+
+if grep -q 'Possible near-duplicates\|advisory' "$WORK/pout"; then
+	printf 'FAIL porcelain must not emit the reader block\n'
+	awk '{ print "    " $0 }' "$WORK/pout"
+	fails=$((fails + 1))
+else
+	printf 'ok   porcelain emits no reader prose\n'
+fi
+
+# Silence is silence in both modes: a filing with no candidate must print
+# nothing, or rule 13 would read a header line as a flagged id.
+porcelain_out 'a title sharing nothing with any shipped row zzzqqq'
+if [[ -s "$WORK/pout" ]]; then
+	printf 'FAIL porcelain is empty when nothing matches\n'
+	awk '{ print "    " $0 }' "$WORK/pout"
+	fails=$((fails + 1))
+else
+	printf 'ok   porcelain is empty when nothing matches\n'
+fi
+
 # --- the audit: the noise claim stays measurable ---------------------------
 #
 # The thresholds are a claim about how often the matcher fires against a real
