@@ -133,6 +133,40 @@ while read -r dir; do
 	fi
 done < <(workspace_modules)
 
+# A module outside go.work is measured and ratcheted like any other, so every one
+# must carry a baseline row. Without this assertion, adding a non-workspace
+# module leaves its packages unratcheted and nothing says so: the tests still
+# run, so a failing one is still caught, and only a deletion or a slide goes
+# unseen.
+while read -r dir; do
+	if grep -qE "^\./${dir}[[:space:]]" coverage-baseline.txt; then
+		printf 'ok   nonworkspace-module    %-20s has a baseline row\n' "./$dir"
+	else
+		printf 'FAIL nonworkspace-module    %s has no row in coverage-baseline.txt\n' "./$dir" >&2
+		fails=$((fails + 1))
+	fi
+done < <(firstparty_nonworkspace_modules)
+
+# report_module must report n/a rather than a number it cannot defend: a
+# header-only profile and a missing one both mean nothing was measured, and a
+# bogus 0.0% floor there would gate on noise.
+printf 'mode: set\n' >"$WORKDIR/header-only.out"
+got="$(report_module ./x "$WORKDIR/header-only.out" "")"
+if [[ "$got" == $'./x\tn/a\t0' ]]; then
+	printf 'ok   report-module          header-only profile -> n/a\n'
+else
+	printf 'FAIL report-module          header-only profile: got %q\n' "$got" >&2
+	fails=$((fails + 1))
+fi
+
+got="$(report_module ./x "$WORKDIR/does-not-exist.out" "")"
+if [[ "$got" == $'./x\tn/a\t0' ]]; then
+	printf 'ok   report-module          missing profile     -> n/a\n'
+else
+	printf 'FAIL report-module          missing profile: got %q\n' "$got" >&2
+	fails=$((fails + 1))
+fi
+
 if (( fails > 0 )); then
 	printf '\n%d coverage-split assertion(s) failed\n' "$fails" >&2
 	exit 1
