@@ -8284,7 +8284,7 @@ License file: google.golang.org/genproto/googleapis/rpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.83.0)
+Module: google.golang.org/grpc (v1.83.1)
 License file: google.golang.org/grpc/LICENSE
 ================================================================================
 
@@ -8492,7 +8492,7 @@ License file: google.golang.org/grpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.83.0)
+Module: google.golang.org/grpc (v1.83.1)
 License file: google.golang.org/grpc/NOTICE.txt
 ================================================================================
 
