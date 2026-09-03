@@ -1,6 +1,7 @@
 package scalesetlistener_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -42,12 +43,20 @@ func TestListener_PublishesAvailableJobsFromDelivery(t *testing.T) {
 	prov := &recordingProvisioner{srv: srv}
 	prov.setCompleteErr(true) // the worker stays in flight, pinning capacity at its one slot
 	m := newCountingMetrics()
-	_, ssID := startListener(t, srv, fixedCapacity(1), prov, m)
+	var capacity atomicInt // opens below, once GitHub holds the whole queue
+	_, ssID := startListener(t, srv, func(context.Context) int { return capacity.get() }, prov, m)
 
 	const queued = 4
 	for i := 0; i < queued; i++ {
 		srv.EnqueueJob(ssID)
 	}
+	// Only now open the slot. A poll landing mid-enqueue would assign the first job and
+	// publish the statistics riding on that message — counting only what GitHub held at
+	// that instant. Nothing would republish: the slot is full so no further message is
+	// delivered, and refreshDemand is gated on advertising zero capacity, which a fixed
+	// non-zero CapacityFunc never does. The gauge would hold that stale value for the
+	// rest of the run and `n == queued-1` would never come true (Q1005 mode B).
+	capacity.set(1)
 
 	require.Eventually(t, func() bool {
 		n, writes := m.availableJobs()
