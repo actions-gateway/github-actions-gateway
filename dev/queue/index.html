@@ -2789,6 +2789,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
+<td><a href="Q1052/">Q1052</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml">A PR whose workflows await approval blocks silently and forever</a></td>
+<td><code>ci</code> <code>security</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A queued <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</td>
+</tr>
+<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
