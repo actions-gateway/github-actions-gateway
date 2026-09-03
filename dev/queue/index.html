@@ -2696,9 +2696,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1034/">Q1034</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-live-test.sh"><code>verify-pages-live-test</code> retry cases rest on a clock it does not control</a></td>
 <td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>Three cases fail under host load and pass on rerun, and the mechanism is <code>SECONDS</code> rather than anything about the subject.</td>
+<td><strong>Event:</strong> any of <code>verify-pages-live-test.sh</code>'s three retry assertions fails on <code>main</code>: *a site that goes correct on a later attempt …</td>
 </tr>
 <tr>
 <td><a href="Q1038/">Q1038</a></td>

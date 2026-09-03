@@ -2579,6 +2579,36 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-asserted-cause-was-measured-before-it-was-fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The asserted cause was measured before it was fixed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mitigation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mitigation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2598,27 +2628,41 @@
 
 
 <h1 id="verify-pages-live-test-retry-cases-rest-on-a-clock-it-does-not-control"><code>verify-pages-live-test</code> retry cases rest on a clock it does not control<a class="headerlink" href="#verify-pages-live-test-retry-cases-rest-on-a-clock-it-does-not-control" title="Permanent link">&para;</a></h1>
-<p>Three cases fail under host load and pass on rerun, and the mechanism is <code>SECONDS</code> rather than anything about the subject.</p>
+<p><strong>Event:</strong> any of <code>verify-pages-live-test.sh</code>'s three retry assertions fails on <code>main</code>: <em>a site that goes correct on a later attempt passes</em>, <em>the check polls rather than sampling once</em>, or <em>each attempt carries its own cache-busting query</em>.</p>
+<p>Three cases failed under host load and passed on rerun, and the mechanism was <code>SECONDS</code> rather than anything about the subject.</p>
 <p><strong>Measured 2026-08-29 03:24 PDT</strong> in <code>make check</code> on a branch touching no file under <code>scripts/pages/</code>, host at load average 28.35 over 18 cores.
-The three that failed are the retry cases: <em>a site that goes correct on a later attempt passes</em>, <em>the check polls rather than sampling once</em>, and <em>each attempt carries its own cache-busting query</em>.
+The three that failed are the retry cases.
 Their reported reason is one line:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>did not serve 1.6.0 after 606s (60s budget, 1 attempt(s))
 </code></pre></div>
 <p>Re-run alone eight minutes later on the same tree: all assertions pass.</p>
-<p><strong>Why the budget is the wrong instrument here.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-live.sh"><code>verify-pages-live.sh</code></a> stops starting attempts when <code>((SECONDS + INTERVAL &gt;= TIMEOUT))</code>, so the loop's attempt count is a function of wall clock.
+<p><strong>Why the budget was the wrong instrument here.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-live.sh"><code>verify-pages-live.sh</code></a> stops starting attempts when <code>((SECONDS + INTERVAL &gt;= TIMEOUT))</code>, so the loop's attempt count is a function of wall clock.
 That is correct for the real subject, where the budget bounds how long a release waits on Pages.
 Under a stubbed <code>curl</code> the same expression measures the host instead: one simulated attempt took 606 s against a 60 s budget, so the loop made a single attempt and every assertion about <em>retrying</em> had nothing to observe.
 The three failures are one cause, and none of them is about the code under test.</p>
-<p>Two candidate fixes, neither measured:</p>
+<h2 id="the-asserted-cause-was-measured-before-it-was-fixed">The asserted cause was measured before it was fixed<a class="headerlink" href="#the-asserted-cause-was-measured-before-it-was-fixed" title="Permanent link">&para;</a></h2>
+<p>Confirmed 2026-09-03 by driving <code>verify-pages-live.sh</code> directly with the propagation case's own arguments behind a stub <code>curl</code> sleeping 59 s per request, which is the smallest delay that consumes a 60 s budget in one attempt.
+The reported line reproduces in shape: <code>did not serve 1.6.0 after 59s (60s budget, 1 attempt(s))</code>, 1 request, 1 distinct query string, exit 1.
+The same stub at 0 s gives 3 attempts, 4 requests, 3 distinct, exit 0.
+So the row's stated mechanism is measured rather than inferred, and the three assertions collapse together because they read one loop.</p>
+<h2 id="mitigation">Mitigation<a class="headerlink" href="#mitigation" title="Permanent link">&para;</a></h2>
+<p>The second of the row's two candidates.
+Injecting the clock was the first, and it leaves the same failure available on a slower machine; the cases are about <em>how many</em> attempts, not how long, so the clock is not the subject and a test-settable deadline is the wrong repair.</p>
 <ul>
-<li>Inject the clock.
-  The loop reads <code>SECONDS</code>; a test that could set it would make the attempt count a property of the scenario rather than of the machine.</li>
-<li>Or assert the retry behaviour without a budget at all: drive the loop with a stub that succeeds on attempt N and assert N attempts happened, with <code>TIMEOUT</code> set high enough that it cannot bind.</li>
+<li>The propagation case runs against a budget no run can reach (<code>--timeout 86400</code>), rather than a raised one.</li>
+<li>Its assertions are exact and read the loop's <strong>own</strong> attempt counter off the success line, not a count of stub requests: one attempt makes one or two requests depending on how far through <code>check</code> it gets, and the old floor of <code>&gt;= 3</code> conflated the two.</li>
+<li>The cache-busting assertion is tied to that attempt count, so it cannot pass vacuously.
+  Over a single attempt one query string is trivially all-distinct, which is how it stayed green through the sighting.</li>
+<li>A budget no run can reach turns non-convergence into a hang, so the stub caps the case at 8 <strong>requests</strong>.
+  Counted in requests rather than seconds, so the guard cannot itself become a second clock.
+  Past the cap it answers synthetically rather than serving the fixture's correct tree, which may be the very thing that stopped converging; a run that reaches the cap then fails the exact-attempt assertion instead of polling for a day.</li>
 </ul>
-<p>The second is likely right, because the first leaves the same failure available on a slower machine and the cases are about <em>how many attempts</em>, not <em>how long</em>.</p>
+<p>Verified 2026-09-03 under the same 59 s stub, both configurations against one stub and only the arguments differing: the old arguments fail after one attempt at 59 s, the shipped ones succeed at attempt 3 with 4 requests and 3 distinct query strings, having spent 238 s of wall clock, four times the budget that used to bind.
+Both inversions go red by name.
+Deleting the retry (<code>if true</code> in place of the budget check) reds all three, and a constant cache-bust token reds only the distinctness assertion while the attempt count still reads 3, so the two are independent.</p>
 <p><strong>Related and not a duplicate.</strong> <a href="../Q822/">Q822</a> is the class, suites failing under concurrent load and passing on rerun, and its open question is whether to cap <code>run-parallel.sh</code>'s fan-out.
 <a href="../Q1031/">Q1031</a> is a traced instance whose mechanism is a killed probe.
-This is a second traced instance with a different mechanism, a wall-clock budget consumed by the host, and it is the one of the three that names a fix needing nobody's permission.</p>
+This is a second traced instance with a different mechanism, a wall-clock budget consumed by the host.</p>
 
 
 
