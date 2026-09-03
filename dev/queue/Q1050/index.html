@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1031/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1050/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>go-throttle's probe is killed under host load, denying a -race rewrite - GitHub Actions Gateway</title>
+        <title>17 of 19 go-throttle shell cases re-run the Go table test's matrix - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite" class="md-skip">
+        <a href="#17-of-19-go-throttle-shell-cases-re-run-the-go-table-tests-matrix" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              go-throttle's probe is killed under host load, denying a -race rewrite
+              17 of 19 go-throttle shell cases re-run the Go table test's matrix
             
           </span>
         </div>
@@ -2597,30 +2597,16 @@
   
 
 
-<h1 id="go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite">go-throttle's probe is killed under host load, denying a -race rewrite<a class="headerlink" href="#go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>claude-go-throttle-hook-test</code> fails on <code>main</code>.</p>
-<p><code>claude-go-throttle-hook-test</code> fired the real <code>local-throttle.sh</code> on every assertion, and <code>gothrottle</code> bounds that probe at 5 s and denies a <code>-race</code> it cannot throttle, so a starved probe replaced the rewrite the suite was asserting.
-<strong>Measured 2026-08-29 00:45 PDT</strong>, in <code>make check</code> on a branch touching no file under <code>scripts/agent/</code>: the suite failed, took 163 s (the slowest of the 115), and the hook returned a deny whose own reason names the cause: <code>throttle probe failed after 5.805s: scripts/agent/local-throttle.sh prefix: signal: killed</code>.
-The host was at load average 40.82 over 18 cores.
-Re-run alone six minutes later on the same tree: exit 0.
-The deny is correct in production, since an unthrottled <code>-race</code> can freeze the GUI (Q92, long closed and so no longer a row); what was wrong is that it landed on a <em>test</em> asserting the rewrite.</p>
-<p><strong>The mitigation is to stop reading a failed probe as a decision.</strong> <code>hook_decision</code> re-asks while the trace says the probe never answered, which is Q785's own rule pointed at the suite instead of the hook, and it keys on the probe's trace line, which no decision defect can reach.
-The suite also runs the entry point from a mirror of the repo layout, which fixes the expected prefix instead of deriving it per platform and retires a SKIP that passed this suite having asserted nothing wherever <code>local-throttle.sh</code> reports throttling off.
-One case stays on the default path, to assert the hook still reaches the repo's own script.</p>
-<p><strong>Stubbing alone does not work, and finding that out is what measured the mechanism.</strong> A first attempt replaced the probe with a stub that does nothing but <code>printf</code>, on the assumption that a stub answers instantly.
-<code>make check</code> killed <em>that</em> stub at 5.002 s, naming the mirror's own path.
-So the cost is the exec rather than the script: measured 2026-09-03 under this repo's <code>make scripts-test</code> fan-out at load 57 to 65, a do-nothing stub took 68 to 633 ms and a bare <code>/bin/echo</code> 46 to 477 ms, a 2.7x median gap against a 5 s budget the tail reaches anyway.
-A lighter probe and a longer budget are the same guess at a number the host is free to exceed.</p>
-<p><strong>The row named one failing case and there were 12.</strong> Measured 2026-09-03 by driving the decision binary with a probe that always misses the budget: every <code>-race</code> case the suite asserts becomes the same probe-failure deny, <code>bare: go test</code> becomes silence, and <code>two real invocations + a mention</code> passed while asserting only <code>deny</code>, which that deny satisfies.
-That last one is now pinned to the count reason.</p>
-<p><strong>What has not been isolated is which contention produces the tail.</strong> Pure CPU oversubscription does not: 36 spinners to load 29 left the probe at roughly 90 ms, its idle latency.
-A scheduling demotion is a 10x to 20x multiplier at constant load (85 to 332 ms against 1480 to 4236 ms under <code>nice -n 10 taskpolicy -d throttle</code>, ten interleaved pairs at load 31 to 46), but <code>make scripts-test</code> inherits no <code>THROTTLE_PREFIX</code> (only the <code>go</code>/lint invocations in <code>scripts/go/</code> carry one), so that bounds what contention can cost rather than explaining the kill.
-<a href="../Q1007/">Q1007</a> carries the same demotion as an unverified candidate for a suite that <em>does</em> run under it, and this is the nearest quantification of it.</p>
-<p>Adjacent to <a href="../Q822/">Q822</a> and not a duplicate of it.
-Q822 is the generic class, suites that fail under concurrent load and pass on rerun, and its open question is whether to cap <code>run-parallel.sh</code>'s fan-out, which it calls a machine-wide throughput decision.
-It also says plainly that nothing under it reproduces a suite failing <em>because of</em> the fan-out.
-This row is that traced instance: the hook's own deny reason names the mechanism.
-Capping the fan-out would probably close both and needs the throughput decision; re-asking a probe that never answered closes this one and needs nothing.</p>
+<h1 id="17-of-19-go-throttle-shell-cases-re-run-the-go-table-tests-matrix">17 of 19 go-throttle shell cases re-run the Go table test's matrix<a class="headerlink" href="#17-of-19-go-throttle-shell-cases-re-run-the-go-table-tests-matrix" title="Permanent link">&para;</a></h1>
+<p><strong>Measured 2026-09-03</strong> by extracting each suite's case commands and normalising whitespace: of the 19 command literals in <code>claude-go-throttle-hook-test.sh</code> that carry a <code>go build</code>/<code>go test</code>, <strong>17 are also cases in <code>TestDecide</code></strong> (<code>devtools/agent/gothrottle/decide_test.go</code>, 39 cases).
+The two that are not are near-variants: a differently worded commit message, and <code>(cd cmd/agc &amp;&amp; go test ./...)</code>.
+So the shell suite re-runs the decision matrix the table test already owns, through a real fork per case, and the table test's own comment says it is the one that carries the matrix.</p>
+<p><strong>The question is what the duplicate cases buy, not whether they duplicate.</strong> Each shell case additionally exercises the entry point resolving the binary and the throttle script, the on-demand build, the JSON envelope Claude Code reads, and <code>GOTHROTTLE_DEBUG</code> end to end.
+Whether that needs 17 cases or 3 is the open question, and it is a judgement about how much end-to-end signal a seam is worth rather than a defect.</p>
+<p><strong>Not a flake row, and it is no longer one.</strong> Each duplicated case costs a probe fork, and a starved fork used to redden the suite; <a href="../Q1031/">Q1031</a> closed that by re-asking a probe that never answered, so cutting the case count no longer buys reliability.
+What it would buy is run time and one less place to edit when the decision matrix moves.</p>
+<p>Weigh it against the reason those cases exist: the suite asserts both directions because both fail silently (Q624, closed), and its wrapper and heredoc cases were each added after a real escape (Q696, Q624).
+Deleting an end-to-end assertion because a unit test covers the same input is the move that looks clean and loses the integration signal, so this needs the argument made rather than a count applied.</p>
 
 
 

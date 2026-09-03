@@ -2688,9 +2688,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1031/">Q1031</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh">go-throttle's probe is killed under host load, denying a -race rewrite</a></td>
 <td><code>flake</code> <code>debt</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><code>claude-go-throttle-hook-test</code> fails its <code>safety: -race not throttled by rewrite</code> case when the machine is loaded, and the hook it …</td>
+<td><strong>Event:</strong> <code>claude-go-throttle-hook-test</code> fails on <code>main</code>.</td>
 </tr>
 <tr>
 <td><a href="Q1034/">Q1034</a></td>
@@ -4227,6 +4227,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> <code>spec.capacityGate.mode</code> gains a value that yields a negative placeability verdict without a scale-up: the <code>Probe</code> mode sketched …</td>
+</tr>
+<tr>
+<td><a href="Q1050/">Q1050</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh">17 of 19 go-throttle shell cases re-run the Go table test's matrix</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Measured 2026-09-03</strong> by extracting each suite's case commands and normalising whitespace: of the 19 command literals in …</td>
 </tr>
 </tbody>
 </table>
