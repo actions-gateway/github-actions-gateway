@@ -1817,6 +1817,10 @@ So when you write a negative assertion:
   That guard is what keeps the test honest; note it still could not catch Q504, because it validated the AGC's env var rather than where the call actually went.
 - **Prefer asserting the specific wrong thing did not happen** over asserting nothing happened.
   `seq` must not contain `Failed/Evicted` is a claim about a mechanism; "the counter stayed 0" is a claim about the whole world.
+- **A wait for an absence is satisfied before the thing exists.** A `require.Eventually` whose predicate is a negative has the same defect as a negative assertion, with the poll loop hiding it: it can return on its first tick without the subject ever having appeared.
+  `TestAGC_PodProvisioning_MaxWorkersCeiling` waited on "no `job-*` Secret exists" to observe the provisioner *deleting* one, and that is equally true in the window before the provisioner stages it.
+  Measured 2026-09-03 over two runs (Q1008), the wait returned in 4.8 ms and 55.7 ms having never seen a Secret, so every step after it ran while the job it was pacing against was still being provisioned, which is what opened the window the flake fell through.
+  Wait on an event that can only follow, never on a state that precedes and follows alike: here the listener's own session DELETE, which the post-job recycle sends after provisioning returns.
 - **A poll or sampler cannot establish "X never happens."** A negative claim about an API-object transition needs watch/informer-level evidence: Q502 designed against "a drained Pending worker publishes no terminal phase," measured by a 200 ms phase sampler — but a real kubelet publishes a *transient* `Failed`-with-`deletionTimestamp` that samplers miss and the production informer sees, and the mark-only rule built on that measurement re-ran a job that never ran.
 
 **A positive assertion can be vacuous too — make the double testify.** It bites hardest where the whole chain is fast: `E2E_AGC_ScaleSetAcquisition` drives an in-cluster stub whose long polls wake on enqueue, so its JobAvailable→acquire spec completes in ~34 ms — enqueue, claim, provision, assert.
@@ -2566,6 +2570,11 @@ Two rules keep a new test deterministic:
   Before Q677 they did, and a test running both kinds had to give them different names.
 - **Wait on the condition, not the clock.** Prefer the stub's channel-based waiters (`WaitForFirstPoll`, `WaitForSessionDelete`) over wall-clock sleeps; they return the instant the event happens.
   The timeout you pass is only a safety ceiling, not the expected latency — size it generously for a CPU-starved 2-vCPU CI runner (seconds of headroom, well inside the package's 5m test timeout), since raising a too-tight ceiling alone just moves a flake rather than fixing it.
+- **Never enqueue a second job onto a session that already acquired one.** `AcquireJob` spends that session's single-use JIT agent whether or not the provisioning after it succeeds, so the goroutine that took the job DELETEs its session and opens a fresh one (Q114) as soon as the job handler returns.
+  `brokertest.Server` queues jobs per session ID and re-offers nothing, so a job enqueued in that window waits in a queue no listener polls again: the assertion downstream breaches its whole budget with no second `AcquireJob` anywhere in the log.
+  Pass the acquiring session's ID in `enqueueJobOnOwnerSession`'s `alreadySeen` map so the helper waits for the replacement.
+  `ActiveSessionsForOwner` reports what is active at the instant it is called, which is a narrower fact than *will still be polled*.
+  That is the gap Q1008 fell through on `main`.
 
 ### Test doubles must long-poll
 
