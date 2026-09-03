@@ -259,6 +259,16 @@ Everything else still passes through: a plain `go build`/`go test` is not the ru
 **Expect that deny on a saturated machine**, since the probe's 5 s timeout is what a contended one runs out of: spawning the probe costs ~120–200 ms idle, but measured 5 s+ under a 60-way parallel `make check` (load average 27).
 That is the right answer there rather than a nuisance, since the moment the probe cannot answer is the moment an unthrottled `-race` is most expensive, and the reason says to retry or use the `make` target.
 
+**The cost is the exec, not the script, so no probe is fast enough to assert against (Q1031).** Measured 2026-09-03 under this repo's own `make scripts-test` fan-out at load 57 to 65: a stub doing no work at all took 68 to 633 ms, a bare `/bin/echo` 46 to 477 ms, and a `make check` in the same window killed that do-nothing stub at 5.002 s.
+The kill is a tail event on process startup, which neither a lighter probe nor a longer budget reaches; both are guesses at a number the host is free to exceed.
+Pure CPU oversubscription does not produce it at all (~90 ms at load 29), while a scheduling demotion is a 10x to 20x multiplier at constant load (85 to 332 ms against 1480 to 4236 ms, ten interleaved pairs) that `make scripts-test` does not inherit, so that figure bounds what contention can cost rather than explaining the kill.
+The same demotion is an unverified candidate under [Q1007](../queue/Q1007.md), which does run under it.
+
+So [`claude-go-throttle-hook-test.sh`](../../scripts/agent/claude-go-throttle-hook-test.sh) reads a failed probe as the absence of a verdict and re-asks, which is Q785's rule pointed at the suite instead of the hook.
+Left as a decision it reddens 12 assertions at once, and a thirteenth that checked `deny` alone passed while asserting nothing it named.
+The retry keys on the probe's own trace line, which no decision defect can reach, so it cannot turn a real failure green.
+The suite also runs the entry point from a mirror of the repo layout, which fixes the expected prefix instead of deriving it per platform and retires a SKIP that passed the suite having asserted nothing wherever `local-throttle.sh` reports throttling off; one case stays on the default path, to assert the hook still reaches the repo's own script.
+
 What counts as an invocation is a `go` token in **command position** — including behind an allowlisted wrapper (`timeout 900 go test -race …`, Q696), which the scanner missed entirely because `go` is an argument there.
 The allowlist (`wrappers` in the Go package) names the wrappers whose own options and operands can be skipped safely; a name it does not list, or an option its spec does not describe, stops the peel and the command passes through unthrottled rather than have the prefix guessed into the wrong place.
 Quoted strings and heredoc bodies parse as words rather than commands, so a `git commit -F -` message that quotes `go test -race` is not an invocation (Q624; before that it was, and a message naming it twice was denied outright).

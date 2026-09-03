@@ -12,9 +12,12 @@
 #
 # The decision itself is devtools/agent/gothrottle (Q708) and its table test
 # carries the case matrix. What this suite covers is everything around it: that
-# the entry point builds and execs the binary, that the prefix resolved from the
-# real local-throttle.sh lands in the right place, and that the emitted JSON is
-# the shape Claude Code reads.
+# the entry point builds and execs the binary, that whatever the probe returns
+# lands in the right place, and that the emitted JSON is the shape Claude Code
+# reads. A failed probe is re-asked rather than read as a decision, and the
+# probe is a stub (Q1031, below), so the one thing that leaves uncovered — that
+# the entry point reaches the repo's *own* throttle script — is asserted on its
+# own at the end.
 #
 # Both directions are asserted, because both fail silently (Q624). The hook
 # counts a `go` in *command position*, or behind an allowlisted wrapper (Q696),
@@ -40,20 +43,12 @@ fails=0
 
 # The hook is a no-op when throttling is inactive (CI / headless / SSH), which is
 # exactly the environment this test runs in. Force the throttle-active path so
-# the hook computes a real prefix: clear CI and present a graphical session. Both
-# the hook and this test resolve the prefix from the same script under the same
-# env, so the expected rewrite is derived, never hardcoded per-OS.
+# the real script computes a real prefix: clear CI and present a graphical
+# session. Only the default-path case below needs this; every other case runs
+# against the mirror, whose probe answers the same on any host.
 throttle_env() {
 	env -u CI DISPLAY="${DISPLAY:-:0}" "$@"
 }
-
-PREFIX="$(throttle_env "$THROTTLE" prefix || true)"
-if [[ -z "$PREFIX" ]]; then
-	# No throttle prefix on this platform (e.g. an unsupported OS) — there is no
-	# rewrite to assert. Skip loudly rather than pass a hollow suite.
-	printf 'SKIP claude-go-throttle-hook-test: no throttle prefix on this platform\n'
-	exit 0
-fi
 
 # The hook's stderr from the most recent run_hook call. GOTHROTTLE_DEBUG makes
 # each silent path in the hook and the binary name itself there; nothing reads
@@ -61,13 +56,89 @@ fi
 TRACE_FILE="$(mktemp)"
 # Stub throttle probes, standing in for local-throttle.sh in the Q785 cases.
 STUB_DIR="$(mktemp -d)"
-trap 'rm -f "$TRACE_FILE"; rm -rf "$STUB_DIR"' EXIT
+# A mirror of the repo layout the entry point derives from $0, so the real,
+# unmodified hook runs against a probe this suite controls (Q1031).
+MIRROR="$(mktemp -d)"
+trap 'rm -f "$TRACE_FILE"; rm -rf "$STUB_DIR" "$MIRROR"' EXIT
 
-# run_hook CMD — feed CMD to the hook as a Bash PreToolUse payload, print stdout.
+# --- the probe cannot be made fast, so its failure is not read as a verdict ---
+#
+# gothrottle bounds `local-throttle.sh prefix` at 5 s and denies a `-race` it
+# cannot throttle. That is the right production answer and the wrong test input:
+# a starved probe turns 12 of the assertions below into the same probe-failure
+# deny (Q1031).
+#
+# The cost is the exec, not the script. Measured 2026-09-03 under this repo's
+# own `make scripts-test` fan-out at load 57-65, a stub doing no work at all
+# took 68-633 ms and a bare /bin/echo 46-477 ms, and a `make check` killed that
+# same do-nothing stub at 5.002 s. So the kill is a tail event on process
+# startup rather than anything a lighter probe or a longer budget reaches, and
+# both of those are guesses at a number the host is free to exceed.
+#
+# What removes the dependency is reading a failed probe as the absence of a
+# verdict rather than as one, which is Q785's rule pointed at the suite instead
+# of the hook: hook_decision re-runs while the trace says the probe never
+# answered. The assertions themselves are untouched.
+#
+# The mirror is the other half and does not fix the flake. It makes the probe
+# deterministic in content, so the expected rewrite is a fixed string rather
+# than one derived per-platform from the script under test, and it retires a
+# SKIP that used to pass this suite having asserted nothing wherever
+# local-throttle.sh reports throttling off. What it cannot cover — that the
+# entry point reaches the repo's *own* script — is asserted on its own at the
+# end.
+PREFIX='gag-stub-throttle -d throttle'
+MIRROR_HOOK="$MIRROR/scripts/agent/claude-go-throttle-hook.sh"
+
+mkdir -p "$MIRROR/scripts/agent" "$REPO_ROOT/.build"
+# Symlinks, not copies: the hook under test is the real file, and `devtools` and
+# `.build` are shared so the binary is built and staleness-checked exactly as it
+# is in the repo.
+ln -s "$HOOK" "$MIRROR_HOOK"
+ln -s "$REPO_ROOT/devtools" "$MIRROR/devtools"
+ln -s "$REPO_ROOT/.build" "$MIRROR/.build"
+cat >"$MIRROR/scripts/agent/local-throttle.sh" <<'STUB'
+#!/usr/bin/env bash
+# Stand-in for local-throttle.sh. Also asserts the caller asks for `prefix`:
+# anything else exits non-zero, which reaches the decision as a probe failure
+# and reddens every -race case rather than passing quietly.
+[[ "${1:-}" == prefix ]] || exit 64
+STUB
+printf 'printf "%%s\\n" "%s"\n' "$PREFIX" >>"$MIRROR/scripts/agent/local-throttle.sh"
+chmod +x "$MIRROR/scripts/agent/local-throttle.sh"
+
+# probe_failed — did the last hook run end with the throttle probe never
+# answering? The binary names that path on the trace, and no decision defect can
+# reach it: a hook that stopped rewriting still returns a decision. That is what
+# makes it safe to re-run on, and it is the whole reason the retry below cannot
+# launder a real failure green.
+probe_failed() {
+	grep -q 'throttle probe failed' "$TRACE_FILE"
+}
+
+# How many times to re-ask for a decision the probe never delivered. Five, not
+# to raise the effective budget, but because each attempt is an independent
+# draw from a tail that a single exec occasionally lands in.
+readonly PROBE_ATTEMPTS=5
+
+# hook_decision HOOK CMD — feed CMD to HOOK as a Bash PreToolUse payload and
+# print its stdout, re-running while the throttle probe never answered.
+# throttle_env matters only for the default-path caller, whose probe is the real
+# script; the mirror's stub ignores CI and DISPLAY alike.
+hook_decision() {
+	local hook="$1" cmd="$2" out attempt
+	for ((attempt = 1; attempt <= PROBE_ATTEMPTS; attempt++)); do
+		out="$(jq -cn --arg c "$cmd" '{tool_name: "Bash", tool_input: {command: $c}}' \
+			| throttle_env GOTHROTTLE_DEBUG=1 "$hook" 2>"$TRACE_FILE")"
+		probe_failed || break
+	done
+	printf '%s' "$out"
+}
+
+# run_hook CMD — a decision from the mirror, which is what every case below
+# other than the default-path one asserts against.
 run_hook() {
-	local cmd="$1"
-	jq -cn --arg c "$cmd" '{tool_name: "Bash", tool_input: {command: $c}}' \
-		| throttle_env GOTHROTTLE_DEBUG=1 "$HOOK" 2>"$TRACE_FILE"
+	hook_decision "$MIRROR_HOOK" "$1"
 }
 
 # field OUT EXPR — read a jq path from the hook output (empty if absent/invalid).
@@ -241,10 +312,14 @@ go build ./... && go test -race ./...
 git commit -m "docs: go test -race notes"
 CASE
 deny2_out="$(run_hook "$two_real_with_mention")"
-if [[ "$(field "$deny2_out" '.hookSpecificOutput.permissionDecision')" == "deny" ]]; then
+# The reason, not just the decision: gothrottle has a second deny (a probe that
+# could not run, Q785), and `deny` alone is satisfied by it — so this case would
+# have reported green while asserting nothing about the count (Q1031).
+if [[ "$(field "$deny2_out" '.hookSpecificOutput.permissionDecision')" == "deny" &&
+	"$(field "$deny2_out" '.hookSpecificOutput.permissionDecisionReason')" == *"more than one go build/test"* ]]; then
 	pass 'two real invocations + a mention -> still deny'
 else
-	fail "two real invocations + a mention: want deny; $(diag "$deny2_out")"
+	fail "two real invocations + a mention: want deny w/ the count reason; $(diag "$deny2_out")"
 fi
 
 # --- Q696: a -race behind a wrapper is throttled, not skipped -----------------
@@ -369,6 +444,53 @@ else
 	else
 		fail "probe failed: no -race expected no output; $(diag "$out")"
 	fi
+fi
+
+# --- Q1031: the entry point reaches the repo's own throttle script ------------
+#
+# The mirror supplies its own local-throttle.sh, so it catches the entry point
+# reading the wrong path *relative to itself* and cannot catch the real file
+# being absent, moved, or non-executable. That failure is silent by design: the
+# hook exits 0 with no output, so it becomes a permanent no-op and every `-race`
+# in every session runs unthrottled. This is the one case that runs the hook
+# where it lives, which is what closes that half.
+#
+# It deliberately does not assert a decision. The probe here is the real script
+# under a real 5 s budget, and while hook_decision re-asks a starved one, five
+# attempts is a bound rather than a guarantee. So the property asserted is the
+# one both outcomes carry: that the script at the hook's own path is what
+# answered. A rewrite carries that script's prefix; a deny that outlasts the
+# retries names its path. Neither is reachable if the entry point looked
+# somewhere else.
+#
+# The probe's exit status, not its output, is what says the script is there:
+# `prefix` prints nothing on an unsupported OS and exits 0, which is exactly
+# what a missing script's empty output looks like. Reading the two as one is
+# the Q785 defect, and it would have made this case pass on the very tree it
+# exists to catch.
+if real_prefix="$(throttle_env "$THROTTLE" prefix 2>/dev/null)"; then
+	real_probe_ran=1
+else
+	real_probe_ran=0
+	real_prefix=""
+fi
+default_out="$(hook_decision "$HOOK" '(cd cmd/agc && go test -race ./...)')"
+if [[ "$real_probe_ran" == 0 ]]; then
+	fail "default path: $THROTTLE did not run; the hook is a silent no-op without it"
+elif [[ -z "$real_prefix" ]]; then
+	# The script ran and reported throttling off (an unsupported OS): there is
+	# nothing to apply, and silence is the whole contract.
+	if [[ -z "$default_out" ]]; then
+		pass 'default path: throttling off -> unchanged'
+	else
+		fail "default path: throttling off, expected no output; $(diag "$default_out")"
+	fi
+elif [[ "$(field "$default_out" '.hookSpecificOutput.updatedInput.command')" == *"$real_prefix go test -race"* ]]; then
+	pass 'default path: the repo throttle script answered (rewrite carries its prefix)'
+elif [[ "$(field "$default_out" '.hookSpecificOutput.permissionDecisionReason')" == *"$THROTTLE prefix"* ]]; then
+	pass 'default path: the repo throttle script answered (probe starved; deny names it)'
+else
+	fail "default path: want a rewrite carrying [$real_prefix] or a deny naming [$THROTTLE]; $(diag "$default_out")"
 fi
 
 # --- Q703: the trace names the silent path, and stays off unless asked --------
