@@ -12,12 +12,13 @@
 # Every tree-side check in that run was green, so a suite that only proved the
 # artifact assertion would be proving the half that did not fail.
 #
-# Two cases carry the loop rather than the comparison. A site that goes correct
+# Three cases carry the loop rather than the comparison. A site that goes correct
 # on a later attempt must pass, or the check would report a red for ordinary
-# propagation; and the stub records the query string of every request, because a
-# poll that re-reads one cached URL would report the stale copy for as long as
-# the edge holds it — which is exactly what the incident's manual cache-busting
-# had to work around.
+# propagation; the loop's own attempt counter says it retried rather than
+# sampling once; and the stub records the query string of every request, because
+# a poll that re-reads one cached URL would report the stale copy for as long as
+# the edge holds it, which is exactly what the incident's manual cache-busting
+# had to work around. None of the three may rest on wall clock (Q1034).
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -39,8 +40,10 @@ fail() {
 }
 
 # Stub curl: resolve the requested URL under $STUB_SITE_ROOT, logging the query
-# string of every request. $STUB_FLIP_AFTER attempts serve the `before` tree and
+# string of every request. $STUB_FLIP_AFTER requests serve the `before` tree and
 # the rest serve `after`, which is how the propagation case is expressed.
+# $STUB_GIVE_UP_AFTER bounds a loop that never converges, answering with
+# $STUB_GIVE_UP_VERSIONS past the cap; see its comment below.
 cat > "$FIXTURE_DIR/curl" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -66,8 +69,23 @@ printf '%s\n' "$query" >> "$STUB_QUERY_LOG"
 tree="after"
 if [[ -n "${STUB_FLIP_AFTER:-}" ]]; then
 	# One line per request, and versions.json is the first read of each attempt.
-	attempts="$(grep -c . "$STUB_QUERY_LOG")"
-	((attempts > STUB_FLIP_AFTER)) || tree="before"
+	requests="$(grep -c . "$STUB_QUERY_LOG")"
+	((requests > STUB_FLIP_AFTER)) || tree="before"
+	# Non-convergence guard, counted in REQUESTS so it can never become a second
+	# clock. A case driven with a budget no run can reach would otherwise poll
+	# for a day if the site never went correct. Past the cap the stub answers
+	# synthetically so the loop ends whatever state the fixture is in -- serving
+	# the `after` tree instead would be trusting the very thing that stopped
+	# converging. The caller's exact-attempt assertion is what then reports the
+	# runaway, because the count will be past what that case expects.
+	if [[ -n "${STUB_GIVE_UP_AFTER:-}" ]] && ((requests > STUB_GIVE_UP_AFTER)); then
+		if [[ "$path" == /versions.json ]]; then
+			printf '%s\n' "${STUB_GIVE_UP_VERSIONS:-[]}" > "$dest"
+		else
+			echo "<html>give-up</html>" > "$dest"
+		fi
+		exit 0
+	fi
 fi
 
 src="$STUB_SITE_ROOT/$tree${path}"
@@ -144,48 +162,81 @@ unset STUB_FLIP_AFTER
 
 # --- propagation that arrives late is a pass, not a red run ---
 #
-# The request-count assertions live HERE rather than on the timeout case above,
-# and both halves of that matter.
+# All three assertions here are about HOW MANY attempts the loop makes, so none
+# of them may be a function of the clock. The stub supplies the deterministic
+# half: it serves the stale tree for the first two requests whatever the host
+# does, so success requires a third attempt.
 #
-# Deterministic: the stub serves the stale tree for the first two requests
-# whatever the clock does, so reaching success REQUIRES at least three. Counting
-# on the timeout case instead made the assertion a race against the budget —
-# under a loaded `make scripts-test` (99 suites in parallel) a single attempt
-# consumed the whole 4s, the loop broke after one request, and the suite failed
-# for a reason that was never about the code.
+# The budget supplies the other half, and it is set where no run can reach it
+# rather than merely raised. The loop stops starting attempts at
+# `SECONDS + INTERVAL >= TIMEOUT`, and behind a stubbed curl that expression
+# measures the host instead of the subject: under a loaded `make scripts-test`
+# one simulated attempt has cost 606s, which broke the previous 60s budget after
+# a single attempt and collapsed all three assertions at once (Q1034). Raising
+# the budget only moves that threshold. What removes it is a budget the run
+# cannot reach. $STUB_GIVE_UP_AFTER caps this case at 8 requests, so a runaway
+# ends by the tenth and even at that 606s attempt the case is bounded near
+# 6,000s against a budget of a day, and the assertions below are counted in
+# attempts rather than seconds.
 #
-# And with one request the distinctness check passed VACUOUSLY: one query string
-# is trivially all-distinct. So the floor below is what gives that assertion
-# anything to prove, rather than a tidier way to state it.
-#
-# The budget is generous because this case must SUCCEED, and success exits the
-# loop as soon as the site is right. A large timeout costs nothing on that path
-# and removes the clock from the assertion entirely.
+# Should this case fail anyway, its log names the budget: a `(86400s budget,
+# 1 attempt(s))` line is the clock binding again, not a retry defect.
 export STUB_FLIP_AFTER=2
-: > "$STUB_QUERY_LOG"
+export STUB_GIVE_UP_AFTER=8
+export STUB_GIVE_UP_VERSIONS="$CORRECT"
 expect "a site that goes correct on a later attempt passes" 0 \
-	--version 1.6.0 --alias stable --base http://site --timeout 60 --interval 1
+	--version 1.6.0 --alias stable --base http://site --timeout 86400 --interval 1
 
-attempts="$(grep -c . "$STUB_QUERY_LOG")"
-if ((attempts >= 3)); then
-	pass "the check polls rather than sampling once ($attempts requests)"
+# The loop's OWN counter, read off the success line, rather than a count of stub
+# requests: attempts are what this case is about, and one attempt makes one or
+# two requests depending on how far through `check` it gets. Exact rather than a
+# floor: the stub fixes the answer at 3, so a floor would accept a loop that had
+# stopped bounding itself as readily as one that works.
+made="$(awk '/is live/ { sub(/.*\(attempt /, ""); sub(/\).*/, ""); print }' "$FIXTURE_DIR/out.log")"
+if [[ "$made" == "3" ]]; then
+	pass "the check polls rather than sampling once (3 attempts)"
 else
-	fail "the check polls rather than sampling once" "made $attempts request(s)"
+	fail "the check polls rather than sampling once" \
+		"the stub served the stale tree for two requests, so success needed attempt 3; got '${made:-no success line}'"
 fi
+
 # Per ATTEMPT, not per request. The two fetches inside one attempt share a
 # token by design and may: they are different URLs, so they are already
 # different cache keys. What must never repeat is the token across attempts,
 # which is what a stale edge copy would otherwise be re-read through. Asserting
 # one-per-request looked stricter and was simply wrong -- it only ever passed
 # because the timeout case makes exactly one request per attempt.
+#
+# Tied to the attempt count above so it cannot pass vacuously: over a single
+# attempt one query string is trivially all-distinct.
+requests="$(grep -c . "$STUB_QUERY_LOG")"
 distinct="$(sort -u "$STUB_QUERY_LOG" | grep -c .)"
-if ((distinct >= 3)); then
-	pass "each attempt carries its own cache-busting query ($distinct distinct over $attempts request(s))"
+if [[ "$made" == "3" ]] && ((distinct == 3)); then
+	pass "each attempt carries its own cache-busting query (3 distinct over $requests request(s))"
 else
 	fail "each attempt carries its own cache-busting query" \
-		"$attempts request(s) used only $distinct distinct query string(s)"
+		"$requests request(s) over ${made:-0} attempt(s) used $distinct distinct query string(s)"
 fi
-unset STUB_FLIP_AFTER
+unset STUB_FLIP_AFTER STUB_GIVE_UP_AFTER STUB_GIVE_UP_VERSIONS
+
+# The cap above is the only thing standing between a budget no run can reach and
+# a day-long hang, and a green suite cannot show that it was read: every case so
+# far converges long before 8 requests. So drive a site that never goes correct
+# and require the cap to end the run at the attempt it predicts -- eight stale
+# attempts, then the synthetic answer on the ninth.
+export STUB_FLIP_AFTER=9999
+export STUB_GIVE_UP_AFTER=8
+export STUB_GIVE_UP_VERSIONS="$CORRECT"
+expect "a site that never goes correct still terminates" 0 \
+	--version 1.6.0 --alias stable --base http://site --timeout 86400 --interval 0
+capped="$(awk '/is live/ { sub(/.*\(attempt /, ""); sub(/\).*/, ""); print }' "$FIXTURE_DIR/out.log")"
+if [[ "$capped" == "9" ]]; then
+	pass "the request cap ends a run that never converges (attempt 9)"
+else
+	fail "the request cap ends a run that never converges" \
+		"the cap is 8 requests and each stale attempt makes one, so the run should end on attempt 9; got '${capped:-no success line}'"
+fi
+unset STUB_FLIP_AFTER STUB_GIVE_UP_AFTER STUB_GIVE_UP_VERSIONS
 
 # --- the alias half, which the version check alone cannot see ---
 tree before "$HALF" dev 1.6.0 1.5.0 stable
