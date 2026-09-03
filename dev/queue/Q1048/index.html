@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1039/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1048/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>No cluster this repo stands up runs the shared-tenants mirror topology - GitHub Actions Gateway</title>
+        <title>Nothing schedules the mirror client census in a dogfood window - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#no-cluster-this-repo-stands-up-runs-the-shared-tenants-mirror-topology" class="md-skip">
+        <a href="#nothing-schedules-the-mirror-client-census-in-a-dogfood-window" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              No cluster this repo stands up runs the shared-tenants mirror topology
+              Nothing schedules the mirror client census in a dogfood window
             
           </span>
         </div>
@@ -2579,47 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#the-venue-is-the-calico-kind-lane" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The venue is the Calico kind lane
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-the-lane-grades" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the lane grades
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The work
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2638,82 +2597,20 @@
   
 
 
-<h1 id="no-cluster-this-repo-stands-up-runs-the-shared-tenants-mirror-topology">No cluster this repo stands up runs the shared-tenants mirror topology<a class="headerlink" href="#no-cluster-this-repo-stands-up-runs-the-shared-tenants-mirror-topology" title="Permanent link">&para;</a></h1>
-<p>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</p>
-<p><strong>Measured 2026-08-29, re-derived 2026-09-03.</strong> <code>scripts/dogfood/e2e-start.sh</code>'s <code>apply_registry_mirror()</code> applies <code>deploy/registry-mirror</code> or, under <code>REGISTRY_MIRROR_PERSISTENT=1</code>, <code>overlays/persistent</code>.
-Neither composes <code>components/shared-tenants</code>.
-Nothing under <code>scripts/</code>, <code>.github/</code> or <code>mk/</code> names the component or its two overlays except the static gate that reads their text, so no dogfood window and no e2e lane has ever rendered the shared ingress policy, let alone driven traffic through it.</p>
-<p><strong>Why this matters more than the render gap.</strong> <a href="../Q1024/">Q1024</a> is that no gate <em>renders</em> those overlays; this is that no cluster <em>runs</em> them.
-A rendered policy proves the YAML composes.
-It cannot show that the peers it admits match the pods that actually connect, which is the failure mode the shared topology has: a NetworkPolicy ingress narrowing is fail-closed and total, so a peer that misses one real client black-holes that client's every pull.</p>
-<p><strong>What it already cost.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1795">Q1026</a> narrowed the shared ingress peer to worker pods and was held in draft to wait for a dogfood window to confirm no client was cut off.
-That window could never confirm it: dogfood runs the isolated topology, so the narrowed policy is not applied there.
-The PR merged on that reasoning rather than on a live reading.</p>
-<h2 id="the-venue-is-the-calico-kind-lane">The venue is the Calico kind lane<a class="headerlink" href="#the-venue-is-the-calico-kind-lane" title="Permanent link">&para;</a></h2>
-<p>Scoped 2026-09-03.
-The three readings that settle it, all from the repo:</p>
-<ul>
-<li><strong>Only the Calico lane enforces.</strong> kindnet accepts NetworkPolicy objects and does not reliably drop the traffic (Q7b/Q119), and that holds for ingress as well: <code>manager_np_test.go</code> gates its metrics-<em>ingress</em> specs on <code>egressEnforcingCNI()</code> for exactly this reason.
-  So the venue is <code>e2e-calico.yml</code> → <code>e2e-reusable.yml</code> with <code>kind_cni: calico</code>, and a spec there skips on kindnet like its neighbours.</li>
-<li><strong>The apparatus is already built.</strong> <code>manager_np_test.go</code> grades a <code>namespaceSelector</code>-keyed ingress peer in both directions with throwaway namespaces, and <code>runEgressProbe(ns, name, workloadLabeled, curlArgs)</code> already carries a toggle for the very label this peer ANDs in.
-  This item is that file's shape pointed at a different policy, not a new capability.</li>
-<li><strong>A dogfood leg is the worse venue, not the dearer one.</strong> <code>deploy/dogfood-e2e/base/resources.yaml</code> already marks <code>gag-dogfood-e2e</code> with <code>actions-gateway.com/tenant: managed</code>, and that cluster has one tenant, so a dogfood run of the shared overlay produces the positive and <strong>cannot produce either negative</strong> without namespaces the cluster does not have.
-  The negatives are where the fail-closed risk lives.
-  A window is also booked and event-gated, where what this needs is a check that runs on every change to the component.
-  And applying the shared overlay there swaps the live <code>registry-mirror-worker-access</code> in place, leaving the cluster on the shared policy until the next <code>e2e-start.sh</code>.</li>
-</ul>
-<h2 id="what-the-lane-grades">What the lane grades<a class="headerlink" href="#what-the-lane-grades" title="Permanent link">&para;</a></h2>
-<p>Three probes against the render of <code>overlays/shared-tenants</code>, each a one-shot curl pod on 5000:</p>
-<table>
-<thead>
-<tr>
-<th>Namespace</th>
-<th>Pod</th>
-<th>Expected</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>marked, <strong>and not <code>gag-dogfood-e2e</code></strong></td>
-<td><code>actions-gateway/component: workload</code></td>
-<td>admitted</td>
-</tr>
-<tr>
-<td>marked</td>
-<td>unlabelled</td>
-<td>denied</td>
-</tr>
-<tr>
-<td>unmarked</td>
-<td>workload-labelled</td>
-<td>denied</td>
-</tr>
-</tbody>
-</table>
-<p><strong>The first row's namespace choice is the control.</strong> Under the base's isolated ingress a namespace other than <code>gag-dogfood-e2e</code> is denied, so a green positive cannot be produced by the wrong render.
-An assertion run in the tenant namespace could not distinguish the two.
-Rows two and three are the two halves of the AND that Q1026 introduced and nothing has read live.</p>
-<p>Probe the real render rather than a stand-in listener, deliberately: the policy's <code>podSelector</code> is <code>app: registry-mirror</code>, and a Deployment whose pods lost that label leaves the policy selecting nothing, which is fail-<strong>open</strong> and invisible in a green suite.</p>
-<p><strong>Not an upstream-backed pull, deliberately.</strong> The row previously asked for "at least one real pull".
-What grades the peer is whether a connection completes an HTTP exchange on 5000, and <code>GET /v2/</code> is answered by the registry's own API layer rather than by the cache behind it, which is why it is the readiness probe.
-So the probe reads the admitted path and nothing downstream of it.
-An upstream manifest fetch would add a Docker Hub dependency on a hosted runner, the flake the lane already mirrors curl and Vault into its local registry to avoid, and would grade the mirror's upstream path, which is topology-independent (the component's only patch replaces <code>spec.ingress</code> of one policy) and is already graded on dogfood by <code>e2e-mirror-validate.sh</code>.</p>
-<h2 id="the-work">The work<a class="headerlink" href="#the-work" title="Permanent link">&para;</a></h2>
-<ol>
-<li><code>e2e-reusable.yml</code>: cache and mirror <code>registry:3.1.1</code> and <code>haproxy:3.2.23-alpine</code> into the lane's local registry, <code>if: inputs.kind_cni == 'calico'</code>, modelled on the curl and Vault steps.
-   Both are Docker Hub digest pins, so they are the 429 class those steps exist for.</li>
-<li>A test-only kustomization composing <code>deploy/registry-mirror/overlays/shared-tenants</code> with an <code>images:</code> override at the two mirrored refs, so the shipped overlay is what renders and only the image source moves.</li>
-<li><code>cmd/gmc/test/e2e/mirror_np_test.go</code>: a <code>Describe</code> skipping on <code>!egressEnforcingCNI()</code>, applying that kustomization in <code>BeforeAll</code>, scaling four of the five instances to zero (one running pod satisfies <code>app: registry-mirror</code>), and the three probes above with <code>DeferCleanup</code> on the namespaces.
-   Keeping the apply in the suite rather than the workflow means the kindnet lane pays nothing.</li>
-<li>Docs: the "What is proven, and what is not" section of <code>deploy/registry-mirror/README.md</code>, the spec list in <code>docs/development/testing.md</code>, and <code>e2e-calico.yml</code>'s header list, which that file's own comment says has drifted before, so grep the call sites rather than trusting the count.</li>
-</ol>
-<p><strong>Size is S</strong>, not the M it was filed at: the scoping found the whole apparatus already built, so the diff is one spec file modelled on a sibling, one small kustomization, two workflow steps and three doc edits.
-Two things would make it M: if <code>kind load</code> cannot satisfy the digest-pinned refs and the image path needs rework beyond the transformer, or if the PSA labels the GMC's <code>NamespacePSAReconciler</code> stamps on a marked probe namespace reject the curl pod.
-Both are cheap to probe first and neither changes the venue.</p>
-<p><strong>What it does not close, by design.</strong> The four wired clients (dockerd, the ref-rewrite <code>docker pull</code>, helm's OCI client, buildkit) are Kata-job wiring, and the kind probe is a curl pod.
-So the lane grades the peer <em>expression</em>; it does not grade that a real worker's source address resolves to its workload-labelled pod under GKE Dataplane V2 across the Kata bridge.
-That reading is <code>scripts/dogfood/e2e-mirror-clients.sh</code>, and nothing schedules it: <a href="../Q1048/">Q1048</a>.</p>
-<p><strong>Done when</strong> the Calico lane applies a shared-tenants overlay and the three probes above pass on it, with each negative confirmed able to fail (drop the peer's <code>podSelector</code>, require the unlabelled probe to go green, restore).</p>
+<h1 id="nothing-schedules-the-mirror-client-census-in-a-dogfood-window">Nothing schedules the mirror client census in a dogfood window<a class="headerlink" href="#nothing-schedules-the-mirror-client-census-in-a-dogfood-window" title="Permanent link">&para;</a></h1>
+<p>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</p>
+<p><strong>Measured 2026-09-03.</strong> No workflow invokes <code>scripts/dogfood/e2e-mirror-clients.sh</code> and no runbook step asks for it.
+Outside its own unit test and the <code>mk/gate-lists.mk</code> entry that runs that test, every mention of it in the tree is prose: <code>scripts/README.md</code>, <code>deploy/registry-mirror/README.md</code>, and backlog rows.
+Its three siblings are all scheduled: <code>docs/operations/kata-dind-workloads.md</code> names <code>e2e-mirror-validate.sh</code>, <code>e2e-mirror-hits.sh</code> and <code>mirror-timing.sh</code> as window checks, and the census is the one omission.</p>
+<p><strong>What it would have said.</strong> The script resolves every address that reached a mirror to a pod or a node and reports whether each carries <code>actions-gateway/component=workload</code>, the label the shared topology's ingress peer now ANDs into its <code>from</code> element.
+That is a prediction of who the narrowing cuts off, and it is valid under the isolated topology the dogfood cluster actually runs, because it is a census of clients rather than a grading of a policy.
+It is also the reading that reaches a Kata worker's real source address on GKE Dataplane V2, which no kind lane can stand in for (<a href="../Q1039/">Q1039</a> scopes what the kind lane does cover, and names this as its residual).</p>
+<p><strong>Why it is small and not urgent.</strong> Every client in this repository is a container of an AGC-provisioned worker pod, and <code>pod.go</code> sets the label unconditionally, so the source read says the census should pass.
+That is precisely why it is worth taking rather than assuming: the script's own header says a source read has checked the clients somebody thought of.
+The cost of never taking it is borne by an adopter running the shared topology, once per adoption, against a failure that is total for the client it misses.</p>
+<p><strong>What it needs.</strong> A line in <code>kata-dind-workloads.md</code>'s window checklist beside its three siblings, and a step in the Kata leg's sequence that runs it while the workers are still up: the script exits 2 rather than passing when an address no longer resolves, so it cannot be run after <code>e2e-stop.sh</code>.
+Whether it belongs in <code>e2e-reusable.yml</code> beside <code>mirror-timing.sh</code> or stays a hand-run window step is the same question <a href="../Q1038/">Q1038</a> is holding open for <code>mirror-timing</code>; settle both together, and take the reading on whichever window answers Q1038.</p>
+<p><strong>Done when</strong> one window has produced a verdict from the script and this row records which one, with the same caution Q1038 carries: an exit 2 is a reading that was not taken, not a finding.</p>
 
 
 

@@ -2710,10 +2710,10 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1039/">Q1039</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/components/shared-tenants/kustomization.yaml">No cluster this repo stands up runs the shared-tenants mirror topology</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">No cluster this repo stands up runs the shared-tenants mirror topology</a></td>
 <td><code>tests</code> <code>debt</code></td>
 <td>🔲</td>
-<td>M</td>
+<td>S</td>
 <td>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</td>
 </tr>
 <tr>
@@ -2883,6 +2883,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Two halves of the registry mirror's network posture have to name one label, and nothing compares them.</td>
+</tr>
+<tr>
+<td><a href="Q1048/">Q1048</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-clients.sh">Nothing schedules the mirror client census in a dogfood window</a></td>
+<td><code>tests</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</td>
 </tr>
 <tr>
 <td><a href="Q992/">Q992</a></td>
