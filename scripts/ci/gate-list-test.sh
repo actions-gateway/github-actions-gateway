@@ -159,8 +159,12 @@ write_makefile "$FIXTURE_DIR/Makefile.opaque" '' '' 'true'
 write_makefile "$FIXTURE_DIR/Makefile.marked" '' '' 'true' \
 	'# queue-scope: none - beta reads no Markdown'
 write_makefile "$FIXTURE_DIR/Makefile.prose" '' '' 'scripts/one/prose.sh'
+# Both scopes, because rule 12 makes a QUEUE_GATES member declaring itself out
+# of docs scope a contradiction: the store is a tree of pages under docs/. So
+# beta stays out of both lists and declares against both.
 write_makefile "$FIXTURE_DIR/Makefile.docs-marked" '' '' 'true' \
-	'# docs-scope: none - beta reads no Markdown'
+	'# queue-scope: none - beta reads no Markdown
+# docs-scope: none - beta reads no Markdown'
 write_makefile "$FIXTURE_DIR/Makefile.ci-marked" '' '' 'true' \
 	'# ci-scope: none - beta is a local-only convenience'
 write_makefile "$FIXTURE_DIR/Makefile.mq-marked" '' '' 'scripts/one/beta.sh' \
@@ -170,7 +174,8 @@ write_makefile "$FIXTURE_DIR/Makefile.subject-queue-marked" '' '' 'scripts/one/s
 	'# queue-scope: none - beta reads the store path to name a file, not to check one'
 write_makefile "$FIXTURE_DIR/Makefile.subject-prose" '' '' 'scripts/one/subject-prose.sh'
 write_makefile "$FIXTURE_DIR/Makefile.subject-prose-marked" '' '' 'scripts/one/subject-prose.sh' \
-	'# docs-scope: none - beta names the page as an instrument, not a subject'
+	'# queue-scope: none - beta names the page as an instrument, not a subject
+# docs-scope: none - beta names the page as an instrument, not a subject'
 write_makefile "$FIXTURE_DIR/Makefile.subject-array" '' '' 'scripts/one/subject-array.sh'
 write_makefile "$FIXTURE_DIR/Makefile.subject-cmdsub" '' '' 'scripts/one/subject-cmdsub.sh'
 write_makefile "$FIXTURE_DIR/Makefile.wide-marked" '' '' 'scripts/one/wide.sh' \
@@ -338,7 +343,7 @@ expect_check docs-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
 	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.opaque"
 assert_output docs-scope-underivable 'docs-scope'
 expect_check docs-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.docs-marked"
+	--docs 'alpha' --queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.docs-marked"
 
 # Rule 10's second derivation, where it earns its keep: every page-scoped gate
 # in the tree hardcodes its page, and seven were invisible to rule 10 at once
@@ -353,7 +358,7 @@ expect_check docs-subject-array 1 --fast 'alpha beta' --heavy 'heavy-one' \
 	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-array"
 assert_output docs-subject-array 'as its subject'
 expect_check docs-subject-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-prose-marked"
+	--docs 'alpha' --queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.subject-prose-marked"
 
 # The half the two cases above cannot reach: both prove the rules fire on a list
 # that is wrong, and neither can prove they fire on a list that is not there. An
@@ -367,6 +372,16 @@ assert_output docs-empty-refused 'non-empty --docs'
 expect docs-absent-refused 2 --check --makefile "$MK" --doc "$DOC" \
 	--scripts-dir "$SCRIPTS" --suites "$SUITES" --workflows "$WF_ALL" \
 	--fast 'alpha beta' --heavy 'heavy-one'
+
+# Rule 12 (Q1040): a QUEUE_GATES member outside DOCS_GATES. Rules 9 and 10 hold
+# DOCS_GATES in both directions and still passed the three real queue gates, so
+# this one is asserted rather than derived and needs its own pair.
+expect_check queue-not-in-docs 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha beta' --docs 'alpha'
+assert_output queue-not-in-docs 'not in DOCS_GATES'
+assert_output queue-not-in-docs beta
+expect_check queue-in-docs 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha beta' --docs 'alpha beta'
 
 # Rule 8 (Q831): a gate can join CHECK_FAST_GATES and be run by no workflow,
 # which every rule above reports as healthy — `make check` enforces it locally

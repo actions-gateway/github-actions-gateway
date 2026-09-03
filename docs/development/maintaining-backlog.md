@@ -327,6 +327,20 @@ It fired again at the cutover, on `page-density-check` against all 178 store pag
 Closing an item routinely [cascades](#what-parking-a-row-obliges-elsewhere) into a plan doc, `plan/README.md`, or a roadmap bullet, which puts the diff outside this section's narrowness.
 Author the change first, then pick the gate by what the diff actually touches.
 
+### Commit the row, then run the gate
+
+[`check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) reads the committed tree rather than the working one: `head_items = items_at("HEAD")`.
+Rules 8, 9 and 13 are functions of what the branch *changed*, so they diff `HEAD` against the merge base with `origin/main`, and rule 11's label vocabulary check reads that same `HEAD` set.
+A row written and not yet committed is therefore invisible to the rule that would reject it, and the run prints `ok` with a count that looks like it included the new file.
+
+That is inherent to a merge-base diff and is not a defect to engineer around: a checker reading the working tree could not answer *what did this branch change*, which is the whole of what rules 8, 9 and 13 ask.
+So the order is commit first, then check.
+The pre-commit hook does not close it either, since it runs before the commit exists and holds only the em-dash ceiling.
+
+**Measured 2026-08-29 on [#1796](https://github.com/actions-gateway/github-actions-gateway/pull/1796).** `Q1038` was filed wearing an `e2e` label that is not on the `**Labels:**` line in [`docs/queue/README.md`](../queue/README.md).
+`make queue-lint` and `make queue-rules-check` were both run by hand *before* the commit and both printed `ok`; CI failed `lint-status` on rule 11, which took `status-lint-gate` down with it.
+Re-running `make queue-rules-check` after the commit reproduces it immediately (Q1040).
+
 ### Two gate behaviours a failure message does not explain
 
 Both hit two sessions independently on 2026-08-27, and neither is inferable from what the gate prints.

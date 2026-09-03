@@ -85,6 +85,13 @@
 #      report is *required*, and so blocking, is a repo-settings question this
 #      cannot read (Q943). A gate deliberately kept off the candidate merge
 #      declares `# merge-queue-scope: none`, the shape rules 7, 8 and 10 use.
+#  12. QUEUE_GATES is contained in DOCS_GATES. The store is a tree of pages under
+#      docs/, so a gate a backlog edit can fail is a gate a prose edit can fail,
+#      and rule 10 cannot derive it: each queue-* gate hands its store path to a
+#      Python entry point rather than to git, on an `exec` line rather than in an
+#      assignment, so neither derivation sees a subject and all three passed in
+#      silence while `make docs-gates` stayed green on a committed row wearing an
+#      undeclared label (Q1040). Asserted directly rather than derived.
 #
 # Usage:
 #   gate-list.sh --list        --fast '<names>' --heavy '<names>'
@@ -765,6 +772,17 @@ for gate in $FAST $HEAVY; do
        add \`merge_group:\` to that workflow's \`on:\` block, or declare \`# merge-queue-scope: none\` with the reason directly above its .PHONY"
 		;;
 	esac
+done
+
+# 12. QUEUE_GATES is contained in DOCS_GATES, asserted because rule 10 cannot
+# derive it. An empty QUEUE_GATES would make this vacuous, the shape the --docs
+# guard above refuses for rule 9; rule 7 reaches it first and goes red on every
+# fast gate, so it is not a second silent hole.
+for gate in $QUEUE; do
+	if ! grep -qw -- "$gate" <<<"$DOCS"; then
+		fail "QUEUE_GATES member '$gate' is not in DOCS_GATES, so \`make docs-gates\` reports a green on a backlog change \`make queue-gates\` would fail
+       add it to DOCS_GATES: the store is a tree of pages under docs/, so every gate a row edit can fail is one a prose edit can fail"
+	fi
 done
 
 if ((fails > 0)); then
