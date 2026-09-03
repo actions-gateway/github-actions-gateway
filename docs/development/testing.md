@@ -1646,6 +1646,11 @@ Prefer an override that earns its place in production over a test-only hook: the
 So the case that pins the wiring sets the deadline to 1 s against a stub that sleeps 5 and requires the failure to name `within 1s`.
 Without it, every other case's green is evidence about the host's load rather than about the code.
 
+**Where the assertion is about attempt count rather than duration, the deadline is not the subject and a test-settable one is the wrong repair.** [`verify-pages-live.sh`](../../scripts/pages/verify-pages-live.sh) stops starting attempts at `SECONDS + INTERVAL >= TIMEOUT`, which is correct for the real gate: the budget bounds how long a release waits on Pages.
+Behind a stubbed `curl` the same expression measures the host instead.
+Measured 2026-09-03 with the stub sleeping 59 s per request, the suite's 60 s budget broke the loop after one attempt and all three assertions about *retrying* had nothing to observe, the same three that had gone red on a loaded `make check` five days earlier.
+Injecting the clock leaves that available on a slower machine, so the repair is a budget the run cannot reach, assertions read off the loop's own attempt counter rather than off elapsed seconds, and a non-convergence guard counted in **requests**, the same currency as the assertion, so the guard cannot become a second clock (Q1034).
+
 ### A `directive is unused` red is about the linter's silence, not the directive
 
 `nolintlint` runs with `allow-unused: false` (`.golangci.yml`), so a `//nolint:<linter>` directive that suppressed nothing fails the build.
