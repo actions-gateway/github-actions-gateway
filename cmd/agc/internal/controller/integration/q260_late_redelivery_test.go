@@ -101,7 +101,14 @@ func TestAGC_Q260_LateRedeliveryAfterCompletionDedups(t *testing.T) {
 	// but while its pod still lingers. It acquires (same planID), finds the claim
 	// still held (lingering), and is deduped — it must NOT re-provision or collide
 	// on the lingering pod.
-	lateID := enqueueJobOnOwnerSession(15*time.Second, rgName, nil, broker.RunnerJobRequestBody{RunnerRequestID: "loser-late"})
+	//
+	// Never onto the winner's own session. Its AcquireJob spent that single-use JIT
+	// agent, so the goroutine DELETEs it and opens a fresh one (Q114) as soon as the
+	// job concludes, which the Secret deletion above says has happened. The stub
+	// queues jobs per session ID and re-offers nothing, so a redelivery landing in
+	// that queue waits for a poll that never comes (Q1008).
+	lateID := enqueueJobOnOwnerSession(15*time.Second, rgName,
+		map[string]bool{winnerID: true}, broker.RunnerJobRequestBody{RunnerRequestID: "loser-late"})
 	require.NotEmpty(t, lateID, "expected a live session to deliver the late redelivery to")
 
 	// The duplicate-delivery counter rises: the late redelivery was deduped on the

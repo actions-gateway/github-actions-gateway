@@ -399,6 +399,11 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	// test left active on the shared stub.
 	id := enqueueJobOnOwnerSession(15*time.Second, "ceiling-rg", nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for ceiling-rg should register")
+	// AcquireJob spends this session's single-use JIT agent whether or not the
+	// provisioning that follows succeeds, so the goroutine that takes the job
+	// DELETEs this session and opens a fresh one (Q114). Both steps below turn on
+	// that, so hold the ID.
+	acquiringSession := id
 
 	// The provisioner must acquire the job, then back off due to the ceiling
 	// without creating a worker pod. We assert on the monotonic acquire-job
@@ -411,19 +416,18 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 		return brokerStub.AcquireJobCalls() > acquiresBefore
 	}, 10*time.Second, 25*time.Millisecond, "provisioner should acquire the job")
 
-	require.Eventually(t, func() bool {
-		var secrets corev1.SecretList
-		_ = k8sClient.List(ctx, &secrets,
-			client.InNamespace(nsName),
-			client.MatchingLabels{"actions-gateway/runner-group": "ceiling-rg"},
-		)
-		for _, s := range secrets.Items {
-			if strings.HasPrefix(s.Name, "job-") {
-				return false
-			}
-		}
-		return true
-	}, 10*time.Second, 25*time.Millisecond, "provisioner should delete job Secret after ceiling check")
+	// Wait for the recycle, not for the Secret's absence. The ceiling path deletes
+	// the job Secret and returns, and the caller then DELETEs the spent session, so
+	// the DELETE is a listener-produced signal that the whole cycle ran. "No job-*
+	// Secret exists" is not: it is equally true BEFORE the provisioner stages one,
+	// so that wait was satisfied on its first tick having never seen the Secret it
+	// names (measured 2026-09-03, Q1008: 4.8ms and 55.7ms in two runs, neither
+	// having observed one), leaving everything below to run while the first job was
+	// still mid-provision.
+	require.True(t, brokerStub.WaitForSessionDelete(acquiringSession, 15*time.Second),
+		"the acquiring listener should recycle its spent JIT agent after the ceiling drop")
+	require.Zero(t, countJobSecrets(t, nsName, "ceiling-rg"),
+		"provisioner should delete the job Secret after the ceiling check")
 
 	// Assert: only the 2 pre-existing pods exist; no new "runner-*" pods were created.
 	var pods corev1.PodList
@@ -448,10 +452,15 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	require.NoError(t, k8sClient.Status().Update(ctx, &preexisting))
 
 	// Enqueue a second job now that active pod count dropped to 1 (< maxWorkers=2).
-	// The provisioner drops ceiling-blocked jobs, so we enqueue a fresh job. Scope
-	// to this RunnerGroup's owner to avoid another test's lingering session.
-	id = enqueueJobOnOwnerSession(15*time.Second, "ceiling-rg", nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for ceiling-rg should still be active")
+	// The provisioner drops ceiling-blocked jobs, so we enqueue a fresh job. Scope to
+	// this RunnerGroup's owner to avoid another test's lingering session, and exclude
+	// the spent one: the stub queues jobs per session ID and re-offers nothing, so a
+	// job left in a recycled session's queue waits for a poll that never comes. The
+	// wait above has already retired it; the exclusion states the precondition where
+	// the enqueue is.
+	id = enqueueJobOnOwnerSession(15*time.Second, "ceiling-rg",
+		map[string]bool{acquiringSession: true}, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a replacement session for ceiling-rg should be available")
 
 	// A new runner pod should now be created since the ceiling is no longer saturated.
 	assert.Eventually(t, func() bool {
