@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1005/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1051/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>PublishesAvailableJobsFromDelivery flakes in two unrelated ways - GitHub Actions Gateway</title>
+        <title>fixedCapacity reports a constant, not the free slots it stands for - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#publishesavailablejobsfromdelivery-flakes-in-two-unrelated-ways" class="md-skip">
+        <a href="#fixedcapacity-reports-a-constant-not-the-free-slots-it-stands-for" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              PublishesAvailableJobsFromDelivery flakes in two unrelated ways
+              fixedCapacity reports a constant, not the free slots it stands for
             
           </span>
         </div>
@@ -2597,28 +2597,25 @@
   
 
 
-<h1 id="publishesavailablejobsfromdelivery-flakes-in-two-unrelated-ways"><code>PublishesAvailableJobsFromDelivery</code> flakes in two unrelated ways<a class="headerlink" href="#publishesavailablejobsfromdelivery-flakes-in-two-unrelated-ways" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>TestListener_PublishesAvailableJobsFromDelivery</code> fails on <code>main</code> again, in any tier.
-Record which of the two modes below, by line and message: they share a test name and nothing else.</p>
-<p>The row was filed against mode A and cited a CI run as proof it reached CI.
-That citation is wrong, and reading it is what found mode B: <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32936563082">run 32936563082</a> failed at line 52 with <code>Condition never satisfied</code>, not at line 61 with <code>expected: 1  actual: 0</code>.
-Mode A has been seen locally only; mode B is the one that reds <code>main</code>.</p>
-<p><strong>Mode A, the assertion outran its wait.</strong> <code>handleMessage</code> publishes the availableJobs gauge from <code>setLastStats</code> the moment statistics arrive and provisions the job the same message assigned afterwards, so the wait on the gauge cleared while the provisioner call was still owed.
-Sighted once, <code>make test-integration</code> run 2 of 4 on one unchanged tree, 2026-08-27, <code>expected: 1  actual: 0</code>.
-Fixed by waiting on <code>prov.count()</code> and then holding it across a 500 ms window.
-The hold rather than the wait is what carries the property: a bound that merely accepts a provision is also cleared by a listener that provisions the rest of the batch a moment later.</p>
-<p><strong>Mode B, the wait could never be satisfied at all.</strong> A poll landing mid-enqueue assigned the first job and published the statistics riding on that message, counting only what GitHub held at that instant.
-Nothing republished: the slot was then full so no further message arrived, and <code>refreshDemand</code> returns early whenever advertised capacity is above zero, which <code>fixedCapacity(1)</code> always is.
-The gauge held the stale value for the rest of the run, so <code>n == queued-1</code> was not slow to come true; it never came true and the 5 s wait always elapsed.
-Fixed by advertising zero capacity while enqueueing and opening the slot afterwards, so the delivered message's statistics count the whole queue.</p>
-<p>Measured on the fixes, three runs each.
-Mode A: a 300 ms sleep between <code>setLastStats</code> and the assignment loop fails the pre-fix test 3/3 with the local sighting's own text and passes the fixed one; an over-provision landing 200 ms late fails the fixed test 3/3 at the hold, and passes both the pre-fix test and the fixed one with the hold deleted.
-Mode B: a 150 ms sleep inside the enqueue loop fails the mode-A-only test 3/3 with CI's own <code>Condition never satisfied</code> at the gauge wait, and passes once the slot is held closed.
-Instrumenting the failing wait gave <code>n=0 writes=2 prov=1</code>, the <code>writes &gt; 1</code> half satisfied and <code>n == queued-1</code> stuck at zero, which is what distinguishes a permanently unsatisfiable condition from a slow one and rules out raising the timeout.</p>
-<p>Idiom sweep over the 141 waits in <code>cmd/agc/internal/scalesetlistener</code> as <code>origin/main</code> holds it, per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">sweep the idiom</a>: one instance of mode A, the one fixed.
-The gauge is the only test-visible signal established to precede what a following assertion names: <code>metricsIncProvisioned</code> fires after <code>Provision</code> returns and <code>metricsIncAbandoned</code> before <code>metricsSetDeferred</code>, so the waits keyed on those cover their assertions.
-The one other wait on the gauge, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/demand_q960_test.go"><code>TestListener_RefreshesDemandGaugeWhileWithholding</code></a>, is followed by <code>assert.Zero(prov.count())</code>: reading a negative early makes it pass, so it cannot flake in mode A's way.
-It advertises zero capacity throughout, so <code>refreshDemand</code> keeps its gauge current and mode B cannot reach it either.</p>
+<h1 id="fixedcapacity-reports-a-constant-not-the-free-slots-it-stands-for"><code>fixedCapacity</code> reports a constant, not the free slots it stands for<a class="headerlink" href="#fixedcapacity-reports-a-constant-not-the-free-slots-it-stands-for" title="Permanent link">&para;</a></h1>
+<p><code>fixedCapacity(n)</code> returns <code>n</code> forever.
+A real <code>CapacityFunc</code> reports <em>free</em> slots, so a saturated set advertises zero; the fake set advertises its original figure no matter how many of its slots are occupied.</p>
+<p>That divergence is load-bearing rather than cosmetic, because production code relies on the property it breaks.
+<code>refreshDemand</code> returns early whenever advertised capacity is above zero (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>), and its Q960 rationale is sound: a set with a free slot is delivered a message whenever GitHub has anything to assign, and every delivery carries statistics, so its gauge cannot go stale.
+Under <code>fixedCapacity</code> that premise is false.
+A test can fill its only slot, keep advertising one free, receive no further message, and never refresh, so any wait on a <code>lastStats</code>-derived value hangs on a gauge frozen at whatever the last delivery happened to carry.
+<strong><code>refreshDemand</code> is correct</strong>; the fake is what diverges.</p>
+<p>This was <a href="../Q1005/">Q1005</a> mode B, and the fix there was to open capacity only after the enqueue loop.
+That idiom already existed: <code>TestListener_StatusReportsServerCountAheadOfProvisioning</code> enqueues, calls <code>capVal.set(n)</code>, and only then waits on <code>l.Status().AssignedJobs</code>, which reads <code>lastStats.TotalAssignedJobs</code>.
+It is a statistics-derived wait that would have been exposed had it opened capacity first, and it is immune because it does not.
+So the safe pattern is in the file; <code>fixedCapacity</code> is the shortcut past it.</p>
+<p><strong>No second live instance.</strong> Measured as this change lands: <code>fixedCapacity</code> appears in no non-test file, and in 16 test files here across 49 sites (50 before this change, since the test fixed here stops using it).
+Counting files is too coarse for the trap, which needs one <em>test</em> to combine a constant non-zero capacity, a slot it fills, and a wait on a statistics-derived value.
+Exactly one test does: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/guards_q597_test.go"><code>TestListener_RetiresGuardsOfJobsWhoseMessagesAreGone</code></a>, pairing <code>fixedCapacity(5)</code> with <code>setCompleteErr(true)</code>.
+Its waits are all listener-internal (<code>prov.count()</code>, <code>m.completedCount()</code>, <code>GuardedJobIDs</code>, <code>PendingMessageCount</code>) rather than statistics-derived, so it cannot reach the trap.
+This is a latent trap with a known-good idiom beside it, not a bug with victims.</p>
+<p>Options, in preference order: make the helper subtract in-flight work so it models free slots; or rename it to say it is a constant, so the next reader does not read it as capacity; or leave it and rely on the idiom.
+The first changes behaviour under every existing caller, so it needs the suite re-run rather than a mechanical edit.</p>
 
 
 

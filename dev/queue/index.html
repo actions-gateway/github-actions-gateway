@@ -2734,11 +2734,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1005/">Q1005</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/q720_available_jobs_test.go#L61"><code>PublishesAvailableJobsFromDelivery</code> asserts past what its wait covers</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/q720_available_jobs_test.go"><code>PublishesAvailableJobsFromDelivery</code> flakes in two unrelated ways</a></td>
 <td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Measured 2026-08-27 under `make …</td>
+<td><strong>Event:</strong> <code>TestListener_PublishesAvailableJobsFromDelivery</code> fails on <code>main</code> again, in any tier.</td>
 </tr>
 <tr>
 <td><a href="Q1015/">Q1015</a></td>
@@ -4195,6 +4195,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>XS</td>
 <td><code>scripts/ci/check-errexit-prologue.sh</code> requires <code>set -euo pipefail</code> plus <code>shopt -s inherit_errexit</code> in every executable script under …</td>
+</tr>
+<tr>
+<td><a href="Q1051/">Q1051</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener_test.go"><code>fixedCapacity</code> reports a constant, not the free slots it stands for</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>fixedCapacity(n)</code> returns <code>n</code> forever.</td>
 </tr>
 <tr>
 <td><a href="Q1017/">Q1017</a></td>
