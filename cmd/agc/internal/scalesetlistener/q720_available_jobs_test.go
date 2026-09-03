@@ -1,6 +1,7 @@
 package scalesetlistener_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -42,12 +43,20 @@ func TestListener_PublishesAvailableJobsFromDelivery(t *testing.T) {
 	prov := &recordingProvisioner{srv: srv}
 	prov.setCompleteErr(true) // the worker stays in flight, pinning capacity at its one slot
 	m := newCountingMetrics()
-	_, ssID := startListener(t, srv, fixedCapacity(1), prov, m)
+	var capacity atomicInt // opens below, once GitHub holds the whole queue
+	_, ssID := startListener(t, srv, func(context.Context) int { return capacity.get() }, prov, m)
 
 	const queued = 4
 	for i := 0; i < queued; i++ {
 		srv.EnqueueJob(ssID)
 	}
+	// Only now open the slot. A poll landing mid-enqueue would assign the first job and
+	// publish the statistics riding on that message — counting only what GitHub held at
+	// that instant. Nothing would republish: the slot is full so no further message is
+	// delivered, and refreshDemand is gated on advertising zero capacity, which a fixed
+	// non-zero CapacityFunc never does. The gauge would hold that stale value for the
+	// rest of the run and `n == queued-1` would never come true (Q1005 mode B).
+	capacity.set(1)
 
 	require.Eventually(t, func() bool {
 		n, writes := m.availableJobs()
@@ -55,8 +64,18 @@ func TestListener_PublishesAvailableJobsFromDelivery(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond,
 		"a delivered message must publish GitHub's queued-but-unassigned count")
 
+	// The gauge above rides on statistics arrival, which handleMessage publishes ahead of
+	// provisioning the job the same message assigned — so waiting on it says a message
+	// landed, not that its job reached the provisioner, and on a busy box the count below
+	// was read in that gap (Q1005). Wait on prov.count() itself, and hold it rather than
+	// sampling once: a listener that ignored capacity provisions the rest of the batch a
+	// moment later, which a single read taken as the first one lands would pass.
+	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
+		"the job the single slot admitted must reach the provisioner")
+	require.Never(t, func() bool { return prov.count() != 1 }, 500*time.Millisecond, 10*time.Millisecond,
+		"capacity of one must not provision the whole queue")
+
 	n, _ := m.availableJobs()
 	assert.Equal(t, queued-1, n,
 		"one job assigned under the single slot, the other three still queued at GitHub")
-	assert.Equal(t, 1, prov.count(), "capacity of one must not provision the whole queue")
 }
