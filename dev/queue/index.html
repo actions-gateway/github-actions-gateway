@@ -2717,14 +2717,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</td>
 </tr>
 <tr>
-<td><a href="Q1008/">Q1008</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> …</td>
-</tr>
-<tr>
 <td><a href="Q999/">Q999</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sharing_test.go">Cross-namespace proxy revoke has no event source, so its test races</a></td>
 <td><code>flake</code> <code>tests</code> <code>security</code></td>
@@ -3901,6 +3893,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> any 15 s <code>require.Eventually</code> in the GMC integration suite breaches on <code>main</code>.</td>
 </tr>
 <tr>
+<td><a href="Q1008/">Q1008</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breached its 20s wait on a spent broker session</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>💤</td>
+<td>M</td>
+<td><strong>Event:</strong> <code>TestAGC_PodProvisioning_MaxWorkersCeiling</code> breaches its 20 s wait again on <code>main</code>, or any test in the <code>cmd/agc</code> integration …</td>
+</tr>
+<tr>
 <td><a href="Q823/">Q823</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>scalesetlistener</code> runs closest to the coverage budget, now 5m</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -4195,6 +4195,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>XS</td>
 <td><code>scripts/ci/check-errexit-prologue.sh</code> requires <code>set -euo pipefail</code> plus <code>shopt -s inherit_errexit</code> in every executable script under …</td>
+</tr>
+<tr>
+<td><a href="Q1049/">Q1049</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/brokertest/server.go"><code>brokertest</code> strands a queued job when its session is deleted</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-09-03 while fixing <a href="Q1008/">Q1008</a>.</td>
 </tr>
 <tr>
 <td><a href="Q1051/">Q1051</a></td>

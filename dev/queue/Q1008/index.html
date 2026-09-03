@@ -23,7 +23,7 @@
     
     
       
-        <title>MaxWorkersCeiling breaches its 20s wait on main, cause unmeasured - GitHub Actions Gateway</title>
+        <title>MaxWorkersCeiling breached its 20s wait on a spent broker session - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#maxworkersceiling-breaches-its-20s-wait-on-main-cause-unmeasured" class="md-skip">
+        <a href="#maxworkersceiling-breached-its-20s-wait-on-a-spent-broker-session" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              MaxWorkersCeiling breaches its 20s wait on main, cause unmeasured
+              MaxWorkersCeiling breached its 20s wait on a spent broker session
             
           </span>
         </div>
@@ -2597,18 +2597,27 @@
   
 
 
-<h1 id="maxworkersceiling-breaches-its-20s-wait-on-main-cause-unmeasured"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured<a class="headerlink" href="#maxworkersceiling-breaches-its-20s-wait-on-main-cause-unmeasured" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
-<p><code>TestAGC_PodProvisioning_MaxWorkersCeiling</code> failed on <code>main</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934660757">integration-test run 32934660757</a>, 2026-08-26 05:39 UTC on <code>ubuntu-latest</code>: <code>Condition never satisfied</code> after 20.38 s at line 457 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go">pod_provisioning_test.go</a>, on "a runner pod should be created once the maxWorkers ceiling is lifted".
-No code change intervened and the suite has been green on <code>main</code> since, so it fits the flake definition.
-This is the only genuine test failure in <code>integration-test</code>'s last 25 <code>main</code> runs; the other red is a run whose two module jobs concluded failure with no failed step, which is a cancellation rather than a verdict.</p>
-<p><strong>A candidate the log offers, and it is unverified.</strong> The assertion waits on a <em>second</em> job being acquired after the ceiling lifts: the test advances <code>preexisting-worker-0</code> to <code>Succeeded</code>, enqueues a fresh job, and expects a runner pod.
-The run log shows the first job dropped at 05:39:03 with <code>provisioner: concurrency ceiling reached (2 active pods)</code>, and then no further <code>AcquireJob</code> for <code>ceiling-rg</code> in the 20 s window.
-Whether the listener simply had not polled again, whether the ceiling-lift has no event source to wake the reconciler, or whether the CI runner was starved, is not established by the log alone.
-Settle which before changing the wait, because a budget raise is the remedy that fits none of the three.</p>
-<p>Reproduce against the full <code>cmd/agc</code> suite rather than alone: <a href="../Q968/">Q968</a> is the same suite and the same <code>Eventually</code> shape, and it reproduced only in-suite, at 1 red in 4 runs on one unchanged tree.
-Its investigation traced that breach to a shutdown defect rather than to load (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1754">#1754</a>, merged 2026-08-27 as <code>17de0762f</code>), so treat a product cause here as live too.
-<a href="../Q1007/">Q1007</a> is the GMC-side sibling and owns the measurement showing that machine load reproduces the <em>suite slowdown</em> in this class without reproducing the <em>failure</em>, so do not assume load here without measuring it.</p>
+<h1 id="maxworkersceiling-breached-its-20s-wait-on-a-spent-broker-session"><code>MaxWorkersCeiling</code> breached its 20s wait on a spent broker session<a class="headerlink" href="#maxworkersceiling-breached-its-20s-wait-on-a-spent-broker-session" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> <code>TestAGC_PodProvisioning_MaxWorkersCeiling</code> breaches its 20 s wait again on <code>main</code>, or any test in the <code>cmd/agc</code> integration suite breaches a wait with no matching <code>AcquireJob</code> in the log.</p>
+<p><code>TestAGC_PodProvisioning_MaxWorkersCeiling</code> failed on <code>main</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934660757">integration-test run 32934660757</a>, 2026-08-26 05:39 UTC on <code>ubuntu-latest</code>: <code>Condition never satisfied</code> after 20.38 s at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go">pod_provisioning_test.go</a>, on "a runner pod should be created once the maxWorkers ceiling is lifted".</p>
+<p><strong>The cause, measured 2026-09-03 and fixed the same day.</strong> The test enqueued its second job onto the session that had acquired the first one.
+<code>AcquireJob</code> spends that session's single-use JIT agent whether or not the provisioning after it succeeds, so the listener DELETEs it and opens a fresh one (Q114) the moment the ceiling drop returns; <code>brokertest.Server</code> queues jobs per session ID and re-offers nothing, so the job waited in a queue no listener polls again.
+<code>enqueueJobOnOwnerSession(…, nil, …)</code> picks any session active at that instant, which is a narrower fact than <em>will still be polled</em>.</p>
+<p>Two direct measurements settle it.
+Forcing the second job onto the acquiring session reproduces the CI failure exactly: same assertion, 20.52 s against CI's 20.38 s, and no second <code>AcquireJob</code> at all (<code>acqDelta=0</code>) — which is what the CI log shows too, since the <code>Q247</code> WARN that accompanies every acquire never reappears in the 20 s window.
+And the gate meant to pace the test against the ceiling cycle was vacuous: it waited on "no <code>job-*</code> Secret exists", which is equally true before the provisioner stages one, and it returned in 4.8 ms and 55.7 ms over two runs having never observed a Secret.
+That is what left everything downstream racing a job still being provisioned.</p>
+<p>Neither candidate the original row offered was the cause.
+The wait is not tight: the test completes in 0.47-0.63 s against its 20 s budget, so raising it would have moved the threshold and left this intact.</p>
+<p><strong>What shipped.</strong> The vacuous gate is now <code>WaitForSessionDelete</code> on the acquiring session, a listener-produced event that can only follow provisioning, with the Secret assertion after it as a point-in-time check.
+The second enqueue excludes that session.
+The same idiom is swept: the Q260 late-redelivery test carried it unreported and is fixed here too; <code>q422_quota_admission_test.go</code> enqueues repeatedly on one session and is safe, because its deliveries are rejected before <code>AcquireJob</code> and so spend no agent.
+The rule is in <a href="../../development/testing/#avoiding-shared-stub-flakes-in-the-agc-suite">testing.md § Avoiding shared-stub flakes in the AGC suite</a>, and the general form of the vacuous wait in <a href="../../development/testing/#a-negative-assertion-must-be-able-to-fail-for-only-one-reason">§ A negative assertion must be able to fail for only one reason</a>.</p>
+<p><strong>What this does not cover.</strong> The stub's per-session queue is the fidelity gap underneath: a real broker re-offers an undelivered message when its session dies, and <code>brokertest</code> strands it.
+Any future test can walk into the same trap.
+<a href="../Q1049/">Q1049</a> owns that.</p>
+<p><a href="../Q1005/">Q1005</a> is the same shape one tier down, in <code>cmd/agc/internal/scalesetlistener</code>: a wait satisfied by a signal published earlier on the same code path than the one the assertion names.
+<a href="../Q1007/">Q1007</a> is the GMC-side sibling and owns the load measurement for this class.</p>
 
 
 
