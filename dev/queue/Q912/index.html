@@ -2623,6 +2623,16 @@ The reading the timeout branch was built for: <code>ps</code> reported the child
 <code>S</code> is blocked on something other than CPU, where starvation past the 30s bound predicts <code>R</code>, so this sample points away from the cause the row was left with.
 The <code>0:00.00</code> discriminates nothing on its own, since a child that never got going and one waiting for CPU both burn none, and macOS printing hundredths only bounds it under 10ms.
 One sample, on a host running the rest of the fan-out at the time, so it narrows the cause without settling it.</p>
+<p>A third sighting 2026-09-03, again under local <code>make check</code> on a PR branch, so the trigger still does not fire.
+Both instances went red in one run, as on 2026-08-24: the top-level gate on port 56339 and the suite's "shipped tree passes with no arguments" case on port 56585.
+Both read <code>S 0:00.00</code> with an empty log and the poll never observing it non-empty.
+That is three <code>ps</code> samples now across the two sightings that carry one, all <code>S</code> and none <code>R</code>, so the reading keeps pointing away from CPU starvation without any of them settling it.
+The branch touched only <code>mk/gate-lists.mk</code>, <code>scripts/ci/gate-list*.sh</code> and prose, none of which the checker or the fake is built from, and <code>make endpoint-parity-check</code> alone passed straight afterwards.
+A full <code>make check</code> over the same tree twenty minutes earlier was green, taking 298s across the 50-gate fan-out against 164s for the red run.
+<code>uptime</code> read <code>load averages: 51.29 57.82 46.32</code> on an 18-core host, taken after the failure rather than during it, so it bounds the contention loosely and dates nothing.
+The suite instance printed the checker's output this time, so the <code>expect_rc</code> change is doing its job and the two instances are now comparable.
+A second session in the same parallel batch reported the same failure within the same two-hour window, at a load average it read as 72, and also cleared it by re-running the single gate; that reading is theirs rather than one taken here, and their PR (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1826">#1826</a>) touches neither this row nor anything the fake is built from.
+Two concurrent sightings under a batch that is itself loading the host is the strongest contention evidence the row has, and it still does not separate contention from whatever <code>S</code> says the child was blocked on.</p>
 
 
 

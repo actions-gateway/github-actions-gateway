@@ -2946,6 +2946,16 @@ It fired again at the cutover, on <code>page-density-check</code> against all 17
 <p><strong>When it does not apply:</strong> if the change touches <em>any</em> other file — code, a plan doc, another page under <code>docs/</code> — run the full <code>make check</code> (plus whatever heavier tier the change warrants).
 Closing an item routinely <a href="#what-parking-a-row-obliges-elsewhere">cascades</a> into a plan doc, <code>plan/README.md</code>, or a roadmap bullet, which puts the diff outside this section's narrowness.
 Author the change first, then pick the gate by what the diff actually touches.</p>
+<h3 id="commit-the-row-then-run-the-gate">Commit the row, then run the gate<a class="headerlink" href="#commit-the-row-then-run-the-gate" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-queue-rules.py"><code>check-queue-rules.py</code></a> reads the committed tree rather than the working one: <code>head_items = items_at("HEAD")</code>.
+Rules 8, 9 and 13 are functions of what the branch <em>changed</em>, so they diff <code>HEAD</code> against the merge base with <code>origin/main</code>, and rule 11's label vocabulary check reads that same <code>HEAD</code> set.
+A row written and not yet committed is therefore invisible to the rule that would reject it, and the run prints <code>ok</code> with a count that looks like it included the new file.</p>
+<p>That is inherent to a merge-base diff and is not a defect to engineer around: a checker reading the working tree could not answer <em>what did this branch change</em>, which is the whole of what rules 8, 9 and 13 ask.
+So the order is commit first, then check.
+The pre-commit hook does not close it either, since it runs before the commit exists and holds only the em-dash ceiling.</p>
+<p><strong>Measured 2026-08-29 on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1796">#1796</a>.</strong> <code>Q1038</code> was filed wearing an <code>e2e</code> label that is not on the <code>**Labels:**</code> line in <a href="../../queue/"><code>docs/queue/README.md</code></a>.
+<code>make queue-lint</code> and <code>make queue-rules-check</code> were both run by hand <em>before</em> the commit and both printed <code>ok</code>; CI failed <code>lint-status</code> on rule 11, which took <code>status-lint-gate</code> down with it.
+Re-running <code>make queue-rules-check</code> after the commit reproduces it immediately (Q1040).</p>
 <h3 id="two-gate-behaviours-a-failure-message-does-not-explain">Two gate behaviours a failure message does not explain<a class="headerlink" href="#two-gate-behaviours-a-failure-message-does-not-explain" title="Permanent link">&para;</a></h3>
 <p>Both hit two sessions independently on 2026-08-27, and neither is inferable from what the gate prints.</p>
 <p><strong><code>queue-lint</code> keys on the bare <code>name.go:NNN</code> text wherever it appears, link label included.</strong> A row citing a source line is asked to re-point or drop it, and the obvious remedy does <em>not</em> clear the note: turning the citation into a proper Markdown link leaves the pattern matching inside the label.
