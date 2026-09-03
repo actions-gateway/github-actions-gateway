@@ -107,7 +107,8 @@ The prose one exists because those gates run at the very *end* of `make check`, 
 `gate-lists-check` holds both lists to that claim in both directions: a member outside `CHECK_FAST_GATES` makes the target a second opinion, and a fast gate the list omits makes it report a green `make check` would not.
 `DOCS_GATES` was never passed in, and it had been failing the first half for the life of the list: `make docs-gates` ran `release-notes-check`, which was in neither gate list, so it tested something `make check` did not (Q920).
 It was failing the second half too, and by more: the completeness rule read only the pathspecs a gate hands git, and every page-scoped gate here names its page as a constant instead, so seven were invisible at once and `make docs-gates` was green on prose edits to nine pages `make check` can fail (Q930).
-`roadmap-check`, `comparison-stamps-check`, `promql-check`, `metric-tiers-check`, `reason-tiers-check`, `api-reference-check` and `gate-lists-check` joined the list when the rule learned to read a hardcoded subject, and `rung-order-check` with it (Q972); the target runs 20 gates in about 7 seconds.
+`roadmap-check`, `comparison-stamps-check`, `promql-check`, `metric-tiers-check`, `reason-tiers-check`, `api-reference-check` and `gate-lists-check` joined the list when the rule learned to read a hardcoded subject, and `rung-order-check` with it (Q972).
+The three store gates joined last, held there by a rule of their own rather than by a derivation, because a gate that hands its store path to a Python entry point shows neither a pathspec nor a hardcoded subject (Q1040); the target runs 23 gates in about 9 seconds.
 
 **A shell edit needs `make shellcheck` on its own.** Neither subset target includes it.
 The gate is 37 s over all 210 scripts, against a whole fast fan-out to learn the same thing from `make check` (measured 2026-08-15, Q870).
@@ -365,7 +366,7 @@ An extraction over full command lines therefore returns the list's size whether 
 Switching from matching processes to distinct paths does **not** fix it, which is the trap: both readings come off the same inherited argv.
 Process counts stay citable as process counts; a distinct-suite count taken this way does not.
 
-Capping is not free either, because the same runner backs `make check` itself at 45 gates, with `scripts-test` nested inside as one of them, plus `docs-gates` at 19 and `queue-gates` at 10.
+Capping is not free either, because the same runner backs `make check` itself at 45 gates, with `scripts-test` nested inside as one of them, plus `docs-gates` at 23 and `queue-gates` at 11.
 A cap nests, so `check` would take a slot and open another capped runner beneath it.
 
 ### The coverage budget is wall clock, so it measures scheduling
@@ -909,6 +910,10 @@ It fails when:
   A script names its instruments that way too, so a hit there can be declared away with a reason (Q930).
   `gate-lists-check` is the one gate that does: it assigns `docs/queue/Q*.md` only to name a single item for this rule to test other gates against, reads the filename and checks nothing in the file.
   A gate whose recipe runs no `scripts/` file has no derivable file set and declares the same way, with a `# status-scope: none` comment and its reason directly above its `.PHONY`, as `md-reflow-check` does;
+- a `QUEUE_GATES` member is missing from `DOCS_GATES`, so `make docs-gates` reports a green on a backlog change `make queue-gates` would fail (Q1040).
+  The store is a tree of pages under `docs/`, so the containment is an invariant rather than a coincidence, and the completeness rule above cannot derive it: each `queue-*` gate hands its store path to a Python entry point rather than to git, and names it on an `exec` line rather than in an assignment, so both derivations come up empty and all three passed in silence.
+  `make docs-gates` was therefore green on a committed row wearing a label `make queue-rules-check` rejects outright.
+  This one is asserted directly;
 - a gate runs in `make check` but in no workflow, so it gates nothing on a PR.
   `make check` is then the only thing enforcing it, and the failure reports as a clean gate list — every rule above stays green (Q831).
   `comparison-stamps-check` shipped that way, and by the time the rule was written five gates were unwired: `license-header-check`, `page-density-check`, `semver-floor-sources-check`, `md-reflow-check` and `promql-check`.

@@ -134,6 +134,9 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   rung-order-check     the admission ladder's rungs listed in 04-operational-flows.md in an order Admit does not walk
 #   api-reference-check  docs/reference/api.md hand-edited away from what controller-gen renders
 #   gate-lists-check     testing.md stopping short of citing the list targets it must name
+#   queue-lint           an item's frontmatter, rank, title cap or target broken by a row edit
+#   queue-rules-check    a row filed wearing a label docs/queue/README.md never declared
+#   queue-claims-check   an id this branch adds that holds no refs/queue-ids claim
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
 # subset of `make check` and never a second opinion. That claim went unchecked
 # for the life of the list and was false: release-notes-check was in neither gate
@@ -145,8 +148,14 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 # page-scoped gate here is written the second way, so the rule had been blind to
 # seven of them at once and `make docs-gates` was green on prose edits to nine
 # pages `make check` can fail.
+# The store is a tree of pages under docs/, so this list contains QUEUE_GATES
+# outright, and the three queue-* gates are what that adds. Neither derivation
+# reaches them, so `gate-lists-check` rule 12 asserts the containment instead
+# (Q1040); `make docs-gates` was green on a committed row that
+# `make queue-rules-check` fails outright.
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               getting-started-check \
+              queue-lint queue-rules-check queue-claims-check \
               md-reflow-check page-density-check release-pins-check \
               release-notes-check upgrade-toc-check \
               conflict-markers-check \
