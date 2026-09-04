@@ -20,6 +20,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 GATE="$REPO_ROOT/scripts/ci/check-fixture-maintenance.sh"
 
@@ -40,6 +42,7 @@ run() {
 
 want_rc() {
 	local name="$1" want="$2"
+	die_if_killed "$name" "$rc" "$want"
 	if [[ "$rc" == "$want" ]]; then
 		printf 'ok   %-52s rc=%s\n' "$name" "$rc"
 	else

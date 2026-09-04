@@ -111,7 +111,23 @@ The count was right only because errexit could not reach it.
 
 ## Shared helpers and Makefile wiring
 
-Before writing a new helper function, check [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — `require_cmd`, `workspace_modules`, and the throttle setup already live there.
+Before writing a new helper function, check [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — `require_cmd`, `workspace_modules`, `die_if_killed`, and the throttle setup already live there.
+
+**A test suite that compares a captured exit status guards it with `die_if_killed` first.** A status above 128 is 128+n from a signal: the command was killed before it could answer, so comparing it against a wanted status blames the subject for the kill, and a contended `make check` reports `expected rc=1, got rc=143` as a defect in the gate under test (Q1023).
+The guard exits with that same status instead, which is what lets [`run-parallel.sh`](../../scripts/ci/run-parallel.sh) file the suite under KILLED rather than FAILED, the distinction it already draws and explains.
+
+```bash
+out="$("$@" 2>&1)" || rc=$?
+die_if_killed "$name" "$rc" "$want"
+if ((rc == want)); then
+```
+
+Two things about it are load-bearing.
+The split is `> 128`, not `>= 128`: git spends 128 on any fatal error, so 128 is not a signal death (Q837, where `run-parallel.sh` drew the same line).
+And the third argument is the *wanted* status, which a suite deliberately asserting a kill needs: [`run-parallel-test.sh`](../../scripts/ci/run-parallel-test.sh) expects 137 and 143 from the runner's own KILLED path, and a want-blind guard would exit before those assertions ran.
+Pass it whenever the wanted status is a variable; omit it for a literal, which can never be a signal.
+A helper that discards the status outright (`|| true`) has the same defect in a quieter form: the command is dead before it prints, so the assertion reports a missing needle and blames the gate's wording.
+
 The root `Makefile` keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see [`scripts/README.md`](../../scripts/README.md) for the script inventory and parameter conventions.
 
 **A new script goes in a `scripts/<group>/` directory, never at the top level.** The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in [`scripts/README.md`](../../scripts/README.md) and the rule is explained in [testing.md § `scripts/` is grouped by blast radius](testing.md#scripts-is-grouped-by-blast-radius).

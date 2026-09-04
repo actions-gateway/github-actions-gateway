@@ -162,6 +162,9 @@ Both still exit non-zero, because a killed command did not do its work.
 What separates them is the fan-out's own status: 1 when anything reached a bad verdict, and otherwise the first killed command's own `128+N` (Q837).
 Exit 128 is not a signal death, since git spends it on any fatal error, so it stays a `FAILED`.
 
+**A nested suite only reaches that distinction if it hands the status back**, which is what `die_if_killed` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh) is for: a suite that compares a killed child's `143` against a wanted `1` reports a false `FAILED` from inside a fan-out that would have called it `KILLED` (Q1023).
+Guard every captured-status comparison with it; [bash-style.md § Shared helpers](bash-style.md#shared-helpers-and-makefile-wiring) has the shape and the two traps.
+
 Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per passing package and the full output of any package that fails (compress success, expand failure).
 When debugging a **slow or hanging** test, add `V=1` (`make check V=1` or `make test V=1`) to stream output live — without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing (not even its `t.Log` lines) until it finishes or hits `-timeout`.
 

@@ -11,6 +11,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/ci/check-conflict-markers.sh"
 
@@ -33,6 +35,7 @@ expect() {
 	fixture="$FIXTURE_DIR/$name.txt"
 	printf '%s\n' "$content" >"$fixture"
 	"$CHECKER" "$fixture" >/dev/null 2>&1 || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		printf 'ok   %-24s rc=%s\n' "$name" "$got_rc"
 	else
@@ -107,6 +110,7 @@ selection_case() {
 	if [[ -n "$file" ]]; then
 		rm -f "$SELECT_REPO/$file"
 	fi
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		printf 'ok   %-24s rc=%s\n' "$name" "$got_rc"
 	else

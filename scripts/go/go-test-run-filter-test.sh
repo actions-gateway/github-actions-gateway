@@ -23,6 +23,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 
 fails=0
@@ -88,6 +90,7 @@ run_gate() {
 # expect_status NAME WANT — the run's exit status.
 expect_status() {
 	local name="$1" want="$2"
+	die_if_killed "$name" "$rc" "$want"
 	if [[ "$rc" == "$want" ]]; then
 		printf 'ok   status   %-28s -> %s\n' "$name" "$rc"
 	else

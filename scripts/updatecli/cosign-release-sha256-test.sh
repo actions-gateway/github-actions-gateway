@@ -22,6 +22,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 SCRIPT="$REPO_ROOT/scripts/updatecli/cosign-release-sha256.sh"
 
@@ -113,6 +115,7 @@ run() {
 
 assert_rc() {
 	local name="$1" want="$2"
+	die_if_killed "$name" "$out_rc" "$want"
 	if [[ "$out_rc" == "$want" ]]; then
 		pass "$name (rc=$out_rc)"
 	else

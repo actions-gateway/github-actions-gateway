@@ -25,6 +25,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 GATE="$REPO_ROOT/scripts/docs/check-plan-index.sh"
 
 fails=0
@@ -104,6 +106,7 @@ index() {
 expect() {
     local name="$1" want="$2" want_text="${3:-}" got=0
     ( cd "$WORK" && GAG_RELEASE_TAG="$TAG" "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
+    die_if_killed "$name" "$got" "$want"
     if [[ "$got" != "$want" ]]; then
         printf 'FAIL %s: want exit %s, got %s\n' "$name" "$want" "$got"
         awk '{ print "    " $0 }' "$WORK/gate.out"

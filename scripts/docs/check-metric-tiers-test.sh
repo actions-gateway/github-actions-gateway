@@ -20,6 +20,8 @@ shopt -s inherit_errexit
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATE="$SCRIPT_DIR/check-metric-tiers.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 
 METRICS_DOC="$REPO_ROOT/docs/operations/observability-metrics.md"
 PARITY_DOC="$REPO_ROOT/docs/plan/v2-ga.md"
@@ -38,6 +40,7 @@ expect_rc() {
     local name="$1" want="$2" rc=0
     shift 3
     "$@" >/dev/null 2>&1 || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if ((rc == want)); then
         ok "$name (rc=$rc)"
     else

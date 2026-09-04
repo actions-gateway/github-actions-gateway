@@ -14,6 +14,8 @@ shopt -s inherit_errexit
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATE="$SCRIPT_DIR/check-comparison-stamps.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 WORK="$REPO_ROOT/tmp/comparison-stamps-test"
 
 rm -rf "$WORK"
@@ -28,6 +30,7 @@ check() {
     shift 2
     local got=0
     "$GATE" "$@" >"$WORK/out.log" 2>&1 || got=$?
+    die_if_killed "$name" "$got" "$want"
     if [[ "$got" == "$want" ]]; then
         pass=$((pass + 1))
         printf 'ok   %s\n' "$name"
