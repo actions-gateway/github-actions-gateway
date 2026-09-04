@@ -2,7 +2,7 @@
 
 **Status:** spike **complete**, no code changed.
 This is the escape-hatch check the [re-route #8 conclusion](archive/gke-dogfood-turnup-findings.md) invited: #8 isolated the last Q224 blocker to **GitHub's server-side fan-out distinct-delivery starvation** on GAG's many-acquirers topology and called [Option E / Q264](q264-scale-set-protocol.md) the structural fix.
-Before the user commits to (or declines) the Q264 scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.
+Before the user commits to (or declines) the [Q264](../queue/Q264.md) scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.
 
 **Verdict up front: no AGC-side lever provides a *reliable* fix; #530/§5 stands — [Option E (Q264)](q264-scale-set-protocol.md) is the only structural fix.**
 

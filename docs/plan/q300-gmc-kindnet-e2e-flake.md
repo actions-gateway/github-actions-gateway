@@ -1,7 +1,7 @@
 # Q300 — systemic kindnet `e2e / e2e` leg flakiness (cross-spec, control-plane starvation suspected)
 
 **Status:** watching — the PR #612 kindnetd-unthrottle fix **did** close the CFS-throttling mechanism (throttle counters are zero in every post-#612 failure dump), and the 2026-07-18 "recurrence" that briefly escalated this row was a **misattribution** (it was the Q349 flake on a commit that predated the Q349 fix — see the triage below).
-One genuinely unexplained dataplane event remains (2026-07-15, `CrossTenantNetworkBlocked` fail-open), so the row sits in [flake watch](../queue/README.md) with the failure dump upgraded to attribute the next occurrence from CI artifacts alone.
+One genuinely unexplained dataplane event remains (2026-07-15, `CrossTenantNetworkBlocked` fail-open), so [Q300](../queue/Q300.md) sits in [flake watch](../queue/README.md) with the failure dump upgraded to attribute the next occurrence from CI artifacts alone.
 
 A second `CrossTenantNetworkBlocked` occurrence (2026-08-03, on a PR branch) points at the same spec from the opposite direction — enforcement flapping rather than leaking open — and turned up a test-harness defect that hides the probe's own diagnostic.
 See [2026-08-03](#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies).

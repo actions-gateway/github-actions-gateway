@@ -4,7 +4,7 @@
 Four distinct failure modes now sit behind that one timeout, and only one of them is the defect the spec exists to catch.
 This file exists so the next occurrence is classified before anything is changed.
 
-**Status:** the 2026-08-26 and 2026-08-28 sightings are attributed, as **two** further shapes rather than one, and both are mitigated.
+**Status:** [Q549](../queue/Q549.md) is parked in flake watch; the 2026-08-26 and 2026-08-28 sightings are attributed, as **two** further shapes rather than one, and both are mitigated.
 Mode A is diagnosed and mitigated (PR #1120).
 **Mode B is diagnosed as of 2026-08-12 and fixed under Q809**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
 Mode C (the recovery scan never observed the disruption) and mode D (the spec failing on its own sampler) are attributed below: see [What the 2026-08-26 and 2026-08-28 sightings show](#what-the-2026-08-26-and-2026-08-28-sightings-show).

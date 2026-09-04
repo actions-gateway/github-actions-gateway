@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # check-plan-index.sh — keep docs/plan/README.md and the docs/plan/ tree in sync,
-# in both directions. Two invariants, both fail-fast so drift can't ship:
+# in both directions. Five invariants, all fail-fast so drift can't ship:
 #
 #   1. An open plan has open work. An active (non-Archive) row in
 #      docs/plan/README.md whose Status cell carries an open marker (⚠️ ❌ 🚧 🔲)
@@ -59,6 +59,27 @@
 #      no release to contradict. ⚠️ stays legal on a shipped release: a residual
 #      Queue row is a real state. The reverse direction — ✅ before the tag —
 #      is deliberately not gated, since the docs are written before the tag is cut.
+#
+#   5. Status paragraph ↔ Queue row. Invariants 1 and 3 bind the index row; the
+#      plan doc's own `**Status` paragraph — the one above the file's first `##`
+#      heading, ending at the blank line under it — is the same claim one file
+#      lower and nothing read it. Two halves, each the neighbouring invariant
+#      reused at that level:
+#
+#      5a mirrors invariant 3. A QNNN the paragraph names is linked while its row
+#      is live and bare once it is gone, so the anchor dies with the row and
+#      `make doc-links` forces the sentence around it to be re-read.
+#
+#      5b mirrors invariant 1, in its direction: a paragraph whose plan the store
+#      still backs with a live item must link at least one live row. An unpinned
+#      claim has no anchor to lose, which is how merge-drivers-go.md read
+#      "Phase 1 in progress" for the four days after Phase 1 merged in #1819 —
+#      Q893's own instance, and the only live one when this was written.
+#      Invariant 1 cannot see it: that rule reads the index cell, which said
+#      "🚧 In progress" and was true of the plan as a whole.
+#
+#      ⓘ exempts a paragraph, as it does an index row: an informational plan
+#      claims no progress, so it has nothing that goes stale.
 #
 set -euo pipefail
 shopt -s inherit_errexit
@@ -396,9 +417,144 @@ elif (( ${#release_rows[@]} > 0 )); then
     fi
 fi
 
+# Invariant 5: a plan doc's own Status paragraph, bound the same way — the one
+# above the file's first `##` heading, from that line to the blank line under it. The paragraphs around it carry the
+# doc's scope, method and verdict, which describe the work rather than claim its
+# state — the same cut invariant 3 makes when it reads column 3 and leaves the
+# Scope cell alone, and the reason v2-api-gap-analysis.md is not charged for
+# naming Q273 in its Goal sentence. Requiring the paragraph to sit above the
+# first heading is what keeps a mid-doc one out: security.md carries a `**Status`
+# line at 1035, a thousand lines below anything a reader takes as the rollup.
+#
+# extract_preamble FILE — print it as `line<TAB>text`, or nothing when the file
+# has no `**Status` line above its first heading.
+extract_preamble() {
+    awk '
+        /^## / { exit }
+        /^\*\*Status/ { inpre = 1 }
+        inpre && NF == 0 { exit }
+        inpre { print FNR "\t" $0 }
+    ' "$1"
+}
+
+pre_dangling=() pre_unlinked=() pre_mismatch=() pre_unpinned=()
+preambles_checked=0
+for f in ${disk_active+"${disk_active[@]}"}; do
+    preamble="$(extract_preamble "$plan_dir/$f")"
+    [[ -n "$preamble" ]] || continue
+    # ⓘ exempts a preamble as it does an index row: an informational plan claims
+    # no progress, so it carries nothing that can go stale.
+    [[ "$preamble" == *ⓘ* ]] && continue
+    preambles_checked=$(( preambles_checked + 1 ))
+
+    # 5a, invariant 3's rule one file lower. The linked IDs are read and removed
+    # first so the bare scan below cannot see the label inside a link.
+    links_live=0
+    while IFS=$'\t' read -r lineno kind id; do
+        case "$kind" in
+        live) links_live=1 ;;
+        dangling) pre_dangling+=("$f:$lineno"$'\t'"$id") ;;
+        unlinked) pre_unlinked+=("$f:$lineno"$'\t'"$id") ;;
+        mismatch) pre_mismatch+=("$f:$lineno"$'\t'"$id") ;;
+        esac
+    done < <(awk '
+        FNR == NR { anchor[$0] = 1; next }
+        {
+            lineno = $1
+            sub(/^[0-9]+\t/, "")
+            line = $0
+            while (match(line, "\\[Q[0-9]+\\]\\(\\.\\./queue/Q[0-9]+\\.md\\)")) {
+                split(substr(line, RSTART, RLENGTH), part, "]")
+                label = substr(part[1], 2)
+                target = substr(part[2], index(part[2], "/") + 1)
+                sub(/^queue\//, "", target)
+                sub(/\.md\)$/, "", target)
+                if (label != target) {
+                    print lineno "\tmismatch\t" label " -> " target
+                } else if (!(label in anchor)) {
+                    print lineno "\tdangling\t" label
+                } else {
+                    print lineno "\tlive\t" label
+                }
+                line = substr(line, 1, RSTART - 1) substr(line, RSTART + RLENGTH)
+            }
+            # Every other Markdown link goes next, label and all. An ID inside
+            # one is already pinned to something a reader can follow, and
+            # `[Option E / Q264](q264-scale-set-protocol.md)` is the shape that
+            # would otherwise be charged for naming a row it does not link.
+            while (match(line, "\\[[^]]*\\]\\([^)]*\\)")) {
+                line = substr(line, 1, RSTART - 1) substr(line, RSTART + RLENGTH)
+            }
+            while (match(line, "Q[0-9]+")) {
+                id = substr(line, RSTART, RLENGTH)
+                if (id in anchor) { print lineno "\tunlinked\t" id }
+                line = substr(line, RSTART + RLENGTH)
+            }
+        }
+    ' "$ids_file" <(printf '%s\n' "$preamble"))
+
+    # 5b, invariant 1's rule in its own direction. A plan the store still backs
+    # has work in flight, so its preamble is a claim that will go stale — and an
+    # unlinked claim has no anchor to lose when the row closes.
+    if (( ! links_live )) && grep -rqF --include='Q*.md' "$f" "$store"; then
+        first_line="${preamble%%$'\t'*}"
+        pre_unpinned+=("$f:$first_line")
+    fi
+done
+
+if (( ${#pre_unlinked[@]} > 0 )); then
+    errors=1
+    {
+        printf 'check-plan-index: %d plan Status paragraph(s) name a live Queue row without linking it.\n' "${#pre_unlinked[@]}"
+        printf 'A bare ID is the closed form and nothing notices when it goes stale. Write [QNNN](../queue/QNNN.md)\n'
+        printf 'so closing the row breaks the anchor and forces the paragraph to be re-read.\n'
+        for c in "${pre_unlinked[@]}"; do
+            IFS=$'\t' read -r l i <<<"$c"
+            printf '  - docs/plan/%s names %s, which is still an item in docs/queue/\n' "$l" "$i"
+        done
+    } >&2
+fi
+
+if (( ${#pre_dangling[@]} > 0 )); then
+    errors=1
+    {
+        printf 'check-plan-index: %d plan Status paragraph(s) link a Queue row that no longer exists.\n' "${#pre_dangling[@]}"
+        printf 'The row closed, so the paragraph summarizes work that has finished and is stale by construction.\n'
+        printf 'Re-read it against the plan, then write the ID bare — the closed form — or drop it.\n'
+        for c in "${pre_dangling[@]}"; do
+            IFS=$'\t' read -r l i <<<"$c"
+            printf '  - docs/plan/%s links %s, which is no longer an item in docs/queue/\n' "$l" "$i"
+        done
+    } >&2
+fi
+
+if (( ${#pre_mismatch[@]} > 0 )); then
+    errors=1
+    {
+        printf 'check-plan-index: %d plan Status paragraph link(s) label one Queue row and point at another.\n' "${#pre_mismatch[@]}"
+        printf 'doc-links validates the target only, so a mismatched label reads as correct forever.\n'
+        for c in "${pre_mismatch[@]}"; do
+            IFS=$'\t' read -r l i <<<"$c"
+            printf '  - docs/plan/%s links %s\n' "$l" "$i"
+        done
+    } >&2
+fi
+
+if (( ${#pre_unpinned[@]} > 0 )); then
+    errors=1
+    {
+        printf 'check-plan-index: %d plan Status paragraph(s) pin their claim to no live Queue row.\n' "${#pre_unpinned[@]}"
+        printf 'The store still carries an item naming the plan, so the paragraph is a claim about work in\n'
+        printf 'flight and nothing dies when that work lands. Link the live row(s) the paragraph is about, or\n'
+        printf 'mark the plan ⓘ if it tracks no progress. merge-drivers-go.md read "Phase 1 in progress" for\n'
+        printf 'four days after Phase 1 merged, and this is the half no gate could see (Q893).\n'
+        for c in "${pre_unpinned[@]}"; do printf '  - docs/plan/%s\n' "$c"; done
+    } >&2
+fi
+
 if (( errors )); then
     exit 1
 fi
 
-printf 'check-plan-index: ok (%d active, %d archived; every open-marked row backed by a live item, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open)\n' \
-    "${#indexed_active[@]}" "${#indexed_archive[@]}" "$release_checked"
+printf 'check-plan-index: ok (%d active, %d archived; every open-marked row backed by a live item, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open, %d plan Status paragraph(s) read)\n' \
+    "${#indexed_active[@]}" "${#indexed_archive[@]}" "$release_checked" "$preambles_checked"

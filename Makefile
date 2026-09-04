@@ -733,9 +733,10 @@ queue-id: ## Search the backlog for near-duplicates, then allocate a Q-ID (make 
 roadmap-check: ## Fail when docs/roadmap.md names backlog rows that shipped or moved tables
 	scripts/docs/check-roadmap.sh
 
-# Catches a plan claiming open work no backlog item carries, and the narrower
-# case where the plan stays but its Status cell still names items that closed
-# (Q800). Rationale + the ⓘ exemption live in the script header.
+# Catches a plan claiming open work no backlog item carries, the narrower case
+# where the plan stays but its Status cell still names items that closed (Q800),
+# and the same two questions asked of the plan doc's own Status paragraph, which
+# nothing read until Q893. Rationale + the ⓘ exemption live in the script header.
 .PHONY: plan-index-check
 plan-index-check: ## Assert every open-marked plan in docs/plan/README.md is backed by a live item
 	scripts/docs/check-plan-index.sh

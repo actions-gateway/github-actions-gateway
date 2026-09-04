@@ -2,7 +2,7 @@
 
 **Status:** ⚠️ Partial.
 The *actuator* shipped (Phase 1).
-**Phase 0 is answered:** the ScaleSet tier is not exposed to the unbounded form of this defect, from a live measurement already committed to the repo — so Q501 is a **classic-tier** item and candidate B's cost is not worth paying.
+**Phase 0 is answered:** the ScaleSet tier is not exposed to the unbounded form of this defect, from a live measurement already committed to the repo — so [Q501](../queue/Q501.md) is a **classic-tier** item and candidate B's cost is not worth paying.
 The remaining question is Phase 2, one live-GitHub reading that the cancel spec is now instrumented to take.
 
 Q501 was found by [Q459's cancellation measurement](archive/q459-drained-worker-recovery.md#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501): a `sleep 600` job ran its full 600s after its run was cancelled from GitHub, which concluded the job at its own ~5-minute grace.
