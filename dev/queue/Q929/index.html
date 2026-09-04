@@ -2663,7 +2663,7 @@ The whole 117-site surface is therefore exposed, and the gosec half is a measure
   One cache archive in, two verdicts out.</li>
 <li><strong>A different runner.</strong> Both <code>lint</code> jobs ran GitHub-hosted <code>ubuntu-latest</code> on Go 1.26.6 in the same workspace path, despite <code>runs-on</code> being an expression here and the failing run being a dispatch.</li>
 <li><strong>Issue-count truncation ahead of the filter.</strong> <code>MaxSameIssues</code> and <code>MaxFromLinter</code> are registered after <code>NewNolintFilter</code> in <code>pkg/lint/runner.go</code> (2.12.2), so no cap can make a directive read unused.
-  Q1003 covers what the caps do instead.</li>
+  The caps are lifted now, so a red here reports its full extent: <a href="../../development/testing/#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">testing.md</a>.</li>
 <li><strong>Cause #1 firing in one run and not the other.</strong> At <code>c99129aa</code> the exclusion rule's path was <code>proxytrust_test\.go</code>, the name the file carried before #1137 renamed it, so the rule matched nothing and the two directives were the sole suppression.
   Q923 repointed it afterwards.
   The incident is a linter silence with no exclusion in play.</li>
