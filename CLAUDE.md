@@ -236,7 +236,9 @@ When in doubt, write the detail in `docs/` and link it; prefer tightening an exi
   Use `git commit --fixup=<sha>` + `GIT_SEQUENCE_EDITOR=true git rebase --autosquash origin/main` for that (autosquash works though interactive rebase does not).
   Amending `HEAD` itself is fine while unpushed: fix up the message or staged changes without asking.
   Once pushed (but before a PR exists), prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
-- **Merges go through the merge queue, which only the web UI can enqueue into** — `gh pr merge` routes a queue enqueue through `enablePullRequestAutoMerge`, and this repo sets `allow_auto_merge: false`, so every form of it fails `Auto merge is not allowed for this repository` (measured 2026-08-14 on #1525, gh 2.96.0).
+- **Merges go through the merge queue, and `gh pr merge` cannot enqueue into it** — it routes through `enablePullRequestAutoMerge`, which this repo disables (`allow_auto_merge: false`), so every form fails `Auto merge is not allowed for this repository` (re-measured 2026-09-04 on gh 2.100.0, with all 9 required checks green and `mergeStateStatus: CLEAN`, so it is not gh falling back on unfinished checks).
+  **`enqueuePullRequest` does work**, so the queue is reachable from a session: `gh api graphql -f query='mutation($pr:ID!){enqueuePullRequest(input:{pullRequestId:$pr}){mergeQueueEntry{position state}}}' -F pr="$(gh pr view <n> --json id --jq .id)"` (measured 2026-09-04 on #1843-#1846).
+  Whether you *may* is the authorization rule below, not a question about the tool.
   The queue validates the candidate merge result and a failing entry is kicked back to its PR with the failure attached (the signal pr-sentinel reacts to).
   A push to a queued PR is **rejected** (`GH006`, measured 2026-08-12); wait for the queue to land or evict it rather than dequeuing, which would revoke a human's merge decision.
   Prefer everything in the first push and weigh the CI a push restarts (docs-only gates are seconds; the e2e matrix is a quarter-hour).
@@ -245,7 +247,7 @@ When in doubt, write the detail in `docs/` and link it; prefer tightening an exi
   **Exception — self-healing your own open PR always pushes:** a CI fix or a `git rebase origin/main` conflict heal that a pr-sentinel wake asked for is repairing *this* PR, not adding scope, so push it once the queue releases it (`--force-with-lease` after a rebase; branch-guard's default `strict` policy auto-approves a force-push of the worktree's own branch) and relaunch the watcher.
   **A heal that follows a queue eviction may also re-enqueue**, but only when `scripts/agent/pr-requeue-eligible.sh --assess <pr>` (before the rebase) and `--confirm <pr>` (after CI) both pass — a prior *human* enqueue, no current queue entry, and conflicts confined to the merge-driver-owned files.
   That restores the maintainer's own decision; a **first** enqueue is never yours to make (Q692).
-  Both verdicts are advisory until `gh` can enqueue at all: report the `ELIGIBLE` line and hand the re-enqueue back, rather than reading the failed `gh pr merge` as a defect to work around.
+  Both verdicts gate that re-enqueue, and the mutation above is how you run it once they pass; report the `ELIGIBLE` line either way, so the decision is auditable.
   Verify what landed by content (`git show origin/main:<path>`), never by SHA — a squash orphans your SHAs, and a rebase rewrites them.
 - After pushing, check for a PR (`gh pr view`); if none exists and the task is finished, open one per Workflow step 5.
 - No AI/Claude attribution anywhere in commits or PRs — no `Co-Authored-By`, no "Generated with" lines.
