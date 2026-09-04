@@ -209,8 +209,9 @@ The mechanics here:
   A worker may rebase and re-enqueue **only** when [`scripts/agent/pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
   A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a `gh` failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
-- **`ELIGIBLE` does not make the re-enqueue runnable.** `gh pr merge` routes it through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so every form of it fails `Auto merge is not allowed for this repository` (measured 2026-08-14 on #1525, gh 2.96.0).
-  Report the verdict and its `measured:` line, and hand the re-enqueue to the maintainer.
+- **`ELIGIBLE` is the authorization, not the mechanism.** `gh pr merge` cannot enqueue, because it routes through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so every form of it fails `Auto merge is not allowed for this repository` (re-measured 2026-09-04 on gh 2.100.0, with all nine required checks green, so it is not the documented fallback for unfinished checks).
+  The `enqueuePullRequest` mutation does work (`gh api graphql`, measured 2026-09-04 on #1843-#1846), so once both verdicts pass the re-enqueue is runnable here.
+  Report the verdict and its `measured:` line either way, so the decision is auditable; hand the re-enqueue to the maintainer whenever either verdict fails, and never make a *first* enqueue.
 
 ## Concurrency and contention
 

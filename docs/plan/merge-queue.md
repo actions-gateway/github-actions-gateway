@@ -80,7 +80,10 @@ where `tmp/ruleset.json` is the current ruleset body (GET it first) plus:
 - `min_entries_to_merge: 1` with a 5-minute wait lets batches form at the observed merge rate (~2 PRs per 5-min window at peak) without stalling a lone PR.
 - `check_response_timeout_minutes: 60` clears the worst observed e2e run (30 min) with headroom for queue-time image-cache misses.
 
-After activation, `gh pr merge --squash` enqueues instead of merging directly; a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.
+After activation, a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.
+This section predicted `gh pr merge --squash` would enqueue; it does not.
+That form routes through `enablePullRequestAutoMerge`, which `allow_auto_merge: false` forbids, so it fails outright (measured 2026-09-04, gh 2.100.0).
+Enqueueing from a terminal takes the `enqueuePullRequest` mutation instead; see [CONTRIBUTING.md](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open).
 
 Rollback: delete the `merge_queue` rule from the ruleset; behavior reverts to direct merges and the process rules in CONTRIBUTING.md.
 

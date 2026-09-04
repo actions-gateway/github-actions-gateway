@@ -264,8 +264,13 @@ The file holds full 40-character commit hashes because that is all `git blame` p
 ### Pushing to a PR that is already open
 
 Prefer putting everything in the first push — but "never push again" is too strong, and the reason matters.
-Every merge goes through the **merge queue** (entered from the PR's web UI; the queue validates the candidate merge and lands it), so the old race (a direct squash-merge overtaking a just-pushed commit and stranding it) cannot happen: while a PR is queued, a push to its branch is **rejected** (`GH006 ... Branches that are queued for merging cannot be updated`, measured 2026-08-12), so the candidate the queue is validating cannot change under it.
-The CLI cannot enqueue: `gh pr merge` routes it through `enablePullRequestAutoMerge`, and this repository sets `allow_auto_merge: false`, so every form of the command fails with `Auto merge is not allowed for this repository` (measured 2026-08-14, gh 2.96.0).
+Every merge goes through the **merge queue** (entered from the PR's web UI, or by the `enqueuePullRequest` API; the queue validates the candidate merge and lands it), so the old race (a direct squash-merge overtaking a just-pushed commit and stranding it) cannot happen: while a PR is queued, a push to its branch is **rejected** (`GH006 ... Branches that are queued for merging cannot be updated`, measured 2026-08-12), so the candidate the queue is validating cannot change under it.
+`gh pr merge` cannot enqueue: it routes through `enablePullRequestAutoMerge`, and this repository sets `allow_auto_merge: false`, so every form of the command fails with `Auto merge is not allowed for this repository` (re-measured 2026-09-04 on gh 2.100.0, against a PR whose nine required checks were all green, so this is not the documented fallback for unfinished checks).
+The GraphQL mutation the queue actually takes does work, if you want to enqueue without leaving the terminal:
+
+```bash
+gh api graphql -f query='mutation($pr:ID!){enqueuePullRequest(input:{pullRequestId:$pr}){mergeQueueEntry{position state}}}' -F pr="$(gh pr view <n> --json id --jq .id)"
+```
 
 The cost of a push to a PR that is *not* queued is therefore CI and queue position, not a stranded commit.
 On a docs-only PR the gates are seconds, so an amend is cheap; on a Go change a push restarts `integration-test` and the security scans, roughly ten minutes, and sends the PR to the back of the queue, where it then pays the e2e lanes for the first time.
