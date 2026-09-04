@@ -15,6 +15,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 CHECKER="$HERE/check-queue-rules.py"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -77,6 +80,7 @@ run() {  # run <repo> -> rc, output in $TMP/out
 expect() {  # expect <want-rc> <repo> <name> [pattern]
     local want="$1" repo="$2" name="$3" pat="${4:-}" rc=0
     run "$repo" || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if [[ "$rc" != "$want" ]]; then
         bad "$name (rc=$rc want=$want)"
         sed 's/^/       /' "$TMP/out" | head -3

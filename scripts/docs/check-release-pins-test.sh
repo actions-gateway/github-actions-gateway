@@ -15,6 +15,8 @@ shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 readonly GATE="$REPO_ROOT/scripts/docs/check-release-pins.sh"
 
 WORKDIR="$(mktemp -d)"
@@ -44,6 +46,7 @@ run() {
 pass_case() {
     local name="$1" doc="$2"
     run "$doc"
+    die_if_killed "$name" "$status"
     if (( status == 0 )); then
         printf 'ok   %s\n' "$name"
     else
@@ -57,6 +60,7 @@ pass_case() {
 fail_case() {
     local name="$1" doc="$2" needle="$3"
     run "$doc"
+    die_if_killed "$name" "$status"
     if (( status == 1 )) && [[ "$output" == *"$needle"* ]]; then
         printf 'ok   %s\n' "$name"
     else
@@ -154,6 +158,7 @@ resolves() {
     shift 2
     d="$(setup_repo "$want" "$@")"
     out="$( (cd "$d" && GAG_RELEASE_TAG='' "$GATE" "$d/doc.md") 2>&1 )" || st=$?
+    die_if_killed "$name" "$st"
     if (( st == 0 )) && [[ "$out" == *"current release $want "* ]]; then
         printf 'ok   %s\n' "$name"
     else
@@ -172,6 +177,7 @@ resolves '0.x is not a release operators install' v1.0.0 v0.9.0 v1.0.0
 d="$(setup_repo v1.3.0 v0.1.0)"
 st=0
 out="$( (cd "$d" && GAG_RELEASE_TAG='' "$GATE" "$d/doc.md") 2>&1 )" || st=$?
+die_if_killed "no stable tag -> skip" "$st"
 if (( st == 0 )) && [[ "$out" == *SKIP* ]]; then
     printf 'ok   %s\n' 'no stable tag -> skip, not fail'
 else
@@ -213,6 +219,7 @@ prep="$(prepared_repo a v1.4.0 v1.5.0-rc.3)"
 # shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
 printf '> Pin `--version 1.5.0` here.\n' >"$prep/doc.md"
 run_in "$prep" "$prep/doc.md"
+die_if_killed "prepared version accepted" "$status"
 if (( status == 0 )); then
     printf 'ok   %s\n' 'a candidate is tagged -> the prepared version may be pinned early'
 else
@@ -237,6 +244,7 @@ fi
 # shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
 printf '> Pin `--version 1.3.0` here.\n' >"$prep/stale.md"
 run_in "$prep" "$prep/stale.md"
+die_if_killed "stale pin still fails" "$status"
 if (( status == 1 )) && [[ "$output" == *"1.3.0"* ]]; then
     printf 'ok   %s\n' 'a candidate is tagged -> a genuinely stale pin still fails'
 else
@@ -250,6 +258,7 @@ released="$(prepared_repo b v1.4.0 v1.5.0-rc.3 v1.5.0)"
 # shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
 printf '> Pin `--version 1.6.0` here.\n' >"$released/doc.md"
 run_in "$released" "$released/doc.md"
+die_if_killed "allowance ends at the stable tag" "$status"
 if (( status == 1 )); then
     printf 'ok   %s\n' 'the stable tag landed -> no unreleased version is accepted'
 else
@@ -281,6 +290,7 @@ pad_tags "$padded"
 # shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
 printf '> Pin `--version 1.5.0` here.\n' >"$padded/doc.md"
 run_in "$padded" "$padded/doc.md"
+die_if_killed "spent candidate past the pipe buffer" "$status"
 if (( status == 1 )) && [[ "$output" == *"1.5.0"* ]]; then
     printf 'ok   %s\n' 'a spent candidate stays spent when the tag list outgrows the pipe buffer'
 else

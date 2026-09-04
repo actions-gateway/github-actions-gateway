@@ -169,6 +169,10 @@ fi
 # Exiting and exiting quietly are separate properties: the guard could return
 # early and still have printed, and a killed watcher reports 128+SIGKILL here
 # rather than passing as a clean exit.
+#
+# So `off_rc` is deliberately left unguarded by die_if_killed (Q1023, Q1055):
+# the stub `sleep` above kills this watcher on the tick a regression would take,
+# and a guard would report that regression as KILLED instead of failing it.
 if ((off_rc == 0)) && [[ ! -s "$WORK/off.log" ]]; then
 	ok 'interval 0 exits 0 without output' 'exited 0, printed nothing'
 else

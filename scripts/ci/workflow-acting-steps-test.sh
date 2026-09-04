@@ -37,6 +37,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 EXTRACT="$REPO_ROOT/scripts/ci/workflow-step-body.sh"
 
@@ -207,6 +209,7 @@ drive() {
 
 expect_rc() {
 	local name="$1" want="$2" got="$3" dir="$4"
+	die_if_killed "$name" "$got" "$want"
 	if [[ "$got" != "$want" ]]; then
 		fail "$name" "want rc=$want got rc=$got"
 		sed 's/^/    | /' "$dir/stepout" >&2
@@ -342,6 +345,7 @@ else
 	dir="$(new_sandbox check-regression-eq2)"
 	write_delegate "$dir" 7
 	got="$(drive "$dir" "$WORK/freeze-check-eq2.sh" "DELEGATE_OUT=v1.6.0-rc.1 no longer covers main")"
+	die_if_killed check-regression-eq2 "$got"
 	if [[ "$got" == 0 ]] && grep -qF 'log<<FREEZE_EOF' "$dir/outputs"; then
 		pass check-regression-eq2 'the -eq 2 defect lets rc=7 through, so these cases can fail'
 	else
@@ -439,6 +443,7 @@ else
 	# Read `rc` and the heredoc-delimited `log` back out of $GITHUB_OUTPUT the
 	# way the runner does, so the second step is fed what the first published.
 	step_rc="$(awk -F= '/^rc=/ { print $2 }' "$dir/outputs")"
+	die_if_killed freeze-end-to-end "$step_rc"
 	step_log="$(awk '/^log<<FREEZE_EOF$/ { inblk = 1; next } /^FREEZE_EOF$/ { inblk = 0 } inblk { print }' "$dir/outputs")"
 	if [[ "$step_rc" != 1 ]]; then
 		fail freeze-end-to-end "the check step published rc=${step_rc:-<empty>}, not 1"
@@ -537,6 +542,7 @@ else
 	got="$(drive "$dir" "$WORK/pages-mike-always-stable.sh" \
 		"VERSION=1.5.1" "ALIAS=" "IS_DEFAULT=false" "STABLE_TAG=true" \
 		"TITLE=1.5.1" "CONFIG=mkdocs.yml" "MIKE_STUB_VERSIONS=1.5.1 1.6.0")"
+	die_if_killed pages-regression-backport "$got"
 	if [[ "$got" == 0 ]] && grep -qF 'mike set-default --config-file mkdocs.yml stable' "$dir/calls"; then
 		pass pages-regression-backport 'without the comparison a backport demotes the site, so this case can fail'
 	else

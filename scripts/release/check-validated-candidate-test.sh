@@ -17,6 +17,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 SUBJECT="$SCRIPT_DIR/check-validated-candidate.sh"
 
 pass=0
@@ -80,6 +83,7 @@ run_case() {
 	out="$(cd "$FIXTURE" &&
 		STUB_EXIT="$stub_exit" CHECK_VALIDATED_SURFACE_CHECK="$STUB" \
 			"$SUBJECT" "$@" 2>&1)" || rc=$?
+		die_if_killed "$desc" "$rc" "$want"
 	LAST_OUT="$out"
 	if [[ "$rc" == "$want" ]]; then
 		ok "$desc (exit ${rc})"

@@ -22,6 +22,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/ci/check-tools.sh"
 REAL_BASH="$BASH"
@@ -88,6 +90,7 @@ version_case() {
 	} >"$STUB_DIR/bash"
 	chmod +x "$STUB_DIR/bash"
 	out="$(PATH="$STUB_DIR:$PATH" "$REAL_BASH" "$CHECKER" --required bash 2>&1)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" != "$want_rc" ]]; then
 		fail "$name" "want rc=$want_rc got rc=$got_rc"
 		return 0
@@ -124,6 +127,7 @@ rm -f "$STUB_DIR/bash"
 # name the version it read — the whole point of declaring one.
 real_rc=0
 real_out="$("$CHECKER" --required bash 2>&1)" || real_rc=$?
+die_if_killed real-bash-clears-floor "$real_rc"
 real_version="$(printf '%s.%s.%s' "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" "${BASH_VERSINFO[2]}")"
 if (( real_rc == 0 )) && [[ "$real_out" == *"($real_version, need "* ]]; then
 	pass real-bash-clears-floor "$real_version"
@@ -171,6 +175,7 @@ fi
 # silently unchecked, which is the failure this whole mechanism exists to avoid.
 floors_rc=0
 floors_out="$("$CHECKER" --floors 2>&1)" || floors_rc=$?
+die_if_killed real-floors-all-resolve "$floors_rc"
 if (( floors_rc == 0 )) && [[ "$floors_out" != *UNRESOLVED* ]]; then
 	pass real-floors-all-resolve "$(grep -c . <<<"$floors_out") declared"
 else
@@ -323,6 +328,7 @@ floor_case() {
 	local name="$1" row="$2" want_rc="$3" want_out="$4" got_rc=0 out checker
 	checker="$(fake_repo "$row")"
 	out="$("$REAL_BASH" "$checker" --floors 2>&1)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" != "$want_rc" ]]; then
 		fail "$name" "want rc=$want_rc got rc=$got_rc ($out)"
 	elif [[ "$out" != *"$want_out"* ]]; then
@@ -343,6 +349,7 @@ floor_case unresolvable-pin-is-a-failure 'stubtool|required|||https://example.in
 checker="$(fake_repo 'stubtool|required|||https://example.invalid||@ci:NO_SUCH_VERSION|')"
 broken_rc=0
 broken_out="$("$REAL_BASH" "$checker" 2>&1)" || broken_rc=$?
+die_if_killed unresolvable-pin-reported "$broken_rc"
 if (( broken_rc != 0 )) && [[ "$broken_out" == *"PIN"*"does not resolve"* ]]; then
 	pass unresolvable-pin-reported "rc=$broken_rc"
 else
@@ -366,6 +373,7 @@ chmod +x "$STUB_DIR/stubtool"
 checker="$(fake_repo 'stubtool|required|||https://example.invalid||1.0.0|report --short')"
 vc_rc=0
 vc_out="$(PATH="$STUB_DIR:$PATH" "$REAL_BASH" "$checker" 2>&1)" || vc_rc=$?
+die_if_killed version-cmd-consulted "$vc_rc"
 if (( vc_rc == 0 )) && [[ "$vc_out" == *"(1.2.3, need 1.0.0+)"* ]]; then
 	pass version-cmd-consulted "1.2.3"
 else
@@ -375,6 +383,7 @@ fi
 checker="$(fake_repo 'stubtool|required|||https://example.invalid||1.0.0|')"
 novc_rc=0
 novc_out="$(PATH="$STUB_DIR:$PATH" "$REAL_BASH" "$checker" 2>&1)" || novc_rc=$?
+die_if_killed version-cmd-is-load-bearing "$novc_rc"
 if (( novc_rc == 1 )) && [[ "$novc_out" == *"no version reported"* ]]; then
 	pass version-cmd-is-load-bearing "rc=$novc_rc"
 else
@@ -410,6 +419,7 @@ done
 if [[ -n "$old_bash" ]]; then
 	old_rc=0
 	old_out="$("$old_bash" "$CHECKER" 2>&1)" || old_rc=$?
+	die_if_killed old-bash-reports-the-floor "$old_rc"
 	if (( old_rc != 0 )) && [[ "$old_out" == *'bash 4.4+'* ]]; then
 		pass old-bash-reports-the-floor "$old_bash"
 	else

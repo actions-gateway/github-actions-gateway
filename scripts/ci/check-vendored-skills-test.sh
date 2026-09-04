@@ -19,6 +19,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/ci/check-vendored-skills.sh"
 
@@ -60,6 +62,7 @@ expect() {
 	local name="$1" want="$2" desc="$3" dir="$4" rc=0 out
 	shift 4
 	out="$(cd "$dir" && "$CHECKER" --manifest manifest.tsv "$@" 2>&1)" || rc=$?
+	die_if_killed "$name" "$rc" "$want"
 	if ((rc != want)); then
 		printf 'FAIL: %s — %s: expected rc %d, got %d\n' "$name" "$desc" "$want" "$rc" >&2
 		printf '%s\n' "$out" | sed 's/^/       /' >&2
@@ -158,6 +161,7 @@ fi
 
 rc=0
 out="$("$CHECKER" 2>&1)" || rc=$?
+die_if_killed shipped "$rc"
 if ((rc != 0)); then
 	printf 'FAIL: shipped — this repo'"'"'s own vendored files do not match their digests\n' >&2
 	printf '%s\n' "$out" | sed 's/^/       /' >&2

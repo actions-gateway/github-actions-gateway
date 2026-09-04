@@ -89,15 +89,17 @@ git_candidates() {
 # The seen-set is an associative array, not a string scanned with a glob: the
 # doc-links oracle feeds this the whole tree (13.8k paths, 90% of them vendor/),
 # and a substring test against an accumulating string costs O(N^2) — 38s there,
-# against 0.5s for the keyed lookup.
+# against 0.5s for the keyed lookup. It is named `seen_paths` rather than `seen`
+# because shellcheck carries a sourced file's declarations into the sourcing
+# script: a `local seen=0` there is then read as an array and warns (SC2178).
 select_present_files() {
 	local path
-	local -A seen=()
+	local -A seen_paths=()
 	while IFS= read -r path; do
 		[[ -n "$path" ]] || continue
 		[[ -f "$path" ]] || continue
-		[[ -n "${seen[$path]:-}" ]] && continue
-		seen[$path]=1
+		[[ -n "${seen_paths[$path]:-}" ]] && continue
+		seen_paths[$path]=1
 		printf '%s\n' "$path"
 	done
 }

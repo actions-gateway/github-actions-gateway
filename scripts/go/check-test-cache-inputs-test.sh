@@ -17,6 +17,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 
 GATE="$REPO_ROOT/scripts/go/check-test-cache-inputs.sh"
@@ -47,6 +49,7 @@ assert_gate() {
 	local dir="$1" want="$2" desc="$3" rc=0 out
 	(cd "$dir" && git add -A)
 	out="$(cd "$dir" && "$GATE" 2>&1)" || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
 	if [[ "$rc" != "$want" ]]; then
 		echo "FAIL: $desc — want exit $want, got $rc" >&2
 		printf '%s\n' "$out" >&2
@@ -218,6 +221,7 @@ assert_gate "$d" 0 "an //go:build e2e derivation is skipped"
 # --- this tree stays green, and its allowlist stays specific ------------------
 rc=0
 "$GATE" >/dev/null 2>&1 || rc=$?
+die_if_killed "the gate passes against this repo" "$rc"
 if [[ "$rc" != 0 ]]; then
 	echo "FAIL: the gate does not pass against this repo (exit $rc)" >&2
 	fails=$((fails + 1))

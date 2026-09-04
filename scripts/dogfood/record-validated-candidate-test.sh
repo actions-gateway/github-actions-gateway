@@ -16,6 +16,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 SUBJECT="$SCRIPT_DIR/record-validated-candidate.sh"
 
 pass=0
@@ -86,6 +89,7 @@ run_case() {
 	local out rc=0
 	out="$(PATH="$BIN:$PATH" GH_LOG="$GH_LOG" REPO=owner/name \
 		env "${env_args[@]}" "$SUBJECT" "$@" 2>&1)" || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
 	LAST_OUT="$out"
 	if [[ "$rc" == "$want" ]]; then
 		ok "$desc (exit ${rc})"

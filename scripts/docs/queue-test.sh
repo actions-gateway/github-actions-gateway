@@ -10,6 +10,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 Q="$HERE/queue.py"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -22,6 +25,7 @@ expect_rc() {  # expect_rc <want> <name> <cmd...>
     local want="$1" name="$2" rc=0
     shift 2
     "$@" >"$TMP/out" 2>"$TMP/err" || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if [[ "$rc" == "$want" ]]; then
         ok "$name"
     else
@@ -215,6 +219,7 @@ for opener in "Blocked on an upstream release" "**Blocked by** the rename" \
     item "$S" Q2 a1 ready
     rc=0
     python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+    die_if_killed "lint: a blocked row opening '$opener'" "$rc"
     # "is blocked but", not the rest of the sentence: a grep for wording only
     # the current message carries cannot fail against the check this one
     # replaced, and an assertion that cannot fail is not evidence.
@@ -230,6 +235,7 @@ S="$TMP/vacuousblock"
 item "$S" Q1 a0 blocked 'Still stuck. The `work Q123` example is unrelated.'
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a blocked row citing an unrelated id" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "is blocked but" "$TMP/e"; then
     ok "lint: a blocked row citing an unrelated id still warns"
 else
@@ -243,6 +249,7 @@ S="$TMP/mention"
 item "$S" Q1 a0 ready "Found during the Q99 audit, which shipped long ago."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a bare id in prose is a mention" "$rc"
 if [[ $rc -eq 0 ]] && ! grep -q "Q99" "$TMP/e"; then
     ok "lint: a bare id in prose is a mention, not a reference"
 else
@@ -253,6 +260,7 @@ S="$TMP/danglink"
 item "$S" Q1 a0 ready "Superseded by [Q99](Q99.md), which is not in the store."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a link at an item not in the store" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "links Q99" "$TMP/e"; then
     ok "lint: a link at an item not in the store warns without failing"
 else
@@ -264,6 +272,7 @@ S="$TMP/quotedlink"
 item "$S" Q1 a0 ready 'The form is `[Q99](Q99.md)`, quoted rather than used.'
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a link inside backticks is quoted syntax" "$rc"
 if [[ $rc -eq 0 ]] && ! grep -q "Q99" "$TMP/e"; then
     ok "lint: a link inside backticks is quoted syntax, not a reference"
 else
@@ -309,6 +318,7 @@ S="$TMP/notrigger"
 item "$S" Q1 a0 deferred "Parked for now."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: deferred without a trigger" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "names no trigger" "$TMP/e"; then
     ok "lint: deferred without a trigger warns without failing"
 else
@@ -335,6 +345,7 @@ S="$TMP/emptystore"
 mkdir -p "$S"
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: an empty store passes with a note" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "no Q\*.md under" "$TMP/e"; then
     ok "lint: an empty store passes with a note naming the directory"
 else
@@ -345,6 +356,7 @@ S="$TMP/fileref"
 item "$S" Q1 a0 ready "The defect is at nosuch/thing.go:120 today."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: an unresolvable file:line reference" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "nosuch/thing.go:120" "$TMP/e"; then
     ok "lint: an unresolvable file:line reference warns without failing"
 else
@@ -359,6 +371,7 @@ S="$TMP/dotref"
 item "$S" Q1 a0 ready "The defect is at .github/workflows/nosuch.yml:12 today."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a dot-directory citation" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "cites \.github/workflows/nosuch\.yml:12" "$TMP/e"; then
     ok "lint: a dot-directory citation warns with its leading dot intact"
 else
@@ -371,6 +384,7 @@ S="$TMP/dotdotref"
 item "$S" Q1 a0 ready "The defect is at ../nosuch/thing.go:7 today."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a ../ citation" "$rc"
 if [[ $rc -eq 0 ]] && grep -q "cites \.\./nosuch/thing\.go:7" "$TMP/e"; then
     ok "lint: a ../ citation warns with its prefix intact"
 else
@@ -385,6 +399,7 @@ mkdir -p "$TMP/.github/workflows"
 item "$S" Q1 a0 ready "The defect is at .github/workflows/real.yml:12 today."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a dot-directory citation that resolves" "$rc"
 if [[ $rc -eq 0 ]] && ! grep -q "real\.yml" "$TMP/e"; then
     ok "lint: a dot-directory citation that resolves stays quiet"
 else
@@ -398,6 +413,7 @@ S="$TMP/notaref"
 item "$S" Q1 a0 ready "The window is 10:30 wide and nosuch/notes.txt:4 is not one."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+die_if_killed "lint: a colon-number that is not a file reference" "$rc"
 if [[ $rc -eq 0 ]] && ! grep -q "which does not" "$TMP/e"; then
     ok "lint: a colon-number that is not a file reference stays quiet"
 else

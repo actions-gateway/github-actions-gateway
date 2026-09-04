@@ -24,6 +24,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/docs/check-release-ladder.sh"
 
@@ -67,6 +69,7 @@ write_page() {
 expect() {
 	local name="$1" want="$2" desc="$3" page="$4" store="$5" rc=0 out
 	out="$("$CHECKER" --page "$page" --store "$store" 2>&1)" || rc=$?
+	die_if_killed "$name" "$rc" "$want"
 	if ((rc != want)); then
 		printf 'FAIL: %s — %s: expected rc %d, got %d\n' "$name" "$desc" "$want" "$rc" >&2
 		printf '%s\n' "$out" | sed 's/^/       /' >&2
@@ -167,6 +170,7 @@ expect missing-store 2 'a store that does not exist refuses' \
 
 rc=0
 "$CHECKER" --nonsense > /dev/null 2>&1 || rc=$?
+die_if_killed unknown-arg "$rc" 2
 if ((rc != 2)); then
 	printf 'FAIL: unknown-arg — an unrecognized argument: expected rc 2, got %d\n' "$rc" >&2
 	((fails++)) || true

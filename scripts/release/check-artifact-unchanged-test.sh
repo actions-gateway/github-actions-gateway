@@ -10,6 +10,8 @@ shopt -s inherit_errexit
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBJECT="$SCRIPT_DIR/check-artifact-unchanged.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 
 pass=0
 fail=0
@@ -29,6 +31,7 @@ run_case() {
 	local desc="$1" want="$2" from="$3" to="$4"
 	local out rc
 	out="$(cd "$REPO_ROOT" && "$SUBJECT" "$from" "$to" 2>&1)" && rc=0 || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
 	if [[ "$rc" == "$want" ]]; then
 		ok "$desc"
 	else
@@ -94,6 +97,7 @@ if has_parent "$head_sha" &&
 	git -C "$nowt" config maintenance.auto false
 	nowt_rc=0
 	nowt_out="$( (cd "$nowt" && "$SUBJECT" "${head_sha}^" "$head_sha" 2>&1) )" || nowt_rc=$?
+	die_if_killed "a semverfloor that cannot run" "$nowt_rc"
 	if [[ "$nowt_rc" -eq 2 && "$nowt_out" == *"semverfloor -ships failed"* ]]; then
 		ok "a semverfloor that cannot run is exit 2, not a finding"
 	else
@@ -125,6 +129,7 @@ chmod +x "$stub_bin/go"
 build_case_rc=0
 build_case_out="$( (cd "$REPO_ROOT" && PATH="$stub_bin:$PATH" \
 	"$SUBJECT" "$head_sha" "$head_sha" 2>&1) )" || build_case_rc=$?
+	die_if_killed "a semverfloor that cannot build" "$build_case_rc"
 if [[ "$build_case_rc" -eq 2 && "$build_case_out" == *"could not build semverfloor"* ]]; then
 	ok "a semverfloor that cannot build is exit 2, not a finding"
 else

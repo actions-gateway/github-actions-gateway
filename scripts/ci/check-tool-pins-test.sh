@@ -22,6 +22,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/ci/check-tool-pins.sh"
 
@@ -48,6 +50,7 @@ write_makefile() {
 expect() {
 	local name="$1" want="$2" desc="$3" mk="$4" rc=0 out
 	out="$("$CHECKER" --makefile "$mk" 2>&1)" || rc=$?
+	die_if_killed "$name" "$rc" "$want"
 	if ((rc != want)); then
 		printf 'FAIL: %s — %s: expected rc %d, got %d\n' "$name" "$desc" "$want" "$rc" >&2
 		printf '%s\n' "$out" | sed 's/^/       /' >&2
@@ -177,6 +180,7 @@ fi
 
 rc=0
 "$CHECKER" --database "$db" > /dev/null 2>&1 || rc=$?
+die_if_killed print-rules-guard "$rc" 2
 if ((rc != 2)); then
 	printf 'FAIL: print-rules-guard — --database without --print-rules: expected rc 2, got %d\n' "$rc" >&2
 	((fails++)) || true
@@ -186,6 +190,7 @@ fi
 
 rc=0
 "$CHECKER" --makefile "$REPO_ROOT/Makefile" --nonsense > /dev/null 2>&1 || rc=$?
+die_if_killed unknown-arg "$rc" 2
 if ((rc != 2)); then
 	printf 'FAIL: unknown-arg — an unrecognized argument: expected rc 2, got %d\n' "$rc" >&2
 	((fails++)) || true

@@ -19,6 +19,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 GATE="$REPO_ROOT/scripts/docs/check-em-dash.sh"
 
 fails=0
@@ -90,6 +92,7 @@ run_gate() {
     else
         (cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || got=$?
     fi
+    die_if_killed "$name" "$got" "$want"
     if [[ "$got" == "$want" ]]; then
         printf 'ok   %s\n' "$name"
         return
@@ -195,6 +198,7 @@ commit_all base
 printf 'And — five.\n' >>"$WORK/a.md"
 req_rc=0
 (cd "$WORK" && env -u GITHUB_ACTIONS EM_DASH_REQUIRE_BASE=1 "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || req_rc=$?
+die_if_killed "EM_DASH_REQUIRE_BASE turns an unmeasurable ratchet into a failure" "$req_rc"
 if [[ "$req_rc" == 1 ]]; then
     printf 'ok   %s\n' 'EM_DASH_REQUIRE_BASE turns an unmeasurable ratchet into a failure'
 else
@@ -212,6 +216,7 @@ prose_page "$WORK/a.md" 'One — two.'
 commit_all base
 amb_rc=0
 (cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE CI=true "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || amb_rc=$?
+die_if_killed "an ambient CI=true does not turn the skip into a failure" "$amb_rc"
 if [[ "$amb_rc" == 0 ]]; then
     printf 'ok   %s\n' 'an ambient CI=true does not turn the skip into a failure'
 else
@@ -288,6 +293,7 @@ commit_all 'the gain'
 set_base
 base_rc=0
 (cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE "$GATE" --baseline "$WORK/baseline.txt" --base HEAD~1) >"$WORK/gate.out" 2>&1 || base_rc=$?
+die_if_killed "--base overrides a merge-base that has moved past the gain" "$base_rc"
 if [[ "$base_rc" == 1 ]]; then
     printf 'ok   %s\n' '--base overrides a merge-base that has moved past the gain'
 else
@@ -298,6 +304,7 @@ expect_out 'the overridden base is the one reported against' 'up from 3 at the b
 
 bogus_rc=0
 (cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE "$GATE" --baseline "$WORK/baseline.txt" --base no-such-rev) >"$WORK/gate.out" 2>&1 || bogus_rc=$?
+die_if_killed "a --base that does not resolve fails rather than degrading" "$bogus_rc"
 if [[ "$bogus_rc" != 0 ]]; then
     printf 'ok   %s\n' 'a --base that does not resolve fails rather than degrading'
 else

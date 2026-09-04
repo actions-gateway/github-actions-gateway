@@ -16,6 +16,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 # The fixture repos symlink this in so the copied entry point can cache the Go
 # driver it builds; a dangling symlink would fail the build instead.
 mkdir -p "$REPO_ROOT/.build"
@@ -267,6 +269,7 @@ expect_resolved() {
 	plan_index "${SIDE_OURS[@]}" >"$WORKDIR/ours.md"
 	plan_index "${SIDE_THEIRS[@]}" >"$WORKDIR/theirs.md"
 	run_merge "$repo" "$WORKDIR/base.md" "$WORKDIR/ours.md" "$WORKDIR/theirs.md"
+	die_if_killed "$name" "$MERGE_RC"
 
 	local got want_text="$EXPECT_TEXT"
 	EXPECT_TEXT=''
@@ -297,6 +300,7 @@ expect_conflict() {
 	repo="$(merge_repo "conflict-$RANDOM")"
 	plan_index "${SIDE_BASE[@]}" >"$WORKDIR/base.md"
 	plan_index "${SIDE_OURS[@]}" >"$WORKDIR/ours.md"
+	die_if_killed "$name" "$MERGE_RC"
 	plan_index "${SIDE_THEIRS[@]}" >"$WORKDIR/theirs.md"
 	run_merge "$repo" "$WORKDIR/base.md" "$WORKDIR/ours.md" "$WORKDIR/theirs.md"
 
@@ -418,6 +422,7 @@ cp "$WORKDIR/dup-ours.md" "$WORKDIR/dup-driver.md"
 rc=0
 "$DRIVER" "$WORKDIR/dup-base.md" "$WORKDIR/dup-driver.md" "$WORKDIR/dup-theirs.md" \
 	7 "$TARGET" 2>"$WORKDIR/dup.err" || rc=$?
+	die_if_killed "moved to two tables at once" "$rc"
 cp "$WORKDIR/dup-ours.md" "$WORKDIR/dup-git.md"
 git merge-file "$WORKDIR/dup-git.md" "$WORKDIR/dup-base.md" "$WORKDIR/dup-theirs.md" >/dev/null 2>&1 || true
 if (( rc == 0 )) && grep -q 'lists a plan more than once: b.md' "$WORKDIR/dup.err" &&
@@ -440,6 +445,7 @@ plan_index "$A" -- "$SEC" -- "$ARCH" >"$WORKDIR/x-base.md"
 } >"$WORKDIR/x-ours.md"
 plan_index "$A" "$B" -- "$SEC" -- "$ARCH" >"$WORKDIR/x-theirs.md"
 run_merge "$restructure" "$WORKDIR/x-base.md" "$WORKDIR/x-ours.md" "$WORKDIR/x-theirs.md"
+die_if_killed "a side adds a whole table" "$MERGE_RC"
 if (( MERGE_RC == 0 )) && ! has_markers "$restructure" &&
 	[[ "$(keys "$restructure/$TARGET")" == 'a.md b.md sec.md archive/old.md c.md ' ]]; then
 	ok 'a side adds a whole table       -> falls back to git, which merges it'
@@ -458,6 +464,7 @@ sed 's/^Topic-organized index of plan files\./Our new intro./' \
 sed 's/^Topic-organized index of plan files\./Their new intro./' \
 	"$WORKDIR/p-base.md" >"$WORKDIR/p-theirs.md"
 run_merge "$prose_repo" "$WORKDIR/p-base.md" "$WORKDIR/p-ours.md" "$WORKDIR/p-theirs.md"
+die_if_killed "outside the rows: contested prose" "$MERGE_RC"
 if (( MERGE_RC == 1 )) && has_markers "$prose_repo"; then
 	ok 'outside the rows: contested prose -> markers'
 else
@@ -476,6 +483,7 @@ plan_index "$A" "$B" "$C" -- "$SEC" -- "$ARCH" >"$WORKDIR/u-ours.md"
 plan_index "$A" "$B" "$C" "$D" -- "$SEC" -- "$(arow old2.md '2026-08-03 — Q2')" "$ARCH" \
 	>"$WORKDIR/u-theirs.md"
 run_merge "$unconfigured" "$WORKDIR/u-base.md" "$WORKDIR/u-ours.md" "$WORKDIR/u-theirs.md"
+die_if_killed "no driver configured: distant edits" "$MERGE_RC"
 if (( MERGE_RC == 0 )) && ! has_markers "$unconfigured"; then
 	ok 'no driver configured: git merges distant edits as before'
 else
@@ -490,6 +498,7 @@ plan_index "$A" "$B" -- "$SEC" -- "$ARCH" >"$WORKDIR/u2-base.md"
 plan_index "$A" "$B" "$C" -- "$SEC" -- "$ARCH" >"$WORKDIR/u2-ours.md"
 plan_index "$A" "$B" "$D" -- "$SEC" -- "$ARCH" >"$WORKDIR/u2-theirs.md"
 run_merge "$unconfigured2" "$WORKDIR/u2-base.md" "$WORKDIR/u2-ours.md" "$WORKDIR/u2-theirs.md"
+die_if_killed "no driver configured: adjacent adds" "$MERGE_RC"
 if (( MERGE_RC == 1 )); then
 	ok 'no driver configured: adjacent adds still conflict (the motivating case)'
 else
@@ -514,6 +523,7 @@ plan_index "$A" "$B" "$D" -- "$SEC" -- "$ARCH" >"$rebase_repo/$TARGET"
 git -C "$rebase_repo" "${GIT_ID[@]}" commit -qam 'file d'
 rc=0
 git -C "$rebase_repo" "${GIT_ID[@]}" rebase main >"$WORKDIR/rebase.log" 2>&1 || rc=$?
+die_if_killed "rebase onto main" "$rc"
 if (( rc == 0 )) && [[ "$(keys "$rebase_repo/$TARGET")" == 'a.md b.md c.md d.md sec.md archive/old.md ' ]] &&
 	! has_markers "$rebase_repo"; then
 	ok 'rebase onto main: both new plan rows applied'
@@ -542,6 +552,7 @@ cp "$WORKDIR/s-ours.md" "$subdir_repo/$TARGET"
 git -C "$subdir_repo" "${GIT_ID[@]}" commit -qam ours
 rc=0
 (cd "$subdir_repo/docs/plan" && git "${GIT_ID[@]}" merge theirs >"$MERGE_LOG" 2>&1) || rc=$?
+die_if_killed "merge from a subdirectory" "$rc"
 if (( rc == 0 )) && [[ "$(keys "$subdir_repo/$TARGET")" == 'a.md b.md c.md d.md sec.md archive/old.md ' ]]; then
 	ok 'merge from a subdirectory resolves the relative driver path'
 else
@@ -558,6 +569,7 @@ cp "$REPO_ROOT/$TARGET" "$real_out"
 rc=0
 "$DRIVER" "$REPO_ROOT/$TARGET" "$real_out" "$REPO_ROOT/$TARGET" 7 "$TARGET" \
 	>"$WORKDIR/real-identity.log" 2>&1 || rc=$?
+	die_if_killed "an identity merge is byte-identical" "$rc"
 if (( rc == 0 )) && cmp -s "$real_out" "$REPO_ROOT/$TARGET"; then
 	ok "$TARGET: an identity merge is byte-identical"
 else
@@ -572,6 +584,7 @@ cp "$REPO_ROOT/$TARGET" "$real_out"
 rc=0
 "$DRIVER" "$REPO_ROOT/$TARGET" "$real_out" "$WORKDIR/real-theirs.md" 7 "$TARGET" \
 	>"$WORKDIR/real-delete.log" 2>&1 || rc=$?
+	die_if_killed "a one-sided real deletion" "$rc"
 if (( rc == 0 )) && cmp -s "$real_out" "$WORKDIR/real-theirs.md"; then
 	ok "$TARGET: deleting $first_key one-sided reproduces that file"
 else
@@ -652,6 +665,7 @@ git -C "$gate_repo" "${GIT_ID[@]}" commit -qm base
 # proves nothing.
 base_gate_rc=0
 (cd "$gate_repo" && ./scripts/docs/check-plan-index.sh) >"$WORKDIR/gate-base.log" 2>&1 || base_gate_rc=$?
+die_if_killed "gate agreement: baseline" "$base_gate_rc"
 
 # file_plan REPO NAME — add a plan file plus its README row directly under the
 # first table's separator. ⓘ so invariant 1 (must stay STATUS-referenced) does
@@ -682,8 +696,10 @@ git -C "$gate_repo" "${GIT_ID[@]}" commit -qm 'file our plan'
 
 merge_rc=0
 git -C "$gate_repo" "${GIT_ID[@]}" merge theirs >"$MERGE_LOG" 2>&1 || merge_rc=$?
+die_if_killed "gate agreement: merge" "$merge_rc"
 gate_rc=0
 (cd "$gate_repo" && ./scripts/docs/check-plan-index.sh) >"$WORKDIR/gate-merged.log" 2>&1 || gate_rc=$?
+die_if_killed "gate agreement: merged" "$gate_rc"
 if (( base_gate_rc == 0 )) && (( merge_rc == 0 )) && (( gate_rc == 0 )) &&
 	grep -q '](zz-our-plan.md)' "$gate_repo/$TARGET" &&
 	grep -q '](zz-their-plan.md)' "$gate_repo/$TARGET"; then
