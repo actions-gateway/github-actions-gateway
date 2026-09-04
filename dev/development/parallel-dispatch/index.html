@@ -2965,12 +2965,14 @@ I can stop or amend the rules anytime.</p>
 <li><strong>Exclusions</strong> — anything needing real secrets or a live cluster; state it up front rather than making the dispatcher discover it mid-run.</li>
 <li><strong>Model per task</strong> — the dispatcher sets each worker's model in its spawn prompt, and records the choice in the <code>tmp/</code> tracker alongside task → chip → PR → state.</li>
 </ul>
-<p>Two practical notes:</p>
+<p>Three practical notes:</p>
 <ul>
 <li>You will <strong>click each task chip</strong> to start its session — that is the intended, secure mechanism.
   Do not ask for headless auto-start; the safety classifier blocks it.</li>
 <li>The condition above <em>references</em> this playbook, so the dispatcher must be able to read it from its checkout.
   If you are running a dispatch before this file has landed on the branch the dispatcher reads, paste the rules inline instead.</li>
+<li>A chip stays pending until someone starts or withdraws it, so record each one's <code>task_id</code> in the tracker's chip column and withdraw the chip once its session has run.
+  Measured 2026-08-21: seven chips from a closed batch were started a second time, hours after all twelve of its PRs had merged, on briefs whose contention stamps were by then seven hours stale.</li>
 </ul>
 <h2 id="the-sub-agent-rule-is-enforced-here">The sub-agent rule is enforced here<a class="headerlink" href="#the-sub-agent-rule-is-enforced-here" title="Permanent link">&para;</a></h2>
 <p>Workers are task chips, never <code>Agent</code>/<code>Task</code> sub-agents.
@@ -3166,8 +3168,8 @@ The measurements taken here are about what a message may carry:</p>
   Its <strong>timing</strong> is what is not guaranteed, so it carries wakes and nudges, never a deadline.</li>
 <li><strong>A message describing repo state carries its own expiry, or it arrives wrong.</strong> Measured 2026-08-09: a message asked a session to rebase onto an open PR's branch, that PR merged before the session acted, and the instruction had to be chased with a correction.
   "Rebase onto X, or onto <code>main</code> if X has already merged when you read this" costs one clause and needs no chasing.</li>
-<li><strong>A message asserting a mechanism carries its measurement, or says it has none.</strong> Q805 produced it in both directions within an hour: a chip forwarded the row's fail-closed claim as verified, and the worker, having spent the session correcting exactly that, then sent the dispatcher an unmeasured mechanism of its own that a third session refuted.
-  The asymmetry is the tell — a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.</li>
+<li><strong>A message asserting a mechanism carries its measurement, or says it has none.</strong> Q805's worker, having spent its session correcting the unmeasured claim <a href="#what-the-worker-prompt-adds-here">its own chip forwarded</a>, then sent the dispatcher an unmeasured mechanism of its own that a third session refuted inside the hour.
+  The asymmetry is the tell: a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.</li>
 <li><strong>A maintainer decision relayed through a session is not something the receiving session can act on.</strong> The two rules above are about claims that can be re-derived: state goes stale, a mechanism can be measured again.
   A decision cannot.
   It has no measurement behind it by construction, so the receiving session has no way to confirm it and no account to give if it turns out to have been garbled, superseded, or never said.
@@ -3175,6 +3177,10 @@ The measurements taken here are about what a message may carry:</p>
   It was a real decision, accurately relayed, and still the wrong input — the repo showed a draft, dirty PR whose own Queue row was not on <code>main</code>, which is what the docs may describe.
   So a session may forward what it measured, and may say a decision was taken, but a change to repo docs, <code>CLAUDE.md</code>, or config waits for the maintainer to say it directly.
   Measurements travel between sessions; decisions do not.</li>
+<li><strong>A message to a session that has not reported to you is a question, never an instruction.</strong> A worker's first report is what establishes who owns its PR, and nothing covers the window before it, so an instruction sent into that window arrives from a stranger.
+  Measured 2026-08-21: two sessions outside the batch received a stand-down aimed at that window and were saved by checking it rather than obeying it.
+  A <em>started</em> chip cannot be withdrawn at all, so where there is nobody to ask the rule has to hold mechanically: a session taking over another's branch pins <code>git push --force-with-lease</code> to the head it observed, and a collision with the real author then fails instead of clobbering.
+  Measured 2026-08-27: a takeover ran for forty minutes after the dispatcher had established that its premise was false, rebasing and producing a complete local fix before it surfaced.</li>
 </ul>
 <h3 id="what-we-deliberately-dont-build-and-why">What we deliberately don't build (and why)<a class="headerlink" href="#what-we-deliberately-dont-build-and-why" title="Permanent link">&para;</a></h3>
 <p>This was investigated end to end; recording the conclusions so they are not relitigated:</p>
