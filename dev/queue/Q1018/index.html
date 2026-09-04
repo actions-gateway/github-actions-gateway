@@ -2611,8 +2611,16 @@ That is the <a href="../../development/testing/#the-status-you-report-is-a-claim
 That worked, and it is not a reading anyone should have to reconstruct to trust a green check.</p>
 <p><strong>The fix has a precedent in the tree.</strong> Seven workflows already write <code>$GITHUB_STEP_SUMMARY</code> (<code>publish.yml</code>, <code>integration-test.yml</code>, <code>doc-links.yml</code> among them), so a skipping script can say so where a reviewer sees it without opening a 3,000-line log.
 The shape to settle: whether the line is written by the script or the step, and whether a skip should also annotate, since a summary is read only by someone already looking.</p>
-<p><strong>Do not "fix" it by failing on skip.</strong> The skip is correct in both cases; what is missing is that it is <em>legible</em>.
+<p><strong>Do not "fix" it by failing on skip, in these two cases.</strong> The skip is correct in both; what is missing is that it is <em>legible</em>.
 A gate that failed the hosted lane for having no in-cluster mirror would be a worse instrument than the one described here.</p>
+<p><strong>Which fix applies turns on whether the skip condition is legitimate in that venue, and both answers now ship.</strong> The two instances above skip on a condition that is true in a venue that is working: there is no in-cluster mirror on the hosted lane, and none on a developer's <code>make e2e</code>.
+Failing there would redden a correct lane, so the fix is to make the skip visible.
+<code>scripts/manifest/check-registry-mirror-render.sh</code> (Q1024) skips on a condition that is a defect in the venue instead: it needs kubectl, which is <code>e2e</code>-tier so <code>make check</code> cannot require it, but no CI lane should ever skip its renders: kubectl missing from <code>ubuntu-latest</code> is a regression in the image, not a lane.
+So it keeps the <code>command -v kubectl</code> guard for the local run and the CI step passes <code>--require-render</code>, which turns that skip into a failure.
+The two are not in tension: only the caller knows which venue it is in, so the script offers both and the call site chooses.</p>
+<p><strong>The live second instance of the same choice is <code>scripts/ci/check-template-library.sh</code></strong>, whose render half degrades to a printed skip with no way to require it, and which <code>unit-test.yml</code> runs unflagged.
+Its skip is the venue-defect kind, not the legitimate kind, so it can go green in CI while rendering nothing.
+Whether it gains a <code>--require-render</code> of its own or the summary line this row proposes is the same open question, but it should not be left reading as the legitimate case.</p>
 
 
 
