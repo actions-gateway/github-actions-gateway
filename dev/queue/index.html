@@ -2845,14 +2845,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>cover-check</code> prints two different tolerances for one module across runs of an unchanged tree, or reports a <code>FAIL</code> whose …</td>
 </tr>
 <tr>
-<td><a href="Q1024/">Q1024</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md">Nothing renders the registry-mirror kustomize overlays in CI</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>deploy/registry-mirror/</code> ships four render targets an operator applies with <code>kubectl apply -k</code>, and no gate renders any of them: the root …</td>
-</tr>
-<tr>
 <td><a href="Q1030/">Q1030</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-registry-mirror-catalog-deny.py">Nothing reconciles the mirror's ingress peer with the worker's label</a></td>
 <td><code>ci</code> <code>debt</code></td>

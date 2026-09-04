@@ -2642,8 +2642,8 @@
 <p>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</p>
 <p><strong>Measured 2026-08-29, re-derived 2026-09-03.</strong> <code>scripts/dogfood/e2e-start.sh</code>'s <code>apply_registry_mirror()</code> applies <code>deploy/registry-mirror</code> or, under <code>REGISTRY_MIRROR_PERSISTENT=1</code>, <code>overlays/persistent</code>.
 Neither composes <code>components/shared-tenants</code>.
-Nothing under <code>scripts/</code>, <code>.github/</code> or <code>mk/</code> names the component or its two overlays except the static gate that reads their text, so no dogfood window and no e2e lane has ever rendered the shared ingress policy, let alone driven traffic through it.</p>
-<p><strong>Why this matters more than the render gap.</strong> <a href="../Q1024/">Q1024</a> is that no gate <em>renders</em> those overlays; this is that no cluster <em>runs</em> them.
+Nothing under <code>scripts/</code>, <code>.github/</code> or <code>mk/</code> applies the component or its two overlays to a cluster — the two gates that name them read their text and render them in CI — so no dogfood window and no e2e lane has ever driven traffic through the shared ingress policy.</p>
+<p><strong>Why this matters more than the render gap.</strong> <code>check-registry-mirror-render.sh</code> (Q1024, shipped) <em>renders</em> those overlays; this is that no cluster <em>runs</em> them.
 A rendered policy proves the YAML composes.
 It cannot show that the peers it admits match the pods that actually connect, which is the failure mode the shared topology has: a NetworkPolicy ingress narrowing is fail-closed and total, so a peer that misses one real client black-holes that client's every pull.</p>
 <p><strong>What it already cost.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1795">Q1026</a> narrowed the shared ingress peer to worker pods and was held in draft to wait for a dogfood window to confirm no client was cut off.
