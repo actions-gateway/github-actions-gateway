@@ -166,6 +166,48 @@ profile_statements() {
 	awk 'NR > 1 && !seen[$1]++ { n += $(NF - 1) } END { print n + 0 }' "$1"
 }
 
+# uncached_packages — the go.work package dirs whose test result `go test` cannot
+# key, as `./<dir>` patterns. The list is read from the out-of-module read gate's
+# own UNCACHED map rather than copied here, so the two cannot drift: that gate is
+# what fails when an undeclared package appears, and a second spelling of the
+# list would go stale with nothing reporting it.
+uncached_packages() {
+	local pkg listing
+	listing="$(scripts/go/check-test-cache-inputs.sh --uncached-packages)"
+	while IFS= read -r pkg; do
+		[[ -n "$pkg" ]] || continue
+		printf './%s\n' "$pkg"
+	done <<<"$listing"
+}
+
+# run_uncached_pass [GO FLAGS...] — force a fresh run of those packages, the way
+# scripts/go/go-test.sh does for `make test`.
+#
+# `go test` keys a result on the files the testlog records, so a test that
+# derives its root at runtime, or whose reads happen in a subprocess, has no key
+# that tracks the tree. Measured 2026-09-04 on cmd/probe/compat: warm the cover
+# cache, add Q936's own violation (`_ "net/http/httptest"` in cmd/proxy's package
+# main), and the workspace-wide run replays `(cached)` at 83.5% and exits 0, while
+# -count=1 over that same tree exits 1 naming the import. `make check` runs
+# cover-check rather than go-test.sh, so this is the local gate that needs it
+# (Q992).
+#
+# Uninstrumented: it must not clobber the merged profile run_coverage is
+# building, and the package's coverage number already comes from there. The pass
+# surfaces a failure rather than moving a number.
+run_uncached_pass() {
+	local pkg
+	local pkgs=()
+	while IFS= read -r pkg; do
+		pkgs+=("$pkg")
+	done < <(uncached_packages)
+	((${#pkgs[@]} > 0)) || return 0
+
+	echo "==> go test -count=1 ${pkgs[*]}" >&2
+	# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+	$THROTTLE_PREFIX go test -trimpath -timeout 5m "$@" -count=1 "${pkgs[@]}" >&2
+}
+
 # run_coverage PROFILE — run the unit tests across every go.work module in one
 # invocation, writing the merged coverage profile to PROFILE.
 run_coverage() {
@@ -199,6 +241,12 @@ run_coverage() {
 	$THROTTLE_PREFIX go test -trimpath -timeout 5m $p_flag $verbose_flag \
 		-coverprofile="$profile" "${patterns[@]}" >&2 || {
 		echo "coverage: 'go test' failed (output above)" >&2
+		exit 1
+	}
+
+	# shellcheck disable=SC2086  # flag strings word-split intentionally
+	run_uncached_pass $p_flag $verbose_flag || {
+		echo "coverage: forced uncached 'go test' pass failed (output above)" >&2
 		exit 1
 	}
 

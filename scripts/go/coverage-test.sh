@@ -229,6 +229,78 @@ else
 	fails=$((fails + 1))
 fi
 
+# The forced `-count=1` pass over the packages `go test` cannot key a result for
+# (Q992). Two properties, and each needs its own assertion: that the list is the
+# read gate's rather than a copy, and that -count=1 actually reaches `go test`.
+#
+# Neither can be established by running cover-check twice and watching it pass.
+# A stale replay IS a pass, so the failing tree is the only one that separates
+# the two states, and reproducing it here means changing compiled output — a
+# comment-only edit and an unused package-level var both replay `(cached)`.
+# So this asserts the mechanism instead, and the end-to-end proof (plant
+# `_ "net/http/httptest"` in cmd/proxy's package main, require cover-check red)
+# is a measurement taken at review time, recorded in the PR body.
+
+# Drift: the list coverage.sh runs is the one check-test-cache-inputs.py owns,
+# with `./` prefixes and nothing else. A second spelling of it here would go
+# stale silently; this is what reports that.
+want_uncached="$(scripts/go/check-test-cache-inputs.sh --uncached-packages | sed 's|^|./|')"
+got_uncached="$(uncached_packages)"
+
+# Emptying UNCACHED makes run_uncached_pass a no-op and every assertion below
+# vacuous, so it is asserted rather than skipped: doing it is deliberate, and
+# this is what asks whether it was.
+if [[ -n "$want_uncached" ]]; then
+	printf 'ok   uncached-nonempty      -> %d package(s) declared\n' "$(wc -l <<<"$want_uncached" | tr -d ' ')"
+else
+	printf 'FAIL uncached-nonempty      the UNCACHED map is empty, so the forced pass covers nothing\n' >&2
+	fails=$((fails + 1))
+fi
+
+if [[ "$got_uncached" == "$want_uncached" ]]; then
+	printf 'ok   uncached-list          -> %s\n' "$(tr '\n' ' ' <<<"$got_uncached")"
+else
+	printf 'FAIL uncached-list          want=[%s] got=[%s]\n' "$want_uncached" "$got_uncached" >&2
+	fails=$((fails + 1))
+fi
+
+# -count=1 reaches `go test`, and so does every package the list names. A stub
+# `go` on PATH records the argv, so this asserts the flag without paying for the
+# run: the real pass is a cold run of a package that shells out per workspace
+# module (3.7s here, and it tracks build-cache warmth rather than a fixed
+# duration).
+STUB="$WORKDIR/stub"
+mkdir -p "$STUB"
+cat >"$STUB/go" <<'STUBEOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$GO_ARGV_LOG"
+STUBEOF
+chmod +x "$STUB/go"
+
+GO_ARGV_LOG="$WORKDIR/argv.txt" \
+	PATH="$STUB:$PATH" \
+	THROTTLE_PREFIX="" \
+	bash -c 'set -uo pipefail; source scripts/go/coverage.sh; run_uncached_pass -p 4' \
+	>/dev/null 2>&1 || true
+
+argv="$(cat "$WORKDIR/argv.txt" 2>/dev/null || true)"
+if grep -qx -- '-count=1' <<<"$argv"; then
+	printf 'ok   uncached-count-flag    -> -count=1 passed to go test\n'
+else
+	printf 'FAIL uncached-count-flag    argv=[%s]\n' "$(tr '\n' ' ' <<<"$argv")" >&2
+	fails=$((fails + 1))
+fi
+
+while read -r pkg; do
+	[[ -n "$pkg" ]] || continue
+	if grep -qxF -- "$pkg" <<<"$argv"; then
+		printf 'ok   uncached-package       %-22s in the forced pass\n' "$pkg"
+	else
+		printf 'FAIL uncached-package       %s missing from argv=[%s]\n' "$pkg" "$(tr '\n' ' ' <<<"$argv")" >&2
+		fails=$((fails + 1))
+	fi
+done <<<"$want_uncached"
+
 if (( fails > 0 )); then
 	printf '\n%d coverage-split assertion(s) failed\n' "$fails" >&2
 	exit 1
