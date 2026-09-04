@@ -177,16 +177,23 @@ want_order() {
 # fan-out never timed anything. Every run now reports each label's wall time.
 # The seconds are asserted as ranges, not exact values: the duration truncates
 # both endpoints, so a command spanning a second boundary reports one more.
-rp "quick:true" "slow:sleep 2"
+# Every bound is a floor and none a ceiling: the timed span wraps four forks and
+# a pipeline teardown, so an upper bound asserts host load rather than the
+# runner (Q970). Hence `slow`'s alternation over a plain `[3-9][0-9]*`, which
+# would reject the two-digit duration a contended host reports.
+rp "quick:true" "mid:sleep 1" "slow:sleep 3"
 want_rc 'a timed run still exits 0' 0
 want 'the run reports wall time' 'wall time, slowest first'
-want 'a slow command reports its seconds' '^\[run-parallel\] +[2-9][0-9]*s +slow$'
-want 'a fast command is reported too' '^\[run-parallel\] +[01]s +quick$'
-want 'the run reports its own elapsed time' 'elapsed [0-9]+s across 2 command\(s\)'
+want 'a slow command reports its seconds' '^\[run-parallel\] +([3-9]|[1-9][0-9]+)s +slow$'
+want 'a fast command is reported too' '^\[run-parallel\] +[0-9]+s +quick$'
+want 'the run reports its own elapsed time' 'elapsed [0-9]+s across 3 command\(s\)'
 
 # Slowest first, so the member setting the fan-out's total is the first line
-# read. Ordering is by duration, not spawn order: `slow` is passed second.
-want_order 'the slowest command is listed first' '[0-9]s +slow$' '[0-9]s +quick$'
+# read. Ordering is by duration, not spawn order: the three are passed fastest
+# first and come back reversed. The claim runs between the two sleepers —
+# ordering `quick` would rest on fork overhead staying under a sibling's — and
+# their two-second gap is the margin a flip has to cross (Q970).
+want_order 'the slowest command is listed first' '[0-9]+s +slow$' '[0-9]+s +mid$'
 
 # The trap this change had to avoid: the timing sits inside the same subshell
 # whose status `wait` collects, so a bookkeeping step that swallowed the status
