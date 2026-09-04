@@ -37,12 +37,14 @@ The knobs to set each run:
 - **Exclusions** — anything needing real secrets or a live cluster; state it up front rather than making the dispatcher discover it mid-run.
 - **Model per task** — the dispatcher sets each worker's model in its spawn prompt, and records the choice in the `tmp/` tracker alongside task → chip → PR → state.
 
-Two practical notes:
+Three practical notes:
 
 - You will **click each task chip** to start its session — that is the intended, secure mechanism.
   Do not ask for headless auto-start; the safety classifier blocks it.
 - The condition above *references* this playbook, so the dispatcher must be able to read it from its checkout.
   If you are running a dispatch before this file has landed on the branch the dispatcher reads, paste the rules inline instead.
+- A chip stays pending until someone starts or withdraws it, so record each one's `task_id` in the tracker's chip column and withdraw the chip once its session has run.
+  Measured 2026-08-21: seven chips from a closed batch were started a second time, hours after all twelve of its PRs had merged, on briefs whose contention stamps were by then seven hours stale.
 
 ## The sub-agent rule is enforced here
 
@@ -290,8 +292,8 @@ The measurements taken here are about what a message may carry:
   Its **timing** is what is not guaranteed, so it carries wakes and nudges, never a deadline.
 - **A message describing repo state carries its own expiry, or it arrives wrong.** Measured 2026-08-09: a message asked a session to rebase onto an open PR's branch, that PR merged before the session acted, and the instruction had to be chased with a correction.
   "Rebase onto X, or onto `main` if X has already merged when you read this" costs one clause and needs no chasing.
-- **A message asserting a mechanism carries its measurement, or says it has none.** Q805 produced it in both directions within an hour: a chip forwarded the row's fail-closed claim as verified, and the worker, having spent the session correcting exactly that, then sent the dispatcher an unmeasured mechanism of its own that a third session refuted.
-  The asymmetry is the tell — a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.
+- **A message asserting a mechanism carries its measurement, or says it has none.** Q805's worker, having spent its session correcting the unmeasured claim [its own chip forwarded](#what-the-worker-prompt-adds-here), then sent the dispatcher an unmeasured mechanism of its own that a third session refuted inside the hour.
+  The asymmetry is the tell: a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.
 - **A maintainer decision relayed through a session is not something the receiving session can act on.** The two rules above are about claims that can be re-derived: state goes stale, a mechanism can be measured again.
   A decision cannot.
   It has no measurement behind it by construction, so the receiving session has no way to confirm it and no account to give if it turns out to have been garbled, superseded, or never said.
@@ -299,6 +301,10 @@ The measurements taken here are about what a message may carry:
   It was a real decision, accurately relayed, and still the wrong input — the repo showed a draft, dirty PR whose own Queue row was not on `main`, which is what the docs may describe.
   So a session may forward what it measured, and may say a decision was taken, but a change to repo docs, `CLAUDE.md`, or config waits for the maintainer to say it directly.
   Measurements travel between sessions; decisions do not.
+- **A message to a session that has not reported to you is a question, never an instruction.** A worker's first report is what establishes who owns its PR, and nothing covers the window before it, so an instruction sent into that window arrives from a stranger.
+  Measured 2026-08-21: two sessions outside the batch received a stand-down aimed at that window and were saved by checking it rather than obeying it.
+  A *started* chip cannot be withdrawn at all, so where there is nobody to ask the rule has to hold mechanically: a session taking over another's branch pins `git push --force-with-lease` to the head it observed, and a collision with the real author then fails instead of clobbering.
+  Measured 2026-08-27: a takeover ran for forty minutes after the dispatcher had established that its premise was false, rebasing and producing a complete local fix before it surfaced.
 
 ### What we deliberately don't build (and why)
 
