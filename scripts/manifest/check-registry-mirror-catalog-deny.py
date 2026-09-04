@@ -21,8 +21,9 @@ behind it. That posture is spread over five files that cannot see each other:
 
 A sixth instance added to the first without a deny container serves its catalog
 to every tenant that can reach it, and nothing else in this repository would
-notice: no CI job renders these manifests (Q1024), and the cluster battery that
-would catch it needs a booked dogfood session. A registry quietly returned to
+notice: check-registry-mirror-render.sh renders these manifests (Q1024) but a
+dropped sidecar renders perfectly, and the cluster battery that would catch it
+needs a booked dogfood session. A registry quietly returned to
 0.0.0.0 is the same hole by a different route — the proxy is still there and no
 longer the only way in.
 

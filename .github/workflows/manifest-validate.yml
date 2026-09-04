@@ -212,6 +212,21 @@ jobs:
       # already, and the check needs only python3.
       - name: every mirror is fronted by the catalog deny (make registry-mirror-catalog-deny-check)
         run: make registry-mirror-catalog-deny-check
+      # The same tree's third question, and the one only a render can answer
+      # (Q1024): nothing rendered the four `kubectl apply -k` targets, so a
+      # kustomization.yaml that does not build reached the operator's cluster
+      # before it reached CI. Same job again — it already reads
+      # deploy/registry-mirror/**, and kubectl is on the hosted image
+      # (measured: run 33230881190's template-library step printed its success
+      # line with no skip note).
+      #
+      # Invoked directly rather than through `make registry-mirror-render-check`
+      # so it can pass --require-render: the gate degrades to a printed skip
+      # without kubectl, which `make check` needs (kubectl is e2e-tier) and CI
+      # must not have — a runner that lost kubectl would leave this green while
+      # checking nothing, the shape the gate exists to close.
+      - name: every registry-mirror kustomize target renders (registry-mirror-render-check)
+        run: scripts/manifest/check-registry-mirror-render.sh --require-render
 
   # Parse the shipped PromQL — the rule file's expressions and both dashboards'
   # panel queries (Q910) — and reconcile the alert rules with the docs that
