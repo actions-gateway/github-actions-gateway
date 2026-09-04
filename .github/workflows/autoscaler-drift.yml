@@ -36,10 +36,12 @@
 #     first path in the `changes` filter below. It cannot cross a minor — doing so
 #     would manufacture the node-image skew this gate exists to report.
 #
-# CAVEAT that the trigger depends on: GitHub does not run workflows on a PR
-# authored by GITHUB_TOKEN, so the weekly updatecli bump PR arrives with no
-# checks. Re-trigger it (close + reopen) as part of the dependency triage pass —
-# see docs/development/dependency-updates.md.
+# CAVEAT that the trigger depends on: the weekly updatecli bump PR is authored by
+# GITHUB_TOKEN, so GitHub creates its runs and then holds them at
+# action_required. This gate is among them, and it does not start until someone
+# clicks "Approve and run" during the dependency triage pass. An empty check list
+# there is a hold, not a workflow that never fired. See
+# docs/development/dependency-updates.md, section "Operating notes".
 name: autoscaler drift
 
 on:

@@ -2813,7 +2813,7 @@ Two consequences to plan for:
 
 - **The gate is not a required status check.** A failure wants a human decision — adopt the new vocabulary (update the matcher and the recorded unit table) or hold the bump — the same posture as the shellcheck and polaris bump PRs.
   The workflow still ends in an `autoscaler-drift-gate` job of the usual shape, so it can be required later without restructuring ([required-status-checks.md](../plan/archive/required-status-checks.md)).
-- **An updatecli PR arrives with no checks at all.** GitHub never triggers workflows on a `GITHUB_TOKEN`-authored PR, so both triggers above only pay off if the checks are re-run — close and reopen the PR during the weekly dependency triage pass ([dependency-updates.md](dependency-updates.md#operating-notes)).
+- **An updatecli PR arrives with its checks withheld.** GitHub creates the runs for a `GITHUB_TOKEN`-authored PR and then holds every one at `action_required`, so both triggers above only pay off once someone releases them with **Approve and run** during the weekly dependency triage pass ([dependency-updates.md](dependency-updates.md#operating-notes)).
   On a cluster-autoscaler bump that step is the entire PR: nothing else in it needs testing.
 
 What each arm measured on first run, and the findings that outlived them, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474) (cluster-autoscaler) and [§9i](../plan/capacity-aware-intake.md#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479) (Karpenter — including the recorder-generation premise it corrected).

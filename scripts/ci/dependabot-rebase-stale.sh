@@ -27,12 +27,13 @@
 # nothing at all, for a human to close.
 #
 # WHAT IT DELIBERATELY DOES NOT DO
-# The force-push uses the workflow's GITHUB_TOKEN, and GitHub never re-triggers
-# workflows from a GITHUB_TOKEN push, so the required PR checks stay reported
-# against the pre-rebase commit. Clearing that is the same one-click maintainer
-# step every synced Dependabot PR already needs (close + reopen the PR). See
-# docs/development/go-workspaces.md, section "Dependabot Go bumps are
-# auto-synced".
+# The force-push uses the workflow's GITHUB_TOKEN. GitHub creates the runs for
+# that push and then holds every one at action_required until a maintainer
+# approves, so the required PR checks do not start on the rebased commit until
+# then. Clearing that is the same one-click step every synced Dependabot PR
+# already needs, and the click is "Approve and run" rather than close + reopen.
+# See docs/development/go-workspaces.md, section "Both bot pushes leave the
+# checks withheld pending approval".
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -389,7 +390,7 @@ rebase_pr() {
 		echo
 		sed 's/^/    /' "$audit"
 		echo
-		echo "**The checks still need one manual re-trigger.** The rebase was pushed with the workflow's \`GITHUB_TOKEN\`, and GitHub never re-runs workflows from a \`GITHUB_TOKEN\` push, so the checks above are still reported against the pre-rebase commit. Close and reopen this PR to re-fire them."
+		echo "**The checks are withheld and need one approval.** The rebase was pushed with the workflow's \`GITHUB_TOKEN\`, so GitHub created this commit's runs and is holding them at \`action_required\`. Release them with **Approve and run** on the checks tab, which starts the runs already on this commit; closing and reopening queues a second full set instead, so it is the costlier click rather than a broken one."
 	} >"$scratch/comment-$number.md"
 	gh pr comment "$number" --body-file "$scratch/comment-$number.md" >/dev/null
 	echo "  commented on $url"

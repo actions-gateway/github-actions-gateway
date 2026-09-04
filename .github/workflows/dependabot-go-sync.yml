@@ -8,14 +8,26 @@ name: dependabot-go-sync
 # (make vendor-sync) on the PR branch and commits the result back, so a human no
 # longer has to (Q111). Sibling of the go.sum tidiness normalization (Q94).
 #
-# Loop safety: the sync commit is pushed with the default GITHUB_TOKEN, and
-# GitHub never re-triggers workflows from a GITHUB_TOKEN push — so the bot commit
-# cannot re-fire this workflow on itself. That same rule means the required PR
-# checks (vendor-check, tidy-check, license-notices, unit-test) do NOT
-# automatically re-run on the synced commit; a maintainer re-triggers them with
-# one click (close+reopen the PR, or `@dependabot recreate`). See
-# docs/development/go-workspaces.md § Dependabot Go bumps for the full rationale
-# and why a stored PAT — which would re-trigger CI — is deliberately not used.
+# Withheld checks: the sync commit is pushed with the default GITHUB_TOKEN.
+# GitHub DOES create runs for that push, this workflow's own included, but holds
+# every one at action_required until a maintainer approves. So the required PR
+# checks (vendor-check, tidy-check, license-notices, unit-test) do not start on
+# the synced commit until then, and an empty check list is a hold rather than a
+# workflow that never fired (Q1052).
+#
+# Loop safety is the approval gate, not a suppressed trigger. Approving does
+# re-fire this workflow on its own sync commit: the `if:` below gates on the PR
+# author, which is still dependabot[bot] after a github-actions[bot] push, so it
+# does not block the re-fire. What bounds the chain is that each generation's
+# runs are withheld behind their own approval, plus `make vendor-sync` being
+# idempotent, so a pass over an already-synced tree commits nothing.
+#
+# Release the checks with "Approve and run", which starts the existing runs in
+# place; close+reopen queues a second full set instead, so it is the costlier
+# click rather than a broken one. See
+# docs/development/go-workspaces.md, section "Both bot pushes leave the checks
+# withheld pending approval", for the measurement and for why a stored PAT,
+# which would avoid the hold, is deliberately not used.
 on:
   pull_request:
 

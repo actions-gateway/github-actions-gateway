@@ -100,10 +100,15 @@ The scheduled [`updatecli.yml`](../../.github/workflows/updatecli.yml) workflow 
 ## Operating notes
 
 - **Repo setting prerequisite.** updatecli opens PRs with the default `GITHUB_TOKEN`, so *Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"* must be enabled.
-- **CI does not auto-run on the bump PR.** GitHub never triggers workflows from a `GITHUB_TOKEN`-authored PR (the same constraint [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml) documents).
-  The relevant gate must run before merge — e2e for a kind or Calico bump, the lint job for shellcheck — so a maintainer re-triggers checks by closing and reopening the PR.
-  **On a kind, cluster-autoscaler, or Karpenter bump this step is the whole point, not a formality:** those PRs are the only triggers the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock) has, so merging one without re-running checks is the one path that lets an upstream vocabulary reword through unobserved.
-  A stored App token would remove this step; it is deliberately not used yet (one more secret to manage), matching the go-sync rationale.
+- **The bump PR's checks are created and then withheld.** updatecli opens the PR with the default `GITHUB_TOKEN`, and GitHub creates that PR's workflow runs and then holds every one at `action_required` until a maintainer approves.
+  It is the same hold a `GITHUB_TOKEN` *push* gets, whose mechanism is in [go-workspaces.md](go-workspaces.md#both-bot-pushes-leave-the-checks-withheld-pending-approval) and whose detection gap is Q1052.
+  An empty check list on one of these PRs is therefore a hold rather than a workflow that never fired, and it never clears on its own.
+  Release the runs with **Approve and run** on the checks tab, which starts the ones already sitting on the head rather than queueing a second full set.
+  **On a kind, cluster-autoscaler, or Karpenter bump this step is the whole point, not a formality:** those PRs are the only triggers the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock) has, so merging one without releasing the checks is the one path that lets an upstream vocabulary reword through unobserved.
+  Measured 2026-09-04 on [#1695](https://github.com/actions-gateway/github-actions-gateway/pull/1695), the only `GITHUB_TOKEN`-authored pull request this repo has opened to date: 13 runs were created with the PR at 2026-08-24T07:34:43Z, every one at `action_required`, and were released in place as attempt 2 on 2026-08-26T16:27:33Z.
+  A close and reopen followed eleven minutes later and queued a second set of 13 runs that started immediately, so reopening is the costlier click rather than a broken one.
+  It cannot say whether reopening *alone* would release a PR nobody has approved, because that one had already been approved when it happened.
+  A stored App token would remove the hold; it is deliberately not used yet (one more secret to manage), matching the go-sync rationale.
 - **Triage cadence.** updatecli is scheduled just after Dependabot so all dependency PRs land together and are reviewed in one weekly pass.
 - **A stale Go bump PR rebases itself, but never merge one by hand.** The vendor sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged while `main` moves goes conflicting and cannot self-rebase.
   [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) replays its bumps onto current `main` instead (Q427).

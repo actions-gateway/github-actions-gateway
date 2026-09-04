@@ -17,11 +17,13 @@ name: dependabot-rebase-stale
 # (refusing any that Go reports as a downgrade), regenerates everything with
 # `make vendor-sync`, and force-pushes the result.
 #
-# It does NOT re-run the PR's checks: the force-push uses GITHUB_TOKEN, and
-# GitHub never re-triggers workflows from a GITHUB_TOKEN push. That is the same
-# one-click maintainer step (close + reopen) every synced Dependabot PR already
-# needs; the workflow leaves a PR comment saying so. See
-# docs/development/go-workspaces.md § Dependabot Go bumps are auto-synced.
+# It does NOT start the PR's checks: the force-push uses GITHUB_TOKEN, so GitHub
+# creates the runs for it and then holds every one at action_required until a
+# maintainer approves. That is the same one-click step every synced Dependabot PR
+# already needs, and the click is "Approve and run" rather than close + reopen;
+# the workflow leaves a PR comment saying so. See
+# docs/development/go-workspaces.md, section "Both bot pushes leave the checks
+# withheld pending approval".
 on:
   push:
     # Every main push can strand a synced branch: a go.mod, go.sum, vendor/, or
