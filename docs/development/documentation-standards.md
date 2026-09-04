@@ -370,17 +370,18 @@ The check is in `make check` and costs about a second for the whole tree.
 
 ### What stays hard-wrapped, and why it stays that way
 
-Measured 2026-08-13 on mdreflow v0.1.7: 99.70% of interior line breaks in the docset's prose sit at a sentence boundary, 13,746 of 13,787, leaving 41.
-The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
-"In-scope" excludes the generated docs, which `.mdreflow.yaml` skips.
-Re-derive both rather than quoting them: `make md-reflow-coverage` recomputes the percentage and `ARGS=-v` lists all 41, while `make md-reflow-explain` names each declined paragraph with a stable reason code.
+Measured 2026-09-04 on mdreflow v0.3.0: 99.76% of interior line breaks in the docset's prose sit at a sentence boundary, 18,400 of 18,444, leaving 44.
+The formatter declines 35 paragraphs across 8 files, spanning 82 source lines.
+"In-scope" excludes the generated docs, which `.mdreflow.yaml` skips, and every tracked symlink, so a testdata copy of an excluded page cannot be measured under a second path (Q939).
+Re-derive both rather than quoting them: `make md-reflow-coverage` recomputes the percentage and `ARGS=-v` lists all 44, while `make md-reflow-explain` names each declined paragraph with a stable reason code.
 Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.
-Those figures were taken against v0.1.7 and the pin has since moved to v0.3.0, which splits sentences v0.1.7 joined, so re-derive before citing them rather than reading them as current.
+The figures move with the pin as well as with the tree, because v0.3.0 splits sentences v0.1.7 joined, so a reading taken under one pin is not a reading under the next.
 
-That figure reads lower than the 99.81% this section carried before, and the tree did not get worse: the measurement got wider.
-The 41 split two ways, and the split is the finding.
+Read a move in that percentage as a change in what was measured until you have ruled that out.
+It rose from the 99.67% the same command gave on this tree before Q939 dropped the symlink, which narrowed the set; and an earlier reading had fallen to 99.70% from 99.81% because the measurement got wider.
+The 44 split two ways, and the split is the finding.
 Twenty sit in paragraphs mdreflow declines and reports, which `--explain` accounts for exactly.
-The other 21 sit in two MkDocs admonition bodies mdreflow never sees at all: an admonition body reflows while it holds a single block and silently leaves scope once it holds two, reported neither as a change nor as a decline.
+The other 24 sit in two MkDocs admonition bodies mdreflow never sees at all: an admonition body reflows while it holds a single block and silently leaves scope once it holds two, reported neither as a change nor as a decline.
 A hand-derived count could not see the second group, because nothing named it.
 
 What remains is a small set of guards, each a correctness property rather than a defect, and `--explain` names which one fired.
