@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1023/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1055/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>expect_rc reports a signal death as a wrong verdict - GitHub Actions Gateway</title>
+        <title>Roll the signal-death guard out to the suites still comparing rc raw - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#expect_rc-reports-a-signal-death-as-a-wrong-verdict" class="md-skip">
+        <a href="#roll-the-signal-death-guard-out-to-the-suites-still-comparing-rc-raw" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              expect_rc reports a signal death as a wrong verdict
+              Roll the signal-death guard out to the suites still comparing rc raw
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#parked-the-guard-shipped-the-recurrence-has-not-been-observed-since" class="md-nav__link">
+  <a href="#the-population-is-scripts-testsh-and-that-boundary-is-not-the-class" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Parked: the guard shipped, the recurrence has not been observed since
+        The population is scripts/**/*-test.sh, and that boundary is not the class
       
     </span>
   </a>
@@ -2616,25 +2616,69 @@
   
 
 
-<h1 id="expect_rc-reports-a-signal-death-as-a-wrong-verdict"><code>expect_rc</code> reports a signal death as a wrong verdict<a class="headerlink" href="#expect_rc-reports-a-signal-death-as-a-wrong-verdict" title="Permanent link">&para;</a></h1>
-<p><code>expect_rc</code> compares the command's status numerically against the wanted one, so a status of 128+n means a killed process rather than a verdict, and it is reported as the gate having answered wrongly.
-<code>run-parallel.sh</code> already draws that line one level up and says so in its own output: SIGTERM (143) under host contention is not a gate failure, while 137 is the OOM killer and is.
-The nested suites do not, so a contention kill inside <code>scripts-test</code> reddens <code>make check</code> as a failed assertion and reads as a defect in the gate under test.</p>
-<p>Measured 2026-08-28 under local <code>make check</code> (18 cores, load 22-33, 48 gates fanned out with ~106 script suites nested inside one of them): <code>check-endpoint-parity-test</code> reported <code>FAIL a fake missing the endpoint fails: expected rc=1, got rc=143</code>.
-The captured output on that same failure carries the gate's correct report (<code>the e2e fake serves no GET /repos/x/x/actions/runs/x</code>, then <code>endpointparity: 1 finding(s) across 1 request site(s)</code>), so the checker had already reached the verdict the assertion wanted and was killed before it could exit 1.
-The suite passed four times standalone straight afterwards on the same tree.</p>
-<p>The fix is to treat <code>rc &gt;= 128</code> as a kill rather than a mismatch: name the signal, and either fail with that distinction stated or hand it back the way <code>run-parallel.sh</code> does.</p>
-<p><strong>Key the fix on the compare, not on <code>expect_rc</code>.</strong> The name is the obvious handle and it under-reaches: <code>expect_rc</code> is copied into eight suites, but the defect is any numeric comparison of a captured status against a wanted one, and that shape appears 51 times across 31 suites under a spread of names (<code>expect_rc</code>, <code>expect_retry</code> at <code>scripts/e2e/validate-cluster-test.sh:140</code>, <code>want_rc</code>, <code>want</code>, and bare inline compares).
-Measured 2026-08-28 over <code>scripts/**/*-test.sh</code> for <code>((rc [!=]= …))</code> and <code>[[ "$rc" [!=]= … ]]</code>.
-A pass that greps for the helper's name fixes eight and leaves twenty-three suites able to report the same false finding.
-A shared assertion helper the suites source would close it once rather than 51 times, and that is the larger change to weigh.</p>
-<p>Distinct from <a href="../Q912/">Q912</a>, whose mechanism is the endpoint-parity fake failing to start inside its bound; here the fake started, served, and was reported on.
-Distinct from <a href="../Q822/">Q822</a>, which is about the uncapped fan-out that produces the contention; this row is about what the suites do with a kill once it lands, and is worth having whether or not the fan-out is ever capped.</p>
-<h2 id="parked-the-guard-shipped-the-recurrence-has-not-been-observed-since">Parked: the guard shipped, the recurrence has not been observed since<a class="headerlink" href="#parked-the-guard-shipped-the-recurrence-has-not-been-observed-since" title="Permanent link">&para;</a></h2>
-<p><code>die_if_killed</code> (scripts/lib/common.sh) lands the distinction, and 33 suites adopted it, including this row's target.
-A flake fix is unproven until it stops recurring, so this parks rather than closing: the failure here was one sighting under one contended run, and nothing has re-run that window.</p>
-<p><strong>Event:</strong> any <code>scripts/</code> suite reports a <code>128+n</code> status as a wrong verdict again, in the <code>expected rc=N, got rc=143</code> shape, on <code>main</code> or locally.</p>
-<p><a href="../Q1055/">Q1055</a> carries the roll-out to the 35 suites and 139 sites the guard has not reached, which is ordinary work rather than a recurrence of this.</p>
+<h1 id="roll-the-signal-death-guard-out-to-the-suites-still-comparing-rc-raw">Roll the signal-death guard out to the suites still comparing rc raw<a class="headerlink" href="#roll-the-signal-death-guard-out-to-the-suites-still-comparing-rc-raw" title="Permanent link">&para;</a></h1>
+<p><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back with that status rather than compared against a wanted one.
+Q1023 adopted it in the 33 suites where the insertion needed no judgement.
+35 suites and 139 comparison sites still read a kill as the subject having answered wrongly.</p>
+<p>Measured 2026-09-04 over <code>scripts/**/*-test.sh</code>, counting any numeric comparison of a <code>VAR=$?</code> capture against a wanted status, over every capture name found in the tree (52 of them, not just <code>rc</code>), in both <code>(( ))</code> and <code>[[ ]]</code>/<code>[ ]</code> form.
+That query returns 181 sites across 68 suites, against the 51 across 31 Q1023 estimated with a narrower two-pattern regex.
+The gap is the point: the surface is wider than any single helper name or comparison shape, which is why keying on <code>expect_rc</code> reaches 9 suites and keying on one regex reaches a third of it.</p>
+<p><strong>181 is a floor, and re-derive it rather than working the list.</strong> The query keys on <code>VAR=$?</code> in the same file, so it cannot see a status laundered through something else on its way to the comparison, and that shape is already in flight. Q1006's <code>scripts/ci/workflow-acting-steps-test.sh</code> (measured 2026-09-04 at <code>b71bd4c5d</code>, unmerged) has a <code>drive()</code> that captures <code>... || rc=$?</code> and then <code>printf '%s\n' "$rc"</code>, so callers hold the status as <code>got="$(drive ...)"</code>; one more site reads it back out of a file the workflow wrote, <code>step_rc="$(awk -F= '/^rc=/ { print $2 }' "$dir/outputs")"</code>. Four real sites there (210, 345, 443, 540), and this query returns none of them. It also returns one false positive in that same file, <code>[[ "$rc" == kill ]]</code> at line 152, where <code>rc</code> is a mode parameter (<code>local dir="$1" rc="$2"</code>) that merely shares the name.
+So the query is a starting point with error in both directions, exactly as Q1023's narrower one was for it.
+Re-run it, then read what it returns and what it cannot reach.</p>
+<p><strong>What is left needs judgement per site, which is why it is not more of Q1023.</strong> Of the 139, most sit where the guard cannot be inserted mechanically:
+- a comparison compounded with a content assertion (<code>(( status == want )) &amp;&amp; [[ "$output" == *"$needle"* ]]</code>), 58 sites across 14 suites, <code>check-tools-test.sh</code> and <code>check-release-pins-test.sh</code> densest;
+- a site at top level with no enclosing helper, so there is no <code>name</code> in scope to report and one has to be named (<code>check-dep-advisory-test.sh:96</code>, <code>check-errexit-prologue-test.sh:196</code>);
+- a suite whose assertion helper carries no <code>name</code> local at all (<code>queue-test.sh</code>, 13 sites; <code>validate-release-test.sh</code>, 10; <code>git-merge-plan-index-test.sh</code>, 14).</p>
+<p><strong>Two traps, both of which will make a careless pass wrong.</strong> <code>die_if_killed</code> takes an optional WANT precisely because <code>run-parallel-test.sh</code> asserts 137 and 143 against the runner's own KILLED path: a want-blind guard exits before those assertions run and breaks the one suite that proves the distinction works.
+And the split is <code>&gt; 128</code>, not <code>&gt;= 128</code>: git spends 128 on any fatal error, which is the line <code>run-parallel.sh</code> already drew in Q837 and the one Q1023's own prose got wrong.</p>
+<p><code>expect_output</code>-shaped helpers are in scope too even though they compare no status: <code>out="$(cmd 2&gt;&amp;1 || true)"</code> discards it, so a kill lands as a missing needle and the report blames the gate's wording.
+One fix closes both, which is why they are one row.</p>
+<p><strong>The operator is not the discriminator; whether the value came from <code>$?</code> is.</strong> A string compare of a captured status has the defect identically, because 143 is not 1 whichever way the test is spelled: <code>[[ "$got_rc" == "$want_rc" ]]</code> at <code>scripts/ci/check-conflict-markers-test.sh:39</code> is two of the 181 sites, and a <code>grep -E '\-(eq|ne|ge|gt|le|lt) '</code> over that whole file returns 0.
+So a query keyed on the numeric operators reports a suite with the defect as clean.
+Both readings were taken 2026-09-04, and this is the shape most likely to make a roll-out pass believe it is finished.</p>
+<h2 id="the-population-is-scripts-testsh-and-that-boundary-is-not-the-class">The population is <code>scripts/**/*-test.sh</code>, and that boundary is not the class<a class="headerlink" href="#the-population-is-scripts-testsh-and-that-boundary-is-not-the-class" title="Permanent link">&para;</a></h2>
+<p>Workflow <code>run:</code> bodies hold the same comparison and were never swept, because they are YAML rather than a script the gate lists.
+Measured 2026-09-04 with the same query over <code>.github/workflows/*.yml</code>: <strong>5 sites across 3 workflows</strong>, none of them guarded, and none reachable by sourcing <code>scripts/lib/common.sh</code> from a <code>run:</code> block.</p>
+<table>
+<thead>
+<tr>
+<th>Site</th>
+<th>Comparison</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>e2e-reusable.yml:562</code></td>
+<td><code>[[ "$bake_rc" -ne 0 ]]</code></td>
+</tr>
+<tr>
+<td><code>e2e-reusable.yml:723</code></td>
+<td><code>[[ $gh_rc -ne 0 ]]</code></td>
+</tr>
+<tr>
+<td><code>publish.yml:200</code></td>
+<td><code>[ "${rc}" -eq 0 ]</code></td>
+</tr>
+<tr>
+<td><code>publish.yml:207</code></td>
+<td><code>[ "${rc}" -ge 2 ]</code></td>
+</tr>
+<tr>
+<td><code>release-freeze-watch.yml:79</code></td>
+<td><code>[ "${rc}" -ge 2 ]</code></td>
+</tr>
+</tbody>
+</table>
+<p>Whether these are defects is a separate judgement per site, and one of the five is already settled the other way.</p>
+<p><strong><code>release-freeze-watch.yml:79</code> is correct as written; do not guard it.</strong> Its own comment at lines 74 to 78 says a signal death belongs inside that bucket: exit 2 is "could not measure", and "anything above it is the delegate crashing (126 not executable, 137 killed) rather than exiting", which fails the job loudly instead of reaching a report step that would read any non-zero as a spent candidate.
+A <code>die_if_killed</code>-shaped guard here would abort on precisely the case the classifier is written to catch, turning a working path into a broken one.
+Read 2026-09-04 from the workflow; Q1006's suite asserts both directions against real deaths, a 126 by removing the delegate's executable bit and a 137 by <code>kill -KILL $$</code>.</p>
+<p>That inversion is the argument for judging each site rather than sweeping them.
+The boundary reasoning behind <code>die_if_killed</code> is right and its conclusion flips here, because a test suite asking "did the subject answer" and a classifier asking "can I trust this measurement" want opposite things from a 137.
+Q1006's own history is the counter-example in the same venue: that classifier reached review as <code>-eq 2</code> and let 7, 126 and 137 through before becoming <code>-ge 2</code>.
+Deciding the remaining four is not this row, and a row that closed the 139 while leaving them unexamined should say so rather than read as having finished the class.</p>
+<p>Distinct from <a href="../Q822/">Q822</a>, which is the uncapped fan-out producing the contention; this is what the suites do with a kill once it lands, and is worth having whether or not the fan-out is ever capped.</p>
 
 
 

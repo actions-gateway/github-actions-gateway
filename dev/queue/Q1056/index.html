@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1006/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1056/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing executes a workflow run: body before it reaches main - GitHub Actions Gateway</title>
+        <title>Nothing drives publish.yml's acting run: bodies before a release - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-executes-a-workflow-run-body-before-it-reaches-main" class="md-skip">
+        <a href="#nothing-drives-publishymls-acting-run-bodies-before-a-release" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing executes a workflow run: body before it reaches main
+              Nothing drives publish.yml's acting run: bodies before a release
             
           </span>
         </div>
@@ -2597,21 +2597,21 @@
   
 
 
-<h1 id="nothing-executes-a-workflow-run-body-before-it-reaches-main">Nothing executes a workflow <code>run:</code> body before it reaches main<a class="headerlink" href="#nothing-executes-a-workflow-run-body-before-it-reaches-main" title="Permanent link">&para;</a></h1>
-<p><code>make check</code> runs targets over the tree, and no target enters a workflow step's shell, so a <code>run:</code> body is first executed by the runner on the event that triggers it.
-The 11 workflows with no <code>pull_request</code> trigger first run their bodies after merge, or at a <code>v*</code> tag in <code>publish.yml</code>'s case, so the first reader of a defect there is a bot acting on it or a release.
-Measured 2026-08-27 by parsing each workflow's <code>on:</code> block: a grep of the whole file answers 10, because <code>release-freeze-watch.yml</code> names <code>pull_request</code> only in a comment explaining why it does not use one.
-Neither actionlint nor shellcheck's integration executes it, so a defect in what the script <em>decides</em> is invisible to both.</p>
-<p>Measured 2026-08-27 on this repo's own release-freeze-watch.yml, which reached review with <code>if [ "${rc}" -eq 2 ]</code> where the delegate's crash codes are 2 and above.
-Exit codes 7, 126 and 137 each fell through to the report step and opened a <code>release-freeze</code> issue retiring a candidate nothing had measured, and the issue could not name the candidate because the report's sed finds no rc string in a crash log.
-Green actionlint, green shellcheck, green <code>make check</code>, and a full review; the defect was found by hand-driving the step.</p>
-<p>The mechanism is cheap and needs no new dependency: read the step's <code>run:</code> body out of the YAML through the block-scalar dedent, put stubs for the delegate and <code>gh</code> on PATH, drive it under <code>bash -e -o pipefail</code> (the shell Actions uses for a <code>run:</code> step), and assert on what the stubs were asked to do.
-A driver posing rc 0/1/2/7/126/137 against the two steps above took 69 lines, plus a 37-line extractor.
-The positive control is the load-bearing half: a case that must still open an issue, so a change silencing every code fails instead of passing.</p>
-<p>Separate from <a href="../Q856/">Q856</a> and <a href="../Q943/">Q943</a>, which both ask whether a gate job is <em>wired</em>: reconciled with its <code>needs</code>, or registered as required.
-Those two catch a correct script that nothing requires; this one catches a required gate whose script decides the wrong thing.</p>
-<p>Scope is a judgement call and belongs in the item: covering every <code>run:</code> body in 29 workflows is not proportionate.
-The steps worth it are the ones that act rather than report, meaning those that open an issue, push, publish, or tag, which is a much smaller set than the workflow count suggests.</p>
+<h1 id="nothing-drives-publishymls-acting-run-bodies-before-a-release">Nothing drives publish.yml's acting <code>run:</code> bodies before a release<a class="headerlink" href="#nothing-drives-publishymls-acting-run-bodies-before-a-release" title="Permanent link">&para;</a></h1>
+<p>Q1006 shipped a driver for the workflow <code>run:</code> bodies that act, and scoped <code>publish.yml</code> out of it deliberately.
+This is the residue.</p>
+<p><code>publish.yml</code> triggers only on a <code>v*</code> tag push and a dispatch, so no pull request executes any of its bodies.
+Measured 2026-09-04 by parsing each workflow's <code>on:</code> block: it is one of eleven workflows with no <code>pull_request</code> trigger, and the only one of those whose bodies both act on the world outside the run and are undriven.
+Its acting steps run <code>cosign sign</code>, <code>cosign sign-blob</code>, <code>helm push</code>, <code>gh release create</code>, <code>gh release upload</code> and <code>gh release edit</code>: publishing, signing and releasing, each first executed during the release it is publishing.</p>
+<p><strong>What is already covered, so this row is not the whole gap.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-publish-digest.sh"><code>check-publish-digest.sh</code></a> holds the retried build's wiring statically, and <code>cosign-pin-check</code> and <code>semver-floor-sources-check</code> cover two more properties.
+Those read the YAML.
+None of them enters a step's shell, so nothing exercises what the bodies <em>decide</em>: which digest a <code>gh release edit --draft=false</code> promotes, whether a chart push that failed to parse its digest still signs something, what the <code>--latest</code> branch does on a backport tag.</p>
+<p><strong>Why Q1006 excluded it, and what would change that.</strong> The two steps Q1006 drives need one stub each (<code>gh</code>; <code>mike</code> plus <code>git</code>).
+<code>publish.yml</code>'s need <code>cosign</code>, <code>syft</code>, <code>docker</code>, <code>helm</code> and <code>gh</code>, several of them recording multi-line output later steps parse, which is a driver several times the size of the one that ships in Q1006 rather than an afternoon's extension of it.
+Sized M for that reason, not because the mechanism is unknown: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-step-body.sh"><code>workflow-step-body.sh</code></a> and the case shape in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-acting-steps-test.sh"><code>workflow-acting-steps-test.sh</code></a> both generalize, and the suite's <code>acting_registry()</code> already carries <code>publish.yml</code> with this row's id as its deferral reason.</p>
+<p><strong>The extractor already reaches all six, so this is a driver to write rather than steps to convert first.</strong> It refuses a body that interpolates a <code>${{ }}</code> expression into its script text, because the runner substitutes that before bash sees it, so a driven body would not be the body CI runs.
+Measured 2026-09-04: <code>workflow-step-body.sh</code> returns rc 0 for <code>chart</code>, <code>chart_crds_v2</code>, and the four release steps (<code>Compose and create the GitHub Release …</code>, <code>Render, sign, and attach the v2 CRD manifest …</code>, <code>Build, sign, and attach the gag-migrate CLI binaries …</code>, <code>Publish the release now every asset is attached</code>).
+All six take their inputs through <code>env:</code>, so the whole cost of this row is the stubs and the cases.</p>
 
 
 

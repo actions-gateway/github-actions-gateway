@@ -2800,9 +2800,17 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1023/">Q1023</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/check-endpoint-parity-test.sh"><code>expect_rc</code> reports a signal death as a wrong verdict</a></td>
 <td><code>ci</code> <code>tests</code> <code>flake</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
 <td><code>expect_rc</code> compares the command's status numerically against the wanted one, so a status of 128+n means a killed process rather than a …</td>
+</tr>
+<tr>
+<td><a href="Q1055/">Q1055</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">Roll the signal-death guard out to the suites still comparing rc raw</a></td>
+<td><code>ci</code> <code>tests</code> <code>flake</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
 </tr>
 <tr>
 <td><a href="Q1029/">Q1029</a></td>
@@ -3061,14 +3069,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Inv.</td>
 </tr>
 <tr>
-<td><a href="Q1006/">Q1006</a></td>
-<td><a href="../development/testing/">Nothing executes a workflow <code>run:</code> body before it reaches main</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make check</code> runs targets over the tree, and no target enters a workflow step's shell, so a <code>run:</code> body is first executed by the runner on …</td>
-</tr>
-<tr>
 <td><a href="Q1054/">Q1054</a></td>
 <td><a href="../development/website/">Filing a queue row adds a page no local gate builds</a></td>
 <td><code>ci</code> <code>docs</code> <code>debt</code></td>
@@ -3083,6 +3083,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>CLAUDE.md</code> and <a href="../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md</a> both say to confirm a …</td>
+</tr>
+<tr>
+<td><a href="Q1056/">Q1056</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Nothing drives publish.yml's acting <code>run:</code> bodies before a release</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q1006 shipped a driver for the workflow <code>run:</code> bodies that act, and scoped <code>publish.yml</code> out of it deliberately.</td>
 </tr>
 <tr>
 <td><a href="Q707/">Q707</a></td>

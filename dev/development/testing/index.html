@@ -2803,6 +2803,56 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#driving-a-workflow-run-body" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Driving a workflow run: body
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Driving a workflow run: body">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#which-steps-are-in-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which steps are in scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-shell-a-body-is-driven-under" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shell a body is driven under
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-suite-asserts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the suite asserts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-doc-link-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4284,6 +4334,8 @@ Under host contention that is usually SIGTERM (<code>signal 15, exit 143</code>)
 Both still exit non-zero, because a killed command did not do its work.
 What separates them is the fan-out's own status: 1 when anything reached a bad verdict, and otherwise the first killed command's own <code>128+N</code> (Q837).
 Exit 128 is not a signal death, since git spends it on any fatal error, so it stays a <code>FAILED</code>.</p>
+<p><strong>A nested suite only reaches that distinction if it hands the status back</strong>, which is what <code>die_if_killed</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a> is for: a suite that compares a killed child's <code>143</code> against a wanted <code>1</code> reports a false <code>FAILED</code> from inside a fan-out that would have called it <code>KILLED</code> (Q1023).
+Guard every captured-status comparison with it; <a href="../bash-style/#shared-helpers-and-makefile-wiring">bash-style.md § Shared helpers</a> has the shape and the two traps.</p>
 <p>Test output is non-verbose by default: <code>go test</code> prints one <code>ok &lt;pkg&gt;</code> line per passing package and the full output of any package that fails (compress success, expand failure).
 When debugging a <strong>slow or hanging</strong> test, add <code>V=1</code> (<code>make check V=1</code> or <code>make test V=1</code>) to stream output live — without <code>-v</code>, <code>go test</code> buffers each package's output until the package completes, so a hung test shows nothing (not even its <code>t.Log</code> lines) until it finishes or hits <code>-timeout</code>.</p>
 <p>A sub-second subset also runs automatically at commit time via the tracked pre-commit hook in <code>.githooks/</code>: gofmt on staged Go files and <a href="../documentation-standards/#enforcing-the-em-dash-rule"><code>em-dash-check</code></a> when any Markdown is staged.
@@ -4657,6 +4709,80 @@ There is no version env var to bump; it rides the <code>tools/</code> Dependabot
 The script therefore fails outright on a missing shellcheck rather than running degraded. shellcheck is already a <code>required</code>-tier tool in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools.sh"><code>check-tools.sh</code></a>, so <code>make doctor</code> covers it; the CI job installs the same pinned version the shellcheck job does, off a workflow-level <code>SHELLCHECK_VERSION</code>/<code>SHELLCHECK_SHA256</code> pair so the two cannot drift apart.
 <code>make doctor</code> reads that same <code>SHELLCHECK_VERSION</code> as shellcheck's version floor, so a local shellcheck older than CI's is reported rather than left to surface as a red CI job on a branch whose <code>make shellcheck</code> was green: an older linter finds fewer problems, which is the same false-green in the other direction.</p>
 <p>Accepted findings inside a <code>run:</code> block carry the same targeted <code># shellcheck disable=SCxxxx</code> directive as a standalone script — placed above a <code>{ … }</code> group it covers the whole group, which is how <code>publish.yml</code>'s single-quoted <code>printf</code> format strings (a genuine SC2016 false positive) are justified once rather than per line.</p>
+<h3 id="driving-a-workflow-run-body">Driving a workflow <code>run:</code> body<a class="headerlink" href="#driving-a-workflow-run-body" title="Permanent link">&para;</a></h3>
+<p><code>make scripts-test</code> runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-acting-steps-test.sh"><code>scripts/ci/workflow-acting-steps-test.sh</code></a>, which extracts workflow step bodies with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-step-body.sh"><code>workflow-step-body.sh</code></a>, executes them with stubs on <code>PATH</code>, and asserts on what the stubs were asked to do (Q1006).
+The CI <code>shellcheck</code> job in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> runs the same target, gated on the <code>workflows</code> paths-filter as well as <code>scripts</code>, because the subject is <code>.github/workflows/</code> rather than <code>scripts/</code>.</p>
+<p>It exists because nothing else executes a <code>run:</code> body before it reaches <code>main</code>.
+<code>make check</code> runs targets over the tree and no target enters a step's shell, so a body is first executed by the runner on the event that triggers it.
+The <a href="#the-actionlint-gate">actionlint gate</a> above parses those bodies and delegates them to shellcheck; neither one runs them, so a defect in what the script <em>decides</em> is invisible to both.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/release-freeze-watch.yml"><code>release-freeze-watch.yml</code></a> reached review classifying its delegate's exit code with <code>if [ "${rc}" -eq 2 ]</code> where the crash codes are 2 and above.
+Exit 7, 126 and 137 each fell through to the report step, which reads every non-zero code as a spent candidate, so a crashed check would have opened a <code>release-freeze</code> issue retiring a candidate nothing had measured, and the issue could not have named the candidate because the title's <code>sed</code> finds no <code>-rc.N</code> string in a crash log.
+It was caught by hand-driving the step, with actionlint, shellcheck and <code>make check</code> all green and a full review taken.
+<code>git log -S'-eq 2' -- .github/workflows/release-freeze-watch.yml</code> is empty, so that comparison never merged; the workflow landed once, on 2026-08-27, already carrying <code>-ge 2</code>.</p>
+<h4 id="which-steps-are-in-scope">Which steps are in scope<a class="headerlink" href="#which-steps-are-in-scope" title="Permanent link">&para;</a></h4>
+<p>Driving every <code>run:</code> body in thirty workflows is not proportionate, so the subject is derived rather than enumerated: a step is in scope when it <strong>acts</strong> (opens an issue, pushes a ref, publishes an artifact, or tags) <strong>and</strong> no <code>pull_request</code> event executes it.</p>
+<p>Eleven workflows carry no <code>pull_request</code> trigger at all, measured by parsing each <code>on:</code> block.
+A grep answers ten, because <code>release-freeze-watch.yml</code> names <code>pull_request</code> only in a comment explaining why it has none.
+That count is not itself the scope: a workflow with a <code>pull_request</code> trigger can still gate its acting job off that event, which <code>pages.yml</code> does.</p>
+<p>Five workflows run an acting command.
+Two are driven:</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Step</th>
+<th>Acts by</th>
+<th>Why a PR never runs it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>release-freeze-watch.yml</code></td>
+<td><code>check</code>, <code>report</code></td>
+<td><code>gh issue create</code> / <code>comment</code> / <code>close</code></td>
+<td>no <code>pull_request</code> trigger</td>
+</tr>
+<tr>
+<td><code>pages.yml</code></td>
+<td><code>mike</code></td>
+<td><code>git push origin gh-pages</code></td>
+<td>the <code>publish</code> job is <code>if: github.event_name != 'pull_request'</code></td>
+</tr>
+</tbody>
+</table>
+<p>The other three are excluded, and the reasons are the scope claim rather than an aside:</p>
+<ul>
+<li><strong><code>dependabot-go-sync.yml</code></strong> pushes to a Dependabot branch, and <code>pull_request</code> is its only trigger, so every Dependabot PR executes that body before it merges.
+  It is not in the defect class.</li>
+<li><strong><code>e2e-reusable.yml</code></strong> pushes two images, and both e2e lanes that call it declare <code>merge_group</code>, so the queue runs it against the candidate merge commit before that commit lands.
+  Its push also targets the registry the same job stands up, so it publishes nothing outside the run.</li>
+<li><strong><code>publish.yml</code></strong> is in the class and is deferred to Q1056.
+  Its acting steps need <code>cosign</code>, <code>syft</code>, <code>docker</code>, <code>helm</code> and <code>gh</code> stubs, a driver several times the size of this one, and its wiring is already held statically by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-publish-digest.sh"><code>check-publish-digest.sh</code></a> and the cosign pin gate.</li>
+</ul>
+<p>Two workflows act only through a delegate: <code>dependabot-rebase-stale.yml</code> calls <code>scripts/ci/dependabot-rebase-stale.sh</code> and <code>updatecli.yml</code> calls the <code>updatecli</code> binary, and in both the <code>run:</code> body decides one flag.
+The decisions are in the delegate, which has its own suite, so driving the wrapper would test the flag and nothing else.</p>
+<p><strong>A closing assertion holds that derivation to the tree, both directions.</strong> Every workflow running an acting command must be driven or listed in the suite's <code>acting_registry()</code> with a reason, and a registry line naming a workflow that no longer exists, or no longer acts, fails too.
+Without it the suite would cover a frozen pair and a thirty-first workflow could start opening issues uncovered, which is the same false negative the <a href="#the-path-filter-gate">path-filter gate</a> exists for one rung over.</p>
+<h4 id="the-shell-a-body-is-driven-under">The shell a body is driven under<a class="headerlink" href="#the-shell-a-body-is-driven-under" title="Permanent link">&para;</a></h4>
+<p><code>bash --noprofile --norc -e</code>, and deliberately <strong>not</strong> <code>-o pipefail</code>.
+GitHub's documented default <code>run:</code> shell is <code>bash -e {0}</code>; <code>-eo pipefail</code> arrives only with an explicit <code>shell: bash</code>, a job <code>defaults.run.shell</code>, or a workflow-level one.
+No workflow here sets any of the three, so the suite refuses with rc 2 rather than driving the wrong shell if a <code>shell:</code> or <code>defaults:</code> key appears in either subject.
+That claim about GitHub's default is read off its documentation rather than measured here, and the refusal is the local half that keeps it tied to the tree.</p>
+<p>The difference is not academic.
+Measured 2026-09-04 on bash 5.3.15, the report step's <code>printf</code> into <code>sed</code> into <code>head -1</code> candidate extraction exits 141 under <code>-e -o pipefail</code> for a log long enough that <code>head</code> closes the pipe before <code>sed</code> finishes, killing the step before it opens the issue, and exits 0 under <code>-e</code>.
+A pipefail drive would therefore redden a step that works.
+It happens not to bite today: all 20 cases still pass with pipefail added, because their fixture logs are short, so the choice currently decides no verdict here.</p>
+<h4 id="what-the-suite-asserts">What the suite asserts<a class="headerlink" href="#what-the-suite-asserts" title="Permanent link">&para;</a></h4>
+<p>Twenty cases over the three steps.
+The <code>check</code> step's classification is driven at delegate exit 0, 1, 2, 7, 126 and 137, and the last two are posed for real rather than as a stub exiting with the number: 126 by making the delegate non-executable, 137 by having it <code>kill -KILL $$</code>.
+2, 7, 126 and 137 must fail the job and write no <code>log</code> output, so the report step's <code>RC</code> and <code>LOG</code> are empty and it cannot retire a candidate nothing measured.</p>
+<p><strong>Each subject carries a positive control, which is the load-bearing half.</strong> A suite of "must not act" cases passes trivially for a body that has stopped acting at all, so <code>report-opens-issue</code> requires a spent candidate with no open issue to open one, and <code>pages-highest-release</code> requires the highest released version to claim <code>stable</code> and push.
+<code>freeze-end-to-end</code> chains the two steps through <code>$GITHUB_OUTPUT</code>, so a change that clamps the delegate's exit code fails there rather than passing every negative case.</p>
+<p><strong>Two regression cases re-apply a historical defect and require the assertions to go red</strong>: <code>-ge 2</code> back to <code>-eq 2</code> in the check step, and the highest-release comparison deleted from the mike step.
+Each asserts its mutation landed before reading the verdict, because a <code>sed</code> that matched nothing leaves the mechanism intact and the pass then reads as the assertion not biting.</p>
+<p>Adding a step is a call to <code>extract</code>, a stub, and its cases.
+The extractor refuses with rc 2 rather than printing nothing on a missing workflow or step, two steps sharing a name, a <code>uses:</code> step, a folded scalar, and a body interpolating a <code>${{ }}</code> expression, which the runner substitutes before bash sees it.
+An empty body drives clean, so each of those has to be a refusal: a silence would make every case built on it vacuous.</p>
 <h3 id="the-doc-link-gate">The doc-link gate<a class="headerlink" href="#the-doc-link-gate" title="Permanent link">&para;</a></h3>
 <p><code>make doc-links</code> runs <code>scripts/docs/check-doc-links.sh</code> over every present, non-vendored Markdown file — tracked, or untracked and not gitignored (<a href="#gates-scan-present-files-not-just-tracked-ones">the shared file selection</a>) — and is wired into <code>make check</code>, so the local pre-review gate matches CI.
 CI runs the same <code>make doc-links</code> target from its <strong>own</strong> workflow, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>.github/workflows/doc-links.yml</code></a>, scoped by that workflow's internal <code>changes</code> filter to <code>**.md</code>, the checkers, the docs-site build inputs, and the workflow itself.
