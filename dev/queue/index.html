@@ -3085,6 +3085,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>make check</code> runs targets over the tree, and no target enters a workflow step's shell, so a <code>run:</code> body is first executed by the runner on …</td>
 </tr>
 <tr>
+<td><a href="Q1054/">Q1054</a></td>
+<td><a href="../development/website/">Filing a queue row adds a page no local gate builds</a></td>
+<td><code>ci</code> <code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>docs/queue/</code> publishes at <code>/dev/queue/</code>, so every new row is a new page under <code>docs/</code>.</td>
+</tr>
+<tr>
 <td><a href="Q1028/">Q1028</a></td>
 <td><a href="../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">A workflow-level CI read cannot tell a skipped job from a passing one</a></td>
 <td><code>docs</code> <code>tests</code></td>
@@ -4086,11 +4094,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q974/">Q974</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/coverage-baseline.txt"><code>cmd/proxy</code> sits below its coverage floor, passing only on tolerance</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/coverage-baseline.txt"><code>cmd/probe</code> sits below its coverage floor, passing only on tolerance</a></td>
 <td><code>debt</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-24 from a green <code>make check</code>: <code>./cmd/proxy</code> reports 78.7% against a recorded floor of 79.3%, and passes only because …</td>
+<td><strong>Re-measured 2026-09-04 08:35 PDT</strong> on a quiet tree at <code>origin/main</code> (<code>f792d60c5</code>), <code>make cover-check</code> exit 0: <code>./cmd/probe</code> reports 81.6% …</td>
 </tr>
 <tr>
 <td><a href="Q975/">Q975</a></td>

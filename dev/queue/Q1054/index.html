@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1031/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1054/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>go-throttle's probe is killed under host load, denying a -race rewrite - GitHub Actions Gateway</title>
+        <title>Filing a queue row adds a page no local gate builds - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite" class="md-skip">
+        <a href="#filing-a-queue-row-adds-a-page-no-local-gate-builds" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              go-throttle's probe is killed under host load, denying a -race rewrite
+              Filing a queue row adds a page no local gate builds
             
           </span>
         </div>
@@ -2579,25 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#six-sightings-after-the-fix-2026-09-04" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Six sightings after the fix, 2026-09-04
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2616,86 +2597,20 @@
   
 
 
-<h1 id="go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite">go-throttle's probe is killed under host load, denying a -race rewrite<a class="headerlink" href="#go-throttles-probe-is-killed-under-host-load-denying-a--race-rewrite" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>claude-go-throttle-hook-test</code> fails on <code>main</code>.</p>
-<p><code>claude-go-throttle-hook-test</code> fired the real <code>local-throttle.sh</code> on every assertion, and <code>gothrottle</code> bounds that probe at 5 s and denies a <code>-race</code> it cannot throttle, so a starved probe replaced the rewrite the suite was asserting.
-<strong>Measured 2026-08-29 00:45 PDT</strong>, in <code>make check</code> on a branch touching no file under <code>scripts/agent/</code>: the suite failed, took 163 s (the slowest of the 115), and the hook returned a deny whose own reason names the cause: <code>throttle probe failed after 5.805s: scripts/agent/local-throttle.sh prefix: signal: killed</code>.
-The host was at load average 40.82 over 18 cores.
-Re-run alone six minutes later on the same tree: exit 0.
-The deny is correct in production, since an unthrottled <code>-race</code> can freeze the GUI (Q92, long closed and so no longer a row); what was wrong is that it landed on a <em>test</em> asserting the rewrite.</p>
-<p><strong>The mitigation is to stop reading a failed probe as a decision.</strong> <code>hook_decision</code> re-asks while the trace says the probe never answered, which is Q785's own rule pointed at the suite instead of the hook, and it keys on the probe's trace line, which no decision defect can reach.
-The suite also runs the entry point from a mirror of the repo layout, which fixes the expected prefix instead of deriving it per platform and retires a SKIP that passed this suite having asserted nothing wherever <code>local-throttle.sh</code> reports throttling off.
-One case stays on the default path, to assert the hook still reaches the repo's own script.</p>
-<p><strong>Stubbing alone does not work, and finding that out is what measured the mechanism.</strong> A first attempt replaced the probe with a stub that does nothing but <code>printf</code>, on the assumption that a stub answers instantly.
-<code>make check</code> killed <em>that</em> stub at 5.002 s, naming the mirror's own path.
-So the cost is the exec rather than the script: measured 2026-09-03 under this repo's <code>make scripts-test</code> fan-out at load 57 to 65, a do-nothing stub took 68 to 633 ms and a bare <code>/bin/echo</code> 46 to 477 ms, a 2.7x median gap against a 5 s budget the tail reaches anyway.
-A lighter probe and a longer budget are the same guess at a number the host is free to exceed.</p>
-<p><strong>The row named one failing case and there were 12.</strong> Measured 2026-09-03 by driving the decision binary with a probe that always misses the budget: every <code>-race</code> case the suite asserts becomes the same probe-failure deny, <code>bare: go test</code> becomes silence, and <code>two real invocations + a mention</code> passed while asserting only <code>deny</code>, which that deny satisfies.
-That last one is now pinned to the count reason.</p>
-<p><strong>What has not been isolated is which contention produces the tail.</strong> Pure CPU oversubscription does not: 36 spinners to load 29 left the probe at roughly 90 ms, its idle latency.
-A scheduling demotion is a 10x to 20x multiplier at constant load (85 to 332 ms against 1480 to 4236 ms under <code>nice -n 10 taskpolicy -d throttle</code>, ten interleaved pairs at load 31 to 46), but <code>make scripts-test</code> inherits no <code>THROTTLE_PREFIX</code> (only the <code>go</code>/lint invocations in <code>scripts/go/</code> carry one), so that bounds what contention can cost rather than explaining the kill.
-<a href="../Q1007/">Q1007</a> carries the same demotion as an unverified candidate for a suite that <em>does</em> run under it, and this is the nearest quantification of it.</p>
-<p>Adjacent to <a href="../Q822/">Q822</a> and not a duplicate of it.
-Q822 is the generic class, suites that fail under concurrent load and pass on rerun, and its open question is whether to cap <code>run-parallel.sh</code>'s fan-out, which it calls a machine-wide throughput decision.
-It also says plainly that nothing under it reproduces a suite failing <em>because of</em> the fan-out.
-This row is that traced instance: the hook's own deny reason names the mechanism.
-Capping the fan-out would probably close both and needs the throughput decision; re-asking a probe that never answered closes this one and needs nothing.</p>
-<h2 id="six-sightings-after-the-fix-2026-09-04">Six sightings after the fix, 2026-09-04<a class="headerlink" href="#six-sightings-after-the-fix-2026-09-04" title="Permanent link">&para;</a></h2>
-<p>The mitigation merged in <code>bffbe6504</code> (#1831) and is an ancestor of every branch below, so these are post-fix recurrences rather than the original defect.
-All five are local <code>make check</code> on a PR branch, so the <strong>Event</strong> trigger does not fire and the row stays in Flake watch; the soak is recounted from 2026-09-04.
-Found by five of the six workers in one dispatch wave, none of which touched anything under <code>scripts/agent/</code>, and every one passed the suite standalone straight afterwards.
-The sixth is this row's own branch.</p>
-<table>
-<thead>
-<tr>
-<th>Load at failure</th>
-<th>Reported</th>
-<th>Standalone re-run</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>~15 to 19</td>
-<td><code>throttle probe failed after 5.002s</code></td>
-<td>passes at <strong>20.39</strong></td>
-</tr>
-<tr>
-<td>32 to 33 (<code>endpoint-parity</code> window)</td>
-<td>suite red beside two siblings</td>
-<td>rc=0</td>
-</tr>
-<tr>
-<td>54</td>
-<td><code>throttle probe failed after 5.004s</code></td>
-<td>passes</td>
-</tr>
-<tr>
-<td>64</td>
-<td>5 s wall-clock probe</td>
-<td>passes</td>
-</tr>
-<tr>
-<td>74.17</td>
-<td><code>throttle probe failed after 5.001s</code></td>
-<td>passes</td>
-</tr>
-<tr>
-<td>not captured</td>
-<td><code>throttle probe failed after 5.001s</code>, case <code>bare: go test</code></td>
-<td>passes in 2 s</td>
-</tr>
-</tbody>
-</table>
-<p><strong>The lowest sighting refutes the load story this row rests on, and it refutes it from inside one session.</strong> The original measurement was taken at load average 40.82 and the mechanism section reasons from contention throughout.
-The first row above failed at roughly 15 to 19 and then passed standalone at <strong>20.39</strong> on the same tree, so the passing run carried the higher load.
-Whatever bounds the probe is therefore not load average, or not load average alone, and the quantification under <em>What has not been isolated</em> is measuring the wrong axis.
-The 5-attempt re-ask did not clear the failure at that load either, which is the mitigation's own budget rather than its keying.</p>
-<p><strong>The last row is the branch that records this section</strong>, which makes it a control nobody arranged: the diff is four markdown files under <code>docs/queue/</code> and cannot reach the hook under test.
-Its load at the moment of failure was not captured, which is a gap in this reading rather than a number to infer; what is known is that <code>make check</code> started with a one-minute average of 5.73 and the machine read 15.08 about a minute after the failure, with the 51-gate and 117-suite fan-out in between.
-It is also the <code>bare: go test</code> case the row names, so the failing case is the one the mitigation's own analysis predicts.</p>
-<p>The reported timings cluster at 5.001 to 5.004 s against a 5 s budget, which is the budget expiring rather than a probe running long.
-That is consistent with the row's finding that the cost is the exec, and inconsistent with a starved-CPU story that should scatter.</p>
-<p><a href="../Q822/">Q822</a> carries a sixth sighting from the same wave in a different suite at load 32.21, which is that row's class rather than this one's.</p>
+<h1 id="filing-a-queue-row-adds-a-page-no-local-gate-builds">Filing a queue row adds a page no local gate builds<a class="headerlink" href="#filing-a-queue-row-adds-a-page-no-local-gate-builds" title="Permanent link">&para;</a></h1>
+<p><code>docs/queue/</code> publishes at <code>/dev/queue/</code>, so every new row is a new page under <code>docs/</code>.
+<code>make check</code> never builds the site and <code>make docs-gates</code> does not either, so the whole <code>mkdocs --strict</code> class is invisible until CI.</p>
+<p><strong>Measured 2026-09-04</strong> on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1839">#1839</a>.
+A new row's <code>target:</code> was written <code>../../docs/development/go-workspaces.md</code>, which escapes the mkdocs root and then points back into the docs tree; <code>docs/queue/README.md</code> renders <code>target</code> as a link, so <code>mkdocs --strict</code> aborted.
+Three checks went red on one cause: <code>build</code> and <code>release-links</code> both abort on the warning and <code>doc-links-gate</code> aggregates them.
+The session ran <code>make check</code> twice and <code>make docs-gates</code> once before pushing, all green, all structurally blind to it.</p>
+<p><strong>The gap is between the rule's wording and the act it has to fire on.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">CLAUDE.md</a> already says that adding or moving a page under <code>docs/</code> needs <code>make docs-build</code>.
+Nobody filing a backlog row reads that as adding a page, and every worker in every dispatch wave files rows, so the exposure recurs on a schedule.</p>
+<p><strong>Only the escaping form breaks.</strong> A batch-wide read of every row touched by the six PRs of the 2026-09-04 wave found <code>../../.mdreflow.yaml</code>, <code>../../scripts/go/coverage.sh</code>, <code>../../.github/workflows/dependabot-go-sync.yml</code>, <code>../../scripts/manifest/check-registry-mirror-catalog-deny.py</code> and <code>../../.github/workflows/e2e-reusable.yml</code>, all leaving <code>docs/</code> for a code file and all fine.
+So the check wants the escaping-into-<code>docs/</code> shape rather than a ban on <code>../../</code>.</p>
+<p><strong>Done when</strong> a row whose <code>target:</code> would break the site render fails before CI.
+The cheap rung is a <code>queue-lint</code> rule keyed on that shape, which needs no site build and so can join the fast gates; the thorough rung is putting <code>docs-build</code> in reach of the docs gates, which costs a full mkdocs run.
+Prefer the first unless the second is wanted for a reason this row does not carry.</p>
 
 
 

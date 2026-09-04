@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-sighting-at-ordinary-load-2026-09-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A sighting at ordinary load, 2026-09-04
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2609,6 +2628,17 @@ The <code>controller</code> 2m timeout is covered by the raise to 5m Q823 shippe
 And nothing here reproduces a suite failing <em>because of</em> the fan-out: a property of the runner and a failure traced to it are separate claims, and only the first is in hand.</p>
 <p>Capping is a machine-wide throughput decision of the same kind as <a href="../Q966/">Q966</a> and wants the same hands.
 The same runner backs <code>check</code> itself at 45 gates, with <code>scripts-test</code> nested inside as one of them, plus <code>docs-gates</code> at 19 and <code>queue-gates</code> at 10, so a cap nests and would cost the largest caller most.</p>
+<h2 id="a-sighting-at-ordinary-load-2026-09-04">A sighting at ordinary load, 2026-09-04<a class="headerlink" href="#a-sighting-at-ordinary-load-2026-09-04" title="Permanent link">&para;</a></h2>
+<p><code>git-merge-script-index-test</code> failed once under local <code>make check</code>, case <em>a one-sided row edit is kept alongside the other side's add</em>, and passed standalone straight afterwards.
+Load average at failure was <strong>32.21</strong> on 18 cores, which is an ordinary working figure on this machine rather than a contention peak.
+A PR branch, so no trigger fires.</p>
+<p><strong>The load is the finding, not the failure.</strong> This row's premise is that suites fail <em>under concurrent load</em>, and 32 is what this box sits at with a few sessions running.
+So the sighting is evidence against the premise as stated: either the threshold is far lower than the row assumes, or load average is the wrong axis.
+<a href="../Q1031/">Q1031</a> reaches the same conclusion from the other end, with a sighting that failed at roughly 15 to 19 and then passed at 20.39 on the same tree.
+Two rows now carry a reading where the passing run was the more loaded one.</p>
+<p><strong>The fan-out counts in this row have all moved</strong>, and they size its closing argument about what a cap would cost.
+Measured 2026-09-04 from <code>mk/gate-lists.mk</code>: <code>SCRIPTS_TESTS</code> is <strong>117</strong>, not 97; <code>CHECK_FAST_GATES</code> is <strong>51</strong>, not 45; <code>DOCS_GATES</code> is <strong>23</strong>, not 19; <code>QUEUE_GATES</code> is <strong>11</strong>, not 10.
+The fan-out is about a fifth wider than the row describes, so the nesting cost it weighs is understated rather than wrong.</p>
 
 
 
