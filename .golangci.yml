@@ -230,6 +230,17 @@ linters:
       - third_party$
       - builtin$
       - examples$
+issues:
+  # Report a gate's full extent, not a sample of it. Upstream defaults
+  # (max-same-issues: 3, max-issues-per-linter: 50) cap the report rather
+  # than the analysis, and nothing in the output says a cap bound, so a
+  # developer fixes what the log names, pushes, and CI comes back with the
+  # rest. Measured on golangci-lint 2.12.2 with a noisy linter enabled over
+  # cmd/agc solely to generate findings: 4243 of them printed as 50. The
+  # caps trade completeness for a readable console; this gate's reader is a
+  # CI log nobody scrolls twice (Q1003).
+  max-same-issues: 0
+  max-issues-per-linter: 0
 formatters:
   enable:
     - gofmt

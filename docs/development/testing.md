@@ -1707,10 +1707,10 @@ The same happens to staticcheck when `-ST1001` is added to `linters.settings.sta
 Both of those routes are deterministic, so what carries the class from the first cause to the third is the source rather than the runs: `nolint_filter.go` keeps `matchedIssueFromLinter map[string]bool` keyed on `issue.FromLinter` and answers an `//nolint:X` with that map's lookup for `X`, so it has no per-linter branch and no input describing *why* an issue is absent.
 Note which instrument closes which step, because the first cause above is the other way round.
 
-**A `nolintlint` red under-reports its own extent.** `.golangci.yml` sets no `issues:` block, so golangci-lint's own defaults apply and truncate the report silently.
-`max-same-issues: 3` is the one measured here: five identical unused-directive reds print as three, summarised as `nolintlint: 3`.
-`max-issues-per-linter: 50` is the other cap the missing block leaves at its default, and five issues never approached it.
-Read the count as a floor until Q1003 lifts the caps, and re-run with `--max-same-issues=0` before concluding you have fixed them all.
+**A `nolintlint` red reports its full extent.** `.golangci.yml` sets `issues.max-same-issues: 0` and `issues.max-issues-per-linter: 0` (Q1003), lifting golangci-lint's own defaults of 3 and 50.
+Both truncate the report while saying nothing in the output about having bound.
+Each is measured on 2.12.2: the `-ST1001` route above over `cmd/gmc/test/utils` prints three of its five identical unused-directive reds at the upstream default and all five under this config, and `wsl` prints 50 of its 4,243 over `cmd/agc` at the upstream default and all 4,243 once the cap is lifted, under a config enabling that linter solely to generate them.
+So the count is the extent, and `--max-same-issues=0` is no longer needed before concluding you have fixed them all.
 Truncation cannot *cause* the red: `MaxSameIssues` and `MaxFromLinter` are registered after `NewNolintFilter` in `pkg/lint/runner.go`.
 
 **A directive naming a disabled linter is inert, not an error**, because the nolint filter drops the candidate outright when the named linter is not in the enable list (golangci-lint 2.12.2, `pkg/result/processors/nolint_filter.go`).
