@@ -615,6 +615,78 @@ The script therefore fails outright on a missing shellcheck rather than running 
 
 Accepted findings inside a `run:` block carry the same targeted `# shellcheck disable=SCxxxx` directive as a standalone script — placed above a `{ … }` group it covers the whole group, which is how `publish.yml`'s single-quoted `printf` format strings (a genuine SC2016 false positive) are justified once rather than per line.
 
+### Driving a workflow `run:` body
+
+`make scripts-test` runs [`scripts/ci/workflow-acting-steps-test.sh`](../../scripts/ci/workflow-acting-steps-test.sh), which extracts workflow step bodies with [`workflow-step-body.sh`](../../scripts/ci/workflow-step-body.sh), executes them with stubs on `PATH`, and asserts on what the stubs were asked to do (Q1006).
+The CI `shellcheck` job in [`unit-test.yml`](../../.github/workflows/unit-test.yml) runs the same target, gated on the `workflows` paths-filter as well as `scripts`, because the subject is `.github/workflows/` rather than `scripts/`.
+
+It exists because nothing else executes a `run:` body before it reaches `main`.
+`make check` runs targets over the tree and no target enters a step's shell, so a body is first executed by the runner on the event that triggers it.
+The [actionlint gate](#the-actionlint-gate) above parses those bodies and delegates them to shellcheck; neither one runs them, so a defect in what the script *decides* is invisible to both.
+[`release-freeze-watch.yml`](../../.github/workflows/release-freeze-watch.yml) reached review classifying its delegate's exit code with `if [ "${rc}" -eq 2 ]` where the crash codes are 2 and above.
+Exit 7, 126 and 137 each fell through to the report step, which reads every non-zero code as a spent candidate, so a crashed check would have opened a `release-freeze` issue retiring a candidate nothing had measured, and the issue could not have named the candidate because the title's `sed` finds no `-rc.N` string in a crash log.
+It was caught by hand-driving the step, with actionlint, shellcheck and `make check` all green and a full review taken.
+`git log -S'-eq 2' -- .github/workflows/release-freeze-watch.yml` is empty, so that comparison never merged; the workflow landed once, on 2026-08-27, already carrying `-ge 2`.
+
+#### Which steps are in scope
+
+Driving every `run:` body in thirty workflows is not proportionate, so the subject is derived rather than enumerated: a step is in scope when it **acts** (opens an issue, pushes a ref, publishes an artifact, or tags) **and** no `pull_request` event executes it.
+
+Eleven workflows carry no `pull_request` trigger at all, measured by parsing each `on:` block.
+A grep answers ten, because `release-freeze-watch.yml` names `pull_request` only in a comment explaining why it has none.
+That count is not itself the scope: a workflow with a `pull_request` trigger can still gate its acting job off that event, which `pages.yml` does.
+
+Five workflows run an acting command.
+Two are driven:
+
+| Workflow | Step | Acts by | Why a PR never runs it |
+|---|---|---|---|
+| `release-freeze-watch.yml` | `check`, `report` | `gh issue create` / `comment` / `close` | no `pull_request` trigger |
+| `pages.yml` | `mike` | `git push origin gh-pages` | the `publish` job is `if: github.event_name != 'pull_request'` |
+
+The other three are excluded, and the reasons are the scope claim rather than an aside:
+
+- **`dependabot-go-sync.yml`** pushes to a Dependabot branch, and `pull_request` is its only trigger, so every Dependabot PR executes that body before it merges.
+  It is not in the defect class.
+- **`e2e-reusable.yml`** pushes two images, and both e2e lanes that call it declare `merge_group`, so the queue runs it against the candidate merge commit before that commit lands.
+  Its push also targets the registry the same job stands up, so it publishes nothing outside the run.
+- **`publish.yml`** is in the class and is deferred to Q1056.
+  Its acting steps need `cosign`, `syft`, `docker`, `helm` and `gh` stubs, a driver several times the size of this one, and its wiring is already held statically by [`check-publish-digest.sh`](../../scripts/ci/check-publish-digest.sh) and the cosign pin gate.
+
+Two workflows act only through a delegate: `dependabot-rebase-stale.yml` calls `scripts/ci/dependabot-rebase-stale.sh` and `updatecli.yml` calls the `updatecli` binary, and in both the `run:` body decides one flag.
+The decisions are in the delegate, which has its own suite, so driving the wrapper would test the flag and nothing else.
+
+**A closing assertion holds that derivation to the tree, both directions.** Every workflow running an acting command must be driven or listed in the suite's `acting_registry()` with a reason, and a registry line naming a workflow that no longer exists, or no longer acts, fails too.
+Without it the suite would cover a frozen pair and a thirty-first workflow could start opening issues uncovered, which is the same false negative the [path-filter gate](#the-path-filter-gate) exists for one rung over.
+
+#### The shell a body is driven under
+
+`bash --noprofile --norc -e`, and deliberately **not** `-o pipefail`.
+GitHub's documented default `run:` shell is `bash -e {0}`; `-eo pipefail` arrives only with an explicit `shell: bash`, a job `defaults.run.shell`, or a workflow-level one.
+No workflow here sets any of the three, so the suite refuses with rc 2 rather than driving the wrong shell if a `shell:` or `defaults:` key appears in either subject.
+That claim about GitHub's default is read off its documentation rather than measured here, and the refusal is the local half that keeps it tied to the tree.
+
+The difference is not academic.
+Measured 2026-09-04 on bash 5.3.15, the report step's `printf` into `sed` into `head -1` candidate extraction exits 141 under `-e -o pipefail` for a log long enough that `head` closes the pipe before `sed` finishes, killing the step before it opens the issue, and exits 0 under `-e`.
+A pipefail drive would therefore redden a step that works.
+It happens not to bite today: all 20 cases still pass with pipefail added, because their fixture logs are short, so the choice currently decides no verdict here.
+
+#### What the suite asserts
+
+Twenty cases over the three steps.
+The `check` step's classification is driven at delegate exit 0, 1, 2, 7, 126 and 137, and the last two are posed for real rather than as a stub exiting with the number: 126 by making the delegate non-executable, 137 by having it `kill -KILL $$`.
+2, 7, 126 and 137 must fail the job and write no `log` output, so the report step's `RC` and `LOG` are empty and it cannot retire a candidate nothing measured.
+
+**Each subject carries a positive control, which is the load-bearing half.** A suite of "must not act" cases passes trivially for a body that has stopped acting at all, so `report-opens-issue` requires a spent candidate with no open issue to open one, and `pages-highest-release` requires the highest released version to claim `stable` and push.
+`freeze-end-to-end` chains the two steps through `$GITHUB_OUTPUT`, so a change that clamps the delegate's exit code fails there rather than passing every negative case.
+
+**Two regression cases re-apply a historical defect and require the assertions to go red**: `-ge 2` back to `-eq 2` in the check step, and the highest-release comparison deleted from the mike step.
+Each asserts its mutation landed before reading the verdict, because a `sed` that matched nothing leaves the mechanism intact and the pass then reads as the assertion not biting.
+
+Adding a step is a call to `extract`, a stub, and its cases.
+The extractor refuses with rc 2 rather than printing nothing on a missing workflow or step, two steps sharing a name, a `uses:` step, a folded scalar, and a body interpolating a `${{ }}` expression, which the runner substitutes before bash sees it.
+An empty body drives clean, so each of those has to be a refusal: a silence would make every case built on it vacuous.
+
 ### The doc-link gate
 
 `make doc-links` runs `scripts/docs/check-doc-links.sh` over every present, non-vendored Markdown file — tracked, or untracked and not gitignored ([the shared file selection](#gates-scan-present-files-not-just-tracked-ones)) — and is wired into `make check`, so the local pre-review gate matches CI.
