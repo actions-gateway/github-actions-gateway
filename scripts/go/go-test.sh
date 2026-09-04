@@ -54,7 +54,7 @@
 # makes go's test-RESULT cache key identical across checkouts of the same
 # content. Without it every .claude/worktrees/* clone re-runs the whole unit
 # suite once (measured: cmd/agc coverage 226s cold vs 5s in a second worktree
-# with the flag, byte-identical profile). See the local-gate-throughput plan
+# with the flag, same coverage numbers). See the local-gate-throughput plan
 # (indexed in docs/plan/README.md). It is deliberately NOT set globally via
 # GOFLAGS: cmd/gmc/test/e2e resolves the v2 CRD chart dir from
 # runtime.Caller(0), which a trimmed path breaks. The unit tier does not do
