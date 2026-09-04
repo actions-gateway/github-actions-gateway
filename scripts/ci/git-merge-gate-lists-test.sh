@@ -26,6 +26,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 DRIVER="$REPO_ROOT/scripts/ci/git-merge-gate-lists.sh"
 GATE_LISTS="$REPO_ROOT/mk/gate-lists.mk"
 
@@ -163,6 +165,7 @@ entries_of() {
 expect_set() {
 	local desc="$1" var="$2"
 	shift 2
+	die_if_killed "$desc" "$LAST_RC"
 	if ((LAST_RC != 0)); then
 		bad "$desc" "driver reported a conflict: $(head -1 "$FIXTURE_DIR/err")"
 		return
@@ -308,6 +311,7 @@ setup_rc=0
 ) >"$FIXTURE_DIR/e2e-setup.log" 2>&1 || setup_rc=$?
 
 E2E_DESC="a real rebase resolves adjacent appends to mk/gate-lists.mk"
+die_if_killed "$E2E_DESC" "$setup_rc"
 if ((setup_rc != 0)); then
 	bad "$E2E_DESC" "the fixture repo did not build: $(tail -2 "$FIXTURE_DIR/e2e-setup.log" | tr '\n' ' ')"
 else
@@ -315,6 +319,7 @@ else
 	(cd "$REPO" && git rebase main) >"$FIXTURE_DIR/rebase.log" 2>&1
 	rebase_rc=$?
 	set -e
+	die_if_killed "$E2E_DESC" "$rebase_rc"
 	if ((rebase_rc != 0)); then
 		bad "$E2E_DESC" \
 			"rc=$rebase_rc; $(grep -m1 'merge-gate-lists:' "$FIXTURE_DIR/rebase.log" || tail -2 "$FIXTURE_DIR/rebase.log" | tr '\n' ' ')"

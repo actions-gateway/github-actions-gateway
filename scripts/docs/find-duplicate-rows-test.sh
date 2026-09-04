@@ -20,6 +20,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 SEARCH="$REPO_ROOT/scripts/docs/find-duplicate-rows.sh"
 ALLOC="$REPO_ROOT/scripts/docs/alloc-queue-id.sh"
 
@@ -78,6 +80,7 @@ expect() {
 	local name="$1" want="$2" got=0
 	shift 3 # name, want, the literal --
 	"$SEARCH" --store "$WORK/queue" "$@" >"$WORK/out" 2>&1 || got=$?
+	die_if_killed "$name" "$got"
 
 	if ((got != 0)); then
 		printf 'FAIL %s: the search must never fail a filing, got exit %s\n' "$name" "$got"
@@ -238,6 +241,7 @@ backlog "Q440|[GMC CRD manifest drifts from the AGC types it embeds]($crd_link)|
 	"Q456|[The GMC CRD manifests are stale and no gate notices]($crd_link)|tests" \
 	'Q650|[Em-dash density in the design and operations docs](development/documentation-standards.md)|docs'
 got="$(run_status "$SEARCH" --store "$WORK/queue" --audit)"
+die_if_killed "the audit counts every pair and flags only the planted duplicate" "$got"
 # 5 rows (3 Queue + Deferred + Flake watch) -> 10 pairs, of which only the
 # planted Q440/Q456 duplicate may flag.
 if [[ "$got" == 0 ]] &&
@@ -252,6 +256,7 @@ else
 fi
 
 got="$(run_status "$SEARCH" --store "$WORK/queue")"
+die_if_killed "no title is a usage error, not a silent pass" "$got"
 if [[ "$got" == 1 ]] && grep -q 'wants the title' "$WORK/out"; then
 	printf 'ok   %s\n' 'no title is a usage error, not a silent pass'
 else
@@ -266,6 +271,7 @@ fi
 # needs no `gh` and claims no ID.
 
 got="$(run_status "$ALLOC")"
+die_if_killed "alloc-queue-id refuses to claim an ID with no title" "$got"
 if [[ "$got" == 1 ]] && grep -q 'wants the title' "$WORK/out"; then
 	printf 'ok   %s\n' 'alloc-queue-id refuses to claim an ID with no title'
 else
@@ -277,6 +283,7 @@ fi
 # `-n 3` was the way to claim IDs without naming a single row. It has to be
 # gone, not merely discouraged, or the search is a gate with a door beside it.
 got="$(run_status "$ALLOC" -n 3)"
+die_if_killed "the untitled -n batch form is rejected" "$got"
 if [[ "$got" == 1 ]] && grep -q 'unknown argument' "$WORK/out"; then
 	printf 'ok   %s\n' 'the untitled -n batch form is rejected'
 else

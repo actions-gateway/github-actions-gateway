@@ -951,6 +951,7 @@ cap_reset
 # releases once the ceiling goes back.
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "an evaluated, binding, releasing quota rung" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "ok   an evaluated, binding, releasing quota rung passes the leg"
@@ -980,6 +981,7 @@ cap_reset
 printf '2' >"${CAP_HARD_FILE}" # == CAP_USED, so headroom is already zero
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "an already-constrained tenant" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "ok   an already-constrained tenant does not fail the leg"
@@ -1000,6 +1002,7 @@ CAP_RUNGS="capacity scaleup"
 cap_reset
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "an unevaluated quota rung" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "FAIL an unevaluated quota rung must fail the gate" >&2
@@ -1020,6 +1023,7 @@ CAP_ADVERTISED=""
 cap_reset
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "an unpublished advertisedCapacity" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "FAIL an unpublished advertisedCapacity must fail the gate" >&2
@@ -1036,6 +1040,7 @@ CAP_QUOTA_BINDS=0
 cap_reset
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "a non-binding quota rung" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "FAIL a non-binding quota rung must fail the gate" >&2
@@ -1054,6 +1059,7 @@ CAP_QUOTA_LATCHES=1
 cap_reset
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "a latched quota rung" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "FAIL a latched quota rung must fail the gate" >&2
@@ -1081,6 +1087,7 @@ CAP_GATE_REASON=""
 CAP_GATE_MESSAGE=""
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "an absent WorkerCapacityDeclined condition" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "FAIL an absent WorkerCapacityDeclined condition must fail the gate" >&2
@@ -1097,6 +1104,7 @@ cap_reset
 CAP_GATE_REASON="GateModeUnsupported"
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed GateModeUnsupported "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "FAIL GateModeUnsupported must fail the gate" >&2
@@ -1111,6 +1119,7 @@ check_contains "the failure points at the AGC image, not the CRD" \
 cap_reset
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "a published CapacityAvailable verdict" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "ok   a published CapacityAvailable verdict passes the leg"
@@ -1131,6 +1140,7 @@ CAP_GATE_REASON="PodsUnschedulable"
 CAP_GATE_MESSAGE="job intake is gated: no node can place the worker"
 rc=0
 capacity_leg >"${CAP_OUT}" 2>&1 || rc=$?
+die_if_killed "a declined placeability rung" "$rc"
 out="$(cat "${CAP_OUT}")"
 if ((rc == 0)); then
 	echo "ok   a declined placeability rung passes the leg"

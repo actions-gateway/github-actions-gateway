@@ -20,6 +20,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 TOOL="$HERE/reconcile-queue-rows.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -88,6 +91,7 @@ expect() {  # expect <want-rc> <repo> <name> [pattern] [tool-args...]
     local want="$1" repo="$2" name="$3" pat="${4:-}" rc=0
     if (($# >= 4)); then shift 4; else shift $#; fi
     run "$repo" "$@" || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if [[ "$rc" != "$want" ]]; then
         bad "$name (rc=$rc want=$want)"
         sed 's/^/       /' "$TMP/out" | head -5

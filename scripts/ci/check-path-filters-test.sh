@@ -31,6 +31,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 # Source the script under test for its helpers and assertions; the BASH_SOURCE
 # guard there keeps main() from running against the tracked tree on source.
@@ -406,6 +408,7 @@ expect_assertion globstar-names-the-fix 1 "cmd/\*\*/\*\.go" \
 # and none at all if the cause was transient (Q596).
 tracked_rc=0
 tracked_out="$( (scripts/ci/check-path-filters.sh 2>&1) )" || tracked_rc=$?
+die_if_killed tracked-workflows-pass "$tracked_rc"
 if ((tracked_rc == 0)); then
 	ok tracked-workflows-pass 'make path-filters-check is green'
 else

@@ -301,6 +301,11 @@ fake_gh() {
 	chmod +x "${WORK}/bin/gh"
 }
 
+# `watcher_rc` is deliberately left unguarded by die_if_killed (Q1023, Q1055):
+# the stub `sleep` caps the loop with SIGKILL, so 137 is how a watcher that
+# should have reported and did not fails these cases. A guard would report that
+# as KILLED rather than as the failure it is.
+#
 # run_watcher STREAM OUT — run a watcher to completion. In the foreground, and
 # with no pid to track: the watcher either reports and returns, or its own
 # capped poll kills it, so nothing here has to decide when to stop waiting.

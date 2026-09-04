@@ -128,6 +128,10 @@ And the third argument is the *wanted* status, which a suite deliberately assert
 Pass it whenever the wanted status is a variable; omit it for a literal, which can never be a signal.
 A helper that discards the status outright (`|| true`) has the same defect in a quieter form: the command is dead before it prints, so the assertion reports a missing needle and blames the gate's wording.
 
+**A suite whose own harness kills the subject gets no guard at all, and WANT cannot rescue it.** Where a stub bounds a loop with `kill -KILL "$PPID"`, the 128+n it produces is how a *regression* fails the case, and the wanted status is 0, so a guard would file a real failure as KILLED and the third argument has nothing to match.
+[`progress-watch-test.sh`](../../scripts/e2e/progress-watch-test.sh) and [`release-sentinel-test.sh`](../../scripts/dogfood/release-sentinel-test.sh) are the two in the tree; both say so at the capture, because the absence is otherwise indistinguishable from a site the roll-out missed (Q1055).
+Grep a suite for `kill -` before guarding it.
+
 The root `Makefile` keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see [`scripts/README.md`](../../scripts/README.md) for the script inventory and parameter conventions.
 
 **A new script goes in a `scripts/<group>/` directory, never at the top level.** The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in [`scripts/README.md`](../../scripts/README.md) and the rule is explained in [testing.md § `scripts/` is grouped by blast radius](testing.md#scripts-is-grouped-by-blast-radius).

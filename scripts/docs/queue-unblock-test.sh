@@ -12,6 +12,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -35,6 +38,7 @@ item() {  # item <id> <title> [note-line]
 expect() {  # expect <want-rc> <id-arg> <name> [pattern]
     local want="$1" arg="$2" name="$3" pat="${4:-}" rc=0
     "$RUN" "$arg" > "$TMP/out" 2>&1 || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if [[ "$rc" != "$want" ]]; then
         bad "$name (rc=$rc want=$want)"; sed 's/^/       /' "$TMP/out" | head -3; return
     fi

@@ -13,6 +13,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/ci/check-cosign-pin.sh"
 
@@ -65,6 +67,7 @@ expect() {
 	local name="$1" want_rc="$2" makefile="$3" workflow="$4" want_text="${5:-}"
 	local got_rc=0 out
 	out="$("$CHECKER" "$makefile" "$workflow" 2>&1)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" != "$want_rc" ]]; then
 		printf 'FAIL %-30s want rc=%s got rc=%s\n%s\n' "$name" "$want_rc" "$got_rc" "$out" >&2
 		fails=$((fails + 1))
@@ -128,6 +131,7 @@ expect workflow-missing 2 "$mk_in_step" "$FIXTURE_DIR/no-such.yml" 'does not exi
 # runs it.
 rc=0
 out="$("$CHECKER" 2>&1)" || rc=$?
+die_if_killed tracked-tree-in-step "$rc"
 if ((rc == 0)); then
 	printf 'ok   %-30s rc=0\n' tracked-tree-in-step
 else

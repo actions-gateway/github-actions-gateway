@@ -15,6 +15,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/go/check-v2-api-sync.sh"
 
@@ -40,6 +42,7 @@ expect() {
     local name="$1" want_rc="$2" root="$3" got_rc=0
     shift 3
     LAST_OUT="$("$CHECKER" "$root/v2alpha1" "$root/v2beta1" "$@" 2>&1)" || got_rc=$?
+    die_if_killed "$name" "$got_rc" "$want_rc"
     if [[ "$got_rc" == "$want_rc" ]]; then
         printf 'ok   %-34s rc=%s\n' "$name" "$got_rc"
     else
@@ -149,6 +152,7 @@ chmod 644 "$root/v2beta1/shared_types.go"
 # Q596's single occurrence undiagnosable.
 tree_rc=0
 tree_out="$("$CHECKER" 2>&1)" || tree_rc=$?
+die_if_killed tree-in-sync "$tree_rc"
 if ((tree_rc == 0)); then
     printf 'ok   %-34s tracked api/v2alpha1 vs api/v2beta1\n' tree-in-sync
 else

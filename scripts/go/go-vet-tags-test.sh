@@ -25,6 +25,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 # Source the script under test for BUILD_TAGS and assert_tags_cover_tree; the
 # BASH_SOURCE guard there keeps main() from running (and from vetting the whole
@@ -67,6 +69,7 @@ expect_coverage() {
 		cd "$root"
 		assert_tags_cover_tree "$BUILD_TAGS" ./... 2>&1
 	)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		printf 'ok   %-34s rc=%s\n' "$name" "$got_rc"
 	else
@@ -100,6 +103,7 @@ expect_vet() {
 			go vet ./... 2>&1
 		fi
 	)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		printf 'ok   %-34s rc=%s\n' "$name" "$got_rc"
 	else
@@ -160,6 +164,7 @@ lint_config() {
 expect_lint_sync() {
 	local name="$1" want_rc="$2" config="$3" tags="${4-$BUILD_TAGS}" got_rc=0
 	LAST_OUT="$(assert_lint_tags_match "$tags" "$config" 2>&1)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		printf 'ok   %-34s rc=%s\n' "$name" "$got_rc"
 	else
@@ -225,6 +230,7 @@ done < <(workspace_modules)
 # and none at all if the cause was transient (Q596).
 tree_rc=0
 tree_out="$(assert_tags_cover_tree "$BUILD_TAGS" "${tree_patterns[@]}" 2>&1)" || tree_rc=$?
+die_if_killed tree-fully-covered "$tree_rc"
 if ((tree_rc == 0)); then
 	printf 'ok   %-34s tracked workspace, -tags %s\n' tree-fully-covered "$BUILD_TAGS"
 else
@@ -239,6 +245,7 @@ fi
 # tree, so keep its output: "re-run it yourself" is no help in CI (Q596).
 tracked_rc=0
 tracked_out="$(assert_lint_tags_match "$BUILD_TAGS" "$GOLANGCI_CONFIG" 2>&1)" || tracked_rc=$?
+die_if_killed tracked-lint-config-in-sync "$tracked_rc"
 if ((tracked_rc == 0)); then
 	printf 'ok   %-34s %s\n' tracked-lint-config-in-sync "$GOLANGCI_CONFIG"
 else

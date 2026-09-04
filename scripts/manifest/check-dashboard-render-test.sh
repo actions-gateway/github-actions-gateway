@@ -20,6 +20,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 CHECKER="$HERE/check-dashboard-render.py"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -86,6 +89,7 @@ run() {  # run <repo> [args...] -> rc, output in $TMP/out
 expect() {  # expect <want-rc> <repo> <name> [pattern]
     local want="$1" repo="$2" name="$3" pat="${4:-}" rc=0
     run "$repo" || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if [[ "$rc" != "$want" ]]; then
         bad "$name (rc=$rc want=$want)"
         sed 's/^/       /' "$TMP/out" | head -3
@@ -236,6 +240,7 @@ expect 1 "$R" "the override case is red without the override"
 rc=0
 (cd "$R" && DASHBOARD_ALLOW_STALE_RENDER=grafana-dashboard-platform.json \
     python3 "$CHECKER") > "$TMP/out" 2>&1 || rc=$?
+die_if_killed "the override clears it and says so" "$rc"
 if [[ "$rc" == 0 ]] && grep -q "excused" "$TMP/out"; then
     ok "the override clears it and says so"
 else
@@ -274,6 +279,7 @@ dashboard "$R" platform "A panel." "actions_gateway_up"
 git -C "$R" commit -qam "change the dashboard"
 rc=0
 (cd "$R" && python3 "$CHECKER" --base HEAD~1 --head HEAD) > "$TMP/out" 2>&1 || rc=$?
+die_if_killed "--base/--head select the diff to judge" "$rc"
 if [[ "$rc" == 1 ]]; then
     ok "--base/--head select the diff to judge"
 else

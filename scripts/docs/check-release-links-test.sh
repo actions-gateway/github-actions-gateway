@@ -17,6 +17,8 @@ shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 readonly GATE="$REPO_ROOT/scripts/docs/check-release-links.sh"
 readonly HOST="docs.example.test"
 
@@ -63,6 +65,7 @@ run() {
 case_is() {
     local name="$1" want="$2" dir="$3" needle="$4"
     run "$dir"
+    die_if_killed "$name" "$status" "$want"
     if (( status == want )) && [[ "$output" == *"$needle"* ]]; then
         printf 'ok   %s\n' "$name"
     else
@@ -161,6 +164,7 @@ good_notes="$(make_notes v1.3.0 "See [x](https://$HOST/1.3.0/operations/upgrade/
 readonly good_notes
 
 run "$good_notes" "$WORKDIR/no-such-site"
+die_if_killed "a missing GAG_SITE_DIR is an error" "$status"
 if (( status == 2 )) && [[ "$output" == *'Nothing was checked'* ]]; then
     printf 'ok   %s\n' 'a missing GAG_SITE_DIR is an error, not a skip'
 else
@@ -171,6 +175,7 @@ fi
 
 mkdir -p "$WORKDIR/empty-site"
 run "$good_notes" "$WORKDIR/empty-site"
+die_if_killed "a site dir with no index.html is an error" "$status"
 if (( status == 2 )) && [[ "$output" == *'not a docs-site build'* ]]; then
     printf 'ok   %s\n' 'a site dir with no index.html is an error'
 else
@@ -182,6 +187,7 @@ fi
 # No notes at all is a fresh fork, not a broken tree.
 mkdir -p "$WORKDIR/no-notes"
 run "$WORKDIR/no-notes"
+die_if_killed "no release notes -> skip" "$status"
 if (( status == 0 )) && [[ "$output" == *SKIP* ]]; then
     printf 'ok   %s\n' 'no release notes -> skip, not fail'
 else

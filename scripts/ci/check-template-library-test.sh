@@ -24,6 +24,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 
 GATE="$REPO_ROOT/scripts/ci/check-template-library.sh"
@@ -181,6 +183,7 @@ expect_green() {
 	local name="$1" root="$2"
 	shift 2
 	run_gate "$root" --no-render "$@"
+	die_if_killed "$name" "$RC"
 	if ((RC == 0)); then
 		ok "$name" "gate passes the sound fixture"
 	else
@@ -193,6 +196,7 @@ expect_red() {
 	local name="$1" root="$2" fragment="$3"
 	shift 3
 	run_gate "$root" --no-render "$@"
+	die_if_killed "$name" "$RC"
 	if ((RC == 0)); then
 		bad "$name" "gate PASSED a broken fixture; the rule is disarmed"
 	elif [[ "$GATE_OUT" != *"$fragment"* ]]; then
@@ -341,6 +345,7 @@ expect_red "a name-boundary match, not a substring" "$F" "does not name library 
 if command -v kubectl >/dev/null 2>&1; then
 	build_fixture "$F"
 	run_gate "$F"
+	die_if_killed "sound fixture renders" "$RC"
 	if ((RC == 0)); then
 		ok "sound fixture renders" "overlays keep every load-bearing line of their base"
 	else
@@ -364,6 +369,7 @@ if command -v kubectl >/dev/null 2>&1; then
 		          - name: dind
 	EOF
 	run_gate "$F"
+	die_if_killed "render catches a list replacement" "$RC"
 	if ((RC == 0)); then
 		bad "render catches a list replacement" "gate PASSED an overlay that erased its base's init container"
 	elif [[ "$GATE_OUT" != *"renders WITHOUT load-bearing lines"* ]]; then
@@ -380,6 +386,7 @@ fi
 set +e
 tracked="$("$GATE" 2>&1)"
 tracked_rc=$?
+die_if_killed "tracked tree passes" "$tracked_rc"
 set -e
 if ((tracked_rc == 0)); then
 	ok "tracked tree passes" "$(tail -1 <<<"$tracked")"

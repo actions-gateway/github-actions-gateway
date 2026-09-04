@@ -9,6 +9,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 SCRIPT="$REPO_ROOT/scripts/ci/check-dep-advisory.sh"
 
 WORKDIR="$(mktemp -d)"
@@ -83,6 +85,7 @@ expect 'new go.work.gen               -> advise' advise 'printf g >sub/go.work.g
 notgit="$WORKDIR/notgit"
 mkdir -p "$notgit"
 out="$(cd "$notgit" && "$SCRIPT" 2>&1)"; rc=$?
+die_if_killed "outside a git repo" "$rc"
 if [[ -z "$out" && "$rc" == 0 ]]; then
 	printf 'ok   outside a git repo          -> silent, rc=0\n'
 else
@@ -93,6 +96,7 @@ fi
 # It must NEVER exit non-zero, even when advising — it is `make check`'s last step.
 d="$(setup_repo)"; ( cd "$d" && printf x >>go.mod )
 ( cd "$d" && "$SCRIPT" >/dev/null 2>&1 ); rc=$?
+die_if_killed "advising still exits 0" "$rc"
 if [[ "$rc" == 0 ]]; then
 	printf 'ok   advising still exits 0\n'
 else

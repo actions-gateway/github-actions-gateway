@@ -17,6 +17,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 DRIVER="$REPO_ROOT/scripts/docs/git-merge-script-index.sh"
 
 FIXTURE_DIR="$REPO_ROOT/tmp/git-merge-script-index-test.$$"
@@ -64,6 +66,7 @@ bad() {
 expect_resolved() {
 	local desc="$1"
 	shift
+	die_if_killed "$desc" "$LAST_RC"
 	if ((LAST_RC != 0)); then
 		bad "$desc" "driver reported a conflict (rc=$LAST_RC): $(head -1 "$FIXTURE_DIR/err")"
 		return
@@ -195,6 +198,7 @@ mkdir -p "$REPO/scripts"
 set +e
 (cd "$REPO" && git rebase main) >"$FIXTURE_DIR/rebase.log" 2>&1
 rebase_rc=$?
+die_if_killed "a real git rebase resolves adjacent adds" "$rebase_rc"
 set -e
 if ((rebase_rc == 0)) && grep -qF 'agent/b.sh' "$REPO/scripts/README.md" && grep -qF 'agent/c.sh' "$REPO/scripts/README.md"; then
 	ok "a real git rebase resolves adjacent adds through .gitattributes"

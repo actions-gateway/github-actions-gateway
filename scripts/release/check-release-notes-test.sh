@@ -13,6 +13,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 SUBJECT="$SCRIPT_DIR/check-release-notes.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -41,6 +44,7 @@ case_() {
 	local desc="$1" want="$2" body="$3" rc=0 out
 	printf '%s' "$body" >"$WORK/note.md"
 	out="$("$SUBJECT" "$WORK/note.md" 2>&1)" || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
 	if [[ "$rc" == "$want" ]]; then
 		ok "$desc"
 	else
@@ -184,12 +188,14 @@ esac
 # --- usage and reconciliation ------------------------------------------------
 rc=0
 "$SUBJECT" "$WORK/absent.md" >/dev/null 2>&1 || rc=$?
+die_if_killed "a missing file is exit 2" "$rc" 2
 expect "a missing file is exit 2" 2 "$rc"
 
 # The notes this repo has already published must pass, or the gate is describing
 # a convention the project does not actually follow.
 rc=0
 out="$("$SUBJECT" 2>&1)" || rc=$?
+die_if_killed "every shipped release note passes" "$rc"
 if [[ "$rc" == 0 ]]; then
 	ok "every shipped release note passes"
 else

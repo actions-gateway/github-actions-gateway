@@ -11,6 +11,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 # Shrink the metrics-server retry budgets before sourcing (they are read from the
 # environment at source time, so this also asserts that override path): the
@@ -137,6 +139,7 @@ expect_retry() {
 	fake_available_after="$succeed_after"
 	fake_available_calls=0
 	retry_until "$timeout" "$VALIDATE_METRICS_INTERVAL" metrics_api_available || rc=$?
+	die_if_killed "$desc" "$rc" "$expect_rc"
 	if ((rc == expect_rc)) && ((fake_available_calls == expect_calls)); then
 		printf 'ok   retry     %s (rc=%s, %s probe(s))\n' "$desc" "$rc" "$fake_available_calls"
 	else

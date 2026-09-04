@@ -27,6 +27,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 DRIVER="$REPO_ROOT/scripts/docs/git-merge-roadmap.sh"
 TARGET='docs/roadmap.md'
 
@@ -223,6 +225,7 @@ expect_resolved() {
 	roadmap_page "${SIDE_OURS[@]}" >"$WORKDIR/ours.md"
 	roadmap_page "${SIDE_THEIRS[@]}" >"$WORKDIR/theirs.md"
 	run_merge "$repo" "$WORKDIR/base.md" "$WORKDIR/ours.md" "$WORKDIR/theirs.md"
+	die_if_killed "$name" "$MERGE_RC"
 
 	local got want_text="$EXPECT_TEXT"
 	EXPECT_TEXT=''
@@ -441,6 +444,7 @@ cp "$WORKDIR/dup-ours.md" "$WORKDIR/dup-driver.md"
 rc=0
 "$DRIVER" "$WORKDIR/dup-base.md" "$WORKDIR/dup-driver.md" "$WORKDIR/dup-theirs.md" \
 	7 "$TARGET" 2>"$WORKDIR/dup.err" || rc=$?
+	die_if_killed "one bullet in two lists" "$rc"
 cp "$WORKDIR/dup-ours.md" "$WORKDIR/dup-git.md"
 git merge-file "$WORKDIR/dup-git.md" "$WORKDIR/dup-base.md" "$WORKDIR/dup-theirs.md" >/dev/null 2>&1 || true
 if (( rc == 0 )) && grep -q 'binding more than once: Q14' "$WORKDIR/dup.err" &&
@@ -463,6 +467,7 @@ roadmap_page "$A" -- "$E" >"$WORKDIR/x-base.md"
 } >"$WORKDIR/x-ours.md"
 roadmap_page "$A" "$B" -- "$E" >"$WORKDIR/x-theirs.md"
 run_merge "$restructure" "$WORKDIR/x-base.md" "$WORKDIR/x-ours.md" "$WORKDIR/x-theirs.md"
+die_if_killed "a side adds a whole list" "$MERGE_RC"
 if (( MERGE_RC == 0 )) && ! has_markers "$restructure" &&
 	[[ "$(keys "$restructure/$TARGET")" == 'Q10 Q11 Q14 Q12 ' ]]; then
 	ok 'a side adds a whole list        -> falls back to git, which merges it'
@@ -481,6 +486,7 @@ awk '{ sub(/^Unscheduled directions\.$/, "Our new intro."); print }' \
 awk '{ sub(/^Unscheduled directions\.$/, "Their new intro."); print }' \
 	"$WORKDIR/p-base.md" >"$WORKDIR/p-theirs.md"
 run_merge "$prose_repo" "$WORKDIR/p-base.md" "$WORKDIR/p-ours.md" "$WORKDIR/p-theirs.md"
+die_if_killed "outside the bullets: contested prose" "$MERGE_RC"
 if (( MERGE_RC != 0 )) && has_markers "$prose_repo"; then
 	ok 'outside the bullets: contested prose -> markers'
 else
@@ -498,6 +504,7 @@ roadmap_page "$A" "$B" -- "$E" "$F" >"$WORKDIR/u-base.md"
 roadmap_page "$A" -- "$E" "$F" >"$WORKDIR/u-ours.md"
 roadmap_page "$A" "$B" -- "$E" >"$WORKDIR/u-theirs.md"
 run_merge "$unconfigured" "$WORKDIR/u-base.md" "$WORKDIR/u-ours.md" "$WORKDIR/u-theirs.md"
+die_if_killed "no driver configured: distant edits" "$MERGE_RC"
 if (( MERGE_RC == 0 )) && ! has_markers "$unconfigured"; then
 	ok 'no driver configured: git merges distant edits as before'
 else
@@ -512,6 +519,7 @@ roadmap_page "$A" "$B" "$C" -- "$E" "$F" >"$WORKDIR/u2-base.md"
 roadmap_page "$B" "$C" -- "$E" "$F" >"$WORKDIR/u2-ours.md"
 roadmap_page "$A" "$C" -- "$E" "$F" >"$WORKDIR/u2-theirs.md"
 run_merge "$unconfigured2" "$WORKDIR/u2-base.md" "$WORKDIR/u2-ours.md" "$WORKDIR/u2-theirs.md"
+die_if_killed "no driver configured: adjacent deletes" "$MERGE_RC"
 if (( MERGE_RC != 0 )); then
 	ok 'no driver configured: adjacent deletes still conflict (the motivating case)'
 else
@@ -536,6 +544,7 @@ roadmap_page "$A" "$C" -- "$E" "$F" >"$rebase_repo/$TARGET"
 git -C "$rebase_repo" "${GIT_ID[@]}" commit -qam 'ship Q11'
 rc=0
 git -C "$rebase_repo" "${GIT_ID[@]}" rebase main >/dev/null 2>&1 || rc=$?
+die_if_killed "rebase onto main" "$rc"
 if (( rc == 0 )) && [[ "$(keys "$rebase_repo/$TARGET")" == 'Q12 Q14 Q15 ' ]] &&
 	! has_markers "$rebase_repo"; then
 	ok 'rebase onto main: both shipped bullets removed'
@@ -564,6 +573,7 @@ cp "$WORKDIR/s-ours.md" "$subdir_repo/$TARGET"
 git -C "$subdir_repo" "${GIT_ID[@]}" commit -qam ours
 rc=0
 (cd "$subdir_repo/docs" && git "${GIT_ID[@]}" merge theirs >/dev/null 2>&1) || rc=$?
+die_if_killed "merge from a subdirectory" "$rc"
 if (( rc == 0 )) && [[ "$(keys "$subdir_repo/$TARGET")" == 'Q12 Q14 Q15 ' ]]; then
 	ok 'merge from a subdirectory resolves the relative driver path'
 else
@@ -580,6 +590,7 @@ cp "$REPO_ROOT/$TARGET" "$real_out"
 rc=0
 "$DRIVER" "$REPO_ROOT/$TARGET" "$real_out" "$REPO_ROOT/$TARGET" 7 "$TARGET" \
 	>/dev/null 2>&1 || rc=$?
+	die_if_killed "an identity merge is byte-identical" "$rc"
 if (( rc == 0 )) && cmp -s "$real_out" "$REPO_ROOT/$TARGET"; then
 	ok "$TARGET: an identity merge is byte-identical"
 else
@@ -599,6 +610,7 @@ cp "$REPO_ROOT/$TARGET" "$real_out"
 rc=0
 "$DRIVER" "$REPO_ROOT/$TARGET" "$real_out" "$WORKDIR/real-theirs.md" 7 "$TARGET" \
 	>/dev/null 2>&1 || rc=$?
+	die_if_killed "a one-sided real deletion" "$rc"
 if (( rc == 0 )) && cmp -s "$real_out" "$WORKDIR/real-theirs.md"; then
 	ok "$TARGET: deleting $real_last one-sided reproduces that file"
 else

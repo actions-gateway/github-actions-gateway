@@ -28,6 +28,8 @@ shopt -s inherit_errexit
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBJECT="$SCRIPT_DIR/check-candidate-covers-main.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 
 pass=0
 fail=0
@@ -86,6 +88,7 @@ run_case() {
 	out="$(cd "$FIXTURE" &&
 		STUB_EXIT="$stub_exit" CHECK_CANDIDATE_SURFACE_CHECK="$STUB" \
 			"$SUBJECT" "$@" 2>&1)" || rc=$?
+		die_if_killed "$desc" "$rc" "$want"
 	LAST_OUT="$out"
 	if [[ "$rc" == "$want" ]]; then
 		ok "$desc"
@@ -105,6 +108,7 @@ says() {
 # be read as "the candidate is spent".
 usage_rc=0
 (cd "$REPO_ROOT" && "$SUBJECT" one two >/dev/null 2>&1) || usage_rc=$?
+die_if_killed "too many arguments is a usage error" "$usage_rc"
 if [[ "$usage_rc" -eq 2 ]]; then
 	ok "too many arguments is a usage error"
 else
@@ -177,6 +181,7 @@ if incident_ready; then
 	git -C "$INCIDENT" tag v1.6.0-rc.1 "$(git -C "$REPO_ROOT" rev-parse 'v1.6.0-rc.1^{commit}')"
 	inc_rc=0
 	inc_out="$(cd "$INCIDENT" && "$SUBJECT" 811c670d5 2>&1)" || inc_rc=$?
+	die_if_killed "the v1.6.0-rc.1 incident is caught end to end" "$inc_rc"
 	if [[ "$inc_rc" -eq 1 && "$inc_out" == *"v1.6.0-rc.1"* && "$inc_out" == *"go.mod"* ]]; then
 		ok "the v1.6.0-rc.1 incident is caught end to end"
 	else
@@ -187,6 +192,7 @@ if incident_ready; then
 	# versions and moved nothing that ships, so it must not raise the alarm.
 	neg_rc=0
 	(cd "$INCIDENT" && "$SUBJECT" 0d9a40cbc >/dev/null 2>&1) || neg_rc=$?
+	die_if_killed "the same window's Actions bump moves nothing that ships" "$neg_rc"
 	if [[ "$neg_rc" -eq 0 ]]; then
 		ok "the same window's Actions bump moves nothing that ships"
 	else
