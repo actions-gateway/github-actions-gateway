@@ -145,6 +145,27 @@ module_profile() {
 	grep -E "^${modpath}/" "$profile" | grep -vE "$EXCLUDE_RE" || true
 }
 
+# profile_statements FILTERED -- echo the statement denominator for an
+# already-filtered profile: the NumStmt column summed once per DISTINCT block,
+# never once per line.
+#
+# A workspace-wide `go test -coverprofile` emits one row per (block, reporting
+# test binary), so a package linked by three instrumented binaries is written
+# three times while one served from the test cache is written once. `go tool
+# cover -func` merges those rows, so the percentage is invariant to that
+# multiplicity and a raw line sum is not: it tracks the cache instead of the
+# tree, and effective_tolerance is sized off it. Measured 2026-09-04 over one
+# unchanged tree: a colder run gave cmd/proxy 456 rows over 228 blocks (772
+# statements by line sum, 0.5000pp of tolerance) and a fully cached run 228 rows
+# (386, 0.7772pp), both reporting 80.8%. Q989.
+#
+# Only the denominator folds. Duplicate rows always agree on NumStmt but not
+# always on the hit count (2 blocks of 11,031 in that run), so dropping the rows
+# themselves would drop a hit and move the percentage.
+profile_statements() {
+	awk 'NR > 1 && !seen[$1]++ { n += $(NF - 1) } END { print n + 0 }' "$1"
+}
+
 # run_coverage PROFILE — run the unit tests across every go.work module in one
 # invocation, writing the merged coverage profile to PROFILE.
 run_coverage() {
@@ -168,8 +189,11 @@ run_coverage() {
 	# throttle. -trimpath makes the test-result cache key path-independent so a
 	# fresh worktree inherits an already-measured package instead of re-running
 	# it (see scripts/go/go-test.sh's header).
-	# A cached run still emits a byte-identical coverage profile, so the ratchet
-	# reads the same number either way.
+	# A cached package replays the same blocks with the same counts, so the
+	# ratchet reads the same number either way, but not the same ROWS: an
+	# uncached package is written once per instrumented test binary linking it,
+	# so the profile's line count tracks the cache rather than the tree. Nothing
+	# downstream may sum those lines; see profile_statements (Q989).
 	echo "==> go test -coverprofile ${patterns[*]}" >&2
 	# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
 	$THROTTLE_PREFIX go test -trimpath -timeout 5m $p_flag $verbose_flag \
@@ -254,7 +278,7 @@ report_module() {
 	else
 		pct="$(go tool cover -func="$filtered" | tail -n1 | awk '{print $NF}' | tr -d '%')"
 	fi
-	nstmt="$(awk 'NR > 1 { n += $(NF - 1) } END { print n + 0 }' "$filtered")"
+	nstmt="$(profile_statements "$filtered")"
 	printf '%s\t%s\t%s\n' "$dir" "$pct" "$nstmt"
 }
 

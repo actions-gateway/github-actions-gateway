@@ -76,6 +76,62 @@ expect_slice all-excluded example.com/repo/api 'mode: set'
 expect_slice test-tree-module example.com/repo/test/fakegithub 'mode: set'
 expect_slice no-lines example.com/repo/absent 'mode: set'
 
+# expect_stmts NAME PROFILE WANT — assert profile_statements totals WANT.
+expect_stmts() {
+	local name="$1" prof="$2" want="$3" got
+	got="$(profile_statements "$prof")"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   statements %-18s -> %s\n' "$name" "$got"
+	else
+		printf 'FAIL statements %-18s want=[%s] got=[%s]\n' "$name" "$want" "$got" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# The denominator is per distinct BLOCK, not per row. A workspace-wide profile
+# writes a block once per instrumented test binary that reported it, so an
+# uncached package repeats and a cached one does not — summing rows sizes the
+# tolerance off the test cache rather than the tree (Q989). Same blocks, two
+# multiplicities, one answer.
+SINGLE="$WORKDIR/single.out"
+cat >"$SINGLE" <<'EOF'
+mode: set
+example.com/repo/m/a.go:1.1,2.2 3 1
+example.com/repo/m/a.go:4.1,6.2 2 0
+example.com/repo/m/b.go:1.1,9.9 5 1
+EOF
+
+# The repeats agree on NumStmt and disagree on the hit count, which is the
+# shape `go tool cover -func` merges: it sums the counts and counts the
+# statements once.
+REPEATED="$WORKDIR/repeated.out"
+cat >"$REPEATED" <<'EOF'
+mode: set
+example.com/repo/m/a.go:1.1,2.2 3 1
+example.com/repo/m/a.go:4.1,6.2 2 0
+example.com/repo/m/b.go:1.1,9.9 5 1
+example.com/repo/m/a.go:1.1,2.2 3 1
+example.com/repo/m/a.go:4.1,6.2 2 1
+example.com/repo/m/b.go:1.1,9.9 5 0
+example.com/repo/m/a.go:1.1,2.2 3 0
+EOF
+
+expect_stmts single-rows "$SINGLE" 10
+expect_stmts repeated-rows "$REPEATED" 10
+printf 'mode: set\n' >"$WORKDIR/stmts-header-only.out"
+expect_stmts header-only "$WORKDIR/stmts-header-only.out" 0
+
+# The other direction: module_profile must NOT drop the repeats. `go tool cover
+# -func` sums their counts, so a block one binary covered and another missed is
+# covered; deduping the rows here would drop that hit and move the percentage.
+got="$(module_profile example.com/repo/m "$REPEATED" | grep -c 'a.go:4\.1,6\.2' || true)"
+if [[ "$got" == "2" ]]; then
+	printf 'ok   slice %-22s -> repeats kept (%s rows)\n' keeps-repeats "$got"
+else
+	printf 'FAIL slice %-22s want=[2] got=[%s]\n' keeps-repeats "$got" >&2
+	fails=$((fails + 1))
+fi
+
 # module_import_path reads the `module` directive and stops there — a `module`
 # token appearing later (in a require block comment, say) must not win.
 mkdir -p "$WORKDIR/mod"
@@ -113,8 +169,14 @@ expect_tol() {
 # crossover is at 600 statements.
 expect_tol large-module-fixed-pp 1800 0.50   # 3 stmt = 0.17pp, so 0.5pp wins
 expect_tol crossover 600 0.50                # 3 stmt = 0.50pp exactly
-expect_tol small-module-statements 348 0.86  # cmd/proxy: 3 stmt = 0.86pp wins
+expect_tol small-module-statements 348 0.86  # a small module: 3 stmt = 0.86pp wins
 expect_tol tiny-module 100 3.00              # 3 stmt = 3pp
+
+# What the Q989 denominator was worth: cmd/proxy measured 386 statements on
+# 2026-09-04, and the same module counted once per reporting test binary reads
+# 772, which crosses the 600-statement boundary and hands it the fixed floor.
+expect_tol proxy-per-block 386 0.78          # 3 stmt = 0.78pp wins
+expect_tol proxy-per-row 772 0.50            # 3 stmt = 0.39pp, so 0.5pp wins
 
 # A module with no measurable coverage reports 0 statements; dividing by that
 # denominator must not produce inf/NaN and silently disable the gate.

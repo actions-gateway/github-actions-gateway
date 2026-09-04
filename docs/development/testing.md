@@ -334,7 +334,8 @@ The **test-result** cache is the third one, and it is path-keyed *at the default
 Q343 concluded from that there was "no supported knob to share test results across paths"; there is one, and the unit tier now passes it (2026-07):
 
 - **`-trimpath` makes the result cache path-independent.** The flag removes the absolute worktree path from the test binary, so the cache key depends on content alone.
-  Measured on `cmd/agc` with `-coverprofile`: **226 s cold in one worktree, 5 s on the first-ever run in a second worktree** (12 packages cached), emitting a byte-identical coverage profile — so the ratchet reads the same number either way.
+  Measured on `cmd/agc` with `-coverprofile`: **226 s cold in one worktree, 5 s on the first-ever run in a second worktree** (12 packages cached), reporting the same per-module percentage, so the ratchet reads the same number either way.
+  The profile itself is *not* byte-identical, which cost Q989: see [the denominator](#the-denominator-is-counted-per-block-not-per-profile-row) below.
   `broker` reproduces it: without the flag the sibling worktree re-runs, with it the sibling prints `(cached)` immediately.
   [`scripts/go/go-test.sh`](../../scripts/go/go-test.sh) and [`scripts/go/coverage.sh`](../../scripts/go/coverage.sh) pass it, so a fresh worktree at an already-tested commit re-runs only the packages whose content actually changed.
 - **Do not promote it to a global `GOFLAGS`.** [`cmd/gmc/test/e2e`](../../cmd/gmc/test/e2e/e2e_suite_test.go) resolves the v2 CRD chart directory from `runtime.Caller(0)`, which a trimmed path breaks.
@@ -512,6 +513,20 @@ The gate now prints a `note:` when a module sits below its floor but inside tole
 Re-record when you see it: the tolerance is for transient noise, not for a floor the tree can no longer reach.
 The statement-denominated floor gives a small module the slack a large one always had, and the crossover is 600 statements, so `cmd/agc`, `cmd/gmc` and `cmd/probe` are unaffected.
 Both directions are asserted in [`coverage-test.sh`](../../scripts/go/coverage-test.sh): a rule that always took the statement figure would tighten `cmd/agc` to 0.05pp, which is the opposite defect.
+
+#### The denominator is counted per block, not per profile row
+
+Sizing the tolerance in statements only works if the statement count is a property of the tree.
+It was a property of the **test cache** instead, which is Q989: a merged profile carries one row per (block, reporting test binary), so a package linked by three instrumented binaries is written three times and one served from the cache is written once.
+`go tool cover -func` merges those rows, so the percentage never moves; [`coverage.sh`](../../scripts/go/coverage.sh) summed them, so the denominator did.
+
+Measured 2026-09-04 over one unchanged tree at `origin/main`, a colder run against a fully cached one: block multiplicities of 1, 2 and 3 across 11,031 blocks, and `cmd/proxy` read 456 rows over 228 blocks: 772 statements by row, 386 by block, `80.8%` either way.
+Four of the ten workspace modules changed tolerance between the two runs (`api` 1.5625pp → 0.9554, `cmd/proxy` 0.7772 → 0.5000, `githubapp` 0.9434 → 0.5000, `scaleset` 0.6682 → 0.5000); the six that did not are already past the 600-statement crossover, were reported once in both runs, or have no measured statements.
+It only reaches a verdict where the module is *also* below its floor and passing on tolerance, which is the state Q989 recorded on 2026-08-25, when `cmd/proxy` read `FAIL`/`ok`/`ok` across three runs of one tree at an unchanged 78.7%.
+That second condition does not hold today, so the swing reproduces and the flip does not: the module below its floor is now `cmd/probe`, at 2,253 statements, which is past the crossover and takes the fixed 0.5pp either way.
+
+`profile_statements` counts each distinct block once, which makes the two runs agree on all ten modules.
+The rows themselves are deliberately kept: repeats agree on `NumStmt` but not always on the hit count (2 blocks of 11,031 in that run), so deduping the profile would drop a hit and move the percentage that is currently invariant.
 
 **Updating the floor.** When you intentionally add tests and coverage goes up, run `make cover-update` and commit the new `coverage-baseline.txt` — the ratchet then defends the higher number.
 Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently.
