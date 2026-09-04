@@ -207,6 +207,12 @@ Adopting the wiring elsewhere means the ConfigMap and the two patches in [the Ka
 
 ## What is proven, and what is not
 
+The four targets above **render**, on every change to this tree: [`scripts/manifest/check-registry-mirror-render.sh`](../../scripts/manifest/check-registry-mirror-render.sh) builds each one and asserts what the render must contain, as a step in `manifest-validate`.
+Rendering is the weakest of the readings on this page and it was the missing one — `manifest-validate` yamllints these files and kubeconforms the standalone ones, so until then a `kustomization.yaml` that did not build first failed on the cluster of whoever ran `kubectl apply -k`.
+Exit status is not the assertion: the shared topology's patch replaces the mirror-side `ingress` wholesale, so a second rule added to the base disappears from that render at exit 0.
+The gate compares the two renders and names any line the base declares that the shared one lost.
+It proves the YAML composes and nothing more — no cluster this repo boots applies the shared overlay, which is a separate gap.
+
 The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, five per instance, by [`scripts/dogfood/e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh): Available, `/v2/`, a real upstream manifest, an upload refused with 405, and the bundled image's `:5001` debug listener unbound.
 That battery has since gained a sixth check per instance, that `/v2/_catalog` is refused, which has not run on the cluster yet; the deny's own reading is the local one [above](#closing-the-repository-catalog).
 

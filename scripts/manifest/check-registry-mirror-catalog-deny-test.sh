@@ -4,9 +4,11 @@
 # holding every mirror instance behind the deny proxy that refuses
 # /v2/_catalog (Q1022).
 #
-# Why every drift class is asserted rather than just the happy path. Nothing in
-# CI renders these manifests (Q1024) and the cluster battery that would catch a
-# regression needs a booked dogfood session, so this gate is the only thing
+# Why every drift class is asserted rather than just the happy path. This gate
+# reads the sources; check-registry-mirror-render.sh renders them (Q1024), and
+# neither substitutes for the other — a deny sidecar dropped from a Deployment
+# renders perfectly. The cluster battery that would catch a regression needs a
+# booked dogfood session, so this gate is the only thing
 # between the drift and a shared cache handing one tenant the list of what every
 # other tenant pulled. A gate that stopped firing would be indistinguishable
 # from a tree that is whole — which is the state the real tree is in, and why

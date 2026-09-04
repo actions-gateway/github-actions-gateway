@@ -59,6 +59,7 @@ CHECK_FAST_GATES := roadmap-check \
                     queue-claims-check \
                     getting-started-check \
                     semver-floor-sources-check template-library-check \
+                    registry-mirror-render-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check rung-order-check \
                     upgrade-toc-check \
@@ -238,6 +239,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/run-parallel-test ci/check-fixture-maintenance-test \
                  ci/check-script-modes-test \
                  ci/check-template-library-test \
+                 manifest/check-registry-mirror-render-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \

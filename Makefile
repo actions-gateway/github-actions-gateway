@@ -239,13 +239,23 @@ registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tena
 # Distribution serves /v2/_catalog unconditionally and offers no setting that
 # closes it while leaving anonymous pulls working, so each mirror pod fronts its
 # registry with a deny proxy and binds the registry to loopback (Q1022). Six
-# files hold that posture between them and nothing in CI renders any of them
-# (Q1024), so an instance added without the sidecar hands one tenant the list of
-# what every other tenant pulled, and the battery that would catch it needs a
-# booked dogfood session.
+# files hold that posture between them, and an instance added without the sidecar
+# hands one tenant the list of what every other tenant pulled — a battery that
+# would catch it needs a booked dogfood session. This gate reads the sources;
+# `registry-mirror-render-check` below renders them (Q1024).
 .PHONY: registry-mirror-catalog-deny-check
 registry-mirror-catalog-deny-check: ## Fail when a registry mirror is not fronted by the /v2/_catalog deny proxy
 	scripts/manifest/check-registry-mirror-catalog-deny.sh
+
+# The four targets deploy/registry-mirror/ ships are applied with `kubectl apply
+# -k`, and until Q1024 nothing rendered any of them: manifest-validate yamllints
+# the tree and kubeconforms the standalone files, so a kustomization.yaml that
+# does not render first fails on the operator's cluster. Exit status is not the
+# assertion — the shared topology's patch replaces the mirror-side `ingress`
+# wholesale, so a rule added to the base vanishes from that render at exit 0.
+.PHONY: registry-mirror-render-check
+registry-mirror-render-check: ## Fail when a shipped registry-mirror kustomize target does not render, or a render lost a rule its base declares (Q1024)
+	scripts/manifest/check-registry-mirror-render.sh
 
 # Capability parity between the two acquisition tiers rested on a one-time seam
 # walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
