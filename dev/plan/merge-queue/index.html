@@ -2771,7 +2771,10 @@ After Phase 1 merges, add the rule to the existing <code>default-protect</code> 
 <li><code>min_entries_to_merge: 1</code> with a 5-minute wait lets batches form at the observed merge rate (~2 PRs per 5-min window at peak) without stalling a lone PR.</li>
 <li><code>check_response_timeout_minutes: 60</code> clears the worst observed e2e run (30 min) with headroom for queue-time image-cache misses.</li>
 </ul>
-<p>After activation, <code>gh pr merge --squash</code> enqueues instead of merging directly; a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.</p>
+<p>After activation, a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.
+This section predicted <code>gh pr merge --squash</code> would enqueue; it does not.
+That form routes through <code>enablePullRequestAutoMerge</code>, which <code>allow_auto_merge: false</code> forbids, so it fails outright (measured 2026-09-04, gh 2.100.0).
+Enqueueing from a terminal takes the <code>enqueuePullRequest</code> mutation instead; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">CONTRIBUTING.md</a>.</p>
 <p>Rollback: delete the <code>merge_queue</code> rule from the ruleset; behavior reverts to direct merges and the process rules in CONTRIBUTING.md.</p>
 <h2 id="phase-3-re-measure-then-decide">Phase 3: re-measure, then decide<a class="headerlink" href="#phase-3-re-measure-then-decide" title="Permanent link">&para;</a></h2>
 <h3 id="the-re-measurement-2026-08-12">The re-measurement (2026-08-12)<a class="headerlink" href="#the-re-measurement-2026-08-12" title="Permanent link">&para;</a></h3>
