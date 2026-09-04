@@ -15,6 +15,8 @@
 #
 # The file set mirrors .mdreflow.yaml: mdreflow always skips vendor/, and the
 # config excludes two generated pages, the backlog, and the AGENTS.md symlink.
+# Every tracked symlink is dropped by class below, so a testdata copy of an
+# excluded page cannot re-enter the set under a second path.
 # Keep the two in step — a file measured here but not reflowed reads as
 # permanent residue.
 #
@@ -43,8 +45,12 @@ excluded() {
     return 1
 }
 
+# Skip symlinks, as check-em-dash.sh and check-doc-links.sh do, so the target is
+# measured once. mdreflow refuses a non-regular file outright, so a symlink's
+# interior breaks book as permanent residue and inflate the denominator.
 files=()
 while IFS= read -r path; do
+    [[ -L "$repo_root/$path" ]] && continue
     excluded "$path" || files+=("$path")
 done < <(cd "$repo_root" && git ls-files '*.md')
 
