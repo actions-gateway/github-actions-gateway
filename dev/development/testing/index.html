@@ -2750,6 +2750,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Coverage measurement and the ratchet">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-denominator-is-counted-per-block-not-per-profile-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The denominator is counted per block, not per profile row
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -4406,7 +4423,8 @@ Measured (2026-07): <strong><code>GOCACHE</code> is machine-shared and path-inde
 Q343 concluded from that there was "no supported knob to share test results across paths"; there is one, and the unit tier now passes it (2026-07):</p>
 <ul>
 <li><strong><code>-trimpath</code> makes the result cache path-independent.</strong> The flag removes the absolute worktree path from the test binary, so the cache key depends on content alone.
-  Measured on <code>cmd/agc</code> with <code>-coverprofile</code>: <strong>226 s cold in one worktree, 5 s on the first-ever run in a second worktree</strong> (12 packages cached), emitting a byte-identical coverage profile — so the ratchet reads the same number either way.
+  Measured on <code>cmd/agc</code> with <code>-coverprofile</code>: <strong>226 s cold in one worktree, 5 s on the first-ever run in a second worktree</strong> (12 packages cached), reporting the same per-module percentage, so the ratchet reads the same number either way.
+  The profile itself is <em>not</em> byte-identical, which cost Q989: see <a href="#the-denominator-is-counted-per-block-not-per-profile-row">the denominator</a> below.
   <code>broker</code> reproduces it: without the flag the sibling worktree re-runs, with it the sibling prints <code>(cached)</code> immediately.
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh"><code>scripts/go/go-test.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>scripts/go/coverage.sh</code></a> pass it, so a fresh worktree at an already-tested commit re-runs only the packages whose content actually changed.</li>
 <li><strong>Do not promote it to a global <code>GOFLAGS</code>.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e</code></a> resolves the v2 CRD chart directory from <code>runtime.Caller(0)</code>, which a trimmed path breaks.
@@ -4552,6 +4570,16 @@ The gate now prints a <code>note:</code> when a module sits below its floor but 
 Re-record when you see it: the tolerance is for transient noise, not for a floor the tree can no longer reach.
 The statement-denominated floor gives a small module the slack a large one always had, and the crossover is 600 statements, so <code>cmd/agc</code>, <code>cmd/gmc</code> and <code>cmd/probe</code> are unaffected.
 Both directions are asserted in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage-test.sh"><code>coverage-test.sh</code></a>: a rule that always took the statement figure would tighten <code>cmd/agc</code> to 0.05pp, which is the opposite defect.</p>
+<h4 id="the-denominator-is-counted-per-block-not-per-profile-row">The denominator is counted per block, not per profile row<a class="headerlink" href="#the-denominator-is-counted-per-block-not-per-profile-row" title="Permanent link">&para;</a></h4>
+<p>Sizing the tolerance in statements only works if the statement count is a property of the tree.
+It was a property of the <strong>test cache</strong> instead, which is Q989: a merged profile carries one row per (block, reporting test binary), so a package linked by three instrumented binaries is written three times and one served from the cache is written once.
+<code>go tool cover -func</code> merges those rows, so the percentage never moves; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>coverage.sh</code></a> summed them, so the denominator did.</p>
+<p>Measured 2026-09-04 over one unchanged tree at <code>origin/main</code>, a colder run against a fully cached one: block multiplicities of 1, 2 and 3 across 11,031 blocks, and <code>cmd/proxy</code> read 456 rows over 228 blocks: 772 statements by row, 386 by block, <code>80.8%</code> either way.
+Four of the ten workspace modules changed tolerance between the two runs (<code>api</code> 1.5625pp → 0.9554, <code>cmd/proxy</code> 0.7772 → 0.5000, <code>githubapp</code> 0.9434 → 0.5000, <code>scaleset</code> 0.6682 → 0.5000); the six that did not are already past the 600-statement crossover, were reported once in both runs, or have no measured statements.
+It only reaches a verdict where the module is <em>also</em> below its floor and passing on tolerance, which is the state Q989 recorded on 2026-08-25, when <code>cmd/proxy</code> read <code>FAIL</code>/<code>ok</code>/<code>ok</code> across three runs of one tree at an unchanged 78.7%.
+That second condition does not hold today, so the swing reproduces and the flip does not: the module below its floor is now <code>cmd/probe</code>, at 2,253 statements, which is past the crossover and takes the fixed 0.5pp either way.</p>
+<p><code>profile_statements</code> counts each distinct block once, which makes the two runs agree on all ten modules.
+The rows themselves are deliberately kept: repeats agree on <code>NumStmt</code> but not always on the hit count (2 blocks of 11,031 in that run), so deduping the profile would drop a hit and move the percentage that is currently invariant.</p>
 <p><strong>Updating the floor.</strong> When you intentionally add tests and coverage goes up, run <code>make cover-update</code> and commit the new <code>coverage-baseline.txt</code> — the ratchet then defends the higher number.
 Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently.</p>
 <p><strong>Read the floors from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/coverage-baseline.txt"><code>coverage-baseline.txt</code></a>, which is the only record of them.</strong> This page used to copy the table and the copy drifted twice, through the re-records in #779 and #877: by the time Q803 read it, seven of its eight numbers were wrong (<code>cmd/gmc</code> by 23 points) and <code>api</code> and <code>scaleset</code> were missing entirely.

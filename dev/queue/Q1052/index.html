@@ -2579,6 +2579,69 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-selects-them-the-head-commits-author" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What selects them: the head commit's author
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-is-invisible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it is invisible
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-repo-documents-the-opposite-mechanism-in-eight-places" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The repo documents the opposite mechanism, in eight places
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done when
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2598,33 +2661,87 @@
 
 
 <h1 id="a-pr-whose-workflows-await-approval-blocks-silently-and-forever">A PR whose workflows await approval blocks silently and forever<a class="headerlink" href="#a-pr-whose-workflows-await-approval-blocks-silently-and-forever" title="Permanent link">&para;</a></h1>
-<p>A queued <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</p>
-<p><strong>Measured 2026-09-03 02:00 PDT</strong> on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1825">#1825</a>, a dependabot bump of <code>google.golang.org/grpc</code> from 1.83.0 to 1.83.1.
-Every workflow run on its head reads <code>completed / action_required</code> with a duration of <strong>0s</strong>, queued <code>2026-09-02T08:16:17Z</code>, over 24 hours earlier.
-Nothing failed, because nothing started.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>pr<span class="w"> </span>view<span class="w"> </span><span class="m">1825</span><span class="w"> </span>--json<span class="w"> </span>statusCheckRollup<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.statusCheckRollup|length'</span><span class="w">   </span><span class="c1"># 0</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--commit<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>gh<span class="w"> </span>pr<span class="w"> </span>view<span class="w"> </span><span class="m">1825</span><span class="w"> </span>--json<span class="w"> </span>headRefOid<span class="w"> </span>--jq<span class="w"> </span>.headRefOid<span class="k">)</span><span class="s2">"</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># completed  action_required  ...  0s  2026-09-02T08:16:17Z   (every row)</span>
+<p>A withheld <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</p>
+<h2 id="what-selects-them-the-head-commits-author">What selects them: the head commit's author<a class="headerlink" href="#what-selects-them-the-head-commits-author" title="Permanent link">&para;</a></h2>
+<p><strong>Measured 2026-09-04 06:25 PDT.</strong> A Dependabot PR's runs are withheld exactly when its <strong>head commit is authored by <code>github-actions[bot]</code></strong>: that is, when one of this repo's own workflows has force-pushed to the branch with the default <code>GITHUB_TOKEN</code>.
+Neither the ecosystem nor the fork origin selects anything:</p>
+<table>
+<thead>
+<tr>
+<th>head commit author</th>
+<th>n</th>
+<th>run attempt</th>
+<th>hold before start</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>github-actions[bot]</code></td>
+<td>10</td>
+<td><code>2</code> on every one</td>
+<td>1m35s to 4d01h03m, median 6h35m</td>
+</tr>
+<tr>
+<td><code>dependabot[bot]</code></td>
+<td>8</td>
+<td><code>1</code> on every one</td>
+<td>0s on every one</td>
+</tr>
+</tbody>
+</table>
+<p>A clean 18/18 split over the last 40 Dependabot PRs, plus <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1821">#1821</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1823">#1823</a> held at attempt 1 right now.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Withheld: head authored by github-actions[bot]</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># run 33508119136, head 1851d3637e1ce1b0ad5489eea17b1430f35ab548  (#1821)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">#   action_required, attempt=1, created == started == 2026-09-01T12:31:05Z</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">#   all 16 runs on that head read action_required</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># run 33777861089, head 14c803185e0537835d22f555eabd70761f7b8444  (#1823)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1">#   action_required, attempt=1, created == started == 2026-09-03T16:18:46Z</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Ran normally: head authored by dependabot[bot]</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># run 33508008216, head 87323a15a85031a8350d8095865b986a7123043d  (#1822, go_modules)</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># run 33508277737, head 2608f62c05129085269e77f2051c075ea3878543  (#1824, github_actions)</span>
 </code></pre></div>
-<p><strong>Why it is not visible.</strong> <code>statusCheckRollup</code> is empty, so every instrument that reads a PR's checks reports <em>no checks</em> rather than <em>checks withheld</em>, which is the same answer it gives for a branch pushed seconds ago.
+<p><strong>The ecosystem hypothesis is refuted outright.</strong> #1822 is <code>go_modules</code> and ran; #1824 is <code>github_actions</code> and ran.
+<code>go_modules</code> only <em>correlates</em> with the withholding because <code>dependabot-go-sync.yml</code> and <code>dependabot-rebase-stale.yml</code> rewrite Go-module branches and nothing else, so those are the only branches that ever acquire a <code>github-actions[bot]</code> head.</p>
+<p><strong>The fork hypothesis is refuted directly.</strong> Every head repository reads <code>actions-gateway/github-actions-gateway</code> with <code>fork: false</code>, and every run's event is <code>pull_request</code>, not <code>pull_request_target</code>.
+The repository setting <code>actions/permissions/fork-pr-contributor-approval</code> reads <code>{"approval_policy": "first_time_contributors"}</code>, which is the only approval knob the API exposes on this repo.
+But these branches are not forks, so <strong>whether that setting is what withholds them is unverified</strong>.
+Confirming it means changing a repository setting and re-measuring, which needs admin access and is a live mutation; nothing short of that separates it from an unexposed rule keyed on the actor.</p>
+<h2 id="why-it-is-invisible">Why it is invisible<a class="headerlink" href="#why-it-is-invisible" title="Permanent link">&para;</a></h2>
+<p><code>statusCheckRollup</code> is empty, so every instrument that reads a PR's checks reports <em>no checks</em> rather than <em>checks withheld</em>, which is the same answer it gives for a branch pushed seconds ago.
 <code>mergeStateStatus</code> reads <code>BLOCKED</code>, which is also what a PR with a failing required check reads.
 So the state has no signature of its own at either level, and the PR ages out of view.</p>
-<p><strong>What it cost here.</strong> <code>main</code> has no classic branch protection, but the active <code>default-protect</code> ruleset requires nine contexts including <code>security-scan-gate</code>, so this is a hard block in three directions at once:</p>
-<ul>
-<li>
-<h1 id="1825-cannot-merge-because-its-own-required-checks-have-never-run">1825 cannot merge, because its own required checks have never run.<a class="headerlink" href="#1825-cannot-merge-because-its-own-required-checks-have-never-run" title="Permanent link">&para;</a></h1>
-</li>
-<li>A HIGH severity <code>CVE-2026-84304</code> stayed live on <code>main</code>'s dependencies, at <code>cmd/agc/go.mod:77</code> and <code>cmd/gmc/go.mod:92</code>.</li>
-<li>Two unrelated PRs from a dispatch batch, #1828 and #1832, were hard-blocked on <code>trivy (agc, 1)</code>, <code>trivy (gmc, 1)</code> and <code>security-scan-gate</code>, each otherwise green at 52 pass and 0 pending, with the CVE as their only red.</li>
-</ul>
-<p>Two sessions independently diagnosed the CVE, and both initially searched the open PRs for <code>trivy</code> and <code>CVE</code>, the symptom's vocabulary, which a dependency bump's title carries neither of.
+<p><strong>The durable fingerprint is <code>run_attempt</code>, not the conclusion.</strong> Approving a withheld run overwrites <code>action_required</code> with the real result, so the evidence of the hold is erased from the conclusion and survives only as <code>run_attempt &gt;= 2</code> with <code>run_started_at</code> well after <code>created_at</code>.
+That is why a scan for <code>action_required</code> finds only PRs that are stuck <em>right now</em>, and why the ten historical cases above had to be recovered from the timing instead.</p>
+<h2 id="the-repo-documents-the-opposite-mechanism-in-eight-places">The repo documents the opposite mechanism, in eight places<a class="headerlink" href="#the-repo-documents-the-opposite-mechanism-in-eight-places" title="Permanent link">&para;</a></h2>
+<p>Eight assertions across the tree say GitHub <strong>creates no runs</strong> on a <code>GITHUB_TOKEN</code> push, and prescribe close + reopen as the remedy.
+Both halves are wrong: 16 runs were created on #1821's head, and 9 of the 10 released PRs have exactly one unit-test run and <strong>zero</strong> <code>reopened</code> timeline events, so they were released in place rather than by close + reopen.
+That is a separate defect with a separate fix and it is filed as Q1053, which cites this row for the measurement.
+<strong>Q1052 owns it</strong>.</p>
+<p>It belongs here because it is why nobody looked: the docs told every maintainer and every session that an empty check list was the expected, benign outcome of a sync.</p>
+<h2 id="what-it-cost">What it cost<a class="headerlink" href="#what-it-cost" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/1825">#1825</a> <strong>merged 2026-09-03T16:16:25Z</strong>, so its <code>CVE-2026-84304</code> episode is history and not a live cost.
+It remains the worked example: run 33607824908 sat withheld from <code>2026-09-02T08:16:17Z</code> to <code>2026-09-03T15:51:29Z</code>, a span of 31h35m, while a HIGH severity CVE stayed live on <code>main</code>'s dependencies and two unrelated dispatch-batch PRs were hard-blocked on <code>trivy (agc, 1)</code>, <code>trivy (gmc, 1)</code> and <code>security-scan-gate</code>.</p>
+<p>Two sessions independently diagnosed the CVE, and both searched the open PRs for <code>trivy</code> and <code>CVE</code>, the symptom's vocabulary, which a dependency bump's title carries neither of.
 Only searching the package the scanner named reached #1825.</p>
-<p><strong>Not every dependabot PR is affected</strong>, which is what makes it a defect rather than a setting: #1824, same author, has 65 checks and reads <code>CLEAN</code>.
-Whatever selects #1821, #1823 and #1825 for approval and lets #1824 through is the thing to identify first.</p>
-<p><strong>Done when</strong> an open PR whose runs are all <code>action_required</code> cannot age silently.
-The mechanism is deliberately not chosen here.
-A repository-settings change may remove the approval requirement for this actor entirely, in which case there is nothing to detect and the row closes on that.
-Otherwise a scheduled check or a <code>make doctor</code> probe can name such PRs, and the reach is the argument for the first option: the failure is invisible to the PR's own surface, so anything that reads only that PR will keep reporting nothing.</p>
+<p>The live cost today is #1821 (withheld since 2026-09-01) and #1823 (since 2026-09-03).</p>
+<h2 id="done-when">Done when<a class="headerlink" href="#done-when" title="Permanent link">&para;</a></h2>
+<p>An open PR whose runs are all withheld cannot age silently.</p>
+<p><strong>The mechanism is a maintainer's call and is deliberately still not chosen</strong>, because the two arms differ in preference and in access rather than in evidence:</p>
+<ul>
+<li><strong>Remove the approval requirement for this actor.</strong> Closes the row outright with nothing to detect.
+  Needs repository-admin access, and rests on the unverified attribution above: if <code>first_time_contributors</code> is not what withholds these, there is no knob here to turn.
+  On a public repository, relaxing it also weakens the approval gate for genuine fork PRs, which is a security-property regression and needs sign-off under the secure-by-default rule.</li>
+<li><strong>Detect and name such PRs</strong> via a scheduled check or a <code>make doctor</code> probe.
+  Nothing today inspects withheld-run state on open PRs: <code>make doctor</code> checks local tooling only, <code>pr-mergeability-watch.py</code> reads one PR and no checks, and <code>dependabot-rebase-stale.sh</code> selects on conflict state.
+  <strong>The durability finding above is this arm's shaping constraint, not a detail of it.</strong> Approval overwrites <code>action_required</code>, so a probe keyed on that conclusion can only ever see what is withheld at the instant it runs, and is blind by construction to every case already released.
+  A probe that must also account for history has to key on <code>run_attempt &gt;= 2</code> with <code>run_started_at</code> well after <code>created_at</code>, which is a different query against different fields, and it is the only query that can measure how often this happens.
+  Detection does not stop the withholding either, so every affected PR still needs a manual release.</li>
+</ul>
+<p>A third arm the original row did not consider: <strong>stop creating the condition</strong>, or have the pushing workflow release its own runs via <code>POST /actions/runs/{run_id}/approve</code> with <code>actions: write</code>.
+Whether a <code>GITHUB_TOKEN</code> may approve a run it caused is <strong>unverified</strong> and is the first thing to measure if this arm is taken.</p>
+<p><strong>A probe built for the second arm names both directions</strong>: a head authored by <code>github-actions[bot]</code> with <code>action_required</code> runs must go red, and #1822 and #1824, which are <code>dependabot[bot]</code> heads at attempt 1, must stay green.
+Selectivity is the open question: the condition held on 10 of 40 recent Dependabot PRs but on only 2 at any given moment, so a probe that reports every historical case will fire constantly and be ignored.</p>
 <p>Found by the dispatch run of 2026-09-03, which lost two of its eight PRs to it.</p>
 
 

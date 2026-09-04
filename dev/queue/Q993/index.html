@@ -2606,9 +2606,9 @@ The class is therefore unfixable by hand, and the reason is the gate rather than
 <code>max-width: 0</code> means nothing re-wraps, so the defect is in the sentence-boundary detector rather than the wrapper.</p>
 <p><strong>One trigger is identified and verified.</strong> A sentence whose terminating period falls <em>inside</em> an emphasis or code span defeats the splitter: <code>**Bold sentence ends here.** Next sentence follows.</code> stays joined, while moving the period outside the span (<code>**…here**. Next…</code>) splits correctly.</p>
 <p><strong>A second trigger exists and is NOT identified</strong>, which is the part to start from rather than assume closed.
-The live instance is <code>docs/queue/Q970.md</code> file line 14, 568 chars, two sentences, <strong>on the #1718 branch rather than on <code>main</code></strong>: it joins although its terminating period is <em>outside</em> its span, so the identified trigger does not explain it.
-Check it there, not in <a href="../Q970/">Q970</a> as <code>main</code> holds it, whose longest body line is 260 chars and which carries no joined two-sentence line at all.
-If #1718 never lands, re-anchor this row to another instance before working it.
+The live instance is <code>docs/queue/Q970.md</code> file line 14, two sentences: it joins although its terminating period is <em>outside</em> its span, so the identified trigger does not explain it.
+Q970 has since completed and its file is gone from <code>main</code>, so read the instance out of git rather than the tree: <code>git show 073da2f5a:docs/queue/Q970.md | sed -n 14p</code>, 579 chars at that blob.
+Re-anchor to a live instance before working it if that blob will not serve.
 Measured 2026-08-25 by deleting the mechanism, restoring after each probe: splitting the line and running <code>make md-reflow</code> rejoins it; so does restructuring the second sentence to open with a word, and ending the first in a plain word.
 Every component tested alone splits correctly — the leading link, the escaped-bracket regex span, the quoted <code>rp</code> span, a dotted token in a code span, and the line's own tail — and replacing the leading link with a short plain word still leaves the whole line joined, at 509 chars against the original 568.
 <code>mdreflow --explain</code> reports nothing for it, so it is processed rather than declined and no reason code is offered.

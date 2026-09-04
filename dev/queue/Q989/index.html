@@ -2598,14 +2598,21 @@
 
 
 <h1 id="cover-check-tolerance-flips-the-verdict-on-a-fixed-coverage-number"><code>cover-check</code> tolerance flips the verdict on a fixed coverage number<a class="headerlink" href="#cover-check-tolerance-flips-the-verdict-on-a-fixed-coverage-number" title="Permanent link">&para;</a></h1>
-<p><code>effective_tolerance</code> is <code>max(COVERAGE_TOLERANCE, COVERAGE_TOLERANCE_STMT * 100 / NSTMT)</code>, so the pass bound moves with the module's statement count.
-Measured 2026-08-25 on one unchanged tree, three runs of the same <code>make cover-check</code>: <code>./cmd/proxy</code> reported 78.7% every time, with tolerance <code>0.5000pp</code> once and <code>0.8621pp</code> twice, giving <code>FAIL</code>, <code>ok</code>, <code>ok</code>.
-At the defaults (<code>0.5</code>, <code>3</code>) those imply <code>NSTMT</code> of 1044 and 348, a 3x swing in the denominator while the measured percentage did not move at all.
-The failing reading was the one inside <code>make check</code>, where cover-check runs in the parallel fan-out.
-It bites only because <code>./cmd/proxy</code> already sits below its recorded floor (78.7% &lt; 79.3%) and passes on tolerance alone, which the script itself flags and which <code>make cover-update</code> would clear; <code>./cmd/probe</code> is in the same state.
-So the floor drift is what makes the denominator swing observable, and either one alone is quiet.
-Distinct from Q823, which is coverage <em>timing</em> under load rather than the statement count.
-Distinct also from <a href="../Q992/">Q992</a>, which is <code>cover-check</code> replaying a cached test result: that one cannot produce the FAIL measured here, and this row owns the tolerance measurement.</p>
+<p><strong>Event:</strong> <code>cover-check</code> prints two different tolerances for one module across runs of an unchanged tree, or reports a <code>FAIL</code> whose percentage has not moved. → top of Queue, escalated.</p>
+<p>Mitigation shipped: <code>profile_statements</code> counts each distinct block once, so the statement denominator is a property of the tree rather than of the test cache.</p>
+<p>The cause was not the tolerance rule but the number fed to it.
+A merged profile carries one row per (block, reporting test binary), so a package linked by three instrumented binaries is written three times and one served from the cache is written once.
+<code>go tool cover -func</code> merges those rows, so the percentage is invariant to that multiplicity; <code>report_module</code> summed the raw rows, so <code>effective_tolerance</code> was not.</p>
+<p>Measured 2026-09-04 over one unchanged tree at <code>origin/main</code>, a colder run against a fully cached one: 18,409 rows over 11,031 distinct blocks with multiplicities of 1, 2 and 3, against 11,031 rows all at 1.
+<code>./cmd/proxy</code> read 456 rows over 228 blocks, 772 statements by row and 386 by block, <code>80.8%</code> either way, giving 0.5000pp of tolerance against 0.7772pp.
+Four of the ten workspace modules changed tolerance between the two runs (<code>api</code>, <code>cmd/proxy</code>, <code>githubapp</code>, <code>scaleset</code>); counting per block makes all ten agree.</p>
+<p>The row's own 2026-08-25 numbers (348 and 1,044 statements, 78.7% against a 79.3% floor) are a smaller <code>cmd/proxy</code> than today's.
+The <code>FAIL</code> was <strong>not</strong> reproduced, and needs a second condition this tree no longer meets: the module must also sit below its floor and pass on tolerance alone.
+<code>./cmd/proxy</code> is now at its floor exactly after a re-record, and the module currently below its floor is <code>./cmd/probe</code> (81.6% &lt; 81.8%), which at 2,253 statements is past the 600-statement crossover and takes the fixed 0.5pp under either denominator.
+So the swing that produces the flip is fixed and the flip itself was never observed here; a recurrence is expected to look like the Event above rather than like a repeat of the row's original reading.</p>
+<p><code>make cover-update</code> would clear the <code>./cmd/probe</code> shortfall and with it the observability of this defect, which is why the baseline was deliberately left alone.</p>
+<p>Distinct from Q823, which is coverage <em>timing</em> under load rather than the statement count.
+Distinct also from <a href="../Q992/">Q992</a>, which is <code>cover-check</code> replaying a cached test result: that one cannot produce a spurious FAIL, and this row owns the tolerance measurement.</p>
 
 
 

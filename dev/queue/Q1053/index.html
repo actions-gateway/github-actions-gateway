@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q970/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1053/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>run-parallel-test asserts a one-second ceiling on an instant command - GitHub Actions Gateway</title>
+        <title>Docs say a GITHUB_TOKEN push creates no runs; it creates withheld ones - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#run-parallel-test-asserts-a-one-second-ceiling-on-an-instant-command" class="md-skip">
+        <a href="#docs-say-a-github_token-push-creates-no-runs-it-creates-withheld-ones" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              run-parallel-test asserts a one-second ceiling on an instant command
+              Docs say a GITHUB_TOKEN push creates no runs; it creates withheld ones
             
           </span>
         </div>
@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-eight-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The eight sites
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,17 +2616,68 @@
   
 
 
-<h1 id="run-parallel-test-asserts-a-one-second-ceiling-on-an-instant-command"><code>run-parallel-test</code> asserts a one-second ceiling on an instant command<a class="headerlink" href="#run-parallel-test-asserts-a-one-second-ceiling-on-an-instant-command" title="Permanent link">&para;</a></h1>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>scripts/ci/run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the fan-out up as <code>rp "quick:true" "slow:sleep 2"</code>, so the command under that bound is literally <code>true</code>. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code></a> captures <code>started="$(date +%s)"</code> inside the child subshell (line 82) and writes <code>$(( $(date +%s) - started ))</code> (line 100), so the bounded span covers a <code>date</code> fork, the <code>bash -c</code> fork/exec, the <code>awk</code> fork/exec, pipeline teardown and a second <code>date</code>, integer-floored at both ends.
-The assertion therefore encodes that four forks never take a second.
-<strong>Its intent is that the label appears in the timing block at all</strong> — the test's own name is <code>a fast command is reported too</code> — so the seconds are incidental and the whole replacement is <code>^\[run-parallel\] +[0-9]+s +quick$</code>, not a larger ceiling.
-<code>want_order</code> at line 189 is a second latent instance and needs a <strong>different</strong> fix in kind: an ordering claim cannot rest on a command with no duration floor, so it needs a real duration on both sides or the claim has to go.
-Measured 2026-08-24 with ~18 sessions live: it failed inside <code>make check</code> beside <code>claude-go-throttle-hook-test</code> (throttle probe killed) and <code>queue-test</code>, all three passing on individual rerun with no code change.
-<strong>Not observed on a runner, and no docs-only PR can show otherwise:</strong> <code>make scripts-test</code> runs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">unit-test.yml</a>'s path-gated <code>shellcheck</code> job, which skips on a docs-only diff, so the runner evidence is the push-to-main runs (32836906076, <code>ubuntu-latest</code>, success) rather than any PR's green.
-The fix touches <code>scripts/ci/</code>, so that job <strong>does</strong> run on the fixing PR: read it there rather than assuming this gap persists.
-Deliberately not labelled <code>flake</code>: the fix is deterministic and the defect was never seen on <code>main</code>, so a flake-watch trigger, which turns on recurrence observed there, could never fire or be falsified, and completion should delete this row rather than park it.
-It keeps its rank beside the flake rows anyway, because it fails <code>make check</code> locally today and that is what the position is for.
-Also a contention datum for <a href="../Q822/">Q822</a>, whose cause is still unproven; one fix does not close both.</p>
+<h1 id="docs-say-a-github_token-push-creates-no-runs-it-creates-withheld-ones">Docs say a GITHUB_TOKEN push creates no runs; it creates withheld ones<a class="headerlink" href="#docs-say-a-github_token-push-creates-no-runs-it-creates-withheld-ones" title="Permanent link">&para;</a></h1>
+<p>Eight places in the tree assert that GitHub never re-triggers workflows from a <code>GITHUB_TOKEN</code> push, and prescribe close + reopen.
+Both halves are refuted by measurement.</p>
+<p><strong>Measured 2026-09-04 06:25 PDT</strong>, with the full derivation in Q1052, which <strong>owns the measurement</strong>.</p>
+<ul>
+<li><strong>Runs are created.</strong> All 16 workflow runs on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1821">#1821</a>'s head <code>1851d3637e1ce1b0ad5489eea17b1430f35ab548</code> exist and read <code>action_required</code> (for example run 33508119136, <code>event: pull_request</code>).
+  They are withheld pending approval, not suppressed.</li>
+<li><strong>Close + reopen is not what has been used.</strong> Across the ten historical cases, nine have exactly one unit-test run and <strong>zero</strong> <code>reopened</code> timeline events; every one shows <code>run_attempt: 2</code> on the same run id with <code>run_started_at</code> well after <code>created_at</code>.
+  They were released in place, by the "Approve and run" path, which a close + reopen could not produce, since reopening fires a fresh <code>pull_request</code> event and a new run at attempt 1.</li>
+</ul>
+<p>The distinction is not pedantic.
+The documented mechanism predicts an empty check list is benign and expected, which is exactly why a withheld PR ages unnoticed (Q1052).
+It also sends a maintainer to a remedy that re-queues runs which will again await approval, instead of to the approval that actually releases them.</p>
+<h2 id="the-eight-sites">The eight sites<a class="headerlink" href="#the-eight-sites" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.github/workflows/dependabot-go-sync.yml</code></td>
+<td>11-18</td>
+</tr>
+<tr>
+<td><code>.github/workflows/dependabot-rebase-stale.yml</code></td>
+<td>20-24</td>
+</tr>
+<tr>
+<td><code>.github/workflows/autoscaler-drift.yml</code></td>
+<td>39-42</td>
+</tr>
+<tr>
+<td><code>scripts/ci/dependabot-rebase-stale.sh</code></td>
+<td>29-35</td>
+</tr>
+<tr>
+<td><code>scripts/ci/dependabot-rebase-stale.sh</code> (the PR comment it posts)</td>
+<td>392</td>
+</tr>
+<tr>
+<td><code>docs/development/dependency-updates.md</code></td>
+<td>103-106</td>
+</tr>
+<tr>
+<td><code>docs/development/testing.md</code></td>
+<td>2712</td>
+</tr>
+<tr>
+<td><code>docs/development/go-workspaces.md</code></td>
+<td>222-230</td>
+</tr>
+</tbody>
+</table>
+<p><code>updatecli.d/kind.yaml:21-23</code>, <code>updatecli.d/cluster-autoscaler.yaml:26-28</code> and <code>updatecli.d/karpenter.yaml:26-28</code> carry the same remedy in comments and are a fourth copy to reconcile.</p>
+<p>The <code>go-workspaces.md</code> passage at lines 222-230 is the canonical one every other site cites, so it is the one to correct first; the rest can then point at it rather than restating the mechanism.
+Note the sites cite it under the heading <em>Dependabot Go bumps are auto-synced</em>, while the passage actually lives under <em>Both bot pushes leave the checks needing a re-trigger</em>, so the anchors are already stale.</p>
+<p><strong>The updatecli claim in <code>autoscaler-drift.yml</code> at lines 39-42 is a distinct assertion and is not covered by this measurement.</strong> It is about a PR <em>authored</em> by <code>GITHUB_TOKEN</code> starting with no checks, which was not measured here; verify it separately before editing, rather than assuming it fails the same way.</p>
+<p><strong>Done when</strong> the tree states the measured mechanism, that runs are created and withheld, and names the release that has actually been used, with the loop-safety rationale preserved: the sync commit still must not re-fire the sync workflow on itself, and this row does not dispute that.
+Correcting the prose does not make a withheld PR detectable; that is Q1052.</p>
 
 
 
