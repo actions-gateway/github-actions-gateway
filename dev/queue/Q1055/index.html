@@ -2596,6 +2596,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#parked-the-roll-out-shipped-and-the-class-is-not-finished" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parked: the roll-out shipped, and the class is not finished
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2628,7 +2639,7 @@ So the query is a starting point with error in both directions, exactly as Q1023
 Re-run it, then read what it returns and what it cannot reach.</p>
 <p><strong>What is left needs judgement per site, which is why it is not more of Q1023.</strong> Of the 139, most sit where the guard cannot be inserted mechanically:
 - a comparison compounded with a content assertion (<code>(( status == want )) &amp;&amp; [[ "$output" == *"$needle"* ]]</code>), 58 sites across 14 suites, <code>check-tools-test.sh</code> and <code>check-release-pins-test.sh</code> densest;
-- a site at top level with no enclosing helper, so there is no <code>name</code> in scope to report and one has to be named (<code>check-dep-advisory-test.sh:96</code>, <code>check-errexit-prologue-test.sh:196</code>);
+- a site at top level with no enclosing helper, so there is no <code>name</code> in scope to report and one has to be named (<code>scripts/ci/check-dep-advisory-test.sh:89</code>, <code>scripts/ci/check-errexit-prologue-test.sh:200</code>);
 - a suite whose assertion helper carries no <code>name</code> local at all (<code>queue-test.sh</code>, 13 sites; <code>validate-release-test.sh</code>, 10; <code>git-merge-plan-index-test.sh</code>, 14).</p>
 <p><strong>Two traps, both of which will make a careless pass wrong.</strong> <code>die_if_killed</code> takes an optional WANT precisely because <code>run-parallel-test.sh</code> asserts 137 and 143 against the runner's own KILLED path: a want-blind guard exits before those assertions run and breaks the one suite that proves the distinction works.
 And the split is <code>&gt; 128</code>, not <code>&gt;= 128</code>: git spends 128 on any fatal error, which is the line <code>run-parallel.sh</code> already drew in Q837 and the one Q1023's own prose got wrong.</p>
@@ -2649,29 +2660,29 @@ Measured 2026-09-04 with the same query over <code>.github/workflows/*.yml</code
 </thead>
 <tbody>
 <tr>
-<td><code>e2e-reusable.yml:562</code></td>
+<td><code>.github/workflows/e2e-reusable.yml:562</code></td>
 <td><code>[[ "$bake_rc" -ne 0 ]]</code></td>
 </tr>
 <tr>
-<td><code>e2e-reusable.yml:723</code></td>
+<td><code>.github/workflows/e2e-reusable.yml:723</code></td>
 <td><code>[[ $gh_rc -ne 0 ]]</code></td>
 </tr>
 <tr>
-<td><code>publish.yml:200</code></td>
+<td><code>.github/workflows/publish.yml:200</code></td>
 <td><code>[ "${rc}" -eq 0 ]</code></td>
 </tr>
 <tr>
-<td><code>publish.yml:207</code></td>
+<td><code>.github/workflows/publish.yml:207</code></td>
 <td><code>[ "${rc}" -ge 2 ]</code></td>
 </tr>
 <tr>
-<td><code>release-freeze-watch.yml:79</code></td>
+<td><code>.github/workflows/release-freeze-watch.yml:79</code></td>
 <td><code>[ "${rc}" -ge 2 ]</code></td>
 </tr>
 </tbody>
 </table>
 <p>Whether these are defects is a separate judgement per site, and one of the five is already settled the other way.</p>
-<p><strong><code>release-freeze-watch.yml:79</code> is correct as written; do not guard it.</strong> Its own comment at lines 74 to 78 says a signal death belongs inside that bucket: exit 2 is "could not measure", and "anything above it is the delegate crashing (126 not executable, 137 killed) rather than exiting", which fails the job loudly instead of reaching a report step that would read any non-zero as a spent candidate.
+<p><strong><code>.github/workflows/release-freeze-watch.yml:79</code> is correct as written; do not guard it.</strong> Its own comment at lines 74 to 78 says a signal death belongs inside that bucket: exit 2 is "could not measure", and "anything above it is the delegate crashing (126 not executable, 137 killed) rather than exiting", which fails the job loudly instead of reaching a report step that would read any non-zero as a spent candidate.
 A <code>die_if_killed</code>-shaped guard here would abort on precisely the case the classifier is written to catch, turning a working path into a broken one.
 Read 2026-09-04 from the workflow; Q1006's suite asserts both directions against real deaths, a 126 by removing the delegate's executable bit and a 137 by <code>kill -KILL $$</code>.</p>
 <p>That inversion is the argument for judging each site rather than sweeping them.
@@ -2679,6 +2690,44 @@ The boundary reasoning behind <code>die_if_killed</code> is right and its conclu
 Q1006's own history is the counter-example in the same venue: that classifier reached review as <code>-eq 2</code> and let 7, 126 and 137 through before becoming <code>-ge 2</code>.
 Deciding the remaining four is not this row, and a row that closed the 139 while leaving them unexamined should say so rather than read as having finished the class.</p>
 <p>Distinct from <a href="../Q822/">Q822</a>, which is the uncapped fan-out producing the contention; this is what the suites do with a kill once it lands, and is worth having whether or not the fan-out is ever capped.</p>
+<h2 id="parked-the-roll-out-shipped-and-the-class-is-not-finished">Parked: the roll-out shipped, and the class is not finished<a class="headerlink" href="#parked-the-roll-out-shipped-and-the-class-is-not-finished" title="Permanent link">&para;</a></h2>
+<p>180 of the 186 sites the query returns now carry the guard, across 67 suites; before this it was 44 across 34.
+Re-measured 2026-09-04 over <code>scripts/**/*-test.sh</code> with the row's own query (53 capture names in the tree, <code>(( ))</code> and <code>[[ ]]</code>/<code>[ ]</code> forms both), which returned 186 sites across 70 suites rather than the 181/68 above.
+Four laundered sites the query cannot reach were guarded too, in <code>scripts/ci/workflow-acting-steps-test.sh</code>: <code>expect_rc</code> takes the status as an argument off <code>drive()</code>'s stdout, so one guard there covers every caller, and three more sit at the <code>[[ "$got" == 0 ]]</code> sites the row named.</p>
+<p>The six that remain are each a decision rather than a gap:</p>
+<table>
+<thead>
+<tr>
+<th>Site</th>
+<th>Why unguarded</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/ci/workflow-acting-steps-test.sh:154</code></td>
+<td>the row's own false positive: <code>rc</code> is a <code>write_delegate</code> mode parameter, not a status</td>
+</tr>
+<tr>
+<td><code>scripts/lib/common-test.sh:135</code></td>
+<td>the guard's own suite, asserting 143 reaches its verdict</td>
+</tr>
+<tr>
+<td><code>release-sentinel-test.sh</code> (3)</td>
+<td>its stub <code>sleep</code> caps the loop with <code>kill -KILL "$PPID"</code>, so 137 is how a regression fails</td>
+</tr>
+<tr>
+<td><code>scripts/e2e/progress-watch-test.sh:176</code></td>
+<td>same shape: the stub kills the watcher on the tick a regression would take</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The last two are a trap the row did not name, and they are the inverse of the <code>run-parallel-test.sh</code> one.</strong> There, WANT rescues a suite that deliberately asserts a kill; here the wanted status is 0 and the kill is the <em>failure</em> signal, so no argument helps and the guard has to be withheld outright.
+A pass that guarded them would file a real regression as KILLED, which is the failure direction with no report.
+Both now say so at the capture, since an unguarded site is otherwise indistinguishable from one the roll-out missed; <a href="../../development/bash-style/#shared-helpers-and-makefile-wiring">bash-style.md</a> carries the rule.</p>
+<p><strong>Event:</strong> delegated to <a href="../Q1023/">Q1023</a>, whose trigger covers the class: any <code>scripts/</code> suite reporting a <code>128+n</code> status as a wrong verdict again, in the <code>expected rc=N, got rc=143</code> shape.
+This row holds the roll-out and Q1023 holds the signal.</p>
+<p><strong>The workflow <code>run:</code> sites are still unswept</strong>, so the class this row opened is not closed.
+Four of the five in the table above remain a judgement each, and <code>.github/workflows/release-freeze-watch.yml:79</code> is settled the other way: <code>die_if_killed</code> cannot be reached from a <code>run:</code> block without sourcing <code>scripts/lib/common.sh</code> there, so closing them needs a decision about that first.</p>
 
 
 
