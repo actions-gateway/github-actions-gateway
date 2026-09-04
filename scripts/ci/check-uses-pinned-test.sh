@@ -79,6 +79,7 @@ expect_status() {
 	local name="$1" want="$2"
 	shift 2
 	run_gate "$@"
+	die_if_killed "$name" "$GATE_STATUS" "$want"
 	if ((GATE_STATUS == want)); then
 		ok "$name" "exit $GATE_STATUS"
 	else

@@ -26,6 +26,35 @@ require_cmd() {
 step() { echo; echo "==> $*"; }
 die() { echo; echo "ERROR: $*" >&2; exit 1; }
 
+# die_if_killed NAME RC [WANT] — hand a signal death back instead of comparing
+# it against a wanted status.
+#
+# A test suite that captures a command's status and compares it numerically
+# reads 128+n — a signal, not an answer — as the subject having answered wrongly:
+# `expected rc=1, got rc=143` names the assertion as the defect when the truth is
+# that SIGTERM ended the command before it reached a verdict (Q1023). Exiting
+# with that same status instead lets run-parallel.sh classify the suite as
+# KILLED rather than FAILED, which is where the distinction is already drawn and
+# explained.
+#
+# The split is > 128, not >= 128, matching run-parallel.sh: 128 itself is not a
+# signal death — git spends it on any fatal error (Q837).
+#
+# WANT, when given, is the status the caller wanted. A suite that deliberately
+# asserts a kill reached its verdict and must be left alone: run-parallel-test.sh
+# expects 137 and 143 from the runner's own KILLED path, so a want-blind guard
+# would break the one suite that proves this distinction works.
+die_if_killed() {
+	local name="$1" rc="$2" want="${3:-}"
+	(( rc > 128 )) || return 0
+	if [[ -n "$want" ]] && (( rc == want )); then
+		return 0
+	fi
+	printf 'KILLED %s: signal %d (exit %d) ended the command before it reached a verdict\n' \
+		"$name" "$(( rc - 128 ))" "$rc" >&2
+	exit "$rc"
+}
+
 # git_candidates PATHSPEC... — emit the git-known paths matching PATHSPEC, one
 # per line: tracked (--cached) PLUS untracked-and-not-gitignored (--others
 # --exclude-standard). With no PATHSPEC, the whole worktree.

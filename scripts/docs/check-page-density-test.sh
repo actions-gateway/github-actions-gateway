@@ -11,6 +11,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 GATE="$SCRIPT_DIR/check-page-density.sh"
 WORK="$(cd "$SCRIPT_DIR/../.." && pwd)/tmp/page-density-test"
 
@@ -26,6 +29,7 @@ check() {
     shift 2
     local got=0
     "$GATE" "$@" >"$WORK/out.log" 2>&1 || got=$?
+    die_if_killed "$name" "$got" "$want"
     if [[ "$got" == "$want" ]]; then
         pass=$((pass + 1))
         printf 'ok   %s\n' "$name"

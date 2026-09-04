@@ -23,6 +23,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 GATE="$REPO_ROOT/scripts/docs/check-upgrade-toc.sh"
 
 fails=0
@@ -58,6 +60,7 @@ run_gate() {
     else
         env -u GITHUB_ACTIONS "$GATE" "$WORK/upgrade.md" >"$WORK/gate.out" 2>&1 || got=$?
     fi
+    die_if_killed "$name" "$got" "$want"
     if [[ "$got" == "$want" ]]; then
         printf 'ok   %s\n' "$name"
         return

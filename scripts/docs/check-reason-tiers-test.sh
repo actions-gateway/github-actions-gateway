@@ -19,6 +19,8 @@ shopt -s inherit_errexit
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATE="$SCRIPT_DIR/check-reason-tiers.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 
 AGC_SRC="$REPO_ROOT/cmd/agc"
 API_SRC="$REPO_ROOT/api"
@@ -38,6 +40,7 @@ expect_rc() {
     local name="$1" want="$2" rc=0
     shift 3
     "$@" >/dev/null 2>&1 || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if ((rc == want)); then
         ok "$name (rc=$rc)"
     else

@@ -27,6 +27,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 RP="$REPO_ROOT/scripts/ci/run-parallel.sh"
 
@@ -65,6 +67,7 @@ want_no() {
 # want_rc NAME WANT — assert the fan-out's own exit code.
 want_rc() {
 	local name="$1" want="$2"
+	die_if_killed "$name" "$rc" "$want"
 	if [[ "$rc" == "$want" ]]; then
 		printf 'ok   %-42s rc=%s\n' "$name" "$rc"
 	else

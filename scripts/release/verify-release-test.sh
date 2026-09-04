@@ -96,6 +96,7 @@ run_verify() {
 
 expect_rc() {
 	local name="$1" want="$2"
+	die_if_killed "$name" "$out_rc" "$want"
 	if [[ "$out_rc" == "$want" ]]; then
 		pass "$name (rc=$out_rc)"
 	else

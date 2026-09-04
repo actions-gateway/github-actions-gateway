@@ -23,6 +23,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 SCRIPT="$REPO_ROOT/scripts/updatecli/latest-cluster-autoscaler-patch.sh"
 
@@ -101,6 +103,7 @@ JSON
 expect_resolves() {
 	local name="$1" pin="$2" want="$3" got status=0
 	got="$("$SCRIPT" "$pin")" || status=$?
+	die_if_killed "$name" "$status"
 	if ((status != 0)); then
 		fail "$name" "exited $status, wanted $want"
 	elif [[ "$got" == "$want" ]]; then
@@ -118,6 +121,7 @@ expect_fails() {
 	else
 		"$SCRIPT" > /dev/null 2>&1 || status=$?
 	fi
+	die_if_killed "$name" "$status"
 	if ((status != 0)); then
 		pass "$name"
 	else

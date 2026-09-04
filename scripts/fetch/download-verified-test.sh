@@ -21,6 +21,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 SCRIPT="$REPO_ROOT/scripts/fetch/download-verified.sh"
 
@@ -46,6 +48,7 @@ assert_rc() {
 	local name="$1" want_rc="$2" got_rc=0
 	shift 2
 	"$SCRIPT" "$@" > /dev/null 2>&1 || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		pass "$name (rc=$got_rc)"
 	else
@@ -60,6 +63,7 @@ assert_fails() {
 	local name="$1" got_rc=0
 	shift
 	"$SCRIPT" "$@" > /dev/null 2>&1 || got_rc=$?
+	die_if_killed "$name" "$got_rc"
 	if ((got_rc != 0)); then
 		pass "$name (rc=$got_rc)"
 	else

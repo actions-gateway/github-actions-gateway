@@ -23,6 +23,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 CHECKER="$REPO_ROOT/scripts/ci/gate-list.sh"
 
@@ -119,6 +121,7 @@ expect() {
 	local name="$1" want_rc="$2" got_rc=0
 	shift 2
 	LAST_OUT="$("$CHECKER" "$@" 2>&1)" || got_rc=$?
+	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" == "$want_rc" ]]; then
 		printf 'ok   %-28s rc=%s\n' "$name" "$got_rc"
 	else

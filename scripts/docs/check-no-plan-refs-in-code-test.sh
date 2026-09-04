@@ -23,6 +23,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 GATE="$REPO_ROOT/scripts/docs/check-no-plan-refs-in-code.sh"
 
 plan_ref='docs/plan/some-plan.md'
@@ -57,6 +59,7 @@ new_repo() {
 run_gate() {
     local name="$1" want="$2" got=0
     ( cd "$WORK" && "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
+    die_if_killed "$name" "$got" "$want"
     if [[ "$got" == "$want" ]]; then
         printf 'ok   %s\n' "$name"
         return

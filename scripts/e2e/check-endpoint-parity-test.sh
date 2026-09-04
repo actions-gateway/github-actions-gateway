@@ -21,6 +21,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 GATE="$SCRIPT_DIR/check-endpoint-parity.sh"
 
 failures=0
@@ -42,6 +45,7 @@ expect_rc() {
     local name="$1" want="$2" rc=0 out
     shift 3
     out="$("$@" 2>&1)" || rc=$?
+    die_if_killed "$name" "$rc" "$want"
     if ((rc == want)); then
         ok "$name (rc=$rc)"
     else
@@ -51,10 +55,16 @@ expect_rc() {
 }
 
 # expect_output NAME NEEDLE -- command...
+#
+# `|| true` used to discard the status outright, which makes a kill land as a
+# content failure instead: the command is dead before it prints, so the needle is
+# missing and the report blames the gate's wording. Capturing the status costs
+# nothing and lets die_if_killed draw the same line it draws in expect_rc.
 expect_output() {
-    local name="$1" needle="$2" out
+    local name="$1" needle="$2" out rc=0
     shift 3
-    out="$("$@" 2>&1 || true)"
+    out="$("$@" 2>&1)" || rc=$?
+    die_if_killed "$name" "$rc"
     if [[ "$out" == *"$needle"* ]]; then
         ok "$name"
     else

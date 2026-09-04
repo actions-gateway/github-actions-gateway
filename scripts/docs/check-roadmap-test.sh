@@ -11,6 +11,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 CHECK="$REPO_ROOT/scripts/docs/check-roadmap.sh"
 
 WORKDIR="$(mktemp -d)"
@@ -109,6 +111,7 @@ expect() {
     local name="$1" want_rc="$2" rm_file="$3" st_file="$4" needle="${5:-}"
     local out rc=0
     out="$("$CHECK" "$rm_file" "$st_file" "$FEATURES_FILE" 2>&1)" || rc=$?
+    die_if_killed "$name" "$rc" "$want_rc"
     if (( rc != want_rc )); then
         printf 'FAIL %-34s rc=%d, want %d\n' "$name" "$rc" "$want_rc"
         printf '%s\n' "$out" | awk '{ print "       " $0 }'
@@ -482,6 +485,7 @@ badge_expect() {
     local name="$1" want_rc="$2" ft="$3" tag="$4" needle="${5:-}"
     local out rc=0
     out="$(GAG_RELEASE_TAG="$tag" "$CHECK" "$RM_CLEAN" "$ST_CLEAN" "$ft" 2>&1)" || rc=$?
+    die_if_killed "$name" "$rc" "$want_rc"
     if (( rc != want_rc )); then
         printf 'FAIL %-34s rc=%d, want %d\n' "$name" "$rc" "$want_rc"
         printf '%s\n' "$out" | awk '{ print "       " $0 }'

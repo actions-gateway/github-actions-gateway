@@ -17,6 +17,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 CHECK="$REPO_ROOT/scripts/ci/check-script-modes.sh"
 
 # A fixed path under the repo's gitignored tmp/, per the repo temp-file
@@ -56,6 +58,7 @@ expect() {
 	local name="$1" want_rc="$2" cwd="$3" needle="$4"
 	local out rc=0
 	out="$(cd "$cwd" && "$CHECK" 2>&1)" || rc=$?
+	die_if_killed "$name" "$rc" "$want_rc"
 	if ((rc != want_rc)); then
 		printf 'FAIL %-52s rc=%d, want %d\n' "$name" "$rc" "$want_rc"
 		printf '%s\n' "$out" | awk '{ print "       " $0 }'

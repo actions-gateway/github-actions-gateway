@@ -21,6 +21,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 CHECKER="${REPO_ROOT}/scripts/manifest/check-registry-mirror-catalog-deny.py"
 
 BASE=deploy/registry-mirror/base
@@ -69,6 +71,7 @@ PY
 # fail on and the case beside it passes on the unfixed script too.
 expect_absent() {
 	local name="$1" want_rc="$2" needle="$3"
+	die_if_killed "$name" "$rc" "$want_rc"
 	if [[ "${rc}" != "${want_rc}" ]]; then
 		echo "FAIL ${name}: want rc ${want_rc}, got ${rc}" >&2
 		echo "     output: ${out}" >&2
@@ -86,6 +89,7 @@ expect_absent() {
 
 expect() {
 	local name="$1" want_rc="$2" needle="$3"
+	die_if_killed "$name" "$rc" "$want_rc"
 	if [[ "${rc}" != "${want_rc}" ]]; then
 		echo "FAIL ${name}: want rc ${want_rc}, got ${rc}" >&2
 		echo "     output: ${out}" >&2

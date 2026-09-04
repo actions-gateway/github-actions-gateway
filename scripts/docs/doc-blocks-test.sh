@@ -16,6 +16,8 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 cd "$REPO_ROOT"
 
 GATE="scripts/docs/doc-blocks.sh"
@@ -34,6 +36,7 @@ expect_red() {
 	out="$("$GATE" --check "$WORK/case.md" 2>&1)"
 	rc=$?
 	set -e
+	die_if_killed "$name" "$rc"
 	if ((rc == 0)); then
 		printf 'FAIL: %s — the gate accepted a document it must reject\n' "$name" >&2
 		printf '%s\n' "$out" >&2
@@ -51,6 +54,7 @@ expect_green() {
 	out="$("$GATE" --check "$WORK/case.md" 2>&1)"
 	rc=$?
 	set -e
+	die_if_killed "$name" "$rc"
 	if ((rc != 0)); then
 		printf 'FAIL: %s — the gate rejected a document it must accept\n' "$name" >&2
 		printf '%s\n' "$out" >&2
@@ -70,6 +74,7 @@ expect_red_output() {
 	out="$("$GATE" --check "$WORK/case.md" 2>&1)"
 	rc=$?
 	set -e
+	die_if_killed "$name" "$rc"
 	if ((rc == 0)); then
 		printf 'FAIL: %s — the gate accepted a document it must reject\n' "$name" >&2
 		fail=$((fail + 1))
@@ -274,6 +279,7 @@ floor_case() {
 	out="$("$GATE" --check --floor 2 "$doc" 2>&1)"
 	rc=$?
 	set -e
+	die_if_killed "$name" "$rc" "$want_rc"
 	if ((rc != want_rc)); then
 		printf 'FAIL: %s — wanted rc=%d, got rc=%d:\n%s\n' "$name" "$want_rc" "$rc" "$out" >&2
 		fail=$((fail + 1))
