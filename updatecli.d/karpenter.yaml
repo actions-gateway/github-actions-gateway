@@ -23,9 +23,9 @@
 # provider image), so the repo's releases are the only source that answers which
 # tag the harness can build today.
 #
-# Re-trigger the PR's checks (close + reopen) per
-# docs/development/dependency-updates.md — a GITHUB_TOKEN-authored PR starts with
-# none, and here the check IS the point of the PR.
+# Release the PR's checks with "Approve and run" per
+# docs/development/dependency-updates.md: a GITHUB_TOKEN-authored PR has its runs
+# created and then withheld, and here the check IS the point of the PR.
 name: 'Bump Karpenter (drift gate) to the latest release'
 
 scms:
