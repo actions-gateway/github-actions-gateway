@@ -232,6 +232,26 @@ A branch with no merge base exits non-zero and reads as a false hit, which is wh
 An unmerged branch carrying commits but no open PR is normally abandoned residue rather than contention, and this repo keeps those deliberately.
 Measured 2026-08-18 on this page: the sweep returned eight branches where `gh pr list` returned none, and all eight were stale.
 
+**Both instruments are blind from a worker's first commit to its first push**, which for a wave dispatched together is most of the run.
+The remote refs the sweep reads do not exist yet and the PR does not either, so a brief built at dispatch time clears a path a sibling is already editing and nothing reports it until the push.
+Sessions on this machine share one clone, and `refs/heads/` is shared across every worktree of it, so the local branch list sees a sibling from its first commit with no push and no network:
+
+```bash
+git for-each-ref --sort=-committerdate \
+    --format='%(committerdate:relative)%09%(refname:short)' 'refs/heads/claude/*' |
+  head -20
+```
+
+Then drop the ones already merged (`git merge-base --is-ancestor <branch> origin/main`) and read each survivor's files with `git diff --name-only origin/main...<branch>`.
+
+**Filter by recency or the instrument is unusable here.** Worktrees are kept deliberately, so the raw list is mostly residue: measured 2026-09-04, 1,148 local `claude/*` branches, of which 985 are not ancestors of `origin/main` and 938 have no remote ref at all.
+Windowed to the last six hours the same query returns **8** unmerged branches, **2** of them with no remote ref, and those two are what no remote sweep and no PR list could have seen.
+The recency filter is what separates a live sibling from a year of kept residue; without it the signal is 1 % of the output.
+
+**A `gh pr list --limit N` join reports the window, not the repository, and fails toward manufacturing work.** Joining a branch list against one bulk PR query flags every branch whose PR fell outside the window as having no PR at all, which reads as live unattached work and sends a run investigating merged branches.
+Measured 2026-09-04: `--state all --limit 500` returns exactly 500 rows reaching back to #1348 against a repository at #1848, so any branch whose PR is numbered below that reads as PR-less.
+The discriminator is per-branch, `gh pr list --head <branch> --state all`, which is bounded by the branch rather than by the window.
+
 
 **Take the concurrency cap from the machine**, not from a constant:
 
