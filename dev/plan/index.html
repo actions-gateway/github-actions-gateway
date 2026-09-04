@@ -3074,7 +3074,7 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="merge-drivers-go/">merge-drivers-go.md</a></td>
 <td>Move the four git merge drivers off shell and <code>awk</code> onto Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point, so the three-way set merge and its order reconstruction can be unit-tested. markdown-gates-parser.md excluded them, but for an argument against goldmark rather than against Go</td>
-<td>🚧 In progress. Phase 1 (the shared runtime, the keyed-record set merge, and the two table drivers) lands the core with an awk-versus-Go differential over 400 generated three-way cases, agreeing on stdout and exit status in all 400 across seven refusal classes. Phases 2 and 3 carry the roadmap driver and the gate-lists driver's second set merge</td>
+<td>🚧 In progress. Phase 1 (the shared runtime, the keyed-record set merge, and the two table drivers) shipped 2026-08-31, with an awk-versus-Go differential over 400 generated three-way cases agreeing on stdout and exit status in all 400 across seven refusal classes. Phases 2 (<a href="../queue/Q1046/">Q1046</a>) and 3 (<a href="../queue/Q1047/">Q1047</a>) carry the roadmap driver and the gate-lists driver's second set merge</td>
 </tr>
 <tr>
 <td><a href="q889-backlog-item-store/">q889-backlog-item-store.md</a></td>

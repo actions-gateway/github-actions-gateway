@@ -2651,7 +2651,8 @@
 
 <h1 id="the-merge-drivers-on-go">The merge drivers on Go<a class="headerlink" href="#the-merge-drivers-on-go" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> filed 2026-08-30.
-Phase 1 in progress.</p>
+Phase 1 shipped 2026-08-31 in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1819">#1819</a>: the shared runtime, the keyed-record set merge and the two table drivers are in <code>devtools/git/</code>.
+Phase 2 (<a href="../../queue/Q1046/">Q1046</a>) and Phase 3 (<a href="../../queue/Q1047/">Q1047</a>) are open.</p>
 <p>Four git merge drivers resolve this repo's contended registry files, and all four are shell over <code>awk</code>: 1,603 lines across six files, of which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> is the 320-line three-way set merge that three of them share.
 This plan moves the stack to Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point.</p>
 <h2 id="why-and-why-the-existing-answer-does-not-cover-it">Why, and why the existing answer does not cover it<a class="headerlink" href="#why-and-why-the-existing-answer-does-not-cover-it" title="Permanent link">&para;</a></h2>

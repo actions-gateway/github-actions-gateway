@@ -2752,7 +2752,7 @@
 <h1 id="q224--agc-side-lever-spike-can-we-beat-githubs-fan-out-distinct-delivery-starvation-without-option-e">Q224 — AGC-side lever spike: can we beat GitHub's fan-out distinct-delivery starvation without Option E?<a class="headerlink" href="#q224--agc-side-lever-spike-can-we-beat-githubs-fan-out-distinct-delivery-starvation-without-option-e" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> spike <strong>complete</strong>, no code changed.
 This is the escape-hatch check the <a href="../archive/gke-dogfood-turnup-findings/">re-route #8 conclusion</a> invited: #8 isolated the last Q224 blocker to <strong>GitHub's server-side fan-out distinct-delivery starvation</strong> on GAG's many-acquirers topology and called <a href="../q264-scale-set-protocol/">Option E / Q264</a> the structural fix.
-Before the user commits to (or declines) the Q264 scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.</p>
+Before the user commits to (or declines) the <a href="../../queue/Q264/">Q264</a> scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.</p>
 <p><strong>Verdict up front: no AGC-side lever provides a <em>reliable</em> fix; #530/§5 stands — <a href="../q264-scale-set-protocol/">Option E (Q264)</a> is the only structural fix.</strong></p>
 <ul>
 <li><strong>H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).</strong> Renaming the same reactively-grown slots adds <strong>zero</strong> distinct idle runners — the actual binding constraint — while defeating the <a href="../../queue/">Q114</a> recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.

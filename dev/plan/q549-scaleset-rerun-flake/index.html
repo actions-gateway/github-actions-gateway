@@ -2742,7 +2742,7 @@
 <p><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>) deletes a running scale-set worker and waits 90 s for the AGC to re-run its disrupted run under the chart role.
 Four distinct failure modes now sit behind that one timeout, and only one of them is the defect the spec exists to catch.
 This file exists so the next occurrence is classified before anything is changed.</p>
-<p><strong>Status:</strong> the 2026-08-26 and 2026-08-28 sightings are attributed, as <strong>two</strong> further shapes rather than one, and both are mitigated.
+<p><strong>Status:</strong> <a href="../../queue/Q549/">Q549</a> is parked in flake watch; the 2026-08-26 and 2026-08-28 sightings are attributed, as <strong>two</strong> further shapes rather than one, and both are mitigated.
 Mode A is diagnosed and mitigated (PR #1120).
 <strong>Mode B is diagnosed as of 2026-08-12 and fixed under Q809</strong>; see <a href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed</a> below.
 Mode C (the recovery scan never observed the disruption) and mode D (the spec failing on its own sampler) are attributed below: see <a href="#what-the-2026-08-26-and-2026-08-28-sightings-show">What the 2026-08-26 and 2026-08-28 sightings show</a>.

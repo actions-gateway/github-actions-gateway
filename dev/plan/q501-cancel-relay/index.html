@@ -2663,7 +2663,7 @@
 <h1 id="q501--relaying-a-run-cancellation-to-the-worker-pod">Q501 — relaying a run cancellation to the worker pod<a class="headerlink" href="#q501--relaying-a-run-cancellation-to-the-worker-pod" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⚠️ Partial.
 The <em>actuator</em> shipped (Phase 1).
-<strong>Phase 0 is answered:</strong> the ScaleSet tier is not exposed to the unbounded form of this defect, from a live measurement already committed to the repo — so Q501 is a <strong>classic-tier</strong> item and candidate B's cost is not worth paying.
+<strong>Phase 0 is answered:</strong> the ScaleSet tier is not exposed to the unbounded form of this defect, from a live measurement already committed to the repo — so <a href="../../queue/Q501/">Q501</a> is a <strong>classic-tier</strong> item and candidate B's cost is not worth paying.
 The remaining question is Phase 2, one live-GitHub reading that the cancel spec is now instrumented to take.</p>
 <p>Q501 was found by <a href="../archive/q459-drained-worker-recovery/#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501">Q459's cancellation measurement</a>: a <code>sleep 600</code> job ran its full 600s after its run was cancelled from GitHub, which concluded the job at its own ~5-minute grace.
 Cancelling a runaway job does not reclaim its capacity.</p>

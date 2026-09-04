@@ -2781,14 +2781,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A withheld <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</td>
 </tr>
 <tr>
-<td><a href="Q1053/">Q1053</a></td>
-<td><a href="../development/go-workspaces/">Docs say a GITHUB_TOKEN push creates no runs; it creates withheld ones</a></td>
-<td><code>ci</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Eight places in the tree assert that GitHub never re-triggers workflows from a <code>GITHUB_TOKEN</code> push, and prescribe close + reopen.</td>
-</tr>
-<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2987,14 +2979,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>One 2026-08-18 batch produced five: a non-fence-aware heading regex; <code>gh run list --commit</code> empty on queue-merged commits (runs attach to …</td>
-</tr>
-<tr>
-<td><a href="Q893/">Q893</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">Nothing gates a plan doc's Status header against the repo</a></td>
-<td><code>docs</code> <code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Twice in one session a plan's Status line claimed a shipped phase: <code>Phase 1 in progress</code> after two merged, <code>4 to 6 not started</code> with 4 in …</td>
 </tr>
 <tr>
 <td><a href="Q846/">Q846</a></td>

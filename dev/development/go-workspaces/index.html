@@ -2720,10 +2720,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#both-bot-pushes-leave-the-checks-needing-a-re-trigger" class="md-nav__link">
+  <a href="#both-bot-pushes-leave-the-checks-withheld-pending-approval" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Both bot pushes leave the checks needing a re-trigger
+        Both bot pushes leave the checks withheld pending approval
       
     </span>
   </a>
@@ -2997,13 +2997,21 @@ A comment posted by <code>github-actions[bot]</code> with the workflow's <code>G
 This repo deliberately stores no Personal Access Token, so the automation has to do the rebase itself.
 A maintainer typing <code>@dependabot recreate</code> by hand still works, and remains the equivalent manual remedy.</p>
 <p>Run it locally against the live repo with <code>scripts/ci/dependabot-rebase-stale.sh --list</code> (print what it would act on), <code>--dry-run</code> (rebase locally, push nothing), or <code>--bumps A/go.mod B/go.mod</code> (print the bumps it would extract from a pair of files).</p>
-<h3 id="both-bot-pushes-leave-the-checks-needing-a-re-trigger">Both bot pushes leave the checks needing a re-trigger<a class="headerlink" href="#both-bot-pushes-leave-the-checks-needing-a-re-trigger" title="Permanent link">&para;</a></h3>
+<h3 id="both-bot-pushes-leave-the-checks-withheld-pending-approval">Both bot pushes leave the checks withheld pending approval<a class="headerlink" href="#both-bot-pushes-leave-the-checks-withheld-pending-approval" title="Permanent link">&para;</a></h3>
 <p>The sync commit and the rebase force-push are both pushed with the workflow's default <code>GITHUB_TOKEN</code>.
-GitHub deliberately does <strong>not</strong> re-run workflows from a <code>GITHUB_TOKEN</code> push, which is what stops the bot commit from looping the sync workflow back on itself.
-The same rule means the required PR checks do <strong>not</strong> automatically re-evaluate on the new commit: they stay reported against the pre-sync or pre-rebase one.
-A maintainer clears it with one click either way.
-<strong>Close and reopen the PR</strong>, which re-fires the <code>pull_request</code> checks against the new head, and they pass.
-Using a stored Personal Access Token (PAT) instead of <code>GITHUB_TOKEN</code> would re-trigger the checks automatically, but the repo deliberately keeps no such credential, so the one-click re-trigger is the accepted trade-off.
+GitHub <strong>does</strong> create the workflow runs for that push, and then holds them: every run on the new head is created with conclusion <code>action_required</code> and does not start until someone approves it.
+So an empty check list on a synced PR is a hold rather than a workflow that never fired, and it never clears on its own (Q1052, which owns the measurement and the detection gap).</p>
+<p><strong>Release them with "Approve and run"</strong> on the PR's checks tab.
+That starts the runs already sitting on the current head, in place, as attempt 2.
+It is also the path every released case in this repo has actually taken: of the ten historical cases Q1052 measured, nine have zero <code>reopened</code> timeline events and <code>run_attempt: 2</code> on the same run id.
+Closing and reopening the PR fires a fresh <code>pull_request</code> event, which queues a second full set of runs at attempt 1 rather than starting the ones already on the head.
+On <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1695">#1695</a>, the only pull request here carrying both sets on one head, that second set was not withheld: all 13 of its runs have <code>created_at</code> equal to <code>run_started_at</code>.
+So prefer "Approve and run" because it releases what is already queued instead of re-running the whole matrix, not because reopening fails.</p>
+<p><strong>The loop safety does not come from the trigger being suppressed, because it is not suppressed.</strong> Approving the withheld runs re-runs <code>dependabot-go-sync</code> against its own sync commit: its <code>if:</code> gates on the pull request's author, which is still <code>dependabot[bot]</code> after a <code>github-actions[bot]</code> force-push, so that guard does not stop the re-fire either.
+What bounds the chain is the approval gate itself, one per generation, so it cannot run away unattended.
+<code>make vendor-sync</code> is idempotent, so a pass over an already-synced tree commits nothing and the chain stops there; a pass that finds fresh drift, because <code>main</code> moved under the branch, commits again and the next generation is withheld in its turn.
+Measured 2026-09-04 on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1821">#1821</a>: the approved sync run <code>33508119165</code> ran from 21:15:28Z to 21:16:23Z and pushed a second <code>chore(deps): sync workspace vendor + THIRD-PARTY-NOTICES</code> commit, <code>df7e39c</code>, authored 21:16:17Z, whose own 16 runs all read <code>action_required</code> at attempt 1.</p>
+<p>Using a stored Personal Access Token (PAT) instead of <code>GITHUB_TOKEN</code> would let the checks run without the hold, but the repo deliberately keeps no such credential, so the approval click is the accepted trade-off.
 (Fork-authored Dependabot PRs are out of scope: <code>GITHUB_TOKEN</code> can't push to a fork, and this repo's Dependabot pushes branches to the repo itself, not a fork.)</p>
 <h2 id="worktrees">Worktrees<a class="headerlink" href="#worktrees" title="Permanent link">&para;</a></h2>
 <p>Worktrees (<code>.claude/worktrees/&lt;name&gt;/</code>) each have their own <code>go.work</code> that may differ from the root one.</p>
