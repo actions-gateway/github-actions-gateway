@@ -76,7 +76,8 @@ linters:
       # silenced a gate that was never enabled — and Q367 removed it by hand;
       # this gate makes the next such directive fail the build instead of
       # hiding in the tree. The repo's suppressions are already disciplined
-      # (71 of 79 are justified gosec accepts), so this is cheap to adopt.
+      # (106 of 119 sites are justified gosec accepts, measured 2026-09-04),
+      # so this is cheap to adopt.
       #
       # allow-unused:false  — a directive that suppresses nothing is an error.
       # require-specific:true — a bare //nolint disables every linter on the
@@ -188,10 +189,11 @@ linters:
           - staticcheck
         text: "SA1019.*scheme\\.Builder"
       # System cert pool test deliberately uses x509.CertPool.Subjects to
-      # assert superset behavior; rewrite is tracked separately. The path is the
-      # gate's own blind spot: #1137 renamed the file and this rule kept matching
-      # nothing, so a `//nolint` here is unused wherever staticcheck stays quiet
-      # (Q923).
+      # assert superset behavior; rewrite is tracked separately. Deprecated
+      # since Go 1.18, measured on go1.26.6: dropping this rule reports SA1019
+      # at trustpool_test.go:171 and :182. An exclusion suppresses the
+      # diagnostic directly, so it needs no `//nolint` beside it — and adding
+      # one would fail nolintlint as unused (Q923).
       - path: cmd/agc/internal/transport/trustpool_test\.go
         linters:
           - staticcheck
