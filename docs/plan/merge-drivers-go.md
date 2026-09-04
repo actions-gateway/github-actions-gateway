@@ -1,7 +1,8 @@
 # The merge drivers on Go
 
 **Status:** filed 2026-08-30.
-Phase 1 in progress.
+Phase 1 shipped 2026-08-31 in [#1819](https://github.com/actions-gateway/github-actions-gateway/pull/1819): the shared runtime, the keyed-record set merge and the two table drivers are in `devtools/git/`.
+Phase 2 ([Q1046](../queue/Q1046.md)) and Phase 3 ([Q1047](../queue/Q1047.md)) are open.
 
 Four git merge drivers resolve this repo's contended registry files, and all four are shell over `awk`: 1,603 lines across six files, of which [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) is the 320-line three-way set merge that three of them share.
 This plan moves the stack to Go in `devtools/`, keeping every `scripts/` entry point.

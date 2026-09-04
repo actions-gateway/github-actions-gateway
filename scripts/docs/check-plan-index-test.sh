@@ -16,9 +16,15 @@
 # Archive-row cases pin what must stay green, which is where a rule this shape
 # gets noisy first.
 #
-# The last block covers invariant 4, the shipped-release rule (Q812). Its red
+# The next block covers invariant 4, the shipped-release rule (Q812). Its red
 # cases replay the cell invariant 3 was green on for nine days, so they are also
 # the assertion that the two rules do not overlap.
+#
+# The last block covers invariant 5, the plan doc's own Status paragraph (Q893).
+# Its green cases carry the weight: the rule reads free prose rather than a table
+# cell, so what must *not* trip it — a status paragraph below a heading, an ID
+# under the blank line, an ID inside a link to somewhere else — is where a rule
+# this shape goes noisy first, and every one of them is a real shape on `main`.
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -96,6 +102,17 @@ index() {
         printf '\n## Archive\n\n| Plan | Scope | Closed |\n|---|---|---|\n'
         printf '%s\n' "$archive"
     } >"$WORK/docs/plan/README.md"
+}
+
+# plan_body LINES... — overwrite the active plan file with an H1 and the given
+# lines, so a case can vary the Status paragraph invariant 5 reads. new_repo
+# writes a bare H1, which is what keeps every case above this block out of the
+# rule: no `**Status` line, no preamble, nothing charged.
+plan_body() {
+    {
+        printf '# Alpha\n\n'
+        printf '%s\n' "$@"
+    } >"$WORK/docs/plan/alpha.md"
 }
 
 # expect NAME WANT [SUBSTRING] — run the gate inside WORK, compare its exit
@@ -262,6 +279,87 @@ TAG=
 new_repo 'Q10' '' 'release-1.3.md'
 index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | ❌ Open |'
 expect 'a tagless tree skips the release-row check' 0 'release-row check SKIPPED'
+
+
+# --- invariant 5: the plan doc's own Status paragraph (Q893) ----------------
+#
+# 5a is invariant 3's rule one file lower, so its cases mirror that block. 5b
+# has no counterpart there: it charges a paragraph that pins its claim to no
+# live row at all, which is the only half that could have caught Q893's own
+# instance — merge-drivers-go.md read "Phase 1 in progress" for four days after
+# Phase 1 merged, under an index cell invariant 1 was correctly green on.
+
+# Each 5a case links a live row as well, so 5b is satisfied and the only thing
+# that can turn the case red is the rule it names. Without that the fixture goes
+# red either way and the substring is the whole assertion.
+new_repo 'Q10 Q20' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** phase 1 is [Q20](../queue/Q20.md); phase 2 tracked by Q10.'
+expect 'a live Queue row named bare in a Status paragraph is rejected' 1 'names Q10'
+
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** phase 1 is [Q10](../queue/Q10.md); phase 2 was [Q99](../queue/Q99.md).'
+expect 'a Status paragraph linking a row that no longer exists is rejected' 1 'links Q99'
+
+new_repo 'Q10 Q20' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** phase 1 is [Q20](../queue/Q20.md); phase 2 is [Q10](../queue/Q20.md).'
+expect 'a Status paragraph link labelling one row and targeting another is rejected' 1 'links Q10 -> Q20'
+
+# Q893's own shape: the claim names no row, so nothing dies when the work lands.
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | 🚧 In progress |'
+plan_body '**Status:** filed 2026-08-30.' 'Phase 1 in progress.'
+expect 'a Status paragraph pinned to no live row is rejected' 1 'pin their claim to no live Queue row'
+
+# --- green: what must not trip it ------------------------------------------
+
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | 🚧 In progress |'
+plan_body '**Status:** phase 1 shipped; phase 2 is [Q10](../queue/Q10.md).'
+expect 'a Status paragraph linking the live row is accepted' 0
+
+# 5b fires on the store backing the plan, not on the prose. With nothing naming
+# the plan there is no work in flight for the paragraph to go stale about.
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** complete, shipped as Q99.'
+expect 'a Status paragraph on a plan no item names is accepted' 0
+
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** ⓘ informational — read-only analysis, tracked by Q10.'
+expect 'an ⓘ Status paragraph is exempt even naming a live row bare' 0
+
+# The paragraph ends at the blank line. Below it the doc states its scope and
+# method, which describe the work rather than claim its state — the same cut
+# invariant 3 makes when it reads column 3 and leaves the Scope cell alone.
+# v2-api-gap-analysis.md names Q273 that way in its Goal sentence.
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** phase 1 is [Q10](../queue/Q10.md).' '' 'Goal: the thing Q10 was about.'
+expect 'a live ID below the Status paragraph is not charged' 0
+
+# A `**Status` line under a heading is not the rollup. security.md carries one
+# at line 1035, a thousand lines below anything a reader takes as the plan state.
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body 'Intro.' '' '## Workstream 2' '' '**Status:** open, tracked by Q10.'
+expect 'a **Status line below the first heading is not a preamble' 0
+
+# An ID inside a link to somewhere else is already pinned to something the
+# reader can follow. q224-fanout-dispatch-lever-spike.md writes exactly this.
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** blocked on [Option E / Q10](beta.md), see [Q10](../queue/Q10.md).'
+expect 'an ID inside a link to a plan doc is not charged as bare' 0
+
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+plan_body '**Status:** complete, shipped as Q99; residual is [Q10](../queue/Q10.md).'
+expect 'a closed row named bare beside a live linked one is accepted' 0
 
 if (( fails > 0 )); then
     printf '\ncheck-plan-index-test: FAILED — %d case(s)\n' "$fails" >&2

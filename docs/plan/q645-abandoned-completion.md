@@ -5,7 +5,7 @@ See [Findings](#findings).
 The remedy (Q676) is measured and decided the same day: the listener reports **nothing** for its own unrun delivery, per [the remedy measurements](#q676--the-remedy-measurements-2026-08-04).
 The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST force-cancel concludes run and job `cancelled` in ~1 s, per [the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
 The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run is re-run automatically once capacity returns, bounded by the shared per-run retry budget, per [the recovery re-run arm](#q691--the-recovery-re-run-arm-2026-08-08).
-Remaining follow-up: Q682 (sibling `skipped` arm).
+Remaining follow-up: [Q682](../queue/Q682.md) (sibling `skipped` arm).
 
 Queue item: Q645 (completed; done rows are deleted).
 Origin: [release-1.3.md § The rc.5 re-run](release-1.3.md#the-rc5-re-run-2026-08-02).
