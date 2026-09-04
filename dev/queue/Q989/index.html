@@ -2612,7 +2612,7 @@ The <code>FAIL</code> was <strong>not</strong> reproduced, and needs a second co
 So the swing that produces the flip is fixed and the flip itself was never observed here; a recurrence is expected to look like the Event above rather than like a repeat of the row's original reading.</p>
 <p><code>make cover-update</code> would clear the <code>./cmd/probe</code> shortfall and with it the observability of this defect, which is why the baseline was deliberately left alone.</p>
 <p>Distinct from Q823, which is coverage <em>timing</em> under load rather than the statement count.
-Distinct also from <a href="../Q992/">Q992</a>, which is <code>cover-check</code> replaying a cached test result: that one cannot produce a spurious FAIL, and this row owns the tolerance measurement.</p>
+Distinct also from the stale-cache mode <a href="../../development/testing/#a-root-derived-at-runtime-carries-no--to-sweep-for">testing.md</a> records for <code>cover-check</code>: a replayed result cannot produce a spurious FAIL, and this row owns the tolerance measurement.</p>
 
 
 
