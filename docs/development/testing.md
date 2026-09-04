@@ -1093,10 +1093,24 @@ So the one gate standing between a shipped binary and a linked test server was r
 Reading the same files from the test process would not help either, since they sit outside `cmd/probe` and the module-root rule drops them.
 
 So the fix is `-count=1`, over that package alone.
-[`check-test-cache-inputs.py`](../../scripts/go/check-test-cache-inputs.py) names it in an `UNCACHED` map and [`go-test.sh`](../../scripts/go/go-test.sh) reads that map (`--uncached-packages`) to build a second, forced pass, so the list and the gate cannot drift: an undeclared derivation fails the gate.
+[`check-test-cache-inputs.py`](../../scripts/go/check-test-cache-inputs.py) names it in an `UNCACHED` map, and [`go-test.sh`](../../scripts/go/go-test.sh) and [`coverage.sh`](../../scripts/go/coverage.sh) both read that map (`--uncached-packages`) to build a second, forced pass, so the list and the gates cannot drift: an undeclared derivation fails the gate.
 The section above rejects per-package `-count=1` as the wrong granularity, and that still holds where it was measured: 101 s against 1 s cached, across seven packages that each had a free symlink available instead.
 Neither half applies here.
 `cmd/probe/compat` costs 2.4 s cold, it replays from cache in the main invocation so the forced pass pays that once, and no free fix exists at any price.
+
+**`coverage.sh` was the second reader, and it arrived a cycle late (Q992).** The forced pass landed in `go-test.sh` alone, and `make check` runs `cover-check` rather than `go-test.sh`, so the primary local gate was the one path this mode stayed live on.
+The two invocations key separately, because a coverage run instruments the whole workspace: warming `cmd/probe/compat` under `make test` leaves the `cover-check` entry cold, and vice versa.
+
+Measured 2026-09-04 on one tree, three runs.
+A green `make cover-check` to warm it (`probe/compat` fresh at 29.455s), then `_ "net/http/httptest"` added to `cmd/proxy`'s `package main`: the second run replayed `(cached)` at 83.5% and exited 0.
+Restoring the forced pass and re-running that same tree exited non-zero, with the main pass still reporting `(cached)` at line 42 and `==> go test -count=1 ./cmd/probe/compat` failing below it.
+So the pass is what caught it, not a busted cache.
+
+CI was never exposed: [`unit-test.yml`](../../.github/workflows/unit-test.yml) runs `make test-race` beside the `coverage` job under an identical `if:`, so `go-test.sh`'s forced pass ran there whenever `cover-check` did.
+The cost this buys back is a local green followed by a red CI cycle.
+
+The pass is uninstrumented, deliberately: it must not clobber the merged profile `run_coverage` is building, and the package's coverage number already comes from there.
+It costs one cold run of that package, which tracks build-cache warmth and host load rather than a fixed duration: 3.7s standalone and 16.3s inside a loaded coverage run, measured here.
 
 The detector requires both halves of the shape, a runtime derivation *and* `filepath.Join`/`filepath.Dir`, because `runtime.Caller` on its own is the ordinary line-number idiom of a test helper and opens nothing.
 Where a derived path provably stays inside the module root, `DERIV_ALLOW` records that judgement instead, at no runtime cost.
