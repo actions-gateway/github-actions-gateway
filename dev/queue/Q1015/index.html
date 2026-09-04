@@ -2607,6 +2607,8 @@ So this is not a NetworkPolicy enforcement regression, and reading it as one is 
 <p>The failing wait is <code>runEgressProbe</code>'s 2-minute poll for the probe pod to terminate (<code>cmd/gmc/test/e2e/provisioning_test.go:627</code>), which the log shows still in the first poll of <code>metadata-linklocal-dns</code> at 30 s.
 Whether the allowance is genuinely absent under calico's DPv2-adjacent enforcement, or the probe pod merely had not run yet under a 6-way parallel suite, is <strong>unmeasured</strong> — settle that before touching either the allowance or the wait, because the two remedies exclude each other.
 <a href="../Q402/">Q402</a> holds the related upstream finding, that Google documents DPv2 as exempt from the extra NodeLocal DNSCache rule while Q229 measured the opposite.</p>
+<p><strong>Not dispatchable to a parallel worker.</strong> The unmeasured question needs a live calico cluster and a maintainer at the keyboard while it runs, so this wants a serial session rather than a slot in a batch.
+Two dispatch runs on 2026-09-04 independently ranked it top of a flakes-themed pool and independently declined to dispatch it, which is a cost the row should carry rather than each run re-deriving.</p>
 
 
 

@@ -2602,6 +2602,8 @@
 The queue arbitrates on the ruleset's required checks alone, so a red verdict there is visible and not binding until <code>doc-links-gate</code> joins the nine in <code>default-protect</code> (id 17350763).
 That is a repo-settings change and must follow the workflow onto <code>main</code>: registering a check no run reports wedges every merge (<a href="../../plan/merge-queue/">merge-queue.md</a> Phase 2).
 Measured 2026-08-18: 10 of 28 workflows declare <code>merge_group</code>; 9 contexts are required.</p>
+<p><strong>Re-measured 2026-09-04</strong> while enqueuing PRs from a session: <code>default-protect</code> still requires exactly nine contexts — <code>e2e-calico-gate</code>, <code>e2e-gate</code>, <code>integration-test-gate</code>, <code>license-notices-gate</code>, <code>manifest-validate-gate</code>, <code>plan-hygiene-gate</code>, <code>security-scan-gate</code>, <code>status-lint-gate</code>, <code>unit-test-gate</code> — and <code>doc-links-gate</code> is not among them.
+<strong>No pull request can close this row</strong>, since the change is to the ruleset rather than the tree, so it is the maintainer's to make and will keep surfacing as a cheap-looking top row until it does.</p>
 
 
 

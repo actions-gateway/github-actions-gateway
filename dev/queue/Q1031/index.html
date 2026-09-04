@@ -2596,6 +2596,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#five-more-sightings-and-the-axis-the-next-measurement-should-key-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Five more sightings, and the axis the next measurement should key on
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2696,6 +2707,52 @@ It is also the <code>bare: go test</code> case the row names, so the failing cas
 <p>The reported timings cluster at 5.001 to 5.004 s against a 5 s budget, which is the budget expiring rather than a probe running long.
 That is consistent with the row's finding that the cost is the exec, and inconsistent with a starved-CPU story that should scatter.</p>
 <p><a href="../Q822/">Q822</a> carries a sixth sighting from the same wave in a different suite at load 32.21, which is that row's class rather than this one's.</p>
+<h2 id="five-more-sightings-and-the-axis-the-next-measurement-should-key-on">Five more sightings, and the axis the next measurement should key on<a class="headerlink" href="#five-more-sightings-and-the-axis-the-next-measurement-should-key-on" title="Permanent link">&para;</a></h2>
+<p>A second dispatch wave the same day, four workers and the orchestrator, none touching anything under <code>scripts/agent/</code>.
+All are local <code>make check</code> on a PR branch, so the <strong>Event</strong> trigger does not fire and the soak count carries on from 2026-09-04.</p>
+<table>
+<thead>
+<tr>
+<th>Load at failure</th>
+<th>Reported</th>
+<th>Standalone re-run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>not captured</td>
+<td><code>throttle probe failed after 5.012s</code>, case <code>bare: go test</code></td>
+<td>exit 0, same tree</td>
+</tr>
+<tr>
+<td>12.98</td>
+<td><code>throttle probe failed after 5.003s</code></td>
+<td>exit 0, 37 assertions</td>
+</tr>
+<tr>
+<td>not captured</td>
+<td>probe-failure deny</td>
+<td>passes</td>
+</tr>
+<tr>
+<td>30.11</td>
+<td>probe-failure deny</td>
+<td>passes twice at <strong>7.87</strong></td>
+</tr>
+<tr>
+<td>12.25</td>
+<td><code>throttle probe failed after 5.002s</code>, case <code>bare: go test</code></td>
+<td>passes at <strong>11.16</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Three pairs across both waves record the load on both sides, and none of them separates on it.</strong> 15-to-19 failed and 20.39 passed; 30.11 failed and 7.87 passed; 12.25 failed and 11.16 passed.
+One pair has the passing run more loaded, one a quarter as loaded, and one 1.1 apart — so the passing run is above, below and level with the failing one, which is every direction a threshold could take.</p>
+<p><strong>What differs between a failing run and its passing re-run is the fan-out, not the host.</strong> A standalone re-run is one suite; the failing run is that suite as one of <code>SCRIPTS_TESTS</code>'s 117, itself one of <code>CHECK_FAST_GATES</code>'s 51, all launched with <code>&amp;</code> and no cap (<a href="../Q822/">Q822</a> measured both counts on 2026-09-04).
+So the probe competes with a concurrency that load average summarises badly: load is a one-minute mean over the whole machine, while the budget is a 5 s window inside one burst.
+That is consistent with this row's own finding that the cost is the <strong>exec</strong> rather than the script, and with the timings clustering at 5.001 to 5.004 s.</p>
+<p><strong>This re-keys the open measurement rather than adding to it.</strong> <em>What has not been isolated</em> asks which contention produces the tail and quantifies it against load; the quantification stands as a bound on what contention can cost, but the variable to sweep is concurrent process count at exec time, not load average.
+The cheap discriminator nobody has run: drive the suite alone while <code>run-parallel.sh</code> fans out N unrelated siblings, and sweep N. A soak or threshold keyed on load average cannot discriminate here and should not be written.</p>
 
 
 

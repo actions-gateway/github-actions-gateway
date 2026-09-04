@@ -2639,6 +2639,9 @@ Two rows now carry a reading where the passing run was the more loaded one.</p>
 <p><strong>The fan-out counts in this row have all moved</strong>, and they size its closing argument about what a cap would cost.
 Measured 2026-09-04 from <code>mk/gate-lists.mk</code>: <code>SCRIPTS_TESTS</code> is <strong>117</strong>, not 97; <code>CHECK_FAST_GATES</code> is <strong>51</strong>, not 45; <code>DOCS_GATES</code> is <strong>23</strong>, not 19; <code>QUEUE_GATES</code> is <strong>11</strong>, not 10.
 The fan-out is about a fifth wider than the row describes, so the nesting cost it weighs is understated rather than wrong.</p>
+<p><strong>The second disjunct is the live one, and <a href="../Q1031/">Q1031</a> now carries the reading that settles it.</strong> Three failure/re-run pairs there record the load on both sides, and the passing run comes out above, below and level with the failing one.
+What separates them is the fan-out itself — a standalone re-run is one suite, the failing run is that suite inside the 117-wide and 51-wide bursts this row measured — so the axis to sweep is concurrent process count, not load average.
+That does not change what this row asks for; it means a cap would be evaluated against fan-out width, and that no threshold on load average can stand in for one.</p>
 
 
 
