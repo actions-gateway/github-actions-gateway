@@ -331,9 +331,19 @@ jobs:
   # change does not also trigger the full Go lint. `make shellcheck` (scripts/ci/shellcheck-scripts.sh) is
   # the single source of truth for the file set (every present scripts/*.sh,
   # recursive — tracked or untracked-and-not-gitignored).
+  #
+  # Also gated on `workflows`, because `make scripts-test` runs
+  # workflow-acting-steps-test.sh, whose subject is .github/workflows/ rather
+  # than scripts/ (Q1006). It drives the `run:` bodies that act (open an issue,
+  # push, publish or tag) and asserts over the whole tree that any workflow
+  # running one is either driven or classified with a reason. A workflow-only
+  # change must re-run that, or a thirty-first workflow starts acting with the
+  # assertion that would notice never running. Reusing the `workflows` filter
+  # rather than widening `scripts` keeps that filter the only one watching all of
+  # .github/workflows/, which is what its own comment above turns on.
   shellcheck:
     needs: [changes]
-    if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
