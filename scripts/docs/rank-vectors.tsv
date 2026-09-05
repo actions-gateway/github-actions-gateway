@@ -1,15 +1,14 @@
-# rank-vectors.tsv — shared test vectors for the magnitude-head rank scheme.
+# rank-vectors.tsv — test vectors for the magnitude-head rank scheme.
 #
-# Two implementations carry this algebra: queue.py beside this file, and the Go
-# queuestore in karlkfi/github-actions-gateway. Both suites run these vectors,
-# so a change to one that the scheme does not sanction fails on the other side
-# too.
+# queue.py, beside this file, is the only implementation that runs these. A Go
+# one was drafted and never merged, so no second suite checks these vectors.
 #
-# Every expected key here was derived from the scheme's rules — a head letter
-# fixing the integer part's length, base-36 digits, plain string comparison as
-# the order — rather than by running either implementation. Vectors read off a
-# run would only prove that run agrees with itself, which is the drift this
-# file exists to catch.
+# The fixture holds its value regardless, because that value was never a second
+# consumer. Every expected key here is derived from the scheme's rules — a head
+# letter fixing the integer part's length, base-36 digits, plain string
+# comparison as the order — rather than read off a run. Vectors taken from a run
+# prove only that the run agrees with itself; vectors derived from the rules can
+# contradict the implementation, which is what this file is for.
 #
 # Tab-separated columns: lo, hi, want, note.
 #   lo, hi  the neighbours the new key goes between; "-" means open-ended

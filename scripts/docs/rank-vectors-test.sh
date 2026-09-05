@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# test-rank-vectors.sh — run queue.py's rank algebra against rank-vectors.tsv.
+# rank-vectors-test.sh — run queue.py's rank algebra against rank-vectors.tsv.
 #
-# The vectors are derived from the scheme rather than from either
-# implementation, so this suite is evidence that queue.py agrees with the
-# definition — not merely with itself. The Go queuestore in
-# karlkfi/github-actions-gateway runs the same file from its own side.
+# The vectors are derived from the scheme rather than from any implementation,
+# so this suite is evidence that queue.py agrees with the definition, not merely
+# with itself. That argument rests on where the vectors come from, so it holds
+# with queue.py as the only consumer: nothing else runs this fixture.
 #
 # Each expectation is checked three ways: the key matches, it orders strictly
 # between its neighbours, and it satisfies check_rank. The last two catch a
