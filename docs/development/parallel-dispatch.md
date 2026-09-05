@@ -242,11 +242,20 @@ git for-each-ref --sort=-committerdate \
   head -20
 ```
 
-Then drop the ones already merged (`git merge-base --is-ancestor <branch> origin/main`) and read each survivor's files with `git diff --name-only origin/main...<branch>`.
+Read each candidate's files with `git diff --name-only origin/main...<branch>`, and settle whether it is live with `gh pr list --head <branch> --state all`, one call per branch.
 
-**Filter by recency or the instrument is unusable here.** Worktrees are kept deliberately, so the raw list is mostly residue: measured 2026-09-04, 1,148 local `claude/*` branches, of which 985 are not ancestors of `origin/main` and 938 have no remote ref at all.
-Windowed to the last six hours the same query returns **8** unmerged branches, **2** of them with no remote ref, and those two are what no remote sweep and no PR list could have seen.
-The recency filter is what separates a live sibling from a year of kept residue; without it the signal is 1 % of the output.
+**Do not drop the merged ones with `git merge-base --is-ancestor`.** This repo's ruleset merges with `SQUASH`, so a merged branch's commits are orphaned and it is never an ancestor of `main`: measured 2026-09-04, 990 of 1,153 local `claude/*` branches fail that test and most of them are merged.
+The test works only where branches are fast-forwarded or rebase-merged, and it fails toward calling merged work live, which is the direction that manufactures contention.
+The per-branch PR query is the discriminator for both this and the window trap below, and it separates the three states the sweep has to tell apart: merged, open, and never had a pull request at all.
+That last one is the only live case, and reading "no *open* PR" as "spent" is what skips it.
+
+**Filter by recency or the instrument is unusable here.** Worktrees are kept deliberately, so the raw list is mostly spent branches: measured 2026-09-04, 1,153 local `claude/*` branches.
+Windowed to the last six hours it returns 16, and the per-branch query splits them 8 merged, 1 open, and 7 with no pull request at all.
+Only that last class can be pre-push work in flight, and it still holds abandoned scratch branches, so read their diffs before treating one as contention.
+Without the window the same split costs a GitHub call per branch across all 1,153.
+
+**A missing remote ref does not mean a branch was never pushed.** `deleteBranchOnMerge` is on here, so a merged branch loses its remote ref too, and 7 of the 8 merged branches in that window have none.
+The push question is answerable only alongside the PR state, never from the ref alone.
 
 **A `gh pr list --limit N` join reports the window, not the repository, and fails toward manufacturing work.** Joining a branch list against one bulk PR query flags every branch whose PR fell outside the window as having no PR at all, which reads as live unattached work and sends a run investigating merged branches.
 Measured 2026-09-04: `--state all --limit 500` returns exactly 500 rows reaching back to #1348 against a repository at #1848, so any branch whose PR is numbered below that reads as PR-less.
