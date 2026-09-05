@@ -16,9 +16,9 @@ Subcommands:
   migrate   convert a legacy `docs/STATUS.md` Queue/Deferred table into items
   rank      compute an order key for an insertion
 
-Ranks are base-36 order keys compared as plain strings, using the same
-magnitude-head scheme as github-actions-gateway's queuestore, so a store
-written by either tool reads and extends under the other.
+Ranks are base-36 order keys compared as plain strings, under a magnitude-head
+scheme: a head letter fixes the integer part's length, so plain string order is
+numeric order.
 """
 
 import argparse
@@ -72,10 +72,6 @@ SMALLEST_INTEGER = "A" + DIGITS[0] * 26
 # no length at all until a magnitude is exhausted. Heads 'a'..'z' carry integer
 # lengths 2..27 upward, 'Z'..'A' the same downward, and uppercase sorting below
 # lowercase is what puts the descending magnitudes underneath.
-#
-# Ported from the Go implementation in karlkfi/github-actions-gateway's
-# devtools/docs/queuestore so a store written by either reads and extends
-# under the other.
 
 def integer_length(head):
     if "a" <= head <= "z":
@@ -1003,9 +999,9 @@ def main(argv=None):
     k = sub.add_parser(
         "rank",
         help="compute an order key",
-        description="Generates a magnitude-head base-36 order key, the same "
-                    "scheme github-actions-gateway's queuestore uses, so a key "
-                    "minted here interleaves correctly with one minted there.")
+        description="Generates a magnitude-head base-36 order key: a head "
+                    "letter fixes the integer part's length, so plain string "
+                    "comparison orders the keys numerically.")
     k.add_argument("--after", help="rank of the item this goes below")
     k.add_argument("--before", help="rank of the item this goes above")
     k.add_argument("--head", action="store_true", help="before every item")
