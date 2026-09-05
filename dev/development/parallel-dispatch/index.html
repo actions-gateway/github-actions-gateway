@@ -3133,10 +3133,17 @@ Sessions on this machine share one clone, and <code>refs/heads/</code> is shared
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span>--format<span class="o">=</span><span class="s1">'%(committerdate:relative)%09%(refname:short)'</span><span class="w"> </span><span class="s1">'refs/heads/claude/*'</span><span class="w"> </span><span class="p">|</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>head<span class="w"> </span>-20
 </code></pre></div>
-<p>Then drop the ones already merged (<code>git merge-base --is-ancestor &lt;branch&gt; origin/main</code>) and read each survivor's files with <code>git diff --name-only origin/main...&lt;branch&gt;</code>.</p>
-<p><strong>Filter by recency or the instrument is unusable here.</strong> Worktrees are kept deliberately, so the raw list is mostly residue: measured 2026-09-04, 1,148 local <code>claude/*</code> branches, of which 985 are not ancestors of <code>origin/main</code> and 938 have no remote ref at all.
-Windowed to the last six hours the same query returns <strong>8</strong> unmerged branches, <strong>2</strong> of them with no remote ref, and those two are what no remote sweep and no PR list could have seen.
-The recency filter is what separates a live sibling from a year of kept residue; without it the signal is 1 % of the output.</p>
+<p>Read each candidate's files with <code>git diff --name-only origin/main...&lt;branch&gt;</code>, and settle whether it is live with <code>gh pr list --head &lt;branch&gt; --state all</code>, one call per branch.</p>
+<p><strong>Do not drop the merged ones with <code>git merge-base --is-ancestor</code>.</strong> This repo's ruleset merges with <code>SQUASH</code>, so a merged branch's commits are orphaned and it is never an ancestor of <code>main</code>: measured 2026-09-04, 990 of 1,153 local <code>claude/*</code> branches fail that test and most of them are merged.
+The test works only where branches are fast-forwarded or rebase-merged, and it fails toward calling merged work live, which is the direction that manufactures contention.
+The per-branch PR query is the discriminator for both this and the window trap below, and it separates the three states the sweep has to tell apart: merged, open, and never had a pull request at all.
+That last one is the only live case, and reading "no <em>open</em> PR" as "spent" is what skips it.</p>
+<p><strong>Filter by recency or the instrument is unusable here.</strong> Worktrees are kept deliberately, so the raw list is mostly spent branches: measured 2026-09-04, 1,153 local <code>claude/*</code> branches.
+Windowed to the last six hours it returns 16, and the per-branch query splits them 8 merged, 1 open, and 7 with no pull request at all.
+Only that last class can be pre-push work in flight, and it still holds abandoned scratch branches, so read their diffs before treating one as contention.
+Without the window the same split costs a GitHub call per branch across all 1,153.</p>
+<p><strong>A missing remote ref does not mean a branch was never pushed.</strong> <code>deleteBranchOnMerge</code> is on here, so a merged branch loses its remote ref too, and 7 of the 8 merged branches in that window have none.
+The push question is answerable only alongside the PR state, never from the ref alone.</p>
 <p><strong>A <code>gh pr list --limit N</code> join reports the window, not the repository, and fails toward manufacturing work.</strong> Joining a branch list against one bulk PR query flags every branch whose PR fell outside the window as having no PR at all, which reads as live unattached work and sends a run investigating merged branches.
 Measured 2026-09-04: <code>--state all --limit 500</code> returns exactly 500 rows reaching back to #1348 against a repository at #1848, so any branch whose PR is numbered below that reads as PR-less.
 The discriminator is per-branch, <code>gh pr list --head &lt;branch&gt; --state all</code>, which is bounded by the branch rather than by the window.</p>
