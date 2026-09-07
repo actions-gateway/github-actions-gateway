@@ -26,7 +26,7 @@ COSIGN         := $(REPO_ROOT)/.build/cosign
 # verifier the publish run signed with. A bump also needs the new platform
 # digests in scripts/release/download-cosign.sh; bump deliberately (see
 # docs/operations/release.md).
-COSIGN_VERSION ?= v2.5.2
+COSIGN_VERSION ?= v3.1.3
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
