@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q413/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.8/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>v2 GA graduation (v2beta1 → v2) - GitHub Actions Gateway</title>
+        <title>Release 1.8 Milestone Definition - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v2-ga-graduation-v2beta1--v2" class="md-skip">
+        <a href="#release-18-milestone-definition" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v2 GA graduation (v2beta1 → v2)
+              Release 1.8 Milestone Definition
             
           </span>
         </div>
@@ -2579,6 +2579,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this is a release rather than a row that lands whenever
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-gating-row-q1029" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gating row: Q1029
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-rides-the-soak-readings-and-the-alias-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What rides: the soak readings and the alias decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope ledger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explicitly-out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicitly out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-of-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition of done
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#critical-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Critical path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pre-flight-verdicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-flight verdicts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#candidate-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidate validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,18 +2704,131 @@
   
 
 
-<h1 id="v2-ga-graduation-v2beta1--v2">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#v2-ga-graduation-v2beta1--v2" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <a href="../../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes. v1.3.0 shipped 2026-08-03 and two minors followed, so criterion 1 elapsed.
-Outstanding: every kind on real traffic (<a href="../Q1059/">Q1059</a>) and round-trips on real objects (<a href="../Q1060/">Q1060</a>), both taken up as ready rows in <a href="../../plan/release-1.8/">release-1.8.md</a>.</p>
+<h1 id="release-18-milestone-definition">Release 1.8 Milestone Definition<a class="headerlink" href="#release-18-milestone-definition" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status: scoped 2026-09-07, nothing shipped yet.</strong> One gating row, <a href="../../queue/Q1029/">Q1029</a>, the scale-set drain recovery that is lost when no reconcile starts inside a terminating worker's window.
+Three rows ride without gating: the two v2 GA soak readings, <a href="../../queue/Q1059/">Q1059</a> and <a href="../../queue/Q1060/">Q1060</a>, and the Phase 2 alias decision, <a href="../../queue/Q452/">Q452</a>.
+The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 44 commits and <strong>FLOOR: NONE</strong> on 2026-09-07, with seven <code>feat</code>/<code>fix</code> subjects withheld because they ship in no image and no chart.
+Q1029's fix would raise the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.</p>
+</blockquote>
+<h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
+<p>The <a href="../release-ladder/">release ladder</a> reads 1.7 → 2.0, and 2.0 is <a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">parked on a soak</a> whose evidence nobody has gathered.
+Read on 2026-09-07: criterion 1 has elapsed on the record rather than by re-derivation here, since <code>v1.4.0</code> through <code>v1.7.0</code> all shipped on <code>v2beta1</code> and each release's pre-flight API review returned <em>ship as-is</em> over additive surface (<a href="../release-1.4/#pre-flight-the-api-surface-this-tag-publishes">1.4</a>, <a href="../release-1.5/#pre-flight-the-api-surface-this-tag-publishes">1.5</a>, <a href="../release-1.6/">1.6</a>, <a href="../release-1.7/#pre-flight-verdicts">1.7</a>); criterion 2 is unmet on one kind, since the dogfood overlays and <code>scripts/dogfood/setup.sh</code> between them apply <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>ClusterRunnerTemplate</code> and <code>RunnerTemplate</code> while <code>setup.sh</code> deliberately creates no <code>EgressProxy</code> on that cluster, and the e2e lane that does exercise one runs on a kind cluster; criterion 3 has no recorded round-trip across the served versions, the nearest reading being <a href="../archive/q415-migrate-dogfood-validation/">Q415</a>'s live migration, which drove the webhook on one kind in one direction.
+So the GA rung cannot be labelled without publishing a commitment on unmeasured criteria, and the roadmap's near-term section has been empty since 2026-08-29.</p>
+<p>1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one three rows have waited for since 1.7 (<a href="../../queue/Q1038/">Q1038</a>, <a href="../../queue/Q1048/">Q1048</a>, <a href="../../queue/Q1039/">Q1039</a>).
+The theme is v2 GA readiness; what makes it a release an operator upgrades for is the gating row.</p>
+<h2 id="the-gating-row-q1029">The gating row: Q1029<a class="headerlink" href="#the-gating-row-q1029" title="Permanent link">&para;</a></h2>
+<p><a href="../../queue/Q1029/">Q1029</a> is a measured product defect on the scale-set tier.
+<code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a <code>RunnerSet</code> reconcile, so a gracefully deleted worker is judged only if a reconcile begins in the seconds between the kubelet publishing the terminal phase and removing the object.
+When none does, the job is silently never re-run.
+The row carries three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.</p>
+<p>It gates because the exposure is an operator's, not the e2e venue's: a node drain terminates many workers at once, so one missed window there is many lost jobs.
+The design already records that this arm cannot be made restart-safe (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>), and the row argues that Q844's orphan recovery does not cover a worker the scan simply missed.</p>
+<p><strong>Why the gap opens is unverified</strong>, and the row says so: the reconciler runs at <code>MaxConcurrentReconciles: 1</code> and the listener bootstrap does DNS and an HTTP POST inside <code>Reconcile</code>, which is a hypothesis read off timestamps.
+Measuring it is the first step of the work, not a finding to code against.</p>
+<h2 id="what-rides-the-soak-readings-and-the-alias-decision">What rides: the soak readings and the alias decision<a class="headerlink" href="#what-rides-the-soak-readings-and-the-alias-decision" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Row</th>
+<th>What it delivers</th>
+<th>Why it rides rather than gates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../../queue/Q1059/">Q1059</a></td>
+<td>Every <code>v2beta1</code> kind applied and reconciled on the dogfood cluster, recorded against criterion 2</td>
+<td>A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1060/">Q1060</a></td>
+<td>The conversion webhook round-tripped over real objects, including a <code>v1alpha1</code> object such as the gateway <code>deploy/dogfood-migrate</code> applies, recorded against criterion 3</td>
+<td>Same</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q452/">Q452</a></td>
+<td>Whether GA <code>v2</code> defines <code>CiliumFQDN</code>/<code>CalicoFQDN</code>, written into <a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md § Phase 2</a></td>
+<td>A design decision, not a shipped change; deciding it here lets the hop start without one pending</td>
+</tr>
+</tbody>
+</table>
+<p>A reading that comes back negative is the release working: it names the shape fix <code>v2beta1</code> still needs, which resets the soak clock and is exactly what GA is gated on finding first.</p>
+<h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Q-ID</th>
+<th>Item</th>
+<th>Gates?</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../../queue/Q1029/">Q1029</a></td>
+<td>Drain recovery lost when no reconcile starts inside the window</td>
+<td><code>1.8-gate</code></td>
+<td>🔲 open</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1059/">Q1059</a></td>
+<td>Every <code>v2beta1</code> kind on the dogfood cluster (soak criterion 2)</td>
+<td>rides</td>
+<td>🔲 open</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1060/">Q1060</a></td>
+<td>Conversion round-trips on real dogfood objects (soak criterion 3)</td>
+<td>rides</td>
+<td>🔲 open</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q452/">Q452</a></td>
+<td>GA <code>v2</code> and the deprecated FQDN aliases</td>
+<td>rides</td>
+<td>🔲 open</td>
+</tr>
+<tr>
+<td>—</td>
+<td>RC validated on dogfood</td>
+<td>gates</td>
+<td>🔲 no candidate cut</td>
+</tr>
+</tbody>
+</table>
+<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../../queue/Q413/">Q413</a> itself, and 2.0's coupled removals</strong> (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>).
+  Q413 stays parked until both soak readings exist and read clean; this release supplies the readings and does not pre-empt the verdict.</li>
+<li><strong>The <code>feature</code> rows in the ready queue.</strong> <a href="../../queue/Q988/">Q988</a> needs a registry client the repo does not have, <a href="../../queue/Q725/">Q725</a> and <a href="../../queue/Q1011/">Q1011</a> are unrelated to the theme.
+  Any of them landing before the tag rides in the floor's reading of the window, with no label.</li>
+<li><strong>The proxy-hardening cluster</strong> and everything else the ladder punts past 2.0, unchanged.</li>
+</ul>
+<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Q1029 closed</strong>, with the mechanism measured before the fix and an e2e assertion that fails when the recovery is deleted.</li>
+<li><strong>Criterion 2 and criterion 3 have a recorded reading</strong> in <a href="../v2-ga/">v2-ga.md</a>'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.</li>
+<li><strong>Q452 decided</strong> in the plan, with the losing option's cost recorded beside it.</li>
+<li><strong>The three dogfood-window rows</strong> get their window from the candidate: <a href="../../queue/Q1038/">Q1038</a>'s <code>mirror-timing</code> probe, <a href="../../queue/Q1048/">Q1048</a>'s mirror client census, and <a href="../../queue/Q1039/">Q1039</a>'s shared-tenants topology.</li>
+<li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.7.0..&lt;rc commit&gt;</code>, expecting no change: nothing in scope touches the CRDs, so anything it reports is a finding.</li>
+<li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
+</ol>
+<h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
+<p>Q1029's measurement → its fix → a candidate.
+The soak readings and the alias decision run beside it and need the candidate's window, not each other.
+The window is the schedule risk, as it was in 1.7: a reading whose venue is a booked cluster run cannot be compressed the way a code change can.</p>
+<h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>
+<p>None yet.
+Each verdict names the commit it is measured at (<a href="../../operations/release/#1-pre-flight">release.md</a>).</p>
+<h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
+<p>No candidate cut.</p>
 
 
 
 
 
 
-
-  
-  
 
 
 

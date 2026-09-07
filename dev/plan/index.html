@@ -2768,9 +2768,14 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Shipped as <code>v1.7.0</code> on 2026-08-30, validated on <code>rc.3</code>. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Of 1.6's three hand-offs, <a href="../queue/Q215/">Q215</a>'s trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), Q986 has landed, so Definition of Done #5 is claimed rather than narrowed, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in. Three candidates: <code>rc.1</code> failed the admission ladder's quota rung on a real product defect (Q1035, the advertisement recomputed every long-poll but published only by a reconcile an idle set never triggered), <code>rc.2</code> passed with the fix, and <code>rc.3</code> was cut because Q1026 narrowed the shared mirror set's ingress peer afterwards, a manifest that ships in no image and no chart and so is invisible to <code>check-artifact-unchanged.sh</code></td>
 </tr>
 <tr>
+<td><a href="release-1.8/">release-1.8.md</a></td>
+<td>The 1.8 release gate: the scale-set drain recovery lost when no reconcile starts inside a terminating worker's window (<a href="../queue/Q1029/">Q1029</a>), plus the two v2 GA soak readings and the Phase 2 alias decision that ride without gating</td>
+<td>❌ Scoped 2026-09-07. One gating row, <a href="../queue/Q1029/">Q1029</a>, open; <a href="../queue/Q1059/">Q1059</a>, <a href="../queue/Q1060/">Q1060</a> and <a href="../queue/Q452/">Q452</a> ride. <code>semver-floor.sh v1.7.0</code> read FLOOR: NONE over 44 commits on the day it was scoped, so the bump is provisional until the gating row's fix lands</td>
+</tr>
+<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>💤 Parked — every phase is event-gated, so no Queue row remains: the soak and the hop start after <code>v1.3.0</code> ships (<a href="../queue/Q413/">Q413</a>), Phase 3's removals ride <a href="../queue/Q273/">Q273</a>/<a href="../queue/Q264/">Q264</a>, and the Phase 2 alias decision is <a href="../queue/Q452/">Q452</a></td>
+<td>⚠️ Phase 1's two outstanding soak readings are ready rows as of 2026-09-07, riding in <a href="release-1.8/">release-1.8.md</a>: <a href="../queue/Q1059/">Q1059</a> (every kind on dogfood traffic) and <a href="../queue/Q1060/">Q1060</a> (round-trips on real objects), with the Phase 2 alias decision <a href="../queue/Q452/">Q452</a> revived beside them. <a href="../queue/Q413/">Q413</a> stays parked until both readings exist; Phase 3's removals ride <a href="../queue/Q273/">Q273</a>/<a href="../queue/Q264/">Q264</a></td>
 </tr>
 </tbody>
 </table>
@@ -2842,7 +2847,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="release-1.6/">release-1.6.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="release-1.6/">release-1.6.md</a>), then extended 2026-09-07 to 1.7 → 1.8 → 2.0 because the GA soak had no evidence to gate on (<a href="release-1.8/">release-1.8.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>

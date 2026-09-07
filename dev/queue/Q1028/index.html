@@ -2619,7 +2619,7 @@ A correct instrument aimed at a narrower question than the claim built on it, wh
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--jq<span class="w"> </span><span class="s1">'.check_runs[] | "\(.conclusion // .status)\t\(.name)"'</span>
 </code></pre></div>
 <p>Then say what positive evidence looks like when the heavy jobs legitimately skip: name the job that did exercise the change and read its log.
-On #1787 that was <code>shellcheck</code>, which carries <code>make scripts-test</code> (unit-test.yml:375) and whose log held 90 and 48 passing assertion lines from the two new suites.</p>
+On #1787 that was <code>shellcheck</code>, which carries <code>make scripts-test</code> (.github/workflows/unit-test.yml:389) and whose log held 90 and 48 passing assertion lines from the two new suites.</p>
 <p>The same rule belongs in the <code>session-worker</code> skill, whose §5 supplies the defective command and whose <em>What is GitHub-specific</em> table describes it as listing "CI results <strong>for a revision</strong>" — true, and not the same as results for a job.
 That half is a <code>claude-skills</code> PR rather than repo work.</p>
 <p><strong>Related.</strong> Three near-misses of one shape landed across two sessions the same day: a probe aimed at state that could not have produced a positive, returning empty, where empty is indistinguishable from a finding.

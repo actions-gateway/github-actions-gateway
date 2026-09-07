@@ -2619,6 +2619,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-18-exists-rather-than-cutting-20-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why 1.8 exists rather than cutting 2.0 next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-is-punted-past-v200" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2711,6 +2722,11 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 <td><a href="../release-1.7/">release-1.7.md</a></td>
 </tr>
 <tr>
+<td><strong>1.8</strong></td>
+<td>The scale-set drain recovery Q1029 gates on, plus the two v2 GA soak readings (Q1059, Q1060) and the Phase 2 alias decision (Q452), which ride: the release that gathers the evidence 2.0 is parked on</td>
+<td><a href="../release-1.8/">release-1.8.md</a></td>
+</tr>
+<tr>
 <td><strong>2.0</strong></td>
 <td>v2 GA graduation and the three coupled removals: <code>v1alpha1</code>, <code>v2alpha1</code>, and classic acquisition</td>
 <td><a href="../v2-ga/">v2-ga.md</a></td>
@@ -2731,6 +2747,12 @@ Q719 closed on 2026-08-24, which settled the dependency and left 1.6 resting on 
 <code>semver-floor.sh v1.5.0</code> reports the floor at MINOR off nine merged changes that alter the shipped artifact, so 1.6 is forced whatever Q727 does, and the ladder's worry about a thin minor was about a release that no longer exists.
 What Q727 decided was the release's <em>theme</em>, not whether there was one — and it decided it as a decline, so 1.6's parity content is a docs change riding on those nine merged features.
 <a href="../release-1.6/">release-1.6.md</a> carries the measurement and the scope.</p>
+<h2 id="why-18-exists-rather-than-cutting-20-next">Why 1.8 exists rather than cutting 2.0 next<a class="headerlink" href="#why-18-exists-rather-than-cutting-20-next" title="Permanent link">&para;</a></h2>
+<p><strong>Added 2026-09-07, when 1.7 had tagged and the ladder read straight to 2.0.</strong> The GA rung is parked on <a href="../v2-ga/">v2-ga.md</a>'s Phase 1 soak, and on that day the soak had one criterion elapsed and two unmeasured: criterion 1 held across <code>v1.4.0</code> to <code>v1.7.0</code>, criterion 2 was unmet on one kind, <code>EgressProxy</code>, which the dogfood setup deliberately does not create while the other four are applied, and criterion 3 had no round-trip reading across the served versions.
+Labelling <code>2.0-gate</code> rows then would have published a commitment on evidence nobody had, which is the dishonesty this page exists to remove.</p>
+<p><code>semver-floor.sh v1.7.0</code> read <strong>FLOOR: NONE</strong> the same day, so nothing forced a release either; what the ladder needed was a rung whose deliverable is the evidence.
+<a href="../release-1.8/">release-1.8.md</a> is that rung: <a href="../../queue/Q1029/">Q1029</a>, a measured drain-recovery defect, is the one gating row and the reason an operator upgrades, and the two soak readings ride because a measurement that may come back negative cannot be scheduled against a tag.
+A negative reading is the rung working: it names the <code>v2beta1</code> shape fix GA is gated on finding first.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
 <p>Not scheduled, and that is a decision rather than an oversight.
 Each waits on a real signal, and each carries a revive trigger on the backlog rather than a release:</p>

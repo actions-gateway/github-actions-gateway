@@ -2598,7 +2598,7 @@
 
 
 <h1 id="a-patch-lines-e2e-leg-dispatches-from-main-not-the-candidate">A patch line's e2e leg dispatches from main, not the candidate<a class="headerlink" href="#a-patch-lines-e2e-leg-dispatches-from-main-not-the-candidate" title="Permanent link">&para;</a></h1>
-<p><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (validate-release.sh:472), so the e2e matrix leg runs <code>main</code>'s copy of <code>e2e-test.yml</code> and its test code against the candidate's GAG runners.
+<p><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (scripts/dogfood/validate-release.sh:510), so the e2e matrix leg runs <code>main</code>'s copy of <code>e2e-test.yml</code> and its test code against the candidate's GAG runners.
 For a minor cut from <code>main</code>'s head those are near enough the same tree.
 For a patch cut off an older tag they are not, and Q879 made validating a patch line compulsory, so the case now happens by design rather than never.</p>
 <p>Decide what a patch line should dispatch, and whether the default should be the candidate's ref rather than <code>main</code>.

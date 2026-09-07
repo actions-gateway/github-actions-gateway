@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q413/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1058/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>v2 GA graduation (v2beta1 → v2) - GitHub Actions Gateway</title>
+        <title>release-delta.sh still diffs docs/STATUS.md, so closed rows read (none) - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v2-ga-graduation-v2beta1--v2" class="md-skip">
+        <a href="#release-deltash-still-diffs-docsstatusmd-so-closed-rows-read-none" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v2 GA graduation (v2beta1 → v2)
+              release-delta.sh still diffs docs/STATUS.md, so closed rows read (none)
             
           </span>
         </div>
@@ -2597,9 +2597,15 @@
   
 
 
-<h1 id="v2-ga-graduation-v2beta1--v2">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#v2-ga-graduation-v2beta1--v2" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <a href="../../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes. v1.3.0 shipped 2026-08-03 and two minors followed, so criterion 1 elapsed.
-Outstanding: every kind on real traffic (<a href="../Q1059/">Q1059</a>) and round-trips on real objects (<a href="../Q1060/">Q1060</a>), both taken up as ready rows in <a href="../../plan/release-1.8/">release-1.8.md</a>.</p>
+<h1 id="release-deltash-still-diffs-docsstatusmd-so-closed-rows-read-none">release-delta.sh still diffs docs/STATUS.md, so closed rows read (none)<a class="headerlink" href="#release-deltash-still-diffs-docsstatusmd-so-closed-rows-read-none" title="Permanent link">&para;</a></h1>
+<p>The report that <a href="../../operations/release/#when-to-cut">release.md § When to cut</a> says to start from prints an empty <em>Queue rows closed</em> section for every window since the store cutover, and nothing in the output says the section is unreadable rather than empty.</p>
+<p><strong>Measured 2026-09-07</strong> on <code>v1.7.0..origin/main</code>: the report prints <code>(none)</code>, while <code>git log --diff-filter=D v1.7.0..origin/main -- docs/queue</code> shows 19 item files deleted in the same window.
+The mechanism is <code>STATUS_FILE="docs/STATUS.md"</code> (scripts/release/release-delta.sh:48): the closed-rows walk runs <code>git rev-list "$range" -- "$STATUS_FILE"</code>, and that path was deleted on 2026-08-18 in #1603 (Q889 phase 6), so the walk visits no commit and the section is a silent zero.
+The script's own header, and the archived <a href="../../plan/archive/release-decision-support/">release-decision-support.md</a> plan, both still describe the section as diffing STATUS.md's Queue section across revisions, so the docs answer the question wrongly rather than not at all.</p>
+<p>The fix reads the store the way <code>queue.py metrics --events</code> already does: one <code>--diff-filter=D</code> walk over <code>docs/queue/</code>, one line per deleted <code>QNNN.md</code> with the subject of the commit that deleted it.
+Parking no longer needs the Deferred subtraction the STATUS.md version did, because a parked row is a <code>status:</code> edit rather than a deletion; what a deletion cannot tell apart is a completion from a prune, which is <a href="../Q959/">Q959</a>'s defect and stays there.
+This row owns the (none) measurement; Q959 owns the verb.
+Not <a href="../Q940/">Q940</a>, which is a doc naming a different script's deleted read.</p>
 
 
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q413/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1059/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>v2 GA graduation (v2beta1 → v2) - GitHub Actions Gateway</title>
+        <title>Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2) - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v2-ga-graduation-v2beta1--v2" class="md-skip">
+        <a href="#exercise-every-v2beta1-kind-on-the-dogfood-cluster-ga-soak-criterion-2" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v2 GA graduation (v2beta1 → v2)
+              Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2)
             
           </span>
         </div>
@@ -2597,9 +2597,15 @@
   
 
 
-<h1 id="v2-ga-graduation-v2beta1--v2">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#v2-ga-graduation-v2beta1--v2" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <a href="../../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes. v1.3.0 shipped 2026-08-03 and two minors followed, so criterion 1 elapsed.
-Outstanding: every kind on real traffic (<a href="../Q1059/">Q1059</a>) and round-trips on real objects (<a href="../Q1060/">Q1060</a>), both taken up as ready rows in <a href="../../plan/release-1.8/">release-1.8.md</a>.</p>
+<h1 id="exercise-every-v2beta1-kind-on-the-dogfood-cluster-ga-soak-criterion-2">Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2)<a class="headerlink" href="#exercise-every-v2beta1-kind-on-the-dogfood-cluster-ga-soak-criterion-2" title="Permanent link">&para;</a></h1>
+<p><a href="../../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 2 requires all five <code>v2beta1</code> kinds to have carried real traffic on the dogfood cluster, and today four of them have.</p>
+<p><strong>Measured 2026-09-07</strong> over <code>deploy/</code> and <code>scripts/dogfood/</code>, against the five kinds <a href="../../plan/v2-api/">v2-api.md</a> names (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>, <code>EgressProxy</code>): the dogfood overlays apply <code>ActionsGateway</code> and <code>RunnerSet</code> (<code>deploy/dogfood-e2e</code>) plus three <code>ClusterRunnerTemplate</code>s (<code>deploy/templates</code>), and <code>scripts/dogfood/setup.sh</code> applies a namespaced <code>RunnerTemplate</code> (as <code>v2alpha1</code>, so it also passes through the conversion webhook on the way to storage).
+The same script says in its own comments that it creates no <code>EgressProxy</code>, so workers egress directly; the only <code>EgressProxy</code> objects the repo exercises are in envtest and in <code>cmd/gmc/test/e2e</code>, whose venue is a kind cluster in CI rather than the GKE dogfood cluster.
+A first reading of this row named <code>PriorityClassAllowlist</code> as the uncovered kind; it is not one of the five, and it ships in the main chart rather than the v2 CRD chart.
+Whether the release candidate's e2e leg counts as dogfood traffic for those kinds is the first thing to settle, because <a href="../../operations/release/#validate-the-release-candidate-on-dogfood">release.md</a>'s validation dispatches that matrix against the candidate's runners rather than applying the kinds to the dogfood cluster itself.</p>
+<p>The deliverable is evidence, not a build: each kind applied and reconciled to a terminal condition on the dogfood cluster during a release-candidate window, recorded against the criterion in the plan's Phase 1 table, plus whichever overlay or window step makes the next candidate repeat it without being asked.
+Rides in <a href="../../plan/release-1.8/">release-1.8.md</a> rather than gating it, since a soak reading closes when the evidence exists and cannot be scheduled against a tag.
+Sibling: <a href="../Q1060/">Q1060</a> owns criterion 3; <a href="../Q413/">Q413</a> stays parked on both.</p>
 
 
 
