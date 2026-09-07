@@ -261,25 +261,31 @@ spec:
 		const metadataHTTP = "http://169.254.169.254:80/"
 		const metadataDNSPort = "http://169.254.169.254:53/"
 
+		// Both probes are gated (runGatedEgressProbe) because the destination is
+		// an IP literal: nothing here resolves a name, so runEgressProbe's curl-6
+		// retry never engages, and a one-shot 10 s connect-timeout met Calico's
+		// per-endpoint programming window as CURL_RC=28 on the anti-vacuity leg
+		// (Q1015).
 		By("control: an unlabelled pod reaches the metadata stand-in on :80 (destination is up)")
-		logs := runEgressProbe(tenantNS, "metadata-control", false, metadataHTTP)
-		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
+		logs := runGatedEgressProbe(tenantNS, "metadata-control", false, metadataHTTP, metadataHTTP)
+		Expect(logs).To(MatchRegexp(`GATE_RC=0(\s|$)`),
 			"control pod could not reach the metadata stand-in on :80 — the stand-in DaemonSet is not serving, "+
 				"so the negative below would pass whatever the NetworkPolicy does; logs:\n%s", logs)
 
-		// The anti-vacuity control, and the reason this spec cannot pass because
-		// nothing ran. A blocked :80 means the port scoping held ONLY if link-local
-		// is reachable from this same pod's network context at all; if the whole
-		// block were unroutable, or the probe pod were broken, this leg fails too
-		// and the negative is correctly disqualified rather than silently trusted.
-		By("anti-vacuity: a workload-labelled pod DOES reach the same link-local address on :53")
-		logs = runEgressProbe(tenantNS, "metadata-linklocal-dns", true, metadataDNSPort)
-		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
-			"workload pod could not reach link-local on :53 — the NodeLocal DNSCache allowance (Q136) is not in "+
-				"effect, so a blocked :80 below would prove nothing about port scoping; logs:\n%s", logs)
-
-		By("negative: a workload-labelled pod cannot reach the metadata server on :80")
-		logs = runEgressProbe(tenantNS, "metadata-blocked", true, metadataHTTP)
+		// The anti-vacuity control and the negative run in ONE workload-labelled
+		// pod, gate first: a blocked :80 means the port scoping held ONLY if
+		// link-local is reachable from this same pod's network context at all. A
+		// separate pod cannot supply that — it proves its own endpoint was
+		// programmed, while the negative's could still be in the drop window and
+		// pass for the wrong reason. If the whole block were unroutable, or the
+		// probe pod were broken, the gate exhausts its budget and the negative is
+		// correctly disqualified rather than silently trusted.
+		By("anti-vacuity: the workload-labelled pod DOES reach the same link-local address on :53, then " +
+			"negative: the same pod cannot reach the metadata server on :80")
+		logs = runGatedEgressProbe(tenantNS, "metadata-workload", true, metadataDNSPort, metadataHTTP)
+		Expect(logs).To(MatchRegexp(`GATE_RC=0(\s|$)`),
+			"workload pod could not reach link-local on :53 within the gate budget — the NodeLocal DNSCache "+
+				"allowance (Q136) is not in effect, so a blocked :80 would prove nothing about port scoping; logs:\n%s", logs)
 		Expect(logs).To(MatchRegexp(`CURL_RC=(7|28)(\s|$)`),
 			"a worker pod reached the cloud metadata server at 169.254.169.254:80 — it can read the node's cloud "+
 				"credentials. The link-local DNS allowance (Q136) has leaked beyond port 53; logs:\n%s", logs)
