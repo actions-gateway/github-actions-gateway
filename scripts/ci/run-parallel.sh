@@ -24,6 +24,14 @@
 # its slowest member, so that block is the only place a gate's cost is legible
 # (Q819).
 #
+# RUN_PARALLEL_JOBS — how many commands may run at once. Unset or 0 starts every
+# command immediately, so a 117-suite fan-out is 117 concurrent processes by
+# construction (Q822). A cap inherits into a nested fan-out, so `make check` at
+# N holds each level to N rather than the whole tree. Slots are handed out in
+# argument order, and reaping is `wait -n -p` (bash 5.1+, the floor
+# check-tools.sh declares), because the parent has to learn which child freed a
+# slot, and a per-pid wait in spawn order cannot.
+#
 # RUN_PARALLEL_GIT_TRACE_DIR — when set to an absolute, existing directory, each
 # child runs under GIT_TRACE=$dir/<label>.trace. `make scripts-test` sets it so
 # check-fixture-maintenance.sh can hold every suite to the no-background-git
@@ -44,8 +52,29 @@ if (( $# == 0 )); then
     exit 1
 fi
 
+jobs="${RUN_PARALLEL_JOBS:-0}"
+if [[ ! "$jobs" =~ ^[0-9]+$ ]]; then
+    printf '%s: RUN_PARALLEL_JOBS must be a non-negative integer, got %q\n' "${0##*/}" "$jobs" >&2
+    exit 1
+fi
+
 pids=()
 labels=()
+# Exit status by pid, recorded as children are reaped in finish order.
+declare -A status=()
+running=0
+
+# reap_one — wait for any one child and record its status against its pid.
+reap_one() {
+    local pid="" rc=0
+    wait -n -p pid || rc=$?
+    if [[ -z "$pid" ]]; then
+        printf '%s: wait -n returned %d with no child to reap\n' "${0##*/}" "$rc" >&2
+        exit 1
+    fi
+    status["$pid"]="$rc"
+    running=$(( running - 1 ))
+}
 
 # Children report their own wall time here: a subshell cannot assign to the
 # parent, and the parent cannot time them itself because `wait` collects in spawn
@@ -67,6 +96,9 @@ for spec in "$@"; do
     label="${spec%%:*}"
     cmd="${spec#*:}"
     idx="${#pids[@]}"
+    if (( jobs > 0 && running >= jobs )); then
+        reap_one
+    fi
     # Wrap in a subshell so $! is the subshell's PID and wait correctly reflects
     # the pipeline's exit code (via inherited pipefail) rather than awk's.
     # awk -v passes the label as a literal string, avoiding sed delimiter and
@@ -102,14 +134,18 @@ for spec in "$@"; do
     ) &
     pids+=($!)
     labels+=("$label")
+    running=$(( running + 1 ))
+done
+
+while (( running > 0 )); do
+    reap_one
 done
 
 failed=()
 killed=()
 kill_rc=0
 for i in "${!pids[@]}"; do
-    rc=0
-    wait "${pids[$i]}" || rc=$?
+    rc="${status[${pids[$i]}]}"
     (( rc == 0 )) && continue
     # A bare label cannot separate an assertion failing (small rc) from a
     # command the kernel killed (128+n; 137 is the OOM killer's) or one that was
