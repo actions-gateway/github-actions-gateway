@@ -18,8 +18,12 @@ Every open item, in priority order, is in the [working backlog](https://actions-
 
 ## In progress / near-term
 
-**Nothing is scoped here at the moment.** The last entry, CI for untrusted pull requests on Kata workers, shipped on 2026-08-28 and moved to [Features](features.md#security-posture).
-An empty section is the honest state between one piece of scoped work finishing and the next being picked, and the fastest way to fill it is to [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues) describing what you hit first.
+- **[Drain-safe job recovery on the scale-set tier](plan/release-1.8.md)** <!-- q:Q1029 --> A worker deleted gracefully during a node drain is recovered only if a reconcile happens to start inside the seconds its terminal phase is visible.
+  When none does, the job is silently never re-run.
+  The fix is the gating row of the next release.
+
+- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q1059,Q1060,Q452 --> The `v2` graduation is gated on a soak, and two of its three criteria have never been measured.
+  The next release candidate's dogfood window takes both readings, every kind under real traffic and the conversion webhook over real objects, and settles whether GA `v2` keeps the deprecated FQDN aliases.
 
 What lands here is scoped work, none of it waiting on an outside signal.
 Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the event that revives it.
