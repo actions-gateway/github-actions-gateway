@@ -2805,6 +2805,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Done — NetworkPolicy split shipped (commit <code>4932ce7</code>); proxied worker→GitHub egress live-validated via M4 §12</td>
 </tr>
 <tr>
+<td><a href="q988-registry-runner-version/">q988-registry-runner-version.md</a></td>
+<td>Make <code>RunnerVersionTooOld</code> verdict-bearing for a custom or digest-only worker image by reading the runner version out of the image in its registry before any pod runs it: the measurements that ruled out the config label, the stdlib registry client, the async resolver, and the verdict merge</td>
+<td>✅ Done 2026-09-07. Residuals filed as <a href="../queue/Q1065/">Q1065</a> (whether a scoped AGC egress policy should admit a registry) and <a href="../queue/Q1066/">Q1066</a> (node-identity pull credentials)</td>
+</tr>
+<tr>
 <td><a href="q986-egress-attribution/">q986-egress-attribution.md</a></td>
 <td>Attributing the proxy's per-connection egress audit record to a consuming tenant and a job: the two opted-in records, why a source address alone resolves to nothing once the worker pod is deleted, and the alternatives rejected on proxy privilege and on cross-object coupling</td>
 <td>✅ Done. Both halves shipped and the Definition of Done #5 row in <a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> is claimed</td>

@@ -2845,12 +2845,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Two sites decide which reasons the classic listener owns on this condition type, at different widths, and neither is derived from what the …</td>
 </tr>
 <tr>
-<td><a href="Q988/">Q988</a></td>
-<td><a href="../operations/troubleshooting/#worker-image-runner-version">Read the worker runner version from the registry, not the container</a></td>
-<td><code>feature</code> <code>security</code></td>
+<td><a href="Q1065/">Q1065</a></td>
+<td><a href="../design/05-security/#the-registry-read-behind-runnerversiontooold">Decide whether a scoped AGC egress policy should admit the registry read</a></td>
+<td><code>security</code> <code>docs</code></td>
 <td>🔲</td>
-<td>L</td>
-<td>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in …</td>
+<td>S</td>
+<td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) reaches the worker image's registry from the AGC pod over 443, so it works wherever …</td>
+</tr>
+<tr>
+<td><a href="Q1066/">Q1066</a></td>
+<td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's …</td>
 </tr>
 <tr>
 <td><a href="Q989/">Q989</a></td>

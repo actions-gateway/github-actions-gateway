@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q988/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q988-registry-runner-version/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Read the worker runner version from the registry, not the container - GitHub Actions Gateway</title>
+        <title>Q988: read the worker runner version from the registry - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#read-the-worker-runner-version-from-the-registry-not-the-container" class="md-skip">
+        <a href="#q988-read-the-worker-runner-version-from-the-registry" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Read the worker runner version from the registry, not the container
+              Q988: read the worker runner version from the registry
             
           </span>
         </div>
@@ -2579,6 +2579,80 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-measurements-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the measurements changed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-tests-proved-and-how" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the tests proved, and how
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,23 +2671,99 @@
   
 
 
-<h1 id="read-the-worker-runner-version-from-the-registry-not-the-container">Read the worker runner version from the registry, not the container<a class="headerlink" href="#read-the-worker-runner-version-from-the-registry-not-the-container" title="Permanent link">&para;</a></h1>
-<p>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in that container afterwards, so the last write to the termination log wins.
-Nothing inside the container can carry a verdict: the termination log, a shared <code>emptyDir</code>, and <code>bin/Runner.Listener.deps.json</code> itself are all tenant-writable, an init container cannot see the runner image, and a <code>shareProcessNamespace</code> sidecar reading <code>/proc/&lt;pid&gt;/root</code> reads the same live rootfs.
-The only unforgeable source is the image in the registry, read by the AGC before the container runs, which also covers the digest-only references Q715 reports <code>Unknown</code> for and needs no pod.
-Two variants, and they are <em>not</em> the same trust level: the config blob's <code>org.opencontainers.image.version</code> label is one GET and immutable once pinned by digest, but it is authored by whoever built the image, so for a tenant's custom image it is a durable self-report rather than an attestation; only extracting the layer holding <code>deps.json</code> reads what the runner will actually execute.
-Whether <code>actions-runner</code> sets such a label is unverified.
-Sized <code>L</code> because the repo has no registry client at all (no <code>go-containerregistry</code>, <code>crane</code> or <code>remote.Image</code> anywhere), so this needs a client, registry auth (plausibly per-tenant), digest-keyed caching, and unreachable-registry handling.
-Blocks making <code>RunnerVersionTooOld</code> verdict-bearing for a custom image; until then <code>Unknown</code> stays <code>Unknown</code> by design.</p>
+<h1 id="q988-read-the-worker-runner-version-from-the-registry">Q988: read the worker runner version from the registry<a class="headerlink" href="#q988-read-the-worker-runner-version-from-the-registry" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status: done 2026-09-07.</strong> Shipped in one PR; the two residuals are <a href="../../queue/Q1065/">Q1065</a> and <a href="../../queue/Q1066/">Q1066</a>.</p>
+</blockquote>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>Make <code>RunnerVersionTooOld</code> verdict-bearing for a custom or digest-only worker image by reading the runner version out of the image in the registry, before any pod runs it (Q988; the row closes with this plan).</p>
+<h2 id="what-the-measurements-changed">What the measurements changed<a class="headerlink" href="#what-the-measurements-changed" title="Permanent link">&para;</a></h2>
+<p>The row offered two variants and left one fact unverified.
+Measured 2026-09-07 against <code>ghcr.io/actions/actions-runner:2.335.1</code> (linux/amd64, config blob <code>sha256:9660a299…</code>):</p>
+<ul>
+<li><strong>The config label is the base image's, not the runner's.</strong> <code>org.opencontainers.image.version</code> reads <code>24.04</code>, inherited from <code>ubuntu:24.04</code>; the other labels are <code>licenses=MIT</code> and <code>source=https://github.com/actions/runner</code>.
+  The <code>history</code> carries no version either: the runner lands by <code>COPY --chown=runner:docker /actions-runner .</code> from a build stage, so no <code>RUN</code> line names the tarball.
+  The "one GET" variant would misreport the OS version as the runner version, so it is dropped rather than offered as a fallback.</li>
+<li><strong>Only the layer content holds the version</strong>, in <code>home/runner/bin/Runner.Listener.deps.json</code>, the same file the wrapper reads (Q792).
+  Scanning layers last-to-first (overlay order), the two layers above the runner had to be streamed whole (88 MB + 23 MB compressed) and the runner layer gave the file up after 3 MB as its 31st member, so one inspection reads about 114 MB of the 544 MB image.
+  That is once per digest per AGC process.</li>
+<li><strong>Reach is the AGC's egress policy's, not the feature's.</strong> By default <code>buildAGCNetworkPolicy</code> admits 443 with no <code>to:</code> restriction — the breadth <a href="../../design/05-security/#github-app-key-exfiltration-via-agc-apiserver-egress">05-security.md</a> records as the deliberate default — so any registry is reachable; an install that scopes it with <code>apiServerCIDRs</code> (Q145) closes the registry too, and <code>githubEgressFQDNs</code> lists no registry host, so an FQDN allowlist would not reopen even <code>ghcr.io</code> (whose address, <code>172.182.252.136</code> on 2026-09-07, sits in the <code>actions</code> and <code>packages</code> ranges of <code>api.github.com/meta</code>).
+  An unreachable registry therefore has to be an ordinary outcome, not an incident: the tag verdict stands and the message says why.
+  Whether a scoped policy should admit a registry is <a href="../../queue/Q1065/">Q1065</a>.</li>
+<li><strong>Credentials are the pod template's.</strong> The AGC may <code>get</code> Secrets in its namespace and nothing else that could carry a pull credential: the tenant Role grants no read on ServiceAccounts, so the worker SA's <code>imagePullSecrets</code> are out of reach, and a node-identity registry (GKE/GAR, ECR) has no Secret at all.
+  <code>podTemplate.spec.imagePullSecrets</code> is what the AGC can use, and what kubelet would use first.</li>
+</ul>
+<h2 id="design">Design<a class="headerlink" href="#design" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>cmd/agc/internal/runnerimage</code></strong>, a stdlib-only OCI distribution client: reference parsing, the <code>WWW-Authenticate</code> Bearer/Basic dance with anonymous fallback, manifest and index fetch with <code>linux/amd64</code> preferred, and a last-to-first layer scan for <code>*/bin/Runner.Listener.deps.json</code> that honours whiteouts, stops at the first hit, and is bounded in bytes and time.
+  No <code>go-containerregistry</code>: the surface needed is four requests, and the vendored tree would be far larger than the feature.</li>
+<li><strong>An async resolver</strong> in the same package: digest-keyed cache, tag-to-digest resolution on a TTL, one in-flight inspection per key, exponential backoff on failure, and a wake callback the reconcilers route to their existing <code>wakeCh</code>.
+  A reconcile never blocks on the registry.</li>
+<li><strong>Verdict merge in <code>runnercore</code>.</strong> The tag reading is the immediate answer, exactly as today.
+  A completed registry reading overrides it, and the message names the digest it was read at and any disagreement with the tag.
+  A pending or failed reading leaves the tag verdict standing with the reason appended, so a reference with a runner-version tag never regresses to <code>Unknown</code> because a registry was unreachable.</li>
+<li><strong>Reasons unchanged.</strong> <code>WorkerImageBelowMinimum</code>, <code>WorkerImageCurrent</code> and <code>WorkerImageVersionUnknown</code> keep their tiers; the message carries the source.
+  No CRD field is added: the version is in the condition message, and <code>observedRunnerVersion</code> keeps its self-report role.</li>
+</ul>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runnerimage</code> client, inspection, credentials</td>
+<td>✅ stdlib only; tests against an in-process TLS registry</td>
+</tr>
+<tr>
+<td>Async resolver with cache, backoff, wake</td>
+<td>✅ one inspection in flight, digest cached for the process, a tag's manifest re-checked hourly and its layers re-read only when the digest moved, backoff 1 min to 1 h, message strings capped at the boundary</td>
+</tr>
+<tr>
+<td><code>runnercore</code> verdict merge</td>
+<td>✅ nil lookup is byte-for-byte the Q715 verdict; <code>TestNilLookupIsTagVerdict</code> pins it</td>
+</tr>
+<tr>
+<td>Both reconcilers pass the reading; <code>main.go</code> wiring</td>
+<td>✅ transport cloned after the trust pool, secrets through the uncached reader</td>
+</tr>
+<tr>
+<td>Unit tests against an in-process registry; envtest proof the async result reaches status</td>
+<td>✅ three inversions red in the unit tier; the envtest holds the layer and requires the verdict inside a window only the wake explains</td>
+</tr>
+<tr>
+<td>Operator docs, design appendix, API godoc</td>
+<td>✅ troubleshooting, tenant-onboarding, upgrade, features, 03, 05, appendix-h, <code>api.md</code></td>
+</tr>
+<tr>
+<td>Follow-up rows</td>
+<td>✅ <a href="../../queue/Q1065/">Q1065</a>, <a href="../../queue/Q1066/">Q1066</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-the-tests-proved-and-how">What the tests proved, and how<a class="headerlink" href="#what-the-tests-proved-and-how" title="Permanent link">&para;</a></h2>
+<p>Each mechanism was deleted and its test required to go red before the tree was restored from the index: scanning the layers first-to-last reddened the topmost-layer and whiteout tests, disabling the registry override reddened every case of <code>TestRegistryReadingOverridesTag</code>, and dropping the completion wake reddened <code>TestResolverPendingThenDoneWakes</code>.
+The envtest needed a second pass: with the fake registry answering at once, deleting the reconciler's wake left <code>TestV2_RegistryRead_DigestOnlyImageGetsVerdict</code> green in 0.8 s, because the status write's own watch event reconciled the set again before the inspection could lose the race.
+The registry now holds the layer until the set has gone quiet on <code>Unknown</code>, and the verdict is required within three seconds of release, a window the ten-hour resync cannot explain.
+CI's <code>-race</code> integration lane then caught a read the local runs had not: the wake closure read <code>rs.Namespace</code>/<code>rs.Name</code> from the resolver's goroutine while the status update's decode rewrote the same struct (<code>TestV2_RegistryRead_PullSecretFromTemplate</code>, one run in one).
+Both reconcilers now capture the key by value before building the closure; the unfixed tree reproduces the race locally on the first run and the fixed one passes.</p>
+<p>The independent review of #1862 held on four more, each confirmed against the code and each with a test that goes red when its fix is reverted: a whiteout was applied to entries of its own layer, so <code>rm -rf &amp;&amp; COPY</code> in one Dockerfile step hid the file that replaced it (<code>TestInspectHonoursWhiteouts</code>, two new cases); a settled entry appended one wake closure per reconcile for the life of the process (<code>TestResolverSettledEntryHoldsNoWakes</code>); the inspection budget started before the slot was held, so an image queued behind another for fifteen minutes failed without a request (<code>TestResolverTimeoutStartsAfterTheQueue</code>); and registry- and image-controlled strings reached the condition message uncapped, where 32 KiB fails the whole status write (<code>TestResolverClipsWhatReachesTheMessage</code>).
+Its notes landed too: the manifest digest is computed from the bytes rather than read from a header the registry may omit, a tag past its TTL re-fetches the manifest and streams the layers only when the digest moved (<code>TestResolverTagReResolvesOnTTLAndDigestNever</code>, extended), and a Bearer realm must be <code>https</code>.</p>
+<h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Opening <code>ghcr.io</code> in the FQDN allowlist or the proxy's <code>PROXY_ALLOWED_HOST_SUFFIXES</code>: that widens worker egress too, and is a posture decision for its own row.</li>
+<li>Node-identity registry credentials, which the AGC cannot obtain.</li>
+<li>A <code>status.attestedRunnerVersion</code> field.</li>
+</ul>
 
 
 
 
 
 
-
-  
-  
 
 
 

@@ -3826,7 +3826,7 @@ Because the AGC injects the wrapper on top of <strong>any</strong> base, your im
 <strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its six first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently <code>2.329.0</code>, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.</p>
-<p><strong>Tag your image with the runner version it ships.</strong> The AGC reads the runner version off the <code>workerImage</code> reference and reports the verdict as the <code>RunnerVersionTooOld</code> condition on the <code>RunnerGroup</code>/<code>RunnerSet</code>:</p>
+<p><strong>Tag your image with the runner version it ships, and expect the AGC to check the image itself.</strong> The AGC reads the runner version off the <code>workerImage</code> reference at once, then reads it out of the image in its registry (the runner's own <code>bin/Runner.Listener.deps.json</code>, streamed from the layers) and reports the verdict as the <code>RunnerVersionTooOld</code> condition on the <code>RunnerGroup</code>/<code>RunnerSet</code>:</p>
 <table>
 <thead>
 <tr>
@@ -3839,22 +3839,23 @@ GitHub refuses to register a runner below its enforced minimum, currently <code>
 <tr>
 <td><code>True</code></td>
 <td><code>WorkerImageBelowMinimum</code></td>
-<td>The tag names a runner version below GitHub's enforced minimum. Update <code>workerImage</code>; the set counts as impaired and rolls up to the gateway.</td>
+<td>The image ships a runner below GitHub's enforced minimum, read from the registry (the message names the digest), or its tag says so while the registry read is pending or failed. Update <code>workerImage</code>; the set counts as impaired and rolls up to the gateway.</td>
 </tr>
 <tr>
 <td><code>False</code></td>
 <td><code>WorkerImageCurrent</code></td>
-<td>The tag names a version at or above the minimum. This checks the registration floor only; it does not prove the image is inside the 30-day window.</td>
+<td>The image ships a version at or above the minimum. This checks the registration floor only; it does not prove the image is inside the 30-day window.</td>
 </tr>
 <tr>
 <td><code>Unknown</code></td>
 <td><code>WorkerImageVersionUnknown</code></td>
-<td>The reference names no runner version, so nothing has been checked: a digest-only ref, or a tag of your own such as <code>:v3-cuda</code>. Re-tag as <code>&lt;something&gt;:2.335.1</code> to get a verdict, or read the runner version from the worker pod's own log line (below).</td>
+<td>Nothing has been checked yet, and the message says why: the registry read is in progress, it failed (the reason is quoted: an authentication failure, a 404, a dial error) and the reference names no runner version to fall back on, or the image carries no <code>deps.json</code> in its layers and is not <code>actions/runner</code>-derived.</td>
 </tr>
 </tbody>
 </table>
-<p>A digest-only or custom tag is not a failure, just an unchecked one.
-The pinned-digest advice above still stands, and <code>myrepo/runner:2.335.1@sha256:…</code> satisfies both.</p>
+<p>A digest-only or custom tag is no longer unchecked: the registry read reaches it.
+The pinned-digest advice above still stands, and <code>myrepo/runner:2.335.1@sha256:…</code> gives a verdict from the tag while the read runs and from the image once it lands.
+A private registry needs its <code>kubernetes.io/dockerconfigjson</code> Secret named in the pod template's <code>imagePullSecrets</code>, which is also where kubelet reads it; a registry kubelet reaches through the node's identity is not one the AGC can log in to (<a href="../../queue/Q1066/">Q1066</a>).</p>
 <p><strong>Reading the version a running worker actually shipped.</strong> Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>-c<span class="w"> </span>runner<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"runner version"</span>
 </code></pre></div>
@@ -4022,8 +4023,8 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 </tr>
 <tr>
 <td><code>RunnerVersionTooOld=Unknown</code>, reason <code>WorkerImageVersionUnknown</code></td>
-<td>The <code>workerImage</code> reference names no runner version, so nothing was checked</td>
-<td>Tag the image with the runner version it ships, or read the worker pod's <code>runner version detected</code> log line</td>
+<td>The registry read of the image is pending or failed and the reference names no runner version to fall back on, or the image is not <code>actions/runner</code>-derived</td>
+<td>Read the message: an authentication failure (<code>requires a login</code>, <code>token exchange … HTTP 401</code>, <code>unauthorized after authenticating</code>) wants an <code>imagePullSecret</code> on the pod template, a dial error means the AGC's egress policy does not reach the registry; otherwise tag the image with the runner version it ships, or read the worker pod's <code>runner version detected</code> log line</td>
 </tr>
 <tr>
 <td>Test job stays queued in GitHub for &gt;2 minutes</td>

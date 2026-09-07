@@ -2805,7 +2805,7 @@ The fix does not depend on which step inside it was slow.</p>
 <ul>
 <li><strong><a href="../../queue/Q413/">Q413</a> itself, and 2.0's coupled removals</strong> (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>).
   Q413 stays parked until both soak readings exist and read clean; this release supplies the readings and does not pre-empt the verdict.</li>
-<li><strong>The <code>feature</code> rows in the ready queue.</strong> <a href="../../queue/Q988/">Q988</a> needs a registry client the repo does not have, <a href="../../queue/Q725/">Q725</a> and <a href="../../queue/Q1011/">Q1011</a> are unrelated to the theme.
+<li><strong>The <code>feature</code> rows in the ready queue.</strong> Q988 (the registry read behind <code>RunnerVersionTooOld</code>; its row is closed, so it is no longer linked) landed after this was scoped and rides, and <a href="../../queue/Q725/">Q725</a> and <a href="../../queue/Q1011/">Q1011</a> are unrelated to the theme.
   Any of them landing before the tag rides in the floor's reading of the window, with no label.</li>
 <li><strong>The proxy-hardening cluster</strong> and everything else the ladder punts past 2.0, unchanged.</li>
 </ul>

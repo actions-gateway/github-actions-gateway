@@ -529,6 +529,10 @@
          <lastmod>2026-09-07</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/plan/q988-registry-runner-version/</loc>
+         <lastmod>2026-09-07</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/plan/release-1.0/</loc>
          <lastmod>2026-09-07</lastmod>
     </url>
@@ -1221,6 +1225,14 @@
          <lastmod>2026-09-07</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1065/</loc>
+         <lastmod>2026-09-07</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1066/</loc>
+         <lastmod>2026-09-07</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1067/</loc>
          <lastmod>2026-09-07</lastmod>
     </url>
@@ -1782,10 +1794,6 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q985/</loc>
-         <lastmod>2026-09-07</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/queue/Q988/</loc>
          <lastmod>2026-09-07</lastmod>
     </url>
     <url>
