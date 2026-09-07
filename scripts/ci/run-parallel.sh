@@ -61,19 +61,25 @@ fi
 
 pids=()
 labels=()
-# Exit status by pid, recorded as children are reaped in finish order.
-declare -A status=()
+# Exit status by spawn index, recorded as children are reaped in finish order.
+# Keyed by index rather than pid: under a cap a child reaped early can have its
+# pid reused by a later spawn, and a pid-keyed table would then hold only the
+# later child's status.
+status=()
+declare -A idx_of=()
 running=0
 
-# reap_one — wait for any one child and record its status against its pid.
+# reap_one — wait for any one child and record its status against its index.
+# `wait -n -p` unsets the variable when it reaps nothing, hence the default.
 reap_one() {
-    local pid="" rc=0
+    local pid rc=0
     wait -n -p pid || rc=$?
-    if [[ -z "$pid" ]]; then
-        printf '%s: wait -n returned %d with no child to reap\n' "${0##*/}" "$rc" >&2
+    if [[ -z "${pid:-}" || -z "${idx_of[$pid]:-}" ]]; then
+        printf '%s: wait -n returned %d with no child of ours to reap\n' "${0##*/}" "$rc" >&2
         exit 1
     fi
-    status["$pid"]="$rc"
+    status[${idx_of[$pid]}]="$rc"
+    unset "idx_of[$pid]"
     running=$(( running - 1 ))
 }
 
@@ -135,6 +141,7 @@ for spec in "$@"; do
     ) &
     pids+=($!)
     labels+=("$label")
+    idx_of[$!]="$idx"
     running=$(( running + 1 ))
 done
 
@@ -146,7 +153,7 @@ failed=()
 killed=()
 kill_rc=0
 for i in "${!pids[@]}"; do
-    rc="${status[${pids[$i]}]}"
+    rc="${status[$i]}"
     (( rc == 0 )) && continue
     # A bare label cannot separate an assertion failing (small rc) from a
     # command the kernel killed (128+n; 137 is the OOM killer's) or one that was
