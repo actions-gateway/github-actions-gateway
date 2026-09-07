@@ -43,7 +43,7 @@ What Q727 decided was the release's *theme*, not whether there was one — and i
 
 ## Why 1.8 exists rather than cutting 2.0 next
 
-**Added 2026-09-07, when 1.7 had tagged and the ladder read straight to 2.0.** The GA rung is parked on [v2-ga.md](v2-ga.md)'s Phase 1 soak, and on that day the soak had one criterion elapsed and two unmeasured: criterion 1 held across `v1.4.0` to `v1.7.0`, criterion 2 was unmet because the dogfood overlays apply two of the five `v2beta1` kinds and `PriorityClassAllowlist` is exercised nowhere but the kind-cluster e2e suite, and criterion 3 had never been read.
+**Added 2026-09-07, when 1.7 had tagged and the ladder read straight to 2.0.** The GA rung is parked on [v2-ga.md](v2-ga.md)'s Phase 1 soak, and on that day the soak had one criterion elapsed and two unmeasured: criterion 1 held across `v1.4.0` to `v1.7.0`, criterion 2 was unmet on one kind, `EgressProxy`, which the dogfood setup deliberately does not create while the other four are applied, and criterion 3 had no round-trip reading across the served versions.
 Labelling `2.0-gate` rows then would have published a commitment on evidence nobody had, which is the dishonesty this page exists to remove.
 
 `semver-floor.sh v1.7.0` read **FLOOR: NONE** the same day, so nothing forced a release either; what the ladder needed was a rung whose deliverable is the evidence.
