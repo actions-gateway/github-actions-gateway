@@ -68,7 +68,7 @@ The cost is real and it is a trade, not a straight loss: ARC's unprivileged pod 
 [release-1.6.md](release-1.6.md#the-gating-row-q727-decided-as-a-documented-decline) required that population be named rather than left for a reader to discover; it is named on every comparison surface that claims the gap, and in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 This is why C is deferred with a demand trigger rather than declined.
-The gap is real for that population, and the trigger is an adopter reporting it, the same pattern the proxy-hardening cluster used, where [Q725](../queue/Q725.md) revived Q564 and the other three stayed parked.
+The gap is real for that population, and the trigger is an adopter reporting it, the same pattern the proxy-hardening cluster used, where Q725 revived Q564 and the other three stayed parked.
 
 ## What shipped
 

@@ -85,7 +85,9 @@ yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/co
 # so `sum by ((((` satisfies it (Q910). The queries themselves are parsed by
 # `make promql-check`, which needs no host tool.
 dashboards="$REPO_ROOT/deploy/monitoring/grafana-dashboard-tenant.json
-$REPO_ROOT/deploy/monitoring/grafana-dashboard-platform.json"
+$REPO_ROOT/deploy/monitoring/grafana-dashboard-platform.json
+$REPO_ROOT/deploy/monitoring/grafana-dashboard-budget.json
+$REPO_ROOT/deploy/monitoring/grafana-dashboard-security.json"
 
 # The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
 # (CRDs, manager RBAC role, webhook config) that are the codegen substrate and

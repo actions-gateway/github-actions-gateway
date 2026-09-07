@@ -1,6 +1,6 @@
 # Dashboard preview harness
 
-A throwaway, fully reproducible stack for **previewing and screenshotting** the monitoring artifacts in the parent directory — the [`grafana-dashboard-tenant.json`](../grafana-dashboard-tenant.json) and [`grafana-dashboard-platform.json`](../grafana-dashboard-platform.json) dashboards and [`prometheusrule.yaml`](../prometheusrule.yaml) — against a real Prometheus Operator + Grafana.
+A throwaway, fully reproducible stack for **previewing and screenshotting** the monitoring artifacts in the parent directory — every `../grafana-dashboard-*.json` dashboard and [`prometheusrule.yaml`](../prometheusrule.yaml) — against a real Prometheus Operator + Grafana.
 Re-run it whenever a dashboard or the rules change to get fresh screenshots that reflect the current artifacts.
 
 This is a **development/verification tool only.** It applies nothing to a real cluster and is not part of the chart or any install path.
@@ -25,7 +25,7 @@ cd deploy/monitoring/preview
 ./render.sh down     # delete the throwaway cluster
 ```
 
-Writes one PNG per dashboard into `OUT_DIR` (default `.`): `actions-gateway-tenant.png`, `actions-gateway-platform.png`, and `actions-gateway-budget.png`.
+Writes one PNG per dashboard into `OUT_DIR` (default `.`): `actions-gateway-tenant.png`, `actions-gateway-platform.png`, `actions-gateway-budget.png`, and `actions-gateway-security.png`.
 
 The apply step globs `../grafana-dashboard-*.json`, but the render step walks the `DASH_UIDS` array in [`render.sh`](render.sh).
 A new dashboard therefore needs its uid added there, or it is imported and never shot, and the screenshot gate then fails on a PNG the harness was never asked to produce.
@@ -39,6 +39,7 @@ A dashboard change that skips this step leaves the published screenshot showing 
 cp actions-gateway-tenant.png ../../../docs/assets/grafana-dashboard-tenant.png
 cp actions-gateway-platform.png ../../../docs/assets/grafana-dashboard-platform.png
 cp actions-gateway-budget.png ../../../docs/assets/grafana-dashboard-budget.png
+cp actions-gateway-security.png ../../../docs/assets/grafana-dashboard-security.png
 ```
 
 Copy only the dashboards you actually changed.

@@ -88,7 +88,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Fleet rollups for platform admins](operations/observability-metrics.md#full-metrics-reference)**: cross-tenant degraded, egress-stale, and quota gauges in a single pane.
 - **[Scraping setup](operations/observability-metrics-access.md)**: wiring the mutual-TLS metrics endpoints into your Prometheus.
 - **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code.
-- **[Grafana dashboards](operations/observability-dashboards.md)**: a tenant dashboard and a platform dashboard, both as code.
+- **[Grafana dashboards](operations/observability-dashboards.md)**: tenant, platform, budget, and security dashboards, all as code.
 - **[Why a set is not being offered jobs](operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: `RunnerSet` status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
   Readable from `kubectl describe`, so answering it no longer needs metrics access.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.

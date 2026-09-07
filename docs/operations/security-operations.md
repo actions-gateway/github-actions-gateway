@@ -70,6 +70,7 @@ Two detection substrates are used:
 These rules reference metrics that are emitted today ([observability.md § Full Metrics Reference](observability-metrics.md#full-metrics-reference)).
 Drop them into the same `PrometheusRule` group as the SLO alerts, or a dedicated `actions-gateway-security` group.
 Tune thresholds to your fleet.
+The [security dashboard](observability-dashboards.md#security-dashboard) plots the series each rule fires on, one panel per rule, so a reviewer can read the signal behind an alert rather than only the alert.
 
 ```yaml
 groups:

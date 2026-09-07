@@ -69,7 +69,8 @@ Reads rather than operates, and needs evidence rather than assurances.
 
 **Needs, specifically:** artifacts produced unprompted.
 A control that exists but leaves no record is hard to evidence, which is why per-tenant egress attribution and admission decisions matter as much as the controls themselves.
-[Security operations](security-operations.md) and [admission policies](admission-policies.md) are the entry points.
+[Security operations](security-operations.md) and [admission policies](admission-policies.md) are the entry points, and the [security dashboard](observability-dashboards.md#security-dashboard) is the evidence produced unprompted: per-pool egress, admission-policy verdicts, and the abuse signals the security alert group pages on.
+It reads the pool rather than the consumer, and says so on the page: attributing a connection to a tenant and a job is the [audit-record join](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job), which no metric carries.
 
 ### Budget owner
 

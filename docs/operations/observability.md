@@ -24,7 +24,7 @@ Observability is split by surface so you can read just the part you need without
 | [Metrics reference](observability-metrics.md) | Every metric the GMC, AGC, and proxy emit — the full catalogue, the scale-set acquisition tier, proxy metrics, the `kubectl` status columns and owner-label selectors, the label-cardinality guardrail, and the Q205 metric/span renames. |
 | [Accessing metrics (scraping setup)](observability-metrics-access.md) | How to scrape: ad-hoc port-forward, the Prometheus Operator wiring, the install-time NetworkPolicy prerequisites, TLS verification for the GMC manager, and per-tenant AGC/proxy mTLS. |
 | [Alerting & SLOs](observability-alerting.md) | The symptom → metric map, the ready-to-apply `PrometheusRule` alert rules, and the SLO recording rules. |
-| [Grafana dashboards](observability-dashboards.md) | The bundled tenant and platform dashboards, panel by panel, and their template variables. |
+| [Grafana dashboards](observability-dashboards.md) | The bundled tenant, platform, budget, and security dashboards, panel by panel, and their template variables. |
 | [Logging & tracing](observability-logging.md) | Structured JSON logging, per-tenant log levels, debug diagnostics for otherwise-silent paths, and OpenTelemetry tracing (AGC). |
 
-The alert rules and the dashboards also ship as code under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — a `PrometheusRule` plus three Grafana dashboards, one per audience — so prefer applying those over hand-copying the YAML.
+The alert rules and the dashboards also ship as code under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — a `PrometheusRule` plus four Grafana dashboards, one per audience — so prefer applying those over hand-copying the YAML.
