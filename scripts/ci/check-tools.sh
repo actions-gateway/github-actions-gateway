@@ -36,9 +36,10 @@
 # bash 3.2 stock macOS still ships at /bin/bash that shopt fails, `set -e` turns
 # it into an immediate exit, and the only message is `invalid shell option
 # name`. This script is the one that has to name the real problem, so it must
-# run on the shell that has it: 3.2-safe syntax only, above the prologue.
-if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4) )); then
-  printf 'check-tools.sh: bash %s is too old; this project requires bash 4.4+.\n' "${BASH_VERSION%%(*}" >&2
+# run on the shell that has it: 3.2-safe syntax only, above the prologue. The
+# floor itself is 5.1: run-parallel.sh reaps with `wait -n -p` (Q822).
+if (( BASH_VERSINFO[0] < 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] < 1) )); then
+  printf 'check-tools.sh: bash %s is too old; this project requires bash 5.1+.\n' "${BASH_VERSION%%(*}" >&2
   printf '  install: brew install bash   (Apple will not update /bin/bash past 3.2)\n' >&2
   printf '  then put the new bash ahead of /bin on your PATH and re-run this.\n' >&2
   printf '  docs: https://www.gnu.org/software/bash/\n' >&2
@@ -90,7 +91,8 @@ shopt -s inherit_errexit
 # and containers, and every tool carries a docs url for everything else.
 #
 # Where each declared floor comes from:
-#   - bash: inherit_errexit, which scripts/ depends on, arrived in 4.4
+#   - bash: `wait -n -p`, which run-parallel.sh's fan-out cap reaps with,
+#     arrived in 5.1; inherit_errexit, which every script depends on, in 4.4
 #   - go: the go directive in go.work — below it the modules need a toolchain
 #     download to build at all
 #   - shellcheck, yamllint, kubeconform, polaris: a linter older than CI's finds
@@ -102,7 +104,7 @@ shopt -s inherit_errexit
 # server it talks to, so neither yields a client floor this project depends on.
 tools_registry() {
   cat <<'EOF'
-bash|required|bash|bash|https://www.gnu.org/software/bash/||4.4|
+bash|required|bash|bash|https://www.gnu.org/software/bash/||5.1|
 go|required|go||https://go.dev/dl/||@go.work|version
 make|required|make|make|https://www.gnu.org/software/make/|||
 git|required|git|git|https://git-scm.com/downloads|||

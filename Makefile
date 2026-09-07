@@ -87,6 +87,14 @@ all: generate build test ## Generate, build, and test all modules
 # it; mk/gate-lists.mk says why.
 include mk/gate-lists.mk
 
+# Every run-parallel.sh fan-out below runs RUN_PARALLEL_JOBS commands at once,
+# defaulting to the throttle's per-run parallelism cap: physical cores - 2 on a
+# GUI dev shell, empty and so unbounded on CI/headless. Exported so a nested
+# $(MAKE) and its own fan-out inherit one answer; `?=` lets the environment
+# override it and skips the probe when a parent make already exported it (Q822).
+RUN_PARALLEL_JOBS ?= $(shell scripts/agent/local-throttle.sh jobs)
+export RUN_PARALLEL_JOBS
+
 .PHONY: check
 check: ## Fast pre-review gate — `make list-gates` names every gate it runs and what each covers
 	scripts/ci/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")

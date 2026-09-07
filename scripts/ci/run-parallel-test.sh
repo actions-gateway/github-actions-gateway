@@ -219,6 +219,76 @@ want 'a killed command still reports its seconds' '^\[run-parallel\] +[1-9][0-9]
 rp "absent-timed:this-command-does-not-exist-q819"
 want 'a missing command still appears in the timing' '^\[run-parallel\] +[0-9]+s +absent-timed$'
 
+# RUN_PARALLEL_JOBS caps how many commands run at once (Q822). Each child counts
+# the live markers it can see and records the figure, so the cap is asserted on
+# observed concurrency rather than on wall time, which a loaded host stretches.
+# The ceiling is exact and host-independent: a child removes its marker before
+# it exits, and the parent frees a slot only after the exit, so a working cap
+# can never show a count above itself.
+CAP_DIR="$REPO_ROOT/tmp/run-parallel-test-cap.$$"
+rm -rf "$CAP_DIR"
+mkdir -p "$CAP_DIR"
+# Cleaned up by the trace section's EXIT trap below.
+# $$ is the child's own `bash -c`, so each marker is distinct.
+counted="d=$CAP_DIR; touch \"\$d/\$\$.live\"; set -- \"\$d\"/*.live; echo \$# >> \"\$d/seen\"; sleep SECS; rm -f \"\$d/\$\$.live\""
+# cap_run SECS SPEC-PREFIX... — run four counting children under the current
+# RUN_PARALLEL_JOBS and report the peak count any of them saw.
+cap_run() {
+	local secs="$1" probe
+	probe="${counted//SECS/$secs}"
+	rm -f "$CAP_DIR/seen"
+	rp "w:$probe" "x:$probe" "y:$probe" "z:$probe"
+	peak="$(sort -n "$CAP_DIR/seen" | tail -1)"
+}
+want_peak() {
+	local name="$1" op="$2" bound="$3" hit=0
+	case "$op" in
+		'<=') [[ -n "$peak" ]] && (( peak <= bound )) && hit=1 ;;
+		'>=') [[ -n "$peak" ]] && (( peak >= bound )) && hit=1 ;;
+		'==') [[ -n "$peak" ]] && (( peak == bound )) && hit=1 ;;
+	esac
+	if (( hit )); then
+		printf 'ok   %-42s peak=%s\n' "$name" "$peak"
+	else
+		printf 'FAIL %-42s want peak %s %s, got %s\n%s\n' "$name" "$op" "$bound" "${peak:-none}" "$out" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+RUN_PARALLEL_JOBS=2 cap_run 1
+want_rc 'a capped run still exits 0' 0
+want_peak 'a cap bounds observed concurrency' '<=' 2
+want 'a capped run still runs every command' 'elapsed [0-9]+s across 4 command\(s\)'
+
+# Unset means unbounded, which is what every fan-out did before the cap existed.
+# A floor of 2 is the weakest reading that separates it from a cap of 1: four
+# children spawned within milliseconds and each alive for 3 s must overlap
+# unless the host stretches four forks past that, the same margin the
+# slowest-first case above rests on. `env -u` because this suite runs inside
+# `make scripts-test`, which may itself be capped.
+rc=0
+out="$(env -u RUN_PARALLEL_JOBS "$RP" "w:${counted//SECS/3}" "x:${counted//SECS/3}" "y:${counted//SECS/3}" "z:${counted//SECS/3}" 2>&1)" || rc=$?
+peak="$(sort -n "$CAP_DIR/seen" | tail -1)"
+want_rc 'an uncapped run exits 0' 0
+want_peak 'unset runs commands concurrently' '>=' 2
+RUN_PARALLEL_JOBS=1 cap_run 0
+want_peak 'a cap of 1 serializes' '==' 1
+
+# The queue keeps draining past a failure and past a kill, each keeping its own
+# classification: a cap changes when a command starts, never whether it runs or
+# how its status is read.
+RUN_PARALLEL_JOBS=1 rp "early:sh -c 'exit 3'" "killed:sh -c 'kill -9 \$\$'" "after:echo survived"
+want_rc 'a capped failure beside a kill exits 1' 1
+want 'a capped failure keeps its status' 'FAILED:.*early \(exit 3\)'
+want 'a capped kill keeps its signal' 'KILLED:.*killed \(signal 9, exit 137\)'
+want 'a command queued behind a failure still runs' '^\[after\] survived$'
+
+# A value that is not a count is a usage error, not a silent fall-back to
+# unbounded — the one reading that would hide a typo in a Makefile.
+RUN_PARALLEL_JOBS=two rp "a:true"
+want_rc 'a non-integer cap is rejected' 1
+want 'a non-integer cap names the variable' 'RUN_PARALLEL_JOBS must be a non-negative integer'
+
 # RUN_PARALLEL_GIT_TRACE_DIR gives each child its own GIT_TRACE, so a fan-out
 # doubles as the measurement behind check-fixture-maintenance.sh (Q921). Both
 # directions: unset must leave GIT_TRACE alone, because the trace is opt-in and a
@@ -227,7 +297,7 @@ want 'a missing command still appears in the timing' '^\[run-parallel\] +[0-9]+s
 TRACE_DIR="$REPO_ROOT/tmp/run-parallel-test-traces.$$"
 rm -rf "$TRACE_DIR"
 mkdir -p "$TRACE_DIR"
-trap 'rm -rf "$TRACE_DIR"' EXIT
+trap 'rm -rf "$TRACE_DIR" "$CAP_DIR"' EXIT
 
 rc=0
 out="$(RUN_PARALLEL_GIT_TRACE_DIR="$TRACE_DIR" "$RP" \
