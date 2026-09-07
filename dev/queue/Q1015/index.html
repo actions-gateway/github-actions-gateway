@@ -2598,17 +2598,23 @@
 
 
 <h1 id="directegress-anti-vacuity-control-fails-on-calico-negative-disqualified">DirectEgress anti-vacuity control fails on calico, negative disqualified<a class="headerlink" href="#directegress-anti-vacuity-control-fails-on-calico-negative-disqualified" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
-<p><code>E2E_V2_DirectEgress_MetadataServerBlocked</code> failed on <code>main</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33080749313">e2e-calico merge_group run 33080749313</a>, 2026-08-27 14:19 UTC, at <code>cmd/gmc/test/e2e/direct_egress_test.go:276</code>.
-It is the only <code>e2e-calico</code> failure on <code>main</code> besides <a href="../Q549/">Q549</a>'s since 2026-08-18.</p>
-<p><strong>The security assertion did not fail — its control did.</strong> Line 276 is the anti-vacuity probe: a workload-labelled pod must reach the same link-local address on <code>:53</code>, so that the blocked <code>:80</code> below it means something.
-The probe returned a non-zero <code>CURL_RC</code> and the spec refused the negative, exactly as designed: <code>workload pod could not reach link-local on :53 — the NodeLocal DNSCache allowance (Q136) is not in effect</code>.
-So this is not a NetworkPolicy enforcement regression, and reading it as one is the mistake the ledger's <a href="../../development/flake-watch-retired/">refuted calico row</a> already records once.</p>
-<p>The failing wait is <code>runEgressProbe</code>'s 2-minute poll for the probe pod to terminate (<code>cmd/gmc/test/e2e/provisioning_test.go:627</code>), which the log shows still in the first poll of <code>metadata-linklocal-dns</code> at 30 s.
-Whether the allowance is genuinely absent under calico's DPv2-adjacent enforcement, or the probe pod merely had not run yet under a 6-way parallel suite, is <strong>unmeasured</strong> — settle that before touching either the allowance or the wait, because the two remedies exclude each other.
-<a href="../Q402/">Q402</a> holds the related upstream finding, that Google documents DPv2 as exempt from the extra NodeLocal DNSCache rule while Q229 measured the opposite.</p>
-<p><strong>Not dispatchable to a parallel worker.</strong> The unmeasured question needs a live calico cluster and a maintainer at the keyboard while it runs, so this wants a serial session rather than a slot in a batch.
-Two dispatch runs on 2026-09-04 independently ranked it top of a flakes-themed pool and independently declined to dispatch it, which is a cost the row should carry rather than each run re-deriving.</p>
+<p><strong>Event:</strong> <code>E2E_V2_DirectEgress_MetadataServerBlocked</code> fails on <code>main</code> with <code>GATE_RC≠0</code> on either gated probe. → top of Queue, escalated.</p>
+<p><code>E2E_V2_DirectEgress_MetadataServerBlocked</code> failed on <code>main</code> once, in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33080749313">e2e-calico merge_group run 33080749313</a>, 2026-08-27 14:19 UTC, at the anti-vacuity assertion, line 277 of the spec at that commit.
+It is the only <code>e2e-calico</code> failure on <code>main</code> besides <a href="../Q549/">Q549</a>'s in 317 completed runs since 2026-08-18 (270 <code>merge_group</code> and 47 <code>push</code>, counted 2026-09-07; three cancelled <code>push</code> runs excluded).</p>
+<p><strong>The security assertion did not fail; its control did, and the control's pod did run.</strong> The row as filed read the failure as the 2-minute pod wait; the log says otherwise.
+The 30 s line in the output is Ginkgo's progress report, and the assertion fired at 14:19:47 on a pod that had run 14:19:32 to 14:19:42 and reported <code>CURL_RC=28</code>: a 10 s connect-timeout, packets dropped rather than refused.
+The stand-in DaemonSet was 2/2 Ready on that node, and the unlabelled control on the same node had reached :80, its container running 4 s from Started to Finished at 1 s granularity, shell startup included, for a curl to a local listener.</p>
+<p><strong>Mechanism, measured 2026-09-07 on a local kind cluster with Calico v3.31.5.</strong> Calico programs a new pod's endpoint after the container can already run, and everything the pod sends before that is dropped, the same per-endpoint window <a href="../../development/flake-watch-retired/">Q221</a> measured for a selector peer.
+With the workload policy applied and the stand-in listening, 15 of 15 labelled probes on a quiet cluster reached <code>169.254.169.254:53</code> on their first attempt in ≤0.01 s, so the allowance is in effect, not absent.
+Under CPU pressure and pod, Service and NetworkPolicy churn on the same node, 17 of 17 probes that were admitted still reached it, but two single connects took 1.05 s and 1.77 s: the first SYN dropped and the 1 s retransmit accepted.
+Three more trials were rejected by the kubelet with <code>OutOfpods</code> before any packet, a harness overload rather than a dataplane reading.
+The runner's tail is longer than a Mac's: a passing run's unlabelled control waited over 12 s, and the failing pod's window outlasted the 10 s timeout.
+This spec was the one shape with no retry across that window, because its destination is an IP literal and <code>runEgressProbe</code> retries only a failed resolve; every other probe in the suite targets a hostname.</p>
+<p><strong>Mitigation shipped.</strong> The control and the workload pod each gate on their allowed port with a bounded budget (<code>runGatedEgressProbe</code>: 150 s when every attempt is dropped, 210 s if every connect succeeds and the response hangs), and the negative now runs in the same pod as the anti-vacuity gate, so a blocked :80 is asserted only from an endpoint proven programmed.
+Inverted locally by removing the link-local peer from the policy: the exact script exhausted its budget with <code>GATE_RC=28 GATE_ATTEMPTS=30</code> in 161 s, so the gate cannot pass vacuously.</p>
+<p>Residual: the window's CI tail is unmeasured (local maximum 1.77 s against a 10 s timeout it exceeded on the runner), so a recurrence past 150 s would say the mechanism is something else.
+Soak clock runs from the fix; blast radius is the <code>e2e-calico</code> lane, which is merge-group-only (<a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">Q675</a>), bar ≥50 as a correctness-guarding spec.
+<a href="../Q402/">Q402</a> holds the related upstream finding that Google documents DPv2 as exempt from the extra NodeLocal DNSCache rule while Q229 measured the opposite.</p>
 
 
 
