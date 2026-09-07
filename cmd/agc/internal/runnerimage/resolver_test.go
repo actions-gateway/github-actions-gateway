@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage/runnerimagetest"
 	"github.com/stretchr/testify/assert"
@@ -165,6 +166,14 @@ func TestResolverTimeoutStartsAfterTheQueue(t *testing.T) {
 	got := waitFor(t, r, reqB)
 	assert.Equal(t, Done, got.State, "B's budget starts when it holds the slot, not when it queued: %s", got.Err)
 	assert.Equal(t, "2.335.1", got.Result.Version)
+}
+
+func TestClipKeepsValidUTF8(t *testing.T) {
+	s := strings.Repeat("é", 10) // 20 bytes; an odd cut lands mid-rune
+	got := clip(s, 5)
+	assert.True(t, utf8.ValidString(got), "%q", got)
+	assert.Equal(t, "éé…", got)
+	assert.Equal(t, s, clip(s, 20), "nothing is cut at the cap")
 }
 
 func TestResolverClipsWhatReachesTheMessage(t *testing.T) {

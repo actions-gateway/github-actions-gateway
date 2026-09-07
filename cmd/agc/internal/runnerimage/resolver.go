@@ -57,7 +57,8 @@ const (
 	maxResultBytes = 128
 )
 
-// clip shortens s to at most n bytes, marking the cut.
+// clip shortens s to at most n bytes, marking the cut. A cut that splits a rune
+// is trimmed to the last whole one, so the message stays valid UTF-8.
 func clip(s string, n int) string {
 	if len(s) <= n {
 		return s
