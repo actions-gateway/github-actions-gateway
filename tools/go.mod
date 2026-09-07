@@ -283,3 +283,10 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+// actionlint v1.7.12 (its newest release) compiles against yaml/v4 rc.3, and
+// gosec v2.28.0, pulled in by golangci-lint v2.13.x, requires rc.6, whose API
+// drops yaml.ParserError. Both tools live in this one module, so hold yaml/v4
+// at rc.3 until an actionlint release builds against rc.6 (every tool here
+// compiles at rc.3: `make tools`, measured 2026-09-07). Q929 is the bump.
+replace go.yaml.in/yaml/v4 => go.yaml.in/yaml/v4 v4.0.0-rc.3

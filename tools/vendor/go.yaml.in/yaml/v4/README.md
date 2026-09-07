@@ -177,62 +177,26 @@ b:
 ```
 
 
-## Development and Testing with `make`
+## Testing with `make`
 
-This project's makefile (`GNUmakefile`) is set up to support all of the
-project's testing, automation and development tasks in a completely
-deterministic way.
+Running `make test` in this directory should just work.
+You don't need to have `go` installed and even if you do the `GNUmakefile` will
+ignore it and setup / cache its own version under `.cache/`.
+
+The only things you need are:
+* Linux or macOS
+* `git`
+* `bash`
+* `curl`
+* `make`
 
 Some `make` commands are:
 
 * `make test`
-* `make lint tidy`
-* `make test-shell`
-* `make test v=1`
-* `make test o='-foo --bar=baz'`  # Add extra CLI options
 * `make test GO-VERSION=1.2.34`
-* `make test GO_YAML_PATH=/usr/local/go/bin`
-* `make shell`  # Start a shell with the local `go` environment
+* `make shell` Start a shell with the local `go` environment
 * `make shell GO-VERSION=1.2.34`
-* `make distclean`  # Remove all generated files including `.cache/`
-
-
-### Dependency Auto-install
-
-By default, this makefile will not use your system's Go installation, or any
-other system tools that it needs.
-
-The only things from your system that it relies on are:
-* Linux or macOS
-* GNU `make` (3.81+)
-* `git`
-* `bash`
-* `curl`
-
-Everything else, including Go and Go utils, are installed and cached as they
-are needed by the makefile (under `.cache/`).
-
-> **Note**: Use `make shell` to get a subshell with the same environment that
-> the makefile set up for its commands.
-
-
-### Using your own Go
-
-If you want to use your own Go installation and utils, export `GO_YAML_PATH` to
-the directory containing the `go` binary.
-
-Use something like this:
-
-```
-export GO_YAML_PATH=$(dirname "$(command -v go)")
-make <rule>
-# or:
-make <rule> GO_YAML_PATH=$(dirname "$(command -v go)")
-```
-
-> **Note:** `GO-VERSION` and `GO_YAML_PATH` are mutually exclusive.
-> When `GO_YAML_PATH` is set, the Makefile uses your own Go installation and
-> ignores any `GO-VERSION` setting.
+* `make distclean` - Removes `.cache/`
 
 
 ## The `go-yaml` CLI Tool
@@ -241,16 +205,13 @@ This repository includes a `go-yaml` CLI tool which can be used to understand
 the internal stages and final results of YAML processing with the go-yaml
 library.
 
-We strongly encourage you to show pertinent output from this command when
-reporting and discussing issues.
-
 ```bash
 make go-yaml
 ./go-yaml --help
-./go-yaml <<< '
+./go-yaml -t <<< '
 foo: &a1 bar
 *a1: baz
-' -n        # Show value on decoded Node structs (formatted in YAML)
+'
 ```
 
 You can also install it with:
