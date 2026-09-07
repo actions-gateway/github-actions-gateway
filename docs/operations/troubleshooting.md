@@ -1987,7 +1987,15 @@ Jobs may still be running normally: the condition is a prediction about GitHub's
 Every reconcile, the AGC reads the runner version off the effective worker image reference (the set's `workerImage`, else the AGC's `WORKER_IMAGE`, else the digest-pinned built-in default) and compares it to that floor.
 It asks GitHub nothing, which is why the signal exists on a `ScaleSet` set: the scale-set protocol carries no runner version at session creation, so the listener there never sees the rejection that produces the `VersionTooOld` reason on the classic tier.
 
-Only the reference is read, so a tag that is not a runner version reports `Unknown` rather than a verdict.
+The tag is the immediate answer, and the AGC then reads the image itself out of its registry: it fetches the manifest and streams the layers, topmost first, until it finds the runner's own dependency manifest (`bin/Runner.Listener.deps.json`), the one version record the image carries.
+That reading is the verdict once it lands, whatever the tag says, and the message names the digest it was read at and any disagreement with the tag: `ships actions/runner 2.335.1, read from the registry at sha256:… (linux/amd64)`.
+It covers a digest-only reference and a custom tag, so `Unknown` now means one of three things the message spells out: the read is still in progress, the read failed and the tag alone could say nothing, or the image carries no `deps.json` in its layers and is not `actions/runner`-derived where the runner layout puts it.
+
+The read happens once per image digest per AGC process, and a tag-addressed reference is re-read hourly since a tag can move; it costs about 114 MB of egress for the official image, which is 544 MB.
+Credentials come from the pod template's `imagePullSecrets` (`kubernetes.io/dockerconfigjson`), which the AGC reads through its own Role; a pull secret attached to the worker ServiceAccount, or a registry kubelet reaches through the node's identity, is not something the AGC can present ([Q1066](../queue/Q1066.md)).
+Reach is the AGC's egress policy's: by default it admits 443 to any destination, and an install that scopes it with `apiServerCIDRs` closes the registry too ([Q1065](../queue/Q1065.md)).
+A failed read is not an incident: the AGC logs it at warning level, retries on a backoff that doubles from one minute to an hour, and the verdict the tag supports stands with the failure appended, so a reference whose tag names a runner version never regresses to `Unknown` because a registry was unreachable.
+
 `Unknown` is deliberately not `False`: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.
 
 **A `True` verdict makes the set impaired**, so it rolls up into the gateway's `RunnerGroupsDegraded`/`RunnerSetsDegraded` condition.
@@ -1996,8 +2004,11 @@ Only the reference is read, so a tag that is not a runner version reports `Unkno
 **Resolution.**
 
 - **`WorkerImageBelowMinimum`**: build or pull a `workerImage` on runner `2.329.0` or later and update the spec.
-  Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable.
-- **`WorkerImageVersionUnknown`**: either re-tag with the runner version the image ships, or read what a worker actually ran.
+  Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable before the registry read lands.
+- **`WorkerImageVersionUnknown`**: read the message first.
+  `registry read of the image failed (attempt N: …)` names what the AGC could not do: `unauthorized` means the image needs an `imagePullSecret` on the pod template, an HTTP 404 means the reference does not resolve at that registry, and a dial error means the AGC's egress policy does not reach it.
+  `carries no bin/Runner.Listener.deps.json` means the image is not `actions/runner`-derived in the expected layout, and no tag can fix that.
+  Where the registry is out of reach, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
   The injected wrapper reads the version from the runner's own dependency manifest rather than from the tag, and hands it back on the pod's termination message, so a `RunnerSet` carries the last one it saw (Q792):
 
 ```bash

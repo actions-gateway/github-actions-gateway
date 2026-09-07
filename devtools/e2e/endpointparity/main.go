@@ -54,6 +54,9 @@ var pinnedSites = map[string]string{
 	"githubapp/runner_auth.go:FetchRunnerOAuthToken": "AuthorizationURL comes from the JIT config blob the fake generated",
 
 	"githubapp/vaultsigner/vaultsigner.go:do": "Vault, not GitHub: the fake serves no part of this path",
+
+	"cmd/agc/internal/runnerimage/client.go:do":         "the worker image's registry, not GitHub: manifest and blob URLs are composed from the tenant's image reference, and the fake serves no part of them (Q988)",
+	"cmd/agc/internal/runnerimage/client.go:fetchToken": "the registry's token realm, handed whole in its own WWW-Authenticate challenge; the fake serves no part of it (Q988)",
 }
 
 func main() {

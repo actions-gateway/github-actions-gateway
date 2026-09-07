@@ -520,16 +520,17 @@ A working reference you can copy and extend lives at [`scripts/dogfood/runner/Do
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently `2.329.0`, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.
 
-**Tag your image with the runner version it ships.** The AGC reads the runner version off the `workerImage` reference and reports the verdict as the `RunnerVersionTooOld` condition on the `RunnerGroup`/`RunnerSet`:
+**Tag your image with the runner version it ships, and expect the AGC to check the image itself.** The AGC reads the runner version off the `workerImage` reference at once, then reads it out of the image in its registry (the runner's own `bin/Runner.Listener.deps.json`, streamed from the layers) and reports the verdict as the `RunnerVersionTooOld` condition on the `RunnerGroup`/`RunnerSet`:
 
 | Condition | Reason | What it means |
 |---|---|---|
-| `True` | `WorkerImageBelowMinimum` | The tag names a runner version below GitHub's enforced minimum. Update `workerImage`; the set counts as impaired and rolls up to the gateway. |
-| `False` | `WorkerImageCurrent` | The tag names a version at or above the minimum. This checks the registration floor only; it does not prove the image is inside the 30-day window. |
-| `Unknown` | `WorkerImageVersionUnknown` | The reference names no runner version, so nothing has been checked: a digest-only ref, or a tag of your own such as `:v3-cuda`. Re-tag as `<something>:2.335.1` to get a verdict, or read the runner version from the worker pod's own log line (below). |
+| `True` | `WorkerImageBelowMinimum` | The image ships a runner below GitHub's enforced minimum, read from the registry (the message names the digest), or its tag says so while the registry read is pending or failed. Update `workerImage`; the set counts as impaired and rolls up to the gateway. |
+| `False` | `WorkerImageCurrent` | The image ships a version at or above the minimum. This checks the registration floor only; it does not prove the image is inside the 30-day window. |
+| `Unknown` | `WorkerImageVersionUnknown` | Nothing has been checked yet, and the message says why: the registry read is in progress, it failed (the reason is quoted: `unauthorized`, a 404, a dial error) and the reference names no runner version to fall back on, or the image carries no `deps.json` in its layers and is not `actions/runner`-derived. |
 
-A digest-only or custom tag is not a failure, just an unchecked one.
-The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` satisfies both.
+A digest-only or custom tag is no longer unchecked: the registry read reaches it.
+The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` gives a verdict from the tag while the read runs and from the image once it lands.
+A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, which is also where kubelet reads it; a registry kubelet reaches through the node's identity is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
 
 **Reading the version a running worker actually shipped.** Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:
 
@@ -712,7 +713,7 @@ Onboarding is complete when:
 | `HPA TARGETS: <unknown>` | `proxy.resources.requests.cpu` not set | Add `requests.cpu: "10m"` under `spec.proxy.resources.requests` |
 | Worker pods stuck `Pending` | `ResourceQuota` exhausted or no schedulable nodes | Check `kubectl describe resourcequota -n <namespace>` and node capacity |
 | `RunnerGroup`/`RunnerSet` condition `RunnerVersionTooOld=True`, reason `WorkerImageBelowMinimum` | The `workerImage` tag names a runner version below GitHub's enforced minimum | Update `workerImage` to a runner `2.329.0` or later |
-| `RunnerVersionTooOld=Unknown`, reason `WorkerImageVersionUnknown` | The `workerImage` reference names no runner version, so nothing was checked | Tag the image with the runner version it ships, or read the worker pod's `runner version detected` log line |
+| `RunnerVersionTooOld=Unknown`, reason `WorkerImageVersionUnknown` | The registry read of the image is pending or failed and the reference names no runner version to fall back on, or the image is not `actions/runner`-derived | Read the message: an `unauthorized` failure wants an `imagePullSecret` on the pod template, a dial error means the AGC's egress policy does not reach the registry; otherwise tag the image with the runner version it ships, or read the worker pod's `runner version detected` log line |
 | Test job stays queued in GitHub for >2 minutes | `active_sessions = 0` — listener goroutines are not running | Check AGC logs for credential or proxy errors |
 | HPA present but proxy doesn't scale up | `maxReplicas` too low or HPA metric is `<unknown>` | Check both the HPA spec and that `requests.cpu` is set |
 | Proxy stuck below `maxReplicas`; `FailedCreate ... exceeded quota` events | `proxy.maxReplicas` exceeds the namespace `ResourceQuota` | Check the `ProxyQuotaPressure` condition (`kubectl describe actionsgateway …`); raise the quota or lower `maxReplicas` |

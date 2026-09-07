@@ -300,6 +300,21 @@ Enforcement is dual-surface from one source of truth — CIDR `ipBlock` / FQDN `
 The admin footgun (a too-broad suffix/CIDR — `*.googleapis.com`, a CDN, the IMDS endpoint) is bounded by guidance, not code: the docs **lead with an in-cluster caching mirror** as the recommended path and reserve the allowlist for what a mirror genuinely can't proxy.
 See [network-architecture.md § Worker egress to allowlisted non-GitHub destinations](network-architecture.md#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1), [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist), and the [Q242 plan](../plan/archive/q242-g1-proxy-destination-allowlist.md) for the full trade-off record.
 
+### The registry read behind `RunnerVersionTooOld`
+
+The AGC reads the worker image out of its registry to learn the runner version it ships (Q988): a manifest GET, an index GET for a multi-arch reference, and a streamed blob GET per layer scanned, topmost first, until `bin/Runner.Listener.deps.json` turns up.
+It is the attestable counterpart of the wrapper's self-report (`observedRunnerVersion`, Q792), and the trust argument is the one the tag already rests on: both are tenant-authored, and the registry copy is the stronger, because it is immutable once addressed by digest and nothing running inside the container can rewrite it.
+That is what lets the reading move the condition where the self-report deliberately does not.
+
+Three properties bound what the read can cost or leak:
+
+- **No new egress breadth.** The read uses the AGC's existing policy, which admits 443 to any destination by default (the exfiltration section above), so it opens nothing; an install that scopes egress with `apiServerCIDRs` closes the registry too, and the verdict falls back to the tag with the failure in the message.
+  Whether a scoped policy should carry a registry allowance is [Q1065](../queue/Q1065.md).
+- **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, read through the `get` on Secrets the tenant Role already grants and never logged; it is the credential kubelet reads for the same pull.
+  Node-identity registries are out of reach by construction ([Q1066](../queue/Q1066.md)).
+- **Bounded by the AGC, not the image.** A tenant image is untrusted input to the scan, so the stream is capped at 2 GiB of compressed layer bytes, the manifest read at 4 MiB, the dependency file at 4 MiB, and one inspection at fifteen minutes; inspections run one at a time and never touch disk.
+  The official image costs about 114 MB per digest per AGC process (measured 2026-09-07), and a digest is never re-read.
+
 ### Proxy egress audit record
 
 The proxy's per-connection record (`EgressProxy.spec.auditLogging: Connections`, Q564 / [appendix G.3](appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)) is the one place the platform deliberately writes down where a tenant's workers went.

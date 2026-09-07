@@ -80,7 +80,10 @@ type RunnerGroupReconciler struct {
 	Metrics      *runnercore.Metrics
 	Log          *slog.Logger
 	Provisioner  *provisioner.Provisioner
-	AgentKeyType agentpool.KeyType // defaults to KeyTypeRSA (the secure default) when empty
+	// ImageResolver reads the runner version out of the worker image in its registry
+	// (Q988). Nil judges the image by its tag alone.
+	ImageResolver RunnerImageResolver
+	AgentKeyType  agentpool.KeyType // defaults to KeyTypeRSA (the secure default) when empty
 
 	// Recorder emits Kubernetes Events on the reconciled RunnerGroup so that
 	// credential, agent-pool, and listener failures surface in `kubectl describe
@@ -723,8 +726,10 @@ func (r *RunnerGroupReconciler) setRunnerVersionStatus(rg *v1alpha1.RunnerGroup)
 	if r.Provisioner == nil {
 		return
 	}
-	cond := runnercore.WorkerRunnerVersionCondition(
-		r.Provisioner.EffectiveWorkerImage(rg.Spec.WorkerImage), rg.Generation)
+	image := r.Provisioner.EffectiveWorkerImage(rg.Spec.WorkerImage)
+	lookup := imageLookup(r.ImageResolver, image, rg.Spec.PodTemplate.Spec.ImagePullSecrets,
+		func() { wakeReconciler(r.wakeCh, rg.Namespace, rg.Name) })
+	cond := runnercore.WorkerRunnerVersionConditionWithRegistry(image, lookup, rg.Generation)
 
 	prev := conditionValue(rg.Status.Conditions, cond.Type)
 	// The two producers of this condition report different facts through one type. A

@@ -106,6 +106,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)**: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
 - **[Observed runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
   A self-report from the tenant's own container, not an attestation.
+- **[Registry-read runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-new-badge">new in 1.8</span>: the gateway reads the runner version out of the worker image in its registry before any pod runs it, so a digest-only or custom-tagged image gets a verdict rather than `Unknown`.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
 - **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.

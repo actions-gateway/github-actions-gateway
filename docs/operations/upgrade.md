@@ -1310,7 +1310,7 @@ GitHub enforces a minimum runner version to register, and separately requires ea
 [Troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-image-runner-version) carries the current floor and where it comes from.
 
 You do not have to wait for a failure to see this.
-On both acquisition tiers, every reconcile, the AGC reads the runner version off the effective `workerImage` reference and reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`), `WorkerImageCurrent` (`False`), or `WorkerImageVersionUnknown` (`Unknown`, when the reference names no version).
+On both acquisition tiers, every reconcile, the AGC reads the runner version off the effective `workerImage` reference, then out of the image itself in its registry, and reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`), `WorkerImageCurrent` (`False`), or `WorkerImageVersionUnknown` (`Unknown`, while the registry read is pending or failed and the reference names no version, or when the image is not `actions/runner`-derived).
 Check it right after deploying a different worker image:
 
 ```sh

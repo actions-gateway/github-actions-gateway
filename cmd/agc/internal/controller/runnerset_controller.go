@@ -74,7 +74,10 @@ type RunnerSetReconciler struct {
 	ScaleSetMetrics *scalesetlistener.Metrics
 	Log             *slog.Logger
 	Provisioner     *provisioner.Provisioner
-	AgentKeyType    agentpool.KeyType
+	// ImageResolver reads the runner version out of the worker image in its registry
+	// (Q988). Nil judges the image by its tag alone.
+	ImageResolver RunnerImageResolver
+	AgentKeyType  agentpool.KeyType
 
 	// GatewayName scopes this AGC to a single ActionsGateway under multi-gateway
 	// (§H.16 #1): it reconciles only the RunnerSets whose spec.gatewayRef.name
@@ -1011,8 +1014,10 @@ func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, tem
 	if template == nil || r.Provisioner == nil {
 		return
 	}
-	cond := runnercore.WorkerRunnerVersionCondition(
-		r.Provisioner.EffectiveWorkerImage(template.WorkerImage), rs.Generation)
+	image := r.Provisioner.EffectiveWorkerImage(template.WorkerImage)
+	lookup := imageLookup(r.ImageResolver, image, template.PodTemplate.Spec.ImagePullSecrets,
+		func() { wakeReconciler(r.wakeCh, rs.Namespace, rs.Name) })
+	cond := runnercore.WorkerRunnerVersionConditionWithRegistry(image, lookup, rs.Generation)
 
 	prev := conditionValue(rs.Status.Conditions, cond.Type)
 	// The two producers of this condition report different facts through one type. A

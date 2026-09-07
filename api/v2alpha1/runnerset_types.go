@@ -601,7 +601,8 @@ type RunnerSetStatus struct {
 	// container terminates. It is a diagnostic for an operator debugging their own
 	// image, and it deliberately does NOT move the RunnerVersionTooOld condition,
 	// which keeps saying Unknown rather than trusting a value the tenant controls.
-	// Q988 is the attestable form, read from the registry before the container runs.
+	// The attestable form is the AGC's own read of the image in its registry, taken
+	// before the container runs, which is what moves the condition.
 	//
 	// Sticky and newest-wins: the latest report seen from a terminal worker pod
 	// survives that pod being reaped, because the answer is a property of the image
