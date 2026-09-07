@@ -25,8 +25,9 @@
 # (Q819).
 #
 # RUN_PARALLEL_JOBS — how many commands may run at once. Unset or 0 starts every
-# command immediately, so a 117-suite fan-out is 117 concurrent processes by
-# construction (Q822). A cap inherits into a nested fan-out, so `make check` at
+# command immediately, so a 119-suite fan-out is 119 concurrent processes by
+# construction (Q822); the Makefile exports the throttle's `jobs` as the default
+# on a GUI dev shell. A cap inherits into a nested fan-out, so `make check` at
 # N holds each level to N rather than the whole tree. Slots are handed out in
 # argument order, and reaping is `wait -n -p` (bash 5.1+, the floor
 # check-tools.sh declares), because the parent has to learn which child freed a
