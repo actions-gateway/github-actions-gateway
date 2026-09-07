@@ -2163,6 +2163,8 @@ The repo's four instances, each showing a different way the check itself goes wr
 - **Assert that the deletion applied**, when a script drives it rather than your hands.
   Q690 mutated by `perl -i -pe 's{\Q…\E}{…}'` and three of four patterns silently matched nothing: `\Q` quotes regex metacharacters but does **not** stop interpolation, so a pattern containing `$json` or `$baseline` had those spliced out as undefined Perl variables before matching.
   Anchor a scripted mutation on a line number, or escape every `$`; either way the did-it-apply assertion is what tells you which happened.
+- **Restore unconditionally, and gate the commit on the probe.** Q988's last probe crashed while decoding the invalid UTF-8 its reverted test printed, which was the red it was looking for, but the crash skipped the restore that followed it, and the commit sequenced after the probe ran regardless, so the reverted line was pushed as the commit claiming to fix it (b5cb8e6, corrected in 6c02857).
+  Put the restore where no outcome can skip it (a `finally`, a `trap`, or `git checkout` from the index), capture the probe's output as bytes, and confirm the restored file by content before the commit rather than chaining the commit after the probe.
 
 **A green after deletion can mean a redundant guard is standing in, not that the mechanism is dead.** Q624's suite passed in full with command position deleted, because an `already_throttled` short-circuit upstream rescued every case that would have exercised it.
 The mechanism was load-bearing in production and unasserted by the suite — so the answer is a case pitched into the gap the redundant guard does not cover (there, a wrapper the short-circuit does not recognise), not a conclusion that the code is unnecessary.
