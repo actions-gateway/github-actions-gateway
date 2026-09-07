@@ -389,8 +389,8 @@ Suite-seconds is the sum of the runner's own per-label wall times.
 
 Wall time does not rank the caps: uncapped runs span 105 to 233 s and capped ones 79 to 240 s, and the host moved more between runs than any cap did.
 Two readings do separate them, both in the direction of less contention per suite.
-Every capped run totals 2,248 suite-seconds or fewer and every uncapped run 2,609 or more, so under a cap a suite spends less of its own wall time waiting, and the extra wall clock a cap costs is queueing behind the three suites that take 60 to 100 s alone.
-And the exec tail, which is what a 5 s probe budget measures, reached 3.2 s uncapped and never passed 1.8 s capped, with four of the six capped runs under 0.7 s.
+Every run capped at 16 or lower totals 2,248 suite-seconds or fewer and every uncapped run 2,609 or more, so under such a cap a suite spends less of its own wall time waiting, and the extra wall clock a cap costs is queueing behind the three suites that take 60 to 100 s alone; caps of 32 and 64 sit inside the uncapped range and buy nothing on this reading.
+And the exec tail, which is what a 5 s probe budget measures, reached 3.2 s uncapped and never passed 1.8 s capped, with five of the seven capped runs under 0.7 s.
 Both readings hold across a load range this row had already shown cannot rank a run on its own.
 
 **What it does not show is that the fan-out causes any suite to fail.** No run here crossed the 5 s budget [Q1031](../queue/Q1031.md)'s kills expire on: that took a second fan-out beside this one, which these runs had only from the `-race` suite next door.

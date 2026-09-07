@@ -408,13 +408,13 @@ else
 	fail guard-precedes-prologue "guard at '${guard_line:-none}', prologue at '${prologue_line:-none}'"
 fi
 
-# Measured rather than inferred where the host has a pre-4.4 bash to measure
+# Measured rather than inferred where the host has a pre-5.1 bash to measure
 # with: stock macOS keeps 3.2 at /bin/bash, Linux runners do not ship one, and
 # there the ordering assertion above is the whole coverage.
 old_bash=''
 for candidate in /bin/bash /usr/bin/bash; do
 	[[ -x "$candidate" ]] || continue
-	if ! "$candidate" -c 'shopt -s inherit_errexit' 2>/dev/null; then
+	if ! "$candidate" -c '(( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) ))' 2>/dev/null; then
 		old_bash="$candidate"
 		break
 	fi
@@ -429,7 +429,7 @@ if [[ -n "$old_bash" ]]; then
 		fail old-bash-reports-the-floor "rc=$old_rc, output: $old_out"
 	fi
 else
-	printf 'skip %-32s no pre-4.4 bash on this host\n' old-bash-reports-the-floor
+	printf 'skip %-32s no pre-5.1 bash on this host\n' old-bash-reports-the-floor
 fi
 
 if (( fails > 0 )); then
