@@ -48,6 +48,23 @@ type Request struct {
 	Wake func()
 }
 
+// Caps on what a Lookup carries into a condition message. Err quotes registry
+// headers and tar member names and Result's strings come out of the image, so each
+// is clipped here, at the boundary, to stay well inside the 32 KiB a condition
+// message admits.
+const (
+	maxErrBytes    = 512
+	maxResultBytes = 128
+)
+
+// clip shortens s to at most n bytes, marking the cut.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
 func (r Request) key() string {
 	names := append([]string(nil), r.PullSecrets...)
 	sort.Strings(names)
@@ -74,8 +91,9 @@ type Resolver struct {
 	MaxInFlight int
 	// InspectTimeout bounds one inspection; zero means 15 minutes.
 	InspectTimeout time.Duration
-	// TagTTL is how long a reading addressed by tag alone stands before it is
-	// re-resolved; zero means 1 hour. A digest-pinned reading never expires.
+	// TagTTL is how long a reading addressed by tag alone stands before its manifest
+	// is re-fetched; the layers are streamed again only when the digest moved. Zero
+	// means 1 hour. A digest-pinned reading never expires.
 	TagTTL time.Duration
 	// RetryBase and RetryMax bound the failure backoff; zero means 1 minute and 1 hour.
 	RetryBase, RetryMax time.Duration
@@ -127,12 +145,15 @@ func (r *Resolver) Lookup(req Request) Lookup {
 		e = &entry{req: req}
 		r.entries[key] = e
 	}
-	if req.Wake != nil {
-		e.wakes = append(e.wakes, req.Wake)
-	}
 	if !e.inFlight && r.due(e, now) {
 		e.inFlight = true
 		go r.inspect(key, e.req)
+	}
+	// A wake is owed only while an inspection can complete; on a settled entry the
+	// caller already has the answer, and holding its closure would grow the list by
+	// one per reconcile for the life of the process.
+	if e.inFlight && req.Wake != nil {
+		e.wakes = append(e.wakes, req.Wake)
 	}
 	return Lookup{State: e.state, Result: e.result, Err: e.err, Attempts: e.attempts}
 }
@@ -154,28 +175,45 @@ func (r *Resolver) due(e *entry, now time.Time) bool {
 }
 
 func (r *Resolver) inspect(key string, req Request) {
-	base := r.baseCtx()
-	ctx, cancel := context.WithTimeout(base, r.inspectTimeout())
-	defer cancel()
-
+	// The timeout starts once a slot is held: time spent queued behind another
+	// image's inspection is not this one's budget.
 	r.acquire()
 	defer r.release()
-
-	reading, err := r.run(ctx, req)
+	ctx, cancel := context.WithTimeout(r.baseCtx(), r.inspectTimeout())
+	defer cancel()
 
 	r.mu.Lock()
 	e := r.entries[key]
+	var known string
+	if e.state == Done {
+		known = e.result.Digest
+	}
+	r.mu.Unlock()
+
+	reading, unchanged, err := r.run(ctx, req, known)
+
+	r.mu.Lock()
 	e.inFlight = false
-	if err != nil {
+	switch {
+	case err != nil:
 		e.state = Failed
-		e.err = err.Error()
+		e.err = clip(err.Error(), maxErrBytes)
 		e.attempts++
 		e.nextTry = r.now().Add(r.backoff(e.attempts))
 		r.log().Warn("worker image runner version: registry read failed",
 			"image", req.Image, "attempt", e.attempts, "retryAfter", r.backoff(e.attempts), "error", err)
-	} else {
+	case unchanged:
+		e.resolvedAt = r.now()
+		r.log().Debug("worker image runner version: tag still resolves to the digest already read",
+			"image", req.Image, "digest", known)
+	default:
 		e.state = Done
-		e.result = reading
+		e.result = Reading{
+			Digest:   clip(reading.Digest, maxResultBytes),
+			Platform: clip(reading.Platform, maxResultBytes),
+			Version:  clip(reading.Version, maxResultBytes),
+			Found:    reading.Found,
+		}
 		e.err = ""
 		e.attempts = 0
 		e.resolvedAt = r.now()
@@ -192,24 +230,24 @@ func (r *Resolver) inspect(key string, req Request) {
 	}
 }
 
-func (r *Resolver) run(ctx context.Context, req Request) (Reading, error) {
+func (r *Resolver) run(ctx context.Context, req Request, known string) (Reading, bool, error) {
 	if r.HTTP == nil {
-		return Reading{}, fmt.Errorf("no HTTP client configured for the registry read")
+		return Reading{}, false, fmt.Errorf("no HTTP client configured for the registry read")
 	}
 	creds := Credentials{}
 	for _, name := range req.PullSecrets {
 		if r.ReadSecret == nil {
-			return Reading{}, fmt.Errorf("imagePullSecret %q: no secret reader configured", name)
+			return Reading{}, false, fmt.Errorf("imagePullSecret %q: no secret reader configured", name)
 		}
 		data, err := r.ReadSecret(ctx, name)
 		if err != nil {
-			return Reading{}, fmt.Errorf("imagePullSecret %q: %w", name, err)
+			return Reading{}, false, fmt.Errorf("imagePullSecret %q: %w", name, err)
 		}
 		if err := creds.ParseDockerConfigJSON(data); err != nil {
-			return Reading{}, fmt.Errorf("imagePullSecret %q: %w", name, err)
+			return Reading{}, false, fmt.Errorf("imagePullSecret %q: %w", name, err)
 		}
 	}
-	return Inspect(ctx, r.HTTP, req.Image, creds)
+	return inspect(ctx, r.HTTP, req.Image, creds, known)
 }
 
 func (r *Resolver) acquire() {

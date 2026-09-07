@@ -2,6 +2,8 @@ package runnerimage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -132,6 +134,11 @@ func (c *client) fetchToken(ctx context.Context, params map[string]string) error
 	if err != nil {
 		return fmt.Errorf("registry %s: bearer realm %q: %w", c.ref.Registry, realm, err)
 	}
+	// The login rides on this exchange, so the realm the registry names has to be
+	// TLS: a challenge pointing at http would carry it in the clear.
+	if u.Scheme != "https" {
+		return fmt.Errorf("registry %s: bearer realm %q is not https", c.ref.Registry, realm)
+	}
 	q := u.Query()
 	if s := params["service"]; s != "" {
 		q.Set("service", s)
@@ -225,16 +232,27 @@ func (c *client) manifest(ctx context.Context, ref string) (*manifest, string, e
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("manifest %s: HTTP %d", ref, resp.StatusCode)
 	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxManifestBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("manifest %s: %w", ref, err)
+	}
+	if len(body) > maxManifestBytes {
+		return nil, "", fmt.Errorf("manifest %s: larger than %d bytes", ref, maxManifestBytes)
+	}
 	var m manifest
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxManifestBytes)).Decode(&m); err != nil {
+	if err := json.Unmarshal(body, &m); err != nil {
 		return nil, "", fmt.Errorf("manifest %s: %w", ref, err)
 	}
 	if m.MediaType == "" {
 		m.MediaType = resp.Header.Get("Content-Type")
 	}
-	digest := resp.Header.Get("Docker-Content-Digest")
-	if strings.HasPrefix(ref, "sha256:") {
-		digest = ref
+	// The digest is computed from the bytes rather than read from the
+	// Docker-Content-Digest header, so it is canonical whether or not the registry
+	// sends one, and a digest reference is verified against what came back.
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	if strings.HasPrefix(ref, "sha256:") && digest != ref {
+		return nil, "", fmt.Errorf("manifest %s: the registry returned %s instead", ref, digest)
 	}
 	return &m, digest, nil
 }

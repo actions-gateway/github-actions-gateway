@@ -55,6 +55,41 @@ func TestInspectHonoursWhiteouts(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, got.Found)
 	})
+	// A whiteout applies to the layers below it, never to its own: `rm -rf && COPY`
+	// in one Dockerfile step emits the marker beside the files that replace it.
+	t.Run("opaque whiteout beside its replacement", func(t *testing.T) {
+		upper := f.GzipLayer(runnerimagetest.E("home/runner/.wh..wh..opq", ""), runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1")))
+		f.Tag("acme/runner", "opq-replaced", f.Manifest("acme/runner", "linux", "amd64", lower, upper).Digest)
+		got, err := Inspect(context.Background(), f.Client(), f.Image("acme/runner", ":opq-replaced"), nil)
+		require.NoError(t, err)
+		assert.True(t, got.Found, "the file the same layer writes after its whiteout is what the container sees")
+		assert.Equal(t, "2.335.1", got.Version)
+	})
+	t.Run("file whiteout beside its replacement", func(t *testing.T) {
+		upper := f.GzipLayer(runnerimagetest.E("home/runner/bin/.wh.Runner.Listener.deps.json", ""), runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1")))
+		f.Tag("acme/runner", "wh-replaced", f.Manifest("acme/runner", "linux", "amd64", lower, upper).Digest)
+		got, err := Inspect(context.Background(), f.Client(), f.Image("acme/runner", ":wh-replaced"), nil)
+		require.NoError(t, err)
+		assert.True(t, got.Found)
+		assert.Equal(t, "2.335.1", got.Version)
+	})
+}
+
+func TestInspectDigestIsComputedFromTheManifest(t *testing.T) {
+	f := runnerimagetest.New(t)
+	m := f.Manifest("acme/runner", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1"))))
+	f.Tag("acme/runner", "v", m.Digest)
+
+	got, err := Inspect(context.Background(), f.Client(), f.Image("acme/runner", ":v"), nil)
+	require.NoError(t, err)
+	assert.Equal(t, m.Digest, got.Digest, "a tag reference reports the digest of the bytes served, not a header")
+
+	// A digest reference whose bytes hash to something else is refused.
+	other := f.Manifest("acme/runner", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.300.0"))))
+	f.Tag("acme/runner", m.Digest, other.Digest)
+	_, err = Inspect(context.Background(), f.Client(), f.Image("acme/runner", "@"+m.Digest), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "returned "+other.Digest+" instead")
 }
 
 func TestInspectNotRunnerDerived(t *testing.T) {

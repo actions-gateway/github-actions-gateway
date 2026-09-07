@@ -3,6 +3,7 @@ package runnerimage
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -109,6 +110,76 @@ func TestResolverTagReResolvesOnTTLAndDigestNever(t *testing.T) {
 	assert.Equal(t, gets+1, f.BlobGets())
 	assert.Equal(t, "2.329.0", r.Lookup(byDigest).Result.Version)
 	assert.Equal(t, gets+1, f.BlobGets(), "a digest is immutable, so it is never re-read")
+
+	// Past another TTL with the tag still on the same digest, the manifest is
+	// re-fetched and the layers are not.
+	now = now.Add(61 * time.Minute)
+	r.Lookup(byTag)
+	require.Eventually(t, func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return !r.entries[byTag.key()].inFlight
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, gets+1, f.BlobGets(), "an unchanged digest costs the manifest fetch alone")
+	assert.Equal(t, "2.335.1", r.Lookup(byTag).Result.Version)
+	assert.Equal(t, now, r.entries[byTag.key()].resolvedAt, "the check renews the TTL")
+}
+
+func TestResolverSettledEntryHoldsNoWakes(t *testing.T) {
+	f := runnerimagetest.New(t)
+	m := f.Manifest("acme/runner", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1"))))
+	r := &Resolver{HTTP: f.Client()}
+	req := Request{Image: f.Image("acme/runner", "@"+m.Digest), Wake: func() {}}
+	require.Equal(t, Done, waitFor(t, r, req).State)
+
+	for range 1000 {
+		r.Lookup(req)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	assert.Empty(t, r.entries[req.key()].wakes, "a reconcile per 15 s must not accrue a closure each on a digest that is never re-read")
+}
+
+func TestResolverTimeoutStartsAfterTheQueue(t *testing.T) {
+	f := runnerimagetest.New(t)
+	f.HoldBlobs = make(chan struct{})
+	a := f.Manifest("acme/a", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1"))))
+	b := f.Manifest("acme/b", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1"))))
+	r := &Resolver{HTTP: f.Client(), MaxInFlight: 1, InspectTimeout: time.Second}
+	reqA := Request{Image: f.Image("acme/a", "@"+a.Digest)}
+	reqB := Request{Image: f.Image("acme/b", "@"+b.Digest)}
+
+	// A holds the one slot on a blob the registry withholds until its own budget
+	// expires; B queues behind it for longer than the whole budget, and the blob is
+	// released halfway through the budget B gets once it holds the slot.
+	assert.Equal(t, Pending, r.Lookup(reqA).State)
+	require.Eventually(t, func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return len(r.sem) == 1
+	}, time.Second, time.Millisecond, "A holds the slot before B is asked for")
+	assert.Equal(t, Pending, r.Lookup(reqB).State)
+	time.Sleep(r.InspectTimeout + r.InspectTimeout/2)
+	close(f.HoldBlobs)
+
+	got := waitFor(t, r, reqB)
+	assert.Equal(t, Done, got.State, "B's budget starts when it holds the slot, not when it queued: %s", got.Err)
+	assert.Equal(t, "2.335.1", got.Result.Version)
+}
+
+func TestResolverClipsWhatReachesTheMessage(t *testing.T) {
+	f := runnerimagetest.New(t)
+	f.Tag("acme/runner", "v", f.Manifest("acme/runner", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON(strings.Repeat("9", 4000))))).Digest)
+	long := strings.Repeat("x", 4000)
+	r := &Resolver{HTTP: f.Client(), ReadSecret: func(context.Context, string) ([]byte, error) { return nil, errors.New(long) }}
+
+	got := waitFor(t, r, Request{Image: f.Image("acme/runner", ":v"), PullSecrets: []string{"s"}})
+	assert.Equal(t, Failed, got.State)
+	assert.LessOrEqual(t, len(got.Err), maxErrBytes+len("…"), "an error quoting registry or apiserver text is capped")
+
+	got = waitFor(t, r, Request{Image: f.Image("acme/runner", ":v")})
+	assert.Equal(t, Done, got.State)
+	assert.LessOrEqual(t, len(got.Result.Version), maxResultBytes+len("…"), "a version string out of the image is capped")
 }
 
 func TestResolverReadsPullSecrets(t *testing.T) {

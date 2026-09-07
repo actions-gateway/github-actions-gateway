@@ -60,41 +60,52 @@ type Reading struct {
 // overall Timeout — the stream is long and ctx bounds it — which is why there is no
 // default client here.
 func Inspect(ctx context.Context, hc *http.Client, image string, creds Credentials) (Reading, error) {
+	reading, _, err := inspect(ctx, hc, image, creds, "")
+	return reading, err
+}
+
+// inspect is Inspect with a short-circuit: when the reference resolves to
+// knownDigest, the layers are not streamed again and unchanged reports true with an
+// empty reading, since the caller already holds the reading for that digest.
+func inspect(ctx context.Context, hc *http.Client, image string, creds Credentials, knownDigest string) (reading Reading, unchanged bool, err error) {
 	ref, err := ParseReference(image)
 	if err != nil {
-		return Reading{}, err
+		return Reading{}, false, err
 	}
 	if hc == nil {
-		return Reading{}, errors.New("no HTTP client configured for the registry read")
+		return Reading{}, false, errors.New("no HTTP client configured for the registry read")
 	}
 	c := &client{http: hc, ref: ref}
 	c.cred, _ = creds.lookup(ref.Registry)
 
 	m, digest, err := c.manifest(ctx, ref.manifestRef())
 	if err != nil {
-		return Reading{}, err
+		return Reading{}, false, err
 	}
-	reading := Reading{Digest: digest}
+	if knownDigest != "" && digest == knownDigest {
+		return Reading{}, true, nil
+	}
+	reading = Reading{Digest: digest}
 	if len(m.Manifests) > 0 {
 		d, ok := selectPlatform(m.Manifests)
 		if !ok {
-			return reading, fmt.Errorf("%s: the index lists no linux platform", ref)
+			return reading, false, fmt.Errorf("%s: the index lists no linux platform", ref)
 		}
 		reading.Platform = d.Platform.OS + "/" + d.Platform.Architecture
 		if m, _, err = c.manifest(ctx, d.Digest); err != nil {
-			return reading, err
+			return reading, false, err
 		}
 	}
 	if len(m.Layers) == 0 {
-		return reading, fmt.Errorf("%s: the manifest lists no layers", ref)
+		return reading, false, fmt.Errorf("%s: the manifest lists no layers", ref)
 	}
 
 	version, found, err := scanLayers(ctx, c, m.Layers)
 	if err != nil {
-		return reading, err
+		return reading, false, err
 	}
 	reading.Version, reading.Found = version, found
-	return reading, nil
+	return reading, false, nil
 }
 
 // selectPlatform picks the manifest to read from an index: linux/amd64 when present,
@@ -182,6 +193,10 @@ func scanLayer(ctx context.Context, c *client, layer descriptor, budget *countin
 		return "", false, fmt.Errorf("unsupported layer media type %q", layer.MediaType)
 	}
 
+	// A whiteout deletes from the layers below, never from its own: Docker emits an
+	// opaque marker beside the files that replace the directory in one layer, so the
+	// layer's whiteouts are collected here and merged into h once it is fully read.
+	deletes := hidden{files: map[string]struct{}{}}
 	versions := map[string]struct{}{}
 	tr := tar.NewReader(stream)
 	for {
@@ -200,10 +215,10 @@ func scanLayer(ctx context.Context, c *client, layer descriptor, budget *countin
 		dir = strings.TrimSuffix(dir, "/")
 		switch {
 		case base == opaqueWhiteout:
-			h.dirs = append(h.dirs, dir)
+			deletes.dirs = append(deletes.dirs, dir)
 			continue
 		case strings.HasPrefix(base, whiteoutPrefix):
-			h.files[path.Join(dir, strings.TrimPrefix(base, whiteoutPrefix))] = struct{}{}
+			deletes.files[path.Join(dir, strings.TrimPrefix(base, whiteoutPrefix))] = struct{}{}
 			continue
 		}
 		if hdr.Typeflag != tar.TypeReg || !strings.HasSuffix(name, runnerDepsFile) || h.hides(name) {
@@ -214,6 +229,10 @@ func scanLayer(ctx context.Context, c *client, layer descriptor, budget *countin
 			return "", false, fmt.Errorf("%s: %w", name, err)
 		}
 		versions[v] = struct{}{}
+	}
+	h.dirs = append(h.dirs, deletes.dirs...)
+	for f := range deletes.files {
+		h.files[f] = struct{}{}
 	}
 	switch len(versions) {
 	case 0:
