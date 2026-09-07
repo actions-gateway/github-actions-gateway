@@ -52,6 +52,8 @@ Measured 2026-09-07 against `ghcr.io/actions/actions-runner:2.335.1` (linux/amd6
 Each mechanism was deleted and its test required to go red before the tree was restored from the index: scanning the layers first-to-last reddened the topmost-layer and whiteout tests, disabling the registry override reddened every case of `TestRegistryReadingOverridesTag`, and dropping the completion wake reddened `TestResolverPendingThenDoneWakes`.
 The envtest needed a second pass: with the fake registry answering at once, deleting the reconciler's wake left `TestV2_RegistryRead_DigestOnlyImageGetsVerdict` green in 0.8 s, because the status write's own watch event reconciled the set again before the inspection could lose the race.
 The registry now holds the layer until the set has gone quiet on `Unknown`, and the verdict is required within three seconds of release, a window the ten-hour resync cannot explain.
+CI's `-race` integration lane then caught a read the local runs had not: the wake closure read `rs.Namespace`/`rs.Name` from the resolver's goroutine while the status update's decode rewrote the same struct (`TestV2_RegistryRead_PullSecretFromTemplate`, one run in one).
+Both reconcilers now capture the key by value before building the closure; the unfixed tree reproduces the race locally on the first run and the fixed one passes.
 
 ## Out of scope
 
