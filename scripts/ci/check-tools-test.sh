@@ -102,21 +102,24 @@ version_case() {
 	pass "$name" "rc=$got_rc"
 }
 
-# The floor is 4.4, where inherit_errexit arrived.
-version_case below-floor-3.2 'GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)' 1 'need 4.4+'
-version_case below-floor-4.3 'GNU bash, version 4.3.48(1)-release (x86_64-pc-linux-gnu)' 1 'need 4.4+'
-version_case at-floor-4.4 'GNU bash, version 4.4.20(1)-release (x86_64-pc-linux-gnu)' 0 '(4.4.20, need 4.4+)'
-version_case above-floor-5.3 'GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)' 0 '(5.3.15, need 4.4+)'
+# The floor is 5.1, where `wait -n -p` arrived (Q822); inherit_errexit's 4.4 is
+# below it, so a 4.4 that clears the shopt still fails the fan-out.
+version_case below-floor-3.2 'GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)' 1 'need 5.1+'
+version_case below-floor-4.4 'GNU bash, version 4.4.20(1)-release (x86_64-pc-linux-gnu)' 1 'need 5.1+'
+version_case below-floor-5.0 'GNU bash, version 5.0.17(1)-release (x86_64-pc-linux-gnu)' 1 'need 5.1+'
+version_case at-floor-5.1 'GNU bash, version 5.1.16(1)-release (x86_64-pc-linux-gnu)' 0 '(5.1.16, need 5.1+)'
+version_case above-floor-5.3 'GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)' 0 '(5.3.15, need 5.1+)'
 
-# 4.10 is above 4.4 numerically and below it lexically; a string compare passes
-# this case backwards.
-version_case minor-compared-numerically 'GNU bash, version 4.10.0(1)-release' 0 '(4.10.0, need 4.4+)'
+# 10.0 is above 5.1 numerically and below it lexically; a string compare passes
+# this case backwards. (The minor field cannot carry the same case against a
+# floor of .1, since every minor sorts above "1" both ways.)
+version_case major-compared-numerically 'GNU bash, version 10.0.0(1)-release' 0 '(10.0.0, need 5.1+)'
 
 # The banner names the build platform after the version, so taking the last
 # match — or every match — reads darwin25.4.0 as the version. The 5.3.15 case
 # above only proves the right one was picked because this one exists: a floor
-# read off the platform would clear 4.4 too.
-version_case platform-suffix-not-the-version 'GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25.4.0)' 1 'need 4.4+'
+# read off the platform would clear 5.1 too.
+version_case platform-suffix-not-the-version 'GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25.4.0)' 1 'need 5.1+'
 
 # A tool that reports nothing parseable is not silently accepted.
 version_case unparseable-version-rejected 'bash' 1 'no version reported'
@@ -420,7 +423,7 @@ if [[ -n "$old_bash" ]]; then
 	old_rc=0
 	old_out="$("$old_bash" "$CHECKER" 2>&1)" || old_rc=$?
 	die_if_killed old-bash-reports-the-floor "$old_rc"
-	if (( old_rc != 0 )) && [[ "$old_out" == *'bash 4.4+'* ]]; then
+	if (( old_rc != 0 )) && [[ "$old_out" == *'bash 5.1+'* ]]; then
 		pass old-bash-reports-the-floor "$old_bash"
 	else
 		fail old-bash-reports-the-floor "rc=$old_rc, output: $old_out"

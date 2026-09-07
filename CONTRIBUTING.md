@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Go 1.26+
-- **bash 4.4 or newer, ahead of `/bin/bash` on your `PATH`** ([why, and how to get one](#the-bash-floor))
+- **bash 5.1 or newer, ahead of `/bin/bash` on your `PATH`** ([why, and how to get one](#the-bash-floor))
 - Docker (for e2e tests and image builds)
 - [kind](https://kind.sigs.k8s.io/) (for the local e2e cluster)
 - `make`
@@ -31,6 +31,7 @@ A reference that stops resolving (a pin renamed, a workflow deleted) is reported
 
 Every script under `scripts/` opens with `shopt -s inherit_errexit`, without which `set -e` does not reach inside a command substitution and a failed builder yields a truncated value and exit 0 ([bash-style.md](docs/development/bash-style.md#set--e-stops-at-a-command-substitution)).
 That shopt arrived in **bash 4.4**, and 175 of the 185 scripts under `scripts/` declare it today.
+The floor is **bash 5.1**, one step higher: [`run-parallel.sh`](scripts/ci/run-parallel.sh), the fan-out behind `make check`, reaps its children with `wait -n -p`, which arrived in 5.1 ([why it needs that](docs/development/testing.md#the-fast-gates-fan-out-past-the-heavy-build-semaphore)).
 
 Apple still ships bash 3.2 at `/bin/bash` and has no plan to update it, so on stock macOS `/usr/bin/env bash` finds a shell below the floor and every one of those scripts exits before doing anything, saying only:
 
@@ -45,7 +46,7 @@ brew install bash
 ```
 
 Homebrew installs to `/opt/homebrew/bin` (Apple silicon) or `/usr/local/bin` (Intel), which must come before `/bin` on your `PATH`.
-Current Linux distributions are all well past 4.4, so this is a macOS concern in practice.
+Current Linux distributions are at or past 5.1 (Ubuntu 22.04 and Debian 11 ship 5.1), so this is a macOS concern in practice.
 `make doctor` reports the version it found and, on a bash below the floor, names it instead of failing on the shopt.
 
 That registry is also the project's **approved list of host CLI dependencies**.
