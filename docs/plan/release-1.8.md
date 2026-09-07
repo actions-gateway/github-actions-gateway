@@ -1,9 +1,9 @@
 # Release 1.8 Milestone Definition
 
-> **Status: scoped 2026-09-07, nothing shipped yet.** One gating row, [Q1029](../queue/Q1029.md), the scale-set drain recovery that is lost when no reconcile starts inside a terminating worker's window.
+> **Status: scoped 2026-09-07; the gating row is closed, no candidate cut.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
 > Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and the Phase 2 alias decision, [Q452](../queue/Q452.md).
 > The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 44 commits and **FLOOR: NONE** on 2026-09-07, with seven `feat`/`fix` subjects withheld because they ship in no image and no chart.
-> Q1029's fix would raise the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.
+> Q1029's fix raises the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.
 
 ## Why this is a release rather than a row that lands whenever
 
@@ -16,16 +16,21 @@ The theme is v2 GA readiness; what makes it a release an operator upgrades for i
 
 ## The gating row: Q1029
 
-[Q1029](../queue/Q1029.md) is a measured product defect on the scale-set tier.
-`RecoverEvictedScaleSetWorkers` lists from the informer cache at the top of a `RunnerSet` reconcile, so a gracefully deleted worker is judged only if a reconcile begins in the seconds between the kubelet publishing the terminal phase and removing the object.
-When none does, the job is silently never re-run.
-The row carries three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.
+Q1029 was a measured product defect on the scale-set tier.
+`RecoverEvictedScaleSetWorkers` lists from the informer cache at the top of a `RunnerSet` reconcile, so a gracefully deleted worker was judged only if a reconcile began in the seconds between the kubelet publishing the terminal phase and removing the object.
+When none did, the job was silently never re-run.
+The row carried three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.
+
+**Closed 2026-09-07.** The reconciler's worker-pod watch now hands each phase-changing or newly preempted scale-set worker straight to the same judge and the same optimistic-lock claim the scan uses, so the claim no longer waits on the reconcile queue; the scan stays for what no event reaches ([04-operational-flows.md](../design/04-operational-flows.md#detecting-a-disruption-is-not-the-same-as-claiming-it)).
+The deletion-proof is at the envtest tier: `TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld` parks the controller's only reconcile worker in a second set's listener bootstrap for the whole drain and asserts the claim lands while the reconcile count does not move, and it went red on a build where the watch path was inert.
+The e2e drain spec is unchanged: it already re-stages rather than fails on a missed window ([q549-scaleset-rerun-flake.md](q549-scaleset-rerun-flake.md#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch)), so a stricter e2e assertion is a call this plan still owes an answer on.
 
 It gates because the exposure is an operator's, not the e2e venue's: a node drain terminates many workers at once, so one missed window there is many lost jobs.
 The design already records that this arm cannot be made restart-safe ([04-operational-flows.md](../design/04-operational-flows.md#detecting-a-disruption-is-not-the-same-as-claiming-it)), and the row argues that Q844's orphan recovery does not cover a worker the scan simply missed.
 
-**Why the gap opens is unverified**, and the row says so: the reconciler runs at `MaxConcurrentReconciles: 1` and the listener bootstrap does DNS and an HTTP POST inside `Reconcile`, which is a hypothesis read off timestamps.
-Measuring it is the first step of the work, not a finding to code against.
+**Why the gap opened was unverified**, and the row said so: the reconciler runs at `MaxConcurrentReconciles: 1` and the listener bootstrap does DNS and an HTTP POST inside `Reconcile`, which was a hypothesis read off timestamps.
+What the fix established is narrower than a duration: on the vendored controller-runtime the pod's own phase-change event moves a waiting key to ready at once, so the 8-second gap held a reconcile in flight rather than a backoff, and its duration is still not measured directly ([the reading](q549-scaleset-rerun-flake.md#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch)).
+The fix does not depend on which step inside it was slow.
 
 ## What rides: the soak readings and the alias decision
 
@@ -41,7 +46,7 @@ A reading that comes back negative is the release working: it names the shape fi
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1029](../queue/Q1029.md) | Drain recovery lost when no reconcile starts inside the window | `1.8-gate` | 🔲 open |
+| Q1029 | Drain recovery lost when no reconcile starts inside the window | `1.8-gate` | ✅ closed 2026-09-07 |
 | [Q1059](../queue/Q1059.md) | Every `v2beta1` kind on the dogfood cluster (soak criterion 2) | rides | 🔲 open |
 | [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
 | [Q452](../queue/Q452.md) | GA `v2` and the deprecated FQDN aliases | rides | 🔲 open |
@@ -57,7 +62,7 @@ A reading that comes back negative is the release working: it names the shape fi
 
 ## Definition of done
 
-1. **Q1029 closed**, with the mechanism measured before the fix and an e2e assertion that fails when the recovery is deleted.
+1. ✅ **Q1029 closed** (2026-09-07), with the queue mechanism established before the fix, the reconcile's duration left unmeasured and said so, and an envtest assertion that fails when the watch-path recovery is inert; the e2e assertion the criterion asked for is still open, per [the gating row](#the-gating-row-q1029).
 2. **Criterion 2 and criterion 3 have a recorded reading** in [v2-ga.md](v2-ga.md)'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.
 3. **Q452 decided** in the plan, with the losing option's cost recorded beside it.
 4. **The three dogfood-window rows** get their window from the candidate: [Q1038](../queue/Q1038.md)'s `mirror-timing` probe, [Q1048](../queue/Q1048.md)'s mirror client census, and [Q1039](../queue/Q1039.md)'s shared-tenants topology.
@@ -66,7 +71,7 @@ A reading that comes back negative is the release working: it names the shape fi
 
 ## Critical path
 
-Q1029's measurement → its fix → a candidate.
+Q1029's measurement → its fix (done) → a candidate.
 The soak readings and the alias decision run beside it and need the candidate's window, not each other.
 The window is the schedule risk, as it was in 1.7: a reading whose venue is a booked cluster run cannot be compressed the way a code change can.
 

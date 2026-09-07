@@ -68,6 +68,33 @@ var scaleSetTestMetrics = scalesetlistener.NewMetrics(prometheus.NewRegistry())
 // GitHub REST base at a fake for the eviction-recovery rerun call).
 func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server, tweaks ...func(*provisioner.Provisioner)) func() {
 	t.Helper()
+	_, stop := startRunnerSetReconcilerWithScaleSetClients(t, scaleSetClientsFor(srv), tweaks...)
+	return stop
+}
+
+// scaleSetClientFactory is the RunnerSetReconciler.ScaleSetClientFactory signature.
+type scaleSetClientFactory = func(*v2alpha1.RunnerSet, *v2alpha1.ActionsGateway) (*scaleset.Client, error)
+
+// scaleSetClientsFor is the factory that points every set's protocol client at one
+// fake.
+func scaleSetClientsFor(srv *scalesettest.Server) scaleSetClientFactory {
+	return func(_ *v2alpha1.RunnerSet, _ *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+		return scaleset.New(scaleset.Config{
+			TokenProvider: stubProvider{},
+			ConfigURL:     "https://github.com/acme",
+			APIBase:       srv.URL,
+			HTTPClient:    srv.HTTPClient(),
+			PollClient:    srv.HTTPClient(),
+		})
+	}
+}
+
+// startRunnerSetReconcilerWithScaleSetClients is startRunnerSetReconcilerWithScaleSet
+// with the per-set protocol client chosen by the caller, for a suite that needs one set
+// talking to something other than the shared fake, and with the reconciler returned so
+// its test hooks are reachable.
+func startRunnerSetReconcilerWithScaleSetClients(t *testing.T, clients scaleSetClientFactory, tweaks ...func(*provisioner.Provisioner)) (*controller.RunnerSetReconciler, func()) {
+	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
 	skipNameValidation := true
@@ -120,16 +147,7 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 			IdleThreshold:    500,
 			RenewJobInterval: 50 * time.Millisecond,
 		},
-		// Point every ScaleSet set's protocol client at the fake.
-		ScaleSetClientFactory: func(_ *v2alpha1.RunnerSet, _ *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
-			return scaleset.New(scaleset.Config{
-				TokenProvider: stubProvider{},
-				ConfigURL:     "https://github.com/acme",
-				APIBase:       srv.URL,
-				HTTPClient:    srv.HTTPClient(),
-				PollClient:    srv.HTTPClient(),
-			})
-		},
+		ScaleSetClientFactory: clients,
 	}
 	require.NoError(t, r.SetupWithManager(mgr))
 
@@ -138,7 +156,7 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 	var once sync.Once
 	stop := func() { once.Do(func() { mgrCancel(); <-mgrDone }) }
 	t.Cleanup(stop)
-	return stop
+	return r, stop
 }
 
 // newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet whose single runnerLabel

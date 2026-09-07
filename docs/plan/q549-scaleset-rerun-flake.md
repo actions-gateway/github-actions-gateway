@@ -5,6 +5,7 @@ Four distinct failure modes now sit behind that one timeout, and only one of the
 This file exists so the next occurrence is classified before anything is changed.
 
 **Status:** [Q549](../queue/Q549.md) is parked in flake watch; the 2026-08-26 and 2026-08-28 sightings are attributed, as **two** further shapes rather than one, and both are mitigated.
+The product gap under mode C (Q1029) is [closed](#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch) as of 2026-09-07.
 Mode A is diagnosed and mitigated (PR #1120).
 **Mode B is diagnosed as of 2026-08-12 and fixed under Q809**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
 Mode C (the recovery scan never observed the disruption) and mode D (the spec failing on its own sampler) are attributed below: see [What the 2026-08-26 and 2026-08-28 sightings show](#what-the-2026-08-26-and-2026-08-28-sightings-show).
@@ -64,7 +65,7 @@ Do not read the calico run's mechanism onto this one.
 **Why the gap opens is not measured.** Nothing logs a reconcile's duration.
 The reconciler runs at controller-runtime's default `MaxConcurrentReconciles: 1` and never reconciles one key concurrently, and the listener bootstrap does a DNS lookup and an HTTP POST inside `Reconcile`, so a slow bootstrap would delay the next scan.
 That is a hypothesis read off timestamps, not a reading.
-The gap is [Q1029](../queue/Q1029.md).
+The gap was Q1029, [closed below](#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch).
 
 ### What mode C changes
 
@@ -79,6 +80,21 @@ Reaching `Fail()` now means the AGC judged the pod, which is what puts the two c
 
 **Residual:** a regression in the scan's own List selector also presents as silence, and would re-stage rather than fail.
 The envtest pair covers the selector.
+
+### Mode C, closed (2026-09-07): recovery runs off the worker-pod watch
+
+Q1029 took the observation off the reconcile queue.
+The `RunnerSet` reconciler's worker-pod watch handler hands each phase-changing (or newly preempted) scale-set worker straight to the same judge and the same claim the scan uses, and the scan stays for whatever no event reached.
+`TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld` reproduces the gap against a real apiserver, with a second set's listener bootstrap parking the controller's only reconcile worker for the whole drain, and asserts the claim lands while the reconcile count does not move.
+
+Two readings taken on the way, for the next reader of the timings above:
+
+- **The gap was a reconcile in flight, not the retry backoff.** The erroring tenant's reconcile is requeued through the exponential rate limiter, which reaches 5.12 s and 10.24 s after ten and eleven consecutive failures, long enough to be mistaken for the 8-second gap.
+  It is not: on the vendored controller-runtime v0.24.1 the controller runs on the priority queue by default (`UsePriorityQueue` defaults to true in `pkg/controller/controller.go`), and `lockedAddWithOpts` moves a waiting key to ready the moment a plain add arrives for it.
+  The phase change that publishes the drained pod's `Failed` is such an add, inside the window (the probe exits on `TERM`), so had no reconcile been in flight one would have begun inside the window and listed the pod.
+  None completed between 05:24:21 and 05:24:29, so one was in flight across it.
+- **Its duration is still not measured directly.** Nothing logs a reconcile's start; `controller_runtime_reconcile_time_seconds{controller="runnerset"}` is the instrument, and the e2e diagnostics dump does not scrape it.
+  The fix does not depend on which step inside that reconcile was slow: any reconcile longer than the teardown window held the scan past it, and the watch path waits on none of them.
 
 ## Mode D, attributed (2026-08-28): the spec failed on its own diagnostics
 
@@ -107,7 +123,7 @@ They are checked in this order, because each later one depends on reading someth
 |---|---|---|
 | **B**: the pod was gone before the claim could land | `evictionRecoveryEvidenceLost()`: the AGC logged `disruption was lost before it could be claimed` for this pod. Records a `Q809 re-staging` entry | **Diagnosed 2026-08-12**: the disruption was detected and the *claim* failed. Fixed under Q809; the spec re-stages on the unwinnable half |
 | **A**: the AGC control plane was replaced inside the claim window | `agcPodIdentity() != pinnedAGC` at the wait's expiry. Records a `Q549 re-staging` entry | Diagnosed on run [30658951388](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30658951388), mitigated by the UID pin + re-stage (PR #1120). Worked case in [testing.md § Pin the process when the signal comes out of its memory](../development/testing.md#pin-the-process-when-the-signal-comes-out-of-its-memory) |
-| **C**: the recovery scan never observed the disruption | `agcReachedNoDisruptionVerdict()`: no AGC line names the pod alongside `disrupt`. Records a `Q549 re-staging (no verdict)` entry. Must be checked **after** A, since a replaced AGC has no logs to read | **Diagnosed 2026-08-28**, [below](#mode-c-attributed-2026-08-28-the-scan-never-saw-the-disruption). The product gap underneath is [Q1029](../queue/Q1029.md) |
+| **C**: the recovery scan never observed the disruption | `agcReachedNoDisruptionVerdict()`: no AGC line names the pod alongside `disrupt`. Records a `Q549 re-staging (no verdict)` entry. Must be checked **after** A, since a replaced AGC has no logs to read | **Diagnosed 2026-08-28**, [below](#mode-c-attributed-2026-08-28-the-scan-never-saw-the-disruption). The product gap underneath, Q1029, is [closed](#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch) |
 | **D**: the spec failed on its own sampler | none: the assertion is removed | **Diagnosed 2026-08-28**, [below](#mode-d-attributed-2026-08-28-the-spec-failed-on-its-own-diagnostics). The run it reddened had already been recovered |
 
 What is left when all three re-stage arms decline is the defect the spec exists to catch: the AGC judged this pod, under the pinned control plane, and no re-run fired.

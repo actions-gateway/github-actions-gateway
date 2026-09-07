@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -217,10 +219,11 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{RateLimiter: reconcileRateLimiter()}).
 		For(&v2alpha1.RunnerSet{}).
 		// Worker pods carry LabelRunnerSet; re-reconcile on their lifecycle events
-		// so status.activeSessions and the reaper track pod phase transitions.
+		// so status.activeSessions and the reaper track pod phase transitions, and
+		// recover a disrupted scale-set worker off the event itself (Q1029).
 		Watches(
 			&corev1.Pod{},
-			handler.EnqueueRequestsFromMapFunc(r.podToRunnerSet),
+			r.workerPodHandler(),
 			builder.WithPredicates(runnerSetWorkerPodPredicate()),
 		).
 		// Referent watches: a RunnerSet sitting Ready=False/<Ref>NotFound flips the
@@ -1172,6 +1175,77 @@ func (r *RunnerSetReconciler) podToRunnerSet(_ context.Context, obj client.Objec
 		return nil
 	}
 	return []ctrl.Request{{NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: name}}}
+}
+
+// workerPodHandler is the worker-pod watch's handler: the RunnerSet enqueue every
+// event gets, with scale-set disruption recovery run off the event first (Q1029). Why
+// the event rather than the reconcile it enqueues is on
+// provisioner.RecoverDisruptedScaleSetWorker: a drained pod is readable for seconds,
+// and a reconcile already in flight holds the scan past them.
+func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
+	enqueue := handler.EnqueueRequestsFromMapFunc(r.podToRunnerSet)
+	return handler.Funcs{
+		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			r.recoverDisruptedWorkerPod(ctx, e.Object)
+			enqueue.Create(ctx, e, q)
+		},
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			r.recoverDisruptedWorkerPod(ctx, e.ObjectNew)
+			enqueue.Update(ctx, e, q)
+		},
+		DeleteFunc:  enqueue.Delete,
+		GenericFunc: enqueue.Generic,
+	}
+}
+
+// disruptedWorkerRecoveryBudget bounds the synchronous half of a recovery started off a
+// watch event: two cached reads, the claim patch with its bounded conflict retries, and
+// the retry-budget reservation. The GitHub re-run itself runs on handleEviction's own
+// detached context, as it does for the scan.
+const disruptedWorkerRecoveryBudget = 30 * time.Second
+
+// recoverDisruptedWorkerPod starts the recovery of a scale-set worker pod that a watch
+// event shows disrupted, off the reconcile queue. The pre-checks are the cheap half of
+// the judge — a phase or a preemption marker the recovery arms could act on, and no
+// claim yet — so the ordinary Pending→Running event costs nothing here. The rest runs
+// on its own goroutine: the RunnerSet read is cached, the claim is a live patch, and a
+// watch handler must not wait on either. Every recovery arm is at-most-once on the pod's
+// claim annotation, so a pod the scan also sees is recovered once.
+//
+// The goroutine's context is detached from the handler's, which controller-runtime
+// cancels the moment the handler returns (each delivery runs under its own WithCancel
+// in pkg/internal/source/event_handler.go, measured on v0.24.1), and bounded instead.
+func (r *RunnerSetReconciler) recoverDisruptedWorkerPod(ctx context.Context, obj client.Object) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok || pod.Labels[provisioner.LabelAcquisitionProtocol] != provisioner.AcquisitionProtocolScaleSet {
+		return
+	}
+	if _, claimed := pod.Annotations[provisioner.AnnotationEvictionHandledAt]; claimed {
+		return
+	}
+	if pod.Status.Phase != corev1.PodFailed && !provisioner.PreemptedByScheduler(pod) {
+		return
+	}
+	// The event's object is the cache's; the claim mutates the pod it is handed.
+	pod = pod.DeepCopy()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), disruptedWorkerRecoveryBudget)
+		defer cancel()
+		var rs v2alpha1.RunnerSet
+		key := types.NamespacedName{Namespace: pod.Namespace, Name: pod.Labels[provisioner.LabelRunnerSet]}
+		if err := r.Get(ctx, key, &rs); err != nil {
+			r.Log.Debug("disrupted scale-set worker's RunnerSet is not readable; leaving it to the recovery scan",
+				"namespace", key.Namespace, "name", key.Name, "podName", pod.Name, "error", err)
+			return
+		}
+		if rs.Spec.AcquisitionProtocol != v2alpha1.AcquisitionProtocolScaleSet {
+			return
+		}
+		if _, err := r.Provisioner.RecoverDisruptedScaleSetWorker(ctx, r.provisionerTarget(&rs), pod); err != nil {
+			r.Log.Warn("scale-set worker disruption recovery off the pod watch failed; the recovery scan retries it",
+				"namespace", key.Namespace, "name", key.Name, "podName", pod.Name, "error", err)
+		}
+	}()
 }
 
 // gatewayToRunnerSets enqueues every RunnerSet in the gateway's namespace whose

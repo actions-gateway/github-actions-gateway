@@ -667,3 +667,109 @@ func TestRecoverEvictedScaleSetWorkers_DeclineIsNotLoggedForNonCandidates(t *tes
 		})
 	}
 }
+
+// TestRecoverDisruptedScaleSetWorker_RerunsOffTheEvent is Q1029's headline: the pod a
+// worker-pod watch event carries is claimed and its run re-run with no reconcile
+// listing it. The scan is deliberately never called here, so the rerun can only have
+// come off the event path.
+func TestRecoverDisruptedScaleSetWorker_RerunsOffTheEvent(t *testing.T) {
+	ctx := context.Background()
+	pod := drainedWorker("runner-gpu-drained")
+	p, target, m, rerunCount, paths := recoveryFixture(t, pod)
+
+	done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, pod.DeepCopy())
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(1), rerunCount.Load(), "the drained worker's run must be re-run off the event alone")
+	assert.Contains(t, <-paths, "/runs/4242/rerun-failed-jobs", "the run comes off the pod's own annotations")
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseDeletion)))
+
+	var claimed corev1.Pod
+	require.NoError(t, p.Client.Get(ctx, client.ObjectKeyFromObject(pod), &claimed))
+	assert.Contains(t, claimed.Annotations, AnnotationEvictionHandledAt,
+		"the event path claims through the same annotation, or the scan would re-run the job again")
+}
+
+// TestRecoverDisruptedScaleSetWorker_IgnoresWhatIsNotADisruption keeps the event path
+// as narrow as the scan: it judges with the same arms, so a classic worker, a scale-set
+// worker still running, and a recovery already claimed all pass through untouched.
+func TestRecoverDisruptedScaleSetWorker_IgnoresWhatIsNotADisruption(t *testing.T) {
+	classic := func() *corev1.Pod {
+		pod := drainedWorker("runner-classic")
+		delete(pod.Labels, LabelAcquisitionProtocol)
+		return pod
+	}
+	running := func() *corev1.Pod {
+		pod := scaleSetWorkerPod("runner-running", identityAnnotations())
+		pod.Status.Phase = corev1.PodRunning
+		return pod
+	}
+	claimed := func() *corev1.Pod {
+		pod := drainedWorker("runner-claimed")
+		pod.Annotations[AnnotationEvictionHandledAt] = time.Now().UTC().Format(time.RFC3339)
+		return pod
+	}
+	for _, tc := range []struct {
+		name string
+		pod  func() *corev1.Pod
+	}{
+		{"a classic worker", classic},
+		{"a worker still running", running},
+		{"a recovery already claimed", claimed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			pod := tc.pod()
+			p, target, _, rerunCount, _ := recoveryFixture(t, pod)
+
+			done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, pod.DeepCopy())
+			require.NoError(t, err)
+			<-done
+
+			assert.Equal(t, int64(0), rerunCount.Load())
+		})
+	}
+}
+
+// TestRecoverDisruptedScaleSetWorker_AtMostOnceWithTheScan pins the property that lets
+// the two detection paths coexist: a pod both of them see is recovered once, in either
+// order. The second arrival is handed the pod as it was before the claim — the stale
+// copy an informer event or a cached List really delivers — and loses on the
+// optimistic lock rather than by luck.
+func TestRecoverDisruptedScaleSetWorker_AtMostOnceWithTheScan(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		eventFirst bool
+	}{
+		{"event then scan", true},
+		{"scan then event", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			pod := drainedWorker("runner-gpu-drained")
+			p, target, _, rerunCount, _ := recoveryFixture(t, pod)
+			stale := pod.DeepCopy()
+
+			event := func() {
+				done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, stale)
+				require.NoError(t, err)
+				<-done
+			}
+			scan := func() {
+				done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+				require.NoError(t, err)
+				<-done
+			}
+			if tc.eventFirst {
+				event()
+				scan()
+			} else {
+				scan()
+				event()
+			}
+
+			assert.Equal(t, int64(1), rerunCount.Load(), "one drain must spend exactly one slot of the run's retry budget")
+		})
+	}
+}
