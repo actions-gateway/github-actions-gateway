@@ -263,19 +263,19 @@ A gauge saying whether that pair is on for a gateway would let a panel key on th
 | What this row attributes | none | Text. The pool-versus-consumer reading above, stated where the panels are read |
 | CONNECT tunnels opened/s by pool | `sum by (namespace) (rate(actions_gateway_proxy_connections_total[5m]))` | Time series, one line per pool namespace |
 | Active CONNECT tunnels by pool | `sum by (namespace) (actions_gateway_proxy_connections_active)` | Time series. A pool pinned near capacity is the slowloris signal (`ActionsGatewayProxyConnectionsSaturated`) |
-| Egress posture per gateway | `actions_gateway_egress_unattributed` / `_egress_rules_stale` / `_github_egress_incomplete` | State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape, v2 only |
+| Egress posture per gateway | `actions_gateway_egress_unattributed` / `_egress_rules_stale` / `_github_egress_incomplete` | State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape; `egress_rules_stale` is emitted for v1 and v2 gateways, the other two for v2 only |
 
 **Row 2: Admission Decisions**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Admission-policy verdicts/s by policy | `sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~".*-(namespace-psa-guard\|namespace-security-profile-guard\|priorityclass-allowlist-guard\|tenant-resource-guard)", enforcement_action!=""}[5m]))` | Time series. The apiserver increments this counter only when a validation fails, split by the action the binding took (`Deny` rejected the write; `Audit` and `Warn` let it through), so the series is the rejection record itself. The policy name is matched on its suffix because the chart prefixes it with the release's `namePrefix`. Apiserver scrape |
+| Admission-policy verdicts/s by policy | `sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~".*-(namespace-psa-guard\|namespace-security-profile-guard\|priorityclass-allowlist-guard\|tenant-resource-guard)"}[5m]))` | Time series, split by the action the binding took: `deny` rejected the write, `audit` and `warn` let a failed validation through, and `allow` is an evaluation error (`error_type` of `compile_error`, `invalid_error`, or `out_of_budget`) admitted under `failurePolicy: Ignore`. The apiserver never increments the counter for a validation that simply passed, so the series is what the policies refused or could not evaluate, not a request count. Values read from `kubernetes/kubernetes` at `release-1.36` on 2026-09-07. The policy name is matched on its suffix because the chart prefixes it with the release's `namePrefix`. Apiserver scrape |
 | Validating-webhook requests/s by webhook | `sum by (webhook) (rate(controller_runtime_webhook_requests_total[5m]))` | Time series. Says the GMC's webhooks are being exercised, not how often they refused: controller-runtime writes a denial as an HTTP 200 whose `AdmissionReview` body carries the 403, so the `code` label cannot separate a deny from an allow, and no metric today counts webhook rejections ([Q1061](../queue/Q1061.md)) |
 | Name collisions | `sum(actions_gateway_scale_set_name_collision)` | Stat (≥1 = red), scale-set name collisions; the title drops the prefix because a 4-wide stat truncates it. Admission rejects every new pair, so a `1` predates the guard or was applied with the webhook uninstalled |
 
 **Row 3: Abuse Signals**
 
-One panel per rule in the [security alert group](security-operations.md#prometheus-abuse-alerts), so a reviewer sees the series an alert would fire on rather than only the alert.
+One panel per rule in the [security alert group](security-operations.md#prometheus-abuse-alerts) not already plotted above (the saturation rule is the active-tunnels panel in Row 1, the webhook rule is Row 2), so a reviewer sees the series an alert would fire on rather than only the alert.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|

@@ -120,7 +120,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 24, "x": 0, "y": 11 },
       "id": 5,
-      "description": "GMC-exported condition gauges (1 = flagged) that decide whether a tenant's egress is attributable at all. EgressUnattributed: the gateway runs in direct egress mode, so its GitHub traffic leaves from no per-tenant proxy and no egress record or per-tenant IP can name it; expected on a deploy meant to be direct, a misconfiguration on one meant to be proxied. EgressRulesStale: the GitHub IP-range allowlist has not refreshed within its window, so the pool's NetworkPolicy may have drifted from GitHub's published ranges. GitHubEgressIncomplete: a GHES tenant's appliance is outside the CIDR-mode allowlist. All from the GMC scrape; v2 gateways only.",
+      "description": "GMC-exported condition gauges (1 = flagged) that decide whether a tenant's egress is attributable at all. EgressUnattributed: the gateway runs in direct egress mode, so its GitHub traffic leaves from no per-tenant proxy and no egress record or per-tenant IP can name it; expected on a deploy meant to be direct, a misconfiguration on one meant to be proxied. EgressRulesStale: the GitHub IP-range allowlist has not refreshed within its window, so the pool's NetworkPolicy may have drifted from GitHub's published ranges. GitHubEgressIncomplete: a GHES tenant's appliance is outside the CIDR-mode allowlist. All from the GMC scrape; EgressRulesStale is emitted for v1 and v2 gateways, the other two for v2 only.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -167,12 +167,12 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 19 },
       "id": 11,
-      "description": "Verdicts the apiserver recorded for the four shipped ValidatingAdmissionPolicies (namespace-psa-guard, namespace-security-profile-guard, priorityclass-allowlist-guard, tenant-resource-guard), split by the enforcement action the binding took: Deny is a rejected write, Audit and Warn are a failed validation the binding let through. The apiserver increments this counter only when a validation fails, so the series is the rejection record itself, not a request count. Requires the apiserver scrape (kube-prometheus-stack scrapes it by default). The policy name is matched on its suffix because the chart prefixes it with the release's namePrefix.",
+      "description": "Verdicts the apiserver recorded for the four shipped ValidatingAdmissionPolicies (namespace-psa-guard, namespace-security-profile-guard, priorityclass-allowlist-guard, tenant-resource-guard), split by the enforcement action the binding took: deny is a rejected write, audit and warn are a failed validation the binding let through, and allow is an evaluation error (a policy that failed to compile or ran out of budget) admitted under failurePolicy Ignore. The apiserver never increments this counter for a validation that simply passed, so the series is the record of what the policies refused or could not evaluate, not a request count. Requires the apiserver scrape (kube-prometheus-stack scrapes it by default). The policy name is matched on its suffix because the chart prefixes it with the release's namePrefix.",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~\".*-(namespace-psa-guard|namespace-security-profile-guard|priorityclass-allowlist-guard|tenant-resource-guard)\", enforcement_action!=\"\"}[5m]))",
+          "expr": "sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~\".*-(namespace-psa-guard|namespace-security-profile-guard|priorityclass-allowlist-guard|tenant-resource-guard)\"}[5m]))",
           "legendFormat": "{{policy}} {{enforcement_action}}",
           "refId": "A"
         }
