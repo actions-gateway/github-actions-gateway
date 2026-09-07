@@ -40,7 +40,7 @@ Measured 2026-09-07 against `ghcr.io/actions/actions-runner:2.335.1` (linux/amd6
 | Piece | Status |
 |---|---|
 | `runnerimage` client, inspection, credentials | ✅ stdlib only; tests against an in-process TLS registry |
-| Async resolver with cache, backoff, wake | ✅ one inspection in flight, digest cached for the process, tag re-read hourly, backoff 1 min to 1 h |
+| Async resolver with cache, backoff, wake | ✅ one inspection in flight, digest cached for the process, a tag's manifest re-checked hourly and its layers re-read only when the digest moved, backoff 1 min to 1 h, message strings capped at the boundary |
 | `runnercore` verdict merge | ✅ nil lookup is byte-for-byte the Q715 verdict; `TestNilLookupIsTagVerdict` pins it |
 | Both reconcilers pass the reading; `main.go` wiring | ✅ transport cloned after the trust pool, secrets through the uncached reader |
 | Unit tests against an in-process registry; envtest proof the async result reaches status | ✅ three inversions red in the unit tier; the envtest holds the layer and requires the verdict inside a window only the wake explains |
@@ -54,6 +54,9 @@ The envtest needed a second pass: with the fake registry answering at once, dele
 The registry now holds the layer until the set has gone quiet on `Unknown`, and the verdict is required within three seconds of release, a window the ten-hour resync cannot explain.
 CI's `-race` integration lane then caught a read the local runs had not: the wake closure read `rs.Namespace`/`rs.Name` from the resolver's goroutine while the status update's decode rewrote the same struct (`TestV2_RegistryRead_PullSecretFromTemplate`, one run in one).
 Both reconcilers now capture the key by value before building the closure; the unfixed tree reproduces the race locally on the first run and the fixed one passes.
+
+The independent review of #1862 held on four more, each confirmed against the code and each with a test that goes red when its fix is reverted: a whiteout was applied to entries of its own layer, so `rm -rf && COPY` in one Dockerfile step hid the file that replaced it (`TestInspectHonoursWhiteouts`, two new cases); a settled entry appended one wake closure per reconcile for the life of the process (`TestResolverSettledEntryHoldsNoWakes`); the inspection budget started before the slot was held, so an image queued behind another for fifteen minutes failed without a request (`TestResolverTimeoutStartsAfterTheQueue`); and registry- and image-controlled strings reached the condition message uncapped, where 32 KiB fails the whole status write (`TestResolverClipsWhatReachesTheMessage`).
+Its notes landed too: the manifest digest is computed from the bytes rather than read from a header the registry may omit, a tag past its TTL re-fetches the manifest and streams the layers only when the digest moved (`TestResolverTagReResolvesOnTTLAndDigestNever`, extended), and a Bearer realm must be `https`.
 
 ## Out of scope
 

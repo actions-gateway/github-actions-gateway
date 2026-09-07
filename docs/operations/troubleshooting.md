@@ -1991,10 +1991,11 @@ The tag is the immediate answer, and the AGC then reads the image itself out of 
 That reading is the verdict once it lands, whatever the tag says, and the message names the digest it was read at and any disagreement with the tag: `ships actions/runner 2.335.1, read from the registry at sha256:… (linux/amd64)`.
 It covers a digest-only reference and a custom tag, so `Unknown` now means one of three things the message spells out: the read is still in progress, the read failed and the tag alone could say nothing, or the image carries no `deps.json` in its layers and is not `actions/runner`-derived where the runner layout puts it.
 
-The read happens once per image digest per AGC process, and a tag-addressed reference is re-read hourly since a tag can move; it costs about 114 MB of egress for the official image, which is 544 MB.
+The read happens once per image digest per AGC process; a tag-addressed reference has its manifest re-fetched hourly since a tag can move, and its layers are streamed again only when the digest moved.
+It costs about 114 MB of egress for the official image, which is 544 MB.
 Credentials come from the pod template's `imagePullSecrets` (`kubernetes.io/dockerconfigjson`), which the AGC reads through its own Role; a pull secret attached to the worker ServiceAccount, or a registry kubelet reaches through the node's identity, is not something the AGC can present ([Q1066](../queue/Q1066.md)).
-Reach is the AGC's egress policy's: by default it admits 443 to any destination, and an install that scopes it with `apiServerCIDRs` closes the registry too ([Q1065](../queue/Q1065.md)).
-A failed read is not an incident: the AGC logs it at warning level, retries on a backoff that doubles from one minute to an hour, and the verdict the tag supports stands with the failure appended, so a reference whose tag names a runner version never regresses to `Unknown` because a registry was unreachable.
+Reach is the AGC's egress policy's: by default it admits 443 and 6443 to any destination and no other port, so a registry on a custom port (`registry.example.com:5000`) is out of reach, and an install that scopes it with `apiServerCIDRs` closes the registry too ([Q1065](../queue/Q1065.md)).
+A failed read is not an incident: the AGC logs it at warning level, retries on a backoff that doubles from one minute to an hour (on the set's next reconcile once the delay has passed, since the resolver runs no timer of its own), and the verdict the tag supports stands with the failure appended, so a reference whose tag names a runner version never regresses to `Unknown` because a registry was unreachable.
 
 `Unknown` is deliberately not `False`: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.
 
@@ -2006,7 +2007,8 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
 - **`WorkerImageBelowMinimum`**: build or pull a `workerImage` on runner `2.329.0` or later and update the spec.
   Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable before the registry read lands.
 - **`WorkerImageVersionUnknown`**: read the message first.
-  `registry read of the image failed (attempt N: …)` names what the AGC could not do: `unauthorized` means the image needs an `imagePullSecret` on the pod template, an HTTP 404 means the reference does not resolve at that registry, and a dial error means the AGC's egress policy does not reach it.
+  `registry read of the image failed (attempt N: …)` names what the AGC could not do: an authentication failure (`requires a login and the pod template names no imagePullSecret`, `token exchange with <host>: HTTP 401 (anonymous)`, or `unauthorized after authenticating (as <user>)`) means the image needs an `imagePullSecret` on the pod template, or the one it names is refused; an HTTP 404 means the reference does not resolve at that registry; and a dial error means the AGC's egress policy does not reach it.
+  `context deadline exceeded` means one inspection ran past its fifteen-minute budget, which starts once the inspection holds its slot, not while it queues behind another image.
   `carries no bin/Runner.Listener.deps.json` means the image is not `actions/runner`-derived in the expected layout, and no tag can fix that.
   Where the registry is out of reach, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
   The injected wrapper reads the version from the runner's own dependency manifest rather than from the tag, and hands it back on the pod's termination message, so a `RunnerSet` carries the last one it saw (Q792):

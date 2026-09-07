@@ -308,12 +308,17 @@ That is what lets the reading move the condition where the self-report deliberat
 
 Three properties bound what the read can cost or leak:
 
-- **No new egress breadth.** The read uses the AGC's existing policy, which admits 443 to any destination by default (the exfiltration section above), so it opens nothing; an install that scopes egress with `apiServerCIDRs` closes the registry too, and the verdict falls back to the tag with the failure in the message.
+- **No new egress breadth.** The read uses the AGC's existing policy, which admits 443 and 6443 to any destination by default (the exfiltration section above) and no other port, so it opens nothing and a registry on another port is out of reach; an install that scopes egress with `apiServerCIDRs` closes the registry too, and the verdict falls back to the tag with the failure in the message.
   Whether a scoped policy should carry a registry allowance is [Q1065](../queue/Q1065.md).
-- **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, read through the `get` on Secrets the tenant Role already grants and never logged; it is the credential kubelet reads for the same pull.
+- **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, read through the `get` on Secrets the tenant Role already grants; it is the credential kubelet reads for the same pull.
+  The password is never logged or reported; the username reaches the condition message and the warning log when a read fails, so an operator can tell which login was refused.
+  A Bearer challenge's realm must be `https`, since the login rides on that exchange.
   Node-identity registries are out of reach by construction ([Q1066](../queue/Q1066.md)).
 - **Bounded by the AGC, not the image.** A tenant image is untrusted input to the scan, so the stream is capped at 2 GiB of compressed layer bytes, the manifest read at 4 MiB, the dependency file at 4 MiB, and one inspection at fifteen minutes; inspections run one at a time and never touch disk.
-  The official image costs about 114 MB per digest per AGC process (measured 2026-09-07), and a digest is never re-read.
+  The official image costs about 114 MB per digest per AGC process (measured 2026-09-07): a digest-addressed reference is never re-read, and a tag-addressed one has its manifest re-fetched hourly and its layers streamed again only when the digest moved.
+  What reaches the condition message is capped at the resolver boundary, so a hostile image or registry cannot push a status write past the 32 KiB a condition message admits.
+  The manifest digest is computed from the bytes served and checked against a digest reference; the layers are not digest-verified, which the tenant-authored trust argument above covers.
+  Retries and the hourly re-check run on the set's next reconcile rather than on a timer, so a set with nothing else due reads its registry on the reconcile cadence.
 
 ### Proxy egress audit record
 
