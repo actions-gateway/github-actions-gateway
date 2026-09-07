@@ -218,11 +218,15 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 			// working, not an error.
 			podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause, "error", err)
 		case apierrors.IsNotFound(err):
-			// The pod is the only record of this disruption, and it went away before
-			// the claim landed — so no reconcile of any replica can recover it now.
-			// Surface it: this is a job that will silently never be re-run, and the
-			// window is real (Q809 measured it on the drain arm, where the kubelet
-			// removes the object seconds after the container exits).
+			// The pod went away before the claim landed. What is lost is the lock, not
+			// the record: an event caller still holds the run identity on its copy, but
+			// re-running without the annotation would let a replica or the other path
+			// re-run it again, so both callers decline. Surface it: this is a job that
+			// will silently never be re-run, and the window is real (Q809 measured it on
+			// the drain arm, where the kubelet removes the object seconds after the
+			// container exits). The two paths are routinely concurrent claimants, so a
+			// conflict whose re-read comes back NotFound lands here too and counts a run
+			// the winner recovered; the metric row says so.
 			podLog.Warn("scale-set worker disruption was lost before it could be claimed; its run will not be re-run automatically",
 				"cause", cause, "error", err)
 			if p.Metrics != nil {
@@ -326,9 +330,9 @@ func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 // deletion case, and abandonedAwaitingRecovery). A pod matching it that neither arm
 // accepted has been judged and declined.
 //
-// A drained worker is readable only for the seconds between the kubelet publishing the
-// terminal phase and removing the object, and a judge that never got a look at it
-// leaves the same silence a regressed discriminator does. Without a line for the
+// A drained worker is readable only briefly (RecoverDisruptedScaleSetWorker's doc has
+// the window), and a judge that never got a look at it leaves the same silence a
+// regressed discriminator does. Without a line for the
 // declined case the two are indistinguishable, which is what left Q549 unattributable
 // across three sightings.
 func externallyDeletedTerminalWorker(pod *corev1.Pod) bool {

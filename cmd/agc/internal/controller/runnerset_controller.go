@@ -1180,8 +1180,7 @@ func (r *RunnerSetReconciler) podToRunnerSet(_ context.Context, obj client.Objec
 // workerPodHandler is the worker-pod watch's handler: the RunnerSet enqueue every
 // event gets, with scale-set disruption recovery run off the event first (Q1029). Why
 // the event rather than the reconcile it enqueues is on
-// provisioner.RecoverDisruptedScaleSetWorker: a drained pod is readable for seconds,
-// and a reconcile already in flight holds the scan past them.
+// provisioner.RecoverDisruptedScaleSetWorker.
 func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 	enqueue := handler.EnqueueRequestsFromMapFunc(r.podToRunnerSet)
 	return handler.Funcs{

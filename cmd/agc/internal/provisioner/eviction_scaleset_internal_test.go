@@ -739,34 +739,35 @@ func TestRecoverDisruptedScaleSetWorker_IgnoresWhatIsNotADisruption(t *testing.T
 // optimistic lock rather than by luck.
 func TestRecoverDisruptedScaleSetWorker_AtMostOnceWithTheScan(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		eventFirst bool
+		name  string
+		order []string
 	}{
-		{"event then scan", true},
-		{"scan then event", false},
+		{"event then scan", []string{"event", "scan"}},
+		{"scan then event", []string{"scan", "event"}},
+		// Two deliveries of one pod (Failed, then Failed with a deletion timestamp)
+		// hand the event path the same disruption twice.
+		{"event then event", []string{"event", "event"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			pod := drainedWorker("runner-gpu-drained")
 			p, target, _, rerunCount, _ := recoveryFixture(t, pod)
-			stale := pod.DeepCopy()
 
-			event := func() {
-				done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, stale)
-				require.NoError(t, err)
-				<-done
+			step := map[string]func(){
+				"event": func() {
+					// Each delivery is its own copy of the pod as it was: no claim on it.
+					done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, pod.DeepCopy())
+					require.NoError(t, err)
+					<-done
+				},
+				"scan": func() {
+					done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+					require.NoError(t, err)
+					<-done
+				},
 			}
-			scan := func() {
-				done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
-				require.NoError(t, err)
-				<-done
-			}
-			if tc.eventFirst {
-				event()
-				scan()
-			} else {
-				scan()
-				event()
+			for _, s := range tc.order {
+				step[s]()
 			}
 
 			assert.Equal(t, int64(1), rerunCount.Load(), "one drain must spend exactly one slot of the run's retry budget")
