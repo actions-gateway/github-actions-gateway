@@ -568,6 +568,74 @@ func egressEnforcingCNI() bool {
 // actions-gateway/component=workload label that the tenant NetworkPolicies
 // match on.
 func runEgressProbe(ns, name string, workloadLabeled bool, curlArgs string) string {
+	script := fmt.Sprintf(`      set -u
+      rc=0
+      for attempt in 1 2 3 4 5; do
+        rc=0
+        curl --silent --show-error --output /dev/null \
+             --connect-timeout 10 --max-time 20 \
+             --write-out 'HTTP_CODE=%%{http_code}\n' \
+             %s || rc=$?
+        # curl 6 = could not resolve host: transient CoreDNS readiness on a
+        # freshly scheduled pod. Retry only this; 0/7/28 are real signals —
+        # surface them at once so assertions see the true outcome unmasked.
+        if [ "$rc" -ne 6 ]; then break; fi
+        sleep 2
+      done
+      echo "CURL_RC=${rc}"
+`, curlArgs)
+	return runProbePod(ns, name, workloadLabeled, script, 2*time.Minute)
+}
+
+// runGatedEgressProbe is runEgressProbe with a reachability gate in the same
+// pod: the script polls gateURL until curl exits 0, then takes the one-shot
+// probe of curlArgs exactly as runEgressProbe does. Logs carry GATE_RC=<n>
+// GATE_ATTEMPTS=<n> ahead of the CURL_RC/HTTP_CODE lines.
+//
+// The gate rides the CNI's per-endpoint policy-programming window: a fresh
+// pod's egress is dropped until Felix has programmed its endpoint, and under
+// the 6-way parallel suite that window has outlasted one 10 s connect-timeout
+// (Q1015: e2e-calico run 33080749313, CURL_RC=28 from a pod whose node had
+// the destination listening; the unlabelled control in a passing run waited
+// 12 s). An IP-literal destination is the shape that meets the window with no
+// retry at all: every other runEgressProbe target is a hostname, whose first
+// failure inside the window is the resolve, and none has flaked.
+//
+// Gating in the SAME pod is what makes a negative taken afterwards
+// non-vacuous: a separate control pod proves only its own endpoint was
+// programmed, while the negative pod could still be in the drop window and
+// pass for the wrong reason. The budget is bounded so a destination that is
+// genuinely unreachable still reports GATE_RC≠0 and the caller's assertion
+// still fails: 30 × (3 s connect-timeout + 2 s) = 150 s when every attempt
+// is dropped (the Q291 figure), 30 × (5 s max-time + 2 s) = 210 s if every
+// connect succeeds and the response hangs, plus the one-shot's 20 s, inside
+// the 5-minute pod-phase ceiling.
+func runGatedEgressProbe(ns, name string, workloadLabeled bool, gateURL, curlArgs string) string {
+	script := fmt.Sprintf(`      set -u
+      n=0
+      rc=1
+      while [ "$n" -lt 30 ]; do
+        n=$((n+1))
+        rc=0
+        curl --silent --output /dev/null --connect-timeout 3 --max-time 5 %s || rc=$?
+        if [ "$rc" -eq 0 ]; then break; fi
+        sleep 2
+      done
+      echo "GATE_RC=${rc} GATE_ATTEMPTS=${n}"
+      rc=0
+      curl --silent --show-error --output /dev/null \
+           --connect-timeout 10 --max-time 20 \
+           --write-out 'HTTP_CODE=%%{http_code}\n' \
+           %s || rc=$?
+      echo "CURL_RC=${rc}"
+`, gateURL, curlArgs)
+	return runProbePod(ns, name, workloadLabeled, script, 5*time.Minute)
+}
+
+// runProbePod applies a one-shot curl pod running script (a YAML block scalar
+// body, indented six spaces) and returns its logs once it terminates within
+// wait. Offsets are 2 because callers are the two wrappers above.
+func runProbePod(ns, name string, workloadLabeled bool, script string, wait time.Duration) string {
 	labels := "e2e-probe: control"
 	if workloadLabeled {
 		labels = "actions-gateway/component: workload"
@@ -588,24 +656,9 @@ spec:
     command: ["sh", "-c"]
     args:
     - |
-      set -u
-      rc=0
-      for attempt in 1 2 3 4 5; do
-        rc=0
-        curl --silent --show-error --output /dev/null \
-             --connect-timeout 10 --max-time 20 \
-             --write-out 'HTTP_CODE=%%{http_code}\n' \
-             %s || rc=$?
-        # curl 6 = could not resolve host: transient CoreDNS readiness on a
-        # freshly scheduled pod. Retry only this; 0/7/28 are real signals —
-        # surface them at once so assertions see the true outcome unmasked.
-        if [ "$rc" -ne 6 ]; then break; fi
-        sleep 2
-      done
-      echo "CURL_RC=${rc}"
-`, name, ns, labels, curlImage, curlArgs)
+%s`, name, ns, labels, curlImage, script)
 
-	ExpectWithOffset(1, utils.ApplyManifest(manifest)).To(Succeed(), "apply egress probe pod %s/%s", ns, name)
+	ExpectWithOffset(2, utils.ApplyManifest(manifest)).To(Succeed(), "apply egress probe pod %s/%s", ns, name)
 	DeferCleanup(func() {
 		cmd := exec.Command("kubectl", "delete", "pod", name,
 			"-n", ns, "--ignore-not-found", "--wait=false")
@@ -614,7 +667,7 @@ spec:
 
 	By("waiting for probe pod " + name + " to terminate")
 	var finalPhase string
-	EventuallyWithOffset(1, func(g Gomega) {
+	EventuallyWithOffset(2, func(g Gomega) {
 		cmd := exec.Command("kubectl", "get", "pod", name,
 			"-n", ns,
 			"-o", "jsonpath={.status.phase}",
@@ -624,11 +677,11 @@ spec:
 		g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
 			"probe pod still in phase %q", out)
 		finalPhase = out
-	}, 2*time.Minute, 3*time.Second).Should(Succeed())
+	}, wait, 3*time.Second).Should(Succeed())
 
 	logs, logsErr := utils.Run(exec.Command("kubectl", "logs", name, "-n", ns))
-	ExpectWithOffset(1, logsErr).NotTo(HaveOccurred(), "fetch probe pod logs")
-	ExpectWithOffset(1, finalPhase).To(Equal("Succeeded"),
+	ExpectWithOffset(2, logsErr).NotTo(HaveOccurred(), "fetch probe pod logs")
+	ExpectWithOffset(2, finalPhase).To(Equal("Succeeded"),
 		"probe pod %s ended in phase %s (infrastructure problem — the script always exits 0); logs:\n%s", name, finalPhase, logs)
 	return logs
 }
