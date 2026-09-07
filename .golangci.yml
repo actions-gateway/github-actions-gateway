@@ -203,8 +203,9 @@ linters:
       # post-finalizer-add and status-conflict retries, and the replacement is a
       # behaviour decision per site (rely on the watch event, or pick a
       # RequeueAfter interval), owned by Q1063. golangci-lint 2.12.2 never
-      # reported these, cold or warm; 2.13.2 (staticcheck 0.8.1) does. Drop this
-      # rule when Q1063 lands, so a new use of the field fails the gate.
+      # reported these, cold or warm; 2.13.2 does (it also moves staticcheck to
+      # 0.8.1, and which half surfaces them was not separated). Drop this rule
+      # when Q1063 lands, so a new use of the field fails the gate.
       - path: cmd/(agc|gmc)/internal/controller/
         linters:
           - staticcheck
