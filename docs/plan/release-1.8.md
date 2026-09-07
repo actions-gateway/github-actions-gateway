@@ -11,7 +11,7 @@ The [release ladder](release-ladder.md) reads 1.7 → 2.0, and 2.0 is [parked on
 Read on 2026-09-07: criterion 1 has elapsed on the record rather than by re-derivation here, since `v1.4.0` through `v1.7.0` all shipped on `v2beta1` and each release's pre-flight API review returned *ship as-is* over additive surface ([1.4](release-1.4.md#pre-flight-the-api-surface-this-tag-publishes), [1.5](release-1.5.md#pre-flight-the-api-surface-this-tag-publishes), [1.6](release-1.6.md), [1.7](release-1.7.md#pre-flight-verdicts)); criterion 2 is unmet on one kind, since the dogfood overlays and `scripts/dogfood/setup.sh` between them apply `ActionsGateway`, `RunnerSet`, `ClusterRunnerTemplate` and `RunnerTemplate` while `setup.sh` deliberately creates no `EgressProxy` on that cluster, and the e2e lane that does exercise one runs on a kind cluster; criterion 3 has no recorded round-trip across the served versions, the nearest reading being [Q415](archive/q415-migrate-dogfood-validation.md)'s live migration, which drove the webhook on one kind in one direction.
 So the GA rung cannot be labelled without publishing a commitment on unmeasured criteria, and the roadmap's near-term section has been empty since 2026-08-29.
 
-1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window every soak reading needs, and the same window is the one three rows have waited for since 1.7 ([Q1038](../queue/Q1038.md), [Q1048](../queue/Q1048.md), [Q1039](../queue/Q1039.md)).
+1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one three rows have waited for since 1.7 ([Q1038](../queue/Q1038.md), [Q1048](../queue/Q1048.md), [Q1039](../queue/Q1039.md)).
 The theme is v2 GA readiness; what makes it a release an operator upgrades for is the gating row.
 
 ## The gating row: Q1029
@@ -21,8 +21,8 @@ The theme is v2 GA readiness; what makes it a release an operator upgrades for i
 When none does, the job is silently never re-run.
 The row carries three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.
 
-It gates because the exposure is an operator's, not the e2e venue's: a node drain is exactly when many workers terminate at once and the reconcile loop is busiest.
-The design already records that this arm cannot be made restart-safe ([04-operational-flows.md](../design/04-operational-flows.md#detecting-a-disruption-is-not-the-same-as-claiming-it)), and Q844's orphan recovery does not cover a worker the scan simply missed.
+It gates because the exposure is an operator's, not the e2e venue's: a node drain terminates many workers at once, so one missed window there is many lost jobs.
+The design already records that this arm cannot be made restart-safe ([04-operational-flows.md](../design/04-operational-flows.md#detecting-a-disruption-is-not-the-same-as-claiming-it)), and the row argues that Q844's orphan recovery does not cover a worker the scan simply missed.
 
 **Why the gap opens is unverified**, and the row says so: the reconciler runs at `MaxConcurrentReconciles: 1` and the listener bootstrap does DNS and an HTTP POST inside `Reconcile`, which is a hypothesis read off timestamps.
 Measuring it is the first step of the work, not a finding to code against.
