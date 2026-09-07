@@ -604,9 +604,12 @@ func runEgressProbe(ns, name string, workloadLabeled bool, curlArgs string) stri
 // Gating in the SAME pod is what makes a negative taken afterwards
 // non-vacuous: a separate control pod proves only its own endpoint was
 // programmed, while the negative pod could still be in the drop window and
-// pass for the wrong reason. The budget is bounded (30 × (3 s + 2 s) = 150 s,
-// the Q291 figure) so a destination that is genuinely unreachable still
-// reports GATE_RC≠0 and the caller's assertion still fails.
+// pass for the wrong reason. The budget is bounded so a destination that is
+// genuinely unreachable still reports GATE_RC≠0 and the caller's assertion
+// still fails: 30 × (3 s connect-timeout + 2 s) = 150 s when every attempt
+// is dropped (the Q291 figure), 30 × (5 s max-time + 2 s) = 210 s if every
+// connect succeeds and the response hangs, plus the one-shot's 20 s, inside
+// the 5-minute pod-phase ceiling.
 func runGatedEgressProbe(ns, name string, workloadLabeled bool, gateURL, curlArgs string) string {
 	script := fmt.Sprintf(`      set -u
       n=0
@@ -626,7 +629,7 @@ func runGatedEgressProbe(ns, name string, workloadLabeled bool, gateURL, curlArg
            %s || rc=$?
       echo "CURL_RC=${rc}"
 `, gateURL, curlArgs)
-	return runProbePod(ns, name, workloadLabeled, script, 4*time.Minute)
+	return runProbePod(ns, name, workloadLabeled, script, 5*time.Minute)
 }
 
 // runProbePod applies a one-shot curl pod running script (a YAML block scalar
