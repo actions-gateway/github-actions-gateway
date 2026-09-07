@@ -1015,8 +1015,11 @@ func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, tem
 		return
 	}
 	image := r.Provisioner.EffectiveWorkerImage(template.WorkerImage)
+	// The wake fires from the resolver's goroutine after this reconcile has returned,
+	// so it captures the key by value: rs is rewritten by the status update's decode.
+	namespace, name := rs.Namespace, rs.Name
 	lookup := imageLookup(r.ImageResolver, image, template.PodTemplate.Spec.ImagePullSecrets,
-		func() { wakeReconciler(r.wakeCh, rs.Namespace, rs.Name) })
+		func() { wakeReconciler(r.wakeCh, namespace, name) })
 	cond := runnercore.WorkerRunnerVersionConditionWithRegistry(image, lookup, rs.Generation)
 
 	prev := conditionValue(rs.Status.Conditions, cond.Type)
