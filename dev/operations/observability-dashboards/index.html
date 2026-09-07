@@ -2192,6 +2192,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#security-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dashboard-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2726,6 +2737,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#security-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dashboard-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2758,12 +2780,12 @@
 
 <h1 id="grafana-dashboards">Grafana Dashboards<a class="headerlink" href="#grafana-dashboards" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer, Tenant operator, Budget owner</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator, Budget owner, Security</p>
 </blockquote>
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Three reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+<p><strong>Import as code.</strong> Four reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
 The layouts below document what each contains.</p>
 </blockquote>
 <table>
@@ -2790,11 +2812,17 @@ The layouts below document what each contains.</p>
 <td>a tenant's AGC (per-tenant mTLS)</td>
 <td>Budget owner paying for the fleet</td>
 </tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-security.json"><code>grafana-dashboard-security.json</code></a></td>
+<td>the per-tenant proxy and AGC scrapes, the GMC scrape, and the apiserver scrape</td>
+<td>Security / compliance reviewer asking for evidence</td>
+</tr>
 </tbody>
 </table>
 <p>The first two split along the scrape boundary each reads from, which mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
 <p>The <strong>budget</strong> dashboard splits on a different axis: it reads the same tenant scrape as the tenant dashboard, and exists because the question is different rather than the data.
 A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.</p>
+<p>The <strong>security</strong> dashboard splits the same way and reads all three scrapes, because the evidence a reviewer asks for is spread across them: egress is on the proxy scrape, the condition gauges and webhook counters on the GMC's, and the admission-policy verdicts on the apiserver's.</p>
 <blockquote>
 <p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
@@ -3394,6 +3422,139 @@ A shape here is therefore whatever provisioned the worker, on either protocol.</
 </tr>
 </tbody>
 </table>
+<h2 id="security-dashboard">Security dashboard<a class="headerlink" href="#security-dashboard" title="Permanent link">&para;</a></h2>
+<p><img alt="The security Grafana dashboard rendered against a live Prometheus: an egress-attribution row keyed on the pool with a text panel saying so, an admission-decisions row of policy verdicts and webhook traffic, an abuse-signals row mirroring the security alert group, and the running control-plane versions." src="../../assets/grafana-dashboard-security.png" /></p>
+<p>For the <a href="../personas/#security--compliance">security / compliance persona</a>, who reads rather than operates and needs evidence produced unprompted.
+Filtered by <code>$namespace</code>.
+It reads three scrapes, and each row says which: egress and the abuse counters come from the per-tenant proxy and AGC scrapes, the condition gauges and webhook counters from the GMC scrape, and the admission-policy verdicts from the apiserver scrape, which <code>kube-prometheus-stack</code> collects by default and a hand-built Prometheus may not.</p>
+<p><strong>It is keyed on the pool, not the consumer, and says so on the page.</strong> <code>namespace</code> on every proxy series is the namespace the pool runs in, stamped by the scrape target.
+On a pool no other namespace references that is the tenant; on a pool shared via <code>spec.sharing.allowedNamespaces</code> it is the pool, and no metric says which consumer opened a tunnel.
+Attributing a connection to a tenant and a job is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">audit-record join</a> of two log streams, and no panel here reads them, so the dashboard never presents a pool's traffic as a consumer's.
+A gauge saying whether that pair is on for a gateway would let a panel key on the consumer where the join exists to back it (<a href="../../queue/Q1062/">Q1062</a>).</p>
+<p><strong>Row 1: Egress Attribution (per pool)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What this row attributes</td>
+<td>none</td>
+<td>Text. The pool-versus-consumer reading above, stated where the panels are read</td>
+</tr>
+<tr>
+<td>CONNECT tunnels opened/s by pool</td>
+<td><code>sum by (namespace) (rate(actions_gateway_proxy_connections_total[5m]))</code></td>
+<td>Time series, one line per pool namespace</td>
+</tr>
+<tr>
+<td>Active CONNECT tunnels by pool</td>
+<td><code>sum by (namespace) (actions_gateway_proxy_connections_active)</code></td>
+<td>Time series. A pool pinned near capacity is the slowloris signal (<code>ActionsGatewayProxyConnectionsSaturated</code>)</td>
+</tr>
+<tr>
+<td>Egress posture per gateway</td>
+<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code></td>
+<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape; <code>egress_rules_stale</code> is emitted for v1 and v2 gateways, the other two for v2 only</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 2: Admission Decisions</strong></p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Admission-policy verdicts/s by policy</td>
+<td><code>sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~".*-(namespace-psa-guard\|namespace-security-profile-guard\|priorityclass-allowlist-guard\|tenant-resource-guard)"}[5m]))</code></td>
+<td>Time series, split by the action the binding took: <code>deny</code> rejected the write, <code>audit</code> and <code>warn</code> let a failed validation through, and <code>allow</code> is an evaluation error (<code>error_type</code> of <code>compile_error</code>, <code>invalid_error</code>, or <code>out_of_budget</code>) admitted under <code>failurePolicy: Ignore</code>. The apiserver never increments the counter for a validation that simply passed, so the series is what the policies refused or could not evaluate, not a request count. Values read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07. The policy name is matched on its suffix because the chart prefixes it with the release's <code>namePrefix</code>. Apiserver scrape</td>
+</tr>
+<tr>
+<td>Validating-webhook requests/s by webhook</td>
+<td><code>sum by (webhook) (rate(controller_runtime_webhook_requests_total[5m]))</code></td>
+<td>Time series. Says the GMC's webhooks are being exercised, not how often they refused: controller-runtime writes a denial as an HTTP 200 whose <code>AdmissionReview</code> body carries the 403, so the <code>code</code> label cannot separate a deny from an allow, and no metric today counts webhook rejections (<a href="../../queue/Q1061/">Q1061</a>)</td>
+</tr>
+<tr>
+<td>Name collisions</td>
+<td><code>sum(actions_gateway_scale_set_name_collision)</code></td>
+<td>Stat (≥1 = red), scale-set name collisions; the title drops the prefix because a 4-wide stat truncates it. Admission rejects every new pair, so a <code>1</code> predates the guard or was applied with the webhook uninstalled</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 3: Abuse Signals</strong></p>
+<p>One panel per rule in the <a href="../security-operations/#prometheus-abuse-alerts">security alert group</a> not already plotted above (the saturation rule is the active-tunnels panel in Row 1, the webhook rule is Row 2), so a reviewer sees the series an alert would fire on rather than only the alert.</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Denied CONNECTs/s by pool (SSRF signal)</td>
+<td><code>sum by (namespace) (rate(actions_gateway_proxy_connect_denied_total[5m]))</code></td>
+<td>Time series. Every increment is an explicit allowlist denial (<code>ActionsGatewayProxyConnectDenied</code>). It says a probe happened, not what it reached</td>
+</tr>
+<tr>
+<td>Proxy dial errors/s by pool</td>
+<td><code>sum by (namespace) (rate(actions_gateway_proxy_dial_errors_total[5m]))</code></td>
+<td>Time series (<code>ActionsGatewayProxyDialErrorSpike</code>)</td>
+</tr>
+<tr>
+<td>Tunnels lasting 30m–1h, per hour, by pool</td>
+<td><code>sum by (namespace) (increase(…_bucket{le="3600"}[1h])) - sum by (namespace) (increase(…_bucket{le="1800"}[1h]))</code></td>
+<td>Time series (<code>ActionsGatewayProxyLongLivedTunnels</code>). Each bucket is summed per namespace before the subtraction because the two selectors differ on <code>le</code> and a bare subtraction would match nothing</td>
+</tr>
+<tr>
+<td>Eviction retries/s (cause=eviction) by tenant</td>
+<td><code>sum by (namespace, runner_group) (rate(actions_gateway_eviction_retries_total{cause="eviction"}[15m]))</code></td>
+<td>Time series (<code>ActionsGatewayEvictionRetryAbuse</code>). Scoped to <code>cause="eviction"</code>: preemption recoveries are the expected steady state under a preempting <code>priorityTiers</code> floor</td>
+</tr>
+<tr>
+<td>Token refresh errors/s by tenant</td>
+<td><code>sum by (namespace) (rate(actions_gateway_token_refresh_errors_total[5m]))</code></td>
+<td>Time series (<code>ActionsGatewayTokenRefreshAbuse</code>). Flat zero is healthy</td>
+</tr>
+<tr>
+<td>Managed gateways</td>
+<td><code>actions_gateway_managed_gateways</code></td>
+<td>Stat with trend (<code>ActionsGatewayManagedGatewaysJump</code>). No <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
+</tr>
+<tr>
+<td>ResourceQuota saturation</td>
+<td><code>100 * kube_resourcequota{type="used"} / ignoring(type) kube_resourcequota{type="hard"}</code></td>
+<td>Bar gauge, <code>percent</code>, <strong>instant</strong> (<code>ActionsGatewayQuotaExhausted</code>). Needs kube-state-metrics</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 4: Running Versions</strong></p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Control-plane versions by component</td>
+<td><code>count by (component, version) (actions_gateway_build_info)</code></td>
+<td>Stat, one tile per component and version: which build is running when an advisory names an affected version. No <code>namespace</code> label</td>
+</tr>
+</tbody>
+</table>
 <h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>
@@ -3412,6 +3573,8 @@ A shape here is therefore whatever provisioned the worker, on either protocol.</
 <li><code>$rate</code> is a <strong>textbox</strong>, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
   Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.</li>
 </ul>
+<p>The security dashboard declares only <code>$namespace</code> (<code>label_values({__name__=~"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code>), unioned across the proxy and both acquisition tiers so a namespace holding only a pool, or only a scale-set deploy, still appears.
+On the proxy panels the value it filters is the pool's namespace, per the note at the top of that section.</p>
 <blockquote>
 <p><strong>A textbox variable in a panel query needs the PromQL gate to know about it.</strong> <code>make promql-check</code> parses every panel expression, and a Grafana variable in syntactic position (<code>[$__range]</code>, <code>* $rate</code>) is not valid PromQL.
 The checker substitutes from the dashboard's own <code>templating.list</code> before parsing, so a variable the dashboard never declares is reported by name rather than passing as a parse error nobody reads.</p>

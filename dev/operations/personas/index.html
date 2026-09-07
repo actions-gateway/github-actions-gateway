@@ -2923,7 +2923,8 @@ That is the test the <a href="../observability-dashboards/#tenant-dashboard">ten
 <p><strong>Owns:</strong> the threat model's operational half, admission policy compatibility, abuse response, and whatever an auditor asks for.</p>
 <p><strong>Needs, specifically:</strong> artifacts produced unprompted.
 A control that exists but leaves no record is hard to evidence, which is why per-tenant egress attribution and admission decisions matter as much as the controls themselves.
-<a href="../security-operations/">Security operations</a> and <a href="../admission-policies/">admission policies</a> are the entry points.</p>
+<a href="../security-operations/">Security operations</a> and <a href="../admission-policies/">admission policies</a> are the entry points, and the <a href="../observability-dashboards/#security-dashboard">security dashboard</a> is the evidence produced unprompted: per-pool egress, admission-policy verdicts, and the abuse signals the security alert group pages on.
+It reads the pool rather than the consumer, and says so on the page: attributing a connection to a tenant and a job is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">audit-record join</a>, which no metric carries.</p>
 <h3 id="budget-owner">Budget owner<a class="headerlink" href="#budget-owner" title="Permanent link">&para;</a></h3>
 <p>Owns the spend, and usually cannot read the cluster at all.</p>
 <p><strong>Needs, specifically:</strong> cost per tenant, in currency, from data they can defend in a planning conversation.

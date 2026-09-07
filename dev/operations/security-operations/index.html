@@ -4029,7 +4029,8 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <h2 id="prometheus-abuse-alerts">Prometheus abuse alerts<a class="headerlink" href="#prometheus-abuse-alerts" title="Permanent link">&para;</a></h2>
 <p>These rules reference metrics that are emitted today (<a href="../observability-metrics/#full-metrics-reference">observability.md § Full Metrics Reference</a>).
 Drop them into the same <code>PrometheusRule</code> group as the SLO alerts, or a dedicated <code>actions-gateway-security</code> group.
-Tune thresholds to your fleet.</p>
+Tune thresholds to your fleet.
+The <a href="../observability-dashboards/#security-dashboard">security dashboard</a> plots the series each rule fires on, one panel per rule, so a reviewer can read the signal behind an alert rather than only the alert.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">groups</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-security</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">rules</span><span class="p">:</span>

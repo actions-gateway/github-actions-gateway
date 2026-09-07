@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q725/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1061/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Security and compliance dashboard for the audit persona - GitHub Actions Gateway</title>
+        <title>security-operations abuse alerts: two shipped expressions cannot fire - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#security-and-compliance-dashboard-for-the-audit-persona" class="md-skip">
+        <a href="#security-operations-abuse-alerts-two-shipped-expressions-cannot-fire" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Security and compliance dashboard for the audit persona
+              security-operations abuse alerts: two shipped expressions cannot fire
             
           </span>
         </div>
@@ -2597,10 +2597,16 @@
   
 
 
-<h1 id="security-and-compliance-dashboard-for-the-audit-persona">Security and compliance dashboard for the audit persona<a class="headerlink" href="#security-and-compliance-dashboard-for-the-audit-persona" title="Permanent link">&para;</a></h1>
-<p>The proxy's opt-in per-connection audit record (Q564) attributes per pool by default, and per tenant and per job only where the operator has turned on both halves of the Q986 attribution pair (<code>ConnectionsWithSource</code> plus <code>WorkerAddresses</code>).
-So a dashboard keyed on the consumer has to say which of the two it is reading, and show nothing rather than the pool's traffic when the pair is off.
-The Security persona needs evidence produced unprompted: per-tenant egress attribution, admission rejections, abuse signals.</p>
+<h1 id="security-operations-abuse-alerts-two-shipped-expressions-cannot-fire">security-operations abuse alerts: two shipped expressions cannot fire<a class="headerlink" href="#security-operations-abuse-alerts-two-shipped-expressions-cannot-fire" title="Permanent link">&para;</a></h1>
+<p>Two rules in the <code>actions-gateway-security</code> group the doc tells an operator to drop into their <code>PrometheusRule</code> are inert as written, and one threat-map row rests on the same wrong claim.</p>
+<p><strong><code>ActionsGatewayWebhookRejections</code> selects a code the counter never carries.</strong> Its expression is <code>rate(controller_runtime_webhook_requests_total{code="403"}[10m])</code>. controller-runtime writes a validating-webhook denial as an HTTP 200 whose <code>AdmissionReview</code> body carries the 403: <code>ValidationResponse</code> sets <code>Result.Code = 403</code> on the response struct, and <code>writeAdmissionResponse</code> JSON-encodes it without calling <code>WriteHeader</code> (vendored <code>sigs.k8s.io/controller-runtime/pkg/webhook/admission/response.go</code> and <code>http.go</code>, read 2026-09-07).
+The <code>code</code> label is the HTTP status <code>promhttp.InstrumentHandlerCounter</code> observed, so a deny increments <code>code="200"</code> and the <code>403</code> series never exists.
+The threat-map row "<code>ActionsGateway</code> CR in reserved namespace / spec probing → admission webhook <code>403</code> rejection rate" is the same claim in prose.
+No metric today counts webhook rejections; the fix is either a GMC counter on the deny path or pointing the row and the rule at the apiserver's <code>apiserver_validating_admission_policy_check_total{enforcement_action="deny"}</code> (the values are lowercase, read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07) for the policies the chart ships, which is what the security dashboard (Q725) reads instead.</p>
+<p><strong><code>ActionsGatewayProxyLongLivedTunnels</code> subtracts two selectors that differ on <code>le</code>.</strong> <code>increase(…_bucket{le="3600"}[1h]) - increase(…_bucket{le="1800"}[1h])</code> is a one-to-one vector match on every label, and the two sides carry different <code>le</code> values, so the result is empty and the rule never fires.
+It needs <code>ignoring(le)</code> or a <code>sum by (namespace)</code> on each side, which is the form the security dashboard's tunnel panel uses.</p>
+<p>Both were found while building that dashboard from the doc's own alert group.
+<code>make promql-check</code> parses the doc's expressions and both parse, which is why neither surfaced: a well-formed query that selects nothing is exactly what that gate cannot see.</p>
 
 
 
