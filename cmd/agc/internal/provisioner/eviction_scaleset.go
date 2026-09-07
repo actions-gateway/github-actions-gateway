@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -31,11 +32,13 @@ import (
 // Identity moves onto the pod: the assignment message carries the workflow run
 // (scaleset.JobMessage.RunIdentity), and ProvisionScaleSetWorker stamps it as the
 // AnnotationRunID / AnnotationRepository annotations. Detection moves to the owning
-// reconciler, which already watches worker pods for phase changes and already lists
-// them every reconcile to reap them. Both halves are durable rather than
-// process-scoped, so an AGC that restarts between a worker's eviction and its recovery
-// still recovers it — the property Q420 chose a pod annotation over in-memory state to
-// get, for the same fire-and-forget reason.
+// reconciler, in two paths that share one judge and one claim: its worker-pod watch
+// hands each phase-changing event's pod to RecoverDisruptedScaleSetWorker as it
+// arrives (Q1029), and RecoverEvictedScaleSetWorkers lists every reconcile for what no
+// event reached. Both halves are durable rather than process-scoped, so an AGC that
+// restarts between a worker's eviction and its recovery still recovers it — the
+// property Q420 chose a pod annotation over in-memory state to get, for the same
+// fire-and-forget reason.
 //
 // What is reused unchanged: handleEviction, reserveEvictionRetry, the sharded
 // per-run-id lock, and the sweeper. The Q106 invariant — at most maxEvictionRetries
@@ -65,6 +68,12 @@ const (
 // AnnotationEvictionHandledAt). It is a no-op for an owner with no disrupted workers,
 // and for the classic tier, whose pods carry no LabelAcquisitionProtocol.
 //
+// It is the slower of the two detection paths and the one that is not on a clock.
+// RecoverDisruptedScaleSetWorker acts on the worker-pod watch event itself, which is
+// what reaches a drained pod inside its teardown window (Q1029); this scan covers what
+// no event reaches — a pod already terminal when the process started, or an event path
+// that failed. The claim annotation arbitrates between the two.
+//
 // Call it BEFORE the reaper. Recovery reads the disrupted pod, and the reaper deletes
 // terminal pods once spec.completedPodTTL elapses; reaping first would drop the
 // evidence on any pod whose eviction the AGC did not observe promptly (a restart, a
@@ -91,33 +100,10 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		return closedChan(), fmt.Errorf("provisioner: list scale-set worker pods: %w", err)
 	}
 
-	// Pair each recoverable pod with the cause that made it recoverable, so the metrics
-	// and the operator-facing wording downstream say which disruption actually happened.
-	type disrupted struct {
-		pod   *corev1.Pod
-		cause string
-		// abandoned routes the pod to the force-cancel path instead of straight to
-		// rerun-failed-jobs: it never ran its job, so the run has to be concluded
-		// before a re-run is legal (Q766, abandoned_scaleset.go).
-		abandoned bool
-	}
-	var recoverable []disrupted
+	var recoverable []disruptedScaleSetWorker
 	for i := range pods.Items {
-		pod := &pods.Items[i]
-		switch cause, ok := disruptionAwaitingRecovery(pod); {
-		case ok:
-			recoverable = append(recoverable, disrupted{pod: pod, cause: cause})
-		case abandonedAwaitingRecovery(pod):
-			recoverable = append(recoverable, disrupted{pod: pod, cause: recoveryCauseAbandoned, abandoned: true})
-		case externallyDeletedTerminalWorker(pod):
-			// Declined, and saying so is the point: an unrecovered pod looks the same
-			// whether a scan judged it or no scan ever saw it (Q549). Debug because
-			// declining is usually right — a cleanup delete of an already-failed pod is
-			// exactly what the ordering check exists to reject.
-			log.Debug("externally deleted scale-set worker did not qualify as a recoverable disruption; no automatic re-run",
-				"podName", pod.Name,
-				"deletionRequestedAt", deletionRequestedAt(pod).UTC().Format(time.RFC3339),
-				"terminatedAt", podTerminationRecordTime(pod).UTC().Format(time.RFC3339))
+		if d, ok := judgeScaleSetDisruption(log, &pods.Items[i]); ok {
+			recoverable = append(recoverable, d)
 		}
 	}
 	if len(recoverable) == 0 {
@@ -135,64 +121,7 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 
 	var recoveries []<-chan struct{}
 	for _, d := range recoverable {
-		// cause is deliberately NOT on podLog: handleEviction puts it on every line it
-		// emits, and a logger-level attribute would duplicate the key on those.
-		pod, cause := d.pod, d.cause
-		podLog := log.With("podName", pod.Name)
-
-		// Claim before calling GitHub, under an optimistic lock: whoever wins the patch
-		// owns this pod's single recovery attempt.
-		if err := p.claimEvictionRecovery(ctx, pod); err != nil {
-			switch {
-			case apierrors.IsConflict(err):
-				// A conflict that survived the re-read retry: the fresh object already
-				// carries the claim, so another replica or a concurrent reconcile of the
-				// same owner owns this recovery. The mechanism working, not an error.
-				podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause, "error", err)
-			case apierrors.IsNotFound(err):
-				// The pod is the only record of this disruption, and it went away before
-				// the claim landed — so no reconcile of any replica can recover it now.
-				// Surface it: this is a job that will silently never be re-run, and the
-				// window is real (Q809 measured it on the drain arm, where the kubelet
-				// removes the object seconds after the container exits).
-				podLog.Warn("scale-set worker disruption was lost before it could be claimed; its run will not be re-run automatically",
-					"cause", cause, "error", err)
-				if p.Metrics != nil {
-					p.Metrics.EvictionRecoveryEvidenceLost.WithLabelValues(key.Namespace, key.Name, cause).Inc()
-				}
-				target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryEvidenceLost", "RecoverEvictedWorker",
-					fmt.Sprintf("worker pod %s was lost to %s, but its pod was deleted before the recovery could be claimed, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
-			default:
-				podLog.Warn("could not claim scale-set worker disruption for recovery; skipping", "cause", cause, "error", err)
-			}
-			continue
-		}
-
-		// A never-started worker has no failed job for rerun-failed-jobs to act on, so
-		// it takes the force-cancel-then-defer path rather than handleEviction — which
-		// also owns its own identity read and its own identity-unknown reporting.
-		if d.abandoned {
-			recoveries = append(recoveries, p.recoverAbandoned(ctx, target, pod, abandonedDetectionDeleted))
-			continue
-		}
-
-		owner, repo, runID, ok := runIdentityFromPod(pod)
-		if !ok {
-			// The assignment message carried no complete run identity, so there is
-			// nothing to re-run. Surface it: this is the one failure mode that makes the
-			// whole mechanism silently inert, and an operator seeing disrupted jobs stay
-			// failed needs to be told why rather than left to infer it.
-			podLog.Warn("scale-set worker was disrupted but its run identity is unknown; automatic re-run skipped", "cause", cause)
-			if p.Metrics != nil {
-				p.Metrics.EvictionRecoveryIdentityUnknown.WithLabelValues(key.Namespace, key.Name, cause).Inc()
-			}
-			target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryIdentityUnknown", "RecoverEvictedWorker",
-				fmt.Sprintf("worker pod %s was lost to %s but carries no workflow-run identity, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
-			continue
-		}
-
-		recoveries = append(recoveries,
-			p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause))
+		recoveries = append(recoveries, p.recoverDisruptedScaleSetWorker(ctx, target, spec, log, d))
 	}
 
 	done := make(chan struct{})
@@ -203,6 +132,137 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		close(done)
 	}()
 	return done, nil
+}
+
+// RecoverDisruptedScaleSetWorker is RecoverEvictedScaleSetWorkers for one pod, handed
+// straight from the owning reconciler's worker-pod watch with the event's own object
+// (Q1029). The scan lists from the informer cache at the top of a reconcile, so a
+// drained worker — readable only for the seconds between the kubelet publishing its
+// terminal phase and removing the object — was recovered only when a reconcile
+// happened to begin inside that window. A reconcile already in flight holds the next
+// one past it: the queue runs one reconcile of a key at a time, and the listener
+// bootstrap does GitHub I/O inside Reconcile. The watch event carries the pod at the
+// moment it became recoverable, so this path claims it without waiting for the queue.
+//
+// pod is judged as delivered and mutated by the claim, so pass the event's object —
+// never a re-read, which can already be NotFound — as a copy the cache does not own. A
+// pod that is not a scale-set worker, or not a recoverable disruption, is a no-op. The
+// claim arbitrates against the scan and against other replicas exactly as it does for
+// the scan, so a pod both paths see is recovered once.
+func (p *Provisioner) RecoverDisruptedScaleSetWorker(ctx context.Context, target Target, pod *corev1.Pod) (<-chan struct{}, error) {
+	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet {
+		return closedChan(), nil
+	}
+	log := p.logForKey(target.Key())
+	d, ok := judgeScaleSetDisruption(log, pod)
+	if !ok {
+		return closedChan(), nil
+	}
+	spec, err := target.Resolve(ctx)
+	if err != nil {
+		return closedChan(), fmt.Errorf("provisioner: resolve provisioning spec for eviction recovery: %w", err)
+	}
+	return p.recoverDisruptedScaleSetWorker(ctx, target, spec, log, d), nil
+}
+
+// disruptedScaleSetWorker pairs a recoverable pod with the cause that made it
+// recoverable, so the metrics and the operator-facing wording downstream say which
+// disruption actually happened.
+type disruptedScaleSetWorker struct {
+	pod   *corev1.Pod
+	cause string
+	// abandoned routes the pod to the force-cancel path instead of straight to
+	// rerun-failed-jobs: it never ran its job, so the run has to be concluded before
+	// a re-run is legal (Q766, abandoned_scaleset.go).
+	abandoned bool
+}
+
+// judgeScaleSetDisruption classifies one unclaimed scale-set worker pod against the
+// recovery arms. A terminating worker neither arm accepted is logged, and saying so is
+// the point: an unrecovered pod looks the same whether it was judged or never seen
+// (Q549). Debug because declining is usually right — a cleanup delete of an
+// already-failed pod is exactly what the ordering check exists to reject.
+func judgeScaleSetDisruption(log *slog.Logger, pod *corev1.Pod) (disruptedScaleSetWorker, bool) {
+	switch cause, ok := disruptionAwaitingRecovery(pod); {
+	case ok:
+		return disruptedScaleSetWorker{pod: pod, cause: cause}, true
+	case abandonedAwaitingRecovery(pod):
+		return disruptedScaleSetWorker{pod: pod, cause: recoveryCauseAbandoned, abandoned: true}, true
+	case externallyDeletedTerminalWorker(pod):
+		log.Debug("externally deleted scale-set worker did not qualify as a recoverable disruption; no automatic re-run",
+			"podName", pod.Name,
+			"deletionRequestedAt", deletionRequestedAt(pod).UTC().Format(time.RFC3339),
+			"terminatedAt", podTerminationRecordTime(pod).UTC().Format(time.RFC3339))
+	}
+	return disruptedScaleSetWorker{}, false
+}
+
+// recoverDisruptedScaleSetWorker claims d's pod and starts its recovery — the per-pod
+// step both detection paths share. The returned done channel closes when the recovery
+// finishes, at once where the claim was lost or the pod carries nothing to re-run.
+func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target Target, spec *ResolvedSpec, log *slog.Logger, d disruptedScaleSetWorker) <-chan struct{} {
+	key := target.Key()
+	// cause is deliberately NOT on podLog: handleEviction puts it on every line it
+	// emits, and a logger-level attribute would duplicate the key on those.
+	pod, cause := d.pod, d.cause
+	podLog := log.With("podName", pod.Name)
+
+	// Claim before calling GitHub, under an optimistic lock: whoever wins the patch
+	// owns this pod's single recovery attempt.
+	if err := p.claimEvictionRecovery(ctx, pod); err != nil {
+		switch {
+		case apierrors.IsConflict(err):
+			// A conflict that survived the re-read retry: the fresh object already
+			// carries the claim, so the other detection path, another replica, or a
+			// concurrent reconcile of the same owner owns this recovery. The mechanism
+			// working, not an error.
+			podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause, "error", err)
+		case apierrors.IsNotFound(err):
+			// The pod went away before the claim landed. What is lost is the lock, not
+			// the record: an event caller still holds the run identity on its copy, but
+			// re-running without the annotation would let a replica or the other path
+			// re-run it again, so both callers decline. Surface it: this is a job that
+			// will silently never be re-run, and the window is real (Q809 measured it on
+			// the drain arm, where the kubelet removes the object seconds after the
+			// container exits). The two paths are routinely concurrent claimants, so a
+			// conflict whose re-read comes back NotFound lands here too and counts a run
+			// the winner recovered; the metric row says so.
+			podLog.Warn("scale-set worker disruption was lost before it could be claimed; its run will not be re-run automatically",
+				"cause", cause, "error", err)
+			if p.Metrics != nil {
+				p.Metrics.EvictionRecoveryEvidenceLost.WithLabelValues(key.Namespace, key.Name, cause).Inc()
+			}
+			target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryEvidenceLost", "RecoverEvictedWorker",
+				fmt.Sprintf("worker pod %s was lost to %s, but its pod was deleted before the recovery could be claimed, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
+		default:
+			podLog.Warn("could not claim scale-set worker disruption for recovery; skipping", "cause", cause, "error", err)
+		}
+		return closedChan()
+	}
+
+	// A never-started worker has no failed job for rerun-failed-jobs to act on, so it
+	// takes the force-cancel-then-defer path rather than handleEviction — which also
+	// owns its own identity read and its own identity-unknown reporting.
+	if d.abandoned {
+		return p.recoverAbandoned(ctx, target, pod, abandonedDetectionDeleted)
+	}
+
+	owner, repo, runID, ok := runIdentityFromPod(pod)
+	if !ok {
+		// The assignment message carried no complete run identity, so there is
+		// nothing to re-run. Surface it: this is the one failure mode that makes the
+		// whole mechanism silently inert, and an operator seeing disrupted jobs stay
+		// failed needs to be told why rather than left to infer it.
+		podLog.Warn("scale-set worker was disrupted but its run identity is unknown; automatic re-run skipped", "cause", cause)
+		if p.Metrics != nil {
+			p.Metrics.EvictionRecoveryIdentityUnknown.WithLabelValues(key.Namespace, key.Name, cause).Inc()
+		}
+		target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryIdentityUnknown", "RecoverEvictedWorker",
+			fmt.Sprintf("worker pod %s was lost to %s but carries no workflow-run identity, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
+		return closedChan()
+	}
+
+	return p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause)
 }
 
 // disruptionAwaitingRecovery reports whether pod is a scale-set worker that lost its job
@@ -238,7 +298,8 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 //     restart-safe, and cannot be made so — the evidence is the pod and the deletion
 //     removes it. What keeps the windows reachable at all is the worker-pod watch
 //     predicate admitting the update where a pod newly becomes a preemption victim, and
-//     the phase-change edge for the drain shape. Do not narrow that predicate.
+//     the phase-change edge for the drain shape — the events the reconciler hands to
+//     RecoverDisruptedScaleSetWorker as they arrive. Do not narrow that predicate.
 //   - The deletion arm shares the classic waiter's predicate
 //     (externallyDeletedBeforeTerminal), which orders the mark against the pod's
 //     terminal time. Without that, a cleanup delete of a pod whose job genuinely
@@ -269,11 +330,11 @@ func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 // deletion case, and abandonedAwaitingRecovery). A pod matching it that neither arm
 // accepted has been judged and declined.
 //
-// The scan lists from the informer cache at the top of a reconcile, so it sees a drained
-// worker only if a reconcile begins inside the seconds between the kubelet publishing
-// the terminal phase and removing the object. Without a line for the declined case, a
-// regressed discriminator and a scan that never got that look are the same silence,
-// which is what left Q549 unattributable across three sightings.
+// A drained worker is readable only briefly (RecoverDisruptedScaleSetWorker's doc has
+// the window), and a judge that never got a look at it leaves the same silence a
+// regressed discriminator does. Without a line for the
+// declined case the two are indistinguishable, which is what left Q549 unattributable
+// across three sightings.
 func externallyDeletedTerminalWorker(pod *corev1.Pod) bool {
 	if _, claimed := pod.Annotations[AnnotationEvictionHandledAt]; claimed {
 		return false

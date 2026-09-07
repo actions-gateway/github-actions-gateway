@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -562,4 +564,154 @@ func markPreempted(t *testing.T, pod *corev1.Pod) {
 	})
 	require.NoError(t, k8sClient.Status().Update(ctx, &fresh),
 		"the preemption marker must be writable, or the test cannot pose its question")
+}
+
+// TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld is Q1029. The
+// recovered-side twin above proves the drain shape is recovered when a reconcile gets
+// to run; the e2e sightings showed it is not recovered when none does — the scan reads
+// the informer cache at the top of a reconcile, so a drained pod's few-second window
+// was reachable only if a reconcile began inside it, and one already in flight held
+// the next one past it (an 8-second gap between reconcile completions swallowed a
+// 3.4-second window on run 32933225396).
+//
+// This reproduces that gap against the real apiserver: a second RunnerSet whose
+// listener bootstrap never returns parks the controller's single reconcile worker
+// (MaxConcurrentReconciles is the default 1, and the bootstrap's GitHub I/O runs inside
+// Reconcile) for the whole drain. The drained worker is claimed and its run re-run off
+// the worker-pod watch event while no reconcile runs at all — the reconcile count is
+// the control, and it must not move.
+func TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld(t *testing.T) {
+	const ns = "v2-rs-ss-drain-held"
+	const label = "linux-drain-held"
+	const holdingSet = "ss-hold"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	fakeGitHub, rerunCalls := rerunCounter(t)
+
+	// The bootstrap that never returns. Every request the holding set's protocol client
+	// makes blocks here until released, so its Reconcile parks the worker on the first
+	// GitHub call of ensureScaleSet. entered says the park has happened; release is
+	// closed before the manager stops so the parked reconcile can return.
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var enteredOnce, releaseOnce sync.Once
+	releaseHold := func() { releaseOnce.Do(func() { close(release) }) }
+	holder := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		enteredOnce.Do(func() { close(entered) })
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(func() {
+		releaseHold()
+		holder.Close()
+	})
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newScaleSetRunnerSet("ss-drain-held", ns, "gw", label, 3)
+	rs.Spec.EvictionRetryDelay = &metav1.Duration{Duration: time.Second}
+	rs.Spec.MaxEvictionRetries = ptr.To(int32(2))
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = k8sClient.Delete(bg, rs)
+		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	shared := scaleSetClientsFor(srv)
+	r, _ := startRunnerSetReconcilerWithScaleSetClients(t, func(set *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+		if set.Name != holdingSet {
+			return shared(set, gw)
+		}
+		return scaleset.New(scaleset.Config{
+			TokenProvider: stubProvider{},
+			ConfigURL:     "https://github.com/acme",
+			APIBase:       holder.URL,
+			HTTPClient:    holder.Client(),
+			PollClient:    holder.Client(),
+		})
+	}, func(p *provisioner.Provisioner) {
+		p.GitHubAPIURL = fakeGitHub.URL
+		p.HTTPClient = fakeGitHub.Client()
+	})
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
+	waitForSetReadyReason(t, ns, "ss-drain-held", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	srv.EnqueueJob(ssID)
+
+	var pod corev1.Pod
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "ss-drain-held"}); err != nil {
+			return false
+		}
+		for i := range pods.Items {
+			if strings.HasPrefix(pods.Items[i].Name, "runner-") {
+				pod = pods.Items[i]
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond, "a worker pod must be provisioned for the assigned job")
+	require.NotEmpty(t, pod.Annotations[provisioner.AnnotationRunID],
+		"the assignment's workflowRunId must have reached the pod, or no rerun could fire either way")
+
+	// Park the worker: the holding set resolves the same referents and then blocks in
+	// its listener bootstrap.
+	hold := newScaleSetRunnerSet(holdingSet, ns, "gw", "linux-hold", 1)
+	require.NoError(t, k8sClient.Create(ctx, hold))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), hold) })
+	select {
+	case <-entered:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the holding set's bootstrap never reached its stub, so nothing is parking the reconcile worker")
+	}
+	reconciles := r.ReconcileCountForTest()
+
+	// The kubelet's sequence, reproduced: mark first, terminal phase second — with the
+	// only reconcile worker parked.
+	holdWithFinalizer(t, ns, pod.Name)
+	evictPod(t, &pod)
+	publishTerminalFailure(t, ns, pod.Name)
+
+	// The measurement: the claim lands off the phase-change event.
+	require.Eventually(t, func() bool {
+		var got corev1.Pod
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: pod.Name}, &got); err != nil {
+			return false
+		}
+		_, claimed := got.Annotations[provisioner.AnnotationEvictionHandledAt]
+		return claimed
+	}, 10*time.Second, 50*time.Millisecond,
+		"a drained scale-set worker must be claimed off the worker-pod watch while the reconcile queue is held")
+
+	// The control: no reconcile began between the drain and the claim, so the scan
+	// cannot have made it. Read after the claim, because the count only proves the park
+	// held for the span it brackets.
+	require.Equal(t, reconciles, r.ReconcileCountForTest(),
+		"a reconcile ran while the worker was meant to be parked, so this test did not pose its question")
+
+	require.Eventually(t, func() bool { return rerunCalls.Load() >= 1 }, 30*time.Second, 100*time.Millisecond,
+		"the claimed drain must be re-run automatically")
+
+	// Let the parked reconcile return, and every reconcile the drain enqueued behind it
+	// run its scan over the claimed pod: at-most-once holds across both paths.
+	releaseHold()
+	assert.Never(t, func() bool { return rerunCalls.Load() > 1 }, 5*time.Second, 100*time.Millisecond,
+		"one drain must spend exactly one slot of the run's retry budget, whichever path observed it")
 }

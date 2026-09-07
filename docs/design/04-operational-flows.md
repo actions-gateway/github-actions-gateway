@@ -400,14 +400,14 @@ sequenceDiagram
     Q-->>L: JobAssigned (ownerName, repositoryName, workflowRunId)
     L->>P: provision, stamping run-id/repository + acquisition-protocol=ScaleSet
     Note over L: fire-and-forget — the runner pulls and completes its own job
-    P-->>R: Failed/Evicted, DisruptionTarget=PreemptionByScheduler, or Failed + deletionTimestamp — seen via the reconciler's pod watch
+    P-->>R: Failed/Evicted, DisruptionTarget=PreemptionByScheduler, or Failed + deletionTimestamp; the reconciler's pod watch hands the event's pod to recovery at once (Q1029), and a scan at the top of every reconcile lists for what no event reached
     R->>P: claim: stamp eviction-handled-at (optimistic lock)
     alt claim won and identity present
         R->>GH: POST .../runs/{run_id}/rerun-failed-jobs (retried until the run concludes — the classic loop above)
     else identity absent
         Note over R: eviction_recovery_identity_unknown_total++, Warning Event (manual re-run)
     else claim lost
-        Note over R: another reconcile or replica owns it — skip
+        Note over R: the other detection path, another reconcile, or a replica owns it — skip
     end
 ```
 
@@ -453,7 +453,7 @@ The residual is a cancelled run whose worker is *also* evicted or preempted befo
 
 ##### Detecting a disruption is not the same as claiming it
 
-The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and the recovery scan lists from the informer cache while it claims through the live API.
+The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and recovery reads the pod off the informer (the watch event, or the scan's cached List) while it claims through the live API.
 So a pod can pass the discriminator and still be gone before its claim patch lands, and the run is then unrecoverable by any reconcile, in any replica, because the pod *is* the disruption's record.
 Measured on three `e2e-calico` runs on 2026-08-12, where a drained worker was removed within about two seconds of the delete request, well inside its 30-second grace period, because the container exits as soon as it is signalled ([Q809](../plan/q549-scaleset-rerun-flake.md#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost)).
 
@@ -463,11 +463,12 @@ Two things follow, and both are deliberate:
 * **It is not recovered from the cached copy.** The claim is what makes recovery at-most-once, and acting on an in-memory pod after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption.
   A visible manual re-run is the better trade than a silently doubled budget.
 
-An earlier loss has no report at all, and cannot: the scan runs once per reconcile, so a drained worker whose window opens and closes between two reconciles is never listed and never judged.
-There is no pod to count and no Event to attach.
-What the scan *can* say is the other half.
+A scan alone could also miss a drain outright, and that loss had no report at all: the scan runs once per reconcile over the informer cache, so a drained worker whose window opened and closed between two reconciles was never listed and never judged, with no pod to count and no Event to attach.
+A reconcile already in flight held the next one past the window, since the queue runs one reconcile of a key at a time and the listener bootstrap does its GitHub I/O inside `Reconcile`: an 8-second gap between reconcile completions swallowed a 3.4-second window on the Q549 sightings.
+So the disruption is observed from the worker-pod watch as well (Q1029): the phase-change or preemption event that enqueues the reconcile hands its pod straight to the same judge and the same claim, and recovery no longer waits on the queue.
+The scan stays for what no event reaches, such as a pod already terminal when the process started, and the claim annotation arbitrates between the two, so a pod both see is recovered once.
+What the scan *can* still say is the other half.
 It logs the terminating workers it did judge and decline, at `Debug`, so an unrecovered drain that appears nowhere in the log is separable from one the discriminator rejected.
-Closing the gap itself means observing the disruption from the worker-pod watch rather than from a cached List a reconcile later ([Q1029](../queue/Q1029.md)).
 
 A conflict on that patch is a different thing and *is* retried.
 The optimistic lock exists to arbitrate between claimants, but the apiserver raises the same conflict for any concurrent write, and the kubelet publishing the terminal phase is guaranteed to be racing, since that transition is the edge that triggers the reconcile.
@@ -522,7 +523,7 @@ The run really is left failed, so the re-run is the repair rather than a duplica
 **Q421 measured that exclusion on both tiers, 2026-07-27; Q459 then measured the two facts that let Q502 close it.** The report does get out on the graceful path: a drained *running* worker's relayed report reaches GitHub, the job concludes `failure` well under a minute after the disruption (15–26s across five runs), and `rerun-failed-jobs` is accepted — so an automatic re-run is available.
 And the shape is discriminable: a disrupted worker lands in `PodFailed` with an *empty* reason — the same shape a genuinely failing job produces — but it lands there **while carrying its `deletionTimestamp`**, which a run cancelled by a human (measured 2026-07-29: nothing in the gateway deletes a cancelled run's pod) and a genuine failure both lack.
 Recovery therefore keys on the deletion mark at terminal publish, ordered against the container's recorded exit — as the request time, the mark less its grace period (Q519) — on both tiers, with the reaper's own deletions excluded by the stamp it writes before deleting.
-What remains deliberately unrecovered is a worker deleted before its container ever ran — the drained *Pending* worker, which publishes at most a transient `Failed`-with-mark carrying no exit record — because a job that never ran to a reportable end leaves no failed job to re-run; the envtest pair (`TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun`, `TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover`) and the fake-GitHub `E2E_AGC_WorkerNodeDrain` pin that side, and `TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns` / `TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers` pin the recovered side.
+What remains deliberately unrecovered is a worker deleted before its container ever ran — the drained *Pending* worker, which publishes at most a transient `Failed`-with-mark carrying no exit record — because a job that never ran to a reportable end leaves no failed job to re-run; the envtest pair (`TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun`, `TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover`) and the fake-GitHub `E2E_AGC_WorkerNodeDrain` pin that side, and `TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns` / `TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers` pin the recovered side, with `TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld` pinning that the scale-set half no longer waits on a reconcile (Q1029).
 The worker pod's `safe-to-evict: false` / `do-not-disrupt` annotations still do not deflect a drain, being advisory to autoscalers and deschedulers only.
 The full reasoning and constraints are in [q459-drained-worker-recovery.md](../plan/archive/q459-drained-worker-recovery.md); operator-facing guidance is in [troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-auto-re-runs-the-jobs-it-interrupts); the measured result is in [the experiment](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-27).
 

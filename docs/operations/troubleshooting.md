@@ -3154,13 +3154,14 @@ Consequences an operator should know:
   The pod is the disruption's only record, and the kubelet removes it once the container's exit is published — so if the AGC's claim lands after that, nothing recovers the run and no later reconcile can.
   It is reported rather than silent: `actions_gateway_eviction_recovery_evidence_lost_total{cause="deletion"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded on the `RunnerSet`.
   Those runs need a manual re-run.
-  A sustained rate means the AGC is not reaching the window — check whether it is CPU-starved or its work queue is backlogged, not whether the policy or role is wrong.
-- **A smaller fraction is not reported by any metric** (scale-set tier only).
-  The recovery scan reads the worker pods once per reconcile, so a drained worker is only judged if a reconcile begins between the kubelet publishing the terminal phase and removing the object.
-  If none does, the pod is never seen: no claim, no metric, no Event, and no log line naming it.
-  The tell is the absence: an unrecovered drain whose pod appears nowhere in the AGC log, against a recovered one that appears twice.
-  **That reading needs `spec.logLevel: debug` on the ActionsGateway.** The scan logs the terminating workers it judged and *declined* at `Debug`, and the default is `info` ([observability-logging.md](observability-logging.md)), so at the default a declined pod is silent too and the absence no longer separates the two.
-  Same remedy as above: the AGC's reconcile loop is not turning over fast enough.
+  A sustained rate means the AGC is not reaching the window — check whether it is CPU-starved or its pod watch is lagging the API server, not whether the policy or role is wrong.
+- **On an AGC before Q1029, a smaller fraction was not reported by any metric** (scale-set tier only).
+  The recovery scan read the worker pods once per reconcile, so a drained worker was judged only if a reconcile began between the kubelet publishing the terminal phase and removing the object, and a reconcile already in flight held the next one past that window.
+  If none did, the pod was never seen: no claim, no metric, no Event, and no log line naming it.
+  Since Q1029 the worker-pod watch hands the pod to recovery as its phase change arrives, so a drain is judged whether or not a reconcile turns over; the per-reconcile scan remains for pods no event reached.
+  On an older AGC the tell is the absence: an unrecovered drain whose pod appears nowhere in the AGC log, against a recovered one that appears twice.
+  **That reading needs `spec.logLevel: debug` on the ActionsGateway.** The judge logs the terminating workers it saw and *declined* at `Debug`, and the default is `info` ([observability-logging.md](observability-logging.md)), so at the default a declined pod is silent too and the absence no longer separates the two.
+  The remedy is the upgrade; until then, the AGC's reconcile loop is not turning over fast enough.
 - **The first re-run call may be refused.** GitHub's conclusion on this path takes 15–26s while `evictionRetryDelay` defaults to 5s, so the first `rerun-failed-jobs` can land while the run is still in progress and be answered `403 This workflow is already running`.
   The Q503 retry loop absorbs that — the re-run is retried on a 30s pace until accepted — so no action is needed; see [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) for the loop's own failure modes.
 
@@ -3247,10 +3248,10 @@ Expected behaviour is one automatic re-run per preempted run.
    So check `cause="vanished"` before concluding nothing fired — a preemption counter that stays flat while the vanished one moves is this case, not a defect.
    The classic tier is unaffected: its provisioning goroutine is already watching the pod, and if that goroutine is gone the session is gone with it.
 5. **The AGC saw the victim but lost it before claiming it** (scale-set tier only).
-   The same window as (4), missed by a margin rather than entirely: the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing.
+   The same window as (4), missed by a margin rather than entirely: recovery reads the pod off the informer and claims it through the live API, so a pod removed in between yields a claim that finds nothing.
    `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
    A manual re-run is required unless the AGC restarts, which is the one thing that re-reads the persisted record and picks the run up under `cause="vanished"`.
-   A sustained rate points at AGC responsiveness — CPU starvation or a backlogged work queue — rather than at the role or the policy.
+   A sustained rate points at AGC responsiveness — CPU starvation, or a pod watch lagging the API server — rather than at the role or the policy.
 
 **Diagnostics.**
 

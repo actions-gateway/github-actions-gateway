@@ -18,7 +18,7 @@ That is a page telling adopters nine things are in progress when they are waitin
 | **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
 | **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](release-1.6.md) |
 | **1.7** | Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
-| **1.8** | The scale-set drain recovery Q1029 gates on, plus the two v2 GA soak readings (Q1059, Q1060) and the Phase 2 alias decision (Q452), which ride: the release that gathers the evidence 2.0 is parked on | [release-1.8.md](release-1.8.md) |
+| **1.8** | The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060) and the Phase 2 alias decision (Q452), which ride: the release that gathers the evidence 2.0 is parked on | [release-1.8.md](release-1.8.md) |
 | **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
@@ -47,7 +47,7 @@ What Q727 decided was the release's *theme*, not whether there was one — and i
 Labelling `2.0-gate` rows then would have published a commitment on evidence nobody had, which is the dishonesty this page exists to remove.
 
 `semver-floor.sh v1.7.0` read **FLOOR: NONE** the same day, so nothing forced a release either; what the ladder needed was a rung whose deliverable is the evidence.
-[release-1.8.md](release-1.8.md) is that rung: [Q1029](../queue/Q1029.md), a measured drain-recovery defect, is the one gating row and the reason an operator upgrades, and the two soak readings ride because a measurement that may come back negative cannot be scheduled against a tag.
+[release-1.8.md](release-1.8.md) is that rung: Q1029, a measured drain-recovery defect closed 2026-09-07, is the one gating row and the reason an operator upgrades, and the two soak readings ride because a measurement that may come back negative cannot be scheduled against a tag.
 A negative reading is the rung working: it names the `v2beta1` shape fix GA is gated on finding first.
 
 ## What is punted past `v2.0.0`
