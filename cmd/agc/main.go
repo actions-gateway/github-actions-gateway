@@ -40,6 +40,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
@@ -414,6 +415,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	imageResolver, err := setupRunnerImageResolver(mgr, namespace)
+	if err != nil {
+		return err
+	}
 
 	// Worker usage sampler (Q359 Phase 2): a nil *Sampler is a safe no-op source,
 	// so the RunnerSet reconciler below can consume it unconditionally.
@@ -440,15 +445,16 @@ func run() error {
 	}
 
 	if err := registerReconcilers(mgr, reconcilerDeps{
-		gatewayName:  gatewayName,
-		brokerCfg:    buildBrokerConfig(cfg),
-		tokenMgr:     tokenMgr,
-		registrar:    registrar,
-		metrics:      m,
-		scaleSet:     sm,
-		prov:         prov,
-		agentKeyType: agentKeyType,
-		usageSampler: usageSampler,
+		gatewayName:   gatewayName,
+		brokerCfg:     buildBrokerConfig(cfg),
+		tokenMgr:      tokenMgr,
+		registrar:     registrar,
+		metrics:       m,
+		scaleSet:      sm,
+		prov:          prov,
+		agentKeyType:  agentKeyType,
+		usageSampler:  usageSampler,
+		imageResolver: imageResolver,
 		// Keyed off exactly the pair buildRegistrar's stub case uses, so the two
 		// acquisition tiers cannot end up pointed at different backends.
 		scaleSetStubURL: scaleSetStubBaseURL(cfg),
@@ -473,6 +479,8 @@ type reconcilerDeps struct {
 	prov         *provisioner.Provisioner
 	agentKeyType agentpool.KeyType
 	usageSampler *usage.Sampler
+	// imageResolver reads the worker image's runner version from its registry (Q988).
+	imageResolver *runnerimage.Resolver
 	// scaleSetStubURL re-points the scale-set bootstrap at a fake-GitHub stub, for
 	// the deployed fake-GitHub e2e tier. Empty in production — it is set only from
 	// the same STUB_AUTH_URL + STUB_BROKER_URL pair that selects the classic tier's
@@ -492,15 +500,16 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 	// ServesRunnerGroups carries the rationale.
 	if controller.ServesRunnerGroups(deps.gatewayName) {
 		r := &controller.RunnerGroupReconciler{
-			Client:       mgr.GetClient(),
-			Log:          slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnergroup"))),
-			TokenManager: deps.tokenMgr,
-			Registrar:    deps.registrar,
-			Metrics:      deps.metrics,
-			Provisioner:  deps.prov,
-			AgentKeyType: deps.agentKeyType,
-			Recorder:     mgr.GetEventRecorder("runnergroup-controller"),
-			BrokerConfig: deps.brokerCfg,
+			Client:        mgr.GetClient(),
+			Log:           slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnergroup"))),
+			TokenManager:  deps.tokenMgr,
+			Registrar:     deps.registrar,
+			Metrics:       deps.metrics,
+			Provisioner:   deps.prov,
+			ImageResolver: deps.imageResolver,
+			AgentKeyType:  deps.agentKeyType,
+			Recorder:      mgr.GetEventRecorder("runnergroup-controller"),
+			BrokerConfig:  deps.brokerCfg,
 		}
 		if err := r.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("setup reconciler: %w", err)
@@ -570,6 +579,7 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 			Metrics:         deps.metrics,
 			ScaleSetMetrics: deps.scaleSet,
 			Provisioner:     deps.prov,
+			ImageResolver:   deps.imageResolver,
 			AgentKeyType:    deps.agentKeyType,
 			GatewayName:     deps.gatewayName,
 			Recorder:        mgr.GetEventRecorder("runnerset-controller"),
@@ -868,4 +878,38 @@ func workerUsageSampleInterval(v string) (interval time.Duration, enabled bool, 
 		return 0, false, fmt.Errorf("interval %s below 1s minimum", d)
 	}
 	return d, true, nil
+}
+
+// setupRunnerImageResolver builds the registry reader behind RunnerVersionTooOld's
+// attested verdict (Q988) and hands its lifetime to the manager.
+//
+// The transport is cloned here, after configureTrustPool has extended
+// http.DefaultTransport, so a proxied AGC reaches the registry through the tenant
+// egress proxy and trusts its CA like every other outbound call. No overall client
+// Timeout: an inspection streams ~100 MB and the resolver bounds it per inspection.
+// Pull secrets are read through the uncached reader, since the AGC deliberately runs
+// no Secret informer (the tenant Role omits watch).
+func setupRunnerImageResolver(mgr ctrl.Manager, namespace string) (*runnerimage.Resolver, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = httpx.DefaultResponseHeaderTimeout
+	reader := mgr.GetAPIReader()
+	r := &runnerimage.Resolver{
+		HTTP: &http.Client{Transport: transport},
+		Log:  slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runner-image"))),
+		ReadSecret: func(ctx context.Context, name string) ([]byte, error) {
+			var s corev1.Secret
+			if err := reader.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &s); err != nil {
+				return nil, err
+			}
+			data, ok := s.Data[corev1.DockerConfigJsonKey]
+			if !ok {
+				return nil, fmt.Errorf("no %s key (type %s)", corev1.DockerConfigJsonKey, s.Type)
+			}
+			return data, nil
+		},
+	}
+	if err := mgr.Add(r); err != nil {
+		return nil, fmt.Errorf("add runner-image resolver: %w", err)
+	}
+	return r, nil
 }

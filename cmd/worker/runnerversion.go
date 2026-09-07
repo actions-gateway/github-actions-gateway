@@ -47,7 +47,8 @@ const (
 // image and the job's own steps run inside it, so anything in the container can
 // rewrite this file before it terminates and kubelet reads whatever is there last.
 // It answers "what does this image say it ships" for an operator debugging a custom
-// image; it must never carry a security verdict. Q988 is the attestable form.
+// image; it must never carry a security verdict. The AGC's own read of the image in
+// its registry (agc/internal/runnerimage) is the attestable form.
 type workerReport struct {
 	// RunnerVersion is the actions/runner version read from the runner's own
 	// dependency manifest, which is the only version record in the release tarball.

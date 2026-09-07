@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,6 +86,24 @@ func runnerVersionLess(a, b [3]uint64) bool {
 //     so nothing has been verified. Said out loud rather than assumed good: a custom
 //     image is exactly where a stale runner hides.
 func WorkerRunnerVersionCondition(image string, generation int64) metav1.Condition {
+	return WorkerRunnerVersionConditionWithRegistry(image, nil, generation)
+}
+
+// WorkerRunnerVersionConditionWithRegistry is WorkerRunnerVersionCondition with the
+// registry's reading of the image folded in (Q988). The tag reading is the immediate
+// answer, as before; the registry reading, once Done, is what the image actually
+// ships and overrides it, with the message naming the digest it was read at and any
+// disagreement with the tag. A Pending or Failed reading leaves the tag verdict
+// standing with the state appended, so a reference whose tag names a runner version
+// never regresses to Unknown because a registry was unreachable — that is today's
+// behaviour exactly, and it is what an FQDN-mode egress policy or a tenant's own
+// registry produces (neither admits the AGC).
+//
+// The trust argument is the one the tag already rests on: both are tenant-authored,
+// and the registry copy is the stronger of the two, because it is immutable once
+// addressed by digest and nothing running inside the container can rewrite it. A nil
+// lookup means no resolver is wired and reports the tag alone.
+func WorkerRunnerVersionConditionWithRegistry(image string, lookup *runnerimage.Lookup, generation int64) metav1.Condition {
 	cond := metav1.Condition{
 		Type:               apiconditions.ConditionRunnerVersionTooOld,
 		ObservedGeneration: generation,
@@ -99,31 +118,85 @@ func WorkerRunnerVersionCondition(image string, generation int64) metav1.Conditi
 		return cond
 	}
 
-	version, known := WorkerImageRunnerVersion(image)
-	if !known {
+	tagVersion, tagKnown := WorkerImageRunnerVersion(image)
+	if lookup != nil && lookup.State == runnerimage.Done {
+		return registryVerdict(cond, image, tagVersion, tagKnown, lookup.Result, minParsed)
+	}
+
+	// The registry has not answered: the tag verdict, saying so.
+	var suffix string
+	if lookup != nil {
+		switch lookup.State {
+		case runnerimage.Pending:
+			suffix = "; the registry read of the image is in progress"
+		case runnerimage.Failed:
+			suffix = fmt.Sprintf("; the registry read of the image failed (attempt %d: %s) and is retried, so this is the tag's claim alone",
+				lookup.Attempts, lookup.Err)
+		}
+	}
+	if !tagKnown {
 		cond.Status = metav1.ConditionUnknown
 		cond.Reason = apiconditions.ReasonWorkerImageVersionUnknown
 		cond.Message = fmt.Sprintf(
-			"worker image %s declares no actions/runner version in its tag, so the runner it ships cannot be checked against GitHub's enforced minimum %s",
-			image, names.MinRunnerVersion)
+			"worker image %s declares no actions/runner version in its tag, so the runner it ships cannot be checked against GitHub's enforced minimum %s%s",
+			image, names.MinRunnerVersion, suffix)
 		return cond
 	}
+	return versionVerdict(cond, image, tagVersion, minParsed, "", suffix)
+}
 
+// registryVerdict judges a completed registry reading. Content wins over the tag in
+// both directions: a version the layers carry is judged even when the tag claims
+// another, and a tag's claim does not stand for an image whose layers carry no runner.
+func registryVerdict(cond metav1.Condition, image, tagVersion string, tagKnown bool, r runnerimage.Reading, minParsed [3]uint64) metav1.Condition {
+	at := "at " + r.Digest
+	if r.Platform != "" {
+		at += " (" + r.Platform + ")"
+	}
+	if !r.Found {
+		cond.Status = metav1.ConditionUnknown
+		cond.Reason = apiconditions.ReasonWorkerImageVersionUnknown
+		cond.Message = fmt.Sprintf(
+			"worker image %s %s carries no bin/Runner.Listener.deps.json in its layers, so it is not actions/runner-derived where the runner layout puts the version and the runner it ships cannot be checked against GitHub's enforced minimum %s",
+			image, at, names.MinRunnerVersion)
+		if tagKnown {
+			cond.Message += fmt.Sprintf("; its tag claims %s, which the image does not bear out", tagVersion)
+		}
+		return cond
+	}
+	if _, ok := parseRunnerVersion(r.Version); !ok {
+		cond.Status = metav1.ConditionUnknown
+		cond.Reason = apiconditions.ReasonWorkerImageVersionUnknown
+		cond.Message = fmt.Sprintf(
+			"worker image %s %s names runner version %q in its dependency manifest, which is not a MAJOR.MINOR.PATCH release, so it cannot be checked against GitHub's enforced minimum %s",
+			image, at, r.Version, names.MinRunnerVersion)
+		return cond
+	}
+	source := ", read from the registry " + at
+	if tagKnown && tagVersion != r.Version {
+		source += fmt.Sprintf(" rather than the %s its tag claims", tagVersion)
+	}
+	return versionVerdict(cond, image, r.Version, minParsed, source, "")
+}
+
+// versionVerdict compares a known version to the floor. source names where the
+// version came from and suffix what is still outstanding; both may be empty.
+func versionVerdict(cond metav1.Condition, image, version string, minParsed [3]uint64, source, suffix string) metav1.Condition {
 	parsed, _ := parseRunnerVersion(version)
 	if runnerVersionLess(parsed, minParsed) {
 		cond.Status = metav1.ConditionTrue
 		cond.Reason = apiconditions.ReasonWorkerImageBelowMinimum
 		cond.Message = fmt.Sprintf(
-			"worker image %s ships actions/runner %s, below GitHub's enforced minimum %s: GitHub refuses to register a runner this old, so jobs stop being served — update workerImage",
-			image, version, names.MinRunnerVersion)
+			"worker image %s ships actions/runner %s%s, below GitHub's enforced minimum %s: GitHub refuses to register a runner this old, so jobs stop being served — update workerImage%s",
+			image, version, source, names.MinRunnerVersion, suffix)
 		return cond
 	}
 
 	cond.Status = metav1.ConditionFalse
 	cond.Reason = apiconditions.ReasonWorkerImageCurrent
 	cond.Message = fmt.Sprintf(
-		"worker image %s ships actions/runner %s, at or above GitHub's enforced minimum %s",
-		image, version, names.MinRunnerVersion)
+		"worker image %s ships actions/runner %s%s, at or above GitHub's enforced minimum %s%s",
+		image, version, source, names.MinRunnerVersion, suffix)
 	return cond
 }
 
