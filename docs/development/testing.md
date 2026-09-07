@@ -1786,9 +1786,12 @@ Three causes, all seen here, and only one of them is the directive's fault:
   Pick one suppression per line; adding the other is the failure, not the fix.
 - **A stale analysis cache.** Q516: an entry keyed on a deleted worktree path reported `G204` *and* `directive //nolint:gosec … is unused` on the same two lines.
   [Build and lint caches across worktrees](#build-and-lint-caches-across-worktrees) has the mechanism and the one-line recovery.
-- **The linter stopped emitting, with nothing else changing.** Q929: one commit, two CI verdicts, same Go, cache key and scope.
-  Still undiagnosed as to *why* the linter went quiet, but four candidate explanations are refuted and recorded in the row, so start from there rather than re-spending them.
-  The sharpest is that both runs logged a hit on the *primary* analyzer-cache key and the same 8,856,940-byte archive, so a `restore-keys` fallback carrying a foreign cache is not what happened.
+- **A warm analyzer cache dropped a fact the linter needed.** Q929: one commit, two CI verdicts, same Go, cache key and scope.
+  Upstream golangci-lint [#3228](https://github.com/golangci/golangci-lint/issues/3228), fixed by [#6649](https://github.com/golangci/golangci-lint/pull/6649) in v2.13.0: a package restored from the analyzer cache re-exported only the facts about its *own* objects, so a package analyzed from source lost every fact about an object it reaches through that cached package's export data but which a third package owns.
+  Staticcheck's SA1019 runs on an `IsDeprecated` fact, so a deprecated method reached that way went unreported and `nolintlint` called the directive beside it unused.
+  Measured 2026-09-07 on 2.12.2 with a scratch package that takes a `*x509.CertPool` back from `transport.BuildTrustPool` without importing `crypto/x509`: a cold run reports `0 issues`, a one-line comment edit followed by a warm run reports the `//nolint:staticcheck` on `pool.Subjects()` unused, and the red persists until the cache is cleared.
+  The same recipe on 2.13.2 stays at `0 issues` across the warm runs, and 2.13.2 rebuilds the inherited facts in memory when it restores a package (`inheritFactsFromDeps` in `pkg/goanalysis/runner_action_cache.go`).
+  What the recipe does not reach is the incident's own site, which imports `crypto/x509` directly and stays clean under it on 2.12.2; the row records that gap, and the fix is the version pin in `tools/go.mod`.
 
 **The surface is every directive, not the ones a past failure named.** Measured 2026-08-24 over the first-party tree and re-derived 2026-08-27: 117 directive sites, 104 of them naming `gosec` and 5 `staticcheck`, the rest `revive`, `dupl`, `errcheck`, `noctx` and `forbidigo`.
 **The unused check is agnostic to the linter**, and that half is measured: renaming `ConditionCredentialUnavailable` at `api/apiconditions/conditions.go:40` so G101's identifier pattern stops matching, with `.golangci.yml` byte-identical and the directive untouched, takes that package from `0 issues` to a `nolintlint` red naming it, and restoring the name takes it back.
