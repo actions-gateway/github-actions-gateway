@@ -2782,11 +2782,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q822/">Q822</a></td>
-<td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
+<td><a href="../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>M</td>
-<td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.</td>
+<td><strong>Event:</strong> a <code>scripts-test</code> suite fails inside a capped local fan-out and passes standalone straight afterwards, on <code>main</code>.</td>
 </tr>
 <tr>
 <td><a href="Q1023/">Q1023</a></td>

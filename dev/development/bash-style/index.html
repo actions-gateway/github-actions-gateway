@@ -2620,10 +2620,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#bash-44-is-a-declared-host-prerequisite" class="md-nav__link">
+  <a href="#bash-51-is-a-declared-host-prerequisite" class="md-nav__link">
     <span class="md-ellipsis">
       
-        bash 4.4 is a declared host prerequisite
+        bash 5.1 is a declared host prerequisite
       
     </span>
   </a>
@@ -2810,10 +2810,11 @@ Split the declaration from the assignment, which is the one form that reports:</
 </code></pre></div>
 <p>shellcheck's SC2155 already rejects the combined form, and <code>make shellcheck</code> runs in the same <code>make check</code>, so this half of the class is closed by a gate that predates the rule.
 The prologue gate deliberately leaves it alone rather than half-duplicating it.</p>
-<h3 id="bash-44-is-a-declared-host-prerequisite">bash 4.4 is a declared host prerequisite<a class="headerlink" href="#bash-44-is-a-declared-host-prerequisite" title="Permanent link">&para;</a></h3>
+<h3 id="bash-51-is-a-declared-host-prerequisite">bash 5.1 is a declared host prerequisite<a class="headerlink" href="#bash-51-is-a-declared-host-prerequisite" title="Permanent link">&para;</a></h3>
 <p>Requiring the shopt everywhere makes the shell version it needs a hard dependency, and until Q751 nothing said so.
 Measured on 2026-08-11: 175 of the 185 scripts under <code>scripts/</code> carry the strict line, 3 carry the tolerant form below, and 7 are sourced <code>lib/</code> files that inherit their caller's options.</p>
-<p>bash is therefore a <code>required</code>-tier entry in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools.sh"><code>check-tools.sh</code></a> with a declared minimum of 4.4, and a prerequisite in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#the-bash-floor"><code>CONTRIBUTING.md</code></a>.
+<p>bash is therefore a <code>required</code>-tier entry in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools.sh"><code>check-tools.sh</code></a> with a declared minimum, and a prerequisite in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#the-bash-floor"><code>CONTRIBUTING.md</code></a>.
+The shopt set the floor at 4.4; it is 5.1 since Q822, because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code></a> reaps its children with <code>wait -n -p</code>, which is how a capped fan-out learns which slot freed (<a href="../testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">the cap</a>).
 The registry gained a seventh field for that minimum; leave it empty for a tool with no floor the project actually depends on, because it costs a <code>--version</code> fork per check.</p>
 <p><code>check-tools.sh</code> is itself one of the scripts that needs 4.4, so its own floor check sits <strong>above</strong> its prologue in 3.2-safe syntax.
 Without that the tool meant to diagnose an old bash would die of the old bash first, reporting <code>invalid shell option name</code> like everything else.

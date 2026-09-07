@@ -4369,7 +4369,7 @@ The cases that matter are the ones where a malformed capture yields a plausible 
 On a small machine this can saturate every core and make the desktop unresponsive.
 On macOS it is worst: the WindowServer compositor misses its kernel watchdog and restarts — the whole GUI freezes (it shows up as <code>WindowServer … userspace_watchdog_timeout</code> in <strong>Console ▸ Crash Reports</strong>).
 On a Linux/WSL desktop you instead get input lag and compositor stutter while the build runs.</p>
-<p>To prevent that, these phases auto-throttle on an <strong>interactive, GUI-bearing dev shell</strong>: the scripts behind the make targets (<code>scripts/go/go-test.sh</code>, <code>scripts/go/go-lint.sh</code>, <code>scripts/go/coverage.sh</code>) run them with both CPU priority <strong>and</strong> disk I/O demoted below the desktop (macOS: <code>nice -n 10 taskpolicy -d throttle</code>; Linux/WSL: <code>nice -n 19</code>, plus <code>ionice -c 3</code> when available), and cap parallelism to physical-cores − 2 (<code>golangci-lint -j</code>, <code>go test -p</code>, <code>GOMAXPROCS</code>).
+<p>To prevent that, these phases auto-throttle on an <strong>interactive, GUI-bearing dev shell</strong>: the scripts behind the make targets (<code>scripts/go/go-test.sh</code>, <code>scripts/go/go-lint.sh</code>, <code>scripts/go/coverage.sh</code>) run them with both CPU priority <strong>and</strong> disk I/O demoted below the desktop (macOS: <code>nice -n 10 taskpolicy -d throttle</code>; Linux/WSL: <code>nice -n 19</code>, plus <code>ionice -c 3</code> when available), and cap parallelism to physical-cores − 2 (<code>golangci-lint -j</code>, <code>go test -p</code>, <code>GOMAXPROCS</code>, and since Q822 the <a href="#the-fast-gates-fan-out-past-the-heavy-build-semaphore">fast-gate fan-outs</a> through <code>RUN_PARALLEL_JOBS</code>).
 Detection and sizing live in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>scripts/agent/local-throttle.sh</code></a>.</p>
 <p>On macOS the I/O demotion matters as much as the CPU demotion: an unthrottled build already runs at a lower QoS than WindowServer yet still trips the watchdog, so the fix is throttling the build's I/O so the compositor's I/O isn't stuck behind it — and <code>taskpolicy</code> is the only macOS way to express that (there is no <code>ionice</code>).</p>
 <p><strong>Demote the two separately; don't clamp QoS.</strong> The macOS prefix was <code>taskpolicy -c utility</code> until Q441.
@@ -4497,11 +4497,126 @@ Q343 concluded from that there was "no supported knob to share test results acro
 <h3 id="the-fast-gates-fan-out-past-the-heavy-build-semaphore">The fast gates fan out past the heavy-build semaphore<a class="headerlink" href="#the-fast-gates-fan-out-past-the-heavy-build-semaphore" title="Permanent link">&para;</a></h3>
 <p><code>serialize_heavy_build</code> bounds how many heavy phases run at once across sessions, and the fast gates are outside it.
 <code>make scripts-test</code> calls <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code></a>, which launches every spec with <code>&amp;</code> into a pid list and then waits.
-There is no cap in it, and <code>SCRIPTS_TESTS</code> holds 97, so all 97 start at once by construction.
+With <code>RUN_PARALLEL_JOBS</code> unset there is no cap in it, and <code>SCRIPTS_TESTS</code> holds 119, so all 119 start at once by construction.
 That is a property of the runner rather than a measurement, and no sampling improves on it.
 So a session in its fast gates has no machine-wide bound while a sibling's heavy phase holds one of two lock slots.
 That is the contention <a href="../../queue/Q822/">Q822</a> suspected.</p>
-<p><strong>What it does not show is that the fan-out causes any suite to fail.</strong> No reproduction connects it to <code>provisioner</code>'s eviction window or to any other red, and the two are separate claims: one is a property of the runner, the other needs a failure traced to it.</p>
+<p><strong><code>RUN_PARALLEL_JOBS=N</code> caps a fan-out at N concurrent commands</strong> (Q822): slots are handed out in argument order, a freed slot goes to the next spec, and the verdict, the <code>FAILED</code>/<code>KILLED</code> split and the per-label wall time are unchanged.
+The cap inherits into a nested fan-out, so <code>make check</code> at N holds the 51-gate level and the 119-suite level to N each rather than the tree to N. It reaps with <code>wait -n -p</code>, which is why the <a href="../bash-style/#bash-51-is-a-declared-host-prerequisite">bash floor</a> is 5.1.
+The Makefile exports <code>RUN_PARALLEL_JOBS</code> as <code>local-throttle.sh jobs</code>, the same per-run cap the <a href="#resource-auto-throttle-on-gui-dev-machines">heavy phases</a> take: physical cores minus 2 on a GUI dev shell, and empty on CI or headless, where the fan-outs stay unbounded.
+<code>RUN_PARALLEL_JOBS=0 make check</code> restores the unbounded run on a dev shell; the environment wins over the default.</p>
+<p><strong>What a cap buys is measured, and it is not wall time.</strong> Eleven <code>make scripts-test</code> runs on 2026-09-07, 18 cores, load average 26 to 153, beside a sibling session's <code>go test -race -tags integration</code> throughout; the exec column is fork+exec of <code>/usr/bin/true</code> sampled every 50 ms for the run's whole duration.
+Suite-seconds is the sum of the runner's own per-label wall times.</p>
+<table>
+<thead>
+<tr>
+<th>Cap</th>
+<th>Wall</th>
+<th>Suite-seconds</th>
+<th>Exec p99</th>
+<th>Exec max</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>none</td>
+<td>105 s</td>
+<td>2,609</td>
+<td>82 ms</td>
+<td>588 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>64</td>
+<td>160 s</td>
+<td>4,703</td>
+<td>412 ms</td>
+<td>1,095 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>32</td>
+<td>138 s</td>
+<td>2,872</td>
+<td>115 ms</td>
+<td>401 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>16</td>
+<td>200 s</td>
+<td>2,248</td>
+<td>188 ms</td>
+<td>628 ms</td>
+<td><code>check-endpoint-parity-test</code> red</td>
+</tr>
+<tr>
+<td>8</td>
+<td>173 s</td>
+<td>1,234</td>
+<td>49 ms</td>
+<td>118 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>none</td>
+<td>120 s</td>
+<td>4,547</td>
+<td>381 ms</td>
+<td>874 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>none</td>
+<td>233 s</td>
+<td>7,923</td>
+<td>1,004 ms</td>
+<td>3,214 ms</td>
+<td><code>check-endpoint-parity-test</code> red</td>
+</tr>
+<tr>
+<td>8</td>
+<td>148 s</td>
+<td>1,121</td>
+<td>33 ms</td>
+<td>91 ms</td>
+<td><code>claude-go-throttle-hook-test</code> SIGTERM from outside</td>
+</tr>
+<tr>
+<td>none</td>
+<td>218 s</td>
+<td>4,971</td>
+<td>656 ms</td>
+<td>3,086 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>8</td>
+<td>240 s</td>
+<td>1,828</td>
+<td>352 ms</td>
+<td>1,727 ms</td>
+<td>green</td>
+</tr>
+<tr>
+<td>16</td>
+<td>79 s</td>
+<td>1,005</td>
+<td>21 ms</td>
+<td>48 ms</td>
+<td>green</td>
+</tr>
+</tbody>
+</table>
+<p>Wall time does not rank the caps: uncapped runs span 105 to 233 s and capped ones 79 to 240 s, and the host moved more between runs than any cap did.
+Two readings do separate them, both in the direction of less contention per suite.
+Every run capped at 16 or lower totals 2,248 suite-seconds or fewer and every uncapped run 2,609 or more, so under such a cap a suite spends less of its own wall time waiting, and the extra wall clock a cap costs is queueing behind the three suites that take 60 to 100 s alone; caps of 32 and 64 sit inside the uncapped range and buy nothing on this reading.
+And the exec tail, which is what a 5 s probe budget measures, reached 3.2 s uncapped and never passed 1.8 s capped, with five of the seven capped runs under 0.7 s.
+Both readings hold across a load range this row had already shown cannot rank a run on its own.</p>
+<p><strong>What it does not show is that the fan-out causes any suite to fail.</strong> No run here crossed the 5 s budget <a href="../../queue/Q1031/">Q1031</a>'s kills expire on: that took a second fan-out beside this one, which these runs had only from the <code>-race</code> suite next door.
+Both <code>check-endpoint-parity-test</code> reds are <a href="../../queue/Q912/">Q912</a>'s signature, a <code>fakegithub</code> that never accepted within 30 s, once uncapped and once at 16, so they are sightings on that row rather than evidence about the cap.
+The two are separate claims: one is a property of the runner, the other needs a failure traced to it.</p>
 <p><strong>No suite in the fan-out takes the lock, but only one of the two reasons is structural.</strong> Five scripts call <code>serialize_heavy_build</code>, and in <code>go-lint.sh</code>, <code>go-vet-tags.sh</code> and <code>coverage.sh</code> the call sits inside <code>main()</code>, so sourcing them cannot take it.
 In <code>go-test.sh</code> and <code>go-test-integration.sh</code> it sits at top level, where sourcing takes the lock immediately, and only their suites' <code>GAG_HEAVY_BUILD_LOCK_HELD=1</code> keeps them out.
 So a future suite that sources either of those without the sentinel puts a lock-taker inside the fan-out, which is the thing this paragraph exists to rule out.</p>

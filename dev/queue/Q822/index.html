@@ -2579,25 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#a-sighting-at-ordinary-load-2026-09-04" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A sighting at ordinary load, 2026-09-04
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2617,31 +2598,18 @@
 
 
 <h1 id="three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun">Three unrelated suites fail under concurrent load and pass on rerun<a class="headerlink" href="#three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.
-A third suite failed with them and has since been deleted with the piped-gate hook.</p>
-<p><strong>The fan-out half is settled and the row's scope was wrong.</strong> <code>run-parallel.sh</code> launches every spec with <code>&amp;</code> into a pid list and then waits, with no cap anywhere in it, and <code>SCRIPTS_TESTS</code> holds 97.
-So <code>make scripts-test</code> starts all 97 at once by construction: a property of the runner, not a sampling result.
-No suite in the fan-out takes <code>serialize_heavy_build</code>, so a session in its fast gates gets no machine-wide bound while a sibling's heavy phase holds one of two lock slots.
-<a href="../../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">What that does and does not establish</a>.</p>
-<p>Two corrections before this is implemented as written.
-The <code>controller</code> 2m timeout is covered by the raise to 5m Q823 shipped, which is itself in flake watch pending recurrence, so only <code>provisioner</code> still sits under this row.
-And nothing here reproduces a suite failing <em>because of</em> the fan-out: a property of the runner and a failure traced to it are separate claims, and only the first is in hand.</p>
-<p>Capping is a machine-wide throughput decision of the same kind as <a href="../Q966/">Q966</a> and wants the same hands.
-The same runner backs <code>check</code> itself at 45 gates, with <code>scripts-test</code> nested inside as one of them, plus <code>docs-gates</code> at 19 and <code>queue-gates</code> at 10, so a cap nests and would cost the largest caller most.</p>
-<h2 id="a-sighting-at-ordinary-load-2026-09-04">A sighting at ordinary load, 2026-09-04<a class="headerlink" href="#a-sighting-at-ordinary-load-2026-09-04" title="Permanent link">&para;</a></h2>
-<p><code>git-merge-script-index-test</code> failed once under local <code>make check</code>, case <em>a one-sided row edit is kept alongside the other side's add</em>, and passed standalone straight afterwards.
-Load average at failure was <strong>32.21</strong> on 18 cores, which is an ordinary working figure on this machine rather than a contention peak.
-A PR branch, so no trigger fires.</p>
-<p><strong>The load is the finding, not the failure.</strong> This row's premise is that suites fail <em>under concurrent load</em>, and 32 is what this box sits at with a few sessions running.
-So the sighting is evidence against the premise as stated: either the threshold is far lower than the row assumes, or load average is the wrong axis.
-<a href="../Q1031/">Q1031</a> reaches the same conclusion from the other end, with a sighting that failed at roughly 15 to 19 and then passed at 20.39 on the same tree.
-Two rows now carry a reading where the passing run was the more loaded one.</p>
-<p><strong>The fan-out counts in this row have all moved</strong>, and they size its closing argument about what a cap would cost.
-Measured 2026-09-04 from <code>mk/gate-lists.mk</code>: <code>SCRIPTS_TESTS</code> is <strong>117</strong>, not 97; <code>CHECK_FAST_GATES</code> is <strong>51</strong>, not 45; <code>DOCS_GATES</code> is <strong>23</strong>, not 19; <code>QUEUE_GATES</code> is <strong>11</strong>, not 10.
-The fan-out is about a fifth wider than the row describes, so the nesting cost it weighs is understated rather than wrong.</p>
-<p><strong>The second disjunct is the live one, and <a href="../Q1031/">Q1031</a> now carries the reading that settles it.</strong> Three failure/re-run pairs there record the load on both sides, and the passing run comes out above, below and level with the failing one.
-What separates them is the fan-out itself — a standalone re-run is one suite, the failing run is that suite inside the 117-wide and 51-wide bursts this row measured — so the axis to sweep is concurrent process count, not load average.
-That does not change what this row asks for; it means a cap would be evaluated against fan-out width, and that no threshold on load average can stand in for one.</p>
+<p><strong>Event:</strong> a <code>scripts-test</code> suite fails inside a capped local fan-out and passes standalone straight afterwards, on <code>main</code>.</p>
+<p>The mitigation is the cap: <code>run-parallel.sh</code> takes <code>RUN_PARALLEL_JOBS</code>, and the Makefile exports <code>local-throttle.sh jobs</code> as its default, physical cores minus 2 on a GUI dev shell and unbounded on CI or headless.
+So <code>make check</code>'s 51-gate level and <code>make scripts-test</code>'s 119-suite level each start at most that many at once instead of all of them.
+<a href="../../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">The measurement</a>: eleven runs on 2026-09-07 beside a sibling <code>go test -race</code> suite, load 26 to 153 on 18 cores.
+Wall time cannot rank the caps, but every run capped at 16 or lower spent 2,248 suite-seconds or fewer against 2,609 or more uncapped (32 and 64 sat inside the uncapped range), and the fork+exec tail peaked at 1.8 s capped against 3.2 s uncapped.
+That tail is the axis <a href="../Q1031/">Q1031</a> re-keyed this row onto, and it moved with the width rather than with the load.</p>
+<p><strong>What the mitigation is not evidence for.</strong> No run crossed the 5 s budget Q1031's probe kills expire on, so that class is not reproduced here; it takes a second fan-out beside this one, which these runs had only from the <code>-race</code> suite next door.
+8 against 16 is not separable in the data, so the default follows the throttle's own number, and <a href="../Q966/">Q966</a> owns whether that number is right.</p>
+<p><strong>Two sightings taken during the sweep belong to <a href="../Q912/">Q912</a></strong>: <code>check-endpoint-parity-test</code> red with a <code>fakegithub</code> that never accepted within 30 s, once uncapped at load 77 and once at a cap of 16 at load 129, both green standalone.
+They are recorded here rather than on that row because the run that produced them is this row's, and a groom moves them.</p>
+<p>The original sightings: the <code>provisioner</code> eviction window under 8 workers on 2026-08-12, and <code>git-merge-script-index-test</code> at load 32.21 on 2026-09-04, the reading that showed load average was the wrong axis.
+The <code>controller</code> 2m timeout in the original set is <a href="../Q823/">Q823</a>'s, covered by the raise to 5m.</p>
 
 
 
