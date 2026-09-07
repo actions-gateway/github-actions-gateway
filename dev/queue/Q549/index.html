@@ -2609,7 +2609,7 @@ The line-264 failure (<a href="https://github.com/actions-gateway/github-actions
 The sampler is no longer asserted on; an empty sequence is a fact about a <code>kubectl</code>-per-sample sampler racing a fast teardown, not about the AGC.
 And the scan now logs the terminating workers it judged and declined, which gives the spec a third "this attempt proves nothing" discriminator beside a replaced control plane and a lost claim: no verdict at all means the claim patch was never attempted, so the chart role was never exercised, and the attempt re-stages under the same <code>maxAttempts</code> budget.</p>
 <p>Reaching <code>Fail</code> now means the AGC judged the pod, so the two causes the failure text names are the two that remain.
-The product gap underneath is <a href="../Q1029/">Q1029</a>, which this row does not close: a drain's recovery is reachable only if a reconcile <em>begins</em> inside the pod's teardown window.
+The product gap underneath, Q1029, is closed: a drain is judged off the worker-pod watch event as its phase change arrives, so its recovery no longer needs a reconcile to <em>begin</em> inside the pod's teardown window.
 Residual: a regression in the scan's own List selector still presents as silence and would re-stage rather than fail.
 Soak clock runs from the fix; blast radius is both e2e lanes, which are merge-group-only (<a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">Q675</a>).</p>
 

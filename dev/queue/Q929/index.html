@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-unused-check-cannot-see-why-a-linter-went-quiet" class="md-nav__link">
+  <a href="#the-cause-is-upstream-and-the-pin-lacked-the-fix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The unused check cannot see why a linter went quiet
+        The cause is upstream, and the pin lacked the fix
       
     </span>
   </a>
@@ -2597,10 +2597,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#refuted-leads" class="md-nav__link">
+  <a href="#what-the-reproduction-does-not-reach" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Refuted leads
+        What the reproduction does not reach
       
     </span>
   </a>
@@ -2608,10 +2608,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#still-open" class="md-nav__link">
+  <a href="#refuted-before-the-cause-was-found" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Still open
+        Refuted before the cause was found
       
     </span>
   </a>
@@ -2639,45 +2639,37 @@
 
 
 <h1 id="the-lint-gate-returns-two-verdicts-on-one-tree">The lint gate returns two verdicts on one tree<a class="headerlink" href="#the-lint-gate-returns-two-verdicts-on-one-tree" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives unused in only one. #1639 deleted the directives; the flake outlives them.</p>
-<p><strong>Do not retire this as "the defect has no way to express itself": that read was wrong.</strong> Re-counted 2026-08-24 and independently again 2026-08-27: 117 first-party directive sites, 104 naming <code>gosec</code> and 5 <code>staticcheck</code>.
-The original count matched the literal <code>nolint:staticcheck</code> and so missed the five <code>//nolint:revive,staticcheck</code> dot-imports under <code>cmd/gmc/test/utils/</code>.
-Any query counting this surface has to span the comma form before its zero means anything.</p>
-<h2 id="the-unused-check-cannot-see-why-a-linter-went-quiet">The unused check cannot see why a linter went quiet<a class="headerlink" href="#the-unused-check-cannot-see-why-a-linter-went-quiet" title="Permanent link">&para;</a></h2>
-<p>Two reproductions on 2026-08-27, each silencing a linter by a route that is neither a config exclusion nor disabling it, so neither restates cause #1 below.</p>
+<p><strong>Event:</strong> a <code>nolintlint</code> <code>directive … is unused</code> red on <code>main</code> or in the merge queue that a rerun clears, or a <code>//nolint:staticcheck</code> reported unused on <code>main</code> with no <code>.golangci.yml</code> exclusion covering that line, where the deprecated call it covers is still in the tree.</p>
+<p>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling the two <code>//nolint:staticcheck</code> directives on lines 171 and 182 of <code>trustpool_test.go</code> at that commit unused in only one, both on <code>x509.CertPool.Subjects</code>, which is deprecated.
+PR #1639 deleted the directives; the flake outlives them, because a <code>nolintlint</code> red is about the linter's silence and every one of the 117 first-party directive sites is exposed to a silence of its linter (<a href="../../development/testing/#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">mechanism and the known causes</a>).</p>
+<h2 id="the-cause-is-upstream-and-the-pin-lacked-the-fix">The cause is upstream, and the pin lacked the fix<a class="headerlink" href="#the-cause-is-upstream-and-the-pin-lacked-the-fix" title="Permanent link">&para;</a></h2>
+<p>golangci-lint <a href="https://github.com/golangci/golangci-lint/issues/3228">#3228</a>, which the maintainer named as the root cause of <a href="https://github.com/golangci/golangci-lint/issues/6224">#6224</a>, a durable CI cache leaking deprecated uses past SA1019, and fixed in <a href="https://github.com/golangci/golangci-lint/pull/6649">#6649</a>, released in v2.13.0 on 2026-08-19.
+A package restored from the analyzer cache re-exported only the facts about its own objects, so a package analyzed from source lost every fact about an object it reaches through that cached package's export data but which a third package owns.
+SA1019 runs on staticcheck's <code>IsDeprecated</code> fact, so the deprecated call went unreported and the directive beside it read as unused.
+<code>tools/go.mod</code> pinned v2.12.2, which predates the fix by 48 commits.</p>
+<p><strong>Measured 2026-09-07, both arms.</strong> A scratch package under <code>cmd/agc</code> that takes a <code>*x509.CertPool</code> back from <code>transport.BuildTrustPool</code> without importing <code>crypto/x509</code>, linted with a fresh <code>GOLANGCI_LINT_CACHE</code>:</p>
 <ul>
-<li><strong>gosec, with <code>.golangci.yml</code> byte-identical to <code>main</code>.</strong> Renaming <code>ConditionCredentialUnavailable</code> at <code>api/apiconditions/conditions.go:40</code> so G101's identifier pattern stops matching, with the directive itself untouched, takes the <code>api</code> module from <code>0 issues</code> to a <code>nolintlint</code> red naming that directive for linter "gosec".
-  Restoring the name returns <code>0 issues</code>.</li>
-<li><strong>staticcheck, with no exclusion rule involved.</strong> Adding <code>-ST1001</code> to <code>linters.settings.staticcheck.checks</code>, which leaves the linter enabled and every other check running, reds all five surviving comma-form directives.
-  Removing it returns <code>0 issues</code>.</li>
+<li><strong>2.12.2:</strong> cold run <code>0 issues</code>; append one comment line and run warm: <code>directive //nolint:staticcheck … is unused for linter "staticcheck"</code> on <code>pool.Subjects()</code>; a third run without an edit repeats it.</li>
+<li><strong>2.13.2:</strong> the same three runs all <code>0 issues</code>.
+  2.13.2 rebuilds a restored package's inherited facts in memory (<code>inheritFactsFromDeps</code>, <code>pkg/goanalysis/runner_action_cache.go</code>, reworked from #6649 by <a href="https://github.com/golangci/golangci-lint/pull/6762">#6762</a>).</li>
 </ul>
-<p>The source says why the route cannot matter.
-<code>nolint_filter.go</code> keeps <code>matchedIssueFromLinter map[string]bool</code> keyed on <code>issue.FromLinter</code>, and answers an <code>//nolint:X</code> with that map's lookup for <code>X</code>.
-There is no per-linter branch, and no input describing <em>why</em> an issue is absent, so nothing downstream can tell a nondeterministic silence from a configured one.
-Both reproductions above are deterministic, so they measure the linter half; the step this row turns on, that a <em>nondeterministic</em> silence lands the same way, rests on that source read.
-The whole 117-site surface is therefore exposed, and the gosec half is a measurement rather than an inference.
-<strong>The row is not retired.</strong></p>
-<h2 id="refuted-leads">Refuted leads<a class="headerlink" href="#refuted-leads" title="Permanent link">&para;</a></h2>
+<p>The mitigation is the bump to v2.13.2.
+CI's <code>restore-keys</code> prefix fallback still restores a 2.12.2 archive into a 2.13.2 run (measured on #1858's first <code>lint</code> job), and that is harmless: golangci-lint salts every analyzer-cache key with the binary version (<code>initHashSalt</code>, <code>pkg/commands/run.go</code>), so the old entries should be unreadable to the new binary; that is a source read of the vendored 2.13.2, not exercised.</p>
+<h2 id="what-the-reproduction-does-not-reach">What the reproduction does not reach<a class="headerlink" href="#what-the-reproduction-does-not-reach" title="Permanent link">&para;</a></h2>
+<p>The incident's own site imports <code>crypto/x509</code> directly, and the recipe above on that site, with the two directives restored and the file's SA1019 exclusion removed, stays at <code>0 issues</code> on 2.12.2 across cold and warm runs.
+So the class is measured and the incident's route through it is not: whatever put a direct import's fact out of reach in run 32172968731 and not in 32145897225 is not reproduced here, and the two job logs differ only in trigger (<code>workflow_dispatch</code> against <code>push</code>) and Azure region once timestamps, temp paths and credential UUIDs are normalised.
+The one wall-clock input the analyzer cache reads is its trim (<code>trimLimit</code> 5 days on entry mtime, run at most daily at <code>Close</code>), and a trim deletes entries, which sends a package back to source analysis rather than silencing it; no mechanism is asserted for the direct edge.
+Upstream's own reproduction was "not simple" and the fix rests on the fact-and-cache diagnosis rather than on a minimal case, so a sighting after the bump is evidence about a second cause, not this one.</p>
+<h2 id="refuted-before-the-cause-was-found">Refuted before the cause was found<a class="headerlink" href="#refuted-before-the-cause-was-found" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>The <code>restore-keys</code> fallback.</strong> Both runs logged <code>Cache hit for: golangci-lint-Linux-c9fb5326…</code>, the primary key rather than the prefix fallback, and the same <code>Cache Size: ~8 MB (8856940 B)</code>.
-  One cache archive in, two verdicts out.</li>
-<li><strong>A different runner.</strong> Both <code>lint</code> jobs ran GitHub-hosted <code>ubuntu-latest</code> on Go 1.26.6 in the same workspace path, despite <code>runs-on</code> being an expression here and the failing run being a dispatch.</li>
-<li><strong>Issue-count truncation ahead of the filter.</strong> <code>MaxSameIssues</code> and <code>MaxFromLinter</code> are registered after <code>NewNolintFilter</code> in <code>pkg/lint/runner.go</code> (2.12.2), so no cap can make a directive read unused.
-  The caps are lifted now, so a red here reports its full extent: <a href="../../development/testing/#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">testing.md</a>.</li>
-<li><strong>Cause #1 firing in one run and not the other.</strong> At <code>c99129aa</code> the exclusion rule's path was <code>proxytrust_test\.go</code>, the name the file carried before #1137 renamed it, so the rule matched nothing and the two directives were the sole suppression.
-  Q923 repointed it afterwards.
-  The incident is a linter silence with no exclusion in play.</li>
+<li><strong>The <code>restore-keys</code> fallback.</strong> Both runs logged <code>Cache hit for: golangci-lint-Linux-c9fb5326…</code>, the primary key, and the same <code>Cache Size: ~8 MB (8856940 B)</code>.</li>
+<li><strong>A different runner.</strong> Both <code>lint</code> jobs ran GitHub-hosted <code>ubuntu-latest</code> on Go 1.26.6 in the same workspace path.</li>
+<li><strong>Issue-count truncation ahead of the filter.</strong> <code>MaxSameIssues</code> and <code>MaxFromLinter</code> are registered after <code>NewNolintFilter</code> in <code>pkg/lint/runner.go</code>; the caps are lifted now (Q1003).</li>
+<li><strong>The exclusion rule firing in one run and not the other.</strong> At <code>c99129aa</code> the rule's path was <code>proxytrust_test\.go</code>, the pre-#1137 name, so it matched nothing in either run; Q923 repointed it.</li>
+<li><strong>Silence at rest.</strong> Six local full sweeps on 2026-08-24, three cold and three warm, all <code>0 issues</code>; the warm runs never edited a file between passes, which is the step the recipe above needs.</li>
 </ul>
-<h2 id="still-open">Still open<a class="headerlink" href="#still-open" title="Permanent link">&para;</a></h2>
-<p>Why staticcheck stopped emitting SA1019 on those two lines in one run.
-Two substantive differences survive a timestamp-normalised diff of the two job logs, and neither is yet a mechanism: the failing run was a <code>workflow_dispatch</code> where the passing one was a <code>push</code>, and their Azure regions differed (<code>westcentralus</code> against <code>westus</code>).
-Everything else the diff turns up is per-run noise, being temp paths and credential UUIDs.</p>
-<p>Not reproduced at rest: six local full sweeps on 2026-08-24, three cold analyzer cache and three warm, all <code>0 issues</code>.
-CI soak counted the same day: 28 <code>unit-test</code> runs on <code>main</code> <em>after</em> run 32172968731, of which 25 succeeded, 3 were cancelled and none failed, newest 2026-08-21 (docs-only merges are path-gated out).
-Read 25 against the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak floors</a>, where it lands on the infra bar.
-Those runs exercised all 117 surviving directives, so they are evidence about the surviving surface; what they cannot speak to is the original mechanism, since #1639 deleted the two sites that exhibited it.
-<a href="../../development/testing/#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">Mechanism and the three known causes</a>.
-The <code>M</code> stands.</p>
+<p>Soak counts from the bump's merge.
+Read against the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">infra floor</a>: a recurrence costs a rerun.</p>
 
 
 

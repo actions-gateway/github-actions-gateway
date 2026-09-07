@@ -2706,10 +2706,10 @@
 
 <h1 id="release-18-milestone-definition">Release 1.8 Milestone Definition<a class="headerlink" href="#release-18-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scoped 2026-09-07, nothing shipped yet.</strong> One gating row, <a href="../../queue/Q1029/">Q1029</a>, the scale-set drain recovery that is lost when no reconcile starts inside a terminating worker's window.
+<p><strong>Status: scoped 2026-09-07; the gating row is closed, no candidate cut.</strong> The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event (<a href="#the-gating-row-q1029">below</a>).
 Three rows ride without gating: the two v2 GA soak readings, <a href="../../queue/Q1059/">Q1059</a> and <a href="../../queue/Q1060/">Q1060</a>, and the Phase 2 alias decision, <a href="../../queue/Q452/">Q452</a>.
 The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 44 commits and <strong>FLOOR: NONE</strong> on 2026-09-07, with seven <code>feat</code>/<code>fix</code> subjects withheld because they ship in no image and no chart.
-Q1029's fix would raise the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.</p>
+Q1029's fix raises the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.</p>
 </blockquote>
 <h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
 <p>The <a href="../release-ladder/">release ladder</a> reads 1.7 → 2.0, and 2.0 is <a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">parked on a soak</a> whose evidence nobody has gathered.
@@ -2718,14 +2718,18 @@ So the GA rung cannot be labelled without publishing a commitment on unmeasured 
 <p>1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one three rows have waited for since 1.7 (<a href="../../queue/Q1038/">Q1038</a>, <a href="../../queue/Q1048/">Q1048</a>, <a href="../../queue/Q1039/">Q1039</a>).
 The theme is v2 GA readiness; what makes it a release an operator upgrades for is the gating row.</p>
 <h2 id="the-gating-row-q1029">The gating row: Q1029<a class="headerlink" href="#the-gating-row-q1029" title="Permanent link">&para;</a></h2>
-<p><a href="../../queue/Q1029/">Q1029</a> is a measured product defect on the scale-set tier.
-<code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a <code>RunnerSet</code> reconcile, so a gracefully deleted worker is judged only if a reconcile begins in the seconds between the kubelet publishing the terminal phase and removing the object.
-When none does, the job is silently never re-run.
-The row carries three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.</p>
+<p>Q1029 was a measured product defect on the scale-set tier.
+<code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a <code>RunnerSet</code> reconcile, so a gracefully deleted worker was judged only if a reconcile began in the seconds between the kubelet publishing the terminal phase and removing the object.
+When none did, the job was silently never re-run.
+The row carried three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.</p>
+<p><strong>Closed 2026-09-07.</strong> The reconciler's worker-pod watch now hands each phase-changing or newly preempted scale-set worker straight to the same judge and the same optimistic-lock claim the scan uses, so the claim no longer waits on the reconcile queue; the scan stays for what no event reaches (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>).
+The deletion-proof is at the envtest tier: <code>TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld</code> parks the controller's only reconcile worker in a second set's listener bootstrap for the whole drain and asserts the claim lands while the reconcile count does not move, and it went red on a build where the watch path was inert.
+The e2e drain spec is unchanged: it already re-stages rather than fails on a missed window (<a href="../q549-scaleset-rerun-flake/#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch">q549-scaleset-rerun-flake.md</a>), so a stricter e2e assertion is a call this plan still owes an answer on.</p>
 <p>It gates because the exposure is an operator's, not the e2e venue's: a node drain terminates many workers at once, so one missed window there is many lost jobs.
 The design already records that this arm cannot be made restart-safe (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>), and the row argues that Q844's orphan recovery does not cover a worker the scan simply missed.</p>
-<p><strong>Why the gap opens is unverified</strong>, and the row says so: the reconciler runs at <code>MaxConcurrentReconciles: 1</code> and the listener bootstrap does DNS and an HTTP POST inside <code>Reconcile</code>, which is a hypothesis read off timestamps.
-Measuring it is the first step of the work, not a finding to code against.</p>
+<p><strong>Why the gap opened was unverified</strong>, and the row said so: the reconciler runs at <code>MaxConcurrentReconciles: 1</code> and the listener bootstrap does DNS and an HTTP POST inside <code>Reconcile</code>, which was a hypothesis read off timestamps.
+What the fix established is narrower than a duration: on the vendored controller-runtime the pod's own phase-change event moves a waiting key to ready at once, so the 8-second gap held a reconcile in flight rather than a backoff, and its duration is still not measured directly (<a href="../q549-scaleset-rerun-flake/#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch">the reading</a>).
+The fix does not depend on which step inside it was slow.</p>
 <h2 id="what-rides-the-soak-readings-and-the-alias-decision">What rides: the soak readings and the alias decision<a class="headerlink" href="#what-rides-the-soak-readings-and-the-alias-decision" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2766,10 +2770,10 @@ Measuring it is the first step of the work, not a finding to code against.</p>
 </thead>
 <tbody>
 <tr>
-<td><a href="../../queue/Q1029/">Q1029</a></td>
+<td>Q1029</td>
 <td>Drain recovery lost when no reconcile starts inside the window</td>
 <td><code>1.8-gate</code></td>
-<td>🔲 open</td>
+<td>✅ closed 2026-09-07</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1059/">Q1059</a></td>
@@ -2807,7 +2811,7 @@ Measuring it is the first step of the work, not a finding to code against.</p>
 </ul>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Q1029 closed</strong>, with the mechanism measured before the fix and an e2e assertion that fails when the recovery is deleted.</li>
+<li>✅ <strong>Q1029 closed</strong> (2026-09-07), with the queue mechanism established before the fix, the reconcile's duration left unmeasured and said so, and an envtest assertion that fails when the watch-path recovery is inert; the e2e assertion the criterion asked for is still open, per <a href="#the-gating-row-q1029">the gating row</a>.</li>
 <li><strong>Criterion 2 and criterion 3 have a recorded reading</strong> in <a href="../v2-ga/">v2-ga.md</a>'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.</li>
 <li><strong>Q452 decided</strong> in the plan, with the losing option's cost recorded beside it.</li>
 <li><strong>The three dogfood-window rows</strong> get their window from the candidate: <a href="../../queue/Q1038/">Q1038</a>'s <code>mirror-timing</code> probe, <a href="../../queue/Q1048/">Q1048</a>'s mirror client census, and <a href="../../queue/Q1039/">Q1039</a>'s shared-tenants topology.</li>
@@ -2815,7 +2819,7 @@ Measuring it is the first step of the work, not a finding to code against.</p>
 <li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
 </ol>
 <h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
-<p>Q1029's measurement → its fix → a candidate.
+<p>Q1029's measurement → its fix (done) → a candidate.
 The soak readings and the alias decision run beside it and need the candidate's window, not each other.
 The window is the schedule risk, as it was in 1.7: a reading whose venue is a booked cluster run cannot be compressed the way a code change can.</p>
 <h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>

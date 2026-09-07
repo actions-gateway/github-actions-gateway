@@ -2717,6 +2717,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</td>
 </tr>
 <tr>
+<td><a href="Q1064/">Q1064</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/orphaned_scaleset.go"><code>ScaleSetWorkerEviction_DoesNotRecover</code> reruns via the orphan scan</a></td>
+<td><code>flake</code> <code>bug</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> asserts that a scale-set worker evicted before any terminal phase is not re-run, and …</td>
+</tr>
+<tr>
 <td><a href="Q999/">Q999</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sharing_test.go">Cross-namespace proxy revoke has no event source, so its test races</a></td>
 <td><code>flake</code> <code>tests</code> <code>security</code></td>
@@ -2766,11 +2774,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q929/">Q929</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">The lint gate returns two verdicts on one tree</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/tools/go.mod">The lint gate returns two verdicts on one tree</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>M</td>
-<td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
+<td><strong>Event:</strong> a <code>nolintlint</code> <code>directive … is unused</code> red on <code>main</code> or in the merge queue that a rerun clears, or a <code>//nolint:staticcheck</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1052/">Q1052</a></td>
@@ -2803,14 +2811,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>M</td>
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
-</tr>
-<tr>
-<td><a href="Q1029/">Q1029</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go">A drain's recovery is lost when no reconcile starts inside its window</a></td>
-<td><code>bug</code> <code>1.8-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td><code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a RunnerSet reconcile, so a gracefully deleted worker is only …</td>
 </tr>
 <tr>
 <td><a href="Q1059/">Q1059</a></td>
@@ -4035,6 +4035,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Three files under <code>scripts/docs/</code> tell a reader that the magnitude-head rank algebra is implemented twice and that both implementations run …</td>
+</tr>
+<tr>
+<td><a href="Q1063/">Q1063</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Migrate the ctrl.Result{Requeue: true} returns off the deprecated field</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>controller-runtime v0.24 deprecates <code>Result.Requeue</code> ("Use <code>RequeueAfter</code> instead"): a rate-limited requeue reuses a limiter meant for …</td>
+</tr>
+<tr>
+<td><a href="Q1067/">Q1067</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-work-tidy.sh">go-work-tidy.sh needs GNU realpath, which no tool check lists</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>go-work-tidy.sh</code> line 103 runs <code>realpath --relative-to="." "$mod_dir"</code> for every module <code>go list -m all</code> returns.</td>
 </tr>
 <tr>
 <td><a href="Q959/">Q959</a></td>

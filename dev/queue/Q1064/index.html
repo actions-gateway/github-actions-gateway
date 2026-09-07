@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1029/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1064/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A drain's recovery is lost when no reconcile starts inside its window - GitHub Actions Gateway</title>
+        <title>ScaleSetWorkerEviction_DoesNotRecover reruns via the orphan scan - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-drains-recovery-is-lost-when-no-reconcile-starts-inside-its-window" class="md-skip">
+        <a href="#scalesetworkereviction_doesnotrecover-reruns-via-the-orphan-scan" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A drain's recovery is lost when no reconcile starts inside its window
+              ScaleSetWorkerEviction_DoesNotRecover reruns via the orphan scan
             
           </span>
         </div>
@@ -2597,57 +2597,17 @@
   
 
 
-<h1 id="a-drains-recovery-is-lost-when-no-reconcile-starts-inside-its-window">A drain's recovery is lost when no reconcile starts inside its window<a class="headerlink" href="#a-drains-recovery-is-lost-when-no-reconcile-starts-inside-its-window" title="Permanent link">&para;</a></h1>
-<p><code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a RunnerSet reconcile, so a gracefully deleted worker is only ever judged if a reconcile <em>begins</em> in the seconds between the kubelet publishing the terminal phase and removing the object.
-When none does, the pod is never seen, the claim patch is never attempted, and the job is silently never re-run: the same outcome <a href="../../development/flake-watch-retired/">Q809</a>'s <code>NotFound</code> arm surfaces, with none of its evidence.</p>
-<p><strong>Measured</strong> on the three <a href="../Q549/">Q549</a> sightings, from the AGC log each run captured:</p>
-<table>
-<thead>
-<tr>
-<th>Run</th>
-<th>Delete requested</th>
-<th>Pod gone</th>
-<th>Reconciles completed</th>
-<th>AGC lines naming the pod</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32933225396">32933225396</a></td>
-<td>05:24:24.95</td>
-<td>05:24:28.37</td>
-<td>05:24:21, then 05:24:29</td>
-<td>0</td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33185281929">33185281929</a></td>
-<td>15:33:34.62</td>
-<td>15:33:41.33</td>
-<td>15:33:34, then 15:33:39</td>
-<td>0</td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934571793">32934571793</a></td>
-<td>05:41:27.58</td>
-<td>before 05:41:28.51</td>
-<td>05:41:27, 05:41:28, 05:41:29</td>
-<td>2: claimed, then re-ran</td>
-</tr>
-</tbody>
-</table>
-<p>The third row is the control: the same spec on the same day, whose reconcile loop happened to turn over inside the window, recovered the run.
-In the first, an 8-second gap between reconcile completions swallows the whole 3.4-second window.
-<strong>The second row evidences the outcome, not this mechanism</strong>: three reconciles completed inside its interval, so something other than an empty gap produced its zero, and this row does not claim to know what.</p>
-<p><strong>Why the gap opens is unverified.</strong> The RunnerSet reconciler runs at the controller-runtime default <code>MaxConcurrentReconciles: 1</code>, and controller-runtime never reconciles one key concurrently anyway, so any slow reconcile of that set delays the scan behind it.
-In these runs that is the scale-set listener bootstrap, which does a DNS lookup and an HTTP POST inside <code>Reconcile</code>.
-That is a hypothesis read off the timestamps, not a measurement: nothing in the log times a reconcile.</p>
-<p>The exposure is not the e2e venue's.
-A node drain is exactly when many workers terminate at once and the reconcile loop is busiest, and the design already records that this arm cannot be made restart-safe (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md § Detecting a disruption is not the same as claiming it</a>).
-Q844's orphan recovery does not cover it: that path reads the in-flight set the listener persisted, and a worker whose disruption the scan simply missed is still in it only until the listener's own next poll.</p>
-<p>Q549 ships the <em>observability</em> half: the scan now logs the pods it judged and declined, so a missed window and a regressed discriminator stop being the same silence, and its spec re-stages rather than failing when no verdict was reached.
-Neither closes this.
-The fix is to stop making the observation depend on winning a race with the reconcile queue: observe the disruption from the worker-pod watch, where the event already carries the pod, rather than from a cached List a reconcile later.
-Measure a reconcile's duration first, so the change is aimed at what actually opens the gap.</p>
+<h1 id="scalesetworkereviction_doesnotrecover-reruns-via-the-orphan-scan"><code>ScaleSetWorkerEviction_DoesNotRecover</code> reruns via the orphan scan<a class="headerlink" href="#scalesetworkereviction_doesnotrecover-reruns-via-the-orphan-scan" title="Permanent link">&para;</a></h1>
+<p><code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> asserts that a scale-set worker evicted before any terminal phase is not re-run, and it fails with a re-run under <code>cause=vanished</code>: the AGC logs <code>worker pod for an unconcluded job was gone when this AGC started</code> for a pod its own listener provisioned seconds earlier, in a process that never restarted.</p>
+<p><strong>Measured 2026-09-07</strong>, on one tree, at a host load average of 75 to 120 on 18 cores: 3 failures in 5 runs on the branch that found it and 1 pass in 1 run on the base it was cut from, none of which touched the orphan scan.
+The failing runs finish in 3 to 4.5 s because the <code>assert.Never</code> fires the moment the re-run lands.</p>
+<p><strong>Mechanism.</strong> <code>RecoverOrphanedScaleSetWorkers</code> takes its once-per-process verdict when it first sees a <strong>non-empty</strong> in-flight set, not on the set's first reconcile: the caller returns early on an empty <code>state.InFlight</code> before the provisioner's <code>orphanScans.claim</code>.
+The listener adds the in-flight entry on a successful provision, so the reconcile the pod's Create event enqueues can read the ConfigMap before the entry lands and consume nothing.
+The spec then evicts the pod the instant it appears, envtest removes it at once, and the next reconcile is the first to see a non-empty set: the entry's pod is gone, so the scan reads it as a worker lost while the AGC was absent.
+That is the false positive the file's own comment says the once-per-process rule exists to prevent ("an entry this process created is covered by the live pod-watch recovery, so re-examining one can only produce a false positive"), reached because the claim is keyed on the reading rather than on the process.</p>
+<p>Two shapes for the fix, and the row does not choose: claim the verdict on the set's first reconcile in the process whether or not the in-flight set is empty, which needs a measurement that the guard ConfigMap is readable by then (a cold cache would hand the first reconcile an empty set and miss real orphans), or have the listener mark entries it created in this process so the scan skips them.
+Either way the spec's own race is worth keeping as the tripwire rather than widening its wait: the product defect is a live AGC re-running a job that never ran, and the fake accepts the <code>rerun-failed-jobs</code> a real GitHub would refuse.</p>
+<p>Not bumped to the top of the queue: sighted locally under load, not yet on <code>main</code>; bump on a CI sighting per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flake fixes go first</a>.</p>
 
 
 
