@@ -142,8 +142,12 @@ def render():
     for ns, rg in TENANTS:
         # job duration: center idx 6 (~64-128s)
         L += hist_lines("actions_gateway_job_duration_seconds", f'namespace="{ns}",runner_group="{rg}"', JOB_BUCKETS, 0.3, 6, elapsed)
-        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.02, elapsed)}')
-        L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
+        # Disruption recoveries carry tier and cause (Q417, Q497); the tenant
+        # dashboard groups on both and the security dashboard selects
+        # cause="eviction", so the synthetic series carry the same four labels.
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="eviction"}} {counter_total(0.02, elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="preemption"}} {counter_total(0.01, elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="eviction"}} 0')
         L.append(f'actions_gateway_quota_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_quota_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
         # single-use JIT agent recycling: routine post-job recycles, no errors
@@ -222,6 +226,21 @@ def render():
         L.append(f'actions_gateway_proxy_quota_exceeded{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_github_egress_incomplete{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_scale_set_name_collision{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_egress_unattributed{{namespace="{ns}",name="{name}"}} 0')
+
+    # Admission decisions, read by the security dashboard. The GMC's validating
+    # webhooks count every request on the controller-runtime counter, and a
+    # denial is an HTTP 200 whose body carries the 403, so the synthetic series
+    # carry code="200" only. The ValidatingAdmissionPolicy verdicts come from
+    # the apiserver's own counter, whose label values are lowercase (deny,
+    # audit, warn, and allow for an evaluation error admitted under
+    # failurePolicy Ignore) and whose error_type is never empty; the kind
+    # apiserver behind the preview has no such policy, so the exporter stands
+    # in for it under the names the chart's default namePrefix produces.
+    for hook, rate in (("runnerset", 0.05), ("actionsgateway", 0.02), ("egressproxy", 0.02)):
+        L.append(f'controller_runtime_webhook_requests_total{{webhook="/validate-actions-gateway-com-v2alpha1-{hook}",code="200"}} {counter_total(rate, elapsed)}')
+    for policy in ("gmc-tenant-resource-guard", "gmc-priorityclass-allowlist-guard"):
+        L.append(f'apiserver_validating_admission_policy_check_total{{policy="{policy}",policy_binding="{policy}-binding",error_type="no_error",enforcement_action="deny"}} {counter_total(0.01, elapsed)}')
 
     # Build metadata (Q318), read by the tenant version panel and the platform
     # Running-versions bar gauge. Each real binary exposes exactly one series and

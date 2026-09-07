@@ -1,0 +1,385 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Security / compliance reference dashboard for github-actions-gateway (Q725): the evidence the audit persona needs produced unprompted. Reads three scrapes: the per-tenant egress-proxy and AGC scrapes for egress and abuse signals, the GMC manager scrape for the fleet condition gauges and the validating-webhook counters, and the apiserver scrape for the ValidatingAdmissionPolicy verdicts. The egress row is keyed on the POOL namespace, which is the consuming tenant only on an unshared pool; tenant-and-job attribution is the Q986 audit-log join and no panel here reads it, so nothing on this dashboard presents pool traffic as a consumer's. See docs/operations/observability-dashboards.md.",
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["actions-gateway"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data source",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values({__name__=~\"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "query": {
+          "query": "label_values({__name__=~\"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "",
+  "title": "Actions Gateway — Security",
+  "uid": "actions-gateway-security",
+  "version": 1,
+  "weekStart": "",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Egress Attribution (per pool)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "What this row attributes",
+      "gridPos": { "h": 10, "w": 8, "x": 0, "y": 1 },
+      "id": 2,
+      "description": "The reading every panel in this row takes, stated once so a shared pool is never read as a tenant.",
+      "options": {
+        "mode": "markdown",
+        "content": "**This row reads the pool, not the consumer.** `namespace` on every proxy series is the namespace the pool runs in, stamped by the scrape target. On a pool no other namespace references, that is the tenant. On a pool shared via `spec.sharing.allowedNamespaces` it is the pool, and nothing here says which consumer opened a tunnel.\n\n**Tenant and job attribution is a log join, not a metric.** The proxy record (`msg=\"egress audit\"`, under `auditLogging: ConnectionsWithSource`) and the AGC record (`msg=\"worker address audit\"`, under `auditLogging: WorkerAddresses`), matched on `sourceIP` = `podIP` inside the bind/release window. No panel here reads that stream, so this dashboard never presents pool traffic as a consumer's. See observability-logging.md § Attributing a record to a tenant and a job."
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CONNECT tunnels opened/s by pool",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 10, "w": 8, "x": 8, "y": 1 },
+      "id": 3,
+      "description": "Accepted CONNECTs per second, one series per pool namespace. Proxy metrics carry no intrinsic namespace label; the per-tenant ServiceMonitor stamps one from the scrape target's namespace, which is the pool's. Where the pool is shared, this is every consumer's traffic summed under the pool's name.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_proxy_connections_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Active CONNECT tunnels by pool",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 1 },
+      "id": 4,
+      "description": "Open tunnels per pool namespace. A pool pinned near its capacity is the slowloris signal the security alert group pages on (ActionsGatewayProxyConnectionsSaturated); read it with the tunnel-duration panel in the Abuse Signals row.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (actions_gateway_proxy_connections_active{namespace=~\"$namespace\"})",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "state-timeline",
+      "title": "Egress posture per gateway",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 11 },
+      "id": 5,
+      "description": "GMC-exported condition gauges (1 = flagged) that decide whether a tenant's egress is attributable at all. EgressUnattributed: the gateway runs in direct egress mode, so its GitHub traffic leaves from no per-tenant proxy and no egress record or per-tenant IP can name it; expected on a deploy meant to be direct, a misconfiguration on one meant to be proxied. EgressRulesStale: the GitHub IP-range allowlist has not refreshed within its window, so the pool's NetworkPolicy may have drifted from GitHub's published ranges. GitHubEgressIncomplete: a GHES tenant's appliance is outside the CIDR-mode allowlist. All from the GMC scrape; EgressRulesStale is emitted for v1 and v2 gateways, the other two for v2 only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "FLAGGED", "color": "red" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "showValue": "never", "mergeValues": true, "alignValue": "center", "rowHeight": 0.9, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_egress_unattributed{namespace=~\"$namespace\"}",
+          "legendFormat": "egress unattributed {{namespace}}/{{name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_egress_rules_stale{namespace=~\"$namespace\"}",
+          "legendFormat": "egress rules stale {{namespace}}/{{name}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_github_egress_incomplete{namespace=~\"$namespace\"}",
+          "legendFormat": "github egress incomplete {{namespace}}/{{name}}",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Admission Decisions",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 10,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Admission-policy verdicts/s by policy",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 19 },
+      "id": 11,
+      "description": "Verdicts the apiserver recorded for the four shipped ValidatingAdmissionPolicies (namespace-psa-guard, namespace-security-profile-guard, priorityclass-allowlist-guard, tenant-resource-guard), split by the enforcement action the binding took: deny is a rejected write, audit and warn are a failed validation the binding let through, and allow is an evaluation error (a policy that failed to compile or ran out of budget) admitted under failurePolicy Ignore. The apiserver never increments this counter for a validation that simply passed, so the series is the record of what the policies refused or could not evaluate, not a request count. Requires the apiserver scrape (kube-prometheus-stack scrapes it by default). The policy name is matched on its suffix because the chart prefixes it with the release's namePrefix.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~\".*-(namespace-psa-guard|namespace-security-profile-guard|priorityclass-allowlist-guard|tenant-resource-guard)\"}[5m]))",
+          "legendFormat": "{{policy}} {{enforcement_action}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Validating-webhook requests/s by webhook",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 12, "y": 19 },
+      "id": 12,
+      "description": "Admission requests the GMC's validating webhooks served, per webhook path, from the GMC scrape. This says the webhooks are being exercised, not how often they refused: controller-runtime writes a denial as an HTTP 200 whose AdmissionReview body carries the 403, so the counter's code label cannot separate a deny from an allow, and no metric today counts webhook rejections. A sustained rise on one path with no matching onboarding is still worth reading against the apiserver audit log.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (webhook) (rate(controller_runtime_webhook_requests_total[5m]))",
+          "legendFormat": "{{webhook}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Name collisions",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 19 },
+      "id": 13,
+      "description": "Gateways reporting ScaleSetNameCollision=True: two RunnerSets driving one scale set at GitHub, each acquiring the other's jobs. Admission rejects every new such pair, so any 1 is a pair that predates the guard or was applied with the webhook uninstalled, and it does not self-heal. From the GMC scrape; v2 only. The title drops the scale-set prefix because a 4-wide stat truncates it.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(actions_gateway_scale_set_name_collision{namespace=~\"$namespace\"})",
+          "legendFormat": "collisions",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Abuse Signals",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "id": 20,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Denied CONNECTs/s by pool (SSRF signal)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 27 },
+      "id": 21,
+      "description": "CONNECTs refused because the destination is off the egress allowlist, per pool. Every increment is an explicit allowlist denial, so this is the precise destination-probing signal (ActionsGatewayProxyConnectDenied). The counter says a probe happened, not what it reached: the per-connection egress audit record names accepted destinations only, and only on a pool that had it on before the incident.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_proxy_connect_denied_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Proxy dial errors/s by pool",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 27 },
+      "id": 22,
+      "description": "Upstream dial failures per pool: a destination that passed the allowlist and then would not connect. Corroborates the denied panel beside it (ActionsGatewayProxyDialErrorSpike), and unlike it also counts transient failures to legitimate hosts.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_proxy_dial_errors_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tunnels lasting 30m–1h, per hour, by pool",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 27 },
+      "id": 23,
+      "description": "Tunnels closed in the last hour whose lifetime fell between 30 minutes and 1 hour, per pool: the slowloris signature (ActionsGatewayProxyLongLivedTunnels). GitHub long-polls are sticky but minutes-long, so hour-long tunnels warrant inspection. Each bucket is summed per namespace before the subtraction, because the two selectors differ on le and would not match otherwise.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (increase(actions_gateway_proxy_tunnel_duration_seconds_bucket{namespace=~\"$namespace\", le=\"3600\"}[1h])) - sum by (namespace) (increase(actions_gateway_proxy_tunnel_duration_seconds_bucket{namespace=~\"$namespace\", le=\"1800\"}[1h]))",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Eviction retries/s (cause=eviction) by tenant",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 34 },
+      "id": 24,
+      "description": "Disruption recoveries started for kubelet evictions, per tenant and owner, over a 15-minute window: a sustained rate with no matching node pressure is the rerun-failed-jobs abuse signature of a compromised AGC (ActionsGatewayEvictionRetryAbuse). Scoped to cause=eviction on purpose: the same counter records preemption recoveries, which are the expected steady state under a preempting priorityTiers floor and would read as abuse here.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_group) (rate(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", cause=\"eviction\"}[15m]))",
+          "legendFormat": "{{namespace}}/{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Token refresh errors/s by tenant",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 8, "y": 34 },
+      "id": 25,
+      "description": "Failed GitHub App installation-token refreshes per tenant. A spike nobody rotated a key for is the first symptom of a revoked or compromised App key, or of a forged token being rejected (ActionsGatewayTokenRefreshAbuse). Flat zero is the healthy reading, which is why the axis is pinned at zero with a soft ceiling of one: an autoscaled axis over a flat zero picks an arbitrary range.",
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0, "custom": { "fillOpacity": 10, "axisSoftMax": 1 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_token_refresh_errors_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Managed gateways",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 4, "x": 14, "y": 34 },
+      "id": 26,
+      "description": "ActionsGateway CRs the GMC manages, with its trend. A jump nobody onboarded is a compromised GMC provisioning workloads or runaway CR creation (ActionsGatewayManagedGatewaysJump). From the GMC scrape; the metric carries no namespace label, so $namespace does not filter it.",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_managed_gateways",
+          "legendFormat": "managed",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "ResourceQuota saturation",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 34 },
+      "id": 27,
+      "description": "Each quota'd resource as a percentage of its cap. A tenant held at 100% is either a job flood exhausting its quota or a quota sized below demand (ActionsGatewayQuotaExhausted); the quota is the hard cap, so the blast radius is contained either way. Matched with ignoring(type) so a namespace holding two ResourceQuota objects still joins. Requires kube-state-metrics.",
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 75 }, { "color": "red", "value": 90 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "100 * kube_resourcequota{namespace=~\"$namespace\", type=\"used\"} / ignoring(type) kube_resourcequota{namespace=~\"$namespace\", type=\"hard\"}",
+          "instant": true,
+          "legendFormat": "{{namespace}} {{resource}} ({{resourcequota}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Running Versions",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 },
+      "id": 30,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Control-plane versions by component",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 42 },
+      "id": 31,
+      "description": "Instances per component and version, from actions_gateway_build_info: the answer to which build is running when an advisory names an affected version. The GMC comes from its own scrape; agc and proxy need the per-tenant scrapes. The metric carries no namespace label, so $namespace does not filter it.",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "count by (component, version) (actions_gateway_build_info)",
+          "legendFormat": "{{component}} {{version}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

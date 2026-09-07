@@ -39,7 +39,7 @@ This is what the release contains today, with no gating row closed.
 
 Q564 is worth calling out.
 It is the first of the four proxy-hardening items [release-1.4.md](release-1.4.md#deferred-out-of-14-and-why) shelved as a coherent theme with no demand recorded against any of them.
-Its demand arrived as [Q725](../queue/Q725.md), the ladder recorded the revive on 2026-08-13, and it shipped.
+Its demand arrived as Q725, the ladder recorded the revive on 2026-08-13, and it shipped.
 The remaining three ([Q565](../queue/Q565.md), [Q566](../queue/Q566.md), [Q567](../queue/Q567.md)) stay parked, which is the trigger list working rather than the theme dissolving.
 
 ## The gating row: Q727, decided as a documented decline

@@ -62,7 +62,7 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
 Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, so five of the original seven remain in it, which is the set the sentence below counts against.
-Its demand was [Q725](../queue/Q725.md), which had sat in the Queue the whole time.
+Its demand was Q725, which had sat in the Queue the whole time.
 
 **None of the original five are back.** The last one that was has since shipped: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
 That is the trigger list working twice rather than a rule being bent, and it is what narrowed the rule above.

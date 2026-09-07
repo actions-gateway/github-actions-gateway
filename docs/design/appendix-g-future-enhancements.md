@@ -49,7 +49,7 @@ Bucket state stays in-process on each proxy pod; for accurate global limits a sh
 
 ## G.3. Proxy-Side Audit Logging
 
-> **✅ Implemented (Q564).** The recorded demand this entry waited on arrived as [Q725](../queue/Q725.md), the audit-persona dashboard, so the enhancement was promoted to committed work and shipped.
+> **✅ Implemented (Q564).** The recorded demand this entry waited on arrived as Q725, the audit-persona dashboard, so the enhancement was promoted to committed work and shipped.
 > It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.
 
 An `EgressProxy` pool writes one structured line per **accepted** CONNECT (pool namespace, destination host and port, bytes each way, tunnel duration) to the same stdout JSON stream the pool already logs to.

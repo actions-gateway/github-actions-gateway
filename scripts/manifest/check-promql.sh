@@ -46,6 +46,7 @@ DASHBOARDS=(
     "deploy/monitoring/grafana-dashboard-tenant.json"
     "deploy/monitoring/grafana-dashboard-platform.json"
     "deploy/monitoring/grafana-dashboard-budget.json"
+    "deploy/monitoring/grafana-dashboard-security.json"
 )
 
 if (($# >= 3)); then
