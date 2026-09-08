@@ -85,10 +85,14 @@ Two traps cost a render each, both found adding a series to the security dashboa
 - **A solo render cannot answer whether a legend is clipped.** `/render/d-solo/<uid>/<uid>?panelId=N&width=…&height=…` grows the returned image to fit the legend whatever height you ask for, so a panel whose legend is cut off in the dashboard shows every entry when rendered alone, at any size.
   Only the full-dashboard render is faithful to the grid cell.
   Use the solo render to read a panel closely, never to judge whether it fits.
-- **Long legend labels clip silently, and height does not fix them.** Six series at path length pushed three entries past the bottom edge of a `w=8, h=7` panel; raising it to `h=10` still clipped one and shifted ten panels below it.
-  Shorten the labels instead.
+- **A panel's legend caps at about two rows, and height does not raise the cap.** Six series at path length pushed three entries past the bottom edge of a `w=8, h=7` panel; raising it to `h=10` still clipped one and shifted ten panels below it, and a later render of seven shorter labels in the same cell still showed only the first four.
+  Roughly two entries fit per row at `w=8`, so a cell like that carries about four legend entries whatever you do to its height.
+  Reduce the series rather than the label length once you are past that.
 
 `label_replace(…, "kind", "$1", …)` is the obvious way to shorten them and **does not work here**: `make promql-check` rejects a `$1` in a dashboard expression, because Grafana's own `$var` interpolation reaches it. The working shape is a `renameByRegex` transformation on the panel, where the `$1` belongs to Grafana's rename machinery rather than to the query.
+
+**A shortening regex has to be injective, and one that parses the name's shape usually is not.** Deriving a label from a webhook path with `.*-([a-z]+)` reads the resource off the end and drops the API version, so `…-github-com-v1alpha1-actionsgateway` and `…-com-v2alpha1-actionsgateway` both render `actionsgateway` and two bands become indistinguishable: exactly the defect the panel was being fixed for.
+Prefer stripping a constant prefix and suffix (`v(.*)\.kb\.io`), which cannot collide whatever names are added later, and check the rename against the full set the chart ships rather than the subset the exporter fakes.
 
 ## Iterating
 

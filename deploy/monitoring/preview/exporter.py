@@ -38,6 +38,19 @@ GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
 # set so the withheld stack shows a scaleup band without implying every set carries one.
 RATE_LIMITED_SCALESETS = {("team-a", "cpu-standard")}
 
+# Every validating webhook the chart ships, as (path, apiserver name, requests/s,
+# denials/s). All six are listed rather than a sample: the security dashboard
+# plots one series per webhook on each of two metrics, so a preview carrying a
+# subset renders a legend that fits while a real install's does not (Q1061).
+WEBHOOKS = (
+    ("/validate-actions-gateway-github-com-v1alpha1-actionsgateway", "vactionsgateway-v1alpha1.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-actionsgateway", "vactionsgateway-v2alpha1.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-clusterrunnertemplate", "vclusterrunnertemplate-v2alpha1.kb.io", 0.01, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-egressproxy", "vegressproxy-v2alpha1.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-runnerset", "vrunnerset-v2alpha1.kb.io", 0.05, 0.012),
+    ("/validate-actions-gateway-com-v2alpha1-runnertemplate", "vrunnertemplate-v2alpha1.kb.io", 0.01, 0.010),
+)
+
 # Declared worker ceiling per scale set: the total the admission rungs subtract from,
 # and therefore the height of the withheld stack on the budget dashboard (Q969).
 SCALESET_CEILINGS = {
@@ -295,9 +308,9 @@ def render():
     # failurePolicy Ignore) and whose error_type is never empty; the kind
     # apiserver behind the preview has no such policy, so the exporter stands
     # in for it under the names the chart's default namePrefix produces.
-    for hook, rate, denied in (("runnerset", 0.05, 0.012), ("actionsgateway", 0.02, 0.01), ("egressproxy", 0.02, 0.01)):
-        L.append(f'controller_runtime_webhook_requests_total{{webhook="/validate-actions-gateway-com-v2alpha1-{hook}",code="200"}} {counter_total(rate, elapsed)}')
-        L.append(f'apiserver_admission_webhook_rejection_count{{name="v{hook}-v2alpha1.kb.io",type="validating",operation="CREATE",error_type="no_error",rejection_code="403"}} {counter_total(denied, elapsed)}')
+    for path, name, rate, denied in WEBHOOKS:
+        L.append(f'controller_runtime_webhook_requests_total{{webhook="{path}",code="200"}} {counter_total(rate, elapsed)}')
+        L.append(f'apiserver_admission_webhook_rejection_count{{name="{name}",type="validating",operation="CREATE",error_type="no_error",rejection_code="403"}} {counter_total(denied, elapsed)}')
     for policy in ("gmc-tenant-resource-guard", "gmc-priorityclass-allowlist-guard"):
         L.append(f'apiserver_validating_admission_policy_check_total{{policy="{policy}",policy_binding="{policy}-binding",error_type="no_error",enforcement_action="deny"}} {counter_total(0.01, elapsed)}')
 
