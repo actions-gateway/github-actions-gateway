@@ -1063,6 +1063,11 @@ Turn on both or neither: one alone records data nothing joins to.
 Both roll their workload.
 The record shapes, the join, and the CNI assumption it rests on are in [logging: attributing a record to a tenant and a job](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job).
 
+**Checking it took effect.** `kubectl describe actionsgateway <gateway>` shows an `EgressAuditAttributable` condition: `True`/`EgressAuditJoined` when both halves are on, and a `False` whose reason names the half still off: `ProxySourceAuditDisabled` (the pool), `WorkerAuditDisabled` (the gateway), `EgressAuditDisabled` (neither), or `DirectEgress` (no `defaultProxyRef`, so there is no per-connection record to attribute).
+Fleet-wide the same fact is the `actions_gateway_egress_audit_attributable` gauge (Q1062).
+Both read the gateway's spec and its `defaultProxyRef`, so they say the pair is *configured*, not that a log pipeline is running the join.
+A `RunnerSet` with its own `spec.proxyRef` egresses through a pool neither of them looked at.
+
 Weigh it as a third cost on top of the two below: together the two streams say which host each of a tenant's jobs reached, which is the evidence an auditor asks for and also a per-worker record the platform now keeps.
 
 **Off is the default deliberately, and turning it on is a decision with two costs.** The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.

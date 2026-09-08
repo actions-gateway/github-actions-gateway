@@ -73,6 +73,35 @@ const (
 	// holder goes to the GMC log, the same non-enumeration rule the admission error
 	// follows.
 	ConditionScaleSetNameCollision = "ScaleSetNameCollision"
+	// ConditionEgressAuditAttributable is an advisory condition (normal-is-True) set
+	// True on an ActionsGateway when both halves of the Q986 egress-attribution pair
+	// are on: the gateway's spec.auditLogging is WorkerAddresses, so its AGC records
+	// which tenant and job held each worker address, AND the EgressProxy resolved from
+	// spec.defaultProxyRef has spec.auditLogging: ConnectionsWithSource, so the pool's
+	// per-connection record carries the source address to join against. Neither record
+	// attributes anything alone; the join of the two is what names a tenant and a job,
+	// which is why the pair is what the condition reports.
+	//
+	// It reports the declared pair, not observed log lines: nothing in the cluster can
+	// confirm an operator's log pipeline runs the join. It also does NOT gate Ready —
+	// both halves are opt-in and Off is the supported default (§G.3).
+	//
+	// It is distinct from ConditionEgressUnattributed, which reads a different fact:
+	// that one is about egress IP identity (is there a per-tenant proxy at all), this
+	// one about whether the audit records that proxy writes can be resolved to a job.
+	// A gateway can be proxied and still unattributable by job, which is the common
+	// state, since both halves default Off.
+	//
+	// A shared pool whose ConnectionsWithSource was turned on for another consumer
+	// still satisfies the proxy half here, and correctly: the source address makes a
+	// connection attributable to one consumer namespace and one job (see
+	// EgressProxy.spec.auditLogging), so this gateway's own WorkerAddresses records
+	// resolve its own connections whoever asked for the pool half.
+	//
+	// Its scope is the gateway: the proxy half is read from defaultProxyRef, so a
+	// bound RunnerSet that overrides spec.proxyRef egresses through a pool this
+	// condition never read (Q1069).
+	ConditionEgressAuditAttributable = "EgressAuditAttributable"
 	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
 	// set True on a RunnerSet whose resolved worker template carries a regular
 	// (non-native) sidecar container that may keep the worker pod alive after the
@@ -282,6 +311,20 @@ const (
 	// ReasonProxiedEgress is the EgressUnattributed=False reason: a proxy resolved, so
 	// egress is attributed to the proxy's stable per-tenant IPs.
 	ReasonProxiedEgress = "ProxiedEgress"
+	// ReasonEgressAuditJoined is the EgressAuditAttributable=True reason: both halves of
+	// the attribution pair are on, so a proxy audit record joins to a tenant and a job.
+	ReasonEgressAuditJoined = "EgressAuditJoined"
+	// ReasonEgressAuditDisabled is the EgressAuditAttributable=False reason when neither
+	// half is on — the default for a proxied gateway that never opted in.
+	ReasonEgressAuditDisabled = "EgressAuditDisabled"
+	// ReasonWorkerAuditDisabled is the EgressAuditAttributable=False reason when the pool
+	// records source addresses but the gateway's spec.auditLogging is Off, so nothing
+	// names the tenant and job that held them.
+	ReasonWorkerAuditDisabled = "WorkerAuditDisabled"
+	// ReasonProxySourceAuditDisabled is the EgressAuditAttributable=False reason when the
+	// gateway records worker addresses but the resolved EgressProxy's spec.auditLogging is
+	// not ConnectionsWithSource, so no record carries an address to join on.
+	ReasonProxySourceAuditDisabled = "ProxySourceAuditDisabled"
 	// ReasonVPACRDNotInstalled is the AGCAutoscalingUnavailable=True reason: the gateway
 	// opted into spec.agcAutoscaling but the cluster has no autoscaling.k8s.io
 	// VerticalPodAutoscaler CRD, so the managed autoscaler could not be created (Q360).

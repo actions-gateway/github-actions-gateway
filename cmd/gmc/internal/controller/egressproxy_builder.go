@@ -45,6 +45,13 @@ const (
 	// per-connection record — the CRD default, and the only one that injects no
 	// audit env onto the proxy container.
 	auditLoggingOff = "Off"
+	// auditLoggingConnectionsWithSource is the EgressProxy.spec.auditLogging value that
+	// adds the client's source address to the per-connection record, and
+	// auditLoggingWorkerAddresses the ActionsGateway.spec.auditLogging value whose AGC
+	// records name the tenant and job that held an address. Neither attributes anything
+	// alone; the pair is what the EgressAuditAttributable condition reports (Q986/Q1062).
+	auditLoggingConnectionsWithSource = "ConnectionsWithSource"
+	auditLoggingWorkerAddresses       = "WorkerAddresses"
 )
 
 // proxyResourceName is the name shared by an EgressProxy's Deployment, Service,
