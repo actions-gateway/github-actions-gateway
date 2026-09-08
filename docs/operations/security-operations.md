@@ -57,7 +57,7 @@ Two detection substrates are used:
 | **Proxy Pool Exhaustion / slowloris** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-17/M-18) | `proxy_connections_active` pinned near capacity; `proxy_tunnel_duration_seconds` mass in the 6h bucket | Metric | Page |
 | **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_connect_denied_total` rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a `proxy_dial_errors_total` spike. The counter says a probe happened, not what it reached: [per-connection egress audit](#per-connection-egress-audit) names the destination, but only on a pool that had it enabled before the incident | Metric (+ optional log) | Ticket |
 | **DoS via Resource Exhaustion** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — rogue workflow exhausting tenant quota | `kube_resourcequota` used/hard ratio sustained at 1.0 | Metric (kube-state-metrics) | Ticket |
-| **`ActionsGateway` CR in reserved namespace / spec probing** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | Admission webhook `403` rejection rate | Metric (controller-runtime) | Ticket |
+| **`ActionsGateway` CR in reserved namespace / spec probing** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | `apiserver_admission_webhook_rejection_count{error_type="no_error", rejection_code="403"}` rate on the GMC's webhook names. Read the **apiserver's** counter, not controller-runtime's: a validating webhook returns its denial as an HTTP 200 whose `AdmissionReview` body carries the 403, so `controller_runtime_webhook_requests_total{code=…}` cannot separate a deny from an allow | Metric (apiserver) | Ticket |
 | **Cross-Tenant GitHub App Credential Leakage / key compromise** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | `token_refresh_errors_total` spike (key revoked out-of-band, or a forged token rejected) | Metric | Page |
 | **Mass tenant provisioning** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) — compromised GMC deploying workloads | `managed_gateways` jumps unexpectedly | Metric | Page |
 | **AGC overpermissioned Secret access** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), H-2 residual) — compromised AGC binary issuing a full-body Secret `list` | AGC ServiceAccount `list secrets` in audit log (legit code path is metadata-only — see [security.md H-2](../plan/security.md)) | Audit log | Page |
@@ -67,7 +67,7 @@ Two detection substrates are used:
 
 ## Prometheus abuse alerts
 
-These rules reference metrics that are emitted today ([observability.md § Full Metrics Reference](observability-metrics.md#full-metrics-reference)).
+These rules reference metrics that are emitted today ([observability.md § Full Metrics Reference](observability-metrics.md#full-metrics-reference)), except two that read the cluster rather than this project: `ActionsGatewayWebhookRejections` needs the apiserver scrape and `ActionsGatewayQuotaExhausted` needs kube-state-metrics.
 Drop them into the same `PrometheusRule` group as the SLO alerts, or a dedicated `actions-gateway-security` group.
 Tune thresholds to your fleet.
 The [security dashboard](observability-dashboards.md#security-dashboard) plots the series each rule fires on, one panel per rule, so a reviewer can read the signal behind an alert rather than only the alert.
@@ -114,13 +114,18 @@ groups:
       # Page: tunnels accumulating in the top (6h) duration bucket means
       # connections are riding the absolute lifetime cap — the M-18
       # slowloris signature.
+      #
+      # Each bucket is summed per namespace before the subtraction (Q1061). A
+      # bare `increase(...) - increase(...)` is a one-to-one vector match on
+      # every label, and the two sides differ on `le`, so nothing matches and
+      # the rule can never fire.
       - alert: ActionsGatewayProxyLongLivedTunnels
         expr: |
-          increase(
-            actions_gateway_proxy_tunnel_duration_seconds_bucket{le="3600"}[1h]
+          sum by (namespace) (
+            increase(actions_gateway_proxy_tunnel_duration_seconds_bucket{le="3600"}[1h])
           ) -
-          increase(
-            actions_gateway_proxy_tunnel_duration_seconds_bucket{le="1800"}[1h]
+          sum by (namespace) (
+            increase(actions_gateway_proxy_tunnel_duration_seconds_bucket{le="1800"}[1h])
           ) > 20
         for: 15m
         labels:
@@ -196,15 +201,37 @@ groups:
 
       # Ticket: admission webhook rejecting CRs — a tenant repeatedly
       # probing reserved namespaces or invalid specs.
+      #
+      # This reads the APISERVER's rejection counter, not the GMC's request
+      # counter (Q1061). controller-runtime returns a denial as an HTTP 200
+      # whose AdmissionReview body carries the 403, so
+      # controller_runtime_webhook_requests_total{code="403"} selects a series
+      # that never exists. The apiserver reads the body, so it records the 403.
+      #
+      # error_type="no_error" means the webhook was reached and said no. The
+      # other values (calling_webhook_error, apiserver_internal_error) are the
+      # GMC being unreachable under failurePolicy: Fail, an availability
+      # problem alerted elsewhere rather than abuse. rejection_code="403" is
+      # what a validator's Denied() produces; a 400 is a malformed
+      # AdmissionReview.
+      # Label semantics read from kubernetes/kubernetes at release-1.36 on
+      # 2026-09-07. The metric is ALPHA-stability, so the label set can change
+      # across minor versions.
       - alert: ActionsGatewayWebhookRejections
         expr: |
-          rate(controller_runtime_webhook_requests_total{code="403"}[10m]) > 0.1
+          sum by (name, operation) (
+            rate(apiserver_admission_webhook_rejection_count{
+              name=~"v(actionsgateway-v1alpha1|actionsgateway-v2alpha1|clusterrunnertemplate-v2alpha1|egressproxy-v2alpha1|runnerset-v2alpha1|runnertemplate-v2alpha1)\\.kb\\.io",
+              error_type="no_error",
+              rejection_code="403"
+            }[10m])
+          ) > 0.1
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "Admission webhook rejecting ActionsGateway requests"
-          description: "Sustained 403s from the validating webhook. Check which principal is submitting CRs to reserved namespaces or with invalid specs."
+          summary: "Admission webhook {{ $labels.name }} rejecting {{ $labels.operation }} requests"
+          description: "Sustained denials from a GMC validating webhook. Check which principal is submitting CRs to reserved namespaces or with invalid specs. Requires the apiserver scrape (kube-prometheus-stack scrapes it by default); the GMC scrape cannot answer this."
 ```
 
 > **Note on labels.** The proxy metrics (`actions_gateway_proxy_*`) carry no intrinsic `namespace` label — each per-tenant proxy is a separate scrape target.
