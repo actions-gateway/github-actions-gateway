@@ -22,6 +22,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
   - [Non-breaking: a GHES appliance behind a private CA can now be trusted (`spec.githubCABundleRef`)](#non-breaking-a-ghes-appliance-behind-a-private-ca-can-now-be-trusted-specgithubcabundleref)
+  - [Agent-identity collisions are now rejected at admission (RunnerSet name, and derived RunnerGroup name)](#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name)
   - [Scale-set name uniqueness is now enforced across the whole GitHub scope, not per namespace](#scale-set-name-uniqueness-is-now-enforced-across-the-whole-github-scope-not-per-namespace)
   - [Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")](#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished)
   - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
@@ -318,6 +319,40 @@ Runbook: [troubleshooting.md § a GHES appliance's certificate is not trusted](t
 
 **Rolling back** restores the defect for these tenants.
 `v1alpha1` has no equivalent field and never will — it is frozen and removed at `v2.0.0`.
+
+### Agent-identity collisions are now rejected at admission (`RunnerSet` name, and derived `RunnerGroup` name)
+
+**Who is affected:** a platform where two runner pools derive the same **agent-identity stem**, the string that `agentpool-<stem>-N` and the GitHub runner name `<stem>-N` are both built from.
+Two shapes reach it, and everyone else is unaffected with no configuration change:
+
+- a `RunnerGroup` whose name starts `rs-` sitting on the stem of a same-suffixed `RunnerSet` (the v1/v2 cross-derivation, since `rs-` is a prefix rather than an injection);
+- two `RunnerSet`s of one **name**, or two `RunnerGroup`s of one name, in *different* namespaces whose gateways point at the same GitHub org, enterprise, or repo.
+
+That second shape is the one most likely to be in a running cluster, and it was accepted before this release.
+It was never safe: the runner name is unique per GitHub scope, so both pools register `<stem>-N` and each 409 is resolved by deleting the incumbent's record.
+The loser reports `agent identity is owned by another pool` on every reconcile and never recovers ([runbook](troubleshooting.md#agent-pool-blocked-another-tenant-owns-the-agent-secret)).
+
+**Nothing is re-validated at upgrade time**, because admission runs on create and update.
+An existing colliding pair keeps running exactly as it did; the rejection lands whenever someone next re-applies either object, which may be long after the upgrade and on a tenant who changed nothing.
+Unlike the scale-set guard above, there is **no** status condition or gauge reporting a pair carried in from an older release: the AGC's existing `AgentPoolError` Event is the only signal, and it fires only once a pool is actually blocked.
+
+Find it in advance, before upgrading, in two commands.
+Any stem appearing twice under one GitHub scope, or twice in one namespace, is a collision:
+
+```bash
+kubectl get runnersets.actions-gateway.com -A \
+  -o jsonpath='{range .items[*]}{.metadata.namespace}{"\trs-"}{.metadata.name}{"\n"}{end}'
+kubectl get runnergroups.actions-gateway.github.com -A \
+  -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}'
+```
+
+**A v1 `ActionsGateway` write is rejected too**, for a `spec.runnerGroups` entry whose derived `RunnerGroup` name (`<gateway>-<first runnerLabel>-<hash>`) lands on a taken stem.
+The entry has no name field, so the rejection names the spec index and the derived name.
+**This can block a rollback**: re-applying a v1 gateway while the colliding v2 `RunnerSet` still exists is refused.
+Delete that `RunnerSet` first: a rollback removes the v2 objects regardless, and the rejection names which one is in the way.
+
+**Rolling back** removes both guards, so the colliding configuration is accepted again along with the pool takeover it allows.
+Nothing is left behind to clean up: the guards are admission-only and write no status.
 
 ### Scale-set name uniqueness is now enforced across the whole GitHub scope, not per namespace
 

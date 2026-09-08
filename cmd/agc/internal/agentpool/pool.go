@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -268,11 +269,11 @@ func (p *Pool) secretName(index int) string {
 }
 
 func runnerGroupSecretName(name string, index int) string {
-	return fmt.Sprintf("agentpool-%s-%d", name, index)
+	return fmt.Sprintf("agentpool-%s-%d", apinames.RunnerGroupAgentStem(name), index)
 }
 
 func runnerSetSecretName(name string, index int) string {
-	return fmt.Sprintf("agentpool-rs-%s-%d", name, index)
+	return fmt.Sprintf("agentpool-%s-%d", apinames.RunnerSetAgentStem(name), index)
 }
 
 // agentName is the runner name registered with GitHub for the agent at index.
@@ -284,10 +285,17 @@ func runnerSetSecretName(name string, index int) string {
 // unauthorized in a loop. Splitting the Secret name alone would have moved that fight
 // from Kubernetes to GitHub rather than ending it.
 func (p *Pool) agentName(index int) string {
+	return fmt.Sprintf("%s-%d", p.agentStem(), index)
+}
+
+// agentStem is this pool's agent-identity stem, per its Scheme. Both derived names
+// are built from it, and the GMC's admission guard against two owners claiming one
+// stem derives it the same way (Q1011, [apinames.RunnerSetAgentStem]).
+func (p *Pool) agentStem() string {
 	if p.scheme == SchemeRunnerSet {
-		return fmt.Sprintf("rs-%s-%d", p.ownerName, index)
+		return apinames.RunnerSetAgentStem(p.ownerName)
 	}
-	return fmt.Sprintf("%s-%d", p.ownerName, index)
+	return apinames.RunnerGroupAgentStem(p.ownerName)
 }
 
 // ErrAgentNameCollision reports that the agent identity at some index is already

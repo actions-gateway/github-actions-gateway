@@ -1806,8 +1806,9 @@ Confirm which tenant holds the Secret before choosing:
 kubectl -n <namespace> get secret <secret-name> -o jsonpath='{.metadata.ownerReferences}'
 ```
 
-**Avoiding it.** Do not name a `RunnerGroup` with an `rs-` prefix.
-That prefix belongs to the v2 derivation, and a v1 name carrying it can claim a v2 tenant's identity.
+**Reaching this state at all means the pair was never validated.** Admission rejects every write that would create one ([Rejected: Agent Identity Already Claimed](#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed)), so a stored pair got there one of two ways: an upgrade from a release before the guard shipped, since a webhook fires only on a write and nothing re-applies these objects, or a window with the `ValidatingWebhookConfiguration` absent (`failurePolicy: Fail` blocks on an *unreachable* webhook, so this needs it uninstalled rather than down).
+
+**Avoiding it.** Do not name a `RunnerGroup` with an `rs-` prefix, and do not give two `RunnerSet`s the same name under gateways bound to one GitHub org.
 See [Migration v1 to v2](migration-v1-to-v2.md#the-two-tenants-keep-separate-runners) for the full derivation table.
 
 ---
@@ -3957,6 +3958,82 @@ scale-set names that GitHub scope already holds)
   To change it, create a **new** `RunnerSet` (with a distinct name and first label) and delete the old one.
 - **More than one label is no longer rejected.** Until Q726 a `ScaleSet` set had to declare exactly one `runnerLabel` and a multi-label set had to set `acquisitionProtocol: Classic`; both CEL rules are gone.
   If you still see one of those messages, the cluster is running an older CRD than the controller; reapply the chart's CRDs.
+
+---
+
+## `RunnerSet` or `ActionsGateway` Rejected: Agent Identity Already Claimed
+
+> Applies to both APIs: the rejection lands on whichever object is written second.
+> This is the **admission-time** form of [Agent Pool Blocked: Another Tenant Owns the Agent Secret](#agent-pool-blocked-another-tenant-owns-the-agent-secret), which describes the same collision once it is already stored.
+
+**Symptoms.** A `RunnerSet` create or update is rejected:
+
+```
+admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: agent-identity stem
+"rs-web" is already claimed by RunnerGroup "rs-web" in namespace "team-a"; an agent
+pool derives its agent Secret "agentpool-<stem>-N" and the runner name it registers
+with GitHub "<stem>-N" from that stem, so two owners sharing it each deregister the
+other's runner and neither recovers. Rename one of the two CRs
+```
+
+Or, when the holder is in another namespace:
+
+```
+admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: agent-identity stem
+"rs-web" is already claimed by another runner pool registered against GitHub scope
+"github.com/acme"; ... Pick a distinct name for this RunnerSet (ask your platform
+administrator which runner names that GitHub scope already holds)
+```
+
+Or a **v1 `ActionsGateway`** write is rejected for one of its `runnerGroups` entries:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+spec.runnerGroups[0] derives RunnerGroup "rs-web-1e3f4a9", whose agent-identity stem
+"rs-web-1e3f4a9" is already claimed by RunnerSet "web-1e3f4a9" in the same namespace;
+... Rename this gateway, change the entry's first runnerLabel, or remove the
+colliding CR
+```
+
+**What happened.** Each runner pool derives every name it uses from one **stem**: the agent Secret `agentpool-<stem>-N`, and the runner name `<stem>-N` it registers with GitHub.
+A `RunnerGroup` named `web` has stem `web`; a `RunnerSet` named `web` has stem `rs-web`.
+That `rs-` prefix is what lets a same-named group and set coexist through a migration, and it is a prefix rather than an injection, so a `RunnerGroup` whose name happens to start `rs-` can land on a stem a `RunnerSet` already owns.
+
+**The two halves of a stem have different boundaries, and both are checked.**
+
+| Derived name | Unique within |
+|---|---|
+| agent Secret `agentpool-<stem>-N` | the namespace |
+| GitHub runner name `<stem>-N` | the org, enterprise, or repo the gateway's `gitHubURL` names |
+
+So a collision is rejected when the two owners share a **namespace**, whatever GitHub they reach, *or* when their gateways bind the **same GitHub scope**, even from different namespaces.
+The cross-namespace half is not an edge case: [Appendix E §E.6](../design/appendix-e-capacity-planning.md#e6-when-to-shard-across-installations) shards one org across namespaces deliberately, and two tenants there naming a `RunnerSet` `build` claim one runner name at GitHub.
+Org and repo names are matched case-insensitively, so `github.com/Acme` and `github.com/acme` are one scope.
+
+**Why it is refused rather than reported.** An admitted collision costs one of the two tenants its entire agent pool and does not self-heal: each pool finds its Secret held by the other, and the loser reports `agent identity is owned by another pool` on every reconcile until an operator renames a CR.
+
+**Resolution.**
+
+- **Same namespace.** The rejection names the holder, because the tenant owns both objects.
+  Rename one of them.
+- **Another namespace.** The holder is withheld, since naming it would disclose another tenant's namespace and object to anyone able to write in their own, so the message names only the GitHub scope.
+  The full detail is in the GMC controller log.
+  A platform admin can also list the stems in play:
+
+  ```bash
+  kubectl get runnersets.actions-gateway.com -A \
+    -o jsonpath='{range .items[*]}{.metadata.namespace}{"\trs-"}{.metadata.name}{"\n"}{end}'
+  kubectl get runnergroups.actions-gateway.github.com -A \
+    -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}'
+  ```
+
+- **On the v1 gateway.** A `runnerGroups` entry carries no name of its own (the GMC derives the `RunnerGroup` name as `<gateway>-<first runnerLabel>-<hash>`), so the rejection names the spec index and the derived name.
+  Rename the gateway, change that entry's first `runnerLabel`, or remove the colliding CR.
+- **Mid-rollback.** Re-applying a v1 gateway while the v2 `RunnerSet` it collides with still exists is rejected.
+  Delete that `RunnerSet` first; a rollback removes the v2 objects regardless, and the rejection names which one is in the way.
+
+**Not to be confused with** [`RunnerSet` Rejected: `acquisitionProtocol`](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter), which is about a `ScaleSet` set's first `runnerLabel`, the *scale-set* name at GitHub, rather than the CR name the agent identity comes from.
+The two guards are independent and a write can trip either.
 
 ---
 

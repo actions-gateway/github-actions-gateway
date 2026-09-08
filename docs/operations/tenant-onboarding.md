@@ -351,6 +351,10 @@ spec:
   # Step 1b — it is not a field on this CR.
   # A runner group has no `name` field — the RunnerGroup CR name is derived from
   # the gateway name + the group's first runnerLabel (here "linux").
+  # That derived name is the group's agent-identity stem, which must be unique in
+  # the namespace AND across every pool bound to this GitHub org, so admission
+  # rejects an entry whose derived name is already claimed. See
+  # troubleshooting.md#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed
   runnerGroups:
     - runnerLabels: ["linux", "self-hosted"]
       maxListeners: 10

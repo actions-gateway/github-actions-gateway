@@ -18,7 +18,6 @@ package migrate
 import (
 	"fmt"
 	"sort"
-	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -313,19 +312,13 @@ func authoritativeGroups(gw *gmcv1alpha1.ActionsGateway, standalone []agcv1alpha
 	return out
 }
 
-// runnerGroupName replicates the GMC's v1 derived name for an inline runnerGroups[]
-// entry (controller.runnerGroupName): a content-derived name from the first runner
-// label, or an index-based fallback, bounded to the 63-char label-value budget.
-// Replicated (not imported — it is unexported in the controller package) so the
-// synthesized standalone name matches what the GMC would have materialized, making
-// the standalone-vs-inline dedup exact. Both sides now derive through apinames, so
-// that equality is enforced by the shared helper rather than by keeping two copies
-// in step by hand.
+// runnerGroupName is the GMC's v1 derived name for an inline runnerGroups[] entry,
+// via the shared [apinames.RunnerGroupName] the controller also calls. The
+// synthesized standalone name must equal what the GMC would have materialized or the
+// standalone-vs-inline dedup is not exact, so the two derive through one function
+// rather than being kept in step by hand.
 func runnerGroupName(gatewayName string, spec agcv1alpha1.RunnerGroupSpec, i int) string {
-	if len(spec.RunnerLabels) > 0 {
-		return apinames.Join(apinames.MaxLabelValue, gatewayName, labelSafe(spec.RunnerLabels[0]))
-	}
-	return apinames.Join(apinames.MaxLabelValue, gatewayName, strconv.Itoa(i))
+	return apinames.RunnerGroupName(gatewayName, spec.RunnerLabels, i)
 }
 
 // labelSafe is controller.labelSafe: a deterministic, RFC-1123-label-safe segment
