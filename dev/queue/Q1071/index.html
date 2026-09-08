@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1072/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1071/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Dashboard preview harness has no lock on its shared kind cluster - GitHub Actions Gateway</title>
+        <title>promql-check never reads the security doc's shipped alert group - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dashboard-preview-harness-has-no-lock-on-its-shared-kind-cluster" class="md-skip">
+        <a href="#promql-check-never-reads-the-security-docs-shipped-alert-group" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dashboard preview harness has no lock on its shared kind cluster
+              promql-check never reads the security doc's shipped alert group
             
           </span>
         </div>
@@ -2597,24 +2597,16 @@
   
 
 
-<h1 id="dashboard-preview-harness-has-no-lock-on-its-shared-kind-cluster">Dashboard preview harness has no lock on its shared kind cluster<a class="headerlink" href="#dashboard-preview-harness-has-no-lock-on-its-shared-kind-cluster" title="Permanent link">&para;</a></h1>
-<p><code>render.sh</code> keys on a single fixed cluster name (<code>CLUSTER=gag-obs</code>) and a single Helm release (<code>RELEASE=kps</code>), and nothing stops two sessions entering it at once.
-Measured 2026-09-07: two sessions started a render six minutes apart, the second reused the first's cluster and died on <code>Error: UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress</code>, having already spent the cluster-create step.</p>
-<p>The collision is worse than the wasted run, and the session that fails is not the session that is harmed.
-Both runs apply <code>../grafana-dashboard-*.json</code> from their <strong>own</strong> worktree into the shared Grafana, and neither notices the other.
-Applying is not the race the operator sees, though: the whole 660s accumulation window sits between the apply and the render, so <strong>the harm lands entirely on whichever session applied first</strong>.
-It renders the <em>other</em> branch's JSON, and gets a PNG that looks plausible and is a different branch's work — the same silent drift <code>dashboard-render-check</code> exists to catch (Q868), arriving through the harness rather than around it.
-The session that applied last is unaffected and has no way to tell it just corrupted a peer's run.</p>
-<p>Measured again the same evening, on the second collision: two sessions were mid-<code>shot</code> together, and the cluster's <code>cm/ag-grafana-dashboard-security</code> held the title from the branch that had <em>not</em> changed it, with zero occurrences of the metric the changing branch had added.
-The session about to shoot that dashboard was the one that had applied first.
-It killed its run on the strength of that read; nothing in the harness would have told it.</p>
-<p>Every dashboard-touching PR must render, so this fires whenever two are in flight, which parallel dispatch makes routine.
-Both sessions here hand-rolled the same <code>pgrep</code>-for-<code>render.sh</code> wait, and the second collision happened <em>because</em> of it: the poll fired in the four-minute gap between one render exiting and the same session starting its next.
-A wait built on observing the peer's process cannot see an intent to re-enter, which is the argument for a real lock over better etiquette.</p>
-<p>Two candidate fixes, and the row does not pick one: a per-session cluster name (<code>CLUSTER</code> already defaults through the environment, so deriving it from the session or worktree is small, but each cluster is a full kube-prometheus-stack install and the box runs oversubscribed); or a lock around the shared one, which keeps the single install and makes the second session wait instead of fail.</p>
-<p><strong>Notes:</strong> the harness is a preview tool, so a failure never reaches CI.
-It costs a session its render and, in the interleaved case, ships a wrong screenshot past a green gate.
-A lock does not subsume <a href="../Q1074/">Q1074</a>: a locked run can still render an empty exporter, and a series sentinel can still be overwritten by a peer's apply.</p>
+<h1 id="promql-check-never-reads-the-security-docs-shipped-alert-group">promql-check never reads the security doc's shipped alert group<a class="headerlink" href="#promql-check-never-reads-the-security-docs-shipped-alert-group" title="Permanent link">&para;</a></h1>
+<p><code>check-promql.sh</code> passes the checker four kinds of input: <code>deploy/monitoring/prometheusrule.yaml</code>, <code>docs/operations/observability-alerting.md</code>, <code>docs/operations/runbook.md</code>, and the four dashboard JSONs.
+<code>docs/operations/security-operations.md</code> is not among them, so the nine-rule <code>actions-gateway-security</code> group that doc tells an operator to drop into a <code>PrometheusRule</code> has never been parsed by anything.</p>
+<p>That is what let Q1061's two inert expressions ship, and Q1061 named the wrong cause: it said the gate parses the doc's expressions and a well-formed query selecting nothing is what the gate cannot see.
+The first half is false: the gate never opens the file.
+Measured 2026-09-07 by extracting the doc's fenced <code>groups:</code> block into a synthetic <code>PrometheusRule</code> and running <code>scripts/manifest/check-promql.sh</code> on it: all nine expressions parsed, and a deliberate <code>{{</code> in one produced <code>expr does not parse</code>, so the checker would have had an opinion had it been pointed at the file.</p>
+<p><strong>Adding the file needs an expression-only mode, which is why this is not one line.</strong> The doc's group is a reference operators copy, not a shipped rule, so the same probe returned eight <code>has no runbook_url annotation</code> findings and one missing runbook heading, all of it policy the checker applies to <code>prometheusrule.yaml</code> and that does not hold here.
+<code>run()</code> currently takes one doc path and spends it on <code>checkMirror</code>/<code>checkRunbook</code> against the shipped rule; this needs a second doc path that gets <code>docBlocks</code> + <code>checkExprs</code> and nothing else, plus a printed rule count so a walk that stopped reaching the block reads as a gap rather than a pass, which is the argument the dashboard target count already makes.</p>
+<p>Neighbour to <a href="../Q996/">Q996</a>, which is the other direction: there the gate reads the right file and compares too little (<code>for:</code> and every label unguarded).
+One fix does not close the other, and the two together are what "guards less than it reads as" means for this tool.</p>
 
 
 

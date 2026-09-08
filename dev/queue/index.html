@@ -3229,14 +3229,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The ~12 KiB figure on four marketing surfaces comes from <code>mem_test.go</code>, which imports classic <code>agentpool</code>/<code>listener</code>, never …</td>
 </tr>
 <tr>
-<td><a href="Q1061/">Q1061</a></td>
-<td><a href="../operations/security-operations/#prometheus-abuse-alerts">security-operations abuse alerts: two shipped expressions cannot fire</a></td>
-<td><code>docs</code> <code>security</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two rules in the <code>actions-gateway-security</code> group the doc tells an operator to drop into their <code>PrometheusRule</code> are inert as written, and …</td>
-</tr>
-<tr>
 <td><a href="Q728/">Q728</a></td>
 <td><a href="../development/documentation-standards/">Let pin-bearing docs cite a third-party version</a></td>
 <td><code>docs</code> <code>debt</code></td>
@@ -4227,6 +4219,30 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The report that <a href="../operations/release/#when-to-cut">release.md § When to cut</a> says to start from prints an empty <em>Queue rows closed</em> …</td>
+</tr>
+<tr>
+<td><a href="Q1071/">Q1071</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-promql.sh">promql-check never reads the security doc's shipped alert group</a></td>
+<td><code>debt</code> <code>tests</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>check-promql.sh</code> passes the checker four kinds of input: <code>deploy/monitoring/prometheusrule.yaml</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1074/">Q1074</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh">render.sh reports success on an all-empty dashboard render</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>render()</code> checks that Grafana's <code>/render</code> call returned HTTP 200 and prints the file size.</td>
+</tr>
+<tr>
+<td><a href="Q1077/">Q1077</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/workload.yaml">Preview scrape overrides the exporter's namespace label</a></td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>exporter.py</code> fakes a two-tenant fleet by emitting explicit <code>namespace="team-a"</code> and <code>namespace="team-b"</code> labels from a single pod.</td>
 </tr>
 <tr>
 <td><a href="Q1002/">Q1002</a></td>

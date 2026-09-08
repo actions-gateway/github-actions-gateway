@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1061/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1074/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>security-operations abuse alerts: two shipped expressions cannot fire - GitHub Actions Gateway</title>
+        <title>render.sh reports success on an all-empty dashboard render - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#security-operations-abuse-alerts-two-shipped-expressions-cannot-fire" class="md-skip">
+        <a href="#rendersh-reports-success-on-an-all-empty-dashboard-render" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              security-operations abuse alerts: two shipped expressions cannot fire
+              render.sh reports success on an all-empty dashboard render
             
           </span>
         </div>
@@ -2597,16 +2597,28 @@
   
 
 
-<h1 id="security-operations-abuse-alerts-two-shipped-expressions-cannot-fire">security-operations abuse alerts: two shipped expressions cannot fire<a class="headerlink" href="#security-operations-abuse-alerts-two-shipped-expressions-cannot-fire" title="Permanent link">&para;</a></h1>
-<p>Two rules in the <code>actions-gateway-security</code> group the doc tells an operator to drop into their <code>PrometheusRule</code> are inert as written, and one threat-map row rests on the same wrong claim.</p>
-<p><strong><code>ActionsGatewayWebhookRejections</code> selects a code the counter never carries.</strong> Its expression is <code>rate(controller_runtime_webhook_requests_total{code="403"}[10m])</code>. controller-runtime writes a validating-webhook denial as an HTTP 200 whose <code>AdmissionReview</code> body carries the 403: <code>ValidationResponse</code> sets <code>Result.Code = 403</code> on the response struct, and <code>writeAdmissionResponse</code> JSON-encodes it without calling <code>WriteHeader</code> (vendored <code>sigs.k8s.io/controller-runtime/pkg/webhook/admission/response.go</code> and <code>http.go</code>, read 2026-09-07).
-The <code>code</code> label is the HTTP status <code>promhttp.InstrumentHandlerCounter</code> observed, so a deny increments <code>code="200"</code> and the <code>403</code> series never exists.
-The threat-map row "<code>ActionsGateway</code> CR in reserved namespace / spec probing → admission webhook <code>403</code> rejection rate" is the same claim in prose.
-No metric today counts webhook rejections; the fix is either a GMC counter on the deny path or pointing the row and the rule at the apiserver's <code>apiserver_validating_admission_policy_check_total{enforcement_action="deny"}</code> (the values are lowercase, read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07) for the policies the chart ships, which is what the security dashboard (Q725) reads instead.</p>
-<p><strong><code>ActionsGatewayProxyLongLivedTunnels</code> subtracts two selectors that differ on <code>le</code>.</strong> <code>increase(…_bucket{le="3600"}[1h]) - increase(…_bucket{le="1800"}[1h])</code> is a one-to-one vector match on every label, and the two sides carry different <code>le</code> values, so the result is empty and the rule never fires.
-It needs <code>ignoring(le)</code> or a <code>sum by (namespace)</code> on each side, which is the form the security dashboard's tunnel panel uses.</p>
-<p>Both were found while building that dashboard from the doc's own alert group.
-<code>make promql-check</code> parses the doc's expressions and both parse, which is why neither surfaced: a well-formed query that selects nothing is exactly what that gate cannot see.</p>
+<h1 id="rendersh-reports-success-on-an-all-empty-dashboard-render">render.sh reports success on an all-empty dashboard render<a class="headerlink" href="#rendersh-reports-success-on-an-all-empty-dashboard-render" title="Permanent link">&para;</a></h1>
+<p><code>render()</code> checks that Grafana's <code>/render</code> call returned HTTP 200 and prints the file size.
+Neither reading can tell a populated dashboard from one where every panel says "No data", so the harness exits 0 and writes four PNGs a session then commits.</p>
+<p>Measured 2026-09-07 while working Q1061.
+An <code>exporter.py</code> edit tripped the Q704 counter floor (<code>ValueError: counter rate 0.004 is below 0.01/s</code>), so the process died at startup: <code>__main__</code> calls <code>render()</code> unconditionally before <code>HTTPServer(...).serve_forever()</code> and outside any <code>try</code>, and <code>counter_total</code> raises on <code>rate &lt; MIN_COUNTER_RATE</code> alone, with no dependence on <code>elapsed</code>.
+Confirmed by running the edited file directly, which exited 1 on that line without binding :9100.
+That startup crash is the Q704 design working as its docstring says it should.
+Prometheus scraped nothing for the whole 660s window, every panel on all four dashboards rendered "No data", and <code>render.sh</code> exited 0 and wrote the PNGs.</p>
+<p><strong>Why <code>kubectl rollout status</code> still passed is not established, and the row does not need it.</strong> The container carries no <code>readinessProbe</code> and no <code>livenessProbe</code>, so a pod counts Ready the moment the container is Running, which a process that starts and exits satisfies for a moment.
+That fits <code>render.sh</code> logging <code>successfully rolled out</code>, and it is a hypothesis: a peer session re-applied the shared cluster from its own worktree before the pod state was inspected, so the ReplicaSet sequence this run actually produced was not observed and cannot be recovered.
+What is verified is the pair that makes the gap real either way: <code>rollout status</code> on a probe-less Deployment is the only liveness gate the harness has, and nothing afterwards checks that a single series exists.
+The security PNG was 223,577 bytes against the committed one's 281,994, so size is not a signal either: a dark-theme dashboard of empty panels compresses to the same order as a full one, and <code>trim_bottom</code> crops to the last non-background row, which the panel chrome supplies regardless.</p>
+<p>What caught it was opening the PNG.
+Nothing else in the loop would have: <code>make dashboard-render-check</code> compares <em>whether</em> the PNG changed against the JSON diff, never what it shows, so a committed empty render satisfies it exactly as a good one does.</p>
+<p><strong>The check belongs before the render, not after it.</strong> A sentinel query against Prometheus once the accumulation window closes fails in seconds with a cause (<code>actions_gateway_build_info</code> has no <code>namespace</code> label and no rate, so it is present or the scrape is broken), where a post-hoc pixel heuristic on the PNG would be both slower and vaguer.
+Worth also failing on a <code>/metrics</code> fetch that does not return 200 before the wait starts, which would have caught this instance 11 minutes earlier.</p>
+<p><strong>A sentinel proves the data exists, not that the render is readable</strong>, and the second failure mode is the one nothing here can reach.
+A panel populated <em>wrongly</em> passes every check in the loop: the Q969 session's own render of this same harness came back with two stacked panels auto-scaling their y-axis to a ~50 floor, truncating the bottom band of a stack whose entire claim is that the total equals a declared ceiling, and with refusal bands at roughly 1% of the acquired series, rendering the panel as one solid blob.
+Both are legible only to a human or a vision pass opening the image.
+So the sentinel is the cheap floor rather than the answer, and a session that adds one has not been relieved of looking at the PNG.</p>
+<p>Neighbour to <a href="../Q1072/">Q1072</a>, which is the harness's other unguarded shared-state problem: no lock on the <code>gag-obs</code> cluster.
+Different mechanism, and one fix does not close the other: a lock still lets a session commit an empty render, and a sentinel query still lets two sessions overwrite each other's Grafana.</p>
 
 
 
