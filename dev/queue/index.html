@@ -4165,6 +4165,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The <code>docker</code> ecosystem lists five directories holding no Dockerfile; #870 consolidated the only one to <code>/</code>, and the last bump was #643 on …</td>
 </tr>
 <tr>
+<td><a href="Q1084/">Q1084</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh">local-throttle silently disables itself when CI is set on a dev Mac</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check …</td>
+</tr>
+<tr>
 <td><a href="Q980/">Q980</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/kustomization.yaml">Assert the dogfood e2e overlays supply their own workerImage</a></td>
 <td><code>tests</code></td>
