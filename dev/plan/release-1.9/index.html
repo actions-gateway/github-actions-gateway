@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.8/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.9/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Release 1.8 Milestone Definition - GitHub Actions Gateway</title>
+        <title>Release 1.9 Milestone Definition - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-18-milestone-definition" class="md-skip">
+        <a href="#release-19-milestone-definition" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release 1.8 Milestone Definition
+              Release 1.9 Milestone Definition
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" class="md-nav__link">
+  <a href="#why-this-release-exists" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why this is a release rather than a row that lands whenever
+        Why this release exists
       
     </span>
   </a>
@@ -2597,21 +2597,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-gating-row-q1029" class="md-nav__link">
+  <a href="#what-this-release-must-not-do" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The gating row: Q1029
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-rides-the-soak-readings-and-the-alias-decision" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What rides: the soak readings and the alias decision
+        What this release must NOT do
       
     </span>
   </a>
@@ -2630,21 +2619,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explicitly out of scope
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#definition-of-done" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Definition of done
+        Definition of Done
       
     </span>
   </a>
@@ -2652,32 +2630,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#critical-path" class="md-nav__link">
+  <a href="#what-waits-for-v200" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Critical path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-flight-verdicts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-flight verdicts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#candidate-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Candidate validation
+        What waits for v2.0.0
       
     </span>
   </a>
@@ -2704,63 +2660,25 @@
   
 
 
-<h1 id="release-18-milestone-definition">Release 1.8 Milestone Definition<a class="headerlink" href="#release-18-milestone-definition" title="Permanent link">&para;</a></h1>
+<h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scoped 2026-09-07; the gating row is closed, no candidate cut.</strong> The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event (<a href="#the-gating-row-q1029">below</a>).
-Three rows ride without gating: the two v2 GA soak readings, <a href="../../queue/Q1059/">Q1059</a> and <a href="../../queue/Q1060/">Q1060</a>, and the Phase 2 alias decision, Q452, which closed 2026-09-08 (<a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">the decision</a>).
-The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 44 commits and <strong>FLOOR: NONE</strong> on 2026-09-07, with seven <code>feat</code>/<code>fix</code> subjects withheld because they ship in no image and no chart.
-Q1029's fix raises the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.</p>
+<p><strong>Status: shape decided 2026-09-08, not scoped.</strong> The rung exists because Rule #4b requires it, not because a defect asked for it, and its content cannot start until 1.8's soak readings land.
+Nothing here is a commitment to a date, and the version is provisional: if 1.8's readings come back negative, the <code>v2beta1</code> shape fix they name lands first and this rung moves.</p>
 </blockquote>
-<h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
-<p>The <a href="../release-ladder/">release ladder</a> reads 1.7 → 2.0, and 2.0 is <a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">parked on a soak</a> whose evidence nobody has gathered.
-Read on 2026-09-07: criterion 1 has elapsed on the record rather than by re-derivation here, since <code>v1.4.0</code> through <code>v1.7.0</code> all shipped on <code>v2beta1</code> and each release's pre-flight API review returned <em>ship as-is</em> over additive surface (<a href="../release-1.4/#pre-flight-the-api-surface-this-tag-publishes">1.4</a>, <a href="../release-1.5/#pre-flight-the-api-surface-this-tag-publishes">1.5</a>, <a href="../release-1.6/">1.6</a>, <a href="../release-1.7/#pre-flight-verdicts">1.7</a>); criterion 2 is unmet on one kind, since the dogfood overlays and <code>scripts/dogfood/setup.sh</code> between them apply <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>ClusterRunnerTemplate</code> and <code>RunnerTemplate</code> while <code>setup.sh</code> deliberately creates no <code>EgressProxy</code> on that cluster, and the e2e lane that does exercise one runs on a kind cluster; criterion 3 has no recorded round-trip across the served versions, the nearest reading being <a href="../archive/q415-migrate-dogfood-validation/">Q415</a>'s live migration, which drove the webhook on one kind in one direction.
-So the GA rung cannot be labelled without publishing a commitment on unmeasured criteria, and the roadmap's near-term section has been empty since 2026-08-29.</p>
-<p>1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one three rows have waited for since 1.7 (<a href="../../queue/Q1038/">Q1038</a>, <a href="../../queue/Q1048/">Q1048</a>, <a href="../../queue/Q1039/">Q1039</a>).
-The theme is v2 GA readiness; what makes it a release an operator upgrades for is the gating row.</p>
-<h2 id="the-gating-row-q1029">The gating row: Q1029<a class="headerlink" href="#the-gating-row-q1029" title="Permanent link">&para;</a></h2>
-<p>Q1029 was a measured product defect on the scale-set tier.
-<code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a <code>RunnerSet</code> reconcile, so a gracefully deleted worker was judged only if a reconcile began in the seconds between the kubelet publishing the terminal phase and removing the object.
-When none did, the job was silently never re-run.
-The row carried three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.</p>
-<p><strong>Closed 2026-09-07.</strong> The reconciler's worker-pod watch now hands each phase-changing or newly preempted scale-set worker straight to the same judge and the same optimistic-lock claim the scan uses, so the claim no longer waits on the reconcile queue; the scan stays for what no event reaches (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>).
-The deletion-proof is at the envtest tier: <code>TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld</code> parks the controller's only reconcile worker in a second set's listener bootstrap for the whole drain and asserts the claim lands while the reconcile count does not move, and it went red on a build where the watch path was inert.
-The e2e drain spec is unchanged: it already re-stages rather than fails on a missed window (<a href="../q549-scaleset-rerun-flake/#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch">q549-scaleset-rerun-flake.md</a>), so a stricter e2e assertion is a call this plan still owes an answer on.</p>
-<p>It gates because the exposure is an operator's, not the e2e venue's: a node drain terminates many workers at once, so one missed window there is many lost jobs.
-The design already records that this arm cannot be made restart-safe (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>), and the row argues that Q844's orphan recovery does not cover a worker the scan simply missed.</p>
-<p><strong>Why the gap opened was unverified</strong>, and the row said so: the reconciler runs at <code>MaxConcurrentReconciles: 1</code> and the listener bootstrap does DNS and an HTTP POST inside <code>Reconcile</code>, which was a hypothesis read off timestamps.
-What the fix established is narrower than a duration: on the vendored controller-runtime the pod's own phase-change event moves a waiting key to ready at once, so the 8-second gap held a reconcile in flight rather than a backoff, and its duration is still not measured directly (<a href="../q549-scaleset-rerun-flake/#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch">the reading</a>).
-The fix does not depend on which step inside it was slow.</p>
-<h2 id="what-rides-the-soak-readings-and-the-alias-decision">What rides: the soak readings and the alias decision<a class="headerlink" href="#what-rides-the-soak-readings-and-the-alias-decision" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Row</th>
-<th>What it delivers</th>
-<th>Why it rides rather than gates</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="../../queue/Q1059/">Q1059</a></td>
-<td>Every <code>v2beta1</code> kind applied and reconciled on the dogfood cluster, recorded against criterion 2</td>
-<td>A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1060/">Q1060</a></td>
-<td>The conversion webhook round-tripped over real objects, including a <code>v1alpha1</code> object such as the gateway <code>deploy/dogfood-migrate</code> applies, recorded against criterion 3</td>
-<td>Same</td>
-</tr>
-<tr>
-<td>Q452</td>
-<td>Whether GA <code>v2</code> defines <code>CiliumFQDN</code>/<code>CalicoFQDN</code>, written into <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md § Phase 2</a></td>
-<td>A design decision, not a shipped change; deciding it here lets the hop start without one pending</td>
-</tr>
-</tbody>
-</table>
-<p>A reading that comes back negative is the release working: it names the shape fix <code>v2beta1</code> still needs, which resets the soak clock and is exactly what GA is gated on finding first.</p>
-<p><strong><a href="../../queue/Q1085/">Q1085</a>'s notice rides here too, and only part of it is done.</strong> Deciding Q452 shipped the notice's docs half — the operator pages, both enum godocs and the admission warning now name <code>v2.0.0</code> as the removal release — which is what makes this tag the one-release-ahead announcement for <code>v2beta1</code> and the aliases.
-What 1.8 still owes is the release-notes line naming that removal, since a notice nobody reads in the release body is a notice by technicality.
-Q1085's other two halves, the admission reject and the pre-upgrade alias check, are deadlined at 1.9 and land here if there is room (<a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">why the deadline is 1.9</a>).</p>
+<h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
+<p><code>v2.0.0</code> advances the storage version to <code>v2</code> and drops <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code> and classic acquisition.
+It cannot also be the release that <em>introduces</em> <code>v2</code>: Kubernetes' <a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">deprecation policy</a> rule #4b says the storage version "may not advance until after a release has been made that supports both the new version and the previous version".</p>
+<p>The rule is a convention rather than something the apiserver enforces, so what it buys here is the argument, and it is <strong>rollback</strong>.
+Once stored objects are rewritten as <code>v2</code>, a cluster cannot return to a release whose CustomResourceDefinitions do not define <code>v2</code>.
+Without this rung that destination is <code>v1.8.0</code>, which would make <code>v2.0.0</code> — the largest upgrade this project asks anyone to make, carrying the <code>v1</code>→<code>v2</code> migration and four removals — the one upgrade with no way back.</p>
+<p>It is also the only place the <code>v2beta1</code> ↔ <code>v2</code> conversion edge runs before it is mandatory.
+<a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">v2-ga.md</a>'s Phase 1 soak validates <code>v2beta1</code>'s shape and says nothing about a conversion that does not exist yet.</p>
+<p>Full reasoning: <a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">release-ladder.md</a>.</p>
+<h2 id="what-this-release-must-not-do">What this release must NOT do<a class="headerlink" href="#what-this-release-must-not-do" title="Permanent link">&para;</a></h2>
+<p><strong>It must not mark <code>v2</code> the storage version</strong>, and must not migrate stored objects.
+That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
+<a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2's step 1 carries a <code>+kubebuilder:storageversion</code> marker that belongs to Phase 3 and <code>v2.0.0</code>; moving it is part of <a href="../../queue/Q413/">Q413</a>, not a follow-up.</p>
+<p>The hub <em>may</em> move to <code>v2</code> here: <code>convertViaHub</code> routes spoke to hub to spoke, and nothing ties the hub to the storage version.</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2773,71 +2691,32 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 </thead>
 <tbody>
 <tr>
-<td>Q1029</td>
-<td>Drain recovery lost when no reconcile starts inside the window</td>
-<td><code>1.8-gate</code></td>
-<td>✅ closed 2026-09-07</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1059/">Q1059</a></td>
-<td>Every <code>v2beta1</code> kind on the dogfood cluster (soak criterion 2)</td>
-<td>rides</td>
-<td>🔲 open</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1060/">Q1060</a></td>
-<td>Conversion round-trips on real dogfood objects (soak criterion 3)</td>
-<td>rides</td>
-<td>🔲 open</td>
-</tr>
-<tr>
-<td>Q452</td>
-<td>GA <code>v2</code> and the deprecated FQDN aliases</td>
-<td>rides</td>
-<td>✅ closed 2026-09-08</td>
+<td><a href="../../queue/Q413/">Q413</a></td>
+<td><a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2: add <code>v2</code> to all five kinds, serve it beside <code>v2beta1</code>, extend conversion coverage. Storage marker withheld</td>
+<td><code>1.9-gate</code></td>
+<td>🔲 deferred on the soak</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1085/">Q1085</a></td>
-<td>The <code>v2beta1</code> removal notice: operator docs, enum godoc and admission warning name <code>v2.0.0</code></td>
-<td>rides</td>
-<td>✅ docs half shipped with Q452; release-notes line open</td>
-</tr>
-<tr>
-<td>—</td>
-<td>RC validated on dogfood</td>
-<td>gates</td>
-<td>🔲 no candidate cut</td>
+<td>Admission rejects new <code>CiliumFQDN</code>/<code>CalicoFQDN</code> writes, and the pre-upgrade alias check joins the checklist</td>
+<td><code>1.9-gate</code></td>
+<td>🔲 open, lands in 1.8 if there is room</td>
 </tr>
 </tbody>
 </table>
-<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong><a href="../../queue/Q413/">Q413</a> itself, and 2.0's coupled removals</strong> (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>).
-  Q413 stays parked until both soak readings exist and read clean; this release supplies the readings and does not pre-empt the verdict.</li>
-<li><strong>The <code>feature</code> rows in the ready queue.</strong> Q988 (the registry read behind <code>RunnerVersionTooOld</code>; its row is closed, so it is no longer linked) landed after this was scoped and rides, and Q725 and Q1011 are unrelated to the theme (both rows are closed, so neither is linked).
-  Any of them landing before the tag rides in the floor's reading of the window, with no label.</li>
-<li><strong>The proxy-hardening cluster</strong> and everything else the ladder punts past 2.0, unchanged.</li>
-</ul>
-<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
+<h2 id="definition-of-done">Definition of Done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ol>
-<li>✅ <strong>Q1029 closed</strong> (2026-09-07), with the queue mechanism established before the fix, the reconcile's duration left unmeasured and said so, and an envtest assertion that fails when the watch-path recovery is inert; the e2e assertion the criterion asked for is still open, per <a href="#the-gating-row-q1029">the gating row</a>.</li>
-<li><strong>Criterion 2 and criterion 3 have a recorded reading</strong> in <a href="../v2-ga/">v2-ga.md</a>'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.</li>
-<li>✅ <strong>Q452 decided</strong> (2026-09-08): <code>v2</code> omits both aliases, because the premise the question rested on was itself revisited and <code>v2beta1</code> is no longer served past <code>v2.0.0</code>.
-   The losing option's cost is recorded beside it in <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md</a>, and the work the answer puts on the critical path is <a href="../../queue/Q1085/">Q1085</a>.
-   The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.</li>
-<li><strong>The three dogfood-window rows</strong> get their window from the candidate: <a href="../../queue/Q1038/">Q1038</a>'s <code>mirror-timing</code> probe, <a href="../../queue/Q1048/">Q1048</a>'s mirror client census, and <a href="../../queue/Q1039/">Q1039</a>'s shared-tenants topology.</li>
-<li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.7.0..&lt;rc commit&gt;</code>, expecting exactly the <code>egressPolicyMode</code> description change item 3 names: the enum members are unchanged, so a reported member add or removal is a finding.</li>
-<li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
+<li><strong><a href="../../queue/Q413/">Q413</a>'s Phase 2 has landed</strong> with <code>v2</code> served on all five kinds and <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers.</li>
+<li><strong>The conversion round-trips both directions</strong> across <code>v2beta1</code> ↔ <code>v2</code> on real objects, not only in unit tests.
+   This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.</li>
+<li><strong><a href="../../queue/Q1085/">Q1085</a> has landed</strong>, here or in 1.8.
+   After this tag its two remaining halves stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
+<li><strong>The published tag serves both versions</strong>, which is the Rule #4b evidence <code>v2.0.0</code> depends on.
+   Record it here, since <code>v2.0.0</code>'s own pre-flight cannot re-derive that a <em>previous</em> release served both.</li>
 </ol>
-<h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
-<p>Q1029's measurement → its fix (done) → a candidate.
-The soak readings and the alias decision run beside it and need the candidate's window, not each other.
-The window is the schedule risk, as it was in 1.7: a reading whose venue is a booked cluster run cannot be compressed the way a code change can.</p>
-<h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>
-<p>None yet.
-Each verdict names the commit it is measured at (<a href="../../operations/release/#1-pre-flight">release.md</a>).</p>
-<h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
-<p>No candidate cut.</p>
+<h2 id="what-waits-for-v200">What waits for <code>v2.0.0</code><a class="headerlink" href="#what-waits-for-v200" title="Permanent link">&para;</a></h2>
+<p>The storage advance and migration (<a href="../../queue/Q1086/">Q1086</a>), the four removals (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>, and <code>v2beta1</code> itself), and the validating webhook rules that un-match when <code>v2alpha1</code> goes (<a href="../../queue/Q1068/">Q1068</a>).
+<a href="../v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 owns the ordering.</p>
 
 
 

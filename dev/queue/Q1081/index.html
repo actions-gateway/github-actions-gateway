@@ -2605,7 +2605,7 @@ A <code>target:</code> pointing into a page those two jobs do not build would ha
 <p>The fix is a gate that resolves every <code>target:</code> anchor against the headings of the file it names, run on pull requests.
 <code>mkdocs build --strict</code> already does this for the rendered store, so the cheap form may be running it (or the existing <code>--strict</code> build) on the PR rather than writing a new checker; that trade is the row's first question.
 The inversion is a fixture row whose <code>target:</code> anchor is off by one character: the gate must go red on it, and a leftover-anchor grep cannot, because it goes green both when the anchor is right and when the <code>target:</code> line is absent.</p>
-<p>Found while closing <a href="../Q452/">Q452</a>, whose PR the defect landed in.
+<p>Found while closing Q452, whose PR the defect landed in (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1867">#1867</a>).
 Neighbour rather than duplicate of the webhook row filed on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1867">#1867</a>, which is not yet on <code>main</code>: that one is a validating webhook rule the <code>v2.0.0</code> cut un-matches, this one is a missing docs gate.</p>
 
 

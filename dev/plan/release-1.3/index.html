@@ -3368,7 +3368,9 @@ The name is repeated wherever an operator forms a plan from the docs (README, ro
 Two stale statements were corrected in passing: "you can stay on <code>v1alpha1</code> indefinitely" (upgrade.md) and "Classic is slated for removal one <em>minor</em> release out" (tenant-onboarding, troubleshooting), which understated a major-tag removal.
 The <code>CiliumFQDN</code>/<code>CalicoFQDN</code> enum values were left saying "a future release (on the classic/<code>v1alpha1</code> deprecation clock)"; naming a release for them was filed as Q428 and is now <strong>settled: <code>v3.0.0</code> at the earliest</strong>, not <code>v2.0.0</code>.
 They are enum members of the beta version <code>v2beta1</code>, which <code>v2.0.0</code> keeps serving, and an API element is removable only by incrementing the version — so they outlive this release's bundle by a major tag.
-Stated for operators in <a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">v1alpha1-deprecation.md</a>.</p>
+Stated for operators in <a href="../../operations/v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">v1alpha1-deprecation.md</a>.</p>
+<p><strong>Superseded 2026-09-08.</strong> The premise "<code>v2.0.0</code> keeps serving <code>v2beta1</code>" was a plan choice and was changed (<a href="../v2beta1-retirement/">v2beta1-retirement.md</a>), which puts the aliases back in this release's bundle after all.
+Recorded rather than rewritten: what 1.3 announced is what 1.3 announced.</p>
 </blockquote>
 <p>The docs half of the notice already shipped as <strong>Q409</strong>: the ARC migration guide, getting-started, tenant onboarding, install, and the positioning pages were all re-routed onto <code>v2beta1</code>, leaving <code>v2alpha1</code> described only as the <code>gag-migrate</code> on-ramp.
 That settles which version new tenants onboard on, which was the open question this release's deprecation decision needed answered.</p>

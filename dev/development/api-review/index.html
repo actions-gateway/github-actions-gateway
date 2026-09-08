@@ -3333,10 +3333,14 @@ Ask before the PR lands, while the alternative is still a design choice; afterwa
 </table>
 <h3 id="removal-needs-a-version-increment-not-a-promise">Removal needs a version increment, not a promise<a class="headerlink" href="#removal-needs-a-version-increment-not-a-promise" title="Permanent link">&para;</a></h3>
 <p>An API element is removable only by incrementing the version — never by deleting it from a version still being served.
-Q428 is where that bit: the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases promised removal "in a future release, on the v1alpha1 deprecation clock", but they are enum members of <code>v2beta1</code>, and v2.0.0 deliberately keeps serving <code>v2beta1</code>.
-The aliases live exactly as long as <code>v2beta1</code> does, which puts the earliest possible removal at <code>v3.0.0</code>.
-The fix was to state that floor identically in the enum godoc for both v2 versions, the generated CRD descriptions, the admission warning, and the operator docs.</p>
+Q428 is where that bit: the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases promised removal "in a future release, on the v1alpha1 deprecation clock", but they are enum members of <code>v2beta1</code>, so they live exactly as long as <code>v2beta1</code> does.
+The fix was to derive a floor from that and state it identically in the enum godoc for both v2 versions, the generated CRD descriptions, the admission warning, and the operator docs.</p>
 <p>Name a floor ("no earlier than vX"), not a schedule, and never promise a removal the version lifecycle cannot deliver.</p>
+<p><strong>A floor derived from a plan moves when the plan does, and the derivation is the part to write down.</strong> Q428's floor was <code>v3.0.0</code>, computed from "<code>v2.0.0</code> keeps serving <code>v2beta1</code>", which read like a property of the versioning contract and was a plan choice.
+When that choice was revisited (<a href="../../plan/v2beta1-retirement/">the v2beta1 retirement decision</a>, 2026-09-08) the floor moved to <code>v2.0.0</code> and every one of those five sites had to move with it.
+The rule survived; only its input changed.
+State the floor <em>and</em> what it is derived from, so the next reader can tell which half a change invalidates.
+A bare "no earlier than <code>v3.0.0</code>" gives them no way to know the sentence is load-bearing on something else.</p>
 <h3 id="a-new-version-must-round-trip-losslessly">A new version must round-trip losslessly<a class="headerlink" href="#a-new-version-must-round-trip-losslessly" title="Permanent link">&para;</a></h3>
 <p><code>v2alpha1</code> is a spoke and <code>v2beta1</code> is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
 If a new version drops a field the old one has, the object must still round-trip: <code>RunnerSet</code> conversion stashes the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in <code>conversion.actions-gateway.com/*</code> annotations and restores them on the way back, so a coexistence-era object is never silently re-protocol'd.

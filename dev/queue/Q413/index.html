@@ -2600,6 +2600,9 @@
 <h1 id="v2-ga-graduation-v2beta1--v2">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#v2-ga-graduation-v2beta1--v2" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> the <a href="../../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes. v1.3.0 shipped 2026-08-03 and two minors followed, so criterion 1 elapsed.
 Outstanding: every kind on real traffic (<a href="../Q1059/">Q1059</a>) and round-trips on real objects (<a href="../Q1060/">Q1060</a>), both taken up as ready rows in <a href="../../plan/release-1.8/">release-1.8.md</a>.</p>
+<p><strong>This spans two releases now, which is why it carries <code>1.9-gate</code> rather than <code>2.0-gate</code>.</strong> Phase 2 — adding <code>v2</code> to the five kinds and serving it beside <code>v2beta1</code> — is 1.9's entire content and blocks that tag.
+The storage marker and Phase 4's cut stay at <code>v2.0.0</code>: Rule #4b will not let storage advance in the same release that introduces <code>v2</code> (<a href="../../plan/release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">why</a>).
+Splitting the row is deliberately deferred until the soak closes and Phase 2 is actually startable, since the split is only useful once someone is picking the work up.</p>
 
 
 

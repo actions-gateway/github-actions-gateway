@@ -2723,11 +2723,19 @@
 
 <h1 id="should-v2beta1-retire-at-v200">Should <code>v2beta1</code> retire at <code>v2.0.0</code>?<a class="headerlink" href="#should-v2beta1-retire-at-v200" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: open, raised 2026-09-07 while deciding <a href="../../queue/Q452/">Q452</a>.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1867">#1867</a> is drafted pending the answer, because Q452's decision depends on it.
-Tracked as <a href="../../queue/Q1082/">Q1082</a>.</p>
+<p><strong>Status: decided 2026-09-08, yes, Path 2.</strong> <code>v2beta1</code> is no longer served past <code>v2.0.0</code>.
+The reasoning given: <code>v2.0.0</code> is a major release and a major release may make breaking changes.
+The analysis below is kept as taken, before the decision, so the cost that was accepted stays legible.</p>
 </blockquote>
+<p><strong>What the decision settles.</strong> <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a> flips to <em><code>v2</code> omits the aliases</em>, GA is born clean, and the aliases stop being on their own clock: they ride <code>v2.0.0</code> with <code>v1alpha1</code>, <code>v2alpha1</code> and classic.
+The published <code>v3.0.0</code> floor is walked back to <code>v2.0.0</code> across the operator docs, the enum godoc and the admission warning.</p>
+<p><strong>What it does not settle, and what it therefore obliges.</strong> Rule #4b is unaffected by semver: storage cannot advance to <code>v2</code> until a release has shipped serving both <code>v2beta1</code> and <code>v2</code>, so the overlap release below is still required and the deprecation notice still has to precede it.
+That package is <a href="../../queue/Q1085/">Q1085</a>: the notice, the admission change from warn to reject, and the pre-upgrade alias check.
+It is now on the critical path rather than optional.
+The check is load-bearing for a mechanical reason given in <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md</a>: one stored object naming an alias fails the whole conversion request that carries it, so it breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the cluster rather than for itself.</p>
+<hr />
 <p>Q452 asked whether GA <code>v2</code> defines the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases.
-It was decided yes, on the reasoning that <code>v2beta1</code> keeps serving them until <code>v3.0.0</code> and every served version must be able to represent every stored object.
+It was first decided yes, on the reasoning that <code>v2beta1</code> keeps serving them until <code>v3.0.0</code> and every served version must be able to represent every stored object.
 That reasoning is sound and rests on a premise nobody argued: <strong>that <code>v2.0.0</code> keeps serving <code>v2beta1</code>.</strong> If <code>v2beta1</code> retires at <code>v2.0.0</code> instead, the aliases go with it, <code>v2</code> never defines them, and Q452's answer flips.</p>
 <h2 id="the-premise-is-asserted-in-three-places-and-contradicted-in-two">The premise is asserted in three places and contradicted in two<a class="headerlink" href="#the-premise-is-asserted-in-three-places-and-contradicted-in-two" title="Permanent link">&para;</a></h2>
 <table>
@@ -2791,17 +2799,17 @@ Both need the same three-release shape, so the overlap release, the storage migr
 </thead>
 <tbody>
 <tr>
-<td>A (1.8 or 1.9)</td>
-<td><code>v2beta1</code> deprecated, removal named for <code>v2.0.0</code>. Admission <strong>rejects</strong> new alias use, where today it only warns. Alias preflight added to the <a href="../../operations/upgrade/#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a>.</td>
-<td>None, unless the preflight flags an <code>EgressProxy</code>: set <code>egressPolicyMode: FQDN</code> and have the platform operator set <code>--fqdn-policy-backend</code>.</td>
+<td>A (1.8)</td>
+<td><code>v2beta1</code> deprecated and the removal named for <code>v2.0.0</code>, in the operator docs, the enum godoc and the admission warning.</td>
+<td>None. Migrate at your convenience: set <code>egressPolicyMode: FQDN</code> and have the platform operator set <code>--fqdn-policy-backend</code>.</td>
 </tr>
 <tr>
-<td>B</td>
-<td>The Rule #4b overlap: <code>v2</code> served beside <code>v2beta1</code>, <code>v2beta1</code> still storage, <code>v2</code> without the aliases.</td>
-<td>None.</td>
+<td>B (1.9)</td>
+<td>The Rule #4b overlap: <code>v2</code> served beside <code>v2beta1</code>, <code>v2beta1</code> still storage, <code>v2</code> without the aliases. Admission <strong>rejects</strong> new alias use, where A only warns, and the alias check joins the <a href="../../operations/upgrade/#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a>.</td>
+<td>Run the check. It flags any <code>EgressProxy</code> still naming an alias, which must be migrated before <code>v2</code> is requested for it.</td>
 </tr>
 <tr>
-<td>C = <code>v2.0.0</code></td>
+<td>C (<code>v2.0.0</code>)</td>
 <td>Storage advances to <code>v2</code>, stored objects migrated, then <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code> and classic removed together.</td>
 <td>The <code>v1</code>→<code>v2</code> migration already planned.</td>
 </tr>
@@ -2810,8 +2818,9 @@ Both need the same three-release shape, so the overlap release, the storage migr
 <ul>
 <li>GA is clean permanently, and Q1076 becomes moot.</li>
 <li>Costs a walkback of the published <code>v3.0.0</code> floor, in the direction that disfavours an operator: sooner than promised.</li>
-<li><strong>Release A's preflight is load-bearing.</strong> It is the only thing between an unmigrated object and the failure mode at Release B, where a conversion that cannot represent the alias fails the whole request.
-  <code>ConversionRequest.Objects</code> is a list, so one such object breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the cluster.</li>
+<li><strong>Release B's alias check is load-bearing, and it ships in the same release as the failure mode it guards.</strong> B is where <code>v2</code> starts being served, so B is the first release where a conversion that cannot represent the alias can be asked for.
+  <code>ConversionRequest.Objects</code> is a list, so one such object breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the cluster.
+  Landing the check and the reject in A instead is strictly safer, and is worth doing if 1.8 has room; what makes B the deadline rather than the target is that after B they are no longer preventive.</li>
 </ul>
 <h2 id="what-the-paths-actually-differ-on">What the paths actually differ on<a class="headerlink" href="#what-the-paths-actually-differ-on" title="Permanent link">&para;</a></h2>
 <table>
@@ -2856,6 +2865,10 @@ Both need the same three-release shape, so the overlap release, the storage migr
 <li><strong>The Rule #4b overlap release</strong>, per above.</li>
 </ul>
 <h2 id="recommendation">Recommendation<a class="headerlink" href="#recommendation" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>Accepted 2026-09-08 on a different and simpler argument than the one below: a major release is allowed to break.
+The cost asymmetry stands as a second reason rather than the deciding one.</p>
+</blockquote>
 <p><strong>Path 2</strong>, weakly, and the reasoning is the cost asymmetry rather than tidiness.
 Path 1's cost is permanent and unbounded; Path 2's costs are one-time and bounded, and most of what looks expensive about it is common cost the graduation owes anyway.
 The marginal work is a notice, an admission change, and a preflight.</p>

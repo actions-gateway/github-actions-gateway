@@ -3189,7 +3189,10 @@ Remove the old values only at a later, deliberate breaking hop.</p>
 <p><strong>Corrected (Q428): that hop is not the classic/<code>v1alpha1</code> clock.</strong> This section originally said the old values ride the <strong>same deprecation clock as classic/v1alpha1</strong>, i.e. <code>v2.0.0</code>.
 They cannot: they are enum members of the beta version <code>v2beta1</code>, which <code>v2.0.0</code> keeps serving, and an API element is removable only by incrementing the version — so they live as long as <code>v2beta1</code> does.
 The earliest release that may remove them is <strong><code>v3.0.0</code></strong>.
-Reasoning and the operator-facing statement: <a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">v1alpha1-deprecation.md</a>.</p>
+Reasoning and the operator-facing statement: <a href="../../operations/v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">v1alpha1-deprecation.md</a>.</p>
+<p><strong>Superseded 2026-09-08: the removal is <code>v2.0.0</code> after all</strong>, by a different route than the one this correction ruled out.
+<code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="../v2beta1-retirement/">v2beta1-retirement.md</a>), so "they live as long as <code>v2beta1</code> does" now resolves to <code>v2.0.0</code> rather than <code>v3.0.0</code>.
+The sign-off this section asks for below was given: a major release may break, and the aliases go with the versions that define them.</p>
 </blockquote>
 <p>A <strong>clean break</strong> (drop the old values immediately) breaks any v2beta1 object that set an FQDN mode.
 Real usage is thin — the only known consumers of <code>CiliumFQDN</code>/<code>CalicoFQDN</code> are tests and docs; dogfood is direct-egress and never exercised an FQDN mode (Q242 finding) — so a clean break <em>may</em> still be acceptable, but that is now an <strong>explicit "zero external adopters + accept a beta break" sign-off</strong>, not an assumed "free" reshape.

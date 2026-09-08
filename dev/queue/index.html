@@ -2652,7 +2652,7 @@ With no network, <code>--no-pr-check</code> hands out the top item and says noth
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.8-gate</code> (blocks the Release 1.8 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.8-gate</code> (blocks the Release 1.8 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>1.9-gate</code> (blocks the Release 1.9 tag, the <a href="../plan/release-ladder/">Rule 4b overlap release</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.
 It exits unmeasurable rather than passing when that happens, which is how this was caught.</p>
@@ -2805,6 +2805,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>expect_rc</code> compares the command's status numerically against the wanted one, so a status of 128+n means a killed process rather than a …</td>
 </tr>
 <tr>
+<td><a href="Q1086/">Q1086</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Storage-migrate stored objects to <code>v2</code> before the <code>v2.0.0</code> removals</a></td>
+<td><code>feature</code> <code>2.0-gate</code></td>
+<td>💤</td>
+<td>L</td>
+<td><strong>Event:</strong> <a href="Q413/">Q413</a> lands and 1.9 ships <code>v2</code> served beside <code>v2beta1</code>.</td>
+</tr>
+<tr>
 <td><a href="Q1055/">Q1055</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">Roll the signal-death guard out to the suites still comparing rc raw</a></td>
 <td><code>ci</code> <code>tests</code> <code>flake</code></td>
@@ -2813,12 +2821,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
 </tr>
 <tr>
-<td><a href="Q1082/">Q1082</a></td>
-<td><a href="../plan/v2beta1-retirement/">Decide whether <code>v2beta1</code> retires at <code>v2.0.0</code> or survives to <code>v3.0.0</code></a></td>
-<td><code>docs</code> <code>2.0-gate</code></td>
+<td><a href="Q1085/">Q1085</a></td>
+<td><a href="../plan/v2beta1-retirement/">v2beta1 deprecation notice, alias reject, and the pre-upgrade check</a></td>
+<td><code>feature</code> <code>1.9-gate</code></td>
 <td>🔲</td>
 <td>M</td>
-<td><a href="Q452/">Q452</a> decided that GA <code>v2</code> defines the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, on the premise that <code>v2.0.0</code> keeps serving …</td>
+<td>Q1082 decided that <code>v2beta1</code> is not served past <code>v2.0.0</code>, which puts three pieces of work on the critical path that were optional while the …</td>
 </tr>
 <tr>
 <td><a href="Q1059/">Q1059</a></td>
@@ -3211,6 +3219,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The stated policy, cited from <a href="../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>, is that "a removal lands on a named release …</td>
+</tr>
+<tr>
+<td><a href="Q1087/">Q1087</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-ladder.sh">Bind a gate-labelled row to its release plan in both directions</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Nothing checks that a row claiming to block a release is known to that release's plan, or that a blocker the plan names carries the label.</td>
 </tr>
 <tr>
 <td><a href="Q794/">Q794</a></td>
@@ -3733,17 +3749,17 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>actions/scaleset</code> reaches GA/v1.0 or the auto-assign contract (<code>actions/scaleset#107</code>) is documented.</td>
 </tr>
 <tr>
-<td><a href="Q452/">Q452</a></td>
-<td><a href="../plan/v2-ga/#phase-2--the-graduation-hop">Decide whether GA <code>v2</code> defines the deprecated FQDN aliases</a></td>
-<td><code>docs</code></td>
+<td><a href="Q1068/">Q1068</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/webhook.yaml"><code>v2.0.0</code> removing <code>v2alpha1</code> un-matches every validating webhook rule</a></td>
+<td><code>bug</code> <code>2.0-gate</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>Taken up in <a href="../plan/release-1.8/">release-1.8.md</a> ahead of the Phase 2 hop it was parked on, so the hop can start without a design …</td>
+<td>M</td>
+<td>All five <code>actions-gateway.com</code> kinds are validated by rules that name <code>apiVersions: [v2alpha1]</code> and nothing else, and no rule sets …</td>
 </tr>
 <tr>
 <td><a href="Q413/">Q413</a></td>
 <td><a href="../plan/v2-ga/">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)</a></td>
-<td><code>milestone</code></td>
+<td><code>milestone</code> <code>1.9-gate</code></td>
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> the <a href="../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes.</td>
@@ -3751,7 +3767,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q273/">Q273</a></td>
 <td><a href="../plan/q273-v2-front-door/">Complete v1 removal (full v2-only)</a></td>
-<td><code>docs</code></td>
+<td><code>docs</code> <code>2.0-gate</code></td>
 <td>💤</td>
 <td>M</td>
 <td><strong>Event:</strong> <a href="../plan/v2-ga/">v2-ga.md</a> Phase 3 begins — the same gate as <a href="Q264/">Q264</a>, which it ships beside.</td>
@@ -3759,7 +3775,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q264/">Q264</a></td>
 <td><a href="../plan/q264-scale-set-protocol/">Remove deprecated classic acquisition machinery</a></td>
-<td><code>debt</code></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> <a href="../plan/v2-ga/">v2-ga.md</a> Phase 3 begins.</td>

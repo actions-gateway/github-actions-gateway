@@ -4616,11 +4616,12 @@ See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-applia
 They are <strong>deprecated</strong> — the admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code>.
 Migrate by changing the tenant field to <code>FQDN</code> and setting the matching operator backend.</p>
 <blockquote>
-<p><strong>They are not removed at <code>v2.0.0</code>.
-The earliest release that may remove them is <code>v3.0.0</code>.</strong> The two values are enum members of <code>egressPolicyMode</code> in the <strong>beta</strong> version <code>actions-gateway.com/v2beta1</code>, and <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds the General Availability (GA) <code>v2</code> version beside it rather than taking it away.
-An API element can only be removed by incrementing the version, never deleted from a version that is still served, so these two live exactly as long as <code>v2beta1</code> does.
-Retiring a served version is a breaking change and lands on a major tag, which puts the earliest possible removal at <code>v3.0.0</code> — one major beyond the <code>v2.0.0</code> that removes <code>v1alpha1</code>, <code>v2alpha1</code>, and classic acquisition.
-Full reasoning and the coupling to the other clocks: <a href="../v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the deprecation and removal notice</a>.</p>
+<p><strong>They are removed at <code>v2.0.0</code></strong>, alongside <code>v1alpha1</code>, <code>v2alpha1</code> and classic acquisition.
+The two values are enum members of <code>egressPolicyMode</code> in <code>actions-gateway.com/v2alpha1</code> and <code>v2beta1</code>; <code>v2.0.0</code> removes both versions, and the General Availability (GA) <code>v2</code> version that replaces them does not define the values.
+An API element can only be removed by incrementing the version, never deleted from a version that is still served — which is why these two live exactly as long as <code>v2beta1</code> does, and <code>v2beta1</code> ends at <code>v2.0.0</code> (<a href="../../plan/v2beta1-retirement/">decided 2026-09-08</a>).
+An earlier notice put the floor at <code>v3.0.0</code>, on the expectation that <code>v2.0.0</code> would keep serving <code>v2beta1</code>; the reasoning was sound and that expectation changed.
+<strong>Migrate before upgrading to <code>v2.0.0</code>:</strong> one <code>EgressProxy</code> still naming an alias fails the conversion for every object in the same request, so it breaks <code>kubectl get egressproxies</code> at <code>v2</code> cluster-wide.
+Full reasoning and the coupling to the other clocks: <a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">the deprecation and removal notice</a>.</p>
 <p><strong>Managed "Cilium" platforms usually do NOT accept the <code>cilium</code> backend.</strong> The CRD test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does not install it</strong> (dropped since GKE 1.21.5-gke.1300) — use <code>--fqdn-policy-backend=gke</code> there, not <code>cilium</code>.
 If a selected backend's CRD is absent, the GMC's apply fails loudly and the <code>EgressProxy</code> goes <code>Degraded</code>; GitHub egress stays <strong>denied</strong> (the base NetworkPolicy default-denies it), never silently opened.

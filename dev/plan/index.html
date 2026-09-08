@@ -2770,17 +2770,22 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.8/">release-1.8.md</a></td>
 <td>The 1.8 release gate: the scale-set drain recovery lost when no reconcile starts inside a terminating worker's window (Q1029), plus the two v2 GA soak readings and the Phase 2 alias decision that ride without gating</td>
-<td>⚠️ Scoped 2026-09-07, and its one gating row, Q1029, closed the same day: recovery now runs off the worker-pod watch, and the fix raises the floor to PATCH. <a href="../queue/Q1059/">Q1059</a>, <a href="../queue/Q1060/">Q1060</a> and <a href="../queue/Q452/">Q452</a> ride, and no candidate is cut</td>
+<td>⚠️ Scoped 2026-09-07, and its one gating row, Q1029, closed the same day: recovery now runs off the worker-pod watch, and the fix raises the floor to PATCH. <a href="../queue/Q1059/">Q1059</a> and <a href="../queue/Q1060/">Q1060</a> ride, Q452's alias decision closed 2026-09-08, <a href="../queue/Q1085/">Q1085</a>'s removal notice rides with its docs half shipped, and no candidate is cut</td>
+</tr>
+<tr>
+<td><a href="release-1.9/">release-1.9.md</a></td>
+<td>The Rule #4b overlap rung: <code>v2</code> served beside <code>v2beta1</code> with the storage version unmoved, so <code>v2.0.0</code> has a rollback destination and the new conversion edge runs once before it is mandatory</td>
+<td>⚠️ Shape decided 2026-09-08, not scoped: the rung exists because Rule #4b requires it, and its content cannot start until 1.8's soak readings land. Gated by <a href="../queue/Q413/">Q413</a> (Phase 2, deferred on the soak) and <a href="../queue/Q1085/">Q1085</a> (reject + pre-upgrade check, which land in 1.8 if there is room)</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
-<td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two outstanding soak readings are ready rows as of 2026-09-07, riding in <a href="release-1.8/">release-1.8.md</a>: <a href="../queue/Q1059/">Q1059</a> (every kind on dogfood traffic) and <a href="../queue/Q1060/">Q1060</a> (round-trips on real objects), with the Phase 2 alias decision <a href="../queue/Q452/">Q452</a> revived beside them. <a href="../queue/Q413/">Q413</a> stays parked until both readings exist; Phase 3's removals ride <a href="../queue/Q273/">Q273</a>/<a href="../queue/Q264/">Q264</a></td>
+<td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
+<td>⚠️ Phase 1's two outstanding soak readings are ready rows as of 2026-09-07, riding in <a href="release-1.8/">release-1.8.md</a>: <a href="../queue/Q1059/">Q1059</a> (every kind on dogfood traffic) and <a href="../queue/Q1060/">Q1060</a> (round-trips on real objects). The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 now ships in 1.9 (<a href="release-1.9/">release-1.9.md</a>) with the storage marker held back to Phase 3. <a href="../queue/Q413/">Q413</a> stays parked until both readings exist; Phase 3 rides <a href="../queue/Q1086/">Q1086</a>, <a href="../queue/Q273/">Q273</a>, <a href="../queue/Q264/">Q264</a> and <a href="../queue/Q1068/">Q1068</a></td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
 <td>Whether <code>v2.0.0</code> retires <code>v2beta1</code> or keeps serving it, which decides whether GA <code>v2</code> defines the deprecated FQDN aliases: the doc conflict, what upstream requires, and the two paths costed against each other</td>
-<td>⚠️ Open as of 2026-09-07, tracked by <a href="../queue/Q1082/">Q1082</a>. Raised while deciding <a href="../queue/Q452/">Q452</a>, whose PR is drafted pending the answer. Both paths need the same Rule #4b overlap release and storage migration, so they differ only in what <code>v2</code> carries and whether the published <code>v3.0.0</code> floor is walked back. Recommends retiring at <code>v2.0.0</code>, weakly. Sibling <a href="../queue/Q1083/">Q1083</a> on the notice period is independent</td>
+<td>✅ Decided 2026-09-08 (Q1082): <code>v2beta1</code> is not served past <code>v2.0.0</code>, because a major release may break. Q452 flips to <em><code>v2</code> omits the aliases</em>, and the aliases move off their own clock onto <code>v2.0.0</code>, walking the published <code>v3.0.0</code> floor back across the operator docs, the enum godoc and the admission warning. Rule #4b still forces an overlap release, so the notice, the admission reject and the pre-upgrade check are <a href="../queue/Q1085/">Q1085</a>. Sibling <a href="../queue/Q1083/">Q1083</a> on the notice period stays open</td>
 </tr>
 </tbody>
 </table>

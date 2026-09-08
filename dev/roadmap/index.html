@@ -2741,8 +2741,8 @@ Priorities move with what adopters actually hit first, so the surest way to infl
 Every open item, in priority order, is in the <a href="https://actions-gateway.com/dev/STATUS/">working backlog</a>.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../plan/v2-ga/">v2 GA readiness</a></strong> <!-- q:Q1059,Q1060,Q452 --> The <code>v2</code> graduation is gated on a soak, and two of its three criteria have never been measured.
-  The next release candidate's dogfood window takes both readings, every kind under real traffic and the conversion webhook over real objects, and settles whether GA <code>v2</code> keeps the deprecated FQDN aliases.</li>
+<li><strong><a href="../plan/v2-ga/">v2 GA readiness</a></strong> <!-- q:Q1059,Q1060 --> The <code>v2</code> graduation is gated on a soak, and two of its three criteria have never been measured.
+  The next release candidate's dogfood window takes both readings: every kind under real traffic, and the conversion webhook over real objects.</li>
 </ul>
 <p>What lands here is scoped work, none of it waiting on an outside signal.
 Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under <a href="#exploring--longer-term">Exploring / longer-term</a> with the event that revives it.
@@ -2755,7 +2755,7 @@ Each waits on a real operator need, a measured limit, or a gating release before
 The first entry is the exception: a firm commitment, waiting only on the release that carries it.</p>
 <ul>
 <li>
-<p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol</a></strong> <!-- q:Q273 --> Committed, but not yet started. <code>v1.3.0</code> is the one-release-ahead announcement; <strong><code>v2.0.0</code></strong> is the named release that removes all three together, since <code>v2beta1</code> is already ScaleSet-only.
+<p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and the classic acquisition protocol</a></strong> <span class="gag-release-chip" title="Blocks the 1.9 release">1.9</span><span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q273,Q1085,Q1086 --> Committed, not started. <strong><code>v2.0.0</code></strong> removes all four, plus the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> egress aliases, after storage-migrating stored objects to <code>v2</code>. <code>v1.3.0</code> announced the first three; <code>v2beta1</code> was added 2026-09-08, superseded by GA <code>v2</code>.
   Gated on the <code>v2</code> GA API being validated, not on a date.</p>
 </li>
 <li>

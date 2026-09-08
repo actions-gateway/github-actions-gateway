@@ -2630,6 +2630,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why 1.9 exists: the storage version cannot advance in the same release that introduces v2
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-is-punted-past-v200" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2723,12 +2734,17 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 </tr>
 <tr>
 <td><strong>1.8</strong></td>
-<td>The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060) and the Phase 2 alias decision (Q452), which ride: the release that gathers the evidence 2.0 is parked on</td>
+<td>The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060), which ride, and the Phase 2 alias decision (Q452), taken 2026-09-07: the release that gathers the evidence 2.0 is parked on</td>
 <td><a href="../release-1.8/">release-1.8.md</a></td>
 </tr>
 <tr>
+<td><strong>1.9</strong></td>
+<td>The Rule 4b overlap: <code>v2</code> served beside <code>v2beta1</code>, storage still <code>v2beta1</code>. <a href="../v2-ga/">v2-ga.md</a> Phase 2, and the admission reject plus pre-upgrade check from <a href="../../queue/Q1085/">Q1085</a></td>
+<td><a href="../release-1.9/">release-1.9.md</a></td>
+</tr>
+<tr>
 <td><strong>2.0</strong></td>
-<td>v2 GA graduation and the three coupled removals: <code>v1alpha1</code>, <code>v2alpha1</code>, and classic acquisition</td>
+<td>v2 GA: storage advances to <code>v2</code>, stored objects migrate, then four coupled removals: <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and classic acquisition</td>
 <td><a href="../v2-ga/">v2-ga.md</a></td>
 </tr>
 </tbody>
@@ -2753,6 +2769,19 @@ Labelling <code>2.0-gate</code> rows then would have published a commitment on e
 <p><code>semver-floor.sh v1.7.0</code> read <strong>FLOOR: NONE</strong> the same day, so nothing forced a release either; what the ladder needed was a rung whose deliverable is the evidence.
 <a href="../release-1.8/">release-1.8.md</a> is that rung: Q1029, a measured drain-recovery defect closed 2026-09-07, is the one gating row and the reason an operator upgrades, and the two soak readings ride because a measurement that may come back negative cannot be scheduled against a tag.
 A negative reading is the rung working: it names the <code>v2beta1</code> shape fix GA is gated on finding first.</p>
+<h2 id="why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">Why 1.9 exists: the storage version cannot advance in the same release that introduces <code>v2</code><a class="headerlink" href="#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2" title="Permanent link">&para;</a></h2>
+<p><strong>Added 2026-09-08</strong>, when <a href="../v2beta1-retirement/">retiring <code>v2beta1</code> at <code>v2.0.0</code></a> put the ladder's shape in question and the gap turned out to predate that decision.</p>
+<p><a href="../v2-ga/">v2-ga.md</a>'s Phase 2 read <em>add <code>v2</code> to each kind, mark it storage</em>, and Phase 3 <em>storage migration, then drop the superseded versions</em>, with both inside the <code>v2.0.0</code> cut.
+That introduces <code>v2</code>, advances storage to it, and removes every other served version on one tag.
+Kubernetes' <a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">deprecation policy</a> rule #4b says the storage version "may not advance until after a release has been made that supports both the new version and the previous version", and no such release existed on this ladder.</p>
+<p>The rule is a convention rather than something the apiserver enforces, so what it is worth is the question, and the answer is <strong>rollback</strong>.
+Once stored objects are rewritten as <code>v2</code>, a cluster cannot go back to a release whose CustomResourceDefinitions do not define <code>v2</code>.
+Without an overlap release that destination is <code>v1.8.0</code>, which makes the <code>v2.0.0</code> upgrade the one with no way back.
+It is already the largest this project asks anyone to make, carrying the <code>v1</code>→<code>v2</code> migration and four removals.</p>
+<p>The overlap release is also the only place the <code>v2beta1</code> ↔ <code>v2</code> conversion edge runs before it is mandatory.
+Phase 1's soak validates <code>v2beta1</code>'s shape; it says nothing about a conversion that does not exist yet.</p>
+<p>So 1.9 serves <code>v2</code> beside <code>v2beta1</code> and changes no storage version, and the storage marker moves from Phase 2 to Phase 3.
+It is deliberately thin: the work is Phase 2, which is already scoped, plus the two operator-facing halves of <a href="../../queue/Q1085/">Q1085</a> that want to land before the removal rather than with it.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
 <p>Not scheduled, and that is a decision rather than an oversight.
 Each waits on a real signal, and each carries a revive trigger on the backlog rather than a release:</p>

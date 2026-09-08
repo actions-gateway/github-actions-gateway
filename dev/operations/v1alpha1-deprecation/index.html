@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#deprecation-and-removal-notice-v1alpha1-v2alpha1-and-classic" class="md-skip">
+        <a href="#deprecation-and-removal-notice-v1alpha1-v2alpha1-v2beta1-and-classic" class="md-skip">
           Skip to content
         </a>
       
@@ -1736,10 +1736,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#why-the-three-are-coupled" class="md-nav__link">
+  <a href="#why-the-removals-are-coupled" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why the three are coupled
+        Why the removals are coupled
       
     </span>
   </a>
@@ -1752,10 +1752,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" class="md-nav__link">
+  <a href="#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A fourth deprecation on a different clock: CiliumFQDN / CalicoFQDN
+        The CiliumFQDN / CalicoFQDN aliases ride the v2.0.0 clock
       
     </span>
   </a>
@@ -2770,10 +2770,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#why-the-three-are-coupled" class="md-nav__link">
+  <a href="#why-the-removals-are-coupled" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why the three are coupled
+        Why the removals are coupled
       
     </span>
   </a>
@@ -2786,10 +2786,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" class="md-nav__link">
+  <a href="#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A fourth deprecation on a different clock: CiliumFQDN / CalicoFQDN
+        The CiliumFQDN / CalicoFQDN aliases ride the v2.0.0 clock
       
     </span>
   </a>
@@ -2888,19 +2888,21 @@
   
 
 
-<h1 id="deprecation-and-removal-notice-v1alpha1-v2alpha1-and-classic">Deprecation and removal notice: <code>v1alpha1</code>, <code>v2alpha1</code>, and Classic<a class="headerlink" href="#deprecation-and-removal-notice-v1alpha1-v2alpha1-and-classic" title="Permanent link">&para;</a></h1>
+<h1 id="deprecation-and-removal-notice-v1alpha1-v2alpha1-v2beta1-and-classic">Deprecation and removal notice: <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and Classic<a class="headerlink" href="#deprecation-and-removal-notice-v1alpha1-v2alpha1-v2beta1-and-classic" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer / tenant operator</p>
 </blockquote>
 <div class="admonition warning">
-<p class="admonition-title">Three deprecations, one removal release: <code>v2.0.0</code></p>
+<p class="admonition-title">Four deprecations, one removal release: <code>v2.0.0</code></p>
 <p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> (see <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>), and author them as single-label <code>ScaleSet</code> runner sets.
 Everything named below stays <strong>fully served until <code>v2.0.0</code></strong>, so nothing is forced today.
 Migrate existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> at your convenience: the move changes the API objects, not how jobs are acquired.</p>
+<p><code>v2beta1</code> is itself removed at <code>v2.0.0</code>, superseded by the General Availability (GA) version <code>v2</code>.
+That is not a reason to delay: the release before <code>v2.0.0</code> serves <code>v2beta1</code> and <code>v2</code> side by side, and moving between them is a re-apply rather than a re-author.</p>
 </div>
 <p>This page is the project's standing deprecation notice.
 It records what <code>v2.0.0</code> removes, what keeps working until then, and what an operator has to do before upgrading past it.
-One further deprecation runs on its own, later clock — <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> egress modes</a>, removable no earlier than <code>v3.0.0</code>.</p>
+A fourth deprecation, <a href="#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> egress modes</a>, was announced on a later clock and now rides this one.</p>
 <h2 id="what-v200-removes">What <code>v2.0.0</code> removes<a class="headerlink" href="#what-v200-removes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2921,8 +2923,8 @@ One further deprecation runs on its own, later clock — <a href="#a-fourth-depr
 <tr>
 <td><strong><code>actions-gateway.com/v2alpha1</code></strong></td>
 <td>v2's first served version, superseded as storage and hub version by the <code>v2beta1</code> graduation</td>
-<td><code>v2beta1</code>, the graduated, ScaleSet-only shape</td>
-<td>read and re-apply your objects at <code>v2beta1</code>; the conversion webhook already round-trips them, so there is no re-author step except for the two <code>v2alpha1</code>-only fields below</td>
+<td><code>v2beta1</code> until <code>v2.0.0</code>, then <code>v2</code></td>
+<td>read and re-apply your objects; the conversion webhook already round-trips them, so there is no re-author step except for the two <code>v2alpha1</code>-only fields below</td>
 </tr>
 <tr>
 <td><strong>Classic acquisition</strong> (<code>RunnerSet.spec.acquisitionProtocol: Classic</code> and <code>spec.maxListeners</code>, both <code>v2alpha1</code>-only)</td>
@@ -2930,39 +2932,39 @@ One further deprecation runs on its own, later clock — <a href="#a-fourth-depr
 <td><code>ScaleSet</code>, the single-acquirer protocol: the default since <code>v1.1.0</code>, and the only protocol <code>v2beta1</code> serves</td>
 <td>create one fresh single-label <code>ScaleSet</code> <code>RunnerSet</code> per <code>runs-on</code> target. <code>acquisitionProtocol</code> is immutable, so this is a create-and-delete, not an edit</td>
 </tr>
+<tr>
+<td><strong><code>actions-gateway.com/v2beta1</code></strong></td>
+<td>the graduated beta version, storage and hub since <code>v1.1.0</code></td>
+<td><code>v2</code>, the GA version</td>
+<td>read and re-apply your objects at <code>v2</code>; the conversion webhook round-trips them, with the one exception of the two deprecated <code>egressPolicyMode</code> aliases below</td>
+</tr>
 </tbody>
 </table>
-<p><code>v2beta1</code> itself is <strong>not</strong> affected.
-Beta's contract is that a version will not be removed, and <code>v2.0.0</code> adds the GA <code>v2</code> version beside it rather than taking it away.</p>
-<h3 id="why-the-three-are-coupled">Why the three are coupled<a class="headerlink" href="#why-the-three-are-coupled" title="Permanent link">&para;</a></h3>
+<p><strong><code>v2beta1</code>'s removal was decided later than the other three</strong> and is not in the <code>release-1.3.md</code> announcement.
+Decided 2026-09-08 (<a href="../../plan/v2beta1-retirement/">reasoning</a>): <code>v2.0.0</code> is a major release, and dropping a served version is a breaking change a major release may make.
+Beta's contract is a migration path, not permanence, and the path here is the overlap release: the tag before <code>v2.0.0</code> serves <code>v2beta1</code> and <code>v2</code> together, so no object is ever unreachable.</p>
+<h3 id="why-the-removals-are-coupled">Why the removals are coupled<a class="headerlink" href="#why-the-removals-are-coupled" title="Permanent link">&para;</a></h3>
 <p><code>v2beta1</code> is already ScaleSet-only, so classic acquisition exists <em>only</em> to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects.
 Removing those two versions removes classic's entire reason to exist.
-Splitting the three removals across separate releases would buy nothing and would cost every operator a second breaking migration, so they land together on one major tag.</p>
-<h2 id="a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">A fourth deprecation on a different clock: <code>CiliumFQDN</code> / <code>CalicoFQDN</code><a class="headerlink" href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" title="Permanent link">&para;</a></h2>
-<p>The <code>EgressProxy</code> field <code>spec.egressPolicyMode</code> accepts two deprecated per-Container Network Interface (CNI) values, <code>CiliumFQDN</code> and <code>CalicoFQDN</code>, superseded by the <code>FQDN</code> intent plus the operator's <code>--fqdn-policy-backend</code> selector (<a href="../security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations</a>).
-They are <strong>not</strong> part of the <code>v2.0.0</code> bundle above.</p>
-<p><strong>The earliest release that may remove them is <code>v3.0.0</code>.</strong></p>
-<p>Why they cannot ride the <code>v2.0.0</code> clock:</p>
-<ol>
-<li><strong>They are elements of a beta version, not a version themselves.</strong> The two values exist in <code>v2alpha1</code> <em>and</em> in <code>v2beta1</code>, which is the storage and hub version.
-   The <code>v2alpha1</code> copy disappears with <code>v2alpha1</code> at <code>v2.0.0</code>; the <code>v2beta1</code> copy does not, because <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds the General Availability (GA) <code>v2</code> version beside it.</li>
-<li><strong>An API element is removed by incrementing the version, never by deleting it from a served one.</strong> Deleting a value from a version already in the field would reject objects an operator has stored and can still <code>kubectl apply</code> — the exact breakage the versioning contract exists to prevent.
-   So the values live for as long as <code>v2beta1</code> is served.</li>
-<li><strong>Beta promises the version will not be removed without a migration path.</strong> Retiring a served version is a breaking change, and this project lands breaking changes on a major tag announced at least one release ahead (<a href="../../roadmap/">roadmap</a>).
-   The next major after <code>v2.0.0</code> is <code>v3.0.0</code>, so that is the earliest tag that can retire <code>v2beta1</code> and, with it, these two values.</li>
-</ol>
-<p>Naming <code>v2.0.0</code> for them would have been a promise the API contract forbids keeping: the removal would have had to either break <code>v2beta1</code> objects or quietly not happen.</p>
-<p>Two consequences worth stating plainly:</p>
-<ul>
-<li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
-  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak (<a href="../../plan/v2-ga/">v2 GA plan</a>).
-  The commitment here is a floor — <em>not before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
-<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open question</strong>, settled by the graduation hop rather than by this notice.
-  <code>v2</code> is a new version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>.
-  Either way the removal release above is unchanged.</li>
-</ul>
-<p><strong>What to do now:</strong> nothing is forced, but migrate when convenient — set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code>.
-The admission webhook already warns on every write that still names a deprecated value, and the warning names <code>v3.0.0</code>.</p>
+Splitting the removals across separate releases would buy nothing and would cost every operator a second breaking migration, so they land together on one major tag.
+<code>v2beta1</code> joins them for the same reason rather than a shared mechanism: it is superseded by <code>v2</code> on its own schedule, and landing it on the same tag spends one breaking migration instead of two.</p>
+<h2 id="the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">The <code>CiliumFQDN</code> / <code>CalicoFQDN</code> aliases ride the <code>v2.0.0</code> clock<a class="headerlink" href="#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock" title="Permanent link">&para;</a></h2>
+<p>The <code>EgressProxy</code> field <code>spec.egressPolicyMode</code> accepts two deprecated per-Container Network Interface (CNI) values, <code>CiliumFQDN</code> and <code>CalicoFQDN</code>, superseded by the <code>FQDN</code> intent plus the operator's <code>--fqdn-policy-backend</code> selector (<a href="../security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations</a>).</p>
+<p><strong>They are removed at <code>v2.0.0</code>, with everything else on this page.</strong></p>
+<p>This supersedes the earlier notice, which put their earliest removal at <code>v3.0.0</code>.
+Nothing about the API contract changed; one premise under that reasoning did.
+The old chain ran: the values are enum members of <code>v2alpha1</code> <em>and</em> <code>v2beta1</code>; an API element is removed by incrementing the version, never by deleting it from a served one; so the values live exactly as long as <code>v2beta1</code> does.
+Every step of that still holds.
+What changed is the last input — <code>v2beta1</code> was expected to outlive <code>v2.0.0</code>, and as of 2026-09-08 it does not (<a href="../../plan/v2beta1-retirement/">why</a>).
+Both versions carrying the aliases are removed at <code>v2.0.0</code>, and the GA <code>v2</code> version does not define them, so <code>v2.0.0</code> is where they go.</p>
+<p><strong>What to do before upgrading to <code>v2.0.0</code>:</strong> if any <code>EgressProxy</code> still names <code>CiliumFQDN</code> or <code>CalicoFQDN</code>, migrate it.
+Set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code> (<code>cilium</code> or <code>calico</code>).
+The enforced policy is identical either way — each alias pins its namesake backend, and <code>FQDN</code> plus the matching selector resolves to the same emitter — so this is a re-label, not a change in what is enforced.</p>
+<p>This is no longer optional, and the reason is mechanical rather than procedural.
+<code>v2</code> cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
+One unmigrated <code>EgressProxy</code> therefore breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the entire cluster, not just for itself.
+A pre-upgrade check that finds them is tracked as <a href="../../queue/Q1085/">Q1085</a>; until it ships, <code>kubectl get egressproxies -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.spec.egressPolicyMode}{"\n"}{end}'</code> lists what to look at.</p>
+<p>The admission webhook warns on every write that still names a deprecated value, and the warning names the removal release.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>All three are deprecated and still fully served.</strong> No release has removed any of them.

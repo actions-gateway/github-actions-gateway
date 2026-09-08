@@ -2644,18 +2644,35 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-3--the-coupled-removals" class="md-nav__link">
+    <nav class="md-nav" aria-label="Phase 2 — the graduation hop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decided-v2-omits-ciliumfqdncalicofqdn" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 3 — the coupled removals
+        Decided: v2 omits CiliumFQDN/CalicoFQDN
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Phase 3 — the coupled removals">
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3--the-storage-advance-and-the-coupled-removals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — the storage advance and the coupled removals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3 — the storage advance and the coupled removals">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2732,7 +2749,7 @@
 <p>This plan starts <strong>after <code>v1.3.0</code> ships</strong>.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.</p>
 <blockquote>
-<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong> Phases 1, 2 and 4 wait on <a href="../../queue/Q413/">Q413</a> (<strong>Event:</strong> the Phase 1 soak closes; <code>v1.3.0</code> shipped 2026-08-03 and criterion 1 has since elapsed); Phase 3's coupled removals wait on <a href="../../queue/Q273/">Q273</a> and <a href="../../queue/Q264/">Q264</a>; the Phase 2 alias decision is <a href="../../queue/Q452/">Q452</a>.
+<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong> Phases 1, 2 and 4 wait on <a href="../../queue/Q413/">Q413</a> (<strong>Event:</strong> the Phase 1 soak closes; <code>v1.3.0</code> shipped 2026-08-03 and criterion 1 has since elapsed); Phase 3's coupled removals wait on <a href="../../queue/Q273/">Q273</a> and <a href="../../queue/Q264/">Q264</a>; the Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The <code>✅</code> on this plan's <a href="../">index row</a> means <em>no open item remains</em>, not that the graduation has happened — deferred residuals <a href="../../development/maintaining-backlog/#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count">don't count</a>.
 The phase table below is the real state.</p>
 </blockquote>
@@ -2761,13 +2778,13 @@ The phase table below is the real state.</p>
 </tr>
 <tr>
 <td>2</td>
-<td>Add <code>v2</code> to each kind, mark it storage, extend conversion coverage</td>
+<td>Add <code>v2</code> to each kind and serve it beside <code>v2beta1</code>; extend conversion coverage. <strong>Ships in 1.9, not 2.0</strong></td>
 <td>M</td>
 <td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
 </tr>
 <tr>
 <td>3</td>
-<td>Storage migration, then drop <code>v2alpha1</code>, <code>v1alpha1</code>, and classic</td>
+<td>Mark <code>v2</code> storage, migrate stored objects, then drop <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code>, and classic</td>
 <td>M</td>
 <td>❌ Open (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>); capability parity <strong>cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
 </tr>
@@ -2867,19 +2884,40 @@ Per <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.m
    The hub moves to <code>v2</code>.</li>
 <li>Storage-migrate stored objects, then drop the superseded served version.</li>
 </ol>
+<p><strong>This hop is split across two releases, which the previous two hops were not.</strong> Step 1's storage marker and all of step 3 move to Phase 3 and the <code>v2.0.0</code> tag; 1.9 ships step 1 without the marker, plus step 2.
+Rule #4b requires a release serving both versions before storage advances, and what that buys is a rollback destination for the largest upgrade this project asks anyone to make (<a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">release-ladder.md</a>).
+The hub is free to move in 1.9 regardless: <code>convertViaHub</code> routes spoke to hub to spoke and nothing ties the hub to the storage version.</p>
 <p>Two project-specific constraints carry over from the last hop and should be read before starting: shared version-neutral code lives in <code>api/apiconditions</code> with one-line re-exports per version, and <code>check-v2-api-sync.sh</code> gates every shared v2 file.
 Getting this wrong is the most likely way to break the hop.</p>
-<p><strong>One shape decision the hop must make: does <code>v2</code> define <code>CiliumFQDN</code>/<code>CalicoFQDN</code>?</strong> The two deprecated <code>EgressProxy.spec.egressPolicyMode</code> aliases cannot be removed at <code>v2.0.0</code> — they are members of the served beta version <code>v2beta1</code>, so their floor is <code>v3.0.0</code> (<a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">Q428</a>).
-That leaves a live choice for <code>v2</code>: omit them (a clean GA surface, but the hub moves to <code>v2</code> and a <code>v2beta1</code> object naming an alias then needs a lossless carrier, since the conversion deliberately rides the values across verbatim rather than collapsing them to <code>FQDN</code>) or carry them deprecated (trivially lossless, but GA is effectively frozen and would be born owning two aliases).
-Either way the removal release is unchanged.
-Decide it here, not at the tag: <a href="../../queue/Q452/">Q452</a>.</p>
-<h2 id="phase-3--the-coupled-removals">Phase 3 — the coupled removals<a class="headerlink" href="#phase-3--the-coupled-removals" title="Permanent link">&para;</a></h2>
-<p><code>v2.0.0</code> executes all three removals announced by <a href="../release-1.3/">release-1.3.md</a>:</p>
+<h3 id="decided-v2-omits-ciliumfqdncalicofqdn">Decided: <code>v2</code> omits <code>CiliumFQDN</code>/<code>CalicoFQDN</code><a class="headerlink" href="#decided-v2-omits-ciliumfqdncalicofqdn" title="Permanent link">&para;</a></h3>
+<p>Q452, decided 2026-09-08, together with the question it turned out to rest on (<a href="../v2beta1-retirement/">v2beta1 retirement</a>).</p>
+<p>The question was whether GA <code>v2</code> defines the two deprecated <code>EgressProxy.spec.egressPolicyMode</code> aliases.
+It was first answered <em>yes</em>, on the reasoning that <code>v2beta1</code> keeps serving them until <code>v3.0.0</code> and every served version must be able to represent every stored object.
+The reasoning was sound and the premise was not a fact: <strong>whether <code>v2.0.0</code> keeps serving <code>v2beta1</code> was a plan choice, not an API-contract requirement</strong>, and the choice was changed.
+<code>v2beta1</code> is no longer served past <code>v2.0.0</code>.</p>
+<p>That removes the constraint outright.
+The aliases are enum members of <code>v2alpha1</code> and <code>v2beta1</code>, Phase 3 removes both, and <code>v2</code> never defines them, so nothing that survives <code>v2.0.0</code> can name one.
+The GA enum is <code>CIDR;FQDN</code>.</p>
+<p><strong>The aliases are no longer on their own clock.</strong> <a href="../../operations/v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">Q428</a> had them removable no earlier than <code>v3.0.0</code>, derived from the survival premise above.
+They now ride the same <code>v2.0.0</code> clock as <code>v1alpha1</code>, <code>v2alpha1</code> and classic acquisition, and the operator instruction changes with it: migrating stops being optional and becomes part of the <code>v1</code>→<code>v2</code> migration.</p>
+<p><strong>What this obliges, and it is the whole cost.</strong> The storage migration in step 3 must not meet a stored <code>EgressProxy</code> naming an alias, because <code>v2</code> cannot represent one and the conversion contract cannot report a single object as absent.
+Read from the vendored <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1/types.go"><code>apiextensions/v1</code> types</a> on 2026-09-07: <code>convertedObjects</code> "must also have the same size as the input list with the same objects in the same order", so the webhook cannot omit one; <code>ConversionResponse.Result</code> is a single <code>metav1.Status</code> for the whole request, so it cannot fail one; and on failure <code>convertedObjects</code> is "otherwise empty", so the failure takes the whole batch.
+<code>ConversionRequest.Objects</code> is a list, so one unrepresentable object breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the cluster rather than for itself.
+That is what makes the pre-upgrade check load-bearing rather than a courtesy, and it is tracked as <a href="../../queue/Q1085/">Q1085</a> alongside the deprecation notice and the admission change that precede it.
+The contract quotes are measured; that a <code>LIST</code> batches into one <code>ConversionRequest</code> follows from the field being a list and was not driven against an apiserver.</p>
+<p><strong>Why the migration is expected to be a no-op in practice.</strong> No chart, overlay or e2e manifest in the tree sets an alias, measured 2026-09-07, and <a href="../q245-fqdn-intent-backend-split/#migration--compatibility">Q245</a> recorded the only known consumers as tests and docs.
+That is a floor rather than a rate, since an external adopter is unknowable for a public project, which is why the check runs rather than being reasoned away.</p>
+<h2 id="phase-3--the-storage-advance-and-the-coupled-removals">Phase 3 — the storage advance and the coupled removals<a class="headerlink" href="#phase-3--the-storage-advance-and-the-coupled-removals" title="Permanent link">&para;</a></h2>
+<p><strong><code>v2.0.0</code> opens by marking <code>v2</code> the storage version and migrating stored objects</strong>, which 1.9 deliberately did not do.
+That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in <a href="../../queue/Q1085/">Q1085</a> load-bearing: the migration is the moment an object naming a value <code>v2</code> cannot represent stops being readable.</p>
+<p><code>v2.0.0</code> then executes all three removals announced by <a href="../release-1.3/">release-1.3.md</a>, plus a fourth decided later:</p>
 <ul>
 <li><code>v1alpha1</code> (the <code>actions-gateway.github.com</code> group) — <a href="../../queue/Q273/">Q273</a></li>
 <li><code>v2alpha1</code> — this plan</li>
 <li>classic acquisition machinery and the transitional <code>acquisitionProtocol</code> / <code>maxListeners</code> fields — <a href="../../queue/Q264/">Q264</a></li>
+<li><code>v2beta1</code>, and with it the <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases: decided 2026-09-08, <a href="../v2beta1-retirement/">v2beta1-retirement.md</a>, and announced separately because <code>release-1.3.md</code> did not carry it</li>
 </ul>
+<p><code>v2beta1</code> is the one removal Rule 4b constrains, and 1.9 is the release that satisfies it: it serves <code>v2beta1</code> and <code>v2</code> side by side without moving storage, so this tag is free to advance.</p>
 <p>They are one bundle because <code>v2beta1</code> is already ScaleSet-only: classic acquisition exists solely to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when <code>v1alpha1</code> is removed.
 Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the <code>ValidatingAdmissionPolicy</code> objects and the validating webhook.</p>

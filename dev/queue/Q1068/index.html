@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1082/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1068/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Decide whether v2beta1 retires at v2.0.0 or survives to v3.0.0 - GitHub Actions Gateway</title>
+        <title>v2.0.0 removing v2alpha1 un-matches every validating webhook rule - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#decide-whether-v2beta1-retires-at-v200-or-survives-to-v300" class="md-skip">
+        <a href="#v200-removing-v2alpha1-un-matches-every-validating-webhook-rule" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Decide whether v2beta1 retires at v2.0.0 or survives to v3.0.0
+              v2.0.0 removing v2alpha1 un-matches every validating webhook rule
             
           </span>
         </div>
@@ -2597,17 +2597,24 @@
   
 
 
-<h1 id="decide-whether-v2beta1-retires-at-v200-or-survives-to-v300">Decide whether <code>v2beta1</code> retires at <code>v2.0.0</code> or survives to <code>v3.0.0</code><a class="headerlink" href="#decide-whether-v2beta1-retires-at-v200-or-survives-to-v300" title="Permanent link">&para;</a></h1>
-<p><a href="../Q452/">Q452</a> decided that GA <code>v2</code> defines the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, on the premise that <code>v2.0.0</code> keeps serving <code>v2beta1</code>.
-The premise is asserted in three docs, two of them published operator pages, and contradicted by the graduation ladder's own step 3 in <a href="../../plan/v2-api/">v2-api.md</a> and <a href="../../plan/v2-ga/">v2-ga.md</a>, which both say the hop drops the superseded served version.
-For the <code>v2beta1</code> → <code>v2</code> hop that superseded version is <code>v2beta1</code>.</p>
-<p>Both cannot be true, and Q452's answer flips on which does: if <code>v2beta1</code> retires at <code>v2.0.0</code>, the aliases go with it and <code>v2</code> never defines them.
-<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1867">#1867</a> is drafted pending this.</p>
-<p>The comparison is written up in <a href="../../plan/v2beta1-retirement/">v2beta1-retirement.md</a>: both paths need the same Rule #4b overlap release and the same storage migration, so they differ only in what <code>v2</code> carries and whether the published <code>v3.0.0</code> floor is walked back.
-Measured 2026-09-07: <code>v2beta1</code> shipped in <code>v1.1.0</code> (2026-07-12); upstream would allow removal 9 months after a deprecation notice, and requires no major version for it; the project's own major-tag rule is what creates the <code>v3.0.0</code> floor.</p>
-<p><strong>Deciding sooner widens the options</strong> — a notice in 1.8 starts a clock and commits to nothing, while each release it slips pushes the earliest clean-GA date out.
-The deliverable is the decision recorded in the plan, and the losing path's cost beside it.
-Sibling: <a href="../Q1083/">Q1083</a> on the notice period this project owes, which is independent of the choice.</p>
+<h1 id="v200-removing-v2alpha1-un-matches-every-validating-webhook-rule"><code>v2.0.0</code> removing <code>v2alpha1</code> un-matches every validating webhook rule<a class="headerlink" href="#v200-removing-v2alpha1-un-matches-every-validating-webhook-rule" title="Permanent link">&para;</a></h1>
+<p>All five <code>actions-gateway.com</code> kinds are validated by rules that name <code>apiVersions: [v2alpha1]</code> and nothing else, and no rule sets <code>matchPolicy</code>, so they reach <code>v2beta1</code> writes only through the apiserver default <code>Equivalent</code> (<a href="../../plan/archive/q74-v2beta1-conversion-webhook/">q74</a> records the same routing).
+Measured 2026-09-07 over <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/webhook.yaml"><code>webhook.yaml</code></a>: <code>vactionsgateway</code>, <code>vclusterrunnertemplate</code>, <code>vegressproxy</code>, <code>vrunnerset</code> and <code>vrunnertemplate</code> are each <code>v2alpha1</code>-only, with zero occurrences of <code>matchPolicy</code> in the file.</p>
+<p><code>Equivalent</code> converts a request into a version the rule names, so a rule whose only version has been removed matches nothing.
+<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 removes <code>v2alpha1</code> <strong>and <code>v2beta1</code></strong> at <code>v2.0.0</code>, leaving <code>v2</code> as the only served version, so every rule's version list is empty of anything that still exists.
+That drops admission validation for every <code>v2</code> write at once, silently, since an unmatched rule is not a <code>failurePolicy: Fail</code> rejection.
+Surfaced while deciding Q452, through the <code>CiliumFQDN</code>/<code>CalicoFQDN</code> deprecation warning, which rides the same routing; the aliases are themselves removed at <code>v2.0.0</code>, so that warning is not what is at risk here.
+The other four kinds' validators are.</p>
+<p><strong>The obvious fix is a trap, and it inverts the failure rather than removing it.</strong> Adding the surviving versions to each rule's <code>versions=</code> list means the apiserver has no conversion to do and sends the object at its own version, so a <code>v2beta1</code> write reaches a handler typed <code>*agcv2alpha1.EgressProxy</code>.
+Admission decoding goes through <code>runtime.DecodeInto</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/sigs.k8s.io/controller-runtime/pkg/webhook/admission/decode.go"><code>decode.go</code></a>), which fails when the decoded type differs from the target (<code>unable to decode %s into %v</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/k8s.io/apimachinery/pkg/runtime/codec.go"><code>codec.go</code></a>).
+Under <code>failurePolicy: Fail</code> that turns a silent loss of validation into every write being rejected.
+The repo's own shape agrees: <code>v1alpha1</code> has its own rule, path and handler rather than sharing one.</p>
+<p>So the fix needs a per-version path and handler for each kind, or one version-agnostic handler, which is why this is <code>M</code> rather than the <code>S</code> it first looks like.
+The decoding half is measured in the vendored tree; the apiserver half, that a rule naming the request's own version suppresses conversion, is documented upstream behaviour this row has <strong>not</strong> measured.
+An envtest with a multi-version rule settles it, and that same test is the inversion the fix needs: it must go red when a rule names only <code>v2alpha1</code> and the version is gone.</p>
+<p>It gates the <code>v2.0.0</code> tag rather than gating <a href="../Q273/">Q273</a>/<a href="../Q264/">Q264</a>: those rows can land whenever, and the tag cannot ship without this.
+Ships beside them if it has not landed sooner.</p>
+<p>Raised in review of #1867, which is also where the original single-line fix was refuted.</p>
 
 
 
