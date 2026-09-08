@@ -2944,7 +2944,7 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 <p><strong>Row 4 — Scale-set Acquisition Tier (per runner_set)</strong></p>
 <p>The default acquisition protocol (Q264).
 These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here.
-Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
+Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these; the <code>$runner_set</code> variable does.</p>
 <table>
 <thead>
 <tr>
@@ -3288,13 +3288,14 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
 <code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
 <h2 id="budget-dashboard">Budget dashboard<a class="headerlink" href="#budget-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, and the zero-idle-compute row contrasting worker consumption with the always-on proxy floor." src="../../assets/grafana-dashboard-budget.png" /></p>
+<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity and refused classic jobs by the admission rung that took them." src="../../assets/grafana-dashboard-budget.png" /></p>
 <p>For the <a href="../personas/#budget-owner">budget owner</a>, who owns the spend and usually cannot read the cluster at all.
 Filtered by <code>$namespace</code> and <code>$runner_group</code>, and priced by a <code>$rate</code> textbox.
 It ships with auto-refresh <strong>off</strong>, where the other two use <code>30s</code>: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.</p>
-<p>Every panel reads one metric: <code>actions_gateway_job_duration_seconds</code>.
+<p>Every spend panel reads one metric: <code>actions_gateway_job_duration_seconds</code>.
 That series is worker pod wall time (creation to the last container finishing) on <strong>both</strong> acquisition tiers, which is the span <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">Appendix F §F.1</a> bills against.
-A pod that never started a container is not observed, because it occupied no node time.</p>
+A pod that never started a container is not observed, because it occupied no node time.
+Row 5 is the exception, and reads the admission ladder instead: spend a throttle is holding down leaves no duration to bill, so the metric that answers what was spent cannot answer what was suppressed.</p>
 <p><strong>The rate is the operator's, not ours.</strong> Appendix F's formula is <code>(job_duration_seconds / 3600) × hourly_node_rate × resource_fraction</code>, and <code>$rate</code> is that trailing pair collapsed into one number: the effective hourly cost of <strong>one worker slot</strong>. The shipped default, <code>0.096</code>, is §F.1's own CPU example: an <code>m6i.4xlarge</code> at $0.768/hr with the pod requesting an eighth of it.
 Its GPU example works out at $4.10/hr, so the two differ by more than 40×.</p>
 <p>That spread is why the shape-level panels stay in pod-hours: one currency figure spanning a tenant's GPU and CPU shapes is an average of two rates that are nothing like each other.
@@ -3422,6 +3423,38 @@ A shape here is therefore whatever provisioned the worker, on either protocol.</
 </tr>
 </tbody>
 </table>
+<p><strong>Row 5 — Throttled Intake (spend a rung is holding down)</strong></p>
+<p>Rows 1 to 4 answer what was spent.
+This one answers what was not: intake an admission rung refused, which shows up nowhere in <code>job_duration_seconds</code> because a job that never ran has no duration to bill.</p>
+<p><strong>It is two panels rather than one because the two acquisition tiers state the same ladder in different units.</strong> The scale-set tier declares a capacity integer per long poll, so its rungs are gauges of worker slots; the classic tier decides per delivered job, so its rungs are counters of jobs.
+Both panels are stacked, and in both the stack total is the demand that tier saw, which is the reading they share.
+Their magnitudes are not comparable and neither panel is a total of the other.
+A deploy running one tier sees the other panel empty; that is the panel saying "no sets on this protocol", not a gap.</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Withheld capacity by rung (scale-set sets)</td>
+<td><code>sum by (namespace) (actions_gateway_scaleset_advertised_capacity)</code> stacked under <code>sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)</code></td>
+<td>Time series, stacked. The stack total is the set's declared worker ceiling, because <a href="../observability-metrics/#scale-set-acquisition-tier-q264">every evaluated rung publishes a value each poll including an explicit <code>0</code></a> and the entries sum to <code>ceiling − advertised</code>. <code>quota</code> is namespace-<code>ResourceQuota</code> headroom, <code>capacity</code> the opt-in placeability gate, <code>scaleup</code> the opt-in creation-rate limit; grouping by <code>reason</code> rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on <code>runner_set</code>, so a <code>$runner_group</code> holding a <code>RunnerGroup</code> name empties it</td>
+</tr>
+<tr>
+<td>Intake refused by rung (classic sets)</td>
+<td><code>sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 3600</code> stacked under the <code>actions_gateway_jobs_admission_rejected_total</code> counterpart, <code>sum by (namespace, reason)</code></td>
+<td>Time series, stacked, jobs/hour. The stack is what GitHub delivered, less the deliveries lost to an acquire error (<code>actions_gateway_job_acquisition_errors_total</code>) or a duplicate-delivery dedup, which increment neither series. <code>ceiling</code> and <code>quota</code> are on by default; <code>capacity</code> and <code>scaleup</code> emit nothing until their owner opts in, so an absent band is a rung nobody enabled rather than a rung holding nothing back</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Withheld capacity is not the same thing as suppressed spend, which is why no panel here prices it with <code>$rate</code>.</strong> A slot a rung held back is money you did not spend only if GitHub had a job queued to fill it; on an idle set the same band is a ceiling nobody was reaching for.
+The demand signal that settles it is <a href="../observability-metrics/#scale-set-acquisition-tier-q264"><code>actions_gateway_scaleset_jobs_available</code></a>, which no dashboard plots today.
+A currency figure derived without it would overstate the suppression, on a dashboard whose whole contract is that its numbers reconcile against a cost tool's.</p>
+<p>Read against the ResourceQuota bars beside it, the <code>quota</code> band is the same conversation from the other side: the bar says a tenant is pinned at its cap, and this band says how many worker slots that cost it.</p>
 <h2 id="security-dashboard">Security dashboard<a class="headerlink" href="#security-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The security Grafana dashboard rendered against a live Prometheus: an egress-attribution row keyed on the pool with a text panel saying so, an admission-decisions row of policy verdicts and webhook traffic, an abuse-signals row mirroring the security alert group, and the running control-plane versions." src="../../assets/grafana-dashboard-security.png" /></p>
 <p>For the <a href="../personas/#security--compliance">security / compliance persona</a>, who reads rather than operates and needs evidence produced unprompted.
@@ -3565,11 +3598,15 @@ A gauge saying whether that pair is on for a gateway would let a panel key on th
 <li><code>$runner_set</code> (<code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code>) filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
 </ul>
-<p>The budget dashboard declares its own set, because it reads a different metric from every panel and its dropdowns have to match that metric exactly:</p>
+<p>The budget dashboard declares its own set, because its spend panels all read one metric and its dropdowns have to match that metric exactly:</p>
 <ul>
 <li><code>$namespace</code> (<code>label_values(actions_gateway_job_duration_seconds_count, namespace)</code>) is keyed on the series the panels actually read, so the dropdown cannot offer a tenant with no cost data or hide one that has some.
   It needs no classic/scale-set union: the duration series is emitted from the pod informer and covers both tiers already.</li>
-<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) is the runner shape, listing <code>RunnerGroup</code> and <code>RunnerSet</code> names together for the reason the Row 3 note gives.</li>
+<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) is the runner shape, listing <code>RunnerGroup</code> and <code>RunnerSet</code> names together for the reason the Row 3 note gives.
+  Row 5's scale-set panel applies it to <code>runner_set</code>, which holds the same names on that tier, so selecting a <code>RunnerGroup</code> empties that panel and selecting a <code>RunnerSet</code> empties the classic one beside it.</li>
+<li><strong>Both dropdowns set <code>allValue</code> to <code>.*</code></strong>, which is what makes Row 5 legible on the tenant it exists for.
+  Grafana expands a bare <code>All</code> to the values the dropdown holds, and both are keyed on the duration series, so a tenant whose intake a rung is holding at zero has completed no job, is in neither list, and would be excluded by <code>All</code> itself.
+  The wildcard costs the spend panels nothing: a tenant with no duration data contributes no series to them either way.</li>
 <li><code>$rate</code> is a <strong>textbox</strong>, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
   Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.</li>
 </ul>

@@ -3294,7 +3294,8 @@ They are still two independent tenants, and each provisions its own pool of pre-
 <blockquote>
 <p><strong>Do not name a <code>RunnerGroup</code> with an <code>rs-</code> prefix.</strong> The prefix is what separates the two derivations, so a <code>RunnerGroup</code> named <code>rs-web</code> derives the same Secret and the same GitHub runner name as a <code>RunnerSet</code> named <code>web</code>.
 Whichever of the two reconciles second cannot create its agents at all, and reports <code>agent identity is owned by another pool</code> until one of them is renamed.
-See <a href="../troubleshooting/#agent-pool-blocked-another-tenant-owns-the-agent-secret">Agent Pool Blocked: Another Tenant Owns the Agent Secret</a>.</p>
+Admission now refuses the write that would create such a pair, on whichever object arrives second, so a pair reaching that state predates the guard: <a href="../troubleshooting/#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed">Rejected: Agent Identity Already Claimed</a>, and <a href="../troubleshooting/#agent-pool-blocked-another-tenant-owns-the-agent-secret">Agent Pool Blocked</a> for one already stored.
+The GitHub runner name is unique per <strong>org</strong>, not per namespace, so the same rule binds two <code>RunnerSet</code>s of one name in different namespaces under one gateway scope.</p>
 </blockquote>
 <p>So during coexistence you will see <strong>two sets of runners</strong> registered with GitHub for one tenant — expected, and the reason both can run at once.
 Each agent Secret also carries an <code>ownerReference</code> to the <code>RunnerGroup</code> or <code>RunnerSet</code> it belongs to, so <code>kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'</code> answers "which tenant owns this?" without guessing from the name.</p>

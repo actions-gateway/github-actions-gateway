@@ -3970,7 +3970,8 @@ The gate shows up instead as slots removed from the ceiling the set advertises t
 An idle gated set whose worker shape stays unplaceable holds a latched <code>AwaitingProbe</code> decline indefinitely; that reading is truthful and costs nothing, so on its own it must not raise a ticket.
 Under a real withhold the per-window probe job is still assigned, so a set with work waiting keeps <code>actions_gateway_scaleset_jobs_assigned_total</code> moving while an idle one does not.</p>
 <ol>
-<li>Read <code>actions_gateway_scaleset_advertised_capacity</code> for what the set is still offering and <code>actions_gateway_scaleset_capacity_withheld</code> by <code>reason</code> for who took the rest; a <code>quota</code> share alongside the <code>capacity</code> one means the <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">ResourceQuota</a> is binding too.</li>
+<li>Read <code>actions_gateway_scaleset_advertised_capacity</code> for what the set is still offering and <code>actions_gateway_scaleset_capacity_withheld</code> by <code>reason</code> for who took the rest; a <code>quota</code> share alongside the <code>capacity</code> one means the <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">ResourceQuota</a> is binding too.
+   The budget dashboard's <a href="../observability-dashboards/#budget-dashboard">Throttled Intake row</a> plots both as one stack whose total is the declared ceiling, which is the fastest way to see the split.</li>
 <li>Then follow the same evidence and remediation path as <a href="#actionsgatewaycapacitygaterejectingjobs">ActionsGatewayCapacityGateRejectingJobs</a> above.</li>
 </ol>
 <hr />
