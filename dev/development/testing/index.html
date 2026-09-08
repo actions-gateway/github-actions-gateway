@@ -3219,6 +3219,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-claim-stated-at-the-altitude-of-the-rule-from-evidence-that-only-reaches-the-case" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A claim stated at the altitude of the rule, from evidence that only reaches the case
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-negative-result-implicates-the-probes-identifier-first" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5755,6 +5766,21 @@ It was then read as a general sequencing decision about two later phases of unre
 It was not: the answer was about <code>#1587</code>, which had merged hours earlier.
 A decision reads as settled context rather than as a claim, so none of the rules above fire on it, and the cost lands on the one party who cannot check the transcript as cheaply as you can — they have to remember, while re-reading the question the answer belonged to takes one search.
 So: quote a decision only from the exchange that produced it, and when a summary is the only source, go back and read what was asked before treating the answer as a rule.</p>
+<h3 id="a-claim-stated-at-the-altitude-of-the-rule-from-evidence-that-only-reaches-the-case">A claim stated at the altitude of the rule, from evidence that only reaches the case<a class="headerlink" href="#a-claim-stated-at-the-altitude-of-the-rule-from-evidence-that-only-reaches-the-case" title="Permanent link">&para;</a></h3>
+<p>The section above is about a claim with nothing behind it.
+This one has a real measurement behind it, taken correctly, and states the conclusion one level up from where the evidence reaches.
+The promotion is invisible in the moment, because the sentence is <em>true of the thing that was measured</em> and the reader has no way to see that the measurement stopped there.</p>
+<p>Three instances on 2026-09-07, in one session, all in prose that had passed every other check on this page:</p>
+<ul>
+<li><strong>"The annotation carrier cannot be inert: the reconciler has to read it."</strong> Measured from <code>RunnerSet</code>, the one kind in <code>api/v2alpha1/conversion.go</code> that has a carrier, and written as a property of carriers.
+  Both halves were false even there: a grep for the two annotation names found them only in the conversion file and its tests, so no controller reads them.</li>
+<li><strong>"Representability at the <em>storage</em> version is the constraint."</strong> True of the case being argued, where the hub and the storage version coincide.
+  The rule is that every <em>served</em> version must represent every stored object, since conversion runs on read; storage is where it bites first, not where it stops.</li>
+<li><strong>"Both transition rules exist in both <code>v2</code> versions."</strong> True of <code>actionsgateways</code>, checked; false of <code>runnerset_types.go</code>, where <code>v2beta1</code> dropped the field the rule guards, and not checked.</li>
+</ul>
+<p>Two were caught by review and one by the maintainer, which is the pattern: nothing mechanical fires on it, because the claim is well-formed and its evidence is real.
+The cheap guard is to write the case you measured next to the rule you drew from it, in the same sentence.
+That is one clause, it makes the gap visible to a reader who was not there, and where the rule genuinely does not generalize the clause is the correction.</p>
 <h3 id="a-negative-result-implicates-the-probes-identifier-first">A negative result implicates the probe's identifier first<a class="headerlink" href="#a-negative-result-implicates-the-probes-identifier-first" title="Permanent link">&para;</a></h3>
 <p>The section above is about a probe that answers a different question.
 This one is about a probe that asks after a name which does not exist, where the command ran and ran correctly, so "empty output is only evidence once the command is known to have run" passes and tells you nothing.</p>

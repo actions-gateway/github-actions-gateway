@@ -3189,6 +3189,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside …</td>
 </tr>
 <tr>
+<td><a href="Q1081/">Q1081</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh">No PR gate judges whether a queue row's <code>target:</code> anchor resolves</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A row's <code>target:</code> may name a heading anchor (<code>../plan/v2-ga.md#some-heading</code>), and nothing that runs on a pull request checks that the …</td>
+</tr>
+<tr>
 <td><a href="Q794/">Q794</a></td>
 <td><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code> no longer needs to pin <code>acquisitionProtocol: Classic</code></a></td>
 <td><code>debt</code></td>
