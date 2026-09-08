@@ -640,11 +640,12 @@ The GMC also re-checks the emitted policy on a bounded cadence (a fraction of th
 They are **deprecated** — the admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend`.
 Migrate by changing the tenant field to `FQDN` and setting the matching operator backend.
 
-> **They are not removed at `v2.0.0`.
-> The earliest release that may remove them is `v3.0.0`.** The two values are enum members of `egressPolicyMode` in the **beta** version `actions-gateway.com/v2beta1`, and `v2.0.0` keeps serving `v2beta1` — it adds the General Availability (GA) `v2` version beside it rather than taking it away.
-> An API element can only be removed by incrementing the version, never deleted from a version that is still served, so these two live exactly as long as `v2beta1` does.
-> Retiring a served version is a breaking change and lands on a major tag, which puts the earliest possible removal at `v3.0.0` — one major beyond the `v2.0.0` that removes `v1alpha1`, `v2alpha1`, and classic acquisition.
-> Full reasoning and the coupling to the other clocks: [the deprecation and removal notice](v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
+> **They are removed at `v2.0.0`**, alongside `v1alpha1`, `v2alpha1` and classic acquisition.
+> The two values are enum members of `egressPolicyMode` in `actions-gateway.com/v2alpha1` and `v2beta1`; `v2.0.0` removes both versions, and the General Availability (GA) `v2` version that replaces them does not define the values.
+> An API element can only be removed by incrementing the version, never deleted from a version that is still served — which is why these two live exactly as long as `v2beta1` does, and `v2beta1` ends at `v2.0.0` ([decided 2026-09-08](../plan/v2beta1-retirement.md)).
+> An earlier notice put the floor at `v3.0.0`, on the expectation that `v2.0.0` would keep serving `v2beta1`; the reasoning was sound and that expectation changed.
+> **Migrate before upgrading to `v2.0.0`:** one `EgressProxy` still naming an alias fails the conversion for every object in the same request, so it breaks `kubectl get egressproxies` at `v2` cluster-wide.
+> Full reasoning and the coupling to the other clocks: [the deprecation and removal notice](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock).
 
 > **Managed "Cilium" platforms usually do NOT accept the `cilium` backend.** The CRD test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
 > **GKE Dataplane V2's managed Cilium does not install it** (dropped since GKE 1.21.5-gke.1300) — use `--fqdn-policy-backend=gke` there, not `cilium`.

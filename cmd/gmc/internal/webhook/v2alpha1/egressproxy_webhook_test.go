@@ -363,8 +363,8 @@ func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
 // TestEgressProxyCustomValidator_DeprecationWarnings asserts the deprecated CNI-specific
 // modes are admitted with a non-blocking warning that names the removal release, while
 // FQDN/CIDR emit none. The release is part of the contract, not decoration: an operator
-// plans the migration from it, and v2beta1's beta contract puts it at v3.0.0 rather than
-// the v2.0.0 that removes v1alpha1/v2alpha1/classic (Q428).
+// plans the migration from it, and it is v2.0.0 — the aliases are enum members of
+// v2alpha1 and v2beta1, both removed there, and GA v2 does not define them (Q452).
 func TestEgressProxyCustomValidator_DeprecationWarnings(t *testing.T) {
 	v := &EgressProxyCustomValidator{
 		Allowlist:   allowlist.NewEgressDestination(nil, nil),
@@ -391,8 +391,10 @@ func TestEgressProxyCustomValidator_DeprecationWarnings(t *testing.T) {
 			}
 			require.Len(t, warns, 1)
 			assert.Contains(t, warns[0], tc.wantToken)
-			assert.Contains(t, warns[0], "v3.0.0",
+			assert.Contains(t, warns[0], "v2.0.0",
 				"the warning must name the removal release so an operator can plan the migration")
+			assert.NotContains(t, warns[0], "v3.0.0",
+				"naming the next major understates the removal by a whole release")
 		})
 	}
 }

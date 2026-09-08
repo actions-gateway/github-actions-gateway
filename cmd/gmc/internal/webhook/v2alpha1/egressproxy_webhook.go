@@ -41,15 +41,16 @@ func validateFQDNBackend(spec *agcv2alpha1.EgressProxySpec, backend controller.F
 // keeps working (it pins its namesake backend), but the operator is nudged toward the
 // FQDN intent + --fqdn-policy-backend split (Q245). An empty string means no warning.
 //
-// The warning names v3.0.0, not the v2.0.0 that removes v1alpha1/v2alpha1/classic: the
-// values are enum members of the served beta version v2beta1, which v2.0.0 keeps
-// serving, so they cannot go before v2beta1 itself does (Q428).
+// The warning names v2.0.0: the values are enum members of v2alpha1 and v2beta1, both
+// of which v2.0.0 removes, and the GA v2 version does not define them (Q452, Q1082).
+// The release is load-bearing — an operator plans the migration from it — and it is
+// derived from which versions v2.0.0 drops, so it moves if that set does.
 func deprecatedModeWarning(mode agcv2alpha1.EgressPolicyMode) string {
 	switch mode {
 	case agcv2alpha1.EgressPolicyModeCiliumFQDN:
-		return "spec.egressPolicyMode CiliumFQDN is deprecated: use FQDN and have the platform operator set GMC --fqdn-policy-backend=cilium. CiliumFQDN still works and will not be removed before v3.0.0."
+		return "spec.egressPolicyMode CiliumFQDN is deprecated and is removed at v2.0.0: use FQDN and have the platform operator set GMC --fqdn-policy-backend=cilium. Migrate before upgrading past v2.0.0."
 	case agcv2alpha1.EgressPolicyModeCalicoFQDN:
-		return "spec.egressPolicyMode CalicoFQDN is deprecated: use FQDN and have the platform operator set GMC --fqdn-policy-backend=calico. CalicoFQDN still works and will not be removed before v3.0.0."
+		return "spec.egressPolicyMode CalicoFQDN is deprecated and is removed at v2.0.0: use FQDN and have the platform operator set GMC --fqdn-policy-backend=calico. Migrate before upgrading past v2.0.0."
 	default:
 		return ""
 	}

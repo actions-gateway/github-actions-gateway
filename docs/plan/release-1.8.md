@@ -1,7 +1,7 @@
 # Release 1.8 Milestone Definition
 
 > **Status: scoped 2026-09-07; the gating row is closed, no candidate cut.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
-> Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and the Phase 2 alias decision, [Q452](../queue/Q452.md).
+> Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and the Phase 2 alias decision, Q452, which closed 2026-09-08 ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
 > The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 44 commits and **FLOOR: NONE** on 2026-09-07, with seven `feat`/`fix` subjects withheld because they ship in no image and no chart.
 > Q1029's fix raises the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.
 
@@ -38,7 +38,7 @@ The fix does not depend on which step inside it was slow.
 |---|---|---|
 | [Q1059](../queue/Q1059.md) | Every `v2beta1` kind applied and reconciled on the dogfood cluster, recorded against criterion 2 | A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative |
 | [Q1060](../queue/Q1060.md) | The conversion webhook round-tripped over real objects, including a `v1alpha1` object such as the gateway `deploy/dogfood-migrate` applies, recorded against criterion 3 | Same |
-| [Q452](../queue/Q452.md) | Whether GA `v2` defines `CiliumFQDN`/`CalicoFQDN`, written into [v2-ga.md § Phase 2](v2-ga.md#phase-2--the-graduation-hop) | A design decision, not a shipped change; deciding it here lets the hop start without one pending |
+| Q452 | Whether GA `v2` defines `CiliumFQDN`/`CalicoFQDN`, written into [v2-ga.md § Phase 2](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn) | A design decision, not a shipped change; deciding it here lets the hop start without one pending |
 
 A reading that comes back negative is the release working: it names the shape fix `v2beta1` still needs, which resets the soak clock and is exactly what GA is gated on finding first.
 
@@ -49,7 +49,7 @@ A reading that comes back negative is the release working: it names the shape fi
 | Q1029 | Drain recovery lost when no reconcile starts inside the window | `1.8-gate` | ✅ closed 2026-09-07 |
 | [Q1059](../queue/Q1059.md) | Every `v2beta1` kind on the dogfood cluster (soak criterion 2) | rides | 🔲 open |
 | [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
-| [Q452](../queue/Q452.md) | GA `v2` and the deprecated FQDN aliases | rides | 🔲 open |
+| Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 ## Explicitly out of scope
@@ -64,9 +64,11 @@ A reading that comes back negative is the release working: it names the shape fi
 
 1. ✅ **Q1029 closed** (2026-09-07), with the queue mechanism established before the fix, the reconcile's duration left unmeasured and said so, and an envtest assertion that fails when the watch-path recovery is inert; the e2e assertion the criterion asked for is still open, per [the gating row](#the-gating-row-q1029).
 2. **Criterion 2 and criterion 3 have a recorded reading** in [v2-ga.md](v2-ga.md)'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.
-3. **Q452 decided** in the plan, with the losing option's cost recorded beside it.
+3. ✅ **Q452 decided** (2026-09-08): `v2` omits both aliases, because the premise the question rested on was itself revisited and `v2beta1` is no longer served past `v2.0.0`.
+   The losing option's cost is recorded beside it in [v2-ga.md](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn), and the work the answer puts on the critical path is [Q1085](../queue/Q1085.md).
+   The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.
 4. **The three dogfood-window rows** get their window from the candidate: [Q1038](../queue/Q1038.md)'s `mirror-timing` probe, [Q1048](../queue/Q1048.md)'s mirror client census, and [Q1039](../queue/Q1039.md)'s shared-tenants topology.
-5. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, expecting no change: nothing in scope touches the CRDs, so anything it reports is a finding.
+5. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, expecting exactly the `egressPolicyMode` description change item 3 names: the enum members are unchanged, so a reported member add or removal is a finding.
 6. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
 
 ## Critical path

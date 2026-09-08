@@ -290,11 +290,16 @@ Ask before the PR lands, while the alternative is still a design choice; afterwa
 ### Removal needs a version increment, not a promise
 
 An API element is removable only by incrementing the version — never by deleting it from a version still being served.
-Q428 is where that bit: the deprecated `CiliumFQDN`/`CalicoFQDN` aliases promised removal "in a future release, on the v1alpha1 deprecation clock", but they are enum members of `v2beta1`, and v2.0.0 deliberately keeps serving `v2beta1`.
-The aliases live exactly as long as `v2beta1` does, which puts the earliest possible removal at `v3.0.0`.
-The fix was to state that floor identically in the enum godoc for both v2 versions, the generated CRD descriptions, the admission warning, and the operator docs.
+Q428 is where that bit: the deprecated `CiliumFQDN`/`CalicoFQDN` aliases promised removal "in a future release, on the v1alpha1 deprecation clock", but they are enum members of `v2beta1`, so they live exactly as long as `v2beta1` does.
+The fix was to derive a floor from that and state it identically in the enum godoc for both v2 versions, the generated CRD descriptions, the admission warning, and the operator docs.
 
 Name a floor ("no earlier than vX"), not a schedule, and never promise a removal the version lifecycle cannot deliver.
+
+**A floor derived from a plan moves when the plan does, and the derivation is the part to write down.** Q428's floor was `v3.0.0`, computed from "`v2.0.0` keeps serving `v2beta1`", which read like a property of the versioning contract and was a plan choice.
+When that choice was revisited ([the v2beta1 retirement decision](../plan/v2beta1-retirement.md), 2026-09-08) the floor moved to `v2.0.0` and every one of those five sites had to move with it.
+The rule survived; only its input changed.
+State the floor *and* what it is derived from, so the next reader can tell which half a change invalidates.
+A bare "no earlier than `v3.0.0`" gives them no way to know the sentence is load-bearing on something else.
 
 ### A new version must round-trip losslessly
 

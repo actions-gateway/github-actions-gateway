@@ -385,7 +385,10 @@ The notice now exists in both halves the policy needs, the API surface and the d
 > Two stale statements were corrected in passing: "you can stay on `v1alpha1` indefinitely" (upgrade.md) and "Classic is slated for removal one *minor* release out" (tenant-onboarding, troubleshooting), which understated a major-tag removal.
 > The `CiliumFQDN`/`CalicoFQDN` enum values were left saying "a future release (on the classic/`v1alpha1` deprecation clock)"; naming a release for them was filed as Q428 and is now **settled: `v3.0.0` at the earliest**, not `v2.0.0`.
 > They are enum members of the beta version `v2beta1`, which `v2.0.0` keeps serving, and an API element is removable only by incrementing the version — so they outlive this release's bundle by a major tag.
-> Stated for operators in [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
+> Stated for operators in [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock).
+>
+> **Superseded 2026-09-08.** The premise "`v2.0.0` keeps serving `v2beta1`" was a plan choice and was changed ([v2beta1-retirement.md](v2beta1-retirement.md)), which puts the aliases back in this release's bundle after all.
+> Recorded rather than rewritten: what 1.3 announced is what 1.3 announced.
 
 The docs half of the notice already shipped as **Q409**: the ARC migration guide, getting-started, tenant onboarding, install, and the positioning pages were all re-routed onto `v2beta1`, leaving `v2alpha1` described only as the `gag-migrate` on-ramp.
 That settles which version new tenants onboard on, which was the open question this release's deprecation decision needed answered.
