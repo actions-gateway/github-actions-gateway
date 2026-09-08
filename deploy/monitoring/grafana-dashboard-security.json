@@ -180,18 +180,24 @@
     },
     {
       "type": "timeseries",
-      "title": "Validating-webhook requests/s by webhook",
+      "title": "Validating-webhook requests and denials/s",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 8, "x": 12, "y": 19 },
       "id": 12,
-      "description": "Admission requests the GMC's validating webhooks served, per webhook path, from the GMC scrape. This says the webhooks are being exercised, not how often they refused: controller-runtime writes a denial as an HTTP 200 whose AdmissionReview body carries the 403, so the counter's code label cannot separate a deny from an allow, and no metric today counts webhook rejections. A sustained rise on one path with no matching onboarding is still worth reading against the apiserver audit log.",
+      "description": "Two series: total requests is the traffic the GMC's six validating webhooks served, and total denied is how much of it was refused. Both are summed across webhooks rather than broken down: a per-webhook split overflows this cell's legend, and the ActionsGatewayWebhookRejections alert already carries the offending webhook in its own name label, so the breakdown is available where an operator acts on it. total requests says the webhooks are being exercised, not how often they refused, because controller-runtime writes a denial as an HTTP 200 whose AdmissionReview body carries the 403 and the counter's code label therefore cannot separate a deny from an allow. denied is the apiserver's own rejection counter, which reads that body, so it is the series that answers how often a webhook said no (ActionsGatewayWebhookRejections). It is scoped to error_type=no_error, the webhook being reached and refusing, rather than the GMC being unreachable under failurePolicy Fail; and to rejection_code=403, what a validator's denial produces, as against the 400 of a malformed AdmissionReview. Requires the apiserver scrape (kube-prometheus-stack scrapes it by default). Label semantics read from kubernetes/kubernetes at release-1.36 on 2026-09-07; the metric is ALPHA-stability, so the label set can change across minor versions.",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (webhook) (rate(controller_runtime_webhook_requests_total[5m]))",
-          "legendFormat": "{{webhook}}",
+          "expr": "sum (rate(controller_runtime_webhook_requests_total{webhook=~\"/validate-.*\"}[5m]))",
+          "legendFormat": "total requests",
           "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum (rate(apiserver_admission_webhook_rejection_count{name=~\"v(actionsgateway-v1alpha1|actionsgateway-v2alpha1|clusterrunnertemplate-v2alpha1|egressproxy-v2alpha1|runnerset-v2alpha1|runnertemplate-v2alpha1)\\\\.kb\\\\.io\", error_type=\"no_error\", rejection_code=\"403\"}[5m]))",
+          "legendFormat": "total denied",
+          "refId": "B"
         }
       ]
     },

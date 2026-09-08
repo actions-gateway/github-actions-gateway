@@ -38,6 +38,20 @@ GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
 # set so the withheld stack shows a scaleup band without implying every set carries one.
 RATE_LIMITED_SCALESETS = {("team-a", "cpu-standard")}
 
+# Every validating webhook the chart ships, as (path, apiserver name, requests/s,
+# denials/s). All six are listed rather than a sample because the security
+# dashboard sums across them: a preview carrying a subset renders totals below
+# what any real install produces, and a legend sized against the wrong series
+# count (Q1061).
+WEBHOOKS = (
+    ("/validate-actions-gateway-github-com-v1alpha1-actionsgateway", "vactionsgateway-v1alpha1.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-actionsgateway", "vactionsgateway-v2alpha1.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-clusterrunnertemplate", "vclusterrunnertemplate-v2alpha1.kb.io", 0.01, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-egressproxy", "vegressproxy-v2alpha1.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2alpha1-runnerset", "vrunnerset-v2alpha1.kb.io", 0.05, 0.012),
+    ("/validate-actions-gateway-com-v2alpha1-runnertemplate", "vrunnertemplate-v2alpha1.kb.io", 0.01, 0.010),
+)
+
 # Declared worker ceiling per scale set: the total the admission rungs subtract from,
 # and therefore the height of the withheld stack on the budget dashboard (Q969).
 SCALESET_CEILINGS = {
@@ -284,14 +298,20 @@ def render():
     # Admission decisions, read by the security dashboard. The GMC's validating
     # webhooks count every request on the controller-runtime counter, and a
     # denial is an HTTP 200 whose body carries the 403, so the synthetic series
-    # carry code="200" only. The ValidatingAdmissionPolicy verdicts come from
+    # carry code="200" only. The apiserver parses that body, so the denials the
+    # same panel plots come from its rejection counter instead (Q1061), which
+    # the kind apiserver cannot produce without the GMC's webhooks installed. Its
+    # rates sit just above the 0.01/s floor rather than at a realistic fraction
+    # of the request rate: below it the counter is flat across the render window
+    # (Q704), which reads as a broken panel. The ValidatingAdmissionPolicy verdicts come from
     # the apiserver's own counter, whose label values are lowercase (deny,
     # audit, warn, and allow for an evaluation error admitted under
     # failurePolicy Ignore) and whose error_type is never empty; the kind
     # apiserver behind the preview has no such policy, so the exporter stands
     # in for it under the names the chart's default namePrefix produces.
-    for hook, rate in (("runnerset", 0.05), ("actionsgateway", 0.02), ("egressproxy", 0.02)):
-        L.append(f'controller_runtime_webhook_requests_total{{webhook="/validate-actions-gateway-com-v2alpha1-{hook}",code="200"}} {counter_total(rate, elapsed)}')
+    for path, name, rate, denied in WEBHOOKS:
+        L.append(f'controller_runtime_webhook_requests_total{{webhook="{path}",code="200"}} {counter_total(rate, elapsed)}')
+        L.append(f'apiserver_admission_webhook_rejection_count{{name="{name}",type="validating",operation="CREATE",error_type="no_error",rejection_code="403"}} {counter_total(denied, elapsed)}')
     for policy in ("gmc-tenant-resource-guard", "gmc-priorityclass-allowlist-guard"):
         L.append(f'apiserver_validating_admission_policy_check_total{{policy="{policy}",policy_binding="{policy}-binding",error_type="no_error",enforcement_action="deny"}} {counter_total(0.01, elapsed)}')
 

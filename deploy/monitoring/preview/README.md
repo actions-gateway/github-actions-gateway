@@ -75,6 +75,26 @@ Common knobs (environment variables):
 | `FROM` / `TO` | `now-10m` / `now` | Dashboard time range. Matched to `WAIT` so the whole window is backed by data. |
 | `CLUSTER` | `gag-obs` | kind cluster name. |
 
+### Reading a render
+
+Open the PNG.
+The harness cannot tell you whether it is right: `render.sh` checks Grafana's HTTP 200 and prints a byte count, and neither separates a populated dashboard from one where every panel reads "No data" (Q1074).
+
+Two traps cost a render each, both found adding a series to the security dashboard's webhook panel:
+
+- **A solo render cannot answer whether a legend is clipped.** `/render/d-solo/<uid>/<uid>?panelId=N&width=…&height=…` grows the returned image to fit the legend whatever height you ask for, so a panel whose legend is cut off in the dashboard shows every entry when rendered alone, at any size.
+  Only the full-dashboard render is faithful to the grid cell.
+  Use the solo render to read a panel closely, never to judge whether it fits.
+- **Legend capacity is not a row count you can derive, and panel height does not buy you rows.** Three renders of the same `w=8, h=7` cell: six labels at full path length clipped three; six short labels (`actionsgateway requests`) fitted in three rows with nothing cut; seven medium labels (`clusterrunnertemplate-v2alpha1 denied`) showed only four.
+  Raising that panel to `h=10` still clipped, and shifted the ten panels below it.
+  The middle case is the committed artifact, so six entries demonstrably fit: capacity moves with label width in a way these three points do not pin down.
+  What they do support is the response: once a legend needs more than about two rows, reduce the number of series rather than the length of their names, and render to confirm.
+
+`label_replace(…, "kind", "$1", …)` is the obvious way to shorten them and **does not work here**: `make promql-check` rejects a `$1` in a dashboard expression, because Grafana's own `$var` interpolation reaches it. The working shape is a `renameByRegex` transformation on the panel, where the `$1` belongs to Grafana's rename machinery rather than to the query.
+
+**A shortening regex has to be injective, and one that parses the name's shape usually is not.** Deriving a label from a webhook path with `.*-([a-z]+)` reads the resource off the end and drops the API version, so `…-github-com-v1alpha1-actionsgateway` and `…-com-v2alpha1-actionsgateway` both render `actionsgateway` and two bands become indistinguishable: exactly the defect the panel was being fixed for.
+Prefer stripping a constant prefix and suffix (`v(.*)\.kb\.io`), which cannot collide whatever names are added later, and check the rename against the full set the chart ships rather than the subset the exporter fakes.
+
 ## Iterating
 
 - Changed the **dashboard JSON or rules**?
