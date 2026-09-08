@@ -2777,6 +2777,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
 <td>⚠️ Phase 1's two outstanding soak readings are ready rows as of 2026-09-07, riding in <a href="release-1.8/">release-1.8.md</a>: <a href="../queue/Q1059/">Q1059</a> (every kind on dogfood traffic) and <a href="../queue/Q1060/">Q1060</a> (round-trips on real objects), with the Phase 2 alias decision <a href="../queue/Q452/">Q452</a> revived beside them. <a href="../queue/Q413/">Q413</a> stays parked until both readings exist; Phase 3's removals ride <a href="../queue/Q273/">Q273</a>/<a href="../queue/Q264/">Q264</a></td>
 </tr>
+<tr>
+<td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
+<td>Whether <code>v2.0.0</code> retires <code>v2beta1</code> or keeps serving it, which decides whether GA <code>v2</code> defines the deprecated FQDN aliases: the doc conflict, what upstream requires, and the two paths costed against each other</td>
+<td>⚠️ Open as of 2026-09-07, tracked by <a href="../queue/Q1082/">Q1082</a>. Raised while deciding <a href="../queue/Q452/">Q452</a>, whose PR is drafted pending the answer. Both paths need the same Rule #4b overlap release and storage migration, so they differ only in what <code>v2</code> carries and whether the published <code>v3.0.0</code> floor is walked back. Recommends retiring at <code>v2.0.0</code>, weakly. Sibling <a href="../queue/Q1083/">Q1083</a> on the notice period is independent</td>
+</tr>
 </tbody>
 </table>
 <h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>
