@@ -1,10 +1,21 @@
 # Should `v2beta1` retire at `v2.0.0`?
 
-> **Status: open, raised 2026-09-07 while deciding [Q452](../queue/Q452.md).** [#1867](https://github.com/actions-gateway/github-actions-gateway/pull/1867) is drafted pending the answer, because Q452's decision depends on it.
-> Tracked as [Q1082](../queue/Q1082.md).
+> **Status: decided 2026-09-08, yes, Path 2.** `v2beta1` is no longer served past `v2.0.0`.
+> The reasoning given: `v2.0.0` is a major release and a major release may make breaking changes.
+> The analysis below is kept as taken, before the decision, so the cost that was accepted stays legible.
+
+**What the decision settles.** [Q452](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn) flips to *`v2` omits the aliases*, GA is born clean, and the aliases stop being on their own clock: they ride `v2.0.0` with `v1alpha1`, `v2alpha1` and classic.
+The published `v3.0.0` floor is walked back to `v2.0.0` across the operator docs, the enum godoc and the admission warning.
+
+**What it does not settle, and what it therefore obliges.** Rule #4b is unaffected by semver: storage cannot advance to `v2` until a release has shipped serving both `v2beta1` and `v2`, so the overlap release below is still required and the deprecation notice still has to precede it.
+That package is [Q1085](../queue/Q1085.md): the notice, the admission change from warn to reject, and the pre-upgrade alias check.
+It is now on the critical path rather than optional.
+The check is load-bearing for a mechanical reason given in [v2-ga.md](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn): one stored object naming an alias fails the whole conversion request that carries it, so it breaks `kubectl get egressproxies` at `v2` for the cluster rather than for itself.
+
+---
 
 Q452 asked whether GA `v2` defines the deprecated `CiliumFQDN`/`CalicoFQDN` aliases.
-It was decided yes, on the reasoning that `v2beta1` keeps serving them until `v3.0.0` and every served version must be able to represent every stored object.
+It was first decided yes, on the reasoning that `v2beta1` keeps serving them until `v3.0.0` and every served version must be able to represent every stored object.
 That reasoning is sound and rests on a premise nobody argued: **that `v2.0.0` keeps serving `v2beta1`.** If `v2beta1` retires at `v2.0.0` instead, the aliases go with it, `v2` never defines them, and Q452's answer flips.
 
 ## The premise is asserted in three places and contradicted in two
@@ -57,14 +68,15 @@ The paths differ only in what happens at the third release and what `v2` carries
 
 | Release | Ships | Operator action |
 |---|---|---|
-| A (1.8 or 1.9) | `v2beta1` deprecated, removal named for `v2.0.0`. Admission **rejects** new alias use, where today it only warns. Alias preflight added to the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#pre-upgrade-validation-checklist). | None, unless the preflight flags an `EgressProxy`: set `egressPolicyMode: FQDN` and have the platform operator set `--fqdn-policy-backend`. |
-| B | The Rule #4b overlap: `v2` served beside `v2beta1`, `v2beta1` still storage, `v2` without the aliases. | None. |
-| C = `v2.0.0` | Storage advances to `v2`, stored objects migrated, then `v2beta1`, `v2alpha1`, `v1alpha1` and classic removed together. | The `v1`→`v2` migration already planned. |
+| A (1.8) | `v2beta1` deprecated and the removal named for `v2.0.0`, in the operator docs, the enum godoc and the admission warning. | None. Migrate at your convenience: set `egressPolicyMode: FQDN` and have the platform operator set `--fqdn-policy-backend`. |
+| B (1.9) | The Rule #4b overlap: `v2` served beside `v2beta1`, `v2beta1` still storage, `v2` without the aliases. Admission **rejects** new alias use, where A only warns, and the alias check joins the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#pre-upgrade-validation-checklist). | Run the check. It flags any `EgressProxy` still naming an alias, which must be migrated before `v2` is requested for it. |
+| C (`v2.0.0`) | Storage advances to `v2`, stored objects migrated, then `v2beta1`, `v2alpha1`, `v1alpha1` and classic removed together. | The `v1`→`v2` migration already planned. |
 
 - GA is clean permanently, and Q1076 becomes moot.
 - Costs a walkback of the published `v3.0.0` floor, in the direction that disfavours an operator: sooner than promised.
-- **Release A's preflight is load-bearing.** It is the only thing between an unmigrated object and the failure mode at Release B, where a conversion that cannot represent the alias fails the whole request.
+- **Release B's alias check is load-bearing, and it ships in the same release as the failure mode it guards.** B is where `v2` starts being served, so B is the first release where a conversion that cannot represent the alias can be asked for.
   `ConversionRequest.Objects` is a list, so one such object breaks `kubectl get egressproxies` at `v2` for the cluster.
+  Landing the check and the reject in A instead is strictly safer, and is worth doing if 1.8 has room; what makes B the deadline rather than the target is that after B they are no longer preventive.
 
 ## What the paths actually differ on
 
@@ -82,6 +94,9 @@ The paths differ only in what happens at the third release and what `v2` carries
 - **The Rule #4b overlap release**, per above.
 
 ## Recommendation
+
+> Accepted 2026-09-08 on a different and simpler argument than the one below: a major release is allowed to break.
+> The cost asymmetry stands as a second reason rather than the deciding one.
 
 **Path 2**, weakly, and the reasoning is the cost asymmetry rather than tidiness.
 Path 1's cost is permanent and unbounded; Path 2's costs are one-time and bounded, and most of what looks expensive about it is common cost the graduation owes anyway.

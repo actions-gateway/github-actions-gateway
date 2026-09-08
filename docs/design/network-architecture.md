@@ -286,7 +286,7 @@ The choice is **split across two roles** (Q245) so the tenant API stays stable a
   - `FQDN` — "express my GitHub allowlist by hostname."
     The tenant does **not** name a CNI; the mechanism is the operator's choice.
   - `CiliumFQDN` / `CalicoFQDN` — **deprecated** aliases that pin their namesake mechanism regardless of the operator backend (retained for backward compatibility; the admission webhook warns).
-    Removable no earlier than `v3.0.0`: they are enum members of the beta version `v2beta1`, which the `v2.0.0` removal bundle keeps serving ([why](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
+    Removed at `v2.0.0`: they are enum members of `v2alpha1` and `v2beta1`, both of which that release removes, and the GA `v2` version does not define them ([why](../operations/v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock)).
 - **Operator backend** — the GMC `--fqdn-policy-backend` flag (`none` | `cilium` | `calico` | `gke`) resolves an `FQDN` intent to a concrete emitter, once per cluster:
   - `cilium` → a `CiliumNetworkPolicy` (`cilium.io/v2`) with `toFQDNs` rules on TCP/443 plus a DNS-visibility rule so Cilium's DNS proxy learns the resolved IPs.
   - `calico` → a Calico `NetworkPolicy` (`projectcalico.org/v3`) with the GitHub hostnames as destination `domains`.

@@ -257,7 +257,11 @@ Remove the old values only at a later, deliberate breaking hop.
 > **Corrected (Q428): that hop is not the classic/`v1alpha1` clock.** This section originally said the old values ride the **same deprecation clock as classic/v1alpha1**, i.e. `v2.0.0`.
 > They cannot: they are enum members of the beta version `v2beta1`, which `v2.0.0` keeps serving, and an API element is removable only by incrementing the version — so they live as long as `v2beta1` does.
 > The earliest release that may remove them is **`v3.0.0`**.
-> Reasoning and the operator-facing statement: [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
+> Reasoning and the operator-facing statement: [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock).
+>
+> **Superseded 2026-09-08: the removal is `v2.0.0` after all**, by a different route than the one this correction ruled out.
+> `v2beta1` is no longer served past `v2.0.0` ([v2beta1-retirement.md](v2beta1-retirement.md)), so "they live as long as `v2beta1` does" now resolves to `v2.0.0` rather than `v3.0.0`.
+> The sign-off this section asks for below was given: a major release may break, and the aliases go with the versions that define them.
 
 A **clean break** (drop the old values immediately) breaks any v2beta1 object that set an FQDN mode.
 Real usage is thin — the only known consumers of `CiliumFQDN`/`CalicoFQDN` are tests and docs; dogfood is direct-egress and never exercised an FQDN mode (Q242 finding) — so a clean break *may* still be acceptable, but that is now an **explicit "zero external adopters + accept a beta break" sign-off**, not an assumed "free" reshape.

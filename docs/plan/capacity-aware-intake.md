@@ -374,7 +374,7 @@ Three things make it more than a one-line change, and they are the design work t
   If the scale-set tier gets a capacity-integer expression of rung 1, those two need the same treatment or they ship classic-only and inherit this exact defect on arrival.
   Design the integer path once, for all three rungs.
 
-**Why it is a 2.0 gate.** Classic acquisition is removed in `v2.0.0` ([v2-ga.md](v2-ga.md#phase-3--the-coupled-removals)).
+**Why it is a 2.0 gate.** Classic acquisition is removed in `v2.0.0` ([v2-ga.md](v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals)).
 Rung 1 exists only on classic.
 So the removal deletes the pre-claim quota gate outright unless this lands first — structurally identical to Q417 for eviction recovery, which cleared the same risk on 2026-07-26, and until now undeclared.
 Two of the four capabilities the README leads with were in this position.

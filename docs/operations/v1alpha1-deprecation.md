@@ -1,62 +1,62 @@
-# Deprecation and removal notice: `v1alpha1`, `v2alpha1`, and Classic
+# Deprecation and removal notice: `v1alpha1`, `v2alpha1`, `v2beta1`, and Classic
 
 > **Audience:** Platform engineer / tenant operator
 
-!!! warning "Three deprecations, one removal release: `v2.0.0`"
+!!! warning "Four deprecations, one removal release: `v2.0.0`"
     Onboard new tenants on the **v2 API** at `actions-gateway.com/v2beta1` (see [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)), and author them as single-label `ScaleSet` runner sets.
     Everything named below stays **fully served until `v2.0.0`**, so nothing is forced today.
     Migrate existing tenants with [`gag-migrate`](migration-v1-to-v2.md) at your convenience: the move changes the API objects, not how jobs are acquired.
 
+    `v2beta1` is itself removed at `v2.0.0`, superseded by the General Availability (GA) version `v2`.
+    That is not a reason to delay: the release before `v2.0.0` serves `v2beta1` and `v2` side by side, and moving between them is a re-apply rather than a re-author.
+
 This page is the project's standing deprecation notice.
 It records what `v2.0.0` removes, what keeps working until then, and what an operator has to do before upgrading past it.
-One further deprecation runs on its own, later clock — [the `CiliumFQDN` / `CalicoFQDN` egress modes](#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn), removable no earlier than `v3.0.0`.
+A fourth deprecation, [the `CiliumFQDN` / `CalicoFQDN` egress modes](#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock), was announced on a later clock and now rides this one.
 
 ## What `v2.0.0` removes
 
 | Removed at `v2.0.0` | What it is today | What replaces it | How you move |
 |---|---|---|---|
 | **`actions-gateway.github.com/v1alpha1`** | the monolithic `ActionsGateway` (inline `proxy` and `runnerGroups[]`) plus the standalone `RunnerGroup` kind | the decomposed `actions-gateway.com` API at `v2beta1` | [`gag-migrate`](migration-v1-to-v2.md), a one-shot fan-out of one v1 object into several v2 objects |
-| **`actions-gateway.com/v2alpha1`** | v2's first served version, superseded as storage and hub version by the `v2beta1` graduation | `v2beta1`, the graduated, ScaleSet-only shape | read and re-apply your objects at `v2beta1`; the conversion webhook already round-trips them, so there is no re-author step except for the two `v2alpha1`-only fields below |
+| **`actions-gateway.com/v2alpha1`** | v2's first served version, superseded as storage and hub version by the `v2beta1` graduation | `v2beta1` until `v2.0.0`, then `v2` | read and re-apply your objects; the conversion webhook already round-trips them, so there is no re-author step except for the two `v2alpha1`-only fields below |
 | **Classic acquisition** (`RunnerSet.spec.acquisitionProtocol: Classic` and `spec.maxListeners`, both `v2alpha1`-only) | the many-acquirers protocol, and the only protocol `v1alpha1` speaks | `ScaleSet`, the single-acquirer protocol: the default since `v1.1.0`, and the only protocol `v2beta1` serves | create one fresh single-label `ScaleSet` `RunnerSet` per `runs-on` target. `acquisitionProtocol` is immutable, so this is a create-and-delete, not an edit |
+| **`actions-gateway.com/v2beta1`** | the graduated beta version, storage and hub since `v1.1.0` | `v2`, the GA version | read and re-apply your objects at `v2`; the conversion webhook round-trips them, with the one exception of the two deprecated `egressPolicyMode` aliases below |
 
-`v2beta1` itself is **not** affected.
-Beta's contract is that a version will not be removed, and `v2.0.0` adds the GA `v2` version beside it rather than taking it away.
+**`v2beta1`'s removal was decided later than the other three** and is not in the `release-1.3.md` announcement.
+Decided 2026-09-08 ([reasoning](../plan/v2beta1-retirement.md)): `v2.0.0` is a major release, and dropping a served version is a breaking change a major release may make.
+Beta's contract is a migration path, not permanence, and the path here is the overlap release: the tag before `v2.0.0` serves `v2beta1` and `v2` together, so no object is ever unreachable.
 
-### Why the three are coupled
+### Why the removals are coupled
 
 `v2beta1` is already ScaleSet-only, so classic acquisition exists *only* to serve `v1alpha1` and `v2alpha1` objects.
 Removing those two versions removes classic's entire reason to exist.
-Splitting the three removals across separate releases would buy nothing and would cost every operator a second breaking migration, so they land together on one major tag.
+Splitting the removals across separate releases would buy nothing and would cost every operator a second breaking migration, so they land together on one major tag.
+`v2beta1` joins them for the same reason rather than a shared mechanism: it is superseded by `v2` on its own schedule, and landing it on the same tag spends one breaking migration instead of two.
 
-## A fourth deprecation on a different clock: `CiliumFQDN` / `CalicoFQDN`
+## The `CiliumFQDN` / `CalicoFQDN` aliases ride the `v2.0.0` clock
 
 The `EgressProxy` field `spec.egressPolicyMode` accepts two deprecated per-Container Network Interface (CNI) values, `CiliumFQDN` and `CalicoFQDN`, superseded by the `FQDN` intent plus the operator's `--fqdn-policy-backend` selector ([security-operations](security-operations.md#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)).
-They are **not** part of the `v2.0.0` bundle above.
 
-**The earliest release that may remove them is `v3.0.0`.**
+**They are removed at `v2.0.0`, with everything else on this page.**
 
-Why they cannot ride the `v2.0.0` clock:
+This supersedes the earlier notice, which put their earliest removal at `v3.0.0`.
+Nothing about the API contract changed; one premise under that reasoning did.
+The old chain ran: the values are enum members of `v2alpha1` *and* `v2beta1`; an API element is removed by incrementing the version, never by deleting it from a served one; so the values live exactly as long as `v2beta1` does.
+Every step of that still holds.
+What changed is the last input — `v2beta1` was expected to outlive `v2.0.0`, and as of 2026-09-08 it does not ([why](../plan/v2beta1-retirement.md)).
+Both versions carrying the aliases are removed at `v2.0.0`, and the GA `v2` version does not define them, so `v2.0.0` is where they go.
 
-1. **They are elements of a beta version, not a version themselves.** The two values exist in `v2alpha1` *and* in `v2beta1`, which is the storage and hub version.
-   The `v2alpha1` copy disappears with `v2alpha1` at `v2.0.0`; the `v2beta1` copy does not, because `v2.0.0` keeps serving `v2beta1` — it adds the General Availability (GA) `v2` version beside it.
-2. **An API element is removed by incrementing the version, never by deleting it from a served one.** Deleting a value from a version already in the field would reject objects an operator has stored and can still `kubectl apply` — the exact breakage the versioning contract exists to prevent.
-   So the values live for as long as `v2beta1` is served.
-3. **Beta promises the version will not be removed without a migration path.** Retiring a served version is a breaking change, and this project lands breaking changes on a major tag announced at least one release ahead ([roadmap](../roadmap.md)).
-   The next major after `v2.0.0` is `v3.0.0`, so that is the earliest tag that can retire `v2beta1` and, with it, these two values.
+**What to do before upgrading to `v2.0.0`:** if any `EgressProxy` still names `CiliumFQDN` or `CalicoFQDN`, migrate it.
+Set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the matching GMC `--fqdn-policy-backend` (`cilium` or `calico`).
+The enforced policy is identical either way — each alias pins its namesake backend, and `FQDN` plus the matching selector resolves to the same emitter — so this is a re-label, not a change in what is enforced.
 
-Naming `v2.0.0` for them would have been a promise the API contract forbids keeping: the removal would have had to either break `v2beta1` objects or quietly not happen.
+This is no longer optional, and the reason is mechanical rather than procedural.
+`v2` cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
+One unmigrated `EgressProxy` therefore breaks `kubectl get egressproxies` at `v2` for the entire cluster, not just for itself.
+A pre-upgrade check that finds them is tracked as [Q1085](../queue/Q1085.md); until it ships, `kubectl get egressproxies -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.spec.egressPolicyMode}{"\n"}{end}'` lists what to look at.
 
-Two consequences worth stating plainly:
-
-- **`v3.0.0` is not scheduled and carries no date**, exactly as `v2.0.0` carries none.
-  It is gated on `v2beta1`'s retirement, which is gated in turn on the `v2` GA soak ([v2 GA plan](../plan/v2-ga.md)).
-  The commitment here is a floor — *not before* `v3.0.0` — and the removal still gets its own one-release-ahead announcement.
-- **Whether the GA `v2` version defines the two values at all is a separate, open question**, settled by the graduation hop rather than by this notice.
-  `v2` is a new version, so it is free to omit them; if it does, an operator on `v2` simply cannot set them, while an operator on `v2beta1` still can until `v3.0.0`.
-  Either way the removal release above is unchanged.
-
-**What to do now:** nothing is forced, but migrate when convenient — set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the matching GMC `--fqdn-policy-backend`.
-The admission webhook already warns on every write that still names a deprecated value, and the warning names `v3.0.0`.
+The admission webhook warns on every write that still names a deprecated value, and the warning names the removal release.
 
 ## Status
 
