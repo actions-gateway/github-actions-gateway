@@ -85,9 +85,10 @@ Two traps cost a render each, both found adding a series to the security dashboa
 - **A solo render cannot answer whether a legend is clipped.** `/render/d-solo/<uid>/<uid>?panelId=N&width=…&height=…` grows the returned image to fit the legend whatever height you ask for, so a panel whose legend is cut off in the dashboard shows every entry when rendered alone, at any size.
   Only the full-dashboard render is faithful to the grid cell.
   Use the solo render to read a panel closely, never to judge whether it fits.
-- **A panel's legend caps at about two rows, and height does not raise the cap.** Six series at path length pushed three entries past the bottom edge of a `w=8, h=7` panel; raising it to `h=10` still clipped one and shifted ten panels below it, and a later render of seven shorter labels in the same cell still showed only the first four.
-  Roughly two entries fit per row at `w=8`, so a cell like that carries about four legend entries whatever you do to its height.
-  Reduce the series rather than the label length once you are past that.
+- **Legend capacity is not a row count you can derive, and panel height does not buy you rows.** Three renders of the same `w=8, h=7` cell: six labels at full path length clipped three; six short labels (`actionsgateway requests`) fitted in three rows with nothing cut; seven medium labels (`clusterrunnertemplate-v2alpha1 denied`) showed only four.
+  Raising that panel to `h=10` still clipped, and shifted the ten panels below it.
+  The middle case is the committed artifact, so six entries demonstrably fit: capacity moves with label width in a way these three points do not pin down.
+  What they do support is the response: once a legend needs more than about two rows, reduce the number of series rather than the length of their names, and render to confirm.
 
 `label_replace(…, "kind", "$1", …)` is the obvious way to shorten them and **does not work here**: `make promql-check` rejects a `$1` in a dashboard expression, because Grafana's own `$var` interpolation reaches it. The working shape is a `renameByRegex` transformation on the panel, where the `$1` belongs to Grafana's rename machinery rather than to the query.
 
