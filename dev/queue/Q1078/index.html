@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1064/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1078/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>ScaleSetWorkerEviction_DoesNotRecover reruns via the orphan scan - GitHub Actions Gateway</title>
+        <title>Scale-set envtest harness reads the guard ConfigMap through the cache - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#scalesetworkereviction_doesnotrecover-reruns-via-the-orphan-scan" class="md-skip">
+        <a href="#scale-set-envtest-harness-reads-the-guard-configmap-through-the-cache" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ScaleSetWorkerEviction_DoesNotRecover reruns via the orphan scan
+              Scale-set envtest harness reads the guard ConfigMap through the cache
             
           </span>
         </div>
@@ -2597,22 +2597,18 @@
   
 
 
-<h1 id="scalesetworkereviction_doesnotrecover-reruns-via-the-orphan-scan"><code>ScaleSetWorkerEviction_DoesNotRecover</code> reruns via the orphan scan<a class="headerlink" href="#scalesetworkereviction_doesnotrecover-reruns-via-the-orphan-scan" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> fails on <code>main</code> with a re-run, or any AGC logs <code>worker pod for an unconcluded job was gone when this AGC started</code> for a pod its own listener provisioned in the same process.</p>
-<p><code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> asserts that a scale-set worker evicted before any terminal phase is not re-run, and it failed with a re-run under <code>cause=vanished</code>: the AGC logged the orphan-scan warning for a pod its own listener had provisioned seconds earlier, in a process that never restarted.</p>
-<p><strong>Sighted 2026-09-07</strong>, on one tree, at a host load average of 75 to 120 on 18 cores: 3 failures in 5 runs on the branch that found it and 1 pass in 1 run on the base it was cut from, none of which touched the orphan scan.
-The failing runs finish in 3 to 4.5 s because the <code>assert.Never</code> fires the moment the re-run lands.
-It is load-dependent: 5 passes in 5 runs at a load average of about 5 on the same tree, which is why the fix was measured against the mechanism instead.</p>
-<p><strong>Mechanism, measured directly.</strong> <code>RecoverOrphanedScaleSetWorkers</code> took its once-per-process verdict when it first saw a <strong>non-empty</strong> in-flight set, not on the set's first reconcile: the caller returned early on an empty <code>state.InFlight</code> before the provisioner's <code>orphanScans.claim</code>.
-The listener adds the in-flight entry on a successful provision, so the reconcile the pod's Create event enqueues can read the ConfigMap before the entry lands and consume nothing.
-The spec then evicts the pod the instant it appears, envtest removes it at once, and the next reconcile is the first to see a non-empty set: the entry's pod is gone, so the scan reads it as a worker lost while the AGC was absent.
-That is the false positive the file's own comment says the once-per-process rule exists to prevent ("an entry this process created is covered by the live pod-watch recovery, so re-examining one can only produce a false positive"), reached because the claim was keyed on the reading rather than on the process.</p>
-<p><strong>Mitigated</strong> by claiming the verdict on the first reconcile that reads the set at all, empty or not.
-That dating is the one the design already documents: the reconcile runs ahead of this process's listener, so an empty reading is the answer "nothing was inherited" rather than a reading still to take.
-The read that could not be taken still returns without claiming, so a failed ConfigMap read leaves the question open.
-The spec's own race is kept as the tripwire rather than widened: the product defect is a live AGC re-running a job that never ran, and the fake accepts the <code>rerun-failed-jobs</code> a real GitHub would refuse.</p>
-<p>Soak clock runs from the fix.
-Correctness-guarding, so <strong>≥50 green <code>main</code> runs</strong> of <code>integration-test.yml</code>: the spec asserts a product behaviour (a live AGC must not re-run a job that never ran), so a false retirement would make a future real red read as a known flake.</p>
+<h1 id="scale-set-envtest-harness-reads-the-guard-configmap-through-the-cache">Scale-set envtest harness reads the guard ConfigMap through the cache<a class="headerlink" href="#scale-set-envtest-harness-reads-the-guard-configmap-through-the-cache" title="Permanent link">&para;</a></h1>
+<p><code>startRunnerSetReconcilerWithScaleSetClients</code> sets <code>p.APIReader</code> and <code>EventReader</code> from <code>mgr.GetAPIReader()</code>, each with a comment saying it wires them "exactly as main.go wires it", and leaves <code>RunnerSetReconciler.APIReader</code> nil.
+<code>scaleSetGuardStore</code> falls back to the cached client when that field is unset (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/scaleset_guards.go">scaleset_guards.go</a>), so every envtest read of a scale-set guard ConfigMap goes through the informer cache while production (main.go, which sets <code>APIReader: mgr.GetAPIReader()</code> on the reconciler) reads it live.</p>
+<p><strong>Why it matters more since Q1064.</strong> The orphan scan now spends its one per-process claim on the first reading of the in-flight set, empty or not.
+Before that, a stale-empty read cost nothing: the claim stayed unspent and the next reconcile retried.
+Now a first reading served stale-empty would burn the scan for the life of the process, which is the failure mode <code>liveScaleSetWorkerPodNames</code> already argues about its own List: "a cold cache would read as every worker in the set having been disrupted".
+Production is unaffected, because the read there is uncached; the exposure is the harness telling us less than it claims to.</p>
+<p><strong>Not currently believed to bite</strong>, and that belief is unmeasured: the Q844 specs build a fresh manager per AGC generation, so the new cache's initial LIST should already carry the seeded ConfigMap, and a cached <code>Get</code> for a kind with no informer blocks until that sync.
+Read off the harness and controller-runtime's <code>getInformerForKind</code> rather than driven.</p>
+<p><strong>The work.</strong> Wire <code>APIReader: mgr.GetAPIReader()</code> on the reconciler in that harness and run the AGC envtest suite.
+It is not a one-line change to wave through: the field also routes the v1alpha1 <code>RunnerGroup</code> adoption probe and <code>resolveRunnerSetRefs</code> off the cache, so the suite is the measurement rather than a formality.
+If some suite genuinely needs the cached reader, wire the guard store's reader on its own instead and say why in the comment that currently claims main.go parity.</p>
 
 
 
