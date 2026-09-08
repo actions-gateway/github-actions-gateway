@@ -19,7 +19,8 @@ That is a page telling adopters nine things are in progress when they are waitin
 | **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](release-1.6.md) |
 | **1.7** | Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
 | **1.8** | The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060), which ride, and the Phase 2 alias decision (Q452), taken 2026-09-07: the release that gathers the evidence 2.0 is parked on | [release-1.8.md](release-1.8.md) |
-| **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
+| **1.9** | The Rule 4b overlap: `v2` served beside `v2beta1`, storage still `v2beta1`. [v2-ga.md](v2-ga.md) Phase 2, and the admission reject plus pre-upgrade check from [Q1085](../queue/Q1085.md) | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) |
+| **2.0** | v2 GA: storage advances to `v2`, stored objects migrate, then four coupled removals: `v1alpha1`, `v2alpha1`, `v2beta1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
 
@@ -49,6 +50,25 @@ Labelling `2.0-gate` rows then would have published a commitment on evidence nob
 `semver-floor.sh v1.7.0` read **FLOOR: NONE** the same day, so nothing forced a release either; what the ladder needed was a rung whose deliverable is the evidence.
 [release-1.8.md](release-1.8.md) is that rung: Q1029, a measured drain-recovery defect closed 2026-09-07, is the one gating row and the reason an operator upgrades, and the two soak readings ride because a measurement that may come back negative cannot be scheduled against a tag.
 A negative reading is the rung working: it names the `v2beta1` shape fix GA is gated on finding first.
+
+## Why 1.9 exists: the storage version cannot advance in the same release that introduces `v2`
+
+**Added 2026-09-08**, when [retiring `v2beta1` at `v2.0.0`](v2beta1-retirement.md) put the ladder's shape in question and the gap turned out to predate that decision.
+
+[v2-ga.md](v2-ga.md)'s Phase 2 read *add `v2` to each kind, mark it storage*, and Phase 3 *storage migration, then drop the superseded versions*, with both inside the `v2.0.0` cut.
+That introduces `v2`, advances storage to it, and removes every other served version on one tag.
+Kubernetes' [deprecation policy](https://kubernetes.io/docs/reference/using-api/deprecation-policy/) rule #4b says the storage version "may not advance until after a release has been made that supports both the new version and the previous version", and no such release existed on this ladder.
+
+The rule is a convention rather than something the apiserver enforces, so what it is worth is the question, and the answer is **rollback**.
+Once stored objects are rewritten as `v2`, a cluster cannot go back to a release whose CustomResourceDefinitions do not define `v2`.
+Without an overlap release that destination is `v1.8.0`, which makes the `v2.0.0` upgrade the one with no way back.
+It is already the largest this project asks anyone to make, carrying the `v1`→`v2` migration and four removals.
+
+The overlap release is also the only place the `v2beta1` ↔ `v2` conversion edge runs before it is mandatory.
+Phase 1's soak validates `v2beta1`'s shape; it says nothing about a conversion that does not exist yet.
+
+So 1.9 serves `v2` beside `v2beta1` and changes no storage version, and the storage marker moves from Phase 2 to Phase 3.
+It is deliberately thin: the work is Phase 2, which is already scoped, plus the two operator-facing halves of [Q1085](../queue/Q1085.md) that want to land before the removal rather than with it.
 
 ## What is punted past `v2.0.0`
 

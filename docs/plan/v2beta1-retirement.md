@@ -68,14 +68,15 @@ The paths differ only in what happens at the third release and what `v2` carries
 
 | Release | Ships | Operator action |
 |---|---|---|
-| A (1.8 or 1.9) | `v2beta1` deprecated, removal named for `v2.0.0`. Admission **rejects** new alias use, where today it only warns. Alias preflight added to the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#pre-upgrade-validation-checklist). | None, unless the preflight flags an `EgressProxy`: set `egressPolicyMode: FQDN` and have the platform operator set `--fqdn-policy-backend`. |
-| B | The Rule #4b overlap: `v2` served beside `v2beta1`, `v2beta1` still storage, `v2` without the aliases. | None. |
-| C = `v2.0.0` | Storage advances to `v2`, stored objects migrated, then `v2beta1`, `v2alpha1`, `v1alpha1` and classic removed together. | The `v1`→`v2` migration already planned. |
+| A (1.8) | `v2beta1` deprecated and the removal named for `v2.0.0`, in the operator docs, the enum godoc and the admission warning. | None. Migrate at your convenience: set `egressPolicyMode: FQDN` and have the platform operator set `--fqdn-policy-backend`. |
+| B (1.9) | The Rule #4b overlap: `v2` served beside `v2beta1`, `v2beta1` still storage, `v2` without the aliases. Admission **rejects** new alias use, where A only warns, and the alias check joins the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#pre-upgrade-validation-checklist). | Run the check. It flags any `EgressProxy` still naming an alias, which must be migrated before `v2` is requested for it. |
+| C (`v2.0.0`) | Storage advances to `v2`, stored objects migrated, then `v2beta1`, `v2alpha1`, `v1alpha1` and classic removed together. | The `v1`→`v2` migration already planned. |
 
 - GA is clean permanently, and Q1076 becomes moot.
 - Costs a walkback of the published `v3.0.0` floor, in the direction that disfavours an operator: sooner than promised.
-- **Release A's preflight is load-bearing.** It is the only thing between an unmigrated object and the failure mode at Release B, where a conversion that cannot represent the alias fails the whole request.
+- **Release B's alias check is load-bearing, and it ships in the same release as the failure mode it guards.** B is where `v2` starts being served, so B is the first release where a conversion that cannot represent the alias can be asked for.
   `ConversionRequest.Objects` is a list, so one such object breaks `kubectl get egressproxies` at `v2` for the cluster.
+  Landing the check and the reject in A instead is strictly safer, and is worth doing if 1.8 has room; what makes B the deadline rather than the target is that after B they are no longer preventive.
 
 ## What the paths actually differ on
 

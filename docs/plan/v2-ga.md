@@ -15,8 +15,8 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 |---|---|---|---|
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../queue/Q413.md)) |
-| 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../queue/Q413.md)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
+| 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ❌ Open ([Q413](../queue/Q413.md)) |
+| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../queue/Q413.md)) |
 
 ## Why this is gated on a soak, not a date
@@ -69,6 +69,10 @@ Per [v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), each 
    The hub moves to `v2`.
 3. Storage-migrate stored objects, then drop the superseded served version.
 
+**This hop is split across two releases, which the previous two hops were not.** Step 1's storage marker and all of step 3 move to Phase 3 and the `v2.0.0` tag; 1.9 ships step 1 without the marker, plus step 2.
+Rule #4b requires a release serving both versions before storage advances, and what that buys is a rollback destination for the largest upgrade this project asks anyone to make ([release-ladder.md](release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2)).
+The hub is free to move in 1.9 regardless: `convertViaHub` routes spoke to hub to spoke and nothing ties the hub to the storage version.
+
 Two project-specific constraints carry over from the last hop and should be read before starting: shared version-neutral code lives in `api/apiconditions` with one-line re-exports per version, and `check-v2-api-sync.sh` gates every shared v2 file.
 Getting this wrong is the most likely way to break the hop.
 
@@ -97,16 +101,19 @@ The contract quotes are measured; that a `LIST` batches into one `ConversionRequ
 **Why the migration is expected to be a no-op in practice.** No chart, overlay or e2e manifest in the tree sets an alias, measured 2026-09-07, and [Q245](q245-fqdn-intent-backend-split.md#migration--compatibility) recorded the only known consumers as tests and docs.
 That is a floor rather than a rate, since an external adopter is unknowable for a public project, which is why the check runs rather than being reasoned away.
 
-## Phase 3 — the coupled removals
+## Phase 3 — the storage advance and the coupled removals
 
-`v2.0.0` executes all three removals announced by [release-1.3.md](release-1.3.md), plus a fourth decided later:
+**`v2.0.0` opens by marking `v2` the storage version and migrating stored objects**, which 1.9 deliberately did not do.
+That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in [Q1085](../queue/Q1085.md) load-bearing: the migration is the moment an object naming a value `v2` cannot represent stops being readable.
+
+`v2.0.0` then executes all three removals announced by [release-1.3.md](release-1.3.md), plus a fourth decided later:
 
 - `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../queue/Q273.md)
 - `v2alpha1` — this plan
 - classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — [Q264](../queue/Q264.md)
 - `v2beta1`, and with it the `CiliumFQDN`/`CalicoFQDN` aliases: decided 2026-09-08, [v2beta1-retirement.md](v2beta1-retirement.md), and announced separately because `release-1.3.md` did not carry it
 
-`v2beta1` is the one removal Rule 4b constrains: storage cannot advance to `v2` until a release has shipped serving both, so the release before `v2.0.0` serves `v2beta1` and `v2` side by side.
+`v2beta1` is the one removal Rule 4b constrains, and 1.9 is the release that satisfies it: it serves `v2beta1` and `v2` side by side without moving storage, so this tag is free to advance.
 
 They are one bundle because `v2beta1` is already ScaleSet-only: classic acquisition exists solely to serve `v1alpha1` and `v2alpha1` objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when `v1alpha1` is removed.
