@@ -1675,6 +1675,24 @@ It was not: the answer was about `#1587`, which had merged hours earlier.
 A decision reads as settled context rather than as a claim, so none of the rules above fire on it, and the cost lands on the one party who cannot check the transcript as cheaply as you can — they have to remember, while re-reading the question the answer belonged to takes one search.
 So: quote a decision only from the exchange that produced it, and when a summary is the only source, go back and read what was asked before treating the answer as a rule.
 
+### A claim stated at the altitude of the rule, from evidence that only reaches the case
+
+The section above is about a claim with nothing behind it.
+This one has a real measurement behind it, taken correctly, and states the conclusion one level up from where the evidence reaches.
+The promotion is invisible in the moment, because the sentence is *true of the thing that was measured* and the reader has no way to see that the measurement stopped there.
+
+Three instances on 2026-09-07, in one session, all in prose that had passed every other check on this page:
+
+- **"The annotation carrier cannot be inert: the reconciler has to read it."** Measured from `RunnerSet`, the one kind in `api/v2alpha1/conversion.go` that has a carrier, and written as a property of carriers.
+  Both halves were false even there: a grep for the two annotation names found them only in the conversion file and its tests, so no controller reads them.
+- **"Representability at the *storage* version is the constraint."** True of the case being argued, where the hub and the storage version coincide.
+  The rule is that every *served* version must represent every stored object, since conversion runs on read; storage is where it bites first, not where it stops.
+- **"Both transition rules exist in both `v2` versions."** True of `actionsgateways`, checked; false of `runnerset_types.go`, where `v2beta1` dropped the field the rule guards, and not checked.
+
+Two were caught by review and one by the maintainer, which is the pattern: nothing mechanical fires on it, because the claim is well-formed and its evidence is real.
+The cheap guard is to write the case you measured next to the rule you drew from it, in the same sentence.
+That is one clause, it makes the gap visible to a reader who was not there, and where the rule genuinely does not generalize the clause is the correction.
+
 ### A negative result implicates the probe's identifier first
 
 The section above is about a probe that answers a different question.

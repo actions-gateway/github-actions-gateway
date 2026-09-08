@@ -476,6 +476,12 @@ That is true of the obvious approach, and taking it would have moved four rows a
 The dashboard had already solved the problem one row below: five tiles fit 24 columns as 4×w5 plus one w4, so the shipped change touched only `y=46` and nothing under it moved.
 State the constraint that is load-bearing ("the condition row is full at 4×w6") and leave the consequence to the session that can measure it; where a cost estimate is what sets the row's `Sz`, say which half of it was measured.
 
+**A row that names its fix concretely is the one a reviewer can refute; a vague row buys a clean review it has not earned.** The rules above all push toward saying more, and the reason is not thoroughness.
+A row saying "the webhook rules need revisiting at `v2.0.0`" passes review because there is nothing in it to disagree with.
+Q1068 named its one-line fix, adding `v2` to five `apiVersions` lists, and review caught within a minute that the fix would turn silent loss of validation into every write rejected, because `matchPolicy: Equivalent` was already routing those writes.
+The row was resized S to M on that reading.
+Precision is what makes a row falsifiable at filing time, when the correction is a rewrite rather than a reverted PR.
+
 ### A completion note is a claim too, and it is the one nobody re-checks
 
 The rules above guard what a row asserts at filing time, when the next session is still expected to verify it.
