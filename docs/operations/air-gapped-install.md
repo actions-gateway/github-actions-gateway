@@ -183,6 +183,10 @@ The patch **survives GMC reconciliation** — the GMC only manages those SAs' la
 > Alternative: if your registry is reachable by the cluster but only needs auth, a cluster-wide approach (e.g. a `default`-SA mutating policy, or a registry pull-through cache that injects credentials) also works.
 > The per-SA patch above is the no-extra-tooling baseline.
 
+> **Name the pull Secret in the worker pod template too.** The SA patch covers the *pull*, which kubelet performs, but the AGC reads the worker image out of the registry itself to report the runner version it ships, and it can only present a Secret the pod template's `imagePullSecrets` names ([Q1066](../queue/Q1066.md)).
+> Against a mirror that requires authentication, an SA-only wiring leaves `RunnerVersionTooOld` at `Unknown`/`WorkerImageVersionUnknown` with an authentication failure in its message, permanently; see [Worker Image Runner Version](troubleshooting.md#worker-image-runner-version).
+> Adding the same Secret name to `podTemplate.spec.imagePullSecrets` restores the reading and changes nothing about the pull.
+
 ---
 
 ## 6. Point the worker image at the mirror

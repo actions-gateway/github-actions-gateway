@@ -2007,10 +2007,15 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
 - **`WorkerImageBelowMinimum`**: build or pull a `workerImage` on runner `2.329.0` or later and update the spec.
   Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable before the registry read lands.
 - **`WorkerImageVersionUnknown`**: read the message first.
-  `registry read of the image failed (attempt N: …)` names what the AGC could not do: an authentication failure (`requires a login and the pod template names no imagePullSecret`, `token exchange with <host>: HTTP 401 (anonymous)`, or `unauthorized after authenticating (as <user>)`) means the image needs an `imagePullSecret` on the pod template, or the one it names is refused; an HTTP 404 means the reference does not resolve at that registry; and a dial error means the AGC's egress policy does not reach it.
+  `registry read of the image failed (attempt N: …)` names what the AGC could not do: an HTTP 404 means the reference does not resolve at that registry, and a dial error means the AGC's egress policy does not reach it.
+  An authentication failure (`requires a login and the pod template names no imagePullSecret`, `token exchange with <host>: HTTP <n> (anonymous)`, or `unauthorized after authenticating (as <user>)`) has two readings, and **whether the worker pods pull tells them apart**.
+  Pods stuck on the image mean the pull is failing too: add an `imagePullSecret` to the pod template, or fix the one it names.
+  Pods that pull and run mean only the AGC's read is failing, and no pod-template secret will fix it: kubelet is authenticating with a credential the AGC cannot present, either a pull secret attached to the worker ServiceAccount or the node's own identity (Artifact Registry under Workload Identity, ECR under the node role) ([Q1066](../queue/Q1066.md)).
+  The [air-gapped install](air-gapped-install.md#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker) pattern produces exactly this against a mirror that requires authentication: it patches `imagePullSecrets` onto the `actions-gateway-worker` ServiceAccount, which kubelet injects into every worker pod and the AGC never reads.
+  Naming the same Secret in the pod template's `imagePullSecrets` as well restores the registry read; it changes nothing about the pull, which the ServiceAccount already covers.
   `context deadline exceeded` means one inspection ran past its fifteen-minute budget, which starts once the inspection holds its slot, not while it queues behind another image.
   `carries no bin/Runner.Listener.deps.json` means the image is not `actions/runner`-derived in the expected layout, and no tag can fix that.
-  Where the registry is out of reach, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
+  Where the registry is out of reach or cannot be authenticated to, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
   The injected wrapper reads the version from the runner's own dependency manifest rather than from the tag, and hands it back on the pod's termination message, so a `RunnerSet` carries the last one it saw (Q792):
 
 ```bash
