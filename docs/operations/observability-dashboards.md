@@ -65,7 +65,7 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 
 The default acquisition protocol (Q264).
 These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here.
-Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these — the `$runner_set` variable does.
+Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these; the `$runner_set` variable does.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -182,15 +182,16 @@ The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-t
 
 ## Budget dashboard
 
-![The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, and the zero-idle-compute row contrasting worker consumption with the always-on proxy floor.](../assets/grafana-dashboard-budget.png)
+![The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity and refused classic jobs by the admission rung that took them.](../assets/grafana-dashboard-budget.png)
 
 For the [budget owner](personas.md#budget-owner), who owns the spend and usually cannot read the cluster at all.
 Filtered by `$namespace` and `$runner_group`, and priced by a `$rate` textbox.
 It ships with auto-refresh **off**, where the other two use `30s`: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.
 
-Every panel reads one metric: `actions_gateway_job_duration_seconds`.
+Every spend panel reads one metric: `actions_gateway_job_duration_seconds`.
 That series is worker pod wall time (creation to the last container finishing) on **both** acquisition tiers, which is the span [Appendix F §F.1](../design/appendix-f-cost-model.md#worker-pod-dominant-cost) bills against.
 A pod that never started a container is not observed, because it occupied no node time.
+Row 5 is the exception, and reads the admission ladder instead: spend a throttle is holding down leaves no duration to bill, so the metric that answers what was spent cannot answer what was suppressed.
 
 **The rate is the operator's, not ours.** Appendix F's formula is `(job_duration_seconds / 3600) × hourly_node_rate × resource_fraction`, and `$rate` is that trailing pair collapsed into one number: the effective hourly cost of **one worker slot**. The shipped default, `0.096`, is §F.1's own CPU example: an `m6i.4xlarge` at $0.768/hr with the pod requesting an eighth of it.
 Its GPU example works out at $4.10/hr, so the two differ by more than 40×.
@@ -242,6 +243,27 @@ The row that answers "what am I paying for when nobody is running CI?".
 | Worker consumption vs. the always-on floor | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))` against `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series, two series on one panel deliberately. Over a quiet weekend the worker line collapses toward zero while the proxy line stays flat, and that flat line is the entire idle floor. An Actions Runner Controller (ARC) scale set holding `minRunners > 0` would show a worker line that never reaches zero. The worker series comes from the duration histogram, which attributes a pod's whole lifetime at completion, so it is a trailing average over the rate window rather than a live pod count: it will not equal the pod count behind the quota panel beside it. Needs kube-state-metrics |
 | Jobs completed per hour | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_count[5m])) * 3600` | Time series showing the volume that drives the worker line beside it |
 | ResourceQuota headroom | `100 * kube_resourcequota{type="used"} / ignoring(type) kube_resourcequota{type="hard"}` | Bar gauge, `percent`, one bar per quota object and resource. A tenant sitting near 100% is one whose spend is held down by the cap rather than by demand, which is a budget conversation rather than an incident. The join is `ignoring(type)` rather than `on(namespace, resource)`, which errors on a namespace holding two `ResourceQuota` objects; it also keeps the `resourcequota` label, which is why the legend names it. A quota lowered below current usage makes the query return above 100%, measured at 200% on two pods under a one-pod quota; `max` is 100, so the bar cannot extend past full. Needs kube-state-metrics |
+
+**Row 5 — Throttled Intake (spend a rung is holding down)**
+
+Rows 1 to 4 answer what was spent.
+This one answers what was not: intake an admission rung refused, which shows up nowhere in `job_duration_seconds` because a job that never ran has no duration to bill.
+
+**It is two panels rather than one because the two acquisition tiers state the same ladder in different units.** The scale-set tier declares a capacity integer per long poll, so its rungs are gauges of worker slots; the classic tier decides per delivered job, so its rungs are counters of jobs.
+Both panels are stacked, and in both the stack total is the demand that tier saw, which is the reading they share.
+Their magnitudes are not comparable and neither panel is a total of the other.
+A deploy running one tier sees the other panel empty; that is the panel saying "no sets on this protocol", not a gap.
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Withheld capacity by rung (scale-set sets) | `sum by (namespace) (actions_gateway_scaleset_advertised_capacity)` stacked under `sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)` | Time series, stacked. The stack total is the set's declared worker ceiling, because [every evaluated rung publishes a value each poll including an explicit `0`](observability-metrics.md#scale-set-acquisition-tier-q264) and the entries sum to `ceiling − advertised`. `quota` is namespace-`ResourceQuota` headroom, `capacity` the opt-in placeability gate, `scaleup` the opt-in creation-rate limit; grouping by `reason` rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on `runner_set`, so a `$runner_group` holding a `RunnerGroup` name empties it |
+| Intake refused by rung (classic sets) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 3600` stacked under the `actions_gateway_jobs_admission_rejected_total` counterpart, `sum by (namespace, reason)` | Time series, stacked, jobs/hour. The stack is what GitHub delivered, less the deliveries lost to an acquire error (`actions_gateway_job_acquisition_errors_total`) or a duplicate-delivery dedup, which increment neither series. `ceiling` and `quota` are on by default; `capacity` and `scaleup` emit nothing until their owner opts in, so an absent band is a rung nobody enabled rather than a rung holding nothing back |
+
+**Withheld capacity is not the same thing as suppressed spend, which is why no panel here prices it with `$rate`.** A slot a rung held back is money you did not spend only if GitHub had a job queued to fill it; on an idle set the same band is a ceiling nobody was reaching for.
+The demand signal that settles it is [`actions_gateway_scaleset_jobs_available`](observability-metrics.md#scale-set-acquisition-tier-q264), which no dashboard plots today.
+A currency figure derived without it would overstate the suppression, on a dashboard whose whole contract is that its numbers reconcile against a cost tool's.
+
+Read against the ResourceQuota bars beside it, the `quota` band is the same conversation from the other side: the bar says a tenant is pinned at its cap, and this band says how many worker slots that cost it.
 
 ## Security dashboard
 
@@ -304,11 +326,15 @@ The dashboards ship with these template variables already wired:
 - `$runner_set` (`label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)`) filters to a specific `RunnerSet` on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges rather than the `scaleset_*` series on purpose: those gauges are emitted for **every** `RunnerSet`, while `scaleset_*` exists only for `ScaleSet`-protocol sets, so keying on the latter would hide a `Classic` set from the dropdown entirely.
 
-The budget dashboard declares its own set, because it reads a different metric from every panel and its dropdowns have to match that metric exactly:
+The budget dashboard declares its own set, because its spend panels all read one metric and its dropdowns have to match that metric exactly:
 
 - `$namespace` (`label_values(actions_gateway_job_duration_seconds_count, namespace)`) is keyed on the series the panels actually read, so the dropdown cannot offer a tenant with no cost data or hide one that has some.
   It needs no classic/scale-set union: the duration series is emitted from the pod informer and covers both tiers already.
 - `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) is the runner shape, listing `RunnerGroup` and `RunnerSet` names together for the reason the Row 3 note gives.
+  Row 5's scale-set panel applies it to `runner_set`, which holds the same names on that tier, so selecting a `RunnerGroup` empties that panel and selecting a `RunnerSet` empties the classic one beside it.
+- **Both dropdowns set `allValue` to `.*`**, which is what makes Row 5 legible on the tenant it exists for.
+  Grafana expands a bare `All` to the values the dropdown holds, and both are keyed on the duration series, so a tenant whose intake a rung is holding at zero has completed no job, is in neither list, and would be excluded by `All` itself.
+  The wildcard costs the spend panels nothing: a tenant with no duration data contributes no series to them either way.
 - `$rate` is a **textbox**, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
   Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.
 
