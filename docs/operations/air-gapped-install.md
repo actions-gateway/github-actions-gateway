@@ -184,7 +184,9 @@ The patch **survives GMC reconciliation** — the GMC only manages those SAs' la
 > The per-SA patch above is the no-extra-tooling baseline.
 
 > **Name the pull Secret in the worker pod template too.** The SA patch covers the *pull*, which kubelet performs, but the AGC reads the worker image out of the registry itself to report the runner version it ships, and it can only present a Secret the pod template's `imagePullSecrets` names ([Q1066](../queue/Q1066.md)).
-> Against a mirror that requires authentication, an SA-only wiring leaves `RunnerVersionTooOld` at `Unknown`/`WorkerImageVersionUnknown` with an authentication failure in its message, permanently; see [Worker Image Runner Version](troubleshooting.md#worker-image-runner-version).
+> Against a mirror that requires authentication, an SA-only wiring means that read never succeeds, so the version the image actually ships is never verified and `RunnerVersionTooOld` carries the authentication failure in its message on every reconcile.
+> The step 6 reference names a version in its tag, so the verdict still stands on the tag's claim rather than degrading to `Unknown`; a digest-only or custom-tagged `workerImage` has no such fallback and does report `Unknown`.
+> See [Worker Image Runner Version](troubleshooting.md#worker-image-runner-version).
 > Adding the same Secret name to `podTemplate.spec.imagePullSecrets` restores the reading and changes nothing about the pull.
 
 ---
