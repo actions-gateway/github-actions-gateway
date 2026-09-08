@@ -89,16 +89,21 @@ func TestRecoverOrphanedScaleSetWorkers_RerunsARecordWhosePodIsGone(t *testing.T
 // TestRecoverOrphanedScaleSetWorkers_NoStoredStateIsANoOp keeps the common path free: a
 // set that has never persisted anything, and a set whose jobs have all concluded, must
 // both cost nothing and recover nothing.
+//
+// Each half gets its own reconciler, because each is a claim about a PROCESS's first
+// reading. Sharing one spends the claim on the first half, after which the second
+// short-circuits ahead of the store entirely and asserts nothing about concluded jobs.
 func TestRecoverOrphanedScaleSetWorkers_NoStoredStateIsANoOp(t *testing.T) {
 	rs := rsObj("linux-large", "tenant-a", nil)
-	r, rerunCount := orphanRecoveryFixture(t, rs)
 
-	<-r.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
+	neverPersisted, rerunCount := orphanRecoveryFixture(t, rs)
+	<-neverPersisted.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
 	assert.Equal(t, int64(0), rerunCount.Load())
 
-	require.NoError(t, r.scaleSetGuardStore(rs).Save(context.Background(),
+	allConcluded, rerunCount := orphanRecoveryFixture(t, rs)
+	require.NoError(t, allConcluded.scaleSetGuardStore(rs).Save(context.Background(),
 		scalesetlistener.GuardState{Completed: []string{"job-done"}}))
-	<-r.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
+	<-allConcluded.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
 	assert.Equal(t, int64(0), rerunCount.Load())
 }
 

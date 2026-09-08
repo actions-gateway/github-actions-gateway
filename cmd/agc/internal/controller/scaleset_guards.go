@@ -129,12 +129,10 @@ func (s *scaleSetGuardStore) Save(ctx context.Context, state scalesetlistener.Gu
 // Nothing here requeues — a set with no stored state is the overwhelmingly common case,
 // and a read that fails is retried by the next reconcile.
 //
-// An empty set is passed on rather than short-circuited (Q1064). The provisioner's claim
-// is what makes the scan once-per-process, and a set that reads empty on the way up is a
-// verdict — this process inherited nothing — so it must spend the claim like any other.
-// Returning early here kept the claim for the first non-empty reading, which is a set
-// this process's own listener had by then written. Only the read failure above returns
-// without claiming, so the question stays open for the next reconcile.
+// An empty set is passed on rather than short-circuited, so that it spends the
+// provisioner's once-per-process claim — see RecoverOrphanedScaleSetWorkers for why the
+// verdict is dated to the process (Q1064). Only the read failure above returns without
+// claiming, which is what keeps the question open for the next reconcile.
 //
 // The returned channel closes once every recovery this call started has finished. The
 // reconcile ignores it, because it must not stall on GitHub; tests block on it.
