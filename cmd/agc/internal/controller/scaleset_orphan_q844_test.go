@@ -89,17 +89,52 @@ func TestRecoverOrphanedScaleSetWorkers_RerunsARecordWhosePodIsGone(t *testing.T
 // TestRecoverOrphanedScaleSetWorkers_NoStoredStateIsANoOp keeps the common path free: a
 // set that has never persisted anything, and a set whose jobs have all concluded, must
 // both cost nothing and recover nothing.
+//
+// Each half gets its own reconciler, because each is a claim about a PROCESS's first
+// reading. Sharing one spends the claim on the first half, after which the second
+// short-circuits ahead of the store entirely and asserts nothing about concluded jobs.
 func TestRecoverOrphanedScaleSetWorkers_NoStoredStateIsANoOp(t *testing.T) {
+	rs := rsObj("linux-large", "tenant-a", nil)
+
+	neverPersisted, rerunCount := orphanRecoveryFixture(t, rs)
+	<-neverPersisted.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
+	assert.Equal(t, int64(0), rerunCount.Load())
+
+	allConcluded, rerunCount := orphanRecoveryFixture(t, rs)
+	require.NoError(t, allConcluded.scaleSetGuardStore(rs).Save(context.Background(),
+		scalesetlistener.GuardState{Completed: []string{"job-done"}}))
+	<-allConcluded.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
+	assert.Equal(t, int64(0), rerunCount.Load())
+}
+
+// TestRecoverOrphanedScaleSetWorkers_EmptyFirstReadingSpendsTheClaim is Q1064. The
+// verdict is a fact about this PROCESS, and the reconcile that takes it runs ahead of
+// the listener that writes the set — so an empty first reading is the answer "this
+// process inherited nothing", not a reading still to take.
+//
+// Keying the claim on the first NON-EMPTY reading instead adjudicated a record this
+// process's own listener had just added: the pod's Create event enqueues a reconcile
+// that reads the ConfigMap before the entry lands, and the next one is then the first to
+// see a non-empty set — whose pod, by then evicted, is gone. That is exactly the false
+// positive the once-per-process rule exists to prevent, reported as cause="vanished" by
+// an AGC that never restarted.
+func TestRecoverOrphanedScaleSetWorkers_EmptyFirstReadingSpendsTheClaim(t *testing.T) {
 	rs := rsObj("linux-large", "tenant-a", nil)
 	r, rerunCount := orphanRecoveryFixture(t, rs)
 
+	// The first reconcile: nothing is stored, because this process's listener has not
+	// started yet.
 	<-r.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
-	assert.Equal(t, int64(0), rerunCount.Load())
+	require.Equal(t, int64(0), rerunCount.Load())
 
-	require.NoError(t, r.scaleSetGuardStore(rs).Save(context.Background(),
-		scalesetlistener.GuardState{Completed: []string{"job-done"}}))
+	// Then this process's own listener provisions a worker and records it, and the pod
+	// is gone by the time the next reconcile reads the set back.
+	storeInFlight(t, r, rs, "job-this-process-provisioned")
 	<-r.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
-	assert.Equal(t, int64(0), rerunCount.Load())
+
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"a record added after this process took its verdict belongs to this process, and its "+
+			"worker is covered by the live pod-watch recovery")
 }
 
 // TestRecoverOrphanedScaleSetWorkers_UnreadableStoreRecoversNothing pins the failure
