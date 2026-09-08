@@ -2008,10 +2008,19 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
 - **`WorkerImageBelowMinimum`**: build or pull a `workerImage` on runner `2.329.0` or later and update the spec.
   Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable before the registry read lands.
 - **`WorkerImageVersionUnknown`**: read the message first.
-  `registry read of the image failed (attempt N: …)` names what the AGC could not do: an authentication failure (`requires a login and the pod template names no imagePullSecret`, `token exchange with <host>: HTTP 401 (anonymous)`, or `unauthorized after authenticating (as <user>)`) means the image needs an `imagePullSecret` on the pod template, or the one it names is refused; an HTTP 404 means the reference does not resolve at that registry; and a dial error means the AGC's egress policy does not reach it.
+  `registry read of the image failed (attempt N: …)` names what the AGC could not do: an HTTP 404 means the reference does not resolve at that registry, and a dial error means the AGC's egress policy does not reach it.
+  An authentication failure is about the AGC's own read and not about the pull: kubelet can hold a credential the AGC cannot, so worker pods may be pulling and running normally while this fails.
+  Do not read it off pod state either way, since a digest-pinned image defaults to `imagePullPolicy: IfNotPresent` and a node that already has the layers runs the pod without contacting the registry at all.
+  Where the failure names the credential the AGC presented, in a trailing parenthesis, that is what decides the fix, whichever message carries it; the rest fall to the out-of-reach case below.
+  Anything ending `(as <user>)`, whether `unauthorized after authenticating` or `token exchange with <host>: HTTP <n>`, means a Secret the pod template names was read and presented and the registry refused it, so the credential is expired, wrong, or carries no pull scope on that repository: replace it rather than naming another.
+  Anything ending `(anonymous)`, and `requires a login and the pod template names no imagePullSecret`, means none was presented, and what to do then turns on whether a `kubernetes.io/dockerconfigjson` Secret exists in the namespace (`kubectl get secrets -n <namespace> --field-selector type=kubernetes.io/dockerconfigjson`).
+  If one does, name it in `podTemplate.spec.imagePullSecrets`, which is the only place the AGC looks.
+  The [air-gapped install](air-gapped-install.md#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker) pattern lands here by design, attaching the Secret to the `actions-gateway-worker` ServiceAccount, which kubelet injects and the AGC never reads; adding it to the pod template restores the reading and changes nothing about the pull.
+  If none does, either no pull credential is configured at all, so create one and name it there, or kubelet is reaching the registry through the node's identity (Artifact Registry under Workload Identity, ECR under the node role) or a node-level `config.json`, neither of which the AGC can present ([Q1066](../queue/Q1066.md)), leaving the tag to carry the verdict.
+  Worker pods that are themselves stuck on the image are a separate problem with its own reading: see the air-gapped install's [verification step](air-gapped-install.md#7-verify).
   `context deadline exceeded` means one inspection ran past its fifteen-minute budget, which starts once the inspection holds its slot, not while it queues behind another image.
   `carries no bin/Runner.Listener.deps.json` means the image is not `actions/runner`-derived in the expected layout, and no tag can fix that.
-  Where the registry is out of reach, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
+  Where the registry is out of reach or cannot be authenticated to, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
   The injected wrapper reads the version from the runner's own dependency manifest rather than from the tag, and hands it back on the pod's termination message, so a `RunnerSet` carries the last one it saw (Q792):
 
 ```bash
