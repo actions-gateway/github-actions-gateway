@@ -102,6 +102,36 @@ func TestRecoverOrphanedScaleSetWorkers_NoStoredStateIsANoOp(t *testing.T) {
 	assert.Equal(t, int64(0), rerunCount.Load())
 }
 
+// TestRecoverOrphanedScaleSetWorkers_EmptyFirstReadingSpendsTheClaim is Q1064. The
+// verdict is a fact about this PROCESS, and the reconcile that takes it runs ahead of
+// the listener that writes the set — so an empty first reading is the answer "this
+// process inherited nothing", not a reading still to take.
+//
+// Keying the claim on the first NON-EMPTY reading instead adjudicated a record this
+// process's own listener had just added: the pod's Create event enqueues a reconcile
+// that reads the ConfigMap before the entry lands, and the next one is then the first to
+// see a non-empty set — whose pod, by then evicted, is gone. That is exactly the false
+// positive the once-per-process rule exists to prevent, reported as cause="vanished" by
+// an AGC that never restarted.
+func TestRecoverOrphanedScaleSetWorkers_EmptyFirstReadingSpendsTheClaim(t *testing.T) {
+	rs := rsObj("linux-large", "tenant-a", nil)
+	r, rerunCount := orphanRecoveryFixture(t, rs)
+
+	// The first reconcile: nothing is stored, because this process's listener has not
+	// started yet.
+	<-r.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
+	require.Equal(t, int64(0), rerunCount.Load())
+
+	// Then this process's own listener provisions a worker and records it, and the pod
+	// is gone by the time the next reconcile reads the set back.
+	storeInFlight(t, r, rs, "job-this-process-provisioned")
+	<-r.recoverOrphanedScaleSetWorkers(context.Background(), slog.Default(), rs)
+
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"a record added after this process took its verdict belongs to this process, and its "+
+			"worker is covered by the live pod-watch recovery")
+}
+
 // TestRecoverOrphanedScaleSetWorkers_UnreadableStoreRecoversNothing pins the failure
 // direction. A ConfigMap this cannot parse must recover nothing: acting on a partial read
 // would re-run runs on no evidence at all.

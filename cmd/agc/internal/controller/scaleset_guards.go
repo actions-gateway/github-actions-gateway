@@ -129,15 +129,19 @@ func (s *scaleSetGuardStore) Save(ctx context.Context, state scalesetlistener.Gu
 // Nothing here requeues — a set with no stored state is the overwhelmingly common case,
 // and a read that fails is retried by the next reconcile.
 //
+// An empty set is passed on rather than short-circuited (Q1064). The provisioner's claim
+// is what makes the scan once-per-process, and a set that reads empty on the way up is a
+// verdict — this process inherited nothing — so it must spend the claim like any other.
+// Returning early here kept the claim for the first non-empty reading, which is a set
+// this process's own listener had by then written. Only the read failure above returns
+// without claiming, so the question stays open for the next reconcile.
+//
 // The returned channel closes once every recovery this call started has finished. The
 // reconcile ignores it, because it must not stall on GitHub; tests block on it.
 func (r *RunnerSetReconciler) recoverOrphanedScaleSetWorkers(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) <-chan struct{} {
 	state, err := r.scaleSetGuardStore(rs).Load(ctx)
 	if err != nil {
 		log.Warn("could not read persisted in-flight jobs; workers lost while this AGC was down will not be recovered", "error", err)
-		return closedChan()
-	}
-	if len(state.InFlight) == 0 {
 		return closedChan()
 	}
 	orphans := make([]provisioner.OrphanedWorker, 0, len(state.InFlight))

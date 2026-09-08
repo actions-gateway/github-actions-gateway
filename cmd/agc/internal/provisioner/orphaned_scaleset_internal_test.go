@@ -18,9 +18,10 @@ import (
 // Every arm of the disruption scan reads its discriminator off a pod that still exists,
 // and preemption and drain both DELETE their victim — so an AGC down across that window
 // issues no re-run at all. These tests pin the replacement record (the listener's
-// persisted in-flight set) and, just as importantly, the three ways it must NOT fire:
-// on a worker whose pod is still there, more than once per process, and on a scan that
-// could not read the cluster.
+// persisted in-flight set) and, just as importantly, the four ways it must NOT fire: on
+// a worker whose pod is still there, more than once per process, on a scan that could
+// not read the cluster, and on a record this process's own listener wrote after the
+// verdict was taken (Q1064).
 
 // orphan builds an in-flight record as the listener persists one, for the job whose
 // worker pod recoveryFixture's helpers name.
@@ -151,10 +152,13 @@ func TestRecoverOrphanedScaleSetWorkers_SpendsTheSharedRetryBudget(t *testing.T)
 		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseVanished)))
 }
 
-// TestRecoverOrphanedScaleSetWorkers_EmptySetTakesNoScan keeps the common path free: a
-// set that never lost a worker must not spend its one claim, or a later restart's
-// records would go unread.
-func TestRecoverOrphanedScaleSetWorkers_EmptySetTakesNoScan(t *testing.T) {
+// TestRecoverOrphanedScaleSetWorkers_EmptySetSpendsTheClaim is the dating rule (Q1064):
+// the verdict is about the PROCESS, so the first reading takes it whether or not the set
+// is empty. A later restart re-asks the question because orphanScanState is in memory and
+// a restart is a new one — what a non-empty set arriving afterwards means instead is that
+// this process's own listener has been provisioning, and its workers are covered by the
+// live pod-watch recovery.
+func TestRecoverOrphanedScaleSetWorkers_EmptySetSpendsTheClaim(t *testing.T) {
 	ctx := context.Background()
 	p, target, _, rerunCount, _ := recoveryFixture(t)
 
@@ -166,5 +170,6 @@ func TestRecoverOrphanedScaleSetWorkers_EmptySetTakesNoScan(t *testing.T) {
 	done, err = p.RecoverOrphanedScaleSetWorkers(ctx, target, []OrphanedWorker{orphan("job1")})
 	require.NoError(t, err)
 	<-done
-	assert.Equal(t, int64(1), rerunCount.Load(), "an empty set must leave the scan still to take")
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"an empty first reading is the verdict that nothing was inherited, so the scan is spent")
 }

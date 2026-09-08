@@ -46,7 +46,10 @@ import (
 //     job's own JobCompleted replays seconds later and retires it.
 //   - ONCE per process, because the failure being closed is exclusively "the AGC was
 //     absent". An entry this process created is covered by the live pod-watch recovery,
-//     so re-examining one can only produce a false positive.
+//     so re-examining one can only produce a false positive. The claim is taken on the
+//     first reconcile that reads the set at all, empty or not (Q1064) — keying it on the
+//     first non-empty reading dated the verdict to whenever the listener first wrote
+//     something, which is after this process started and so adjudicated its own entries.
 //
 // # What it deliberately does not do
 //
@@ -114,11 +117,16 @@ func (s *orphanScanState) release(key string) {
 // reconcile on GitHub). A returned error means the pod scan itself failed and no verdict
 // was taken; the owner's claim is released so the next reconcile retries it.
 func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target Target, inFlight []OrphanedWorker) (<-chan struct{}, error) {
-	if len(inFlight) == 0 {
+	key := target.Key()
+	// Claimed ahead of the emptiness check, not behind it (Q1064): the verdict is about
+	// this process, and the caller reaches here before this process's listener starts,
+	// so an empty set is the answer "nothing was inherited" rather than a reading still
+	// to take. Claiming on the first non-empty set instead adjudicated an entry this
+	// process's own listener had just added.
+	if !p.orphanScans.claim(key.String()) {
 		return closedChan(), nil
 	}
-	key := target.Key()
-	if !p.orphanScans.claim(key.String()) {
+	if len(inFlight) == 0 {
 		return closedChan(), nil
 	}
 	log := p.logForKey(key)
