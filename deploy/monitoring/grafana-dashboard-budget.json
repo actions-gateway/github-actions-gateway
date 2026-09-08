@@ -40,6 +40,7 @@
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(actions_gateway_job_duration_seconds_count, namespace)",
         "hide": 0,
+        "allValue": ".*",
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
@@ -57,6 +58,7 @@
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\"}, runner_group)",
         "hide": 0,
+        "allValue": ".*",
         "includeAll": true,
         "label": "Runner shape",
         "multi": true,
@@ -355,6 +357,60 @@
           "instant": true,
           "legendFormat": "{{namespace}} {{resource}} ({{resourcequota}})",
           "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Throttled Intake (spend a rung is holding down)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "id": 34,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Withheld capacity by rung (scale-set sets)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 32 },
+      "id": 35,
+      "description": "Which rung is suppressing intake, in worker slots. Stacked, and the stack total is the set's declared worker ceiling: advertised capacity is what GitHub may still fill, and each withheld band is what a rung took off it. A tall withheld band beside a ResourceQuota bar near 100% is spend held down by the cap rather than by demand. quota is namespace ResourceQuota headroom, capacity the opt-in placeability gate, scaleup the opt-in creation-rate limit; a rung added later appears as a new band with no edit here. Withheld slots are only suppressed spend where GitHub had jobs queued to fill them, so read them against actions_gateway_scaleset_jobs_available before pricing them. ScaleSet-protocol sets only, so this is empty on a classic-only deploy and the panel beside it is the one to read. $runner_group filters it on runner_set, so selecting a classic RunnerGroup empties it.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "min": 0, "custom": { "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" } } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (actions_gateway_scaleset_advertised_capacity{namespace=~\"$namespace\", runner_set=~\"$runner_group\"})",
+          "legendFormat": "{{namespace}} advertised",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld{namespace=~\"$namespace\", runner_set=~\"$runner_group\"})",
+          "legendFormat": "{{namespace}} withheld: {{reason}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Intake refused by rung (classic sets)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 32 },
+      "id": 36,
+      "description": "The same ladder on the classic tier, which states it per delivered job rather than as a capacity integer: jobs the gate left queued at GitHub, per hour, by the rung that refused them. Stacked against the jobs it did acquire, so the stack is the demand the tier saw and the refused bands are the share of it a rung turned away. The two sum to what GitHub delivered, less the deliveries lost to an acquire error (actions_gateway_job_acquisition_errors_total) or a duplicate-delivery dedup, which increment neither. Units are jobs/hour, not slots: this panel and the one beside it answer the same question in the vocabulary of their own tier and are not comparable in magnitude. Classic-protocol sets only, and the ceiling, capacity and scaleup rungs are each absent until their owner opts in.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "min": 0, "custom": { "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" } } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_jobs_acquired_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m])) * 3600",
+          "legendFormat": "{{namespace}} acquired",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, reason) (rate(actions_gateway_jobs_admission_rejected_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m])) * 3600",
+          "legendFormat": "{{namespace}} refused: {{reason}}",
+          "refId": "B"
         }
       ]
     }

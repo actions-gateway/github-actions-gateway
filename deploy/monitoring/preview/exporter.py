@@ -34,6 +34,34 @@ SCALESETS = [
 # populated without implying every set carries the condition.
 GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
 
+# The scale-up rate limit is the other per-owner opt-in rung (Q717). Enable it on one
+# set so the withheld stack shows a scaleup band without implying every set carries one.
+RATE_LIMITED_SCALESETS = {("team-a", "cpu-standard")}
+
+# Declared worker ceiling per scale set: the total the admission rungs subtract from,
+# and therefore the height of the withheld stack on the budget dashboard (Q969).
+SCALESET_CEILINGS = {
+    ("team-a", "gpu-a100"): 12,
+    ("team-a", "cpu-standard"): 40,
+    ("team-b", "cpu-standard"): 24,
+}
+
+# Baseline slots the namespace ResourceQuota rung holds back, before jitter. A set
+# absent here still publishes the rung's explicit zero.
+QUOTA_WITHHELD = {("team-a", "cpu-standard"): 9, ("team-b", "cpu-standard"): 3}
+
+# (namespace, runner_group) -> {reason: refusal rate}, the classic tier's per-job form
+# of the same ladder. ceiling and quota are on by default; capacity and scaleup are
+# per-owner opt-ins, and a counter has no explicit-zero rule, so a set that has not
+# enabled one emits no series for it at all.
+# Rates are a visible fraction of the acquired series they stack under, for the reason
+# the Q704 floor below exists: a refusal rate realistic for a healthy fleet renders as a
+# sliver on a panel whose whole subject is the refusals.
+REFUSING_TENANTS = {
+    ("team-a", "cpu-standard"): {"ceiling": 0.12, "quota": 0.06},
+    ("team-b", "cpu-standard"): {"quota": 0.08, "scaleup": 0.04},
+}
+
 # The harness renders a 10-minute window (render.sh FROM=now-10m) after WAIT=660s
 # of accumulation, so a counter's whole visible life is a few hundred seconds. A
 # rate below 1/WAIT never reaches its first integer and plots as a flat zero for
@@ -123,6 +151,12 @@ def render():
         rate = {"gpu-a100": 0.12, "cpu-standard": 0.7, "gpu-2x": 0.05}.get(rg, 0.2)
         acquired = counter_total(rate, elapsed, seed=hash((ns, rg)) % 7)
         L.append(f'actions_gateway_jobs_acquired_total{{namespace="{ns}",runner_group="{rg}"}} {acquired}')
+        # Jobs the pre-acquisition gate refused, by the rung that bound (Q443). Stacked
+        # under the acquired series on the budget dashboard, where the two together are
+        # the demand the tier saw.
+        for reason, refused_rate in REFUSING_TENANTS.get((ns, rg), {}).items():
+            L.append(f'actions_gateway_jobs_admission_rejected_total{{namespace="{ns}",runner_group="{rg}",reason="{reason}"}} '
+                     f'{counter_total(refused_rate, elapsed, seed=hash((ns, rg, reason)) % 9)}')
 
     for ns in NAMESPACES:
         L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {counter_total(0.05, elapsed)}')
@@ -201,6 +235,25 @@ def render():
         # gate evaluated and found room, not the latched AwaitingProbe (Q512/Q643).
         if (ns, rs) in GATED_SCALESETS:
             L.append(f'actions_gateway_runnerset_worker_capacity_declined{{namespace="{ns}",runner_set="{rs}",reason="CapacityAvailable"}} 0')
+
+        # The admission ladder in this tier's own form: slots each rung took off the
+        # declared ceiling, and the advertisement left over (Q443). Rungs compose as a
+        # min() and every evaluated one publishes a value each poll, including an
+        # explicit 0, so the bands plus the advertisement sum to the ceiling, which is
+        # what the budget dashboard's stack reads (Q969). Subtracting in rung order
+        # keeps each band its own marginal contribution and the total non-negative.
+        ceiling = SCALESET_CEILINGS[(ns, rs)]
+        withheld = {
+            "quota": int(QUOTA_WITHHELD.get((ns, rs), 0) + jitter(hash((ns, rs)) % 5, 2.5)),
+            "capacity": int(3 + jitter(hash(rs) % 6, 2)) if (ns, rs) in GATED_SCALESETS else 0,
+            "scaleup": int(4 + jitter(hash(ns) % 4, 3)) if (ns, rs) in RATE_LIMITED_SCALESETS else 0,
+        }
+        advertised = ceiling
+        for reason in ("quota", "capacity", "scaleup"):
+            slots = max(0, min(withheld[reason], advertised))
+            advertised -= slots
+            L.append(f'actions_gateway_scaleset_capacity_withheld{{namespace="{ns}",runner_set="{rs}",reason="{reason}"}} {slots}')
+        L.append(f'actions_gateway_scaleset_advertised_capacity{{namespace="{ns}",runner_set="{rs}"}} {advertised}')
 
     # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
     # the per-tenant ServiceMonitor stamps one from the scrape target's namespace

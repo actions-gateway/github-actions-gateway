@@ -278,6 +278,7 @@ An idle gated set whose worker shape stays unplaceable holds a latched `Awaiting
 Under a real withhold the per-window probe job is still assigned, so a set with work waiting keeps `actions_gateway_scaleset_jobs_assigned_total` moving while an idle one does not.
 
 1. Read `actions_gateway_scaleset_advertised_capacity` for what the set is still offering and `actions_gateway_scaleset_capacity_withheld` by `reason` for who took the rest; a `quota` share alongside the `capacity` one means the [ResourceQuota](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) is binding too.
+   The budget dashboard's [Throttled Intake row](observability-dashboards.md#budget-dashboard) plots both as one stack whose total is the declared ceiling, which is the fastest way to see the split.
 2. Then follow the same evidence and remediation path as [ActionsGatewayCapacityGateRejectingJobs](#actionsgatewaycapacitygaterejectingjobs) above.
 
 ---
