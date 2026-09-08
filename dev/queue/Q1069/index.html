@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1066/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1069/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Registry read cannot present node-identity pull credentials (GAR, ECR) - GitHub Actions Gateway</title>
+        <title>Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#registry-read-cannot-present-node-identity-pull-credentials-gar-ecr" class="md-skip">
+        <a href="#scope-the-egress-audit-attribution-gauge-to-a-runnersets-own-proxyref" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Registry read cannot present node-identity pull credentials (GAR, ECR)
+              Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef
             
           </span>
         </div>
@@ -2597,15 +2597,27 @@
   
 
 
-<h1 id="registry-read-cannot-present-node-identity-pull-credentials-gar-ecr">Registry read cannot present node-identity pull credentials (GAR, ECR)<a class="headerlink" href="#registry-read-cannot-present-node-identity-pull-credentials-gar-ecr" title="Permanent link">&para;</a></h1>
-<p>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's <code>imagePullSecrets</code> name, read through the AGC's own Role.
-That is the only credential the AGC can obtain: the tenant Role grants no read on ServiceAccounts, so a pull secret attached to the worker ServiceAccount rather than the template is out of reach, and a registry that kubelet reaches through the node's identity — Artifact Registry under Workload Identity, ECR under the node role — has no Secret to read at all.
-Such an image pulls fine and reports <code>WorkerImageVersionUnknown</code> with an authentication failure in the message (the anonymous path phrases it <code>token exchange with &lt;host&gt;: HTTP &lt;n&gt; (anonymous)</code>; which status GAR and ECR return is unmeasured), while the tag verdict, if the tag names a version, stands.</p>
-<p>Closing it means one of: reading the worker SA's <code>imagePullSecrets</code> (a Role widening, <code>get</code> on <code>serviceaccounts</code>), or a credential helper per cloud (an Artifact Registry token from the AGC's own Workload Identity, an ECR <code>GetAuthorizationToken</code>), which is a dependency and an identity grant per provider.
-The first is cheap and covers the SA-attached Secret only; the second is what the node-identity case needs and is sized <code>M</code> on its own.</p>
-<p>The SA-attached case is this repo's own documented install path rather than an edge: <code>docs/operations/air-gapped-install.md</code> §5 patches <code>imagePullSecrets</code> onto the <code>actions-gateway-worker</code> ServiceAccount, which kubelet injects into every worker pod and the AGC never reads, since both call sites pass <code>Spec.PodTemplate.Spec.ImagePullSecrets</code> (<code>runnergroup_controller.go</code>, <code>runnerset_controller.go</code>).
-Against a mirror that requires authentication, an air-gapped install therefore never completes the registry read unless the operator also names the same Secret in the pod template, which the operator docs say to do; the tag verdict still stands where the tag names a version, as above.
-That is the workaround, so the first closure buys an install path that needs no workaround; it does not reach node identity.</p>
+<h1 id="scope-the-egress-audit-attribution-gauge-to-a-runnersets-own-proxyref">Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef<a class="headerlink" href="#scope-the-egress-audit-attribution-gauge-to-a-runnersets-own-proxyref" title="Permanent link">&para;</a></h1>
+<p><code>EgressAuditUnattributed</code> and <code>actions_gateway_egress_audit_unattributed</code> (Q1062) read the proxy half from <code>ActionsGateway.spec.defaultProxyRef</code>, because that is the proxy the GMC's gateway reconciler has already resolved by the time the condition is written.</p>
+<p>Not because an unresolvable reference makes the condition safe.
+<code>Reconcile</code> returns at <code>setNotReady(ProxyNotFound</code> / <code>ProxyShareNotGranted)</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">actionsgateway_v2_controller.go</a>) <em>before</em> <code>updateStatus</code> runs, and <code>setNotReady</code> writes only the named condition and <code>Ready</code>, so <code>EgressAuditUnattributed</code> keeps whatever it last held.
+Measured 2026-09-07 on a fake-client reconcile, against the pre-inversion polarity: a joined gateway cleared the condition, and after deleting the <code>EgressProxy</code> it stayed cleared beside <code>Ready=False</code>/<code>ProxyNotFound</code>.
+Inverted, that is a gateway whose pool is gone still reading <code>0</code> on the flag.
+That staleness is the whole advisory set's rather than this condition's (<code>EgressUnattributed</code> read <code>False</code>/<code>ProxiedEgress</code> on the same pass), so it is <a href="../Q1079/">Q1079</a> rather than this row.</p>
+<p>Worker traffic does not have to leave through that pool.
+<code>RunnerSet.spec.proxyRef</code> overrides <code>defaultProxyRef</code> for the set's workers (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go">runnerset_target.go</a> resolves <code>rs.proxyRef</code> → <code>gw.defaultProxyRef</code> → direct), and the Q986 join is worker source address against worker bind record, so it is the <em>set's</em> pool whose <code>auditLogging</code> decides whether a record carries an address to join on.
+It is wrong in both directions, and the first is the one Q1062 exists to prevent:</p>
+<ul>
+<li><strong>False <code>0</code>.</strong> A gateway logging <code>WorkerAddresses</code> whose <code>defaultProxyRef</code> pool logs <code>ConnectionsWithSource</code> clears the flag even where every bound <code>RunnerSet</code> overrides the ref to a pool with the source half off, so a consumer-keyed panel would show that pool's traffic under the tenant's name with no join behind it.</li>
+<li><strong>False <code>DirectEgress</code>.</strong> A gateway with <em>no</em> <code>defaultProxyRef</code> reads <code>1</code> with reason <code>DirectEgress</code> however its sets egress, because <code>rs.proxyRef</code> is read first and is independent of the gateway's, so a tenant whose every set names a pool logging <code>ConnectionsWithSource</code> is reported as having no per-connection record to attribute when it has one per set.
+  The message says so as of Q1062, which is a caveat rather than a fix.</li>
+</ul>
+<p>Two shapes to decide between, and the choice is not obvious:
+- <strong>Widen the gateway condition</strong> to require every bound <code>RunnerSet</code>'s resolved pool to log <code>ConnectionsWithSource</code>.
+  The gateway reconciler already lists bound sets for the <code>RunnerSetsDegraded</code> rollup (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">evalRunnerSetHealth</a>), so the list is free, but resolving each set's own <code>proxyRef</code> (cross-namespace, sharing-gated) is new <code>Get</code>s per reconcile on the GMC's hot path, and it collapses a per-set fact into one gateway bit.
+- <strong>A per-<code>RunnerSet</code> twin</strong>, set by the AGC's RunnerSet reconciler, which already resolves the set's pool for its own <code>EgressUnattributed</code> condition.
+  Keeps the resolution where it happens and gives a panel a per-set key, at the cost of a second condition and gauge in a second binary.</p>
+<p>Whichever lands, the gateway gauge's own caveat ("scoped to <code>defaultProxyRef</code>") comes out of <code>observability-metrics.md</code>, <code>observability-logging.md</code>, <code>tenant-onboarding.md</code>, <code>appendix-g-future-enhancements.md</code> §G.3, and the condition godoc in <code>api/apiconditions/conditions.go</code>.</p>
 
 
 

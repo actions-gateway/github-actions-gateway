@@ -3049,6 +3049,11 @@ The patch <strong>survives GMC reconciliation</strong> — the GMC only manages 
 <blockquote>
 <p>Alternative: if your registry is reachable by the cluster but only needs auth, a cluster-wide approach (e.g. a <code>default</code>-SA mutating policy, or a registry pull-through cache that injects credentials) also works.
 The per-SA patch above is the no-extra-tooling baseline.</p>
+<p><strong>Name the pull Secret in the worker pod template too.</strong> The SA patch covers the <em>pull</em>, which kubelet performs, but the AGC reads the worker image out of the registry itself to report the runner version it ships, and it can only present a Secret the pod template's <code>imagePullSecrets</code> names (<a href="../../queue/Q1066/">Q1066</a>).
+Against a mirror that requires authentication, an SA-only wiring means that read never succeeds, so the version the image actually ships is never verified and <code>RunnerVersionTooOld</code> carries the authentication failure in its message on every reconcile.
+The step 6 reference names a version in its tag, so the verdict still stands on the tag's claim rather than degrading to <code>Unknown</code>; a digest-only or custom-tagged <code>workerImage</code> has no such fallback and does report <code>Unknown</code>.
+See <a href="../troubleshooting/#worker-image-runner-version">Worker Image Runner Version</a>.
+Adding the same Secret name to <code>podTemplate.spec.imagePullSecrets</code> restores the reading and changes nothing about the pull.</p>
 </blockquote>
 <hr />
 <h2 id="6-point-the-worker-image-at-the-mirror">6. Point the worker image at the mirror<a class="headerlink" href="#6-point-the-worker-image-at-the-mirror" title="Permanent link">&para;</a></h2>

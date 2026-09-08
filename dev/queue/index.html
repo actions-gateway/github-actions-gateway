@@ -3477,12 +3477,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>YAML reads bare <code>Off</code>/<code>On</code>/<code>Yes</code>/<code>No</code> as booleans, so an operator writing <code>auditLogging: Off</code> in a manifest has admission reject a value …</td>
 </tr>
 <tr>
-<td><a href="Q1062/">Q1062</a></td>
-<td><a href="../operations/observability-dashboards/#security-dashboard">Gauge whether the Q986 attribution pair is on for a gateway</a></td>
+<td><a href="Q1069/">Q1069</a></td>
+<td><a href="../operations/observability-metrics/">Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef</a></td>
 <td><code>feature</code> <code>security</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>The security dashboard (Q725) keys its egress row on the pool, because nothing scrapable says which consumer opened a tunnel: the proxy …</td>
+<td><code>EgressAuditUnattributed</code> and <code>actions_gateway_egress_audit_unattributed</code> (Q1062) read the proxy half from …</td>
+</tr>
+<tr>
+<td><a href="Q1070/">Q1070</a></td>
+<td><a href="../operations/observability-dashboards/#security-dashboard">Key a security-dashboard panel on the egress-audit attribution gauge</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q1062 shipped <code>actions_gateway_egress_audit_unattributed</code>, the series the security dashboard's own Row 1 prose says a consumer-keyed panel …</td>
+</tr>
+<tr>
+<td><a href="Q1079/">Q1079</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Advisory conditions go stale on the fail-closed reconcile path</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>ActionsGatewayV2Reconciler.Reconcile</code> returns at <code>setNotReady(...)</code> for a missing App <code>Secret</code>, <code>ProxyNotFound</code>, <code>ProxyShareNotGranted</code> …</td>
 </tr>
 <tr>
 <td><a href="Q501/">Q501</a></td>
@@ -4275,6 +4291,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>RunnerSetCustomValidator</code> now runs two cross-object guards that each build their own cluster-wide inventory on the uncached API reader …</td>
+</tr>
+<tr>
+<td><a href="Q1080/">Q1080</a></td>
+<td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read: the http bearer-realm failure is undocumented</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>WorkerImageVersionUnknown</code>'s resolution names three of the ten failures <code>client.go</code> can return on the authentication path, and the other …</td>
 </tr>
 </tbody>
 </table>

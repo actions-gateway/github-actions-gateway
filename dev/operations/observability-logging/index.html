@@ -3072,7 +3072,9 @@ The window matters because addresses are reused: a worker pod is deleted when it
 <p>Three things to know before you build on it:</p>
 <ul>
 <li><strong>Two switches, and half-on is legal.</strong> <code>ConnectionsWithSource</code> without <code>WorkerAddresses</code> gives addresses nothing names; <code>WorkerAddresses</code> without it gives bindings nothing asks about.
-  Neither is an error, and neither attributes anything.</li>
+  Neither is an error, and neither attributes anything.
+  Which state a gateway is in is on its <code>EgressAuditUnattributed</code> condition and the <code>actions_gateway_egress_audit_unattributed</code> gauge (Q1062), so you do not have to read two specs to find out: <code>True</code> means a half is off and the reason names which, and <code>False</code>/<code>EgressAuditJoined</code> means both are on.
+  Both read the gateway's <code>defaultProxyRef</code>, so a <code>RunnerSet</code> pointing at a pool of its own is outside what they cover.</li>
 <li><strong>It assumes the proxy sees the worker's own address.</strong> Pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path, so <code>sourceIP</code> is the worker's <code>podIP</code>.
   A CNI that SNATs it breaks the join, so check yours before relying on the records.</li>
 <li><strong>The gateway's own egress has no binding.</strong> The AGC reaches GitHub through the same pool, so its connections carry a <code>sourceIP</code> no <code>bind</code> record ever names.

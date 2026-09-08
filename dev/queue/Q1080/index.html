@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1062/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1080/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Gauge whether the Q986 attribution pair is on for a gateway - GitHub Actions Gateway</title>
+        <title>Registry read: the http bearer-realm failure is undocumented - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gauge-whether-the-q986-attribution-pair-is-on-for-a-gateway" class="md-skip">
+        <a href="#registry-read-the-http-bearer-realm-failure-is-undocumented" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Gauge whether the Q986 attribution pair is on for a gateway
+              Registry read: the http bearer-realm failure is undocumented
             
           </span>
         </div>
@@ -2597,14 +2597,14 @@
   
 
 
-<h1 id="gauge-whether-the-q986-attribution-pair-is-on-for-a-gateway">Gauge whether the Q986 attribution pair is on for a gateway<a class="headerlink" href="#gauge-whether-the-q986-attribution-pair-is-on-for-a-gateway" title="Permanent link">&para;</a></h1>
-<p>The security dashboard (Q725) keys its egress row on the pool, because nothing scrapable says which consumer opened a tunnel: the proxy metrics carry the pool namespace stamped by the scrape target, and tenant-and-job attribution lives only in the two audit log streams the Q986 join reads.
-The row's own constraint, that a consumer-keyed panel show nothing rather than the pool's traffic when the pair is off, is met today by not having a consumer-keyed panel at all.</p>
-<p>What a dashboard could key on is whether the pair is on for a given gateway.
-The GMC already reads both halves, <code>EgressProxy.spec.auditLogging</code> and <code>ActionsGateway.spec.auditLogging</code>, when it renders the two deployments, and already exports one condition gauge per gateway (<code>actions_gateway_egress_unattributed</code> and its siblings).
-A gauge of the same shape, so a dashboard can key a panel on the consumer: <code>1</code> when the gateway's AGC has <code>WorkerAddresses</code> and the <code>EgressProxy</code> it references has <code>ConnectionsWithSource</code>, is the evidence the audit persona is missing: which tenants' egress is attributable by job right now, and since when.
-A dashboard panel keyed on it reads the pool's traffic under a consumer's name only where the join exists to back the reading, and stays empty otherwise, which is the row's constraint stated as a series.</p>
-<p>Out of Q725's scope because it is a GMC metric with its own reconciler and test work, not a dashboard change, and because the half-on case needs a decision: a gateway on a shared pool whose provider turned on <code>ConnectionsWithSource</code> for another consumer's sake reads as attributable under this gauge, and whether that is right depends on whether the consumer's own <code>WorkerAddresses</code> is what the gauge should require.</p>
+<h1 id="registry-read-the-http-bearer-realm-failure-is-undocumented">Registry read: the http bearer-realm failure is undocumented<a class="headerlink" href="#registry-read-the-http-bearer-realm-failure-is-undocumented" title="Permanent link">&para;</a></h1>
+<p><code>WorkerImageVersionUnknown</code>'s resolution names three of the ten failures <code>client.go</code> can return on the authentication path, and the other seven fall to the catch-all sentence about a registry that is out of reach or cannot be authenticated to.
+That is correct advice for six of them.
+The seventh is <code>registry &lt;host&gt;: bearer realm "&lt;url&gt;" is not https</code>, raised where a registry answers a <code>401</code> with a Bearer challenge whose realm is <code>http</code> (<code>fetchToken</code> refuses it, since the login would ride on that exchange in the clear).
+Re-tagging cannot fix it and the registry is reachable, so the catch-all points the operator at the wrong remedy.</p>
+<p>An internal or air-gapped mirror is exactly where an http realm shows up, which is also the audience Q1066's operator docs are written for, so the gap is not in an exotic corner.
+Closing it is a clause in the same paragraph naming the message and saying the fix is on the registry: serve the token realm over TLS.</p>
+<p>Whether any registry in use here actually emits an http realm is unmeasured; the code path is read from <code>cmd/agc/internal/runnerimage/client.go</code>.</p>
 
 
 

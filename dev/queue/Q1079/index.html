@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1066/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1079/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Registry read cannot present node-identity pull credentials (GAR, ECR) - GitHub Actions Gateway</title>
+        <title>Advisory conditions go stale on the fail-closed reconcile path - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#registry-read-cannot-present-node-identity-pull-credentials-gar-ecr" class="md-skip">
+        <a href="#advisory-conditions-go-stale-on-the-fail-closed-reconcile-path" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Registry read cannot present node-identity pull credentials (GAR, ECR)
+              Advisory conditions go stale on the fail-closed reconcile path
             
           </span>
         </div>
@@ -2597,15 +2597,21 @@
   
 
 
-<h1 id="registry-read-cannot-present-node-identity-pull-credentials-gar-ecr">Registry read cannot present node-identity pull credentials (GAR, ECR)<a class="headerlink" href="#registry-read-cannot-present-node-identity-pull-credentials-gar-ecr" title="Permanent link">&para;</a></h1>
-<p>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's <code>imagePullSecrets</code> name, read through the AGC's own Role.
-That is the only credential the AGC can obtain: the tenant Role grants no read on ServiceAccounts, so a pull secret attached to the worker ServiceAccount rather than the template is out of reach, and a registry that kubelet reaches through the node's identity — Artifact Registry under Workload Identity, ECR under the node role — has no Secret to read at all.
-Such an image pulls fine and reports <code>WorkerImageVersionUnknown</code> with an authentication failure in the message (the anonymous path phrases it <code>token exchange with &lt;host&gt;: HTTP &lt;n&gt; (anonymous)</code>; which status GAR and ECR return is unmeasured), while the tag verdict, if the tag names a version, stands.</p>
-<p>Closing it means one of: reading the worker SA's <code>imagePullSecrets</code> (a Role widening, <code>get</code> on <code>serviceaccounts</code>), or a credential helper per cloud (an Artifact Registry token from the AGC's own Workload Identity, an ECR <code>GetAuthorizationToken</code>), which is a dependency and an identity grant per provider.
-The first is cheap and covers the SA-attached Secret only; the second is what the node-identity case needs and is sized <code>M</code> on its own.</p>
-<p>The SA-attached case is this repo's own documented install path rather than an edge: <code>docs/operations/air-gapped-install.md</code> §5 patches <code>imagePullSecrets</code> onto the <code>actions-gateway-worker</code> ServiceAccount, which kubelet injects into every worker pod and the AGC never reads, since both call sites pass <code>Spec.PodTemplate.Spec.ImagePullSecrets</code> (<code>runnergroup_controller.go</code>, <code>runnerset_controller.go</code>).
-Against a mirror that requires authentication, an air-gapped install therefore never completes the registry read unless the operator also names the same Secret in the pod template, which the operator docs say to do; the tag verdict still stands where the tag names a version, as above.
-That is the workaround, so the first closure buys an install path that needs no workaround; it does not reach node identity.</p>
+<h1 id="advisory-conditions-go-stale-on-the-fail-closed-reconcile-path">Advisory conditions go stale on the fail-closed reconcile path<a class="headerlink" href="#advisory-conditions-go-stale-on-the-fail-closed-reconcile-path" title="Permanent link">&para;</a></h1>
+<p><code>ActionsGatewayV2Reconciler.Reconcile</code> returns at <code>setNotReady(...)</code> for a missing App <code>Secret</code>, <code>ProxyNotFound</code>, <code>ProxyShareNotGranted</code> and the <code>githubCABundleRef</code> failures, all of them before <code>updateStatus</code> runs.
+<code>setNotReady</code> writes the named condition and <code>Ready</code> and nothing else, so every advisory condition <code>updateStatus</code> owns keeps the value it last held: <code>EgressUnattributed</code>, <code>AGCAutoscalingUnavailable</code>, <code>ScaleSetNameCollision</code>, <code>RunnerSetsDegraded</code> and <code>EgressAuditUnattributed</code>, plus <code>status.proxyMode</code>.</p>
+<p><strong>Measured 2026-09-07</strong> on a fake-client reconcile (throwaway test, not committed): reconcile a gateway whose <code>defaultProxyRef</code> pool logs <code>ConnectionsWithSource</code> and whose own <code>auditLogging</code> is <code>WorkerAddresses</code>, then delete the <code>EgressProxy</code> and reconcile again.
+<code>Ready</code> correctly becomes <code>False</code>/<code>ProxyNotFound</code>, and beside it the egress-audit condition stays on its joined reason and <code>EgressUnattributed</code> stays <code>False</code>/<code>ProxiedEgress</code>.
+(Measured before #1870 inverted that condition's polarity; the staleness is the reconcile path's and is unaffected by which way it reads.)
+A gateway with no proxy therefore reports its egress as proxied and its audit records as joinable.</p>
+<p>Reading this as a defect is the part that needs deciding, and it is not obvious.
+The fail-closed path deliberately writes as little as possible, and a condition carries <code>observedGeneration</code> and <code>lastTransitionTime</code> precisely so a reader can tell a current status from one the reconciler has not revisited.
+Against that: nothing forces a reader to check, a Prometheus gauge carries neither field, and <code>EgressAuditUnattributed</code> is the one whose stale <code>False</code> an audit panel would key on (Q1062, Q1070).</p>
+<p>Three shapes, cheapest first:
+- <strong>Do nothing and document it</strong>, in <code>docs/design/appendix-h-v2-api-decomposition.md</code> §H.7 where the uniform status contract lives, so the staleness is a stated property of every advisory condition rather than a surprise per condition.
+- <strong>Have <code>setNotReady</code> clear the advisory set</strong> to a <code>Unknown</code>/<code>NotReconciled</code> state, which is honest and touches every consumer of those conditions including the <code>RunnerSetsDegraded</code> rollup.
+- <strong>Gate the gauges on <code>Ready</code></strong>, which is the smallest change and the least honest: it silences the metric on a gateway that may be fine except for one missing reference.</p>
+<p>Found while reviewing #1870 (Q1062), whose first draft asserted the opposite mechanism in its own row.</p>
 
 
 

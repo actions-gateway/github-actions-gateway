@@ -4028,7 +4028,7 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 <tr>
 <td><code>RunnerVersionTooOld=Unknown</code>, reason <code>WorkerImageVersionUnknown</code></td>
 <td>The registry read of the image is pending or failed and the reference names no runner version to fall back on, or the image is not <code>actions/runner</code>-derived</td>
-<td>Read the message: an authentication failure (<code>requires a login</code>, <code>token exchange … HTTP 401</code>, <code>unauthorized after authenticating</code>) wants an <code>imagePullSecret</code> on the pod template, a dial error means the AGC's egress policy does not reach the registry; otherwise tag the image with the runner version it ships, or read the worker pod's <code>runner version detected</code> log line</td>
+<td>An authentication failure is about the AGC's registry read, not the pull (<a href="../troubleshooting/#worker-image-runner-version">details</a>). A dial error means the AGC's egress policy does not reach the registry; otherwise tag the image with the runner version it ships, or read the worker pod's <code>runner version detected</code> log line</td>
 </tr>
 <tr>
 <td>Test job stays queued in GitHub for &gt;2 minutes</td>
@@ -4371,6 +4371,11 @@ Either give such a tenant their own unshared pool, or turn on the attribution pa
 <p>Turn on both or neither: one alone records data nothing joins to.
 Both roll their workload.
 The record shapes, the join, and the CNI assumption it rests on are in <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">logging: attributing a record to a tenant and a job</a>.</p>
+<p><strong>Checking it took effect.</strong> <code>kubectl describe actionsgateway &lt;gateway&gt;</code> shows an <code>EgressAuditUnattributed</code> condition, which clears to <code>False</code>/<code>EgressAuditJoined</code> once both halves are on.
+While it is <code>True</code> the reason names the half still off: <code>ProxySourceAuditDisabled</code> (the pool), <code>WorkerAuditDisabled</code> (the gateway), <code>EgressAuditDisabled</code> (neither), or <code>DirectEgress</code> (no <code>defaultProxyRef</code>, so the AGC's own egress leaves from no pool).
+Fleet-wide the same fact is the <code>actions_gateway_egress_audit_unattributed</code> gauge (Q1062), which reads <code>1</code> until you turn both on.
+Both read the gateway's spec and its <code>defaultProxyRef</code>, so they say the pair is <em>configured</em>, not that a log pipeline is running the join.
+A <code>RunnerSet</code> with its own <code>spec.proxyRef</code> egresses through a pool neither of them looked at.</p>
 <p>Weigh it as a third cost on top of the two below: together the two streams say which host each of a tenant's jobs reached, which is the evidence an auditor asks for and also a per-worker record the platform now keeps.</p>
 <p><strong>Off is the default deliberately, and turning it on is a decision with two costs.</strong> The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
 Agree that with the tenant rather than switching it on across a cluster.

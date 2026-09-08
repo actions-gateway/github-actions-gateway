@@ -3463,7 +3463,10 @@ It reads three scrapes, and each row says which: egress and the abuse counters c
 <p><strong>It is keyed on the pool, not the consumer, and says so on the page.</strong> <code>namespace</code> on every proxy series is the namespace the pool runs in, stamped by the scrape target.
 On a pool no other namespace references that is the tenant; on a pool shared via <code>spec.sharing.allowedNamespaces</code> it is the pool, and no metric says which consumer opened a tunnel.
 Attributing a connection to a tenant and a job is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">audit-record join</a> of two log streams, and no panel here reads them, so the dashboard never presents a pool's traffic as a consumer's.
-A gauge saying whether that pair is on for a gateway would let a panel key on the consumer where the join exists to back it (<a href="../../queue/Q1062/">Q1062</a>).</p>
+Whether that join is missing for a gateway is now a gauge, <code>actions_gateway_egress_audit_unattributed</code>, <code>1</code> while either half of the pair is off (Q1062), and that is the series a consumer-keyed panel would have to gate on.
+No panel here reads it yet (<a href="../../queue/Q1070/">Q1070</a>).
+It reads the gateway's <code>defaultProxyRef</code> only, so it is not a per-pool answer: a <code>RunnerSet</code> naming its own <code>spec.proxyRef</code> egresses through a pool the gauge never looked at, in both directions (<a href="../../queue/Q1069/">Q1069</a>).
+A panel keyed on it is therefore gating on the gateway's declared pair, not on the pool whose traffic it would be drawing.</p>
 <p><strong>Row 1: Egress Attribution (per pool)</strong></p>
 <table>
 <thead>
@@ -3496,6 +3499,10 @@ A gauge saying whether that pair is on for a gateway would let a panel key on th
 </tr>
 </tbody>
 </table>
+<p><code>actions_gateway_egress_audit_unattributed</code> belongs in that timeline as a fourth flag and is not in it yet (<a href="../../queue/Q1070/">Q1070</a>).
+It shares the row's <code>1 = flagged</code> polarity, and it is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">job-attribution</a> half, whether an egress record resolves to a tenant and a job, where <code>egress_unattributed</code> is the IP-identity half, whether there is a per-tenant proxy at all.
+A gateway can be proxied and still unattributed by job, and that is the common state, since both halves of the pair default <code>Off</code>.
+Expect it near-solid <code>1</code> across a fleet that has not opted in, which is a true reading rather than an incident: unlike its three neighbours, a <code>1</code> here is a tenant nobody turned attribution on for, not something that broke.</p>
 <p><strong>Row 2: Admission Decisions</strong></p>
 <table>
 <thead>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1066/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1070/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Registry read cannot present node-identity pull credentials (GAR, ECR) - GitHub Actions Gateway</title>
+        <title>Key a security-dashboard panel on the egress-audit attribution gauge - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#registry-read-cannot-present-node-identity-pull-credentials-gar-ecr" class="md-skip">
+        <a href="#key-a-security-dashboard-panel-on-the-egress-audit-attribution-gauge" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Registry read cannot present node-identity pull credentials (GAR, ECR)
+              Key a security-dashboard panel on the egress-audit attribution gauge
             
           </span>
         </div>
@@ -2597,15 +2597,15 @@
   
 
 
-<h1 id="registry-read-cannot-present-node-identity-pull-credentials-gar-ecr">Registry read cannot present node-identity pull credentials (GAR, ECR)<a class="headerlink" href="#registry-read-cannot-present-node-identity-pull-credentials-gar-ecr" title="Permanent link">&para;</a></h1>
-<p>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's <code>imagePullSecrets</code> name, read through the AGC's own Role.
-That is the only credential the AGC can obtain: the tenant Role grants no read on ServiceAccounts, so a pull secret attached to the worker ServiceAccount rather than the template is out of reach, and a registry that kubelet reaches through the node's identity — Artifact Registry under Workload Identity, ECR under the node role — has no Secret to read at all.
-Such an image pulls fine and reports <code>WorkerImageVersionUnknown</code> with an authentication failure in the message (the anonymous path phrases it <code>token exchange with &lt;host&gt;: HTTP &lt;n&gt; (anonymous)</code>; which status GAR and ECR return is unmeasured), while the tag verdict, if the tag names a version, stands.</p>
-<p>Closing it means one of: reading the worker SA's <code>imagePullSecrets</code> (a Role widening, <code>get</code> on <code>serviceaccounts</code>), or a credential helper per cloud (an Artifact Registry token from the AGC's own Workload Identity, an ECR <code>GetAuthorizationToken</code>), which is a dependency and an identity grant per provider.
-The first is cheap and covers the SA-attached Secret only; the second is what the node-identity case needs and is sized <code>M</code> on its own.</p>
-<p>The SA-attached case is this repo's own documented install path rather than an edge: <code>docs/operations/air-gapped-install.md</code> §5 patches <code>imagePullSecrets</code> onto the <code>actions-gateway-worker</code> ServiceAccount, which kubelet injects into every worker pod and the AGC never reads, since both call sites pass <code>Spec.PodTemplate.Spec.ImagePullSecrets</code> (<code>runnergroup_controller.go</code>, <code>runnerset_controller.go</code>).
-Against a mirror that requires authentication, an air-gapped install therefore never completes the registry read unless the operator also names the same Secret in the pod template, which the operator docs say to do; the tag verdict still stands where the tag names a version, as above.
-That is the workaround, so the first closure buys an install path that needs no workaround; it does not reach node identity.</p>
+<h1 id="key-a-security-dashboard-panel-on-the-egress-audit-attribution-gauge">Key a security-dashboard panel on the egress-audit attribution gauge<a class="headerlink" href="#key-a-security-dashboard-panel-on-the-egress-audit-attribution-gauge" title="Permanent link">&para;</a></h1>
+<p>Q1062 shipped <code>actions_gateway_egress_audit_unattributed</code>, the series the security dashboard's own Row 1 prose says a consumer-keyed panel would have to gate on so a pool's traffic is never read under a consumer's name without the join to back it.
+No panel reads it yet, so the dashboard still keys egress entirely on the pool.</p>
+<p>The minimum is a fourth series in the existing "Egress posture per gateway" state timeline, which it fits: that panel is <code>1 = flagged</code> and so is this gauge, and it tells the audit persona which tenants' egress resolves to no job and since when.
+Say on the panel that a <code>1</code> here is the opt-in default rather than a fault, because it will be near-solid across a fleet that has not turned the pair on, unlike its three neighbours.</p>
+<p><strong>Weigh a stat panel instead, and decide rather than defaulting to the timeline.</strong> A series sitting near-solid <code>1</code> in a <code>1 = flagged</code> row trains the eye to discount the whole panel, including the three neighbours where a <code>1</code> genuinely is a fault, so the cheap placement can cost more than it buys.
+"N of M gateways unattributed" carries the same fact without a band that is always lit, at the cost of losing the since-when a timeline gives for free.</p>
+<p>The reason this was not folded into Q1062 is the render, not the JSON: <code>make dashboard-render-check</code> fails a dashboard changed beyond its panel descriptions whose screenshot did not, so the panel needs a live Grafana + Prometheus to re-render <code>docs/assets/grafana-dashboard-security.png</code> per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/README.md</code></a>.
+A consumer-keyed <em>traffic</em> panel, proxy series filtered to the gateways reading <code>1</code>, is the larger question behind it and needs its own decision about what a mixed pool should show.</p>
 
 
 
