@@ -209,6 +209,10 @@ On a Linux/WSL desktop you instead get input lag and compositor stutter while th
 To prevent that, these phases auto-throttle on an **interactive, GUI-bearing dev shell**: the scripts behind the make targets (`scripts/go/go-test.sh`, `scripts/go/go-lint.sh`, `scripts/go/coverage.sh`) run them with both CPU priority **and** disk I/O demoted below the desktop (macOS: `nice -n 10 taskpolicy -d throttle`; Linux/WSL: `nice -n 19`, plus `ionice -c 3` when available), and cap parallelism to physical-cores − 2 (`golangci-lint -j`, `go test -p`, `GOMAXPROCS`, and since Q822 the [fast-gate fan-outs](#the-fast-gates-fan-out-past-the-heavy-build-semaphore) through `RUN_PARALLEL_JOBS`).
 Detection and sizing live in [`scripts/agent/local-throttle.sh`](../../scripts/agent/local-throttle.sh).
 
+**Setting `CI` yourself turns all of that off.** `throttle_active` returns false on any non-empty `CI` before it looks at the OS, so `CI=true make check` locally runs with no prefix, no core cap, and no `RUN_PARALLEL_JOBS`, starting every fast-gate suite at once.
+On a loaded dev box that manufactures wall-clock failures that are indistinguishable from real flakes (Q1084).
+Run the gate as plain `make check`; reproduce a CI-only behaviour with a workflow dispatch rather than by exporting `CI`.
+
 On macOS the I/O demotion matters as much as the CPU demotion: an unthrottled build already runs at a lower QoS than WindowServer yet still trips the watchdog, so the fix is throttling the build's I/O so the compositor's I/O isn't stuck behind it — and `taskpolicy` is the only macOS way to express that (there is no `ionice`).
 
 **Demote the two separately; don't clamp QoS.** The macOS prefix was `taskpolicy -c utility` until Q441.
