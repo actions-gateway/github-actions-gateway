@@ -48,7 +48,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -309,32 +308,14 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	return nil
 }
 
-// runnerGroupName derives the RunnerGroup CR name for a spec entry. A non-empty
-// first runner label yields a stable, content-derived name; an unlabeled entry
-// falls back to an index-based name. Pruning (pruneRunnerGroups) keys on the
-// owner labels rather than this name, so converging the desired set is correct
-// even when an entry is removed or reordered.
-//
-// The result is bounded to 63 characters, which is NOT the limit on a CR name (253)
-// but the limit on a label VALUE: the AGC stamps this name as
-// actions-gateway/runner-group on every worker pod and agent Secret it creates. An
-// unbounded name is therefore accepted here and rejected there — a 15-character
-// gateway with a 40-character runner label was enough to overrun it, after which
-// every worker pod create failed and the tenant ran no jobs at all while GitHub
-// reported only that the runner had lost communication. v2 avoids this with a
-// 52-char CEL cap on CR names ([§H.6]); v1 has no such cap, so the bound is applied
-// where the name is derived.
-//
-// [apinames.Join] returns a name that already fits unchanged, so every gateway whose
-// derived name is within the limit today keeps exactly the name it has, and only a
-// tenant that is already broken is renamed.
-//
-// [§H.6]: https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/design/appendix-h-v2-api-decomposition.md#h6-naming-and-length-budgets
+// runnerGroupName derives the RunnerGroup CR name for a spec entry, via the shared
+// [apinames.RunnerGroupName] every consumer of that name calls — gag-migrate, which
+// synthesizes it, and GMC admission, which derives it to reject a name that would
+// claim a taken agent-identity stem (Q1011). Pruning (pruneRunnerGroups) keys on the
+// owner labels rather than this name, so converging the desired set is correct even
+// when an entry is removed or reordered.
 func runnerGroupName(ag *gmcv1alpha1.ActionsGateway, spec agcv1alpha1.RunnerGroupSpec, i int) string {
-	if len(spec.RunnerLabels) > 0 {
-		return apinames.Join(apinames.MaxLabelValue, ag.Name, labelSafe(spec.RunnerLabels[0]))
-	}
-	return apinames.Join(apinames.MaxLabelValue, ag.Name, strconv.Itoa(i))
+	return apinames.RunnerGroupName(ag.Name, spec.RunnerLabels, i)
 }
 
 // pruneRunnerGroups deletes RunnerGroup CRs owned by this ActionsGateway that

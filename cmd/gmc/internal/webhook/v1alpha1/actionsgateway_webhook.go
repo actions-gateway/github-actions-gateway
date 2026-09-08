@@ -95,7 +95,9 @@ type ActionsGatewayCustomValidator struct {
 	priorityClasses *allowlist.PriorityClassAllowlist
 
 	// reader lists existing ActionsGateways for the per-namespace singleton
-	// guard (validateSingleton). It is the manager's uncached API reader in
+	// guard (validateSingleton), and every gateway, RunnerGroup and RunnerSet in
+	// the cluster for the agent-identity guard (Q1011,
+	// validateAgentIdentityUniqueness). It is the manager's uncached API reader in
 	// production (wired by SetupActionsGatewayWebhookWithManager). A nil reader
 	// disables the singleton check — unit tests that construct the validator
 	// directly are not exercising it; the integration/e2e and production paths
@@ -121,8 +123,9 @@ func logRejection(ctx context.Context, op string, ag *gmcv1alpha1.ActionsGateway
 }
 
 // ValidateCreate rejects CRs created in reserved namespaces, with a cross-namespace
-// gitHubAppRef, with privileged containers, or requesting securityProfile:
-// privileged in a namespace the platform has not labelled eligible.
+// gitHubAppRef, with privileged containers, requesting securityProfile: privileged in
+// a namespace the platform has not labelled eligible, or whose spec.runnerGroups
+// would derive a RunnerGroup claiming an agent identity another pool already holds.
 func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "create", obj, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace))
@@ -142,6 +145,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 	if err := validateRunnerGroups(obj); err != nil {
 		return nil, logRejection(ctx, "create", obj, err)
 	}
+	if err := v.validateAgentIdentityUniqueness(ctx, obj); err != nil {
+		return nil, logRejection(ctx, "create", obj, err)
+	}
 	if err := v.validatePriorityClasses(obj); err != nil {
 		return nil, logRejection(ctx, "create", obj, err)
 	}
@@ -152,8 +158,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 }
 
 // ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef,
-// privileged containers, a silent securityProfile downgrade, or securityProfile:
-// privileged in a namespace the platform has not labelled eligible. Deletion-only
+// privileged containers, a silent securityProfile downgrade, securityProfile:
+// privileged in a namespace the platform has not labelled eligible, or a
+// spec.runnerGroups entry deriving an already-claimed agent identity. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
 // re-validation (Q518; see validation.DeletionOnlyUpdate).
 func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
@@ -167,6 +174,9 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := validateRunnerGroups(newObj); err != nil {
+		return nil, logRejection(ctx, "update", newObj, err)
+	}
+	if err := v.validateAgentIdentityUniqueness(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := v.validatePriorityClasses(newObj); err != nil {

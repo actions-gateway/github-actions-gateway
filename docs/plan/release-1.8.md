@@ -56,7 +56,7 @@ A reading that comes back negative is the release working: it names the shape fi
 
 - **[Q413](../queue/Q413.md) itself, and 2.0's coupled removals** ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)).
   Q413 stays parked until both soak readings exist and read clean; this release supplies the readings and does not pre-empt the verdict.
-- **The `feature` rows in the ready queue.** Q988 (the registry read behind `RunnerVersionTooOld`; its row is closed, so it is no longer linked) landed after this was scoped and rides, and Q725 and [Q1011](../queue/Q1011.md) are unrelated to the theme.
+- **The `feature` rows in the ready queue.** Q988 (the registry read behind `RunnerVersionTooOld`; its row is closed, so it is no longer linked) landed after this was scoped and rides, and Q725 and Q1011 are unrelated to the theme (both rows are closed, so neither is linked).
   Any of them landing before the tag rides in the floor's reading of the window, with no label.
 - **The proxy-hardening cluster** and everything else the ladder punts past 2.0, unchanged.
 
