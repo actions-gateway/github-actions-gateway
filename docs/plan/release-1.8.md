@@ -42,6 +42,10 @@ The fix does not depend on which step inside it was slow.
 
 A reading that comes back negative is the release working: it names the shape fix `v2beta1` still needs, which resets the soak clock and is exactly what GA is gated on finding first.
 
+**[Q1085](../queue/Q1085.md)'s notice rides here too, and only part of it is done.** Deciding Q452 shipped the notice's docs half — the operator pages, both enum godocs and the admission warning now name `v2.0.0` as the removal release — which is what makes this tag the one-release-ahead announcement for `v2beta1` and the aliases.
+What 1.8 still owes is the release-notes line naming that removal, since a notice nobody reads in the release body is a notice by technicality.
+Q1085's other two halves, the admission reject and the pre-upgrade alias check, are deadlined at 1.9 and land here if there is room ([why the deadline is 1.9](release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2)).
+
 ## Scope ledger
 
 | Q-ID | Item | Gates? | Status |
@@ -50,6 +54,7 @@ A reading that comes back negative is the release working: it names the shape fi
 | [Q1059](../queue/Q1059.md) | Every `v2beta1` kind on the dogfood cluster (soak criterion 2) | rides | 🔲 open |
 | [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
+| [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 ## Explicitly out of scope

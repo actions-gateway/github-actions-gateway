@@ -19,7 +19,7 @@ That is a page telling adopters nine things are in progress when they are waitin
 | **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](release-1.6.md) |
 | **1.7** | Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
 | **1.8** | The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060), which ride, and the Phase 2 alias decision (Q452), taken 2026-09-07: the release that gathers the evidence 2.0 is parked on | [release-1.8.md](release-1.8.md) |
-| **1.9** | The Rule 4b overlap: `v2` served beside `v2beta1`, storage still `v2beta1`. [v2-ga.md](v2-ga.md) Phase 2, and the admission reject plus pre-upgrade check from [Q1085](../queue/Q1085.md) | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) |
+| **1.9** | The Rule 4b overlap: `v2` served beside `v2beta1`, storage still `v2beta1`. [v2-ga.md](v2-ga.md) Phase 2, and the admission reject plus pre-upgrade check from [Q1085](../queue/Q1085.md) | [release-1.9.md](release-1.9.md) |
 | **2.0** | v2 GA: storage advances to `v2`, stored objects migrate, then four coupled removals: `v1alpha1`, `v2alpha1`, `v2beta1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
