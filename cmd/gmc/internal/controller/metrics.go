@@ -180,6 +180,7 @@ type actionsGatewayV2ConditionsCollector struct {
 	egressUnattributed        *prometheus.Desc
 	agcAutoscalingUnavailable *prometheus.Desc
 	scaleSetNameCollision     *prometheus.Desc
+	egressAuditUnattributed   *prometheus.Desc
 }
 
 func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewayV2ConditionsCollector {
@@ -210,6 +211,11 @@ func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewa
 			"1 when the v2 ActionsGateway ScaleSetNameCollision condition is True (a ScaleSet RunnerSet bound to this gateway claims a scale-set name another RunnerSet already claims in the same GitHub scope, so both AGCs drive one scale set and each acquires the other tenant's jobs), else 0. Admission rejects new such pairs, so a 1 is a pair that predates the guard or was applied with the webhook uninstalled — alert on it.",
 			[]string{"namespace", "name"}, nil,
 		),
+		egressAuditUnattributed: prometheus.NewDesc(
+			"actions_gateway_egress_audit_unattributed",
+			"1 when the v2 ActionsGateway EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off, so no egress audit record joins to a tenant and a job: the gateway does not log WorkerAddresses, or the EgressProxy it defaults to does not log ConnectionsWithSource), else 0. Both halves are opt-in and Off is the default, so a 1 is the expected state on a gateway that never opted in, not a fault. A 0 says the pair is configured, not that anything runs the join; scoped to defaultProxyRef, so a RunnerSet with its own proxyRef is not covered.",
+			[]string{"namespace", "name"}, nil,
+		),
 	}
 }
 
@@ -220,6 +226,7 @@ func (c *actionsGatewayV2ConditionsCollector) Describe(ch chan<- *prometheus.Des
 	ch <- c.egressUnattributed
 	ch <- c.agcAutoscalingUnavailable
 	ch <- c.scaleSetNameCollision
+	ch <- c.egressAuditUnattributed
 }
 
 // Collect implements prometheus.Collector. On a read failure it emits nothing
@@ -247,6 +254,8 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.scaleSetNameCollision, prometheus.GaugeValue,
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionScaleSetNameCollision), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.egressAuditUnattributed, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressAuditUnattributed), ag.Namespace, ag.Name)
 	}
 }
 

@@ -71,6 +71,7 @@ func TestVocabularyIsDistinct(t *testing.T) {
 		"ConditionSizingDrift":                 apiconditions.ConditionSizingDrift,
 		"ConditionJobProvisionStalled":         apiconditions.ConditionJobProvisionStalled,
 		"ConditionScaleSetNameCollision":       apiconditions.ConditionScaleSetNameCollision,
+		"ConditionEgressAuditUnattributed":     apiconditions.ConditionEgressAuditUnattributed,
 	}
 
 	seen := make(map[string]string, len(types))

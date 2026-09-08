@@ -64,6 +64,9 @@ Attribution (Q986) is a third value plus a second record, not a wider first one.
 `ConnectionsWithSource` adds the client address to the egress record, and `ActionsGateway.spec.auditLogging: WorkerAddresses` has the AGC write which job holds each worker address while its pod lives.
 That second record is necessary because a worker pod is deleted with its job, so the binding cannot be resolved afterwards.
 Both default `Off` and are opted into separately: neither record is a movement log alone, the join of the two is.
+Because they are separate opt-ins on two objects, a gateway missing either half is flagged by its `EgressAuditUnattributed` condition and the `actions_gateway_egress_audit_unattributed` gauge (Q1062): the fleet-wide read of whose egress resolves to no job, and the series a consumer-keyed dashboard panel has to gate on so it shows a pool's traffic under a consumer's name only where the join backs the reading.
+It is flagged rather than cleared because only the negative is entailed by the two switches: one being off means no join exists, while both being on says nothing about the CNI assumption below or whether a log pipeline runs the join.
+Its scope is the gateway's `defaultProxyRef`: a `RunnerSet` overriding `spec.proxyRef` egresses through a pool that condition never reads (Q1069).
 
 - Field contract and what the record deliberately omits: [05-security.md § Proxy egress audit record](05-security.md#proxy-egress-audit-record).
 - Record shape and how to select it: [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record), and the attribution join in [§ Attributing a record to a tenant and a job](../operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job).

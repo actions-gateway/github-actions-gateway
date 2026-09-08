@@ -975,3 +975,111 @@ func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
 	assert.Equal(t, "WorkerAddresses",
 		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
 }
+
+// TestEgressAuditAttribution covers all five states of the Q986 pair the
+// EgressAuditUnattributed condition reports (Q1062), including the two half-on ones —
+// each names the half still to turn on, because that is what the operator does next.
+func TestEgressAuditAttribution(t *testing.T) {
+	proxyWith := func(mode string) *gmcv2alpha1.EgressProxy {
+		return &gmcv2alpha1.EgressProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: "pool", Namespace: "team-a"},
+			Spec:       gmcv2alpha1.EgressProxySpec{AuditLogging: mode},
+		}
+	}
+	gatewayWith := func(mode string) *gmcv2alpha1.ActionsGateway {
+		ag := v2Gateway("gw", "team-a", "github-app", "pool")
+		ag.Spec.AuditLogging = mode
+		return ag
+	}
+
+	for _, tc := range []struct {
+		name       string
+		gateway    string
+		proxy      *gmcv2alpha1.EgressProxy
+		wantReason string
+		wantInMsg  string
+	}{
+		{"both halves on", "WorkerAddresses", proxyWith("ConnectionsWithSource"),
+			gmcv2alpha1.ReasonEgressAuditJoined, "joins to this tenant"},
+		{"proxy half only", "Off", proxyWith("ConnectionsWithSource"),
+			gmcv2alpha1.ReasonWorkerAuditDisabled, "Set spec.auditLogging: WorkerAddresses"},
+		{"gateway half only", "WorkerAddresses", proxyWith("Connections"),
+			gmcv2alpha1.ReasonProxySourceAuditDisabled, "spec.auditLogging: ConnectionsWithSource"},
+		{"neither half", "Off", proxyWith("Off"),
+			gmcv2alpha1.ReasonEgressAuditDisabled, "not attributable"},
+		// Direct egress leaves the AGC's own traffic on no pool, so the pair cannot be
+		// joined for it however the gateway half is set — the reason names the proxy,
+		// not the opt-in. The message is pinned on the clause that SCOPES the claim to
+		// the control plane, not on "no defaultProxyRef": a bound RunnerSet naming its
+		// own proxyRef does have a per-connection record (Q1069), so an unscoped
+		// wording here would be false, and both wordings contain that opening.
+		{"direct egress with the gateway half on", "WorkerAddresses", nil,
+			gmcv2alpha1.ReasonDirectEgress, "AGC control-plane egress is direct"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reason, msg := egressAuditAttribution(gatewayWith(tc.gateway), tc.proxy)
+			assert.Equal(t, tc.wantReason, reason)
+			assert.Contains(t, msg, tc.wantInMsg)
+		})
+	}
+
+	// An unset auditLogging is the CRD default, and the message must say Off rather
+	// than quoting an empty string at the operator.
+	_, msg := egressAuditAttribution(gatewayWith(""), proxyWith("ConnectionsWithSource"))
+	assert.Contains(t, msg, `is "Off"`)
+
+	// A pool whose source logging was turned on for another consumer still satisfies
+	// the proxy half: the source address attributes a connection to one consumer
+	// namespace and one job, so this gateway's own worker records resolve its own
+	// connections (EgressProxy.spec.auditLogging).
+	//
+	// This is a record of that decision rather than coverage of it, and deliberately
+	// so: egressAuditAttribution reads neither Namespace nor Spec.Sharing, so nothing
+	// here can fail that "both halves on" above does not already catch. It is the
+	// assertion to change if the decision is ever revisited.
+	shared := proxyWith("ConnectionsWithSource")
+	shared.Namespace = "platform"
+	shared.Spec.Sharing = &gmcv2alpha1.ProxySharing{AllowedNamespaces: []string{"team-a"}}
+	reason, _ := egressAuditAttribution(gatewayWith("WorkerAddresses"), shared)
+	assert.Equal(t, gmcv2alpha1.ReasonEgressAuditJoined, reason)
+}
+
+// TestActionsGatewayV2Reconcile_EgressAuditUnattributed asserts the reconciler writes
+// the condition (Q1062) — egressAuditAttribution's own coverage says nothing about
+// whether updateStatus calls it, and the gauge reads the condition, not the spec.
+func TestActionsGatewayV2Reconcile_EgressAuditUnattributed(t *testing.T) {
+	reconcileWith := func(t *testing.T, gatewayMode, proxyMode string) *metav1.Condition {
+		t.Helper()
+		scheme := actionsGatewayV2TestScheme(t)
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
+		proxy := &gmcv2alpha1.EgressProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"},
+			Spec:       gmcv2alpha1.EgressProxySpec{AuditLogging: proxyMode},
+		}
+		ag := v2Gateway("gw", "team-a", "github-app", "shared")
+		ag.Spec.AuditLogging = gatewayMode
+		c := fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(ns, secret, proxy, ag).WithStatusSubresource(ag).Build()
+
+		r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
+		reconcileV2Gateway(t, r, "team-a", "gw")
+
+		var got gmcv2alpha1.ActionsGateway
+		require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
+		return meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressAuditUnattributed)
+	}
+
+	// Abnormal-is-True: both halves on is the cleared state.
+	joined := reconcileWith(t, "WorkerAddresses", "ConnectionsWithSource")
+	require.NotNil(t, joined, "the reconciler must write the condition")
+	assert.Equal(t, metav1.ConditionFalse, joined.Status)
+	assert.Equal(t, gmcv2alpha1.ReasonEgressAuditJoined, joined.Reason)
+
+	// Half on stays True, and the reason names the half still off — the state the row
+	// exists to keep a dashboard from reading as attributed.
+	half := reconcileWith(t, "WorkerAddresses", "Connections")
+	require.NotNil(t, half)
+	assert.Equal(t, metav1.ConditionTrue, half.Status)
+	assert.Equal(t, gmcv2alpha1.ReasonProxySourceAuditDisabled, half.Reason)
+}

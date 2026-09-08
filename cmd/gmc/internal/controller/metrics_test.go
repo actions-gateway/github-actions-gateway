@@ -148,14 +148,16 @@ func TestIPRangeReconciler_NoUpdateWhenNetworkPolicyMissing(t *testing.T) {
 
 // TestActionsGatewayV2ConditionsCollector_MirrorsConditions asserts the v2
 // ActionsGateway condition collector (Q321) exports the runnersets_degraded,
-// agc_available, egress_unattributed, and agc_autoscaling_unavailable (Q390)
-// gauges per non-deleting v2 gateway, each mirroring its condition's True/False
-// (set/clear) state, and skips a deleting gateway entirely.
+// agc_available, egress_unattributed, agc_autoscaling_unavailable (Q390), and
+// egress_audit_unattributed (Q1062) gauges per non-deleting v2 gateway, each
+// mirroring its condition's True/False (set/clear) state, and skips a deleting
+// gateway entirely.
 func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	scheme := newV2MetricsScheme(t)
 
 	// "degraded": RunnerSetsDegraded=True, AGCAvailable=False, EgressUnattributed=True,
-	// AGCAutoscalingUnavailable=True, ScaleSetNameCollision=True.
+	// AGCAutoscalingUnavailable=True, ScaleSetNameCollision=True,
+	// EgressAuditUnattributed=True.
 	degraded := v2GatewayWithCondition("degraded", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionTrue)
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
@@ -169,9 +171,13 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionScaleSetNameCollision, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
+	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionEgressAuditUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+	})
 
 	// "healthy": RunnerSetsDegraded=False, AGCAvailable=True, EgressUnattributed=False,
-	// AGCAutoscalingUnavailable=False, ScaleSetNameCollision=False.
+	// AGCAutoscalingUnavailable=False, ScaleSetNameCollision=False,
+	// EgressAuditUnattributed=False.
 	healthy := v2GatewayWithCondition("healthy", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionFalse)
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
@@ -184,6 +190,9 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionScaleSetNameCollision, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+	})
+	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionEgressAuditUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 
 	deleting := v2ManagedGateway("deleting", true)
@@ -200,6 +209,10 @@ actions_gateway_agc_autoscaling_unavailable{name="healthy",namespace="healthy"} 
 # TYPE actions_gateway_agc_available gauge
 actions_gateway_agc_available{name="degraded",namespace="degraded"} 0
 actions_gateway_agc_available{name="healthy",namespace="healthy"} 1
+# HELP actions_gateway_egress_audit_unattributed 1 when the v2 ActionsGateway EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off, so no egress audit record joins to a tenant and a job: the gateway does not log WorkerAddresses, or the EgressProxy it defaults to does not log ConnectionsWithSource), else 0. Both halves are opt-in and Off is the default, so a 1 is the expected state on a gateway that never opted in, not a fault. A 0 says the pair is configured, not that anything runs the join; scoped to defaultProxyRef, so a RunnerSet with its own proxyRef is not covered.
+# TYPE actions_gateway_egress_audit_unattributed gauge
+actions_gateway_egress_audit_unattributed{name="degraded",namespace="degraded"} 1
+actions_gateway_egress_audit_unattributed{name="healthy",namespace="healthy"} 0
 # HELP actions_gateway_egress_unattributed 1 when the v2 ActionsGateway EgressUnattributed condition is True (the gateway runs in direct egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy), else 0.
 # TYPE actions_gateway_egress_unattributed gauge
 actions_gateway_egress_unattributed{name="degraded",namespace="degraded"} 1
