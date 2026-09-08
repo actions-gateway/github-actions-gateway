@@ -1007,11 +1007,14 @@ func TestEgressAuditAttribution(t *testing.T) {
 			gmcv2alpha1.ReasonProxySourceAuditDisabled, "spec.auditLogging: ConnectionsWithSource"},
 		{"neither half", "Off", proxyWith("Off"),
 			gmcv2alpha1.ReasonEgressAuditDisabled, "not attributable"},
-		// Direct egress writes no per-connection record at all, so the pair cannot be
-		// joined however the gateway half is set — the reason names the proxy, not the
-		// opt-in.
+		// Direct egress leaves the AGC's own traffic on no pool, so the pair cannot be
+		// joined for it however the gateway half is set — the reason names the proxy,
+		// not the opt-in. The message is pinned on the clause that SCOPES the claim to
+		// the control plane, not on "no defaultProxyRef": a bound RunnerSet naming its
+		// own proxyRef does have a per-connection record (Q1069), so an unscoped
+		// wording here would be false, and both wordings contain that opening.
 		{"direct egress with the gateway half on", "WorkerAddresses", nil,
-			gmcv2alpha1.ReasonDirectEgress, "no defaultProxyRef"},
+			gmcv2alpha1.ReasonDirectEgress, "AGC control-plane egress is direct"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			reason, msg := egressAuditAttribution(gatewayWith(tc.gateway), tc.proxy)
