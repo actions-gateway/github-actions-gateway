@@ -49,7 +49,7 @@ const (
 	// adds the client's source address to the per-connection record, and
 	// auditLoggingWorkerAddresses the ActionsGateway.spec.auditLogging value whose AGC
 	// records name the tenant and job that held an address. Neither attributes anything
-	// alone; the pair is what the EgressAuditAttributable condition reports (Q986/Q1062).
+	// alone; a missing half is what the EgressAuditUnattributed condition flags (Q986/Q1062).
 	auditLoggingConnectionsWithSource = "ConnectionsWithSource"
 	auditLoggingWorkerAddresses       = "WorkerAddresses"
 )

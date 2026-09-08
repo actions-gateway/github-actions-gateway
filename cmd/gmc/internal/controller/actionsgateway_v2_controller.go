@@ -663,13 +663,14 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 			fmt.Sprintf("AGC control-plane egress is attributed to EgressProxy %q", proxy.Name))
 	}
 
-	// Egress audit attribution (Q1062): whether the Q986 pair is on for this gateway, so
-	// a fleet-wide reader can tell which tenants' egress records resolve to a tenant and
-	// a job. Advisory like EgressUnattributed and normal-is-True: both halves are opt-in,
-	// Off is the supported default, and it never gates Ready. It reports the declared
-	// pair — nothing here can confirm the operator's log pipeline runs the join.
+	// Egress audit attribution (Q1062): whether either half of the Q986 pair is off, so a
+	// fleet-wide reader can tell which tenants' egress records resolve to no job. The
+	// audit twin of EgressUnattributed above, and abnormal-is-True for the same reason it
+	// is: True is expected on a gateway that never opted in, and it never gates Ready. A
+	// switch being off entails the True; the False says the pair is configured, not that
+	// anything downstream runs the join.
 	auditReason, auditMsg := egressAuditAttribution(ag, proxy)
-	set(gmcv2alpha1.ConditionEgressAuditAttributable, auditReason == gmcv2alpha1.ReasonEgressAuditJoined,
+	set(gmcv2alpha1.ConditionEgressAuditUnattributed, auditReason != gmcv2alpha1.ReasonEgressAuditJoined,
 		auditReason, auditMsg)
 
 	// Managed AGC right-sizing (Q360). Advisory like EgressUnattributed: it never gates
@@ -856,20 +857,20 @@ func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2a
 	return ctrl.Result{}, cause
 }
 
-// egressAuditAttribution reports the EgressAuditAttributable reason and message for a
+// egressAuditAttribution reports the EgressAuditUnattributed reason and message for a
 // gateway and its resolved control-plane proxy (nil for direct egress), from the two
-// halves of the Q986 attribution pair: the gateway's own spec.auditLogging, which
-// names the tenant and job that held a worker address, and the proxy's
-// spec.auditLogging, which carries the source address to join on. Only
-// ReasonEgressAuditJoined is the True state; every other reason names the half to turn
-// on, because that is the operator's next action.
+// halves of the Q986 attribution pair: the gateway's own spec.auditLogging, which names
+// the tenant and job that held a worker address, and the proxy's spec.auditLogging,
+// which carries the source address to join on. ReasonEgressAuditJoined is the only
+// cleared state; every other reason names the half to turn on, because that is the
+// operator's next action.
 //
 // The shared-pool and defaultProxyRef-scope cases are in the condition's own godoc
-// (apiconditions.ConditionEgressAuditAttributable).
+// (apiconditions.ConditionEgressAuditUnattributed).
 func egressAuditAttribution(ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy) (reason, message string) {
 	if proxy == nil {
 		return gmcv2alpha1.ReasonDirectEgress,
-			"no defaultProxyRef: egress leaves from no per-tenant proxy, so there is no per-connection audit record to attribute"
+			"no defaultProxyRef: AGC control-plane egress is direct, so no per-connection record attributes it. A bound RunnerSet naming its own spec.proxyRef is not read here (Q1069)"
 	}
 	// An empty value is the CRD default, so report it as Off rather than as "".
 	effective := func(v string) string {

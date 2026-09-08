@@ -977,7 +977,7 @@ func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
 }
 
 // TestEgressAuditAttribution covers all five states of the Q986 pair the
-// EgressAuditAttributable condition reports (Q1062), including the two half-on ones —
+// EgressAuditUnattributed condition reports (Q1062), including the two half-on ones —
 // each names the half still to turn on, because that is what the operator does next.
 func TestEgressAuditAttribution(t *testing.T) {
 	proxyWith := func(mode string) *gmcv2alpha1.EgressProxy {
@@ -1029,6 +1029,11 @@ func TestEgressAuditAttribution(t *testing.T) {
 	// the proxy half: the source address attributes a connection to one consumer
 	// namespace and one job, so this gateway's own worker records resolve its own
 	// connections (EgressProxy.spec.auditLogging).
+	//
+	// This is a record of that decision rather than coverage of it, and deliberately
+	// so: egressAuditAttribution reads neither Namespace nor Spec.Sharing, so nothing
+	// here can fail that "both halves on" above does not already catch. It is the
+	// assertion to change if the decision is ever revisited.
 	shared := proxyWith("ConnectionsWithSource")
 	shared.Namespace = "platform"
 	shared.Spec.Sharing = &gmcv2alpha1.ProxySharing{AllowedNamespaces: []string{"team-a"}}
@@ -1036,10 +1041,10 @@ func TestEgressAuditAttribution(t *testing.T) {
 	assert.Equal(t, gmcv2alpha1.ReasonEgressAuditJoined, reason)
 }
 
-// TestActionsGatewayV2Reconcile_EgressAuditAttributable asserts the reconciler writes
+// TestActionsGatewayV2Reconcile_EgressAuditUnattributed asserts the reconciler writes
 // the condition (Q1062) — egressAuditAttribution's own coverage says nothing about
 // whether updateStatus calls it, and the gauge reads the condition, not the spec.
-func TestActionsGatewayV2Reconcile_EgressAuditAttributable(t *testing.T) {
+func TestActionsGatewayV2Reconcile_EgressAuditUnattributed(t *testing.T) {
 	reconcileWith := func(t *testing.T, gatewayMode, proxyMode string) *metav1.Condition {
 		t.Helper()
 		scheme := actionsGatewayV2TestScheme(t)
@@ -1059,18 +1064,19 @@ func TestActionsGatewayV2Reconcile_EgressAuditAttributable(t *testing.T) {
 
 		var got gmcv2alpha1.ActionsGateway
 		require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
-		return meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressAuditAttributable)
+		return meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressAuditUnattributed)
 	}
 
+	// Abnormal-is-True: both halves on is the cleared state.
 	joined := reconcileWith(t, "WorkerAddresses", "ConnectionsWithSource")
 	require.NotNil(t, joined, "the reconciler must write the condition")
-	assert.Equal(t, metav1.ConditionTrue, joined.Status)
+	assert.Equal(t, metav1.ConditionFalse, joined.Status)
 	assert.Equal(t, gmcv2alpha1.ReasonEgressAuditJoined, joined.Reason)
 
-	// Half on is False, and the reason names the half still off — the state the row
-	// exists to keep a dashboard from reading as attributable.
+	// Half on stays True, and the reason names the half still off — the state the row
+	// exists to keep a dashboard from reading as attributed.
 	half := reconcileWith(t, "WorkerAddresses", "Connections")
 	require.NotNil(t, half)
-	assert.Equal(t, metav1.ConditionFalse, half.Status)
+	assert.Equal(t, metav1.ConditionTrue, half.Status)
 	assert.Equal(t, gmcv2alpha1.ReasonProxySourceAuditDisabled, half.Reason)
 }

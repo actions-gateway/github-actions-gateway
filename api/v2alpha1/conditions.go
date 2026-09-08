@@ -24,7 +24,7 @@ const (
 	ConditionEgressUnattributed          = apiconditions.ConditionEgressUnattributed
 	ConditionAGCAutoscalingUnavailable   = apiconditions.ConditionAGCAutoscalingUnavailable
 	ConditionScaleSetNameCollision       = apiconditions.ConditionScaleSetNameCollision
-	ConditionEgressAuditAttributable     = apiconditions.ConditionEgressAuditAttributable
+	ConditionEgressAuditUnattributed     = apiconditions.ConditionEgressAuditUnattributed
 	ConditionPossibleReapBlockingSidecar = apiconditions.ConditionPossibleReapBlockingSidecar
 	ConditionWorkerQuotaPressure         = apiconditions.ConditionWorkerQuotaPressure
 	ConditionWorkerQuotaExceeded         = apiconditions.ConditionWorkerQuotaExceeded

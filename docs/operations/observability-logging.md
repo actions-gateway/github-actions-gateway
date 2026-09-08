@@ -162,7 +162,7 @@ Three things to know before you build on it:
 
 - **Two switches, and half-on is legal.** `ConnectionsWithSource` without `WorkerAddresses` gives addresses nothing names; `WorkerAddresses` without it gives bindings nothing asks about.
   Neither is an error, and neither attributes anything.
-  Which state a gateway is in is on its `EgressAuditAttributable` condition and the `actions_gateway_egress_audit_attributable` gauge (Q1062), so you do not have to read two specs to find out: `True` is both halves on, and every `False` reason names the half still off.
+  Which state a gateway is in is on its `EgressAuditUnattributed` condition and the `actions_gateway_egress_audit_unattributed` gauge (Q1062), so you do not have to read two specs to find out: `True` means a half is off and the reason names which, and `False`/`EgressAuditJoined` means both are on.
   Both read the gateway's `defaultProxyRef`, so a `RunnerSet` pointing at a pool of its own is outside what they cover.
 - **It assumes the proxy sees the worker's own address.** Pod-to-ClusterIP traffic is not source-NAT'd on the in-cluster path, so `sourceIP` is the worker's `podIP`.
   A CNI that SNATs it breaks the join, so check yours before relying on the records.

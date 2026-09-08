@@ -276,7 +276,10 @@ It reads three scrapes, and each row says which: egress and the abuse counters c
 **It is keyed on the pool, not the consumer, and says so on the page.** `namespace` on every proxy series is the namespace the pool runs in, stamped by the scrape target.
 On a pool no other namespace references that is the tenant; on a pool shared via `spec.sharing.allowedNamespaces` it is the pool, and no metric says which consumer opened a tunnel.
 Attributing a connection to a tenant and a job is the [audit-record join](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job) of two log streams, and no panel here reads them, so the dashboard never presents a pool's traffic as a consumer's.
-Whether that join exists for a gateway is now a gauge, `actions_gateway_egress_audit_attributable`, `1` when both halves of the pair are on (Q1062), and that is the series a consumer-keyed panel would have to gate on, and no panel here does yet ([Q1070](../queue/Q1070.md)).
+Whether that join is missing for a gateway is now a gauge, `actions_gateway_egress_audit_unattributed`, `1` while either half of the pair is off (Q1062), and that is the series a consumer-keyed panel would have to gate on.
+No panel here reads it yet ([Q1070](../queue/Q1070.md)).
+It reads the gateway's `defaultProxyRef` only, so it is not a per-pool answer: a `RunnerSet` naming its own `spec.proxyRef` egresses through a pool the gauge never looked at, in both directions ([Q1069](../queue/Q1069.md)).
+A panel keyed on it is therefore gating on the gateway's declared pair, not on the pool whose traffic it would be drawing.
 
 **Row 1: Egress Attribution (per pool)**
 
@@ -287,9 +290,10 @@ Whether that join exists for a gateway is now a gauge, `actions_gateway_egress_a
 | Active CONNECT tunnels by pool | `sum by (namespace) (actions_gateway_proxy_connections_active)` | Time series. A pool pinned near capacity is the slowloris signal (`ActionsGatewayProxyConnectionsSaturated`) |
 | Egress posture per gateway | `actions_gateway_egress_unattributed` / `_egress_rules_stale` / `_github_egress_incomplete` | State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape; `egress_rules_stale` is emitted for v1 and v2 gateways, the other two for v2 only |
 
-`actions_gateway_egress_audit_attributable` is not in that timeline and is not a fourth flag: it is normal-is-True, so a `1` reads the opposite way to its three neighbours, and a `0` is the default rather than a fault.
-It is the [job-attribution](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job) half, whether an egress record resolves to a tenant and a job, where `egress_unattributed` is the IP-identity half, whether there is a per-tenant proxy at all.
-A gateway can be proxied and still unattributable by job, which is the common state, since both halves of the pair default `Off`.
+`actions_gateway_egress_audit_unattributed` belongs in that timeline as a fourth flag and is not in it yet ([Q1070](../queue/Q1070.md)).
+It shares the row's `1 = flagged` polarity, and it is the [job-attribution](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job) half, whether an egress record resolves to a tenant and a job, where `egress_unattributed` is the IP-identity half, whether there is a per-tenant proxy at all.
+A gateway can be proxied and still unattributed by job, and that is the common state, since both halves of the pair default `Off`.
+Expect it near-solid `1` across a fleet that has not opted in, which is a true reading rather than an incident: unlike its three neighbours, a `1` here is a tenant nobody turned attribution on for, not something that broke.
 
 **Row 2: Admission Decisions**
 

@@ -73,35 +73,40 @@ const (
 	// holder goes to the GMC log, the same non-enumeration rule the admission error
 	// follows.
 	ConditionScaleSetNameCollision = "ScaleSetNameCollision"
-	// ConditionEgressAuditAttributable is an advisory condition (normal-is-True) set
-	// True on an ActionsGateway when both halves of the Q986 egress-attribution pair
-	// are on: the gateway's spec.auditLogging is WorkerAddresses, so its AGC records
-	// which tenant and job held each worker address, AND the EgressProxy resolved from
-	// spec.defaultProxyRef has spec.auditLogging: ConnectionsWithSource, so the pool's
-	// per-connection record carries the source address to join against. Neither record
-	// attributes anything alone; the join of the two is what names a tenant and a job,
-	// which is why the pair is what the condition reports.
+	// ConditionEgressAuditUnattributed is an advisory condition (abnormal-is-True) set
+	// True on an ActionsGateway when either half of the Q986 egress-attribution pair is
+	// off, so nothing joins an egress audit record to a tenant and a job: the gateway's
+	// spec.auditLogging is not WorkerAddresses, so no record says which tenant and job
+	// held a worker address, or the EgressProxy resolved from spec.defaultProxyRef does
+	// not log ConnectionsWithSource, so no record carries an address to join on. False
+	// (reason EgressAuditJoined) means both halves are on.
 	//
-	// It reports the declared pair, not observed log lines: nothing in the cluster can
-	// confirm an operator's log pipeline runs the join. It also does NOT gate Ready —
-	// both halves are opt-in and Off is the supported default (§G.3).
+	// The polarity is what the condition can establish rather than a house preference.
+	// A join needs more than the two switches — the CNI must not source-NAT pod-to-Service
+	// traffic, and something must collect both log streams and join them — so True is
+	// entailed by a switch being off, while a True on the positive framing would have
+	// claimed a capability this cannot see. It does NOT gate Ready: both halves are
+	// opt-in and Off is the supported default (§G.3), so True is the expected state on a
+	// gateway that never opted in, exactly as ConditionEgressUnattributed is expected on
+	// a direct-egress one.
 	//
-	// It is distinct from ConditionEgressUnattributed, which reads a different fact:
-	// that one is about egress IP identity (is there a per-tenant proxy at all), this
-	// one about whether the audit records that proxy writes can be resolved to a job.
-	// A gateway can be proxied and still unattributable by job, which is the common
-	// state, since both halves default Off.
+	// It is the audit twin of ConditionEgressUnattributed, which reads a different fact:
+	// that one is about egress IP identity (is there a per-tenant proxy at all), this one
+	// about whether the records that proxy writes resolve to a job. A gateway can be
+	// proxied and still unattributed by job, which is the common state.
 	//
 	// A shared pool whose ConnectionsWithSource was turned on for another consumer
-	// still satisfies the proxy half here, and correctly: the source address makes a
-	// connection attributable to one consumer namespace and one job (see
-	// EgressProxy.spec.auditLogging), so this gateway's own WorkerAddresses records
-	// resolve its own connections whoever asked for the pool half.
+	// clears the proxy half here, and correctly: the source address makes a connection
+	// attributable to one consumer namespace and one job (see EgressProxy.spec.auditLogging),
+	// so this gateway's own WorkerAddresses records resolve its own connections whoever
+	// asked for the pool half.
 	//
-	// Its scope is the gateway: the proxy half is read from defaultProxyRef, so a
-	// bound RunnerSet that overrides spec.proxyRef egresses through a pool this
-	// condition never read (Q1069).
-	ConditionEgressAuditAttributable = "EgressAuditAttributable"
+	// Its scope is the gateway: the proxy half is read from defaultProxyRef, and a bound
+	// RunnerSet's own spec.proxyRef takes precedence over that for its workers, so this
+	// condition is wrong in both directions on a gateway whose sets override it — False
+	// where their pool does not log ConnectionsWithSource, and True (reason DirectEgress)
+	// where the gateway has no defaultProxyRef and their pools do (Q1069).
+	ConditionEgressAuditUnattributed = "EgressAuditUnattributed"
 	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
 	// set True on a RunnerSet whose resolved worker template carries a regular
 	// (non-native) sidecar container that may keep the worker pod alive after the
@@ -311,17 +316,18 @@ const (
 	// ReasonProxiedEgress is the EgressUnattributed=False reason: a proxy resolved, so
 	// egress is attributed to the proxy's stable per-tenant IPs.
 	ReasonProxiedEgress = "ProxiedEgress"
-	// ReasonEgressAuditJoined is the EgressAuditAttributable=True reason: both halves of
-	// the attribution pair are on, so a proxy audit record joins to a tenant and a job.
+	// ReasonEgressAuditJoined is the EgressAuditUnattributed=False reason: both halves of
+	// the attribution pair are on, so an egress audit record has a worker-address record
+	// to join against.
 	ReasonEgressAuditJoined = "EgressAuditJoined"
-	// ReasonEgressAuditDisabled is the EgressAuditAttributable=False reason when neither
+	// ReasonEgressAuditDisabled is the EgressAuditUnattributed=True reason when neither
 	// half is on — the default for a proxied gateway that never opted in.
 	ReasonEgressAuditDisabled = "EgressAuditDisabled"
-	// ReasonWorkerAuditDisabled is the EgressAuditAttributable=False reason when the pool
+	// ReasonWorkerAuditDisabled is the EgressAuditUnattributed=True reason when the pool
 	// records source addresses but the gateway's spec.auditLogging is Off, so nothing
 	// names the tenant and job that held them.
 	ReasonWorkerAuditDisabled = "WorkerAuditDisabled"
-	// ReasonProxySourceAuditDisabled is the EgressAuditAttributable=False reason when the
+	// ReasonProxySourceAuditDisabled is the EgressAuditUnattributed=True reason when the
 	// gateway records worker addresses but the resolved EgressProxy's spec.auditLogging is
 	// not ConnectionsWithSource, so no record carries an address to join on.
 	ReasonProxySourceAuditDisabled = "ProxySourceAuditDisabled"
