@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -59,7 +60,8 @@ type docBlock struct {
 // costs seconds on a job that is already running rather than a kind cluster of
 // its own. What it cannot settle is anything needing a kubelet: the two blocks
 // that roll a Deployment and read its logs are declared `mode=skip` in the doc
-// with that reason, and reaching them is Q958's follow-on.
+// with that reason, and they stay skipped: TestGettingStarted_SkipBlockNames
+// below carries what they were covering, and says why.
 //
 // Coverage is opt-in per block and the annotations live in the doc, so this test
 // parses nothing itself — scripts/docs/doc-blocks.sh is the single parser, the
@@ -146,6 +148,55 @@ func TestGettingStarted_Executable(t *testing.T) {
 	require.GreaterOrEqualf(t, executed, executedBlockFloor,
 		"walked %d executable blocks in %s, floor is %d. A block lost its gag:verify annotation, flipped to mode=skip, or the extractor stopped reaching the page.",
 		executed, gettingStartedDoc, executedBlockFloor)
+}
+
+// deployRefRE matches a `deploy/<name>` operand, the TYPE/NAME form kubectl
+// accepts and the form the doc's rotation steps address the AGC Deployment by.
+var deployRefRE = regexp.MustCompile(`\bdeploy/([a-z0-9][a-z0-9.-]*)`)
+
+// skippedDeployRefFloor is how many such operands the skipped blocks carry today,
+// and it is the assertion that stops a vacuous pass: a parser returning nothing,
+// or a doc edit that drops the references, satisfies the per-reference check
+// below by having nothing to check.
+const skippedDeployRefFloor = 3
+
+// TestGettingStarted_SkipBlockNames pins the object names a `mode=skip` block
+// hardcodes to the constant that owns them.
+//
+// This is what Q958 settled instead of buying a kind cluster for the two
+// credential-rotation blocks. The walk above cannot reach them — envtest has no
+// kubelet, so nothing rolls and no pod logs — but the venue was never the whole
+// price. The doc's own Secret block supplies a placeholder private key that does
+// not PEM-decode, and buildTokenProvider parses it eagerly at AGC startup, so the
+// pod crash-loops and the rollout never completes wherever it runs; reaching the
+// blocks means the gate rewriting a block first, and a walk over rewritten text
+// is weaker evidence than the doc's own bytes.
+//
+// What that buys is small, which is the other half of the answer: everything in
+// those two blocks is stock kubectl except one identifier, `deploy/` plus the AGC
+// Deployment name, and that identifier needs no kubelet to check. So it is checked
+// here, against the constant the GMC builds the Deployment from, and both blocks
+// stay declared uncovered with their reasons.
+func TestGettingStarted_SkipBlockNames(t *testing.T) {
+	doc, err := os.ReadFile(gettingStartedDoc)
+	require.NoError(t, err)
+
+	refs := 0
+	for _, b := range parseBlocks(t, doc) {
+		if b.mode != "skip" {
+			continue
+		}
+		for _, m := range deployRefRE.FindAllStringSubmatch(blockBody(t, doc, b.id), -1) {
+			refs++
+			require.Equalf(t, agcName, m[1],
+				"%s:%s: skipped block %q addresses %q, but the GMC names the AGC Deployment %q (agcnames.ControllerName). Nothing executes a skipped block, so this rename would reach an operator uncaught.",
+				gettingStartedDoc, b.line, b.id, m[1], agcName)
+		}
+	}
+
+	require.GreaterOrEqualf(t, refs, skippedDeployRefFloor,
+		"found %d deploy/<name> operands across the skipped blocks of %s, floor is %d. A block lost its annotation, the extractor stopped reaching the page, or the rotation steps stopped naming the Deployment.",
+		refs, gettingStartedDoc, skippedDeployRefFloor)
 }
 
 // parseBlocks runs the shared parser over the doc bytes and returns its records

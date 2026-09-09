@@ -767,12 +767,18 @@ The gate runs in three places off one parser, `scripts/docs/doc-blocks.sh`, so t
 | `make getting-started-check` | the annotations parse, ids are unique, every `needs=` names a block declared earlier, the floor holds | `make check` and `make docs-gates`; CI in `doc-links.yml` |
 | `make getting-started-render-check` | a `mode=render` block's chart still renders | CI in `manifest-validate.yml`'s `validate` job, which already has helm |
 | `TestGettingStarted_Executable` | the blocks are **executed** against a real apiserver | the GMC envtest integration suite |
+| `TestGettingStarted_SkipBlockNames` | a `mode=skip` block still names the objects the tree owns | the GMC envtest integration suite |
 
 The venue is the existing GMC envtest suite rather than a kind cluster of its own, because that suite already stands up every CRD, the validating webhooks, the v2 conversion webhook and the CEL guardrails, so the walk costs **about a second on a job that is already running** against a median 14 min for the e2e lane (n=11 runs that actually ran, 2.9-23.8 min), which is merge-group-only anyway (Q675).
 Teardown is free there: the objects land in the tenant namespace the doc's own first step creates, one `t.Cleanup` retires them, and the apiserver is destroyed at suite end, so the walk is safe to run twice by construction.
 The test reads the doc and the parser through committed `testdata/` symlinks, because [a cached test's reads outside its module root are invisible to the test cache](#the-out-of-module-test-read-gate) and a subprocess's reads never reach the testlog at all.
 
-**What it cannot settle is anything needing a kubelet.** The two credential-rotation blocks that run `kubectl rollout status` and `kubectl logs` are declared `mode=skip` in the page with that reason; Q958 is the follow-on, and the question it has to answer first is whether substituting a fake GitHub for the doc's `githubURL` still counts as executing the doc.
+**What it cannot settle is anything needing a kubelet.** The two credential-rotation blocks that run `kubectl rollout status` and `kubectl logs` are declared `mode=skip` in the page with that reason, and they stay skipped: Q958 priced a venue with a kubelet and declined it.
+The kubelet is not the whole price.
+The page's own Secret block supplies a placeholder private key that does not PEM-decode, and `buildTokenProvider` parses it eagerly at AGC startup, so the pod crash-loops and the rollout never completes in a kind cluster either.
+Reaching the two blocks means the gate rewriting a block first, and a walk over text the gate rewrote is weaker evidence than the doc's own bytes.
+Set against that, the blocks carry one project-specific identifier between them: everything else in both is stock `kubectl`, and `deploy/` plus the AGC Deployment name needs no kubelet to check.
+`TestGettingStarted_SkipBlockNames` checks it against `agcnames.ControllerName`, the constant the GMC builds that Deployment from.
 
 Its own failure mode is the one it exists to catch, so `scripts/docs/doc-blocks-test.sh` asserts a known-bad document goes **red** for each rule, paired with the good document that must stay green: a parser that stopped matching the annotation would report every page clean.
 
