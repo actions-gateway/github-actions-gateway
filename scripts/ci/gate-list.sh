@@ -83,7 +83,7 @@
 #      that question is the trigger: a workflow with no `merge_group` in its
 #      `on:` block provably never reports there. Whether the check it does
 #      report is *required*, and so blocking, is a repo-settings question this
-#      cannot read (Q943). A gate deliberately kept off the candidate merge
+#      cannot read. A gate deliberately kept off the candidate merge
 #      declares `# merge-queue-scope: none`, the shape rules 7, 8 and 10 use.
 #  12. QUEUE_GATES is contained in DOCS_GATES. The store is a tree of pages under
 #      docs/, so a gate a backlog edit can fail is a gate a prose edit can fail,

@@ -149,7 +149,7 @@ That failure names itself a checkout fault and points at the job, because a read
 Keying it on `CI` instead would read a variable the caller never set, and it fired inside the gate's own fixtures, whose repos have no `origin/main` by construction.
 
 One case stays outside the ratchet: a file *inside* the rule may legitimately gain, so two PRs can still push one across 3 per 1,000 between them, and only the run on the candidate sees that.
-`doc-links-gate` is not yet a required check ([Q943](../queue/Q943.md)), so its verdict there is visible rather than binding.
+`doc-links-gate` became a required check on 2026-09-09, so its verdict there is binding.
 
 **What it does not count.** A raw `grep -o '—' | wc -l` was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
 The counter reads the parsed document instead ([`devtools/docs/emdash`](../../devtools/docs/emdash/), over the goldmark layer Q612 built), and skips:

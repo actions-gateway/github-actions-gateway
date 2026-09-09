@@ -175,7 +175,7 @@ Install it once with `make hooks` (or `scripts/dev/setup.sh`); bypass a single c
 The em-dash part is there for *when* it fires rather than for coverage, since `make check` already runs it.
 It is the gate a docs change most often trips at the very end of a full run, after the heavy phases are paid for, and commit time is the first moment the answer is both cheap (410 ms warm) and unavoidable.
 It holds one branch to its own ceiling, and a ceiling is a per-commit verdict: two branches each sitting *at* one and merging over it is a property of the merge result, not of either commit.
-The diff ratchet closed that (Q742) by failing the gain on the branch that made it, so the joint case no longer needs the queue to catch it; the queue's own run on the candidate stays advisory until `doc-links-gate` is required (Q943).
+The diff ratchet closed that (Q742) by failing the gain on the branch that made it, so the joint case no longer needs the queue to catch it; the queue's own run on the candidate has been binding since `doc-links-gate` became a required check on 2026-09-09.
 
 #### Measuring the local gate: start from what is already recorded
 
@@ -1059,7 +1059,7 @@ It fails when:
   Four gates sat that way when this was written, each alone in a workflow declaring no `merge_group`: `conflict-markers-check`, `metric-tiers-check`, `reason-tiers-check` and `endpoint-parity-check`.
   The derivation is the one above, re-asked of the workflows whose `on:` block declares `merge_group`, with comments stripped for the same reason.
   Only a gate that passed the rule above is asked: a gate no workflow runs at all has one defect, not two.
-  Whether the check a queue-evaluated workflow reports is *required*, and so blocking rather than advisory, is a repo-settings question this cannot read (Q943).
+  Whether the check a queue-evaluated workflow reports is *required*, and so blocking rather than advisory, is a repo-settings question this cannot read.
   A gate deliberately kept off the candidate merge declares `# merge-queue-scope: none` with its reason directly above its `.PHONY`;
 - `SCRIPTS_TESTS` and the `scripts/**/*-test.sh` files on disk name different sets.
   A suite written but never listed is the failure worth catching: `make scripts-test` reports green having never run it, so the assertions it carries are disarmed while looking armed.
@@ -3416,12 +3416,12 @@ Adding a job to one of these workflows means adding it to the gate's `needs` in 
 **Why not the simpler top-level `paths-ignore`:** a workflow skipped by a top-level path filter reports **no check at all**, which leaves a *required* check **Pending forever** and wedges the merge.
 Triggering on every PR and gating internally means the `gate` context always reports — green (all jobs skipped) on an unrelated PR, red when a real job fails — so it is safe to require.
 
-**The same pattern serves the merge queue's `merge_group` event.** The nine workflows behind required checks also trigger on `merge_group`, so their gate contexts report on the queue's candidate merge commit.
-`doc-links.yml` is the tenth: Q743 gave it the trigger and the `doc-links-gate` job, so the docs-content gates now run on the candidate merge.
+**The same pattern serves the merge queue's `merge_group` event.** The workflows behind required checks also trigger on `merge_group`, so their gate contexts report on the queue's candidate merge commit.
+`doc-links.yml` is the tenth and most recent: Q743 gave it the trigger and the `doc-links-gate` job, and 2026-09-09 registered that context in the ruleset.
 Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-tiers.yml`, `reason-tiers.yml` and `endpoint-parity.yml` — bringing the count to 14 of 29, and `gate-lists-check` now fails a new gate that lands outside that set.
 Those four carry no `changes` job: `merge_group` takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
-They do not yet **block** it — the queue arbitrates on the ruleset's required checks alone, and registering `doc-links-gate` is a repo-settings change that can only follow the workflow onto `main`, for the ordering reason [merge-queue.md](../plan/merge-queue.md) gives.
-Until it is registered a red docs gate on a candidate merge is visible and not binding.
+Those four do not **block** it: the queue arbitrates on the ruleset's required checks alone and none of them sits behind one, so their verdict on a candidate merge is visible and not binding.
+`doc-links-gate` was the same shape until 2026-09-09, when it was registered under the ordering constraint [merge-queue.md](../plan/merge-queue.md) gives: the workflow onto `main` first, the required check second.
 That is the queue analogue of the Pending-wedge above: a required check that never reports on the merge-group ref stalls the entry until `check_response_timeout_minutes` expires it.
 The `changes` job needs no per-event configuration: on `merge_group`, paths-filter's `base`/`ref` default to the event's commit hashes and detection runs via git against the checkout, so a docs-only queue entry skips the heavy legs exactly as a docs-only PR does.
 The queue is active on `main` (2026-08-03, `merge_queue` rule in the `default-protect` ruleset); [merge-queue.md](../plan/merge-queue.md) records the parameters, the rollback, and the activation-ordering constraint it satisfied.
