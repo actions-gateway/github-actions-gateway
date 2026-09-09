@@ -129,11 +129,16 @@ func startRunnerSetReconcilerWithScaleSetClients(t *testing.T, clients scaleSetC
 	}
 
 	r := &controller.RunnerSetReconciler{
-		Client:          mgr.GetClient(),
-		TokenManager:    tm,
-		Registrar:       &brokerRegistrar{stub: brokerStub},
-		AgentKeyType:    agentpool.KeyTypeEd25519,
-		Provisioner:     p,
+		Client:       mgr.GetClient(),
+		TokenManager: tm,
+		Registrar:    &brokerRegistrar{stub: brokerStub},
+		AgentKeyType: agentpool.KeyTypeEd25519,
+		Provisioner:  p,
+		// The uncached reader the scale-set guard ConfigMap is read through (Q606,
+		// Q1078), exactly as main.go wires it: the orphan scan spends its one
+		// per-process claim on the first reading of the in-flight set (Q1064), so a
+		// stale-empty read would burn the scan for the life of the process.
+		APIReader:       mgr.GetAPIReader(),
 		ScaleSetMetrics: scaleSetTestMetrics,
 		// The uncached reader the capacity gate reads pod Events through on a cluster
 		// that can grow (Q406, Q470), exactly as main.go wires it.

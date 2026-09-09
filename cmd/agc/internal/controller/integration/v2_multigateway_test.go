@@ -77,7 +77,11 @@ func startScopedRunnerSetReconciler(t *testing.T, gatewayName string) {
 		Registrar:    &brokerRegistrar{stub: brokerStub},
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
-		GatewayName:  gatewayName,
+		// The uncached reader the v1alpha1 RunnerGroup adoption probe reads through
+		// (Q1078), exactly as main.go wires it: nil re-routes that read through the
+		// cache rather than disabling it.
+		APIReader:   mgr.GetAPIReader(),
+		GatewayName: gatewayName,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:        brokerStub.URL,
 			RunnerVersion:    "2.335.1",
