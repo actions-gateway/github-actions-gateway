@@ -1042,8 +1042,7 @@ It fails when:
   The pathspec a gate's script hands git is the same question the gate itself asks, so a hit there fails outright and cannot be declared away.
   A subject the script **hardcodes** is weaker evidence: a path literal assigned to a variable, which is how a page-scoped gate names the page it reads.
   A script names its instruments that way too, so a hit there can be declared away with a reason (Q930).
-  `gate-lists-check` is the one gate that does: it assigns `docs/queue/Q*.md` only to name a single item for this rule to test other gates against, reads the filename and checks nothing in the file.
-  A gate whose recipe runs no `scripts/` file has no derivable file set and declares the same way, with a `# status-scope: none` comment and its reason directly above its `.PHONY`, as `md-reflow-check` does;
+  `gate-lists-check` is the one gate that does: it assigns `docs/queue/Q*.md` only to name a single item for this rule to test other gates against, reads the filename and checks nothing in the file, declaring `# queue-scope: none` with its reason directly above its `.PHONY`;
 - a `QUEUE_GATES` member is missing from `DOCS_GATES`, so `make docs-gates` reports a green on a backlog change `make queue-gates` would fail (Q1040).
   The store is a tree of pages under `docs/`, so the containment is an invariant rather than a coincidence, and the completeness rule above cannot derive it: each `queue-*` gate hands its store path to a Python entry point rather than to git, and names it on an `exec` line rather than in an assignment, so both derivations come up empty and all three passed in silence.
   `make docs-gates` was therefore green on a committed row wearing a label `make queue-rules-check` rejects outright.
