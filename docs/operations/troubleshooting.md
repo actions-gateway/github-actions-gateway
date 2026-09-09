@@ -2020,6 +2020,9 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
   Worker pods that are themselves stuck on the image are a separate problem with its own reading: see the air-gapped install's [verification step](air-gapped-install.md#7-verify).
   `context deadline exceeded` means one inspection ran past its fifteen-minute budget, which starts once the inspection holds its slot, not while it queues behind another image.
   `carries no bin/Runner.Listener.deps.json` means the image is not `actions/runner`-derived in the expected layout, and no tag can fix that.
+  `bearer realm "<url>" is not https` is the one authentication failure the remedy below does not fit: the registry answered the `401` with a Bearer challenge naming a plaintext token endpoint, and the AGC refuses it rather than send the login over it.
+  The registry is reachable and no tag can change the challenge, so the fix is on the registry: serve the token realm over TLS.
+  An internal or air-gapped mirror is where this shows up.
   Where the registry is out of reach or cannot be authenticated to, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.
   The injected wrapper reads the version from the runner's own dependency manifest rather than from the tag, and hands it back on the pod's termination message, so a `RunnerSet` carries the last one it saw (Q792):
 

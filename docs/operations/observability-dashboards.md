@@ -115,7 +115,7 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 | HPA desired vs. current | `kube_horizontalpodautoscaler_status_*_replicas` | Time series |
 | ResourceQuota usage | `kube_resourcequota{type="used"}` filtered by namespace | Bar gauge |
 
-**Row 7 — Reliability Signals (Q315)**
+**Row 8 — Reliability Signals (Q315)**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -125,7 +125,7 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 | Worker pods reaped/s (by reason) | `sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
 | Broker token propagation retries/s | `sum by (runner_group) (rate(actions_gateway_broker_token_propagation_retries_total[5m]))` | Time series |
 
-**Row 8 — Fan-out Safety (Q260 / Q266)**
+**Row 9 — Fan-out Safety (Q260 / Q266)**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -168,6 +168,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 |-------|-------|---------------|
 | Active sessions by namespace | `sum by (namespace) (actions_gateway_active_sessions)` | Time series |
 | Jobs acquired/min by namespace (classic) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
+| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
 | Jobs assigned/min by namespace (scale-set) | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
 
 **Row 5 — Build Versions**
@@ -178,7 +179,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 
 The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: `job_duration_seconds` changed span at v1.5.0 without a rename ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)).
 The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
-`actions_gateway_build_info` carries no `namespace` label, so `$namespace` does not filter this row. | Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
+`actions_gateway_build_info` carries no `namespace` label, so `$namespace` does not filter this row.
 
 ## Budget dashboard
 
