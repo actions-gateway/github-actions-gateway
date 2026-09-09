@@ -18,7 +18,7 @@ Individual module Makefiles (e.g.
 
 ## Container images
 
-The four production images (`cmd/{agc,gmc,proxy,worker}/Dockerfile`) are built together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`).
+The four production images (the `agc`, `gmc`, `proxy` and `worker` stages) are built together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`).
 Every image is a named stage of the single root [`Dockerfile`](../../Dockerfile), selected with `--target`; they share one `deps` stage that compiles the vendored dependency tree once.
 The e2e/CI image pipeline is described in [e2e-ci-speed-round-2.md](../plan/e2e-ci-speed-round-2.md), with the earlier round in [docker-image-speed.md](../plan/docker-image-speed.md).
 
@@ -40,7 +40,7 @@ Local `make vulncheck` genuinely re-verifies a stdlib fix: outside the image, `G
 ### Multi-arch (linux/amd64 + linux/arm64)
 
 Published images are **multi-arch** (Q97): the release pipeline ([`publish.yml`](../../.github/workflows/publish.yml)) passes `platforms: linux/amd64,linux/arm64`, producing an OCI image index whose digest is what operators pin.
-All five Dockerfiles (the four production images plus `test/fakegithub`) plumb the target platform the same way:
+All five image stages (the four production images plus `fakegithub`) plumb the target platform the same way:
 
 - The Go **builder stage** runs `FROM --platform=$BUILDPLATFORM` — always the build host's native platform — and **cross-compiles** with `GOOS=$TARGETOS GOARCH=$TARGETARCH`.
   BuildKit populates both args per target platform, so no QEMU emulation is needed for the build.

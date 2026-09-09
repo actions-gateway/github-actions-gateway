@@ -520,7 +520,7 @@ Confirmed via local `docker pull` + `docker run`:
 
 1. `Runner.Worker` is present in the image (no tarball extraction needed).
 2. Path: `/home/runner/bin/Runner.Worker`.
-   This directory is **not** on the default `$PATH`, so the worker Dockerfile sets `ENV PATH=/home/runner/bin:$PATH` to keep [cmd/worker/main.go:91](../../cmd/worker/main.go:91)'s `exec.LookPath("Runner.Worker")` resolving correctly.
+   This directory is **not** on the default `$PATH`, so the worker Dockerfile sets `ENV PATH=/home/runner/bin:$PATH` to keep [cmd/worker/main.go](../../cmd/worker/main.go)'s `exec.LookPath("Runner.Worker")` resolving correctly.
 3. .NET runtime + shared libraries ship inside the image (no host dependency on `ubuntu:24.04`).
 4. Image runs as `USER runner` (UID 1001) — tenants need `runAsUser: 1001` in the RunnerGroup `podTemplate` for PSA `restricted` admission.
    Already documented in [security.md D-2](security.md).
