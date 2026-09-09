@@ -211,7 +211,17 @@ The four targets above **render**, on every change to this tree: [`scripts/manif
 Rendering is the weakest of the readings on this page and it was the missing one — `manifest-validate` yamllints these files and kubeconforms the standalone ones, so until then a `kustomization.yaml` that did not build first failed on the cluster of whoever ran `kubectl apply -k`.
 Exit status is not the assertion: the shared topology's patch replaces the mirror-side `ingress` wholesale, so a second rule added to the base disappears from that render at exit 0.
 The gate compares the two renders and names any line the base declares that the shared one lost.
-It proves the YAML composes and nothing more — no cluster this repo boots applies the shared overlay, which is a separate gap.
+It proves the YAML composes and nothing more: a render cannot show that the peers a policy admits match the pods that actually connect.
+
+The shared topology's ingress peer is **driven**, on the Calico e2e lane, by `E2E_Mirror_SharedTenantsNP` ([`cmd/gmc/test/e2e/mirror_np_test.go`](../../cmd/gmc/test/e2e/mirror_np_test.go), Q1039).
+The container stands this overlay up on a kind cluster — the shipped one, with only an `images:` override moving the two Docker Hub pins onto the lane's local registry — and runs three one-shot curl pods at `/v2/` on 5000: a workload-labelled pod in a marked namespace is admitted, an unlabelled pod in that same marked namespace is dropped, and a workload-labelled pod in an unmarked namespace is dropped.
+The two negatives are the two halves of the AND the peer expresses, which nothing had read live; before this, [Q1026](https://github.com/actions-gateway/github-actions-gateway/pull/1795) narrowed that peer and merged on the reasoning that no client would be cut off rather than on a reading, because the dogfood window runs the isolated topology and could not produce one.
+The positive is also the control: the probe namespaces are deliberately not `gag-dogfood-e2e`, so the base's single-namespace peer would deny it, and a run in which the component silently failed to compose goes red rather than green.
+They are Calico-only — kindnet accepts NetworkPolicy objects and does not reliably drop the traffic (Q7b/Q119) — and the apply lives in the suite's `BeforeAll`, so the kindnet lane pays nothing.
+
+What that leaves is the client half.
+The lane grades the peer *expression* with a curl pod; it does not grade that a real worker's source address resolves to its workload-labelled pod under GKE Dataplane V2 across the Kata bridge.
+That reading is [`scripts/dogfood/e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh), and nothing schedules it (Q1048).
 
 The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, five per instance, by [`scripts/dogfood/e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh): Available, `/v2/`, a real upstream manifest, an upload refused with 405, and the bundled image's `:5001` debug listener unbound.
 That battery has since gained a sixth check per instance, that `/v2/_catalog` is refused, which has not run on the cluster yet; the deny's own reading is the local one [above](#closing-the-repository-catalog).

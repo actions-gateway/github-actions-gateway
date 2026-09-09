@@ -352,6 +352,7 @@ It turns on your tenant count, your disk budget, and whether your tenants are mu
 
 **A shared set is one peer of difference.** The mirror-side ingress admits workload-labelled pods in any namespace carrying the managed-tenant marker, instead of any pod in one namespace named literally, and `kubectl apply -k deploy/registry-mirror/overlays/shared-tenants` renders it.
 The worker-side egress policy sits in the tenant's own namespace and is per-tenant under either topology, so that half is unchanged.
+That peer is graded live on every change to the mirror tree, on a Calico kind cluster: a workload-labelled pod in a marked namespace is admitted, and a pod missing either half is dropped ([what is proven](../../deploy/registry-mirror/README.md#what-is-proven-and-what-is-not)).
 
 **An isolated set costs a whole set per tenant.** Read off the rendered manifests, one set is 5 Deployments and 5 Services requesting 175m of CPU and 480Mi of memory, with limits of 3000m and 3200Mi; the persistent overlay adds 5 PVCs holding 50Gi, which the deployment README prices at about $5 a month.
 Multiply all of it by tenant count.

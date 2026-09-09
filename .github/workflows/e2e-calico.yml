@@ -12,6 +12,12 @@
 #   - E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace             (calico-only, Q83)
 #   - E2E_V2_DirectEgress_NonGitHubBlocked                        (calico-only)
 #   - E2E_V2_DirectEgress_MetadataServerBlocked                   (calico-only, Q716)
+#   - E2E_Mirror_SharedTenantsNP_AdmitsMarkedNamespaceWorkloadPod  (calico-only, Q1039)
+#   - E2E_Mirror_SharedTenantsNP_DeniesUnlabeledPod               (calico-only, Q1039)
+#   - E2E_Mirror_SharedTenantsNP_DeniesUnmarkedNamespace          (calico-only, Q1039)
+# Those last three gate once in their container's BeforeAll rather than per spec,
+# so the call-site count and the spec count differ — read the containers, not the
+# calls.
 # egressEnforcingCNI() is the authoritative list — this comment omitted the
 # direct-egress spec from the v2 work until #1417, and testing.md's copy had the
 # same gap, so grep the call sites rather than trusting either count.
@@ -56,6 +62,7 @@ on:
       - 'cmd/proxy/**'
       - 'Dockerfile'
       - 'charts/actions-gateway/templates/**'
+      - 'deploy/registry-mirror/**'
       - 'scripts/e2e/**'
       - 'scripts/fetch/**'
       - 'scripts/lib/**'
@@ -108,6 +115,13 @@ jobs:
               - 'cmd/proxy/**'         # the egress proxy (ProxyConnectWorks)
               - 'Dockerfile'           # builds the gmc + proxy images this lane deploys
               - 'charts/actions-gateway/templates/**'  # manager NetworkPolicy templates (ManagerMetricsNP); templates-only so a metadata Chart.yaml bump doesn't fire this lane (Q296)
+              # The registry mirror's shared-tenants ingress peer, which
+              # mirror_np_test.go applies and grades live (Q1039). Whole tree, not
+              # just the policy: the component, either overlay and the base's
+              # images all decide what that spec renders and runs. The README is
+              # in scope too — a doc-only edit there fires the lane, accepted as
+              # the price of the peer never drifting past an unrun check again.
+              - 'deploy/registry-mirror/**'
               # The scripts behind e2e-reusable.yml, which this lane and the
               # kindnet lane both run — so these three must match e2e-test.yml's
               # `e2e` filter exactly, and check-path-filters.sh asserts it. The

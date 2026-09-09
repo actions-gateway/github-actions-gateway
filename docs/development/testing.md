@@ -3029,7 +3029,11 @@ It runs `if: always()` in `e2e-reusable.yml` and never exits non-zero, because i
 Run it locally against any report to get the same table.
 
 **Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)).
-**Six** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), `E2E_V2_DirectEgress_NonGitHubBlocked`, and `E2E_V2_DirectEgress_MetadataServerBlocked` (Q716).
+**Nine** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), `E2E_V2_DirectEgress_NonGitHubBlocked`, `E2E_V2_DirectEgress_MetadataServerBlocked` (Q716), and the three registry-mirror ingress specs (`E2E_Mirror_SharedTenantsNP_AdmitsMarkedNamespaceWorkloadPod`, `E2E_Mirror_SharedTenantsNP_DeniesUnlabeledPod`, `E2E_Mirror_SharedTenantsNP_DeniesUnmarkedNamespace`, Q1039).
+
+The count and the call-site count no longer agree: those last three gate once in their container's `BeforeAll` rather than per spec, so `grep -c` over the call sites reads seven where nine specs skip.
+Gating there is what keeps the apply off the kindnet lane: the container stands the shipped shared-tenants overlay up on the cluster, which is work no skipped spec should pay for.
+That container is also the only one asserting an **ingress** drop rather than an egress one: it grades the mirror's shared-topology peer, which ANDs a managed-tenant namespace with a workload-labelled pod, and its two negatives are the two halves of that AND (Q1026).
 
 That last one carries its own destination: a kind cluster has no cloud metadata server, so the spec stands one up at `169.254.169.254` on every node (a privileged `hostNetwork` DaemonSet) before probing it.
 Without that the assertion would pass whether or not the NetworkPolicy did anything.
@@ -3037,9 +3041,9 @@ Its third leg — the same workload pod reaching the same address on port 53 —
 `egressEnforcingCNI()` is the authoritative list; prose copies of it have gone stale twice, so grep the call sites rather than trusting a count.
 Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83).
 
-**A spurious allow is a claim about the enforcer, not only the policy.** All five containers therefore call `utils.DumpCNIEnforcerState()` from their failure path, which reads both lanes' enforcers (`app=kindnet`, `k8s-app=calico-node`) and prints restart attribution, termination reason, and cgroup pressure.
+**A spurious allow is a claim about the enforcer, not only the policy.** All five containers that assert a drop therefore call `utils.DumpCNIEnforcerState()` from their failure path, which reads both lanes' enforcers (`app=kindnet`, `k8s-app=calico-node`) and prints restart attribution, termination reason, and cgroup pressure.
 The `e2e-reusable.yml` diagnostic step reads the same two selectors for the case where the suite process died before its `AfterEach` could run, the same two-probe split as the [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
-Both read kindnet only until #1417, which is the lane where these five specs *skip*, so a failure on the Calico lane captured no enforcer state at all.
+Both read kindnet only until #1417, which is the lane where the enforcement specs *skip*, so a failure on the Calico lane captured no enforcer state at all.
 That PR was filed against a suspected run of enforcement-negative failures which [turned out to be a different spec entirely](maintaining-backlog.md#repurposing-an-id-is-a-closure-with-every-step-skipped); the instrument it added stands on its own.
 CI runs this profile per-PR whenever a change touches NetworkPolicy/proxy code — see [the Calico e2e lane](#the-calico-e2e-lane) below.
 
