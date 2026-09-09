@@ -9,12 +9,14 @@
 # reaching just the classic tier is as invisible in a condition reason or a
 # Kubernetes Event as it is in a counter, and neither was gated.
 #
-# This one inverts the same obligation for the other two, and adds the check the
-# metric side has no need of: an Event reason must also have a runbook entry, so
-# an operator who meets it in `kubectl describe` gets a remedy and not just a
-# tier. What each check asserts, and why the reason argument's index is read off
-# the callee's declaration rather than tabulated, are in the package comment
-# beside devtools/docs/reasontiers.
+# This one inverts the same obligation for the other two, and adds the two checks
+# the metric side has no need of: an Event reason must also have a runbook entry,
+# so an operator who meets it in `kubectl describe` gets a remedy and not just a
+# tier; and a condition type with two producers must enumerate one of them in one
+# place, which is the only check here that reconciles the source against itself
+# rather than against a doc (Q994). What each check asserts, and why the reason
+# argument's index is read off the callee's declaration rather than tabulated,
+# are in the package comment beside devtools/docs/reasontiers.
 #
 # Usage:
 #   check-reason-tiers.sh [AGC_SRC API_SRC LEDGER_DOC RUNBOOK_DOC]

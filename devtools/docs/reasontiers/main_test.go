@@ -22,9 +22,14 @@ const (
 	apiSrc = `package apiconditions
 
 const (
+	ConditionRunnerVersionTooOld = "RunnerVersionTooOld"
+	ConditionDegraded = "Degraded"
+
 	ReasonListenerActive = "ListenerActive"
 	ReasonWorkerCeilingReached = "WorkerCeilingReached"
 	ReasonVersionTooOld = "VersionTooOld"
+	ReasonVersionAccepted = "VersionAccepted"
+	ReasonWorkerImageCurrent = "WorkerImageCurrent"
 	ReasonQuotaExhausted = "QuotaExhausted"
 )
 `
@@ -33,9 +38,14 @@ const (
 import "github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 
 const (
+	ConditionRunnerVersionTooOld = apiconditions.ConditionRunnerVersionTooOld
+	ConditionDegraded = apiconditions.ConditionDegraded
+
 	ReasonListenerActive = apiconditions.ReasonListenerActive
 	ReasonWorkerCeilingReached = apiconditions.ReasonWorkerCeilingReached
 	ReasonVersionTooOld = apiconditions.ReasonVersionTooOld
+	ReasonVersionAccepted = apiconditions.ReasonVersionAccepted
+	ReasonWorkerImageCurrent = apiconditions.ReasonWorkerImageCurrent
 	ReasonQuotaExhausted = apiconditions.ReasonQuotaExhausted
 )
 `
@@ -100,11 +110,75 @@ func (l *Listener) stalled(stalled bool) {
 }
 `
 
+	// The producer half of the ownership check: a condition setter carrying both a
+	// type and a reason, and the two writes the classic listener makes on the type
+	// the enumeration below claims.
+	versionSrc = `package listener
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+)
+
+func setCondition(cfg Config, condType string, status metav1.ConditionStatus, reason, msg string) {
+	cfg.Conditions.SetCondition(metav1.Condition{Type: condType, Reason: reason})
+}
+
+func (l *L) rejectedByGitHub(msg string) {
+	setCondition(l.cfg, agcv1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
+		agcv1alpha1.ReasonVersionTooOld, msg)
+}
+
+func (l *L) accepted() {
+	setCondition(l.cfg, agcv1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionFalse,
+		agcv1alpha1.ReasonVersionAccepted, "accepted")
+	setCondition(l.cfg, agcv1alpha1.ConditionDegraded, metav1.ConditionFalse,
+		agcv1alpha1.ReasonListenerActive, "up")
+}
+`
+
+	// The consumer half: the marked enumeration, and the one comparison against an
+	// entry that is legitimate because it sits in the enumeration's own package.
+	ownerSrc = `package runnercore
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
+)
+
+func DropListenerCondition(prev *metav1.Condition, pushed metav1.Condition) bool {
+	if pushed.Reason != apiconditions.ReasonVersionAccepted {
+		return false
+	}
+	return prev != nil && !IsSessionSourcedRunnerVersion(prev.Reason)
+}
+
+func imageVerdict() metav1.Condition {
+	return metav1.Condition{
+		Type:   apiconditions.ConditionRunnerVersionTooOld,
+		Reason: apiconditions.ReasonWorkerImageCurrent,
+	}
+}
+
+// reasontiers:owns RunnerVersionTooOld internal/listener
+func IsSessionSourcedRunnerVersion(reason string) bool {
+	switch reason {
+	case apiconditions.ReasonVersionTooOld, apiconditions.ReasonVersionAccepted:
+		return true
+	}
+	return false
+}
+`
+
 	goodLedger = "## Condition and Event tier reach\n\n" +
 		"### Condition reasons\n\n" +
 		"| Reason | Tier | Why |\n| --- | --- | --- |\n" +
 		"| `ListenerActive` | Both | Ready on both arms. |\n" +
 		"| `VersionTooOld` | Classic only | GitHub rejects only the classic session. |\n" +
+		"| `VersionAccepted` | Classic only | Only the classic session baseline clears it. |\n" +
+		"| `WorkerImageCurrent` | Both | The image reading asks GitHub nothing. |\n" +
 		"| `WorkerCeilingReached` | Scale-set only | Only the queue holds assignments. |\n\n" +
 		"### Event reasons\n\n" +
 		"| Reason | Tier | Why |\n| --- | --- | --- |\n" +
@@ -139,6 +213,8 @@ func srcTree(t *testing.T, overrides map[string]string) string {
 	files := map[string]string{
 		"internal/controller/runner_shared.go":  sharedSrc,
 		"internal/listener/session.go":          listenerSrc,
+		"internal/listener/version.go":          versionSrc,
+		"internal/runnercore/runnerversion.go":  ownerSrc,
 		"internal/scalesetlistener/listener.go": scaleSetSrc,
 	}
 	for name, body := range overrides {
@@ -502,4 +578,154 @@ func (r *R) warn(rs *RS, err error) {
 			}
 		})
 	}
+}
+
+// --- ownership (Q994) ---------------------------------------------------------
+//
+// The green baseline for these is TestCleanTreeHasNoFindings: the fixture tree
+// carries the marked enumeration and the two writes the listener makes on the
+// type it claims, so each case below mutates exactly one of them.
+
+// The defect the check exists for: the listener grows a third reason on the
+// owned type and the enumeration is not updated with it, so every consumer reads
+// it as the image reading's and overwrites a verdict GitHub actually made.
+func TestOwnershipReasonMissingFromTheEnumerationFails(t *testing.T) {
+	extra := strings.Replace(versionSrc,
+		`		agcv1alpha1.ReasonVersionAccepted, "accepted")`,
+		`		agcv1alpha1.ReasonVersionAccepted, "accepted")
+	setCondition(l.cfg, agcv1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
+		agcv1alpha1.ReasonQuotaExhausted, "policy")`, 1)
+	src := srcTree(t, map[string]string{"internal/listener/version.go": extra})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	requireFinding(t, findings, "QuotaExhausted is published on RunnerVersionTooOld here")
+	requireFinding(t, findings, "does not list it")
+}
+
+// The second half: the width came apart because a consumer asked the same
+// question with a comparison of its own, so a reason added to the enumeration
+// never reached it. Any such comparison outside the enumeration's package is a
+// second membership site.
+func TestOwnershipSecondMembershipSiteFails(t *testing.T) {
+	consumer := `package controller
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+)
+
+func (r *R) defer_(prev metav1.Condition) bool {
+	return prev.Status == metav1.ConditionTrue && prev.Reason == v2alpha1.ReasonVersionTooOld
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	requireFinding(t, findings, "ReasonVersionTooOld is compared against here")
+	requireFinding(t, findings, "second membership site at its own width")
+}
+
+// The complement, and the reason the exemption is by package rather than by
+// function: DropListenerCondition compares against an entry to ask which push it
+// is holding, which is not a membership test and is where the set is declared.
+func TestOwnershipComparisonInTheEnumerationsOwnPackageIsFine(t *testing.T) {
+	findings := runCase(t, srcTree(t, nil), goodLedger, goodRunbook)
+	for _, f := range findings {
+		if strings.Contains(f, "second membership site") {
+			t.Fatalf("the enumeration's own package was read as a consumer: %s", f)
+		}
+	}
+}
+
+// The control the polarity requires: a fourth reason on the OTHER producer must
+// stay out of the session set. Enumerating the image half is the failure
+// direction the switch was written to reject, so this must not fire.
+func TestOwnershipNewImageReasonDoesNotFire(t *testing.T) {
+	extra := strings.Replace(ownerSrc,
+		`		Reason: apiconditions.ReasonWorkerImageCurrent,`,
+		`		Reason: apiconditions.ReasonQuotaExhausted,`, 1)
+	src := srcTree(t, map[string]string{"internal/runnercore/runnerversion.go": extra})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	for _, f := range findings {
+		if strings.Contains(f, "RunnerVersionTooOld") {
+			t.Fatalf("an image-side reason was held to the session set: %s", f)
+		}
+	}
+}
+
+// A write on the owned type whose reason the scan cannot read is the emission
+// that would slip past membership in silence, so it is a finding rather than a
+// skip.
+func TestOwnershipUnreadableEmissionFails(t *testing.T) {
+	computed := strings.Replace(versionSrc,
+		`		agcv1alpha1.ReasonVersionTooOld, msg)`,
+		`		deriveReason(msg), msg)`, 1)
+	src := srcTree(t, map[string]string{"internal/listener/version.go": computed})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	requireFinding(t, findings, "does not name a reason this scan can read")
+}
+
+// The marker is the check's only input, so a tree with none has to refuse: an
+// enumeration whose marker was deleted looks exactly like a tree with nothing to
+// own, and both read green.
+func TestOwnershipWithNoMarkerIsAnError(t *testing.T) {
+	unmarked := strings.Replace(ownerSrc, "// reasontiers:owns RunnerVersionTooOld internal/listener\n", "", 1)
+	src := srcTree(t, map[string]string{"internal/runnercore/runnerversion.go": unmarked})
+	dir := t.TempDir()
+	lPath := filepath.Join(dir, "observability-metrics.md")
+	rPath := filepath.Join(dir, "troubleshooting.md")
+	writeFile(t, lPath, goodLedger)
+	writeFile(t, rPath, goodRunbook)
+	if _, err := run(src, apiTree(t), lPath, rPath); err == nil {
+		t.Fatal("expected an error when no enumeration is marked")
+	}
+}
+
+// A marker aimed at a subtree that writes nothing on the type gates nothing, and
+// green there would be a gate reporting on an empty scan.
+func TestOwnershipMarkerThatGatesNothingIsAnError(t *testing.T) {
+	cases := map[string]string{
+		"producer emits nothing on the type": strings.Replace(ownerSrc,
+			"reasontiers:owns RunnerVersionTooOld internal/listener",
+			"reasontiers:owns RunnerVersionTooOld internal/scalesetlistener", 1),
+		"producer is not a directory": strings.Replace(ownerSrc,
+			"reasontiers:owns RunnerVersionTooOld internal/listener",
+			"reasontiers:owns RunnerVersionTooOld internal/nosuchthing", 1),
+		"condition type is no constant's value": strings.Replace(ownerSrc,
+			"reasontiers:owns RunnerVersionTooOld internal/listener",
+			"reasontiers:owns RunnerVersionAncient internal/listener", 1),
+		"the switch admits nothing readable": strings.Replace(ownerSrc,
+			"	case apiconditions.ReasonVersionTooOld, apiconditions.ReasonVersionAccepted:\n		return true\n",
+			"	case \"\":\n		return true\n", 1),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := srcTree(t, map[string]string{"internal/runnercore/runnerversion.go": body})
+			dir := t.TempDir()
+			lPath := filepath.Join(dir, "observability-metrics.md")
+			rPath := filepath.Join(dir, "troubleshooting.md")
+			writeFile(t, lPath, goodLedger)
+			writeFile(t, rPath, goodRunbook)
+			if _, err := run(src, apiTree(t), lPath, rPath); err == nil {
+				t.Fatal("expected an error rather than a check over nothing")
+			}
+		})
+	}
+}
+
+// A Condition literal that names the owned type and sets its Reason somewhere
+// else is the emission the scan cannot read, so it must be a finding rather than
+// a skip: skipping it is how a reason gets past membership in silence.
+func TestOwnershipLiteralWithNoReasonFails(t *testing.T) {
+	split := strings.Replace(versionSrc,
+		`func (l *L) accepted() {`,
+		`func (l *L) byPolicy(reasonFor func() string) {
+	c := metav1.Condition{Type: agcv1alpha1.ConditionRunnerVersionTooOld}
+	c.Reason = reasonFor()
+	l.cfg.Conditions.SetCondition(c)
+}
+
+func (l *L) accepted() {`, 1)
+	src := srcTree(t, map[string]string{"internal/listener/version.go": split})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	requireFinding(t, findings, "does not name a reason this scan can read")
 }

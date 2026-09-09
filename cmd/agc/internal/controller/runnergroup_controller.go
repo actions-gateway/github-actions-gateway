@@ -739,8 +739,11 @@ func (r *RunnerGroupReconciler) setRunnerVersionStatus(rg *v1alpha1.RunnerGroup)
 	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
 	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
 	// healthy image reading therefore does not refute it, and writing over it would
-	// drop a live rejection from status.
-	if prev.Status == metav1.ConditionTrue && prev.Reason == v1alpha1.ReasonVersionTooOld {
+	// drop a live rejection from status. Which reasons are the listener's is asked of
+	// runnercore rather than compared here: the two consumers held the set at
+	// different widths, and a listener reason this one did not know about was wiped
+	// rather than deferred to (Q994).
+	if prev.Status == metav1.ConditionTrue && runnercore.IsSessionSourcedRunnerVersion(prev.Reason) {
 		return
 	}
 	r.mergeCondition(rg, cond)
