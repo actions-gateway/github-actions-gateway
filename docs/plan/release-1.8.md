@@ -1,9 +1,11 @@
 # Release 1.8 Milestone Definition
 
 > **Status: scoped 2026-09-07; the gating row is closed, no candidate cut.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
-> Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and the Phase 2 alias decision, Q452, which closed 2026-09-08 ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
-> The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 44 commits and **FLOOR: NONE** on 2026-09-07, with seven `feat`/`fix` subjects withheld because they ship in no image and no chart.
-> Q1029's fix raises the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.
+> Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and [Q1085](../queue/Q1085.md)'s release-notes line.
+> The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
+> The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 64 commits and **FLOOR: MINOR** on 2026-09-09, so the tag is `v1.8.0`.
+> Three `feat`s on the released surface set it: Q1062, Q1011 and Q988, with Q1064's and Q1029's fixes as the patches beside them.
+> Eleven `feat`/`fix` subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.
 
 ## Why this is a release rather than a row that lands whenever
 
