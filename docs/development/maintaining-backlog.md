@@ -570,6 +570,10 @@ The lifecycle:
 - **Recurs** → back to Queue top, escalated.
 - **Soaked or obsolete** → retire to the ledger (below).
 
+**A groom is the usual moment, not the only legal one.** Where the fix itself makes the row obsolete, the fixing change may retire it directly: rule 8 reads the ledger entry, not who wrote it or when.
+[Q982](flake-watch-retired.md) is the precedent: [#1747](https://github.com/actions-gateway/github-actions-gateway/pull/1747) deleted the row and added its ledger line in one commit, because a flake-watch trigger turns on recurrence observed on `main` and that path had never run on `main`, so parking it would have soaked against an event that could not happen.
+Parking remains the default: retire at fix time only when you can state, in the ledger entry, why the trigger can no longer fire.
+
 A sighting on a **PR branch** does not meet the trigger, so the row stays in Flake watch — but it is still evidence the mitigation is incomplete: record it (on the row, or in the doc the row links) and count the soak from that date rather than from the fix.
 Record *which mode* failed, too, where the row's fix addressed a specific one: [Q549](../queue/Q549.md)'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.
 
@@ -581,7 +585,7 @@ Retiring per the ledger rules below needs no exception: the ledger entry clears 
 ### Retiring a flake-watch row
 
 Flake watch must not grow without bound — a row whose recurrence-memory has decayed to ~zero still costs a live-table scan every grooming pass and a slice of context budget, for no signal.
-During a grooming pass (never automatically), retire a row when **either** holds:
+Retire a row when **either** holds (never automatically; retirement is always a judgement someone records):
 
 - **Soaked** — the covering spec has passed its **blast-radius run threshold** on `main` since the fix merged (table below), with no recurrence (any recurrence bounces the row back to the Queue, so "since the fix" passes are necessarily consecutive); **or**
 - **Obsolete** — the flaky test or the mitigated code path no longer exists or was materially rewritten, so the old memory can no longer map to today's code (auto-retire regardless of age).
