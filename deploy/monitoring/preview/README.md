@@ -73,7 +73,34 @@ Common knobs (environment variables):
 | `OUT_DIR` | `.` | Directory the PNGs are written to. |
 | `WIDTH` / `HEIGHT` | `1500` / `2300` | Render dimensions. |
 | `FROM` / `TO` | `now-10m` / `now` | Dashboard time range. Matched to `WAIT` so the whole window is backed by data. |
-| `CLUSTER` | `gag-obs` | kind cluster name. |
+| `CLUSTER` | `gag-obs` | kind cluster name. Runs sharing it are serialized against each other; set your own to opt out. See [Running two of these at once](#running-two-of-these-at-once). |
+
+### Running two of these at once
+
+`render.sh` holds an exclusive lock on `$CLUSTER` for the whole of `up`, `shot`, and `down`, so a second session waits rather than entering a cluster someone is already rendering.
+Expect it to sit there.
+A run holds the lock for `WAIT` plus the install, so a queued run reports every 30 s rather than looking hung:
+
+```
+==> waiting for the gag-obs preview cluster (another session is rendering, queued 30s)...
+```
+
+The lock is there because an unserialized overlap corrupts the screenshot silently (Q1072).
+Both runs apply `../grafana-dashboard-*.json` from **their own** worktree into the one Grafana, and the whole `WAIT` window sits between that apply and the render, so the damage lands on whichever session applied **first**.
+It renders the other branch's JSON and gets a PNG that looks entirely plausible, while the session that applied last finishes normally and has no way to tell it just overwrote a peer's run.
+That is the same drift `make dashboard-render-check` exists to catch, arriving through the harness rather than around it.
+The Helm collision an overlap also produces (`another operation (install/upgrade/rollback) is in progress`) is the loud half, and the cheap one: it costs a run, not a wrong screenshot.
+
+Don't wait if you don't want to.
+The lock is keyed on the cluster name, so a cluster of your own never queues:
+
+```sh
+CLUSTER=gag-obs-$USER ./render.sh
+```
+
+That buys wall-clock at the cost of a second full `kube-prometheus-stack` install, which is the trade this box usually loses.
+The lock file lives outside the repo (`~/Library/Caches/github-actions-gateway/` on macOS, `$XDG_CACHE_HOME` on Linux) because the sessions contending for the cluster are in different worktrees.
+It is an advisory `flock`, so killing a render releases it: there is no stale lock to clear.
 
 ### Reading a render
 

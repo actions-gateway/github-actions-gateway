@@ -22,6 +22,8 @@
 #   OUT_DIR=.        # directory the per-dashboard PNGs are written to
 #   WAIT=660         # seconds to let counters/histograms accumulate before render
 #   WIDTH=1500  HEIGHT=2300  FROM=now-10m  TO=now
+# Runs against one CLUSTER are serialized against each other; see "concurrency"
+# below. Set CLUSTER to opt out into a cluster of your own.
 # WAIT and FROM are matched on purpose: the render window (FROM..TO) must fit
 # inside the accumulated data or the time-series panels render mostly empty with
 # a spike at the right edge. Keep WAIT >= the FROM window when changing either.
@@ -91,6 +93,85 @@ port_forward() {
 		(( attempt > 0 )) && sleep 1
 	done
 	die "port-forward to $svc did not become ready"
+}
+
+# --- concurrency -------------------------------------------------------------
+#
+# Every run applies ../grafana-dashboard-*.json from *its own* worktree into the
+# one shared cluster, and the whole WAIT window sits between that apply and the
+# render. So two overlapping runs do not merely collide on Helm ("another
+# operation (install/upgrade/rollback) is in progress"). They render each
+# other's dashboards, and the harm lands on whichever session applied *first*:
+# it gets a plausible PNG of a different branch's JSON, and the session that
+# applied last is unaffected and cannot tell it just corrupted a peer (Q1072).
+#
+# Serializing on the cluster name keeps the single kube-prometheus-stack install
+# this box can afford and makes the second session wait instead of fail. It also
+# composes with the other way out: a session that sets CLUSTER gets its own
+# cluster *and* its own lock, so it never queues behind the shared one.
+#
+# perl's flock, not flock(1) (absent on macOS) and not a mkdir lockdir: the
+# kernel drops it when the holder dies, so a Ctrl-C'd render, routine on a
+# harness that holds the lock for WAIT plus an install, never strands a lock
+# that wedges every later run. Same mechanism, and the same reasons, as
+# serialize_heavy_build in scripts/lib/common.sh.
+
+# lock_path — the host-wide lock file for $CLUSTER, or nothing if this platform
+# has no cache dir to put one in. Not repo-relative on purpose: sessions
+# contending for the cluster are in different worktrees.
+lock_path() {
+	local base
+	case "$(uname -s)" in
+	Darwin) base="$HOME/Library/Caches" ;;
+	Linux) base="${XDG_CACHE_HOME:-$HOME/.cache}" ;;
+	*) return 0 ;;
+	esac
+	local dir="$base/github-actions-gateway"
+	mkdir -p "$dir" 2>/dev/null || return 0
+	# $CLUSTER lands in a path component; kind names are DNS labels, but keep a
+	# stray separator from silently placing the lock somewhere nobody contends.
+	printf '%s/preview-render.%s.lock\n' "$dir" "${CLUSTER//[^A-Za-z0-9._-]/_}"
+}
+
+# serialize_on_cluster — re-exec this script holding an exclusive lock on
+# $CLUSTER, and hold it for the whole run. Pass the script's own "$@".
+serialize_on_cluster() {
+	[[ -n "${GAG_PREVIEW_LOCK_HELD:-}" ]] && return 0
+	local lock why=""
+	lock="$(lock_path)"
+	if [[ -z "$lock" ]]; then
+		why="no cache directory on this platform"
+	elif ! command -v perl >/dev/null 2>&1; then
+		why="perl not found"
+	fi
+	if [[ -n "$why" ]]; then
+		# Degrading is right, since a preview tool should not refuse to run, but
+		# it is the state this whole section exists to prevent, so say so.
+		printf '\033[1;33mwarning:\033[0m %s, so this run holds no lock on %s: a concurrent run will silently render its dashboards instead\n' \
+			"$why" "$CLUSTER" >&2
+		return 0
+	fi
+	export GAG_PREVIEW_LOCK_HELD=1
+	# perl takes the lock, runs the script as a child, and exits with its status;
+	# the lock fd lives in perl and releases when perl exits.
+	exec perl -MFcntl=:flock -e '
+		my ($path, $cluster) = splice(@ARGV, 0, 2);
+		open(my $fh, ">", $path) or exec @ARGV;
+		my ($start, $next) = (time, 0);
+		until (flock($fh, LOCK_EX|LOCK_NB)) {
+			my $queued = time - $start;
+			if ($queued >= $next) {
+				printf STDERR "==> waiting for the %s preview cluster (another session is rendering, queued %ds)...\n", $cluster, $queued;
+				$next = $queued + 30;
+			}
+			select(undef, undef, undef, 1);
+		}
+		my $queued = time - $start;
+		printf STDERR "==> preview cluster acquired after %ds queued\n", $queued if $queued >= 5;
+		my $rc = system @ARGV;
+		exit 255 if $rc == -1;
+		exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);
+	' "$lock" "$CLUSTER" bash "$0" "$@"
 }
 
 ensure_cluster() {
@@ -179,6 +260,15 @@ down() {
 
 main() {
 	local action="${1:-up}"
+	# Validate before locking, so a typo reports now rather than after queueing
+	# behind a render.
+	case "$action" in
+	up | shot | down) ;;
+	*) die "unknown action '$action' (expected: up | shot | down)" ;;
+	esac
+	# Held for the whole action: the apply and the render have to be one
+	# critical section, and `down` must not delete a cluster mid-render.
+	serialize_on_cluster "$@"
 	case "$action" in
 	up)
 		require_cmds
@@ -195,9 +285,6 @@ main() {
 		;;
 	down)
 		down
-		;;
-	*)
-		die "unknown action '$action' (expected: up | shot | down)"
 		;;
 	esac
 }
