@@ -2707,9 +2707,11 @@
 <h1 id="release-18-milestone-definition">Release 1.8 Milestone Definition<a class="headerlink" href="#release-18-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scoped 2026-09-07; the gating row is closed, no candidate cut.</strong> The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event (<a href="#the-gating-row-q1029">below</a>).
-Three rows ride without gating: the two v2 GA soak readings, <a href="../../queue/Q1059/">Q1059</a> and <a href="../../queue/Q1060/">Q1060</a>, and the Phase 2 alias decision, Q452, which closed 2026-09-08 (<a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">the decision</a>).
-The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 44 commits and <strong>FLOOR: NONE</strong> on 2026-09-07, with seven <code>feat</code>/<code>fix</code> subjects withheld because they ship in no image and no chart.
-Q1029's fix raises the floor to PATCH, and the release is a MINOR only if a shipped feature lands beside it, so the version this doc names is provisional until the floor says otherwise.</p>
+Three rows ride without gating: the two v2 GA soak readings, <a href="../../queue/Q1059/">Q1059</a> and <a href="../../queue/Q1060/">Q1060</a>, and <a href="../../queue/Q1085/">Q1085</a>'s release-notes line.
+The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger (<a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">the decision</a>).
+The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 64 commits and <strong>FLOOR: MINOR</strong> on 2026-09-09, so the tag is <code>v1.8.0</code>.
+Three <code>feat</code>s on the released surface set it: Q1062, Q1011 and Q988, with Q1064's and Q1029's fixes as the patches beside them.
+Eleven <code>feat</code>/<code>fix</code> subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.</p>
 </blockquote>
 <h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
 <p>The <a href="../release-ladder/">release ladder</a> reads 1.7 → 2.0, and 2.0 is <a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">parked on a soak</a> whose evidence nobody has gathered.
