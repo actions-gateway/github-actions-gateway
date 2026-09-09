@@ -179,6 +179,57 @@ edit "${root}" "${SHARED}" '                port: 5000' '                port: 5
 run_checker "${root}"
 expect 'a shared component off the base port fails' 1 'admits 5001, but the base admits 5000'
 
+# --- the pod label the two halves must share ---------------------------------
+#
+# The worker-side egress rule says which pods may leave for the mirror; the
+# shared component's ingress peer restates that label as the one it admits
+# (Q1026). Change either alone and workers lose the path entirely — fail-closed,
+# and first read as a booked Kata window in which nothing pulls (Q1030).
+#
+# check-registry-mirror-render.sh caught only one of the two directions before
+# this gate did: measured 2026-09-09 on both seeds below, it fails the component
+# side (its render loses the literal it pins) and passes the base side at exit 0,
+# because nothing rendered compares the two.
+
+root="$(fixture)"
+edit "${root}" "${BASE}/networkpolicy.yaml" 'spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload' 'spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: runner'
+run_checker "${root}"
+expect 'a worker label moved alone fails' 1 "lets out pods labelled ['actions-gateway/component: runner']"
+
+root="$(fixture)"
+edit "${root}" "${SHARED}" '                    actions-gateway/component: workload' '                    actions-gateway/component: runner'
+run_checker "${root}"
+expect 'an ingress peer moved alone fails' 1 "admits pods labelled ['actions-gateway/component: runner']"
+
+# A reconciliation, not a third copy of the string: a rename carried through both
+# files is legitimate and must pass. A gate pinning the literal instead would
+# fail here, which is the difference this case exists to hold.
+root="$(fixture)"
+edit "${root}" "${BASE}/networkpolicy.yaml" '      actions-gateway/component: workload' '      actions-gateway/component: runner'
+edit "${root}" "${SHARED}" '                    actions-gateway/component: workload' '                    actions-gateway/component: runner'
+run_checker "${root}"
+expect 'a rename carried through both halves passes' 0 'both halves of the worker path name actions-gateway/component: runner'
+
+# The same document holds a second podSelector, naming the MIRROR pods the worker
+# egress rule may reach. That is the wiring gate'"'"'s business, not this one, and
+# reading it as the worker label would fail on a change that is none of this
+# gate'"'"'s concern. Demands rc 0 while its neighbours demand 1 -- the assertion,
+# not a typo.
+root="$(fixture)"
+edit "${root}" "${BASE}/networkpolicy.yaml" '          podSelector:
+            matchLabels:
+              app: registry-mirror' '          podSelector:
+            matchLabels:
+              app: registry-mirror-v2'
+run_checker "${root}"
+expect 'the mirror-pod peer selector is not the worker label' 0 'both halves of the worker path name actions-gateway/component: workload'
+
 # --- the deny container probes itself, not the path it proxies ---------------
 #
 # The defect this pins: both probes were on /v2/, which is proxied through, so a
@@ -246,6 +297,17 @@ root="$(fixture)"
 : >"${root}/${BASE}/deployment.yaml"
 run_checker "${root}"
 expect 'an empty deployment file refuses' 2 'no mirror Deployments found'
+
+# A selector the parser can no longer find is a read it could not take, never a
+# verdict that the two halves agree: an empty extraction graded green is the
+# failure this gate would otherwise become.
+root="$(fixture)"
+edit "${root}" "${BASE}/networkpolicy.yaml" '  podSelector:
+    matchLabels:
+      actions-gateway/component: workload' '  podSelector:
+    matchLabels: {}'
+run_checker "${root}"
+expect 'a worker podSelector the parser cannot read refuses' 2 'expected exactly one e2e-mirror-egress spec.podSelector'
 
 echo
 if ((fails)); then
