@@ -12,7 +12,9 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 
 - [`scripts/docs/queue.py`](../../scripts/docs/queue.py) — the store's reader, checker and order tool, vendored byte-identical from the skill and never edited here.
   `queue.py lint` is a pure function of the directory: frontmatter, rank shape, filename/id agreement, the 72-character title cap, unresolvable targets.
-- [`scripts/docs/check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) — the three rules `queue.py lint` cannot express, because each is a function of what the *branch changed* rather than of what the store holds: a `flake` item may not simply vanish, deleting a plan's last item obliges its index row, and the label vocabulary is closed.
+- [`scripts/docs/check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) — the rules `queue.py lint` cannot express.
+  Four are functions of what the *branch changed* rather than of what the store holds: a `flake` item may not simply vanish, deleting a plan's last item obliges its index row, the label vocabulary is closed, and a filed item answers any near-duplicate the matcher flagged.
+  The fifth is a function of where this repo *publishes* the store: a link that leaves `docs/` and points back into it aborts the site build, which no local gate runs (Q1054).
   Backs `make queue-rules-check`; runs in `make check`, `make queue-gates`, and CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml)).
 - [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh) — allocates a new Q-ID (`make queue-id TITLE="…"`) by claiming a ref on the remote, so concurrent sessions never take the same one.
   Rationale, the alternatives weighed, and what it does *not* fix: [queue-id-allocation.md](queue-id-allocation.md).

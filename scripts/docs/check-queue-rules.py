@@ -2,9 +2,9 @@
 """check-queue-rules.py — the backlog rules `queue.py lint` has no equivalent for.
 
 `queue.py lint` is a pure function of a directory: frontmatter, rank shape,
-filename/id agreement, the title cap, unresolvable targets. Three of this
-repo's rules cannot be expressed that way, because each is a function of what
-the *branch changed* rather than of what the store holds:
+filename/id agreement, the title cap, unresolvable targets. This repo's own
+rules cannot be expressed that way. Four are functions of what the *branch
+changed* rather than of what the store holds:
 
   8. A `flake` item may not simply vanish. A shipped mitigation parks it in
      flake watch, and it leaves only through the ledger; deleting it throws
@@ -17,6 +17,14 @@ the *branch changed* rather than of what the store holds:
  11. Every label an item wears is declared, so a typo cannot stick silently.
  13. An item this branch files cites any near-duplicate the matcher flagged, so
      a warning that fired is a warning somebody answered.
+
+The fifth is a function of the store and of where this repo publishes it, which
+is why it is here rather than in the vendored checker:
+
+ 14. A link a row carries resolves for MkDocs. `docs/queue/` publishes at
+     `/dev/queue/`, so a link that leaves `docs/` and points back into it is one
+     MkDocs cannot serve, and `mkdocs --strict` aborts the build. No local gate
+     builds the site, so the whole class was invisible until CI (Q1054).
 
 Rule 13 is the one rule here that shells out. `find-duplicate-rows.sh` already
 scores a candidate title against a store, and `make queue-id` prints its verdict
@@ -44,6 +52,7 @@ Exit: 0 all rules pass, 1 a rule failed, 2 a read that could not be taken.
 """
 
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -60,6 +69,21 @@ LABEL = re.compile(r"`([^`]+)`")
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 TITLE = re.compile(r"^#\s+(.+?)\s*$", re.M)
 MATCHER = "scripts/docs/find-duplicate-rows.sh"
+# MkDocs resolves a page's relative links from inside `docs_dir`, which is
+# `docs/` here (mkdocs.yml sets none, so the default applies). Derived from
+# STORE rather than written again, so the two cannot drift apart.
+DOCS_DIR = posixpath.dirname(STORE)
+PAGE_DIR = posixpath.basename(STORE)
+# A markdown inline link or image target: the `(...)` of `](...)`. Same shape as
+# hooks/source_links.py's, so the two agree about what a link is; a `../..` path
+# inside a code span is not one.
+INLINE_TARGET = re.compile(r"(?<=]\()([^()\s]+)(?=[)\s])")
+# `scheme://…` or `mailto:…`, deliberately narrower than RFC 3986: this repo
+# writes source references as `path/to/file.go:91`, which a general scheme
+# pattern reads as the scheme `path/to/file.go`.
+ABSOLUTE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://|mailto:")
+# The `:91` of `main.go:91`, the clickable file:line form used throughout.
+LINE_SUFFIX = re.compile(r":[0-9]+$")
 
 
 class Unreadable(Exception):
@@ -262,6 +286,72 @@ def rule13(base_items, head_items, root, base_dir, failures):
             f"QUEUE_ALLOW_UNCITED_DUPLICATE={qid} for a deliberate pass.")
 
 
+def reentrant_path(target):
+    """The `docs/`-relative path a link reaches after escaping `docs/`, or None.
+
+    MkDocs resolves a `docs/queue/` page's links from `queue/` inside
+    `docs_dir`, so enough `../` to leave `docs/` puts the link outside anything
+    this build can serve. Where it then points back *into* `docs/`,
+    `hooks/source_links.py` sees a resolved path under `docs/` that the `dev`
+    build publishes and leaves it alone, so the dead link reaches MkDocs and
+    `--strict` aborts.
+
+    A link that escapes and stays out — `../../scripts/go/coverage.sh`, a
+    workflow, `../../.mdreflow.yaml` — is the ordinary case and fine: nothing
+    under `docs/` serves it either, and source_links rewrites it to a
+    `repo_url` blob URL.
+    """
+    path = target.split("#", 1)[0]
+    path = LINE_SUFFIX.sub("", path)
+    if not path or path.startswith(("#", "/")) or ABSOLUTE.match(path):
+        return None
+    if not posixpath.normpath(posixpath.join(PAGE_DIR, path)).startswith(".."):
+        return None  # MkDocs resolves it inside docs_dir
+    reached = posixpath.normpath(posixpath.join(STORE, path))
+    if reached != DOCS_DIR and not reached.startswith(DOCS_DIR + "/"):
+        return None  # escapes and stays out, which source_links absolutizes
+    return reached
+
+
+def links_of(body):
+    """(where, target) for every relative link a row carries.
+
+    The frontmatter `target:` renders as the item's link in the `/dev/queue/`
+    table, and the item page publishes on `dev` too, so a prose link breaks the
+    build the same way from the same directory.
+    """
+    found = []
+    target = target_of(body)
+    if target:
+        found.append(("its frontmatter `target:`", target))
+    for hit in INLINE_TARGET.findall(prose_of(body)):
+        found.append(("its notes", hit))
+    return found
+
+
+def rule14(head_items, failures):
+    """Every link a row carries is one MkDocs can resolve.
+
+    No override: unlike rules 8 and 13 this encodes no judgement about the
+    item, only whether the published site can serve the link. There is no
+    deliberate way to write one it cannot.
+    """
+    for qid, body in sorted(head_items.items()):
+        for where, target in links_of(body):
+            reached = reentrant_path(target)
+            if reached is None:
+                continue
+            fixed = posixpath.relpath(reached, STORE)
+            fragment = target.split("#", 1)[1] if "#" in target else ""
+            failures.append(
+                f"rule 14: {qid} links `{target}` in {where}, which leaves "
+                f"`{DOCS_DIR}/` and points back into it. MkDocs resolves a "
+                f"`{STORE}/` page's links from inside `{DOCS_DIR}/`, so it "
+                f"cannot serve that and `mkdocs --strict` aborts -- a class no "
+                f"local gate builds the site to catch. Write it relative to the "
+                f"store: `{fixed}{'#' + fragment if fragment else ''}`.")
+
+
 def main(argv=None):
     root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"],
                                capture_output=True, text=True).stdout.strip() or ".")
@@ -288,6 +378,7 @@ def main(argv=None):
     rule8(base_items, head_items, ledger, failures)
     rule9(base_items, head_items, index, failures)
     rule11(head_items, vocabulary, failures)
+    rule14(head_items, failures)
     # Rule 13 scores against the store as it stood at the base, so a row filed
     # by this branch is not scored against its own siblings -- two items filed
     # together are one editorial act, and the matcher would pair them with each
@@ -309,7 +400,7 @@ def main(argv=None):
         print(f"check-queue-rules: FAILED - {len(failures)} finding(s)")
         return 1
     print(f"check-queue-rules: ok ({len(head_items)} item(s), "
-          f"{len(base_items)} at the merge base, rules 8, 9, 11 and 13)")
+          f"{len(base_items)} at the merge base, rules 8, 9, 11, 13 and 14)")
     return 0
 
 

@@ -77,7 +77,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # The complete set of gates a docs/queue/-only change can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
 #   queue-lint            the store's own format: frontmatter, rank, title cap, a target that no longer resolves
-#   queue-rules-check     a flake item vanished, a plan's last item left its index row open, a label is undeclared
+#   queue-rules-check     a flake item vanished, a plan's last item left its index row open, a label is undeclared, a row link the site build cannot resolve
 #   roadmap-check         an item changed status or vanished while a roadmap bullet still names it
 #   plan-index-check      the last item citing a plan went away, so archival is owed
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
@@ -136,7 +136,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   api-reference-check  docs/reference/api.md hand-edited away from what controller-gen renders
 #   gate-lists-check     testing.md stopping short of citing the list targets it must name
 #   queue-lint           an item's frontmatter, rank, title cap or target broken by a row edit
-#   queue-rules-check    a row filed wearing a label docs/queue/README.md never declared
+#   queue-rules-check    a row filed wearing a label docs/queue/README.md never declared, or carrying a link that leaves docs/ and points back into it
 #   queue-claims-check   an id this branch adds that holds no refs/queue-ids claim
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
 # subset of `make check` and never a second opinion. That claim went unchecked

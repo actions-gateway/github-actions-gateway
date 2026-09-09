@@ -64,6 +64,15 @@ titled() {  # titled <repo> <id> <title> [target] — an item with a chosen titl
     } > "$1/docs/queue/$2.md"
 }
 
+noted() {  # noted <repo> <id> <note> [target] — an item with a chosen note
+    mkdir -p "$1/docs/queue"
+    {
+        printf -- '---\nid: %s\nrank: a0\nlabels: [docs]\nstatus: ready\nsize: S\n' "$2"
+        if [[ -n "${4:-}" ]]; then printf 'target: %s\n' "$4"; fi
+        printf -- '---\n\n# Title for %s\n\n%s\n' "$2" "$3"
+    } > "$1/docs/queue/$2.md"
+}
+
 seal() {  # seal <repo> — commit the base and make it the merge base
     git -C "$1" add -A
     git -C "$1" commit -qm base
@@ -324,6 +333,74 @@ titled "$R" Q1 "$Q922T" ../development/maintaining-backlog.md
 titled "$R" Q2 "$Q987T" ../development/maintaining-backlog.md
 seal "$R"
 expect 0 "$R" "rule 13 control: a pair already at the base is not this branch's"
+
+# --- rule 14: a row's links resolve for MkDocs ----------------------------
+#
+# The published `/dev/queue/` page and every item page live in `docs/queue/`,
+# so MkDocs resolves their links from `queue/` inside `docs/`. A target with
+# enough `../` to leave `docs/` and point back into it is one MkDocs cannot
+# serve, and `mkdocs --strict` aborts on it -- three checks went red on one
+# such target in #1839 after `make check` twice and `make docs-gates` once, all
+# structurally blind because no local gate builds the site (Q1054).
+
+R="$TMP/r14"; newrepo "$R"
+item "$R" Q1 "docs" "../../docs/development/thing.md"
+seal "$R"
+expect 1 "$R" "rule 14: a target escaping docs/ and re-entering fails" "rule 14: Q1"
+# The reason names the fix, so the reader rewrites rather than diagnoses.
+# shellcheck disable=SC2016  # backticks as markdown code spans, as printed.
+if grep -q -- '`../development/thing.md`' "$TMP/out"; then
+    ok "rule 14: the reason names the store-relative rewrite"
+else
+    bad "rule 14: the reason names the store-relative rewrite"
+fi
+
+# The store-relative form is the intended exit, so it must actually clear it.
+item "$R" Q1 "docs" "../development/thing.md"
+git -C "$R" commit -qam "write the target relative to the store"
+expect 0 "$R" "rule 14: the store-relative target clears it"
+
+# An anchor is carried into the suggestion rather than dropped: a target
+# routinely names a section, and a fix that loses it is a second edit.
+R="$TMP/r14-anchor"; newrepo "$R"
+item "$R" Q1 "docs" "../../docs/development/thing.md#a-section"
+seal "$R"
+expect 1 "$R" "rule 14: an anchored target still fails" "rule 14: Q1"
+# shellcheck disable=SC2016  # backticks as markdown code spans, as printed.
+if grep -q -- '`../development/thing.md#a-section`' "$TMP/out"; then
+    ok "rule 14: the suggestion keeps the anchor"
+else
+    bad "rule 14: the suggestion keeps the anchor"
+fi
+
+# The controls are the whole point of the rule's shape. A `../../` target that
+# leaves docs/ and STAYS out is the ordinary case -- five shipped in one wave --
+# and source_links.py rewrites each into a repo_url blob URL. A rule banning
+# `../../` would redden all of them.
+R="$TMP/r14-out"; newrepo "$R"
+item "$R" Q1 "docs" "../../scripts/go/coverage.sh"
+item "$R" Q2 "docs" "../../.mdreflow.yaml"
+item "$R" Q3 "docs" "../../.github/workflows/dependabot-go-sync.yml"
+item "$R" Q4 "docs" "../development/website.md"
+item "$R" Q5 "docs" "Q9.md"
+seal "$R"
+expect 0 "$R" "rule 14 control: a target that escapes docs/ and stays out passes"
+
+# The item page publishes on `dev` too, so a prose link breaks the build from
+# the same directory. Covering only `target:` would leave the next escaping
+# link to CI, which is the failure this rule exists to move.
+R="$TMP/r14-note"; newrepo "$R"
+noted "$R" Q1 "See [the workspaces doc](../../docs/development/thing.md) for why."
+seal "$R"
+expect 1 "$R" "rule 14: an escaping link in the notes fails" "rule 14: Q1"
+
+# A path in a code span is not a link, so the rule must not read one. Without
+# this the regex could be a bare path match and the suite would not notice.
+R="$TMP/r14-span"; newrepo "$R"
+# shellcheck disable=SC2016  # the backticks are the code span under test.
+noted "$R" Q1 'The old target read `../../docs/development/thing.md`, which broke.'
+seal "$R"
+expect 0 "$R" "rule 14 control: a path in a code span is not a link"
 
 if (( fail )); then
     printf '\ncheck-queue-rules-test: FAILED\n'
