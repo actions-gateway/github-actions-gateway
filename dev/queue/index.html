@@ -2653,7 +2653,8 @@ With no network, <code>--no-pr-check</code> hands out the top item and says noth
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
 <strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.8-gate</code> (blocks the Release 1.8 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>1.9-gate</code> (blocks the Release 1.9 tag, the <a href="../plan/release-ladder/">Rule 4b overlap release</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
-<strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)</p>
+<strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)<br />
+<strong>Ranks:</strong> <code>make queue-rank ARGS="--after &lt;rank&gt; --before &lt;rank&gt;"</code> (also <code>--head</code> / <code>--tail</code>): it warns when the key it mints is one the store already holds (<a href="../development/maintaining-backlog/#mint-the-rank-dont-write-one">why a tie is legal</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.
 It exits unmeasurable rather than passing when that happens, which is how this was caught.</p>
 <p>The label list is closed: <code>check-queue-rules.sh</code> fails an item carrying a label this page does not declare.
@@ -3094,14 +3095,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The ~12 KiB figure on four marketing surfaces comes from <code>mem_test.go</code>, which imports classic <code>agentpool</code>/<code>listener</code>, never …</td>
-</tr>
-<tr>
-<td><a href="Q728/">Q728</a></td>
-<td><a href="../development/documentation-standards/">Let pin-bearing docs cite a third-party version</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>check-release-pins.sh</code> reads every bare <code>X.Y.Z</code> in its five pin files as a GAG pin, so <code>README.md</code> cannot name the ARC version a …</td>
 </tr>
 <tr>
 <td><a href="Q568/">Q568</a></td>
@@ -3840,14 +3833,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>scripts/docs/rank-vectors-test.sh</code> came out of <code>karlkfi/claude-skills</code> in <code>bbc2578f5</code>, beside the four files …</td>
 </tr>
 <tr>
-<td><a href="Q1096/">Q1096</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh">Rank-collision signal is gone from this repo's allocation path</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Before the Q956 re-vendor, <code>queue.py lint</code> noted every pair of items sharing a rank: <code>shares rank X with Y; order falls back to id</code>.</td>
-</tr>
-<tr>
 <td><a href="Q1063/">Q1063</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Migrate the ctrl.Result{Requeue: true} returns off the deprecated field</a></td>
 <td><code>debt</code></td>
@@ -3964,7 +3949,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="../getting-started/">Rotation section is v1-only while the page recommends v2</a></td>
 <td><code>docs</code> <code>bug</code></td>
 <td>🔲</td>
-<td>S</td>
+<td>M</td>
 <td><code>docs/getting-started.md</code> § Rotating GitHub App Credentials is written entirely against the v1 API: it follows the <code>v1-gateway</code> block …</td>
 </tr>
 <tr>
@@ -4022,14 +4007,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The test sets <code>EvictionRerunWindow: 50ms</code> and <code>EvictionRerunRetryInterval: 5ms</code>, drives <code>handleEviction</code> against a real <code>httptest.Server</code> …</td>
-</tr>
-<tr>
-<td><a href="Q1002/">Q1002</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-release-notes.sh">The release notes' commit count is hand-written and goes stale</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>docs/releases/v1.6.0.md</code> opens its "Everything since" section with a commit count that no tool derives.</td>
 </tr>
 <tr>
 <td><a href="Q1016/">Q1016</a></td>

@@ -2597,6 +2597,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mint-the-rank-dont-write-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mint the rank, don't write one
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#isolated-commits-and-what-replaced-them" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2727,6 +2738,16 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   An audit row inheriting an unverified premise is the sharpest case, but the rule is general — <a href="#a-rows-asserted-defect-is-a-claim-not-a-finding">what a row can be wrong about, and what each mistake cost</a>.</li>
 <li><strong>The isolated-commit rule is gone with the table it protected.</strong> A backlog edit no longer has to be its own commit, because the cost it was avoiding was a rebase conflict on one contended file, and one file per item removes it at the source (<a href="#isolated-commits-and-what-replaced-them">what it was, and what replaced it</a>).</li>
 </ul>
+<h2 id="mint-the-rank-dont-write-one">Mint the rank, don't write one<a class="headerlink" href="#mint-the-rank-dont-write-one" title="Permanent link">&para;</a></h2>
+<p>An id comes from <code>make queue-id</code>; the rank is the other half, and until Q1096 nothing on the path a session takes ever offered to mint one.
+So ranks were hand-written, and base-36 order keys are not something to eyeball: 33 rows shared a rank at <code>25edfb0c4</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-rank<span class="w"> </span><span class="nv">ARGS</span><span class="o">=</span><span class="s2">"--after b1c --before b1f"</span><span class="w">   </span><span class="c1"># also --head / --tail</span>
+</code></pre></div>
+<p>Two rows sharing a rank is <strong>legal</strong>: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py"><code>Item.sort_key</code></a> breaks the tie by id and both stay adjacent.
+So this is not a defect being caught, and <code>queue-lint</code> deliberately says nothing about it.
+What the mint adds is the one thing the filer cannot see: it warns when the key it just produced is one the store already holds, to the only party who can still choose differently.</p>
+<p>Bounds do not pin the gap they look like they pin.
+<code>--after b1c --before b1f</code> mints a key between those two <em>values</em>, whatever has since landed there, so the warning is the check and the bounds are not.</p>
 <h2 id="isolated-commits-and-what-replaced-them">Isolated commits, and what replaced them<a class="headerlink" href="#isolated-commits-and-what-replaced-them" title="Permanent link">&para;</a></h2>
 <p><strong>The rule was: a commit touching <code>docs/STATUS.md</code> touches nothing else.</strong> Not "no code" — nothing.
 Two gates enforced it, a pre-commit hook reading the index and <code>check-status-isolation.sh</code> reading the branch's commits, because the hook was structurally blind to an <code>--amend</code> onto a code commit (Q652).</p>
@@ -2829,7 +2850,7 @@ The discriminator is whether the row's evidence still describes its defect, and 
 Every one satisfied the lint — a semantic duplicate is a well-formed row — and every one was filed mid-task, as a side effect of other work, exactly when the doc carrying the rule was not in context.
 A rule that fails at the same seam three times wants a mechanism.</p>
 <p><code>make queue-id</code> is the mechanism, because it is the one chokepoint every filed row passes through, and it takes the title:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">'`doc-links` never reads a new doc until it is staged'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">'`doc-links` never reads a new doc until it is staged'</span>
 </code></pre></div>
 <p>Single-quote it: these titles are full of backticks, which double quotes would hand to the shell as command substitution.
 A title carrying an apostrophe as well is easier to pass straight to <code>scripts/docs/alloc-queue-id.sh</code>, which takes it as a plain argument.</p>
@@ -2907,7 +2928,7 @@ Notes cells are deliberately not matched: folding a 250-character Notes cell int
 <h3 id="whether-it-is-noisy-enough-to-ignore">Whether it is noisy enough to ignore<a class="headerlink" href="#whether-it-is-noisy-enough-to-ignore" title="Permanent link">&para;</a></h3>
 <p>An advisory that fires constantly is worse than none, so the thresholds are measured rather than asserted.
 <code>scripts/docs/find-duplicate-rows.sh --audit</code> runs every shipped row back through the same scoring path the search uses, and prints what flags:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/docs/find-duplicate-rows.sh<span class="w"> </span>--audit
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/docs/find-duplicate-rows.sh<span class="w"> </span>--audit
 </code></pre></div>
 <p><strong>Roughly one row in five surfaces a candidate when filed, and every pair it flags is topically adjacent rather than a nonsense match.</strong> The snapshot behind that, on 2026-08-04 (72 Queue + 31 Deferred + 15 Flake-watch rows): 11 flagged pairs out of 6,903.
 The rate held across every backlog state this was measured in — the Queue turns over faster than any fixed count survives, which is why the figure is a dated instance and <code>--audit</code> is the live answer.
@@ -2924,7 +2945,7 @@ One file per item retires both the contention and the driver.
 Two sessions filing different items write different paths and git has nothing to reconcile, and two editing the <em>same</em> item have a genuine disagreement that must surface as a conflict rather than be resolved by ID behind anyone's back.
 Adding <code>docs/queue/**</code> to <code>.gitattributes</code> is the helpful-looking move that would rebuild the problem the store exists to remove.</p>
 <p><strong>One-time setup, per clone:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>merge-driver
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>merge-driver
 </code></pre></div>
 <p><code>.gitattributes</code> already routes each file to its driver, but git deliberately refuses to let a tracked file define a driver's <em>command</em> — that would be remote code execution on clone — so the config half is per-clone and opt-in.
 <strong>Nothing requires you to install it:</strong> until you do, the attribute names an undefined driver and git silently uses its built-in three-way merge, which is exactly the pre-driver behaviour.
@@ -2970,7 +2991,7 @@ None is required: until you run it the <code>.gitattributes</code> lines name un
 <h2 id="verifying-a-backlog-only-change-run-the-subset-push-now">Verifying a backlog-only change: run the subset, push now<a class="headerlink" href="#verifying-a-backlog-only-change-run-the-subset-push-now" title="Permanent link">&para;</a></h2>
 <p>A backlog-only change cannot fail most of <code>make check</code>, and the full gate takes ~6 minutes.
 Run the subset instead:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>queue-gates
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>queue-gates
 </code></pre></div>
 <p>That is the complete set a <code>docs/queue/</code>-only diff can fail, and every member is also in <code>make check</code>, so it is a strict subset and never a second opinion.
 CI runs the full gate on the pushed branch regardless.</p>
@@ -3084,7 +3105,7 @@ The second case is the worse one, because the branch ends up changing nothing at
 Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded the gate subset passing on the damaged tree even though both lost rows carried it.
 That tree was repaired before it was ever committed, so which of the two accounts of rule 8 applies there is no longer measurable.</p>
 <p><strong>So reconcile the row set, not the markers.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/reconcile-queue-rows.sh"><code>reconcile-queue-rows.sh</code></a> does it, and needs no count you memorised before the rebase started:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>queue-reconcile
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>queue-reconcile
 </code></pre></div>
 <p>Run it while the conflict is still open — before <code>git rebase --continue</code> or <code>git commit</code> — or immediately after.
 It names every item that left your row set and every item the other side has that you do not, and says which of them the two sides account for: an item is accounted for when the side that no longer has it is the side that deleted it.
@@ -3308,8 +3329,8 @@ Tune per flake — these are floors, not ceilings.</p>
 <p>Soak is counted in <strong>runs, not calendar days</strong>: what proves a flake dead is the spec being <em>exercised</em> green, and calendar time is only a proxy for that — one that breaks whenever merge velocity shifts or the spec is path-gated and runs rarely.
 Counting runs measures the thing directly and never needs re-tuning to velocity; the recurrences seen here (Q300, Q291) surfaced within a few dozen runs, inside even the lower threshold.
 Count green runs of the covering workflow since the fix's merge date:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>&lt;name&gt;.yml<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--status<span class="w"> </span>success<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--created<span class="w"> </span><span class="s1">'&gt;=YYYY-MM-DD'</span><span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'length'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>&lt;name&gt;.yml<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--status<span class="w"> </span>success<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--created<span class="w"> </span><span class="s1">'&gt;=YYYY-MM-DD'</span><span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'length'</span>
 </code></pre></div>
 <p>A run that failed on an <em>unrelated</em> flake is excluded, so this undercounts slightly — conservative, which is what we want.
 One thing run-count can't see: a flake suspected to be <strong>time-correlated</strong> (nightly-load or API-rate-limit windows) should also sit through a few day/night cycles before graduating — judgment, not a fixed number.</p>

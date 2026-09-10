@@ -2675,6 +2675,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#naming-that-version-on-a-pin-bearing-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming that version on a pin-bearing page
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-counts-as-upstream" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3113,6 +3124,21 @@ All four were wrong:</p>
 </table>
 <p>Q594 is the fifth, and the one caught in time: it asserted that <code>plan-hygiene.yml</code>'s <code>**.go</code> filter matched no Go file.
 Running the pinned action measured the opposite, so no fix was needed, and what landed instead is a compliant version of the finding (<a href="../testing/#where-a-globstar-works-in-a-filter-glob">testing.md § Where a globstar works in a filter glob</a>).</p>
+<h3 id="naming-that-version-on-a-pin-bearing-page">Naming that version on a pin-bearing page<a class="headerlink" href="#naming-that-version-on-a-pin-bearing-page" title="Permanent link">&para;</a></h3>
+<p>Five pages are read by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a>: <code>README.md</code>, <code>docs/index.md</code>, and <code>install.md</code>, <code>upgrade.md</code>, <code>gitops.md</code> under <code>docs/operations/</code>.
+On those it asserts that <em>every</em> release-version literal names the current release.
+That is only tractable because their noise floor is tiny, so a third-party version written plainly there used to read as a stale pin and fail the gate.
+It is why the README's ARC stamp cited a commit SHA and no version.</p>
+<p>Write the project's name immediately before the version and the gate reads it as attribution rather than a pin (Q728):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ARC-side claims were re-read on 2026-08-12, against the <span class="sb">`gha-runner-scale-set`</span> chart at ARC 0.14.2.
+</code></pre></div>
+<p>Two properties worth knowing before relying on it.
+The name has to sit <strong>immediately</strong> before the version, so one attributed version leaves every other literal on that line still checked.
+The exemption is not a per-line off switch.
+And the recognised names are a short list in <code>release_thirdparty_projects_regexp</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>); adding one is a deliberate act, because each is a hole in a gate whose whole tractability rests on that small noise floor.</p>
+<p>The attribution is visible prose on purpose.
+An HTML comment would be invisible to <code>verify-published-docs.sh</code>, which scans the rendered page and drops comment text while keeping the version beside it, so the source gate would skip what the published-site gate still flagged.
+Those two share one extractor precisely so that cannot happen.</p>
 <h3 id="what-counts-as-upstream">What counts as upstream<a class="headerlink" href="#what-counts-as-upstream" title="Permanent link">&para;</a></h3>
 <p>Anything whose behavior can change with no commit in this repo: a third-party library, a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary, <strong>or a Claude Code hook, plugin, or harness decision</strong> (what workspace-guard denies, which paths are exempt, what a slash command does).
 The test is whether the sentence could go false while <code>make check</code> stays green and nobody here touched anything.</p>
@@ -3163,10 +3189,10 @@ The second names the input as well as the version, because the answer depended o
 </blockquote>
 <h3 id="in-code-comments">In code comments<a class="headerlink" href="#in-code-comments" title="Permanent link">&para;</a></h3>
 <p>Comments here are terse and mechanism-focused, so the citation is a parenthetical rather than a paragraph: the version and what was observed, inside the clause that makes the claim.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// Neither project records through that generation today — measured live for both</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">// (CA v1.36.1, Karpenter v1.14.0: LastTimestamp set, EventTime null) — but nothing</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// pins them to the legacy one, and the window is what keeps a future migration from</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">// reintroducing the accident.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Neither project records through that generation today — measured live for both</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1">// (CA v1.36.1, Karpenter v1.14.0: LastTimestamp set, EventTime null) — but nothing</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1">// pins them to the legacy one, and the window is what keeps a future migration from</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1">// reintroducing the accident.</span>
 </code></pre></div>
 <p>From <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/autoscaler_verdict.go"><code>autoscaler_verdict.go</code></a>.
 When the measurement needs more than a clause, it goes in <code>docs/</code> and the comment links there.
@@ -3288,7 +3314,7 @@ A one-sentence edit is then a one-line diff, so prose review stops being a re-wr
 That payoff is large here: 263 non-vendored Markdown files carry roughly 82,000 lines, and almost every session edits some of them.</p>
 <p>Do not place the breaks by hand.
 <a href="https://github.com/jbeda/mdreflow">mdreflow</a> is vendored in <code>tools/</code> at a pinned version and does it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>md-reflow
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>md-reflow
 </code></pre></div>
 <p><code>make md-reflow-check</code> reports what is unformatted without writing, <code>make md-reflow-diff</code> prints the change, and <code>make md-reflow-explain</code> names every paragraph the formatter declines, where it is, and why.
 The check is in <code>make check</code> and costs about a second for the whole tree.
@@ -3310,11 +3336,11 @@ A hand-derived count could not see the second group, because nothing named it.</
 The set is a property of the pinned version, so read it off <code>tools/go.mod</code> rather than off this page: mdreflow carries twelve reason codes at v0.3.0, and three fire on this tree, measured 2026-08-18.
 They are <code>raw-html-decl-opener</code>, <code>deep-nesting</code> and <code>link-ref-def-shape</code>; the link guard below is a fourth, <code>possible-link-ref-def</code>, which no paragraph here currently trips.
 The one an author must not fight is the link guard: moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Control plane (GMC rolls to
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rc.6, [self-hosted] ready). Second sentence.       → reflows
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>[t](/a
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>b) here. Second one.                               → skipped
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Control plane (GMC rolls to
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rc.6, [self-hosted] ready). Second sentence.       → reflows
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>[t](/a
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>b) here. Second one.                               → skipped
 </code></pre></div>
 <p>Do not hand-wrap around it.
 A paragraph the formatter leaves alone is correctly formatted, and hand-joining to force one through is how a link ends up straddling a break in the first place.</p>
@@ -3322,17 +3348,17 @@ A paragraph the formatter leaves alone is correctly formatted, and hand-joining 
 Both are the segmenter not seeing a sentence boundary, so no break is offered, the rest of the paragraph reflows normally, and <code>--explain</code> has nothing to report.
 There were three until v0.3.0, which started a new line for a sentence opening with inline code or emphasis where v0.1.7 had joined it onto the sentence before.</p>
 <p>The first is terminal punctuation sitting inside an inline span:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>This is a [sentence.](https://example.com) Next one.   → stays joined
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>And **bold.** After bold.                              → stays joined
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>And `code.` After code.                                → stays joined
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>And **bold**. After bold.                              → splits
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>This is a [sentence.](https://example.com) Next one.   → stays joined
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>And **bold.** After bold.                              → stays joined
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>And `code.` After code.                                → stays joined
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>And **bold**. After bold.                              → splits
 </code></pre></div>
 <p>Link text, bold, italic and inline code all behave that way, and moving the punctuation outside the closing delimiter is what makes the break appear.
 That one is a defect rather than a design choice, filed upstream as <a href="https://github.com/jbeda/mdreflow/issues/2">jbeda/mdreflow#2</a> against the link spelling and still open; the other three spellings are the same bug.</p>
 <p>The second is by design: a new sentence must open with an uppercase letter, a digit, a quote or a bracket, or with inline code or emphasis the parse confirms.
 A sentence opening with a bare lowercase tool name qualifies as none of those, so it stays on the line above.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>One sentence here. mdreflow refuses it.                → stays joined
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>One sentence here. The formatter refuses it.           → splits
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>One sentence here. mdreflow refuses it.                → stays joined
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>One sentence here. The formatter refuses it.           → splits
 </code></pre></div>
 <p>Both measured 2026-08-18 on the pinned v0.3.0, and both are shapes <code>--explain</code> cannot account for, alongside the admonition bodies above.
 So a line carrying two sentences in an otherwise sentence-per-line paragraph is likelier to be one of these than a hand-wrap that slipped past the gate.

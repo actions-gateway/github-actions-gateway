@@ -2607,6 +2607,14 @@ So an operator who followed the recommendation and then needs to rotate a compro
 Not introduced by Q958; surfaced by its review, which asked what the two skipped rotation blocks actually name.</p>
 <p><strong>Q958 narrowed the blast radius rather than fixing it.</strong> <code>TestGettingStarted_SkipBlockNames</code> now pins the doc's <code>deploy/&lt;name&gt;</code> operands to <code>agcnames.ControllerName</code>, so the v1 name cannot silently drift, but that certifies the v1 name specifically, and a v2 rotation path would need a different assertion (the name is per gateway, so there is no constant to pin).
 Deciding what the section should say comes first: either scope it explicitly to v1 and add a v2 sibling, or rewrite it for v2 with v1 as the note.</p>
+<p><strong>The harness decides the shape, and the row did not say so.</strong> Measured 2026-09-10.
+<code>TestGettingStarted_SkipBlockNames</code> (<code>cmd/gmc/internal/controller/integration/getting_started_test.go:183</code>) requires <em>every</em> <code>deploy/&lt;name&gt;</code> operand in <em>every</em> <code>mode=skip</code> block to equal <code>agcnames.ControllerName</code>, the v1 name, and holds a floor of 3 such operands (<code>skippedDeployRefFloor</code>).
+Both rotation blocks that name a Deployment are <code>mode=skip</code>, so <strong>either</strong> repair fails that test: rewriting for v2 changes the operands, and adding a v2 sibling adds new ones.
+Whichever shape is chosen, the test changes with it, which is what makes this M rather than S.</p>
+<p><strong>The row said there is no constant to pin, and there is one.</strong> <code>agcResourceSuffix = "-agc"</code> at <code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go:61</code> is package-private, but <code>cmd/gmc/internal/controller/integration</code> sits under the same <code>cmd/gmc/internal/</code> tree, so exporting it is importable there and is <strong>not</strong> an API-surface change: nothing under <code>internal/</code> is on the wire or in <code>api/</code>, so <a href="../../development/api-review/">api-review.md</a> does not bind.
+That is the cheap route: export the suffix, and assert a skipped block's operand is either <code>agcnames.ControllerName</code> or the page's own v2 gateway name joined to that suffix.
+The alternative, moving the derivation to <code>api/apinames</code>, <em>is</em> an API change and needs the review; prefer the first unless something else wants the name too.</p>
+<p>Do not dodge the test by writing the v2 rollout as a label selector (<code>kubectl rollout status deploy -l app=&lt;gateway&gt;-agc</code>) — that passes only because <code>deployRefRE</code> stops matching, which is the floor assertion's exact failure mode.</p>
 
 
 
