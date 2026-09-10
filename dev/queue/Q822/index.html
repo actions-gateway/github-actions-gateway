@@ -2596,6 +2596,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#a-fourth-ci-sighting-2026-09-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fourth CI sighting, 2026-09-10
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2636,6 +2647,22 @@ With main's own push of 301418a29 (2026-09-05, <em>a side that adds a whole tabl
 Every invocation of <code>scripts/docs/git-merge-script-index.sh</code> rebuilds <code>.build/mergedriver</code> with <code>go build -o</code> into one shared path (<code>scripts/lib/merge-driver-common.sh</code>), discards the build's output, and on a failed build falls through to a plain textual merge kept as-is; <code>git-merge-plan-index-test</code> shares that file, and on Linux writing an executable that is running is an error the wrapper would swallow.
 <strong>Unverified</strong>: six rounds of the two suites three-wide locally (load 38 on 18 cores) produced no failure, and macOS does not raise that error, so the local negative is weak.
 The cap does not address this mechanism, and the cheap discriminator is to stop discarding the build's stderr and build once per process tree (a <code>flock</code> on the output path, or a prebuilt binary the suites share), then watch the queue.</p>
+<h2 id="a-fourth-ci-sighting-2026-09-10">A fourth CI sighting, 2026-09-10<a class="headerlink" href="#a-fourth-ci-sighting-2026-09-10" title="Permanent link">&para;</a></h2>
+<p><code>git-merge-script-index-test</code> failed again in the <code>shellcheck</code> job of <code>unit-test.yml</code>, on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1884">#1884</a> (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34462200647">run 34462200647</a>), case <em>a one-sided row edit is kept alongside the other side's add</em>.
+The driver reported <code>the driver could not be built; left ordinary conflict markers in scripts/README.md</code>, which is the swallowed-build path this row names.</p>
+<p>That is a <strong>fourth distinct assertion</strong> from this one suite, after <em>a side that adds a whole table is refused</em> (2026-09-05, <code>main</code>), <em>a real git rebase resolves adjacent adds through .gitattributes</em> (2026-09-07, the #1862 merge group) and the 2026-09-04 local case.
+Four assertions across four runs is the same argument this row already makes, with one more point on it: the failing case moves, so the driver is not what is failing.</p>
+<p>Two readings narrow the mechanism further:</p>
+<ul>
+<li><strong>Cases either side of it passed in the same suite run.</strong> <em>adjacent adds from both sides both survive</em> and <em>a row deleted on one side stays deleted</em> ran before it, and five cases ran green after.
+  Each invocation rebuilds the shared binary, so a build that is broken would fail all of them; exactly one attempt failed.</li>
+<li><strong>It does not reproduce locally.</strong> <code>make scripts-test</code> was green twice on the identical tree, once inside <code>make check</code> and once standalone.</li>
+</ul>
+<p>The PR carried no Go and no shell: its diff is <code>Makefile</code>, <code>scripts/README.md</code>, two docs and three deleted rows.
+It edits <code>scripts/README.md</code>, which is this driver's own subject, so the suite is path-gated on and the sighting will recur on any PR touching <code>scripts/</code> or the <code>Makefile</code>.</p>
+<p>It cost a CI cycle rather than a queue eviction this time, because the failure landed on the PR's own run rather than in the merge group.
+<strong>Confirmed on rerun</strong>: <code>gh run rerun --failed</code> on the same head, with no code change, took the <code>shellcheck</code> job green in 4m8s (job 102827685450), so this sighting meets the repo's own definition of a flake rather than resting on the local negative alone.
+The discriminator this row already prescribes — stop discarding the build's stderr, and build once per process tree — is what would turn the next one into a diagnosis instead of a fifth data point.</p>
 
 
 
