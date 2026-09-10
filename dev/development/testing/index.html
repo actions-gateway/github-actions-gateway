@@ -4965,12 +4965,25 @@ What stops a block quietly dropping out of coverage instead is a per-file floor 
 <td>the blocks are <strong>executed</strong> against a real apiserver</td>
 <td>the GMC envtest integration suite</td>
 </tr>
+<tr>
+<td><code>TestGettingStarted_SkipBlockNames</code></td>
+<td>a <code>mode=skip</code> block still names the AGC Deployment the tree owns</td>
+<td>the GMC envtest integration suite</td>
+</tr>
 </tbody>
 </table>
 <p>The venue is the existing GMC envtest suite rather than a kind cluster of its own, because that suite already stands up every CRD, the validating webhooks, the v2 conversion webhook and the CEL guardrails, so the walk costs <strong>about a second on a job that is already running</strong> against a median 14 min for the e2e lane (n=11 runs that actually ran, 2.9-23.8 min), which is merge-group-only anyway (Q675).
 Teardown is free there: the objects land in the tenant namespace the doc's own first step creates, one <code>t.Cleanup</code> retires them, and the apiserver is destroyed at suite end, so the walk is safe to run twice by construction.
 The test reads the doc and the parser through committed <code>testdata/</code> symlinks, because <a href="#the-out-of-module-test-read-gate">a cached test's reads outside its module root are invisible to the test cache</a> and a subprocess's reads never reach the testlog at all.</p>
-<p><strong>What it cannot settle is anything needing a kubelet.</strong> The two credential-rotation blocks that run <code>kubectl rollout status</code> and <code>kubectl logs</code> are declared <code>mode=skip</code> in the page with that reason; Q958 is the follow-on, and the question it has to answer first is whether substituting a fake GitHub for the doc's <code>githubURL</code> still counts as executing the doc.</p>
+<p><strong>What it cannot settle is anything needing a kubelet.</strong> The two credential-rotation blocks that run <code>kubectl rollout status</code> and <code>kubectl logs</code> are declared <code>mode=skip</code> in the page with that reason, and they stay skipped: Q958 priced a venue with a kubelet and declined it.
+The kubelet is not the whole price.
+The page's own Secret block supplies a placeholder private key that does not PEM-decode, and <code>buildTokenProvider</code> parses it eagerly at AGC startup, so the pod crash-loops and the rollout never completes in a kind cluster either.
+Reaching the two blocks means the gate rewriting a block first, and a walk over text the gate rewrote is weaker evidence than the doc's own bytes.
+Set against that, what the blocks name from the tree needs no kubelet to check.
+<code>TestGettingStarted_SkipBlockNames</code> pins the AGC Deployment name against <code>agcnames.ControllerName</code>, the constant the GMC builds that Deployment from.
+It does not pin the log strings <code>rotate-verify-logs</code> tells the operator to look for: those are inline literals in <code>cmd/agc/internal/token/manager.go</code> with no constant to compare against, and the page named one the AGC has never logged (<code>token refresh successful</code>) until Q958 corrected it to <code>token ready</code>.
+A kubelet would not have caught that either, since <code>kubectl logs --tail=20</code> asserts nothing about content.
+What is left for a kubelet to settle is narrower still: <code>credential_rotation_test.go</code> already drives the whole rotation in this same suite (patch <code>gitHubAppRef</code>, watch the <code>actions-gateway/github-app-secret</code> pod-template annotation flip), so the residual is whether a kubelet rolls a pod, which is Kubernetes' behaviour rather than this repo's.</p>
 <p>Its own failure mode is the one it exists to catch, so <code>scripts/docs/doc-blocks-test.sh</code> asserts a known-bad document goes <strong>red</strong> for each rule, paired with the good document that must stay green: a parser that stopped matching the annotation would report every page clean.</p>
 <p>It earned its keep on the first run.
 Both Step 4 examples were rejected with <code>priorityClassName "runner-critical" is not in the platform allowlist</code>: the chart ships <code>allowedPriorityClasses</code> empty, and the quickstart named tier classes it never told the operator to allowlist, so the page could not be followed to the end.</p>

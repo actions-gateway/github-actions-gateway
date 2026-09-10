@@ -3130,7 +3130,8 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 </ol>
 <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Look for: "token refresh successful" or no token refresh errors</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Look for: "token ready", logged on every refresh. A failure reads</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># "token fetch failed; retrying after backoff".</span>
 </code></pre></div>
 <ol>
 <li><strong>Delete the old Secret</strong> once the rollout is confirmed healthy:</li>

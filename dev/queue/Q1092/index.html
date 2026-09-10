@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q958/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1092/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Reach the install doc's two kubelet-dependent blocks - GitHub Actions Gateway</title>
+        <title>Rotation section is v1-only while the page recommends v2 - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reach-the-install-docs-two-kubelet-dependent-blocks" class="md-skip">
+        <a href="#rotation-section-is-v1-only-while-the-page-recommends-v2" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Reach the install doc's two kubelet-dependent blocks
+              Rotation section is v1-only while the page recommends v2
             
           </span>
         </div>
@@ -2597,15 +2597,16 @@
   
 
 
-<h1 id="reach-the-install-docs-two-kubelet-dependent-blocks">Reach the install doc's two kubelet-dependent blocks<a class="headerlink" href="#reach-the-install-docs-two-kubelet-dependent-blocks" title="Permanent link">&para;</a></h1>
-<p><code>TestGettingStarted_Executable</code> walks nine of <code>docs/getting-started.md</code>'s fourteen fenced blocks against the GMC envtest apiserver, and <code>make getting-started-render-check</code> renders the tenth.
-Four are declared <code>mode=skip</code> in the page itself, each with its reason, and two of those are worth reaching: <code>rotate-rollout-status</code> and <code>rotate-verify-logs</code>, the credential-rotation steps that run <code>kubectl rollout status</code> and <code>kubectl logs</code> against the AGC Deployment.
-There is no kubelet in envtest, so nothing rolls and no pod logs: a venue limit rather than anything wrong with the page.</p>
-<p>The obvious venue is a kind cluster, and the reason this is <code>M</code> rather than <code>S</code> is that a kind cluster alone does not settle it: block <code>github-app-secret</code> supplies a placeholder private key, so the AGC never authenticates and the rollout the doc tells the operator to wait for never completes.
-Reaching these two means substituting <code>test/fakegithub</code> for the doc's <code>githubURL</code>, and that substitution is the question to answer before building anything: a walk over text the gate has rewritten is weaker evidence than the doc's own bytes, and it is not obvious the two blocks are worth buying at that price.
-Settle that first, then pick the venue.
-Measured 2026-08-21: the e2e lane runs a median 14 min (n=11, 2.9-23.8) and is merge-group-only (Q675), against about a second for the envtest walk on a job already running.</p>
-<p>The other two skips stay skipped and need no item: <code>crds-v2-release-asset</code> names a release asset that exists only after a tag, and <code>crds-v2-oci-render</code> pulls a remote OCI chart.</p>
+<h1 id="rotation-section-is-v1-only-while-the-page-recommends-v2">Rotation section is v1-only while the page recommends v2<a class="headerlink" href="#rotation-section-is-v1-only-while-the-page-recommends-v2" title="Permanent link">&para;</a></h1>
+<p><code>docs/getting-started.md</code> § Rotating GitHub App Credentials is written entirely against the v1 API: it follows the <code>v1-gateway</code> block, patches <code>spec.gitHubAppRef</code> on an <code>actions-gateway.github.com/v1alpha1</code> <code>ActionsGateway</code>, and addresses the AGC as <code>deploy/actions-gateway-controller</code>.
+That Deployment name is v1's.
+In v2 the AGC is named per gateway: <code>agcNameV2</code> is <code>ag.Name + agcResourceSuffix</code> (<code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go:72</code>), so a <code>team-a-gateway</code> tenant gets <code>team-a-gateway-agc</code> and the doc's <code>deploy/actions-gateway-controller</code> names nothing.</p>
+<p>The page calls v2 the recommended path in five places (lines 6, 16, 48, 85 and 151), including the § 4 heading itself ("Create your gateway and runner set (v2, recommended)") and line 6 ("The recommended shape for a new tenant is the <strong>v2 API</strong>").
+So an operator who followed the recommendation and then needs to rotate a compromised key is sent to steps that do not apply, and the first one that fails is <code>kubectl rollout status</code> against a Deployment that does not exist, during a credential compromise, which is the worst time to find out.</p>
+<p>Measured 2026-09-10 on <code>claude/q958-fdef07</code>.
+Not introduced by Q958; surfaced by its review, which asked what the two skipped rotation blocks actually name.</p>
+<p><strong>Q958 narrowed the blast radius rather than fixing it.</strong> <code>TestGettingStarted_SkipBlockNames</code> now pins the doc's <code>deploy/&lt;name&gt;</code> operands to <code>agcnames.ControllerName</code>, so the v1 name cannot silently drift, but that certifies the v1 name specifically, and a v2 rotation path would need a different assertion (the name is per gateway, so there is no constant to pin).
+Deciding what the section should say comes first: either scope it explicitly to v1 and add a v2 sibling, or rewrite it for v2 with v1 as the note.</p>
 
 
 
