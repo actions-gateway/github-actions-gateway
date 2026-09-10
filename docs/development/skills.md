@@ -127,6 +127,7 @@ So the fork ran one way, in the direction nobody here controls.
 **Re-vendored 2026-09-09 under Q956, which is what one-way drift costs when nothing asks.** The stale copies were missing behaviour the skills themselves cite by name — `queue.py`'s `CITATION_WINDOW` and `--citation-window`, `pr-mergeability-watch.py`'s `head_change` exit, `pr-requeue-eligible.py`'s `UNMEASURABLE` record — so a session following the `session-worker` contract here was following instructions about a tool it did not have.
 Three of the four came across as clean overwrites; `queue.py` did not, its fork and upstream having diverged past a patch, so it was merged three-way against the vendoring commit.
 What survives that merge is the open-PR check on `next` (Q990), and one comment: the rank-scheme paragraph in the module docstring, where upstream still asserts a second implementation of the algebra exists and its own `rank-vectors.tsv` says the Go queuestore was discarded.
+`claude-skills#489` is open against that paragraph as of 2026-09-10, so the disagreement is upstream's to settle and the fork ends when it lands.
 The rest of what the fork carried is gone from it.
 The cross-repo provenance stripped out of the comments, upstream has since removed itself.
 The stale-citation lookbehind (Q935) was carried here for three weeks and landed upstream as `claude-skills#488` on 2026-09-10, so this re-vendor takes upstream's copy of it and the edit stops being local at all — which is the vendoring model working, one round late.
