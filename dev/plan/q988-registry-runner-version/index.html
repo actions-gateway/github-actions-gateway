@@ -2673,7 +2673,7 @@
 
 <h1 id="q988-read-the-worker-runner-version-from-the-registry">Q988: read the worker runner version from the registry<a class="headerlink" href="#q988-read-the-worker-runner-version-from-the-registry" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: done 2026-09-07.</strong> Shipped in one PR; the two residuals are <a href="../../queue/Q1065/">Q1065</a> and <a href="../../queue/Q1066/">Q1066</a>.</p>
+<p><strong>Status: done 2026-09-07.</strong> Shipped in one PR; the two residuals are Q1065, since decided, and <a href="../../queue/Q1066/">Q1066</a>.</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
 <p>Make <code>RunnerVersionTooOld</code> verdict-bearing for a custom or digest-only worker image by reading the runner version out of the image in the registry, before any pod runs it (Q988; the row closes with this plan).</p>
@@ -2689,7 +2689,7 @@ Measured 2026-09-07 against <code>ghcr.io/actions/actions-runner:2.335.1</code> 
   That is once per digest per AGC process.</li>
 <li><strong>Reach is the AGC's egress policy's, not the feature's.</strong> By default <code>buildAGCNetworkPolicy</code> admits 443 with no <code>to:</code> restriction — the breadth <a href="../../design/05-security/#github-app-key-exfiltration-via-agc-apiserver-egress">05-security.md</a> records as the deliberate default — so any registry is reachable; an install that scopes it with <code>apiServerCIDRs</code> (Q145) closes the registry too, and <code>githubEgressFQDNs</code> lists no registry host, so an FQDN allowlist would not reopen even <code>ghcr.io</code> (whose address, <code>172.182.252.136</code> on 2026-09-07, sits in the <code>actions</code> and <code>packages</code> ranges of <code>api.github.com/meta</code>).
   An unreachable registry therefore has to be an ordinary outcome, not an incident: the tag verdict stands and the message says why.
-  Whether a scoped policy should admit a registry is <a href="../../queue/Q1065/">Q1065</a>.</li>
+  A scoped policy admits no registry, decided under Q1065 (<a href="../../design/05-security/#a-scoped-agc-egress-policy-carries-no-registry-allowance">05-security.md</a>).</li>
 <li><strong>Credentials are the pod template's.</strong> The AGC may <code>get</code> Secrets in its namespace and nothing else that could carry a pull credential: the tenant Role grants no read on ServiceAccounts, so the worker SA's <code>imagePullSecrets</code> are out of reach, and a node-identity registry (GKE/GAR, ECR) has no Secret at all.
   <code>podTemplate.spec.imagePullSecrets</code> is what the AGC can use, and what kubelet would use first.</li>
 </ul>
@@ -2740,7 +2740,7 @@ Measured 2026-09-07 against <code>ghcr.io/actions/actions-runner:2.335.1</code> 
 </tr>
 <tr>
 <td>Follow-up rows</td>
-<td>✅ <a href="../../queue/Q1065/">Q1065</a>, <a href="../../queue/Q1066/">Q1066</a></td>
+<td>✅ Q1065 (decided), <a href="../../queue/Q1066/">Q1066</a></td>
 </tr>
 </tbody>
 </table>

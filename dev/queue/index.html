@@ -2849,14 +2849,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>Admit</code> reserves before the scale-up rung refuses (Q717), so inside the reserve-to-release window a concurrent delivery reads an inflated …</td>
 </tr>
 <tr>
-<td><a href="Q1065/">Q1065</a></td>
-<td><a href="../design/05-security/#the-registry-read-behind-runnerversiontooold">Decide whether a scoped AGC egress policy should admit the registry read</a></td>
-<td><code>security</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) reaches the worker image's registry from the AGC pod over 443, so it works wherever …</td>
-</tr>
-<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
@@ -2929,14 +2921,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Phase 3 of <a href="../plan/merge-drivers-go/">merge-drivers-go.md</a>, and the reason the plan covers four drivers rather than three.</td>
 </tr>
 <tr>
-<td><a href="Q1045/">Q1045</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/find-duplicate-rows.sh">Two rows on one defect go unmatched when their titles barely overlap</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q922, Q924 and Q987 all described one defect, docs naming the deleted <code>lint-backlog.sh</code> as live.</td>
-</tr>
-<tr>
 <td><a href="Q372/">Q372</a></td>
 <td><a href="../plan/structural-debt-audit-2026-07/">Re-run the structural debt audit</a></td>
 <td><code>debt</code></td>
@@ -2961,28 +2945,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Blocked by <a href="Q539/">Q539</a>.</td>
 </tr>
 <tr>
-<td><a href="Q846/">Q846</a></td>
-<td><a href="../development/technical-debt/">A tooling issue is deduped at filing time, after the recommendation</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The <code>github-issue-filer</code> skill searches for duplicates when it files, so a "worth filing" said earlier has had no check at all.</td>
-</tr>
-<tr>
 <td><a href="Q738/">Q738</a></td>
 <td><a href="../development/testing/#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it">Local load harnesses cannot reach a 2-core runner's contention</a></td>
 <td><code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Measured across this family: Q596 2418 runs, Q703 240, Q803 5 at GOMAXPROCS=2, none reproducing a CI-only trigger.</td>
-</tr>
-<tr>
-<td><a href="Q832/">Q832</a></td>
-<td><a href="../roadmap/">Roadmap bullets lose sentence-per-line: mdreflow declines every <code>q:</code></a></td>
-<td><code>ci</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-13 on mdreflow v0.1.7: 20 markers, 20 declined paragraphs, all <code>raw-html-decl-opener</code>; 21/21 on 2026-08-12, so the pair …</td>
 </tr>
 <tr>
 <td><a href="Q682/">Q682</a></td>
@@ -3007,14 +2975,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Measured: of 38 local shell-kill targets only 2 carried a worktree anchor; the rest match every session (Q690 killed the <code>make check</code> …</td>
-</tr>
-<tr>
-<td><a href="Q701/">Q701</a></td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on">No doc records how to hold the scale-set poll loop out of its own poll</a></td>
-<td><code>tests</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two techniques, and picking wrong costs a session: <code>parkInPoll</code> (Q603) fails when the event under test wakes parked polls, as …</td>
 </tr>
 <tr>
 <td><a href="Q739/">Q739</a></td>
@@ -3225,28 +3185,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-14: <code>why-gag.md</code> called the Pending-reap re-run classic-only for the whole <code>v1.4.0</code> cycle after Q766 made it both.</td>
 </tr>
 <tr>
-<td><a href="Q775/">Q775</a></td>
-<td><a href="../development/parallel-dispatch/">A shipped Q-ID can be re-filed as an open row with no gate catching it</a></td>
-<td><code>ci</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A dispatcher filed Q766 while its worker filed-and-deleted the same row, so landing both would have re-opened shipped work.</td>
-</tr>
-<tr>
 <td><a href="Q734/">Q734</a></td>
 <td><a href="../development/website/#interface-rules-the-custom-layer-must-satisfy">Slate body text sits below the APCA floor, capping every muted token</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body …</td>
-</tr>
-<tr>
-<td><a href="Q1012/">Q1012</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh">Nothing checks that a make target named in docs exists</a></td>
-<td><code>ci</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make next-task</code> was taught by CLAUDE.md and had no rule behind it, so a session following the entrypoint the repo names ran `make -n …</td>
 </tr>
 <tr>
 <td><a href="Q735/">Q735</a></td>
@@ -3279,14 +3223,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (scripts/dogfood/validate-release.sh:510), so the e2e matrix leg runs <code>main</code>'s …</td>
-</tr>
-<tr>
-<td><a href="Q883/">Q883</a></td>
-<td><a href="../development/parallel-dispatch/">Read dispatched sessions from a marker, not the brief's wording</a></td>
-<td><code>debt</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>is_authored_prompt</code> keys on the <code>"You are "</code> prefix, which two wordings share by luck.</td>
 </tr>
 <tr>
 <td><a href="Q888/">Q888</a></td>
@@ -3745,28 +3681,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q865 gated one page, because widening it was a larger change than that row held.</td>
 </tr>
 <tr>
-<td><a href="Q913/">Q913</a></td>
-<td><a href="../development/testing/">A gate's failure path is the one path no green run exercises</a></td>
-<td><code>docs</code> <code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q871's checker waited on the child's exit status in two places, so a fake dying during startup deadlocked it.</td>
-</tr>
-<tr>
 <td><a href="Q934/">Q934</a></td>
 <td><a href="../development/parallel-dispatch/">Worker contention sweep false-positives on unrelated histories</a></td>
 <td><code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the contention sweep reads <code>origin/gh-pages</code> as …</td>
-</tr>
-<tr>
-<td><a href="Q937/">Q937</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">Prose can call a deleted row live; only plan README column 3 is gated</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Closing Q900 left <code>testing.md</code> saying "Q900 is measuring which way that actually falls", and no gate could see it.</td>
 </tr>
 <tr>
 <td><a href="Q993/">Q993</a></td>
@@ -3897,14 +3817,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Re-measured 2026-09-04 08:35 PDT</strong> on a quiet tree at <code>origin/main</code> (<code>f792d60c5</code>), <code>make cover-check</code> exit 0: <code>./cmd/probe</code> reports 81.6% …</td>
 </tr>
 <tr>
-<td><a href="Q975/">Q975</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-em-dash.sh">The em-dash ratchet strands connectives, and no gate checks the result</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>check-em-dash.sh</code> (Q654) ratchets density against a per-file baseline, so a file already over the rule may only lose em-dashes.</td>
-</tr>
-<tr>
 <td><a href="Q976/">Q976</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml">Repoint the dependabot docker ecosystem at the real Dockerfile</a></td>
 <td><code>debt</code> <code>security</code></td>
@@ -3953,14 +3865,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>promql-check</code> mirrors each alert in <code>prometheusrule.yaml</code> against the copy <code>observability-alerting.md</code> reproduces, and compares a typed …</td>
 </tr>
 <tr>
-<td><a href="Q997/">Q997</a></td>
-<td><a href="../development/documentation-standards/">Prose that counts a set goes stale on an insertion nothing checks</a></td>
-<td><code>debt</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>An insertion falsifies neighbouring prose asserting a property of the set <strong>without touching that prose</strong>.</td>
-</tr>
-<tr>
 <td><a href="Q1058/">Q1058</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/release-delta.sh">release-delta.sh still diffs docs/STATUS.md, so closed rows read (none)</a></td>
 <td><code>debt</code></td>
@@ -3986,7 +3890,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1077/">Q1077</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/workload.yaml">Preview scrape overrides the exporter's namespace label</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md">Re-render the preview screenshots now the namespace collision is fixed</a></td>
 <td><code>debt</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>

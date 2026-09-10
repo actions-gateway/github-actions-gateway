@@ -23,7 +23,7 @@
     
     
       
-        <title>Preview scrape overrides the exporter's namespace label - GitHub Actions Gateway</title>
+        <title>Re-render the preview screenshots now the namespace collision is fixed - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#preview-scrape-overrides-the-exporters-namespace-label" class="md-skip">
+        <a href="#re-render-the-preview-screenshots-now-the-namespace-collision-is-fixed" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Preview scrape overrides the exporter's namespace label
+              Re-render the preview screenshots now the namespace collision is fixed
             
           </span>
         </div>
@@ -2597,10 +2597,9 @@
   
 
 
-<h1 id="preview-scrape-overrides-the-exporters-namespace-label">Preview scrape overrides the exporter's namespace label<a class="headerlink" href="#preview-scrape-overrides-the-exporters-namespace-label" title="Permanent link">&para;</a></h1>
+<h1 id="re-render-the-preview-screenshots-now-the-namespace-collision-is-fixed">Re-render the preview screenshots now the namespace collision is fixed<a class="headerlink" href="#re-render-the-preview-screenshots-now-the-namespace-collision-is-fixed" title="Permanent link">&para;</a></h1>
 <p><code>exporter.py</code> fakes a two-tenant fleet by emitting explicit <code>namespace="team-a"</code> and <code>namespace="team-b"</code> labels from a single pod.
-The ServiceMonitor at <code>workload.yaml</code> sets no <code>honorLabels</code>, which defaults to <code>false</code>, so Prometheus resolves the collision in the scrape target's favour: the exposed label is renamed <code>exported_namespace</code> and <code>namespace</code> becomes the pod's own namespace, <code>team-a</code>, on every series.</p>
-<p>Every per-tenant panel in all four published screenshots is therefore single-tenant, and the images undersell the dashboards they document.</p>
+The ServiceMonitor at <code>workload.yaml</code> set no <code>honorLabels</code>, which defaults to <code>false</code>, so Prometheus resolved the collision in the scrape target's favour: the exposed label was renamed <code>exported_namespace</code> and <code>namespace</code> became the pod's own namespace, <code>team-a</code>, on every series.</p>
 <p>Measured 2026-09-07 against the live preview stack:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>count by (namespace) (actions_gateway_active_sessions)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  -&gt; [{namespace: team-a}]
@@ -2608,17 +2607,12 @@ The ServiceMonitor at <code>workload.yaml</code> sets no <code>honorLabels</code
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  -&gt; [{exported_namespace: team-a}, {exported_namespace: team-b}]
 </code></pre></div>
 <p>One series carried <code>exported_namespace="team-b"</code> beside <code>namespace="team-a"</code>, which is the collision itself in a single sample.</p>
-<p>The fix is <code>honorLabels: true</code> on the ServiceMonitor endpoint.
-That is right for the preview specifically and would be wrong in a real install: there the AGC runs one pod per tenant, so the target's <code>namespace</code> is the tenant's and the scrape default is what you want.
-The preview stands a fleet up from one pod, so only the exposed label carries the tenant.
-Re-render all four screenshots after the change, since every per-tenant panel moves.</p>
-<p><strong>Whoever runs the re-render: open the budget PNG and count the legend entries on both Row 5 panels.</strong> Eight expected on each, <code>team-a</code>/<code>team-b</code> against advertised plus the three rungs.
-They show four today only because this defect collapses both namespaces into one, so flipping <code>honorLabels</code> doubles them, and a panel that fits four may not fit eight.
-The labels are short (<code>team-a withheld: quota</code>, ~22 characters) so they probably fit, which is exactly what the security dashboard's webhook panel looked like before three of its six entries turned out to be clipped.
-If they clip, drop the redundant <code>withheld:</code>/<code>refused:</code> from the legend format; the panel titles already carry it, and it is a one-line change per panel that improves the legend either way.
-Raised by the Q969 session, which declined to pre-empt it on a green PR because the risk does not exist until this row lands.</p>
-<p>Spotted by the Q969 session while opening its render rather than trusting the harness's exit code, and confirmed here from the config and the query above.
-Related: Q1074, on the harness reporting success for a render nothing looked at.</p>
+<p><code>honorLabels: true</code> on the ServiceMonitor endpoint is the fix and has shipped.
+It is right for the preview specifically and would be wrong in a real install: there the AGC runs one pod per tenant, so the target's <code>namespace</code> is the tenant's and the scrape default is what you want, which is why the comment beside it says so.</p>
+<p><strong>What remains is the render.</strong> All four published screenshots were shot under the collision, so every per-tenant panel in them is single-tenant and the images undersell the dashboards they document.
+The fix does not reach a committed PNG.
+Re-run <code>render.sh</code> per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md">the preview README</a> and commit the four images, which needs the kind plus Prometheus Operator plus Grafana stack rather than a gate.
+Confirm the repair in the same run with the <code>count by (namespace)</code> query above: it must return both tenants.</p>
 
 
 

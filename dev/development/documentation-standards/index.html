@@ -2660,6 +2660,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Enforcing the em-dash rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#splitting-an-em-dash-sentence-must-not-strand-the-connective" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Splitting an em-dash sentence must not strand the connective
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2801,6 +2818,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#prose-that-counts-a-set-goes-stale-on-an-insertion-nothing-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prose that counts a set goes stale on an insertion nothing checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#conventions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2822,6 +2850,17 @@
   
     <nav class="md-nav" aria-label="Line breaks in prose: one sentence per line">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-two-pages-the-formatter-never-reaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two pages the formatter never reaches
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#what-stays-hard-wrapped-and-why-it-stays-that-way" class="md-nav__link">
@@ -3090,6 +3129,15 @@ A listed file may not gain em-dashes; a file with no entry, including every new 
 <p><a href="../../queue/Q650/">Q650</a> is the cleanup.
 As it lands, <code>make em-dash-baseline</code> re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done.
 <code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
+<h3 id="splitting-an-em-dash-sentence-must-not-strand-the-connective">Splitting an em-dash sentence must not strand the connective<a class="headerlink" href="#splitting-an-em-dash-sentence-must-not-strand-the-connective" title="Permanent link">&para;</a></h3>
+<p>The ratchet puts every prose change to a listed file under standing pressure to split an em-dash sentence, and splitting one strands the connective from both halves.
+Measured 2026-08-24 from the gate's own output on a single PR: <code>testing.md</code> at 573 against a base of 570, <code>Q929.md</code> at 3 against 0, and on a later run <code>testing.md</code> at 572 against 570.
+One of the rewrites that pressure forced left <code>which also rules out staticcheck having been quiet on its own, which is the third cause below</code> in <code>testing.md</code>, where the second <code>which</code> no longer has a clause to attach to.</p>
+<p><strong>Nothing automated checks whether the result still parses.</strong> No member of <code>DOCS_GATES</code> has an opinion on prose grammar, and <code>md-reflow-check</code> is <code>mdreflow --check</code>, which is about line breaks alone.
+The only instrument is a human reading the diff, and that is the instrument that failed here: the artifact was a plain <code>+</code> line in the branch diff, and the author reading it did not see what a reviewer reading the rendered prose did.</p>
+<p>The gate stays, because the pressure it applies is the point and the stranded connective is a side effect.
+The habit that avoids it is to re-read the split sentence as prose rather than as a diff line, and to recast the connective into whichever half keeps it (<code>…on its own: the third cause below</code>) instead of leaving it pointing at a clause that is now a separate sentence.
+Nothing about this is unique to em-dashes, since no edit in this repo has its grammar checked; the ratchet is simply what makes the rewrite frequent enough to notice.</p>
 <h2 id="an-upstream-behavior-claim-cites-a-measurement">An upstream-behavior claim cites a measurement<a class="headerlink" href="#an-upstream-behavior-claim-cites-a-measurement" title="Permanent link">&para;</a></h2>
 <p>A sentence about how something outside this repo behaves is a claim nobody here can check, and it goes stale with no commit, no red gate, and no other signal.
 Write the version it was measured against and when, or name the gate that keeps re-measuring it.
@@ -3245,6 +3293,21 @@ They then read a filename off that same advisory and reported it as a measured c
 The dispatcher wrote that trap into the playbook on the worker's evidence, then read a <code>MERGED</code> field as merged-to-<code>main</code> without checking <code>baseRefName</code> on the object it had already fetched, and reported a contradiction on <code>main</code> that did not exist.</p>
 <p>Neither was carelessness, which is the point: both had the mechanism in working memory, and that is what made the next check feel redundant.
 If the check does not fire on real cases, demote this to an observation rather than leaving it stated as a rule.</p>
+<h2 id="prose-that-counts-a-set-goes-stale-on-an-insertion-nothing-checks">Prose that counts a set goes stale on an insertion nothing checks<a class="headerlink" href="#prose-that-counts-a-set-goes-stale-on-an-insertion-nothing-checks" title="Permanent link">&para;</a></h2>
+<p>A sentence asserting a property of a set is falsified by an insertion that never touches that sentence.
+Nothing here reads prose adjacency: <code>metric-tiers</code> reads the ledger, <code>promql-check</code> reads expressions, <code>queue-gates</code> reads the store, and <code>observability-dashboards.md</code> is read by no semantic gate at all.</p>
+<p>Q906 produced three instances in one change, none of them reachable by any gate:</p>
+<ul>
+<li><code>observability-dashboards.md</code> said "the first three capacity panels union the v1 <code>RunnerGroup</code> family with its v2 twin", after a v2-only panel went in third.</li>
+<li>A godoc named <code>TestApplyWorkerCapacityConditions_SetsAllThree</code> and "all three conditions" sat above a function renamed to <code>SetsAllFour</code>, with the test body correct and green throughout.</li>
+<li><code>v2_runnerset_capacity_metrics_test.go</code> said "explicit zeros on the other two families" where three now exist.</li>
+</ul>
+<p>The first two were caught in review rather than shipped, which is the whole defence available today.</p>
+<p><strong>Name the members instead of counting them.</strong> "the <code>RunnerGroup</code> and <code>RunnerScaleSet</code> families" survives the insertion that "both families" does not, and a reader who meets a third member sees an omission rather than a sentence that is simply wrong.
+The count is the part with nothing to check it against; the names are checkable against the thing itself, which is also what makes a later reader able to repair the sentence without re-deriving what it once meant.</p>
+<p>The sibling defect is the same failure from the layout side, and it is worth repairing in the same pass because the tell is identical: a true statement about a set, invalidated by a change that never touches it.
+Six dashboard panels at <code>w=4</code> is exactly 24 columns, so the arithmetic stays right while four previously-full titles come back ellipsed, which the source cannot answer and only the render can.
+Two instances already ship on the tenant dashboard (<code>Denied CONNECTs/s (SSRF signal)</code> at 31 chars, <code>Tunnel duration p95</code> at 19), which is what makes it a class rather than one mistake.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3319,6 +3382,13 @@ That payoff is large here: 263 non-vendored Markdown files carry roughly 82,000 
 <p><code>make md-reflow-check</code> reports what is unformatted without writing, <code>make md-reflow-diff</code> prints the change, and <code>make md-reflow-explain</code> names every paragraph the formatter declines, where it is, and why.
 The check is in <code>make check</code> and costs about a second for the whole tree.
 <code>.mdreflow.yaml</code> at the repo root holds the configuration: <code>sentence</code> mode at <code>max-width: 0</code>, excluding the two generated docs, <code>docs/STATUS.md</code>, and the <code>AGENTS.md</code> symlink. mdreflow always excludes <code>vendor/</code>, so the 471 tracked vendored Markdown files are never walked.</p>
+<h3 id="the-two-pages-the-formatter-never-reaches">The two pages the formatter never reaches<a class="headerlink" href="#the-two-pages-the-formatter-never-reaches" title="Permanent link">&para;</a></h3>
+<p><code>make md-reflow</code> applies the rule above, and it declines any paragraph holding a raw <code>&lt;!</code> opener outside a code span.
+Every gated bullet on <code>docs/roadmap.md</code> carries one, because <code>roadmapcheck</code> rule 1 requires a <code>&lt;!-- q:QN --&gt;</code> annotation naming the backlog rows behind it.
+Measured 2026-09-10 on mdreflow v0.3.0: <code>--explain</code> reports 18 skipped paragraphs against 18 markers, so the decline tracks the bullet count exactly and the whole page is exempt by accident.</p>
+<p>So those bullets are held to sentence-per-line by <code>roadmapcheck</code> rule 13 instead, over <code>docs/roadmap.md</code> and <code>docs/features.md</code> both (Q832).
+It masks code spans, HTML comments and link targets before looking for a boundary, which is what stops <code>v2.0.0</code> reading as three sentences, and it counts a boundary only where what follows is itself terminated, so a trailing link is not a second sentence.
+Split such a bullet by hand; <code>make md-reflow</code> will not do it for you and <code>make md-reflow-check</code> will not complain.</p>
 <h3 id="what-stays-hard-wrapped-and-why-it-stays-that-way">What stays hard-wrapped, and why it stays that way<a class="headerlink" href="#what-stays-hard-wrapped-and-why-it-stays-that-way" title="Permanent link">&para;</a></h3>
 <p>Measured 2026-09-04 on mdreflow v0.3.0: 99.76% of interior line breaks in the docset's prose sit at a sentence boundary, 18,400 of 18,444, leaving 44.
 The formatter declines 35 paragraphs across 8 files, spanning 82 source lines.

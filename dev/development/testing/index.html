@@ -3539,6 +3539,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-gates-failure-path-is-the-one-path-no-green-run-exercises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A gate's failure path is the one path no green run exercises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#assert-the-recovery-property-not-the-mechanism-believed-to-deliver-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3607,6 +3618,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#holding-a-poll-loop-out-of-its-own-poll-two-techniques-and-picking-wrong-costs-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Holding a poll loop out of its own poll: two techniques, and picking wrong costs a session
+      
+    </span>
+  </a>
   
 </li>
         
@@ -6294,6 +6316,16 @@ The flaw was in the sentence that carried it forward, which let a fact about Git
 <p>So when a harness call stands in for a product code path, <strong>write down what it did not exercise</strong>: the client that will really make it, the configuration that will really route it, and the moment it will really fire.
 Then say which of those a follow-up must still confirm.
 A measurement whose write-up names its own blind spots is worth far more than one that quietly implies it has none.</p>
+<h3 id="a-gates-failure-path-is-the-one-path-no-green-run-exercises">A gate's failure path is the one path no green run exercises<a class="headerlink" href="#a-gates-failure-path-is-the-one-path-no-green-run-exercises" title="Permanent link">&para;</a></h3>
+<p>The three rules above prove that an assertion can fail.
+None of them reaches the code a gate runs <em>while</em> it is failing, and that path is the one every passing run skips by construction.</p>
+<p><strong>Q871's checker waited on its child's exit status in two places</strong>, so a fake that died during startup left it blocked on a status the child would never send.
+Every green run reached the first wait with a live child and returned, so the suite exercised the deadlock exactly never.
+A fixture that killed the fake before its first write found the bug in one command.</p>
+<p><strong>A gate that hangs is worse than one that answers wrongly.</strong> A wrong answer is still a verdict, and the fan-out reports it; a blocked gate produces no verdict at all, so <code>run-parallel.sh</code> stops with nothing to read and no failing check naming the cause.</p>
+<p>So write the error-path fixture when the gate is written, rather than after it hangs: kill the child, hand it a malformed line, remove the file it reads.
+This is distinct from timing a gate, which the fan-out already reports.
+That measures a gate doing its job slowly, where this exercises the branch it takes when the job cannot be done at all.</p>
 <h3 id="assert-the-recovery-property-not-the-mechanism-believed-to-deliver-it">Assert the recovery property, not the mechanism believed to deliver it<a class="headerlink" href="#assert-the-recovery-property-not-the-mechanism-believed-to-deliver-it" title="Permanent link">&para;</a></h3>
 <p>A test that exists to pin a safety or recovery property — "the gate cannot starve a tenant", "the queue drains eventually", "the retry budget is bounded" — should assert that property as an observable outcome.
 Asserting instead the internal transition <em>believed</em> to produce it does something worse than under-testing: if the belief is wrong, the test actively defends the defect, and its docstring argues the defect is the safety feature.</p>
@@ -6394,6 +6426,18 @@ That width is too narrow to lose the race on an idle machine, and the flake was 
 Removing the barrier entirely reproduced the CI symptom exactly, which is what tied the two together.</p>
 <p>Two rules follow: <strong>wait on the client the code under test reads</strong>, since where an object has both the cached one is the later observer; and <strong>a one-shot stimulus needs the stronger barrier</strong>.
 The same file's scale-set test may wait on <code>k8sClient</code> because it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects; a single delivered job has no such recovery, which is why <code>waitForCapacityDeclined</code> takes its reader as an explicit parameter, making the choice visible at each call site.</p>
+<h3 id="holding-a-poll-loop-out-of-its-own-poll-two-techniques-and-picking-wrong-costs-a-session">Holding a poll loop out of its own poll: two techniques, and picking wrong costs a session<a class="headerlink" href="#holding-a-poll-loop-out-of-its-own-poll-two-techniques-and-picking-wrong-costs-a-session" title="Permanent link">&para;</a></h3>
+<p>Arranging "the process stopped <em>inside</em> this window" needs the loop held where it cannot make progress.
+The scale-set listener's loop is single-goroutine, so anything it is doing between two polls is such a window, and two helpers exist to hold it there.
+They are not interchangeable.</p>
+<p><strong><code>parkInPoll</code> (Q603) holds the loop inside a poll the stub keeps open.</strong> <code>srv.SetPollTimeout(30 * time.Second)</code> raises the window, and the park is observed as the poll count going quiet: the stub records a poll on arrival and only then holds it, so two samples a few hundred milliseconds apart reading the same count mean the current poll is held, rather than that the loop is between two.
+The first attempt waited for two <em>fresh</em> polls instead, which cannot happen, because once a poll parks there is no second one.
+Use it when the state under test is already reached by the time the loop parks, as "settled but not yet flushed" is.</p>
+<p><strong>It fails when the event under test is one that wakes a parked poll.</strong> <code>CompleteAssignedJob</code> does exactly that, so Q689 could not park: the completion it needed to leave unread is the thing that would end the park.
+Q689 blocked in <code>Provision</code> instead (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/unreadcompletion_q689_test.go">unreadcompletion_q689_test.go</a>), holding the loop inside the provisioner until the listener's context is cancelled, which puts it where it cannot read the queue at all.
+Provisioning is the widest such window to arrange and the easiest to observe, and it stands in for the narrower ones: <code>retryDeferred</code> walks the runner-name ladder against the network, and <code>reconcileDeferred</code> spends a session refresh.</p>
+<p>So ask first whether the event you are holding the loop away from is one that would wake it.
+Where it is, park nothing and block the loop inside the work instead.</p>
 <h3 id="pin-the-process-when-the-signal-comes-out-of-its-memory">Pin the process when the signal comes out of its memory<a class="headerlink" href="#pin-the-process-when-the-signal-comes-out-of-its-memory" title="Permanent link">&para;</a></h3>
 <p>Synchronizing on the right signal is not enough when the controller produces that signal from state it holds <strong>in memory</strong>, downstream of something durable it has already written.</p>
 <p>Q549 is the worked case.

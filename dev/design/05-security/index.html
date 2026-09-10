@@ -1209,6 +1209,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The registry read behind RunnerVersionTooOld">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-scoped-agc-egress-policy-carries-no-registry-allowance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A scoped AGC egress policy carries no registry allowance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3245,6 +3262,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The registry read behind RunnerVersionTooOld">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-scoped-agc-egress-policy-carries-no-registry-allowance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A scoped AGC egress policy carries no registry allowance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3892,7 +3926,7 @@ That is what lets the reading move the condition where the self-report deliberat
 <p>Three properties bound what the read can cost or leak:</p>
 <ul>
 <li><strong>No new egress breadth.</strong> The read uses the AGC's existing policy, which admits 443 and 6443 to any destination by default (the exfiltration section above) and no other port, so it opens nothing and a registry on another port is out of reach; an install that scopes egress with <code>apiServerCIDRs</code> closes the registry too, and the verdict falls back to the tag with the failure in the message.
-  Whether a scoped policy should carry a registry allowance is <a href="../../queue/Q1065/">Q1065</a>.</li>
+  A scoped policy carries no registry allowance, which is the decision recorded below.</li>
 <li><strong>No new credential surface.</strong> The only login the AGC presents is a <code>kubernetes.io/dockerconfigjson</code> Secret the pod template's <code>imagePullSecrets</code> names, read through the <code>get</code> on Secrets the tenant Role already grants; it is the credential kubelet reads for the same pull.
   The password is never logged or reported; the username reaches the condition message and the warning log when a read fails, so an operator can tell which login was refused.
   A Bearer challenge's realm must be <code>https</code>, since the login rides on that exchange.
@@ -3903,6 +3937,43 @@ That is what lets the reading move the condition where the self-report deliberat
   The manifest digest is computed from the bytes served and checked against a digest reference; the layers are not digest-verified, which the tenant-authored trust argument above covers.
   Retries and the hourly re-check run on the set's next reconcile rather than on a timer, so a set with nothing else due reads its registry on the reconcile cadence.</li>
 </ul>
+<h4 id="a-scoped-agc-egress-policy-carries-no-registry-allowance">A scoped AGC egress policy carries no registry allowance<a class="headerlink" href="#a-scoped-agc-egress-policy-carries-no-registry-allowance" title="Permanent link">&para;</a></h4>
+<p>The default policy admits 443 with no <code>to:</code> restriction, so the read works out of the box.
+An install that narrows egress with <code>apiServerCIDRs</code> closes the registry along with everything else, and an FQDN-mode allowlist does not reopen it either, because <code>githubEgressFQDNs</code> lists no registry host and so would not admit <code>ghcr.io</code> even for the default worker image.
+In both cases the read fails, the verdict falls back to the tag, and the failure reaches the condition message.
+That is the designed fallback rather than a defect, which is what makes doing nothing a real option here.</p>
+<p><strong>The decision is to leave it closed.</strong> Scoping the AGC's egress is the operator choosing to shrink what a compromised AGC can reach, and a registry allowance widens exactly that, in the one direction the scoping exists to narrow.
+The capability bought is a sharper <code>RunnerVersionTooOld</code> verdict on an install that has deliberately cut the AGC off from the internet; the capability lost by leaving it closed is that same sharpening, and the tag-based verdict still stands.
+Trading reach for a better diagnostic is the wrong way round for a default, so the secure option stays the default and no rule is written.</p>
+<p><strong>If an install ever needs it, the shape is the part to decide then, not now.</strong> Three candidates, each widening reach differently:</p>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>What it admits</th>
+<th>The cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The default image's registry alone</td>
+<td><code>ghcr.io</code></td>
+<td>Smallest, and useless to any tenant running its own <code>workerImage</code></td>
+</tr>
+<tr>
+<td>The hosts of every <code>workerImage</code> the gateway's sets name</td>
+<td>A set the tenants control</td>
+<td>The allowance moves whenever a tenant edits a set, so the operator no longer decides what the AGC can reach</td>
+</tr>
+<tr>
+<td>An operator-listed set on the <code>ActionsGateway</code></td>
+<td>Exactly what was listed</td>
+<td>The operator keeps the decision, at the cost of a field to maintain and drift when a tenant moves image</td>
+</tr>
+</tbody>
+</table>
+<p>The middle one is the shape to be most careful with: it reads as the convenient default and is the only one that hands the reach decision to the party the scoping is meant to contain.
+Whichever is chosen, it is an explicit opt-in on a policy that is otherwise closed, never a relaxation of the default.</p>
 <h3 id="proxy-egress-audit-record">Proxy egress audit record<a class="headerlink" href="#proxy-egress-audit-record" title="Permanent link">&para;</a></h3>
 <p>The proxy's per-connection record (<code>EgressProxy.spec.auditLogging: Connections</code>, Q564 / <a href="../appendix-g-future-enhancements/#g3-proxy-side-audit-logging">appendix G.3</a>) is the one place the platform deliberately writes down where a tenant's workers went.
 That makes both halves of it a security decision: whether it runs at all, and what a line is allowed to carry.</p>
