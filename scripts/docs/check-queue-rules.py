@@ -79,10 +79,21 @@ PAGE_DIR = posixpath.basename(STORE)
 # hooks/source_links.py's, because Python-Markdown resolves the two into the
 # same link and a reference-style one ships exactly as dead as an inline one.
 INLINE_TARGET = re.compile(r"(?<=]\()([^()\s]+)(?=[)\s])")
+# Every definition, used or not: Python-Markdown emits a link only where the
+# label is referenced, so an unused one builds green and still fails here. That
+# is deliberate rather than a gap -- a definition naming a target the site could
+# not serve is worth fixing before something references it, and tracking label
+# usage is real complexity for a shape that has never appeared in the store.
 REF_TARGET = re.compile(r"(?m)^ {0,3}\[[^\]\n]+\]:[ \t]+(\S+)")
 # A fenced block or a code span is rendered as text, so a link inside one is not
 # a link and MkDocs never resolves it. Stripping them is what keeps rule 14
 # free of an override: a row documenting the rule quotes a bad link on purpose.
+#
+# The four-space indented block is Markdown's third code form and is NOT
+# stripped, so a link inside one is a false positive. Measured 2026-09-10: such
+# a row builds green while rule 14 fires. Left alone deliberately -- 0 of 200
+# rows use indented blocks, this repo's prose fences instead, and a regex for a
+# shape nobody writes costs more than the case it closes.
 FENCE = re.compile(r"(?ms)^([ \t]*)(`{3,}|~{3,}).*?^\1?\2[ \t]*$")
 CODE_SPAN = re.compile(r"(`+)(?:.|\n)*?\1")
 # `scheme://…` or `mailto:…`, deliberately narrower than RFC 3986: this repo
