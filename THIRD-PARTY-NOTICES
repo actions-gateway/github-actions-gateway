@@ -7363,7 +7363,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/mod (v0.37.0)
+Module: golang.org/x/mod (v0.38.0)
 License file: golang.org/x/mod/LICENSE
 ================================================================================
 
@@ -7396,7 +7396,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/net (v0.57.0)
+Module: golang.org/x/net (v0.58.0)
 License file: golang.org/x/net/LICENSE
 ================================================================================
 
@@ -7561,7 +7561,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/text (v0.40.0)
+Module: golang.org/x/text (v0.41.0)
 License file: golang.org/x/text/LICENSE
 ================================================================================
 
@@ -7627,7 +7627,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/tools (v0.47.0)
+Module: golang.org/x/tools (v0.48.0)
 License file: golang.org/x/tools/LICENSE
 ================================================================================
 
@@ -8284,7 +8284,7 @@ License file: google.golang.org/genproto/googleapis/rpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.83.1)
+Module: google.golang.org/grpc (v1.83.2)
 License file: google.golang.org/grpc/LICENSE
 ================================================================================
 
@@ -8492,7 +8492,7 @@ License file: google.golang.org/grpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.83.1)
+Module: google.golang.org/grpc (v1.83.2)
 License file: google.golang.org/grpc/NOTICE.txt
 ================================================================================
 
