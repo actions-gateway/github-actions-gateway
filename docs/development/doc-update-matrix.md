@@ -41,6 +41,9 @@ Two places it costs the most:
   A `Both` claim is still yours to get right, since no static check can confirm one.
 - **Condition and Event reasons.** The same obligation, enforced the same way (Q850): a condition reason or Event reason the AGC emits needs a row in the [condition and Event ledger](../operations/observability-metrics.md#condition-and-event-tier-reach), and `make reason-tiers-check` fails one that has none.
   An Event reason additionally needs a [runbook](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry, because an operator meets it in `kubectl describe` and a tier alone is no remedy.
+  The same gate carries the one obligation that is not a doc edit (Q994): a condition type with two producers has one of them enumerated in a `reasontiers:owns`-marked function, and a reason the listener publishes on such a type needs an entry there in the same change.
+  Without it every consumer reads the new reason as the *other* producer's and overwrites a verdict GitHub actually made.
+  The enumeration is `IsSessionSourcedRunnerVersion` today, and the gate also refuses any package outside its own that compares a reason against an entry rather than calling it.
 - **Positioning copy** (`README.md`, `why-gag.md`, `features.md`, `roadmap.md`).
   A capability claimed for the system but implemented only on the deprecated tier is scheduled for deletion, not shipped — it belongs in the parity table in [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which gates the `v2.0.0` removal on closing exactly this gap.
 

@@ -131,7 +131,9 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   comparison-stamps-check an ARC-column verdict in why-gag.md left without a version and date
 #   promql-check         an alert renamed in observability-alerting.md or the runbook but not in the rule
 #   metric-tiers-check   a metric's tier edited in observability-metrics.md away from what the AGC emits
-#   reason-tiers-check   a reason edited in observability-metrics.md or troubleshooting.md the same way
+#   reason-tiers-check   a reason edited in observability-metrics.md or troubleshooting.md the same way,
+#                        and (Q994) a listener reason on a two-producer condition type absent from the
+#                        membership its consumers honour — that half fails on a pure Go edit, no doc
 #   rung-order-check     the admission ladder's rungs listed in 04-operational-flows.md in an order Admit does not walk
 #   api-reference-check  docs/reference/api.md hand-edited away from what controller-gen renders
 #   gate-lists-check     testing.md stopping short of citing the list targets it must name

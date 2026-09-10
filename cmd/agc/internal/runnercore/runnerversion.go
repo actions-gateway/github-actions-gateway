@@ -230,23 +230,33 @@ func DropListenerCondition(prev *metav1.Condition, pushed metav1.Condition) bool
 		pushed.Reason != apiconditions.ReasonVersionAccepted {
 		return false
 	}
-	return prev != nil && !isSessionSourcedRunnerVersion(prev.Reason)
+	return prev != nil && !IsSessionSourcedRunnerVersion(prev.Reason)
 }
 
-// isSessionSourcedRunnerVersion reports whether reason is one the classic listener
+// IsSessionSourcedRunnerVersion reports whether reason is one the classic listener
 // publishes on RunnerVersionTooOld, as opposed to the reconciler's image reading.
+// It is the single membership site: every consumer that has to tell the two
+// producers apart calls this rather than comparing a reason of its own (Q994).
 //
 // The SESSION set is the closed one, deliberately, because the two sets fail in
 // opposite directions. Enumerating the image reasons instead would let a fourth
 // WorkerImage* reason added later fall through as not-image-sourced, so the listener
-// baseline would overwrite a live verdict and no test or gate would go red —
-// reason-tiers-check reconciles emitted reasons against the operator docs, not
-// against this switch. Enumerating the session reasons makes the same omission
-// conservative: an unrecognized reason is treated as the reconciler's, so the clear
-// is dropped and the condition merely stays stale, which is the pre-Q795 behaviour
-// rather than a wipe. This set is also the one far less likely to grow: the listener
-// owns exactly two reasons on this type, and both are declared beside it.
-func isSessionSourcedRunnerVersion(reason string) bool {
+// baseline would overwrite a live verdict. Enumerating the session reasons makes the
+// omission conservative at the drain — an unrecognized reason is treated as the
+// reconciler's, so the clear is dropped and the condition stays stale, which is the
+// pre-Q795 behaviour. That argument covers DropListenerCondition alone. The other
+// consumer is setRunnerVersionStatus, whose deference is what stops the image reading
+// overwriting a live session verdict, and there the same omission is a wipe: a
+// listener reason missing from this switch reads as the reconciler's own, nothing
+// defers, and a rejection GitHub actually made is gone from status.
+//
+// So the set is gated rather than argued. The marker below is what reason-tiers-check
+// reads: it reconciles this switch against the reasons internal/listener emits on
+// RunnerVersionTooOld, and refuses any consumer outside this package that compares a
+// reason against an entry instead of calling here.
+//
+// reasontiers:owns RunnerVersionTooOld internal/listener
+func IsSessionSourcedRunnerVersion(reason string) bool {
 	switch reason {
 	case apiconditions.ReasonVersionTooOld, apiconditions.ReasonVersionAccepted:
 		return true
