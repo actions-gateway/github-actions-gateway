@@ -270,7 +270,6 @@ registry-mirror-render-check: ## Fail when a shipped registry-mirror kustomize t
 # classic-only from birth with nothing re-walking it. This inverts the
 # obligation for the metric surface: a series cannot reach an operator without a
 # tier in the ledger, and a ledger row the source refutes fails too.
-# status-scope: none — it selects the AGC source and two named docs, never the backlog.
 .PHONY: metric-tiers-check
 metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a tier claim the source refutes
 	scripts/docs/check-metric-tiers.sh
@@ -281,7 +280,6 @@ metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a 
 # still unrecorded. This one also fails an Event reason with no runbook entry,
 # which a metric does not need — an Event is met in `kubectl describe`, where a
 # tier without a remedy is no help.
-# status-scope: none — it selects the AGC source, the API vocabulary, and two named docs.
 .PHONY: reason-tiers-check
 reason-tiers-check: ## Fail on a condition/Event reason with no acquisition-tier row, or a tier claim the source refutes
 	scripts/docs/check-reason-tiers.sh

@@ -1,7 +1,7 @@
 # Plans
 
 Topic-organized index of plan files.
-For current status and priorities, see [docs/STATUS.md](../queue/README.md).
+For current status and priorities, see [the backlog](../queue/README.md).
 
 Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top.
 Where that scope is a change to something other files read, enumerate the readers rather than the references: [maintaining-backlog.md](../development/maintaining-backlog.md#a-plan-enumerates-readers-not-references).
@@ -119,7 +119,7 @@ Each has inline ✓ markers per item.
 
 ## Archive
 
-Plans whose work has fully landed and which `docs/STATUS.md` no longer references.
+Plans whose work has fully landed and which no live backlog item references.
 Moved here so `ls docs/plan/` shows active work only.
 The doc remains available — the rationale is often more valuable than the diff.
 
@@ -251,12 +251,12 @@ When writing a plan's Status cell:
 
 When a plan fully closes:
 
-- If `docs/STATUS.md` still references it (Progress table or any Queue row), leave it under `docs/plan/`.
-- Once STATUS.md no longer references it, `git mv` it to `docs/plan/archive/` and move its row in this README to the Archive section.
+- If a live backlog item still targets it, or an active row's Status cell still links one, leave it under `docs/plan/`.
+- Once no live item references it, `git mv` it to `docs/plan/archive/` and move its row in this README to the Archive section.
   Update any other in-repo links to the new path **and the moved doc's own relative links** (dropping into `archive/` adds one `../` level).
   The doc stays available; the working directory just gets less noisy.
   See the full protocol in [`docs/development/maintaining-backlog.md`](../development/maintaining-backlog.md#archiving-completed-plan-docs).
-- **Do this on close, not in a later audit** — in the same change that drops the plan's last STATUS reference.
-  `make plan-index-check` (part of `make check`) fails when an active, non-`ⓘ` plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.
+- **Do this on close, not in a later audit** — in the same change that closes the plan's last backlog item.
+  Nothing gates the archival itself: since Q889 reversed invariant 1, `make plan-index-check` fails an active row whose Status cell *claims* open work (⚠️ ❌ 🚧 🔲) that no live item backs, so a finished plan left unarchived under a ✅ is legal and only reading catches it.
 
 Add a row to this README when creating, completing, or archiving a plan.
