@@ -2604,7 +2604,7 @@ Q922 and Q924 stood together for twelve days (filed 2026-08-18, closed 2026-08-3
 This row is the half it does not reach.</p>
 <p>Replayed 2026-08-30 with <code>find-duplicate-rows.sh --store</code> against the store as it stood when each was filed, passing each row's own <code>target:</code>:</p>
 <ul>
-<li>Filing Q922 with Q924 present surfaced <a href="../Q830/">Q830</a> at 0.43, a false positive, and never showed Q924.
+<li>Filing Q922 with Q924 present surfaced Q830 at 0.43, a false positive, and never showed Q924.
   <code>bare()</code> strips the anchor, so the two <strong>do</strong> share a target, and the relaxed same-target path is built for exactly this pair.
   It needs <code>TARGET_MIN_SHARED=2</code> shared content words and <code>TARGET_MIN_SCORE=0.25</code>.
   The titles share <strong>one</strong>, <code>backlog</code>, since <code>lint-backlog.sh</code> and <code>maintaining-backlog.md</code> both tokenize through it, which scores 1/7 = 0.143.
@@ -2618,7 +2618,7 @@ The tree matters because retargeting this one row moves two of those figures, to
 A filer targeting a popular doc would meet fifteen candidates every time and learn to skip the block.</p>
 <p>What is unmeasured: the item <strong>body</strong> is the one signal nothing reads today, and these two rows do share body vocabulary where their titles do not.
 Whether that holds across the store, and at what noise, wants an <code>--audit</code> variant before anyone changes a threshold.</p>
-<p>Overlaps <a href="../Q693/">Q693</a>, the same blind spot reached from the other side, and the pair is worth reporting because the matcher's verdict on it has swung across every value while neither row changed what it is about.
+<p>Overlaps Q693, the same blind spot reached from the other side, and the pair is worth reporting because the matcher's verdict on it has swung across every value while neither row changed what it is about.
 Scored against the store at <code>2eec06d51</code>, varying only this row's own title and target:</p>
 <table>
 <thead>

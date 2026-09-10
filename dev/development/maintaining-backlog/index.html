@@ -2764,6 +2764,37 @@ Every one of these is caught by a gate, and every one is cheaper to do up front 
 <li><strong>Archive the plan doc if this was its last backlog reference</strong>, per <a href="#archiving-completed-plan-docs">the protocol below</a>, whose step 4 is the one most often missed: dropping a level into <code>archive/</code> re-bases <strong>the moved doc's own outbound links</strong>, not just the links pointing at it.</li>
 <li><strong>Update the plan's <code>docs/plan/README.md</code> row</strong> in the same change, moving it to the Archive section.</li>
 </ol>
+<p><strong>A pathspec commit resolves against the tree, not against the commit (Q946).</strong> Closing a row deletes a file, so this is where the shape turns up.
+Measured 2026-09-10 on a four-arm probe in a throwaway repo, because the row asserted more than reproduced:</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>git commit -- &lt;new untracked file&gt;</code></td>
+<td>fails, <code>did not match any file(s) known to git</code></td>
+</tr>
+<tr>
+<td><code>git commit -- &lt;deleted tracked file&gt;</code></td>
+<td><strong>succeeds</strong>, and records the deletion</td>
+</tr>
+<tr>
+<td><code>git commit --amend -- &lt;path the amended commit already deleted&gt;</code></td>
+<td>fails, same message</td>
+</tr>
+<tr>
+<td>drop the path that errored, amend again</td>
+<td><strong>the deletion survives</strong></td>
+</tr>
+</tbody>
+</table>
+<p>So a new row file needs <code>git add</code> before it can be named, while a deleted one does not: the pathspec form commits a tracked file's deletion on its own.
+And the amend hazard is an error rather than a silent loss, because <code>--amend</code> starts from <code>HEAD</code>'s tree and the pathspec adds to it instead of resetting what it does not name.
+The row asserted the opposite for that last arm, that dropping the errored path rewrites the commit to hold only the paths still named and drops the deletion; it does not, and the refutation is recorded here rather than left in the closing PR.</p>
 <p>The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where the since-retired piped-gate hook's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row <em>deletion</em> the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.</p>
 <h3 id="repurposing-an-id-is-a-closure-with-every-step-skipped">Repurposing an ID is a closure with every step skipped<a class="headerlink" href="#repurposing-an-id-is-a-closure-with-every-step-skipped" title="Permanent link">&para;</a></h3>
@@ -2806,7 +2837,7 @@ A title carrying an apostrophe as well is easier to pass straight to <code>scrip
 Candidates print to stderr, so <code>ID=$(make queue-id TITLE="…")</code> still works, and <strong>the allocator blocks nothing</strong>: the filer routinely knows something the matcher cannot, such as that two rows sharing a file are genuinely separate defects.
 Say which, in the new row's Notes.</p>
 <p><strong>Saying which is rule 13, and it is a gate.</strong> <code>check-queue-rules.sh</code> re-scores every item a branch adds against the store as it stood at the merge base, and fails when the matcher flags a candidate the new row names nowhere.
-Naming any one of them clears it, because what the rule asks is that the warning was read rather than that every candidate is a duplicate: <a href="../../queue/Q830/">Q830</a> was a false positive and answering it was still the right move.
+Naming any one of them clears it, because what the rule asks is that the warning was read rather than that every candidate is a duplicate: Q830 was a false positive and answering it was still the right move.
 <code>QUEUE_ALLOW_UNCITED_DUPLICATE="Q123"</code> is the deliberate pass.</p>
 <p><strong>What it cannot reach</strong>: scoring against the merge base means two rows filed on concurrent branches never see each other, since neither branch's base holds the other.
 Q922 and Q924 were exactly that, filed three hours apart on 2026-08-18, so rule 13 could not have caught that pair; only the Q987 filing a week later, which is the one that made three.
@@ -2837,6 +2868,9 @@ Naming the near-miss rows is what lets the reader tell a genuinely new class fro
 Two rows describing one page's defect in different vocabulary share neither.
 Q835 was filed on 2026-08-12 after <code>make queue-id</code> returned no candidates at all; reading the Queue by hand found Q832, filed the same day, measuring a third cause of the same undercount on the same page.
 The search narrows the set worth reading, and reading is still what recognises the duplicate.</p>
+<p><strong>It searches the store, so a limitation already documented in prose is invisible to it (Q693).</strong> "Known and accepted" is not a row, and the matcher has no way to see it: Q692's session came close to filing the merge-driver gap that this very page already states, with a clean <code>make queue-id</code> behind it.
+So grep the page the row would <code>target:</code> as well as the store.
+That page is where this project keeps its accepted limitations, and it is one read.</p>
 <h3 id="what-it-keys-on-and-why">What it keys on, and why<a class="headerlink" href="#what-it-keys-on-and-why" title="Permanent link">&para;</a></h3>
 <p>From the three pairs, not from a guess about what similarity means here:</p>
 <table>
@@ -2960,8 +2994,12 @@ The pre-commit hook does not close it either, since it runs before the commit ex
 Re-running <code>make queue-rules-check</code> after the commit reproduces it immediately (Q1040).</p>
 <h3 id="two-gate-behaviours-a-failure-message-does-not-explain">Two gate behaviours a failure message does not explain<a class="headerlink" href="#two-gate-behaviours-a-failure-message-does-not-explain" title="Permanent link">&para;</a></h3>
 <p>Both hit two sessions independently on 2026-08-27, and neither is inferable from what the gate prints.</p>
-<p><strong><code>queue-lint</code> keys on the bare <code>name.go:NNN</code> text wherever it appears, link label included.</strong> A row citing a source line is asked to re-point or drop it, and the obvious remedy does <em>not</em> clear the note: turning the citation into a proper Markdown link leaves the pattern matching inside the label.
-Only moving the number out of the pattern works: write "at line 457 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>pod_provisioning_test.go</code></a>" rather than linking the <code>file:line</code> string itself.</p>
+<p><strong><code>queue-lint</code> keys on the bare <code>name.go:NNN</code> text wherever it appears, link label included.</strong> A row citing a source line is asked to re-point or drop it, and turning the citation into a proper Markdown link does <em>not</em> clear the note, because the pattern matches inside the label.
+<strong>Rooting the path does clear it, with the number left in place (Q1090).</strong> The note fires on a path that does not resolve, never on a number being present: <code>queue.py</code> looks for the cited path under <code>docs/</code> and under the repo root and skips the citation when either finds it, which is why the tool's own message asks you to re-point it first.
+Measured 2026-09-09: Q1089 cited an eviction test by bare filename and reported the note twice, and re-pointing to <code>cmd/agc/internal/provisioner/eviction_internal_test.go:274</code> cleared both, pattern still matching and line number still in the text.
+So re-point the citation rather than dismantling it.
+Moving the number outside any pattern also silences the note, and it costs the addressability the store is built on: <a href="../../queue/"><code>docs/queue/README.md</code></a> and the <code>session-backlog</code> skill both carry a citation as path, line and fragment, so a reader on a different tree finds the line by its text once the number has drifted.
+The note is advisory either way, printed to stderr with <code>queue-lint</code> still exiting 0, unless <code>--strict stale-citation</code> promotes the class to a failure.</p>
 <p><strong>Since the Q956 re-vendor, <code>queue-lint</code> also reads the line a citation names.</strong> Write it as <code>`path:N:the distinctive words on that line`</code>, which is the <code>grep -n</code> form, and the checker asserts the fragment is still there, so a number that has drifted is reported rather than resolving forever against a file that grew.
 Three things follow for a row author.
 Drift of ten lines or fewer is not reported at all (<code>CITATION_WINDOW</code>), because a number that lands a reader within a screen of the thing still works; <code>--citation-window 0</code> demands the fragment on the line named, and <code>--strict stale-citation</code> cannot reach the window, since promotion decides what a note costs and never what counts as one.
@@ -3129,6 +3167,11 @@ The real defect had the opposite sign: a valid reformat made the gate emit twelv
 <p><strong>A count of instances in a row is a claim too, and usually the least-verified part of it.</strong> The mechanism gets checked because it reads like an assertion; "two live differences" reads like an observation and invites fixing exactly two.
 Q851 named two label values whose tier the ledger got wrong; deriving the set from source found seven, plus seven stale <code>Help</code> strings the row had not mentioned at all.
 Where the row names a small N, prefer deriving the population over repairing the named N: the derivation is what catches the rest, and it keeps catching them after the row is closed.</p>
+<p><strong>Refuting a measurement obliges a sweep of the artifacts it justified, which is wider than the row's own citations (Q861).</strong> Closing a row sweeps where the <em>row</em> is cited; a refutation has to sweep where the <em>claim</em> was spent, and a claim is spent wherever it was used as a reason.
+Q809 was filed on 2026-08-11 asserting that the five Calico-gated egress enforcement negatives intermittently saw traffic the policy should drop.
+Then #1417 shipped on that framing, writing it into a workflow comment and into <code>testing.md</code>, and #1441 refuted it ten hours later the same day, having attributed all three failures to one scale-set spec that none of the five negatives was involved in.
+The assertions #1417 had left behind were swept two days later, in #1510, which is the gap this rule closes.
+When a measurement falls, list what it was cited to justify before deciding nothing else moves.</p>
 <p>Rows that name an unknown are honest and useful — several in the Queue say "unmeasured live — confirm X before building".
 That phrasing is the pattern: it tells the next session where to start, instead of sending it to repair something that already works.
 Only a stated <em>mechanism</em> needs this; a symptom ("this test flaked on run N, passed on rerun") is already an observation.</p>

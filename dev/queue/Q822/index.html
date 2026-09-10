@@ -2607,6 +2607,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#the-shared-build-hypothesis-refuted-and-the-real-window-measured-2026-09-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shared-build hypothesis: refuted, and the real window measured, 2026-09-10
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2628,7 +2639,7 @@
 
 
 <h1 id="three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun">Three unrelated suites fail under concurrent load and pass on rerun<a class="headerlink" href="#three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a <code>scripts-test</code> suite fails inside a capped local fan-out and passes standalone straight afterwards, on <code>main</code>.</p>
+<p><strong>Event:</strong> a <code>scripts-test</code> suite fails inside a capped local fan-out and passes standalone straight afterwards, on <code>main</code>; or <code>git-merge-script-index-test</code> or <code>git-merge-plan-index-test</code> fails anywhere with a <code>merge-*-index: the build failed with:</code> line, which is the driver-build race below recurring past its fix.</p>
 <p>The mitigation is the cap: <code>run-parallel.sh</code> takes <code>RUN_PARALLEL_JOBS</code>, and the Makefile exports <code>local-throttle.sh jobs</code> as its default, physical cores minus 2 on a GUI dev shell and unbounded on CI or headless.
 So <code>make check</code>'s 51-gate level and <code>make scripts-test</code>'s 119-suite level each start at most that many at once instead of all of them.
 <a href="../../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">The measurement</a>: eleven runs on 2026-09-07 beside a sibling <code>go test -race</code> suite, load 26 to 153 on 18 cores.
@@ -2663,6 +2674,25 @@ It edits <code>scripts/README.md</code>, which is this driver's own subject, so 
 <p>It cost a CI cycle rather than a queue eviction this time, because the failure landed on the PR's own run rather than in the merge group.
 <strong>Confirmed on rerun</strong>: <code>gh run rerun --failed</code> on the same head, with no code change, took the <code>shellcheck</code> job green in 4m8s (job 102827685450), so this sighting meets the repo's own definition of a flake rather than resting on the local negative alone.
 The discriminator this row already prescribes — stop discarding the build's stderr, and build once per process tree — is what would turn the next one into a diagnosis instead of a fifth data point.</p>
+<h2 id="the-shared-build-hypothesis-refuted-and-the-real-window-measured-2026-09-10">The shared-build hypothesis: refuted, and the real window measured, 2026-09-10<a class="headerlink" href="#the-shared-build-hypothesis-refuted-and-the-real-window-measured-2026-09-10" title="Permanent link">&para;</a></h2>
+<p><strong>This row's mechanism was wrong, and the obvious measurement confirms it rather than refuting it.</strong> The inode of <code>.build/mergedriver</code> is unchanged across a cached rebuild, which reads as <em><code>go build -o</code> copied over the destination in place</em>.
+The control settles it the other way: append three bytes to the output, rebuild, and <strong>the appended bytes survive</strong>, on go1.26.6/darwin-arm64 and go1.26.8/linux-amd64 alike.
+A cache hit writes nothing at all, so it is not a write that leaves the inode alone.</p>
+<p>That also disposes of an argument this row leaned on: the 2026-09-04 sighting was <strong>local</strong>, on macOS, so "no local reproduction because macOS does not raise the error" was explaining away a member of its own evidence set.
+The count is three CI sightings (301418a29 on <code>main</code> 2026-09-05, the #1862 merge group 2026-09-07, <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1884">#1884</a> 2026-09-10) and one local.</p>
+<p><strong>A real window exists, and it is narrower than this row said and narrower than two attempts to restate it.</strong> The contended moment is a cache miss, where go places the binary, and how it places decides everything.
+Same filesystem it renames, which is atomic and safe.
+Cross filesystem it unlinks and streams a copy, so a concurrent <code>execve</code> of the path fails either way: <code>ETXTBSY</code> while the path is an incomplete file held open for writing, and <code>ENOENT</code> in the gap between the unlink and the create.
+Measured on go1.26.8/linux-amd64, replicating that shape against a concurrent exec: <strong>4,106 of 4,109 execs failed</strong>, almost all <code>ETXTBSY</code>, with the instrument's controls confirming it distinguishes <code>ETXTBSY</code> from the <code>EACCES</code> a mode-644 file gives.
+It reproduced independently at 99.8% on a separately-built instrument, with a larger <code>ENOENT</code> share, so the split between the two moves with timing while the total does not.
+<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1898">#1898</a> builds to a sibling path and renames, which takes the atomic route whichever way go placed the temp.</p>
+<p>So this row's original instinct, <code>ETXTBSY</code>, was closer than the two stories written over it: a <code>SIGBUS</code> claim that turned out to characterise coreutils <code>cp</code> truncating in place, which go never does, and a claim that unlinking closed the window, when it only changes the symptom.</p>
+<p><strong>Whether anything here ever takes the copy path is unmeasured.</strong> It needs <code>$GOTMPDIR</code>/<code>$TMPDIR</code> and <code>.build/</code> on different filesystems.
+On a dev Mac they are not, and <code>go build -x</code> shows <code>mv</code>; nobody has read the layout on the CI runners.
+So the fix closes a hazard by construction rather than one observed here.</p>
+<p><strong>And it does not diagnose this row either way.</strong> Every sighting reports <code>the driver could not be built</code>, which is <code>go build</code> failing; both stories above kill an exec <em>after</em> a successful build.
+What #1898 also ships is the discriminator this row asked for: the build's output is relayed on stderr instead of discarded, so a fifth sighting names its cause rather than repeating the symptom.
+The row stays parked on the trigger above, and the next occurrence is expected to carry a <code>merge-*-index: the build failed with:</code> line naming what actually failed.</p>
 
 
 

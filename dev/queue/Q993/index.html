@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-second-trigger-identified-and-verified-2026-09-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A second trigger, identified and verified, 2026-09-10
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2614,6 +2633,37 @@ Every component tested alone splits correctly — the leading link, the escaped-
 <code>mdreflow --explain</code> reports nothing for it, so it is processed rather than declined and no reason code is offered.
 Whoever picks this up starts from those exclusions.</p>
 <p>Neighbour: Q975 (in flight, so not linkable here) covers <code>md-reflow-check</code> being <code>mdreflow --check</code>; this sits inside that rather than against it, and is the opposite direction from the re-wrapping claim Q975 retracted.</p>
+<h2 id="a-second-trigger-identified-and-verified-2026-09-10">A second trigger, identified and verified, 2026-09-10<a class="headerlink" href="#a-second-trigger-identified-and-verified-2026-09-10" title="Permanent link">&para;</a></h2>
+<p><strong>A sentence whose first character is <code>#</code> is never split onto its own line.</strong> Splitting there would produce a line opening with <code>#</code>, which Markdown reads as a heading, so the splitter declines it and the two sentences stay joined.
+Met live while writing the Q861 rule into <a href="../../development/maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">maintaining-backlog.md</a> and the Q830 rule into <a href="../../development/documentation-standards/">documentation-standards.md</a>, both of which open a sentence with a PR reference.</p>
+<p>Measured on the pinned mdreflow by three arms over one fixture, varying only the second sentence's opening token:</p>
+<table>
+<thead>
+<tr>
+<th>Second sentence opens with</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>#1417 shipped on that framing…</code></td>
+<td><strong>joined</strong></td>
+</tr>
+<tr>
+<td><code>Then #1417 shipped on that framing…</code></td>
+<td>split</td>
+</tr>
+<tr>
+<td><code>1417 shipped on that framing…</code></td>
+<td>split</td>
+</tr>
+</tbody>
+</table>
+<p>So it is the <code>#</code>, not the number: a bare <code>#hashtag</code> opener joins too.
+The gate ratifies it in exactly the shape this row already states: <code>--check</code> exits <strong>0</strong> on the joined form and <strong>1</strong> on the hand-split compliant form, and <code>--explain</code> reports nothing, so the line is processed rather than declined.</p>
+<p><strong>It does not explain this row's open instance</strong>, so the unidentified trigger above is still unidentified and this row does not close on it.
+<code>Q970</code> file line 14's second sentence opens with a link, and a leading link, a leading <code>[bracket]</code>, a leading code span and a leading plain word all split correctly on the same fixture, which agrees with the exclusions already recorded above.</p>
+<p>The workaround is to open the sentence with a word, which is what both prose sites now do.</p>
 
 
 
