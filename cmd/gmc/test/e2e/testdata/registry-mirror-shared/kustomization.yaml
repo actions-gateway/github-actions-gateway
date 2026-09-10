@@ -16,10 +16,14 @@ kind: Kustomization
 # the pinned ones.
 #
 # The refs below must name what e2e-reusable.yml's "Mirror registry-mirror
-# images" step pushes. Drift is fail-loud, not silent: a ref nothing pushed
-# leaves the Deployments in ImagePullBackOff and the suite's readiness wait fails
-# naming the pod. A THIRD image appearing in the base is the same -- the step
-# asserts the count and names this file.
+# images" step pushes, and that step RECONCILES the two rather than trusting this
+# comment: it derives the refs from the base Deployment and diffs them against
+# the pairs here, so a pin this file stopped matching fails the step. That gate
+# exists because one shape of drift is silent -- `name:` matches the BARE image
+# name, so a pin that gained a namespace (someorg/registry) would leave these
+# entries inert, the Deployments on the Docker Hub ref, and the kind nodes back
+# on Hub for the 429s the step exists to avoid. The count assertion beside it
+# catches a THIRD image, which is the other way this file goes out of date.
 resources:
   - ../../../../../../deploy/registry-mirror/overlays/shared-tenants
 images:

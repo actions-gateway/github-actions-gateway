@@ -400,26 +400,58 @@ jobs:
           shopt -s inherit_errexit
           dir=/tmp/mirror-images
           tar="$dir/images.tar"
+          stamp="$dir/refs.txt"
           base=deploy/registry-mirror/base/deployment.yaml
+          kust=cmd/gmc/test/e2e/testdata/registry-mirror-shared/kustomization.yaml
 
           mapfile -t refs < <(awk '$1=="image:"{print $2}' "$base" | sort -u)
           if [[ "${#refs[@]}" -ne 2 ]]; then
             echo "::error::$base pins ${#refs[@]} distinct images (${refs[*]}), expected 2."
-            echo "::error::Add the new one to the images: block in cmd/gmc/test/e2e/testdata/registry-mirror-shared/kustomization.yaml and raise the count here."
+            echo "::error::Add the new one to the images: block in $kust and raise the count here."
             exit 1
           fi
 
           # registry:3.1.1@sha256:… -> 127.0.0.1:5000/library/registry:3.1.1.
-          # Must match the newName/newTag pairs in that kustomization.
           locals=()
           for ref in "${refs[@]}"; do
             locals+=("127.0.0.1:5000/library/${ref%@*}")
           done
 
-          if [[ -f "$tar" ]]; then
+          # Reconcile against the kustomization rather than asking a comment to
+          # keep the two in step. Its `images:` block matches on the BARE image
+          # name, so a pin that gained a namespace (someorg/registry) silently
+          # stops matching: the Deployments keep the Docker Hub ref and the kind
+          # nodes go back to Hub for the 429s this step exists to avoid. That is
+          # intermittent rather than loud, which is the shape worth a gate.
+          mapfile -t want < <(awk '
+            /^images:/ { in_img = 1; next }
+            in_img && /^[^ ]/ { in_img = 0 }
+            in_img && $1 == "-" && $2 == "name:" { if (nm != "") print nm ":" tg; nm = ""; tg = "" }
+            in_img && $1 == "newName:" { nm = $2 }
+            in_img && $1 == "newTag:" { gsub(/"/, "", $2); tg = $2 }
+            END { if (nm != "") print nm ":" tg }
+          ' "$kust" | sort)
+          if ! diff -u <(printf '%s\n' "${want[@]}") <(printf '%s\n' "${locals[@]}" | sort); then
+            echo "::error::$kust does not point at the refs this step pushes (left: kustomization, right: derived from $base)."
+            exit 1
+          fi
+
+          # The stamp is what makes the cache path safe off a hosted runner. The
+          # actions/cache step above is hosted-only, so elsewhere a surviving /tmp
+          # is the only thing gating the load — and because the local ref carries
+          # the TAG and not the digest, a digest-only re-pin reuses the same ref
+          # name and stale bytes would push silently. The sibling curl and Vault
+          # steps are safe without this only because they re-tag from the
+          # upstream ref after loading, so a changed pin fails with "No such
+          # image"; this step loads the local refs and pushes them straight out.
+          if [[ -f "$tar" && -f "$stamp" ]] \
+            && diff -q <(printf '%s\n' "${refs[@]}") "$stamp" >/dev/null; then
             echo "==> loading registry-mirror images from cache"
             docker load -i "$tar"
           else
+            if [[ -f "$tar" ]]; then
+              echo "==> cached tar does not match the pinned refs; re-pulling"
+            fi
             for i in "${!refs[@]}"; do
               echo "==> pulling ${refs[$i]}"
               PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
@@ -431,6 +463,7 @@ jobs:
             done
             mkdir -p "$dir"
             docker save -o "$tar" "${locals[@]}"
+            printf '%s\n' "${refs[@]}" > "$stamp"
           fi
 
           for local_ref in "${locals[@]}"; do
