@@ -406,6 +406,20 @@ Both readings hold across a load range this row had already shown cannot rank a 
 Both `check-endpoint-parity-test` reds are [Q912](../queue/Q912.md)'s signature, a `fakegithub` that never accepted within 30 s, once uncapped and once at 16, so they are sightings on that row rather than evidence about the cap.
 The two are separate claims: one is a property of the runner, the other needs a failure traced to it.
 
+**One suite pair shares a build path across the fan-out, and the cap cannot reach it** (Q822).
+`git-merge-script-index-test` and `git-merge-plan-index-test` both drive [`merge-driver-common.sh`](../../scripts/lib/merge-driver-common.sh), and every driver invocation rebuilt `devtools/git/mergedriver` into one shared `.build/mergedriver`, discarding the build's output.
+A cache hit writes nothing, so the only contended moment is a cache miss, where go places the binary, and *how* it places decides whether that is safe.
+Same filesystem it renames, which is atomic; cross filesystem it unlinks and streams a copy, so a concurrent exec of the shared path fails either way: `ETXTBSY` for the length of the stream, while the path is an incomplete file held open for writing, and `ENOENT` in the gap between the unlink and the create.
+Measured 2026-09-10 on go1.26.8/linux-amd64 in a container, replicating that shape against a concurrent `execve`: 4,106 of 4,109 execs failed, almost all `ETXTBSY`; reproduced independently at 99.8% with a larger `ENOENT` share, so the split moves with timing and the total does not.
+The build now writes a sibling path and renames it in, which takes the atomic route whichever way go placed the temp, and relays the build's output on stderr instead of dropping it.
+
+**Whether any runner here takes the copy path is unmeasured.** It needs `$GOTMPDIR`/`$TMPDIR` and `.build/` on different filesystems; on a dev Mac they are not (`TMPDIR` and the worktree both on `/dev/disk3s5`, and `go build -x` shows `mv`), and nobody has read the layout on the CI runners.
+So this is a hazard closed by construction rather than one observed here.
+`scripts/lib/merge-driver-common-test.sh` holds both halves.
+
+**That is a hazard removed, not Q822 diagnosed.** Q822's sightings report `the driver could not be built`, which is a build failing; the race above kills an exec after the build succeeded, so it cannot be the same event.
+The relay is what will name the cause: the next occurrence carries `go`'s own output instead of the bare symptom.
+
 **No suite in the fan-out takes the lock, but only one of the two reasons is structural.** Five scripts call `serialize_heavy_build`, and in `go-lint.sh`, `go-vet-tags.sh` and `coverage.sh` the call sits inside `main()`, so sourcing them cannot take it.
 In `go-test.sh` and `go-test-integration.sh` it sits at top level, where sourcing takes the lock immediately, and only their suites' `GAG_HEAVY_BUILD_LOCK_HELD=1` keeps them out.
 So a future suite that sources either of those without the sentinel puts a lock-taker inside the fan-out, which is the thing this paragraph exists to rule out.
