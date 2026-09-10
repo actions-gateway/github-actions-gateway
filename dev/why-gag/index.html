@@ -671,10 +671,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#two-rows-with-fine-print" class="md-nav__link">
+  <a href="#rows-with-fine-print" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two rows with fine print
+        Rows with fine print
       
     </span>
   </a>
@@ -2788,10 +2788,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#two-rows-with-fine-print" class="md-nav__link">
+  <a href="#rows-with-fine-print" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two rows with fine print
+        Rows with fine print
       
     </span>
   </a>
@@ -3153,7 +3153,7 @@ file by file, is in the <a href="../plan/competitive-analysis-2026-08/#per-cell-
 rather than trusting it, and
 <a href="https://github.com/actions-gateway/github-actions-gateway/issues">tell us what changed</a>.</p>
 </div>
-<h3 id="two-rows-with-fine-print">Two rows with fine print<a class="headerlink" href="#two-rows-with-fine-print" title="Permanent link">&para;</a></h3>
+<h3 id="rows-with-fine-print">Rows with fine print<a class="headerlink" href="#rows-with-fine-print" title="Permanent link">&para;</a></h3>
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too — and when
@@ -3169,6 +3169,9 @@ Nor do workers the reaper took, with one exception: a worker reaped while still 
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
 The loop only closes inside the controller that builds the pods.
 <a href="../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D.7</a>.</p>
+<p><strong>The capacity gate is off by default because gating can destroy the rescue.</strong> Refusing intake on a signal is safe only where nothing else is waiting on that signal to make capacity appear.
+Quota headroom qualifies and the scheduler's <code>Unschedulable</code> verdict does not, because on a cluster that can grow a Pending pod <em>is</em> the request for a node, so elasticity is a property of your cluster rather than of the signal.
+<a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">Appendix D.8</a> works it through for four signals.</p>
 <h2 id="where-arc-is-ahead">Where ARC is ahead<a class="headerlink" href="#where-arc-is-ahead" title="Permanent link">&para;</a></h2>
 <p>Some of it is capability, not only maturity.
 Measured 2026-08-06.
