@@ -120,8 +120,8 @@ type EgressProxySpec struct {
 	// (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL
 	// environment variable; changing it is a rolling restart of the proxy pool (not
 	// a hot reload), so the new level takes effect once the pods roll. Use debug
-	// only for a bug repro — per-CONNECT debug lines dominate log volume under
-	// load. The default is info so a pool never silently runs at debug verbosity.
+	// only for a bug repro. The default is info so a pool never silently runs at
+	// debug verbosity.
 	//
 	// +optional
 	// +kubebuilder:validation:Enum=info;debug
