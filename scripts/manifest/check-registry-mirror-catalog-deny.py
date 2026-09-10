@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """check-registry-mirror-catalog-deny.py — every mirror instance must front its
-registry with the catalog deny, and one port must run through the whole path
-(Q1022).
+registry with the catalog deny, one port must run through the whole path
+(Q1022), and the two halves of the worker's path to the mirror must name one pod
+label (Q1030).
 
 Distribution 3.1.1 serves GET /v2/_catalog unconditionally and offers no setting
 that closes it while leaving anonymous pulls working, so each mirror pod runs a
@@ -15,9 +16,30 @@ behind it. That posture is spread over five files that cannot see each other:
   base/kustomization.yaml  the generator that turns the config into the ConfigMap
                            the Deployments mount
   base/service.yaml        the port clients address
-  base/networkpolicy.yaml  the port the mirror admits, restated once more by
+  base/networkpolicy.yaml  the port the mirror admits, and the pod label a
+                           worker must carry to be let out to it, both restated
+                           once more by
   components/shared-tenants/kustomization.yaml, whose patch replaces the base's
                            ingress wholesale
+
+The label is the same shape of fact as the port and the same two files. The
+worker-side egress rule says which pods may leave for the mirror; the shared
+topology's ingress peer ANDs that same label into its `from` element (Q1026), so
+each file keeps its own copy and nothing compared them. That drift is fail-closed
+and expensive rather than dangerous — workers lose the path entirely, which
+surfaces as a booked Kata window in which nothing pulls.
+
+Green on the label means the two YAML halves agree with EACH OTHER, never that
+they agree with the set the cluster governs: both are derived copies, and the
+authoritative value is Go's (cmd/agc/internal/provisioner/pod.go,
+cmd/gmc/internal/controller/shared_labels.go). Equality is also stricter than the
+functional invariant — only `peer ⊆ egress` is needed, so a wider peer is safe —
+and is demanded anyway because WIDENING the peer is the Q1026 regression.
+
+Comparing the two in the shared RENDER instead would be immune to the parse
+shapes below, kustomize having normalized them, but would not run at all:
+check-registry-mirror-render.sh degrades to a printed skip without kubectl, which
+is e2e-tier. This gate is pure text, so `make check` always reconciles.
 
 A sixth instance added to the first without a deny container serves its catalog
 to every tenant that can reach it, and nothing else in this repository would
@@ -53,6 +75,14 @@ CATALOG_PATH = "/v2/_catalog"
 # egress rule, whose ports are its own business.
 INGRESS_POLICY = "registry-mirror-worker-access"
 
+# The worker-side egress policy, in the tenant's own namespace. Its top-level
+# podSelector is the label a pod must carry to be let OUT to the mirror, and the
+# shared component's ingress peer restates that same label as the one a pod must
+# carry to be let IN. The port above is the mirror's alone; this label belongs to
+# both halves, which is why it is read from the egress rule rather than skipped
+# with it.
+EGRESS_POLICY = "e2e-mirror-egress"
+
 # The deny container probes its own health here rather than at /v2/, which is
 # proxied through: a registry fault would otherwise fail the healthy proxy's
 # probe. The path lives in two files and must be one string.
@@ -67,6 +97,36 @@ HTTP_ADDR_RE = re.compile(r"^\s+- name: REGISTRY_HTTP_ADDR\n\s+value: (\S+)$", r
 VOLUME_CM_RE = re.compile(r"^          configMap:\n            name: (\S+)$", re.M)
 TARGET_PORT_RE = re.compile(r"^      targetPort: (\d+)$", re.M)
 POLICY_PORT_RE = re.compile(r"^\s+- protocol: TCP\n\s+port: (\d+)$", re.M)
+
+# A policy's own `spec.podSelector`, at fixed top-level indent. The peer
+# podSelectors deeper in the same document sit at ten spaces and are not this.
+#
+# The trailing lookahead is what makes the parse total rather than partial. The
+# repeated group stops at the first label line it cannot read -- an inline
+# comment, a value with a space -- so without it a truncated set is compared as
+# the whole selector: two selectors that genuinely differ agree on their first
+# label and the gate prints green (measured). Refusing on an EMPTY extraction
+# does not cover that; the extraction is non-empty and wrong.
+SPEC_LABELS_RE = re.compile(
+    r"^spec:\n  podSelector:\n    matchLabels:\n"
+    r"(?P<labels>(?:      \S+: \S+\n)+)(?!      \S)",
+    re.M,
+)
+
+# A peer's podSelector, wherever the file indents it: the shared component holds
+# its copy inside a `- patch: |` block scalar, so the depth is the block's rather
+# than the policy's. Anchored to a line of its own, so the file header's prose
+# mention of `podSelector` is a word rather than a key.
+#
+# Shapes this pattern is not aimed at, each refusing at rc 2 rather than passing
+# (measured): a second `from` peer, which is how the header documents admitting
+# v1-domain tenants; podSelector listed before namespaceSelector; and
+# matchExpressions. The refusal says "expected exactly one", not "you reformatted".
+PEER_LABELS_RE = re.compile(
+    r"^(?P<indent> *)podSelector:\n(?P=indent)  matchLabels:\n"
+    r"(?P<labels>(?:(?P=indent)    \S+: \S+\n)+)(?!(?P=indent)    \S)",
+    re.M,
+)
 
 
 class Refusal(Exception):
@@ -130,6 +190,22 @@ def policy_document(path, name):
     return docs[0]
 
 
+def selector_labels(pattern, text, what, path):
+    """The one set of matchLabels a selector declares, sorted `key: value` lines.
+
+    Exactly one match, because both sides of the comparison are a single
+    selector: a second would mean the file grew a shape this parser was never
+    aimed at, and picking the first of two would grade the rest green.
+    """
+    found = [m.group("labels") for m in pattern.finditer(text)]
+    if len(found) != 1:
+        raise Refusal(f"{path}: expected exactly one {what}, found {len(found)}")
+    labels = sorted(line.strip() for line in found[0].splitlines() if line.strip())
+    if not labels:
+        raise Refusal(f"{path}: {what} declares no labels")
+    return labels
+
+
 def sole(values, what, path):
     """The one value a set of restatements agrees on, or a refusal."""
     if not values:
@@ -148,6 +224,13 @@ def main():
         base_port = sole(POLICY_PORT_RE.findall(policy_document(POLICIES, INGRESS_POLICY)),
                          "admitted port", POLICIES)
         shared_port = sole(POLICY_PORT_RE.findall(read(SHARED)), "admitted port", SHARED)
+        worker_labels = selector_labels(
+            SPEC_LABELS_RE, policy_document(POLICIES, EGRESS_POLICY),
+            f"{EGRESS_POLICY} spec.podSelector", POLICIES,
+        )
+        peer_labels = selector_labels(
+            PEER_LABELS_RE, read(SHARED), "ingress peer podSelector", SHARED,
+        )
     except Refusal as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
@@ -179,6 +262,14 @@ def main():
         problems.append(
             f"{SHARED} admits {shared_port}, but the base admits {base_port}; its patch "
             "replaces the base's ingress wholesale, so the two must restate one port"
+        )
+    if peer_labels != worker_labels:
+        problems.append(
+            f"{SHARED} admits pods labelled {peer_labels}, but {POLICIES}'s "
+            f"{EGRESS_POLICY} lets out pods labelled {worker_labels}; the two halves of "
+            "the worker's path to the mirror must name one label. The drift is "
+            "fail-closed and total — no worker can pull at all, and the first reading "
+            "of it is a booked Kata window in which nothing does"
         )
     admitted = base_port
 
@@ -287,7 +378,8 @@ def main():
 
     print(
         f"the catalog deny fronts all {len(instances)} mirror instances on {admitted}, "
-        f"each registry on loopback behind it: {', '.join(sorted(instances))}"
+        f"each registry on loopback behind it: {', '.join(sorted(instances))}; "
+        f"both halves of the worker path name {', '.join(worker_labels)}"
     )
     return 0
 

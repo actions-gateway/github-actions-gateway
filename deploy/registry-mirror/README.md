@@ -93,7 +93,7 @@ Measured on 2026-08-29 against both pinned images and the config exactly as `kus
 The percent-encoded forms are why the rule reads the path through `url_dec`: Go decodes escapes before the route is matched, so an unfronted registry answered `/v2/%5Fcatalog` 200 with the repository listed, and a deny written against the raw path would pass it straight through.
 
 Two checks hold it.
-`make registry-mirror-catalog-deny-check` reconciles the six files the posture is spread across — an instance with no deny container, a registry back on the pod network, or a port that stopped agreeing all fail there — and the `catalog` check in [`e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh) grades it on the cluster beside the manifest fetch, so a deny that also broke pulls cannot pass on the catalog reading alone.
+`make registry-mirror-catalog-deny-check` reconciles the six files the posture is spread across — an instance with no deny container, a registry back on the pod network, a port that stopped agreeing, or the worker label named differently by the two halves of the path (Q1030) all fail there — and the `catalog` check in [`e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh) grades it on the cluster beside the manifest fetch, so a deny that also broke pulls cannot pass on the catalog reading alone.
 
 ## Two topologies: one shared set, or one set per tenant
 
