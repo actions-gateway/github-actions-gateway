@@ -29,6 +29,18 @@ each file keeps its own copy and nothing compared them. That drift is fail-close
 and expensive rather than dangerous — workers lose the path entirely, which
 surfaces as a booked Kata window in which nothing pulls.
 
+Green on the label means the two YAML halves agree with EACH OTHER, never that
+they agree with the set the cluster governs: both are derived copies, and the
+authoritative value is Go's (cmd/agc/internal/provisioner/pod.go,
+cmd/gmc/internal/controller/shared_labels.go). Equality is also stricter than the
+functional invariant — only `peer ⊆ egress` is needed, so a wider peer is safe —
+and is demanded anyway because WIDENING the peer is the Q1026 regression.
+
+Comparing the two in the shared RENDER instead would be immune to the parse
+shapes below, kustomize having normalized them, but would not run at all:
+check-registry-mirror-render.sh degrades to a printed skip without kubectl, which
+is e2e-tier. This gate is pure text, so `make check` always reconciles.
+
 A sixth instance added to the first without a deny container serves its catalog
 to every tenant that can reach it, and nothing else in this repository would
 notice: check-registry-mirror-render.sh renders these manifests (Q1024) but a
@@ -88,17 +100,31 @@ POLICY_PORT_RE = re.compile(r"^\s+- protocol: TCP\n\s+port: (\d+)$", re.M)
 
 # A policy's own `spec.podSelector`, at fixed top-level indent. The peer
 # podSelectors deeper in the same document sit at ten spaces and are not this.
+#
+# The trailing lookahead is what makes the parse total rather than partial. The
+# repeated group stops at the first label line it cannot read -- an inline
+# comment, a value with a space -- so without it a truncated set is compared as
+# the whole selector: two selectors that genuinely differ agree on their first
+# label and the gate prints green (measured). Refusing on an EMPTY extraction
+# does not cover that; the extraction is non-empty and wrong.
 SPEC_LABELS_RE = re.compile(
-    r"^spec:\n  podSelector:\n    matchLabels:\n(?P<labels>(?:      \S+: \S+\n)+)", re.M
+    r"^spec:\n  podSelector:\n    matchLabels:\n"
+    r"(?P<labels>(?:      \S+: \S+\n)+)(?!      \S)",
+    re.M,
 )
 
 # A peer's podSelector, wherever the file indents it: the shared component holds
 # its copy inside a `- patch: |` block scalar, so the depth is the block's rather
 # than the policy's. Anchored to a line of its own, so the file header's prose
 # mention of `podSelector` is a word rather than a key.
+#
+# Shapes this pattern is not aimed at, each refusing at rc 2 rather than passing
+# (measured): a second `from` peer, which is how the header documents admitting
+# v1-domain tenants; podSelector listed before namespaceSelector; and
+# matchExpressions. The refusal says "expected exactly one", not "you reformatted".
 PEER_LABELS_RE = re.compile(
     r"^(?P<indent> *)podSelector:\n(?P=indent)  matchLabels:\n"
-    r"(?P<labels>(?:(?P=indent)    \S+: \S+\n)+)",
+    r"(?P<labels>(?:(?P=indent)    \S+: \S+\n)+)(?!(?P=indent)    \S)",
     re.M,
 )
 
