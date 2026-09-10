@@ -23,7 +23,7 @@
     
     
       
-        <title>Three suites share a fixture path and delete each other's - GitHub Actions Gateway</title>
+        <title>Test suites share a fixed fixture path and delete each other's - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#three-suites-share-a-fixture-path-and-delete-each-others" class="md-skip">
+        <a href="#test-suites-share-a-fixed-fixture-path-and-delete-each-others" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Three suites share a fixture path and delete each other's
+              Test suites share a fixed fixture path and delete each other's
             
           </span>
         </div>
@@ -2597,7 +2597,7 @@
   
 
 
-<h1 id="three-suites-share-a-fixture-path-and-delete-each-others">Three suites share a fixture path and delete each other's<a class="headerlink" href="#three-suites-share-a-fixture-path-and-delete-each-others" title="Permanent link">&para;</a></h1>
+<h1 id="test-suites-share-a-fixed-fixture-path-and-delete-each-others">Test suites share a fixed fixture path and delete each other's<a class="headerlink" href="#test-suites-share-a-fixed-fixture-path-and-delete-each-others" title="Permanent link">&para;</a></h1>
 <p>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or <code>$BASHPID</code> uniquifier, and <strong>3 carry none</strong>.
 Those 3 both <code>rm -rf</code> the path at startup and register <code>trap '... rm -rf ...' EXIT</code>.
 (48 suites call <code>mktemp</code> somewhere; the two counts overlap, so neither partitions the set on its own.)
@@ -2605,11 +2605,21 @@ All three are under <code>scripts/docs/</code>: <code>check-script-docs-test.sh<
 The trap fires on a kill as well as on a clean exit, so a killed run can delete a live one's.
 Observed once: a <code>make check</code> went red on <code>check-script-docs-test</code> with four assertions failing <code>cd: .../clean: No such file or directory</code> after a separate <code>make scripts-test</code> in the same worktree was killed; the same tree passed on a re-run alone.
 <strong>Assert any recount still contains that suite.</strong> The first census here returned 37 sites and excluded <code>check-script-docs-test.sh</code> itself, because skipping files that mention <code>mktemp</code> looked like hygiene and dropped the one site with direct evidence behind it.</p>
+<p><strong>Recounted 2026-09-09 (Q1078): 7 carry none, over a population of 121 <code>*-test.sh</code> files of which 49 assign a repo-rooted <code>tmp/</code> path.</strong> The original three are all still in the set, which is the reconciliation the rule above asks for.
+The four that joined them are <code>scripts/ci/check-script-modes-test.sh</code>, <code>scripts/docs/check-rung-order-test.sh</code>, <code>scripts/dogfood/gmc-test.sh</code> and <code>scripts/manifest/check-registry-mirror-render-test.sh</code>, so the class is no longer confined to <code>scripts/docs/</code>.
+All 7 both <code>rm -rf</code> the path at startup and register the same EXIT trap, so the fix below applies unchanged and only its blast radius grew.
+A recount matching only on a literal <code>$REPO_ROOT/tmp/</code> lands on 6 and reads as a disagreement: <code>scripts/docs/check-page-density-test.sh</code> derives its root inline (<code>WORK="$(cd "$SCRIPT_DIR/../.." &amp;&amp; pwd)/tmp/page-density-test"</code>), so match on the <code>tmp/</code> segment rather than on how the root was spelled.
+Nothing catches the drift: the convention lives in prose, so each new suite copies whichever neighbour its author read.</p>
+<p><strong>Observed a second time 2026-09-09 (Q1078), taking two suites in one run.</strong> <code>check-script-docs-test</code> failed four assertions on <code>open scripts/README.md: no such file or directory</code>, and <code>check-script-modes-test</code> failed one on <code>cd: .../tmp/check-script-modes-test/empty: No such file or directory</code>.
+Same precondition as the first sighting: an earlier <code>make check</code> in that worktree had been killed mid-<code>scripts-test</code> (SIGTERM, exit 143).
+Both passed when run serially minutes later against the same tree, and a third <code>make check</code> was green.
+The second suite is one of the four the recount added, so a prediction made off the first census would have missed it.
+The host was at load average 82 to 108 on 18 cores for the red runs and 40 for the green one, which is a confound the sighting cannot separate out.</p>
 <p><strong>The fix is the repo's own convention, not <code>mktemp</code>.</strong> 38 suites already keep the path under <code>tmp/</code> and append <code>.$$</code>, which is a per-PID directory and a one-token change (the convention dates to <code>c619c431c</code>, 2026-08-11).
 That keeps what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">CLAUDE.md</a>'s temp-file rule asks for and <code>mktemp</code> in host <code>/tmp</code> gives up: the fixture persists and stays citable in a PR.
 <code>scripts/docs/check-script-docs-test.sh:22</code> records the fixed path as deliberate, so whatever lands must keep the fixture inside the tree.</p>
 <p><strong>Not <a href="../Q822/">Q822</a>'s mechanism.</strong> Its suites are the Go <code>provisioner</code> and <code>controller</code> ones under 8 workers, a different failure entirely.
-Two suites in one run cannot collide here either, since the three names are distinct; what bites is one worktree running the suites twice.
+Two suites in one run cannot collide here either, since the names are distinct; what bites is one worktree running the suites twice.
 But that is conventional rather than structural, and the first name reused turns the fan-out into a reproducible cause of suite failure, which is the causal link Q822 records as missing.</p>
 
 

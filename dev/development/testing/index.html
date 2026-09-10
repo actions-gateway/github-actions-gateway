@@ -3755,6 +3755,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#a-nil-reader-either-disables-a-read-or-re-routes-it-and-the-re-route-is-the-one-nothing-reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A nil reader either disables a read or re-routes it, and the re-route is the one nothing reports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-envtest-suite-budget" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6580,6 +6591,24 @@ Hand-assembling it has two traps, both of which surface as a confusing envtest f
   The Makefiles pass <code>$(REPO_ROOT)/.build</code>.</li>
 </ul>
 <p>Unit tests (<code>make test</code> / <code>go test ./...</code>) do <strong>not</strong> require envtest — the integration packages are excluded by their <code>//go:build integration</code> tag.</p>
+<h3 id="a-nil-reader-either-disables-a-read-or-re-routes-it-and-the-re-route-is-the-one-nothing-reports">A nil reader either disables a read or re-routes it, and the re-route is the one nothing reports<a class="headerlink" href="#a-nil-reader-either-disables-a-read-or-re-routes-it-and-the-re-route-is-the-one-nothing-reports" title="Permanent link">&para;</a></h3>
+<p>An omitted field in a harness's reconciler literal is usually safe, because nil <em>disables</em> the feature: a nil <code>Metrics</code> records nothing, a nil <code>Recorder</code> emits no Events, and a suite asserting on neither is right to leave them out.
+Reader fields are where that stops holding uniformly, and <code>RunnerSetReconciler</code> carries one of each shape.</p>
+<ul>
+<li><strong><code>EventReader</code> fails open.</strong> Nil short-circuits the autoscaler-verdict gate, which returns <code>CapacityAvailable</code> with "no direct API reader is wired" and never closes.
+  That is deliberate and documented at the declaration, so a suite not exercising the gate is right to omit it.</li>
+<li><strong><code>APIReader</code> falls back.</strong> Nil silently substitutes the cached client, so the read still succeeds and the only difference is whether an informer was started for the kind.
+  Nothing reports that, which is what makes it the shape to go looking for.</li>
+</ul>
+<p>The reads where the fallback matters are the ones production takes uncached <em>on purpose</em>, each for a reason the cached read defeats:</p>
+<ul>
+<li><strong>A kind the AGC has <code>get</code> on but not <code>list</code>/<code>watch</code>.</strong> The projected proxy-share ConfigMap is the case (<code>resolveRunnerSetRefs</code>): a cached read starts an informer the production Role cannot run, so a suite taking it cannot observe the permission production denies.</li>
+<li><strong>A kind a deployment may not serve at all.</strong> The v1alpha1 <code>RunnerGroup</code> adoption probe: a cached <code>Get</code> on an unserved kind wedges the manager's cache.</li>
+<li><strong>A read whose staleness is spent once.</strong> The scale-set guard ConfigMap feeds the orphan scan, which claims its one per-process verdict on the first reading of the in-flight set, empty or not (Q1064), so a stale-empty read burns the scan for the life of the process.</li>
+</ul>
+<p>Q1078 found <code>APIReader</code> nil in three of the five harnesses that construct a <code>RunnerSetReconciler</code>, while two beside them wired it, and two of the three carried a comment claiming parity with <code>main.go</code> for the field next to the missing one.
+A comment claiming parity is scoped to the field it annotates and says nothing about a field that is absent, which is what makes the gap read as deliberate.
+So diff the harness's literal against <code>main.go</code> field by field rather than reading the comments beside the fields that are there, and for each reader ask which of the two shapes its nil takes before deciding the omission is safe.</p>
 <h3 id="the-envtest-suite-budget">The envtest suite budget<a class="headerlink" href="#the-envtest-suite-budget" title="Permanent link">&para;</a></h3>
 <p><code>go test -timeout</code> gives each suite a wall-clock budget.
 It is <strong>10m</strong>, single-sourced in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh"><code>scripts/go/go-test-integration.sh</code></a>, which both module Makefiles and the matrixed CI step run through.

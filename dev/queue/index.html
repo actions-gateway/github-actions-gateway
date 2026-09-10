@@ -2880,14 +2880,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>cover-check</code> prints two different tolerances for one module across runs of an unchanged tree, or reports a <code>FAIL</code> whose …</td>
 </tr>
 <tr>
-<td><a href="Q1030/">Q1030</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-registry-mirror-catalog-deny.py">Nothing reconciles the mirror's ingress peer with the worker's label</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two halves of the registry mirror's network posture have to name one label, and nothing compares them.</td>
-</tr>
-<tr>
 <td><a href="Q1048/">Q1048</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-clients.sh">Nothing schedules the mirror client census in a dogfood window</a></td>
 <td><code>tests</code> <code>dogfood</code></td>
@@ -3382,14 +3374,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The one double that does not hold the poll, against this repo's own rule.</td>
-</tr>
-<tr>
-<td><a href="Q1078/">Q1078</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_scaleset_test.go">Scale-set envtest harness reads the guard ConfigMap through the cache</a></td>
-<td><code>tests</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>startRunnerSetReconcilerWithScaleSetClients</code> sets <code>p.APIReader</code> and <code>EventReader</code> from <code>mgr.GetAPIReader()</code>, each with a comment saying it …</td>
 </tr>
 <tr>
 <td><a href="Q880/">Q880</a></td>
@@ -4113,7 +4097,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q991/">Q991</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-script-docs-test.sh">Three suites share a fixture path and delete each other's</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-script-docs-test.sh">Test suites share a fixed fixture path and delete each other's</a></td>
 <td><code>tests</code> <code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -4174,6 +4158,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>exporter.py</code> fakes a two-tenant fleet by emitting explicit <code>namespace="team-a"</code> and <code>namespace="team-b"</code> labels from a single pod.</td>
+</tr>
+<tr>
+<td><a href="Q1089/">Q1089</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_internal_test.go"><code>TestHandleEviction_RunNeverConcludingIsSurfaced</code> measures the host</a></td>
+<td><code>tests</code> <code>flake</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The test sets <code>EvictionRerunWindow: 50ms</code> and <code>EvictionRerunRetryInterval: 5ms</code>, drives <code>handleEviction</code> against a real <code>httptest.Server</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1090/">Q1090</a></td>
+<td><a href="../development/maintaining-backlog/">The queue-lint citation remedy is wrong, and its advice degrades rows</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><a href="../development/maintaining-backlog/">maintaining-backlog.md</a> says of the <code>queue-lint</code> citation note that only moving the number out of …</td>
 </tr>
 <tr>
 <td><a href="Q1002/">Q1002</a></td>

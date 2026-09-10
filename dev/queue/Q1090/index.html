@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1078/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1090/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Scale-set envtest harness reads the guard ConfigMap through the cache - GitHub Actions Gateway</title>
+        <title>The queue-lint citation remedy is wrong, and its advice degrades rows - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#scale-set-envtest-harness-reads-the-guard-configmap-through-the-cache" class="md-skip">
+        <a href="#the-queue-lint-citation-remedy-is-wrong-and-its-advice-degrades-rows" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Scale-set envtest harness reads the guard ConfigMap through the cache
+              The queue-lint citation remedy is wrong, and its advice degrades rows
             
           </span>
         </div>
@@ -2597,18 +2597,20 @@
   
 
 
-<h1 id="scale-set-envtest-harness-reads-the-guard-configmap-through-the-cache">Scale-set envtest harness reads the guard ConfigMap through the cache<a class="headerlink" href="#scale-set-envtest-harness-reads-the-guard-configmap-through-the-cache" title="Permanent link">&para;</a></h1>
-<p><code>startRunnerSetReconcilerWithScaleSetClients</code> sets <code>p.APIReader</code> and <code>EventReader</code> from <code>mgr.GetAPIReader()</code>, each with a comment saying it wires them "exactly as main.go wires it", and leaves <code>RunnerSetReconciler.APIReader</code> nil.
-<code>scaleSetGuardStore</code> falls back to the cached client when that field is unset (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/scaleset_guards.go">scaleset_guards.go</a>), so every envtest read of a scale-set guard ConfigMap goes through the informer cache while production (main.go, which sets <code>APIReader: mgr.GetAPIReader()</code> on the reconciler) reads it live.</p>
-<p><strong>Why it matters more since Q1064.</strong> The orphan scan now spends its one per-process claim on the first reading of the in-flight set, empty or not.
-Before that, a stale-empty read cost nothing: the claim stayed unspent and the next reconcile retried.
-Now a first reading served stale-empty would burn the scan for the life of the process, which is the failure mode <code>liveScaleSetWorkerPodNames</code> already argues about its own List: "a cold cache would read as every worker in the set having been disrupted".
-Production is unaffected, because the read there is uncached; the exposure is the harness telling us less than it claims to.</p>
-<p><strong>Not currently believed to bite</strong>, and that belief is unmeasured: the Q844 specs build a fresh manager per AGC generation, so the new cache's initial LIST should already carry the seeded ConfigMap, and a cached <code>Get</code> for a kind with no informer blocks until that sync.
-Read off the harness and controller-runtime's <code>getInformerForKind</code> rather than driven.</p>
-<p><strong>The work.</strong> Wire <code>APIReader: mgr.GetAPIReader()</code> on the reconciler in that harness and run the AGC envtest suite.
-It is not a one-line change to wave through: the field also routes the v1alpha1 <code>RunnerGroup</code> adoption probe and <code>resolveRunnerSetRefs</code> off the cache, so the suite is the measurement rather than a formality.
-If some suite genuinely needs the cached reader, wire the guard store's reader on its own instead and say why in the comment that currently claims main.go parity.</p>
+<h1 id="the-queue-lint-citation-remedy-is-wrong-and-its-advice-degrades-rows">The queue-lint citation remedy is wrong, and its advice degrades rows<a class="headerlink" href="#the-queue-lint-citation-remedy-is-wrong-and-its-advice-degrades-rows" title="Permanent link">&para;</a></h1>
+<p><a href="../../development/maintaining-backlog/">maintaining-backlog.md</a> says of the <code>queue-lint</code> citation note that only moving the number out of the pattern works, and recommends writing "at line 457 of" followed by a Markdown link to the file rather than linking the <code>file:line</code> string itself.</p>
+<p>Both halves are wrong, and the recommended remedy discards something the store is built on.</p>
+<p><strong>Rooting the path clears the note with the number left in place.</strong> <code>scripts/docs/queue.py:553:            if any((base / path).exists() for base in (store.parent, store.parent.parent)):</code> skips the note whenever the cited path resolves from <code>docs/</code> or the repo root.
+The note fires on an unresolvable <em>path</em>, never on the presence of a number, so the fix is to root the citation rather than to dismantle it.</p>
+<p><strong>Measured 2026-09-09 (Q1078).</strong> Q1089 was filed citing the eviction test by bare filename and reported the note twice.
+Re-pointing to <code>cmd/agc/internal/provisioner/eviction_internal_test.go:274</code> cleared both, with the pattern still matching and the line number still in the text.
+The linter's own message offers this first ("re-point or drop it"), so the doc contradicts the tool it documents.</p>
+<p><strong>The recommended prose form loses the addressability the store wants.</strong> <a href="../"><code>docs/queue/README.md</code></a> and the <code>session-backlog</code> skill both carry a citation as path, line and fragment, so a reader on a different tree finds the line by its text once the number has drifted.
+Moving the number outside any pattern is what stops the note firing, and it is the same property that stops a drift check or a recount finding it.</p>
+<p><strong>The doc generalised from the one case where its remedy was the only one available.</strong> The original finding is sound and worth keeping: a Markdown link does not help, because the pattern matches inside the label.
+What does not follow is "only".
+Correct that sentence, keep the link-does-not-help finding, and add that the note is a warning at exit 0 rather than a gate failure, since the message goes to stderr and is never appended to <code>problems</code>.</p>
+<p><strong>The class is live in the store.</strong> <code>make queue-lint</code> on 2026-09-09 also reported Q1084 citing <code>local-throttle.sh</code> by bare filename, so this is not a one-row curiosity.</p>
 
 
 
