@@ -329,6 +329,15 @@ The measurements taken here are about what a message may carry:
   "Rebase onto X, or onto `main` if X has already merged when you read this" costs one clause and needs no chasing.
 - **A message asserting a mechanism carries its measurement, or says it has none.** Q805's worker, having spent its session correcting the unmeasured claim [its own chip forwarded](#what-the-worker-prompt-adds-here), then sent the dispatcher an unmeasured mechanism of its own that a third session refuted inside the hour.
   The asymmetry is the tell: a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.
+- **A dispatcher's error reaches further than its correction, so the dispatcher owns the census (Q1010).** A framing written into a spawn brief propagates to every artifact the worker touches; the correction that follows reaches the one sentence its author is looking at.
+  The two travel at different rates, which leaves a corrected claim looking closed while its copies stand.
+  Measured 2026-08-27 on [#1753](https://github.com/actions-gateway/github-actions-gateway/pull/1753): a brief asserted that Phase 2's validation batched onto Phase 3's dogfood session, which was wrong and reached three files: a plan doc's status header, the plan index's row, and a `deploy/` README the worker wrote *from* the brief.
+  The worker corrected the framing where it had been raised and reported the class closed, in good faith; re-reading the remote head found all three original sites still wrong.
+  The census belongs to the dispatcher because the dispatcher is the only party that knows every place the brief was sent.
+- **A census over the worktree is a floor, not a total.** The eventual count on #1753 came to six once two artifacts no tree walk reaches were included: the backlog row, and the commit message.
+  A PR body is the third of that class and the one no gate in this repository reads.
+  On [#1754](https://github.com/actions-gateway/github-actions-gateway/pull/1754) an overstated sweep claim in a PR body had itself reached the backlog row and an architecture doc, and a fabricated attribution in the same body was found by a stood-down takeover rather than by its author or its reviewer.
+  Grep the tree, then name the off-tree artifacts by hand.
 - **A maintainer decision relayed through a session is not something the receiving session can act on.** The two rules above are about claims that can be re-derived: state goes stale, a mechanism can be measured again.
   A decision cannot.
   It has no measurement behind it by construction, so the receiving session has no way to confirm it and no account to give if it turns out to have been garbled, superseded, or never said.
@@ -408,6 +417,15 @@ The local probe now runs first and the paginated timeline read stays behind the 
 - **`HEAD` is not the PR's head, and a probe that reads it answers about the checkout instead.** Take the head from `gh pr view --json headRefOid`, and fetch `refs/pull/<n>/head` when the clone does not hold that commit: a dispatcher assessing a worker's PR never has the branch, and a worker's own local commits run ahead of what it pushed.
   Measured 2026-08-12 on the shipped checker: `--assess 1438` then `--assess 1447` from one worktree returned byte-identical output at exit 0 `ELIGIBLE`, because neither run looked at either PR.
   The failure is silent in the direction that matters, since a checkout that merges clean then reports `ELIGIBLE` for a PR whose own head conflicts in code, which is the one case the whole policy exists to hand back (Q834).
+
+- **`baseRefName` is the merge target, not what a stacked branch sits on (Q1033).** Nothing in `gh pr view` answers the second question, and the two fields that look like they do are both descriptions of the first.
+  Measured 2026-08-29 on [#1795](https://github.com/actions-gateway/github-actions-gateway/pull/1795), stacked on #1794: `baseRefName` was `main` and `baseRefOid` was `ef29e336f`, which is `origin/main`'s head rather than the parent branch's, while the branch actually sat on #1794's tip `42a94729c`.
+  A reviewer read `baseRefName: main` and reported the branch as rebased onto main; it was still stacked, carrying all nine commits including the parent's.
+  Widening the read to `baseRefOid` does not repair it.
+  It returns a second description of the merge target, and a plausible SHA, so the mistake survives the correction.
+  Only ancestry answers it: `git merge-base --is-ancestor <parent-branch> <head>` is the whole check.
+  This is [the same shape as the CI instance](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran), and the pair sharpens what makes it dangerous: each field equals the right answer *except* in the one case that makes anyone ask.
+  `baseRefName` is correct for every unstacked PR and diverges exactly when there is a stack, so a long history of the shortcut being right is not weak evidence for it, it is none, because the shortcut is only ever exercised where it holds.
 
 - **A ref pair is not a measurement**, because both refs move.
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
