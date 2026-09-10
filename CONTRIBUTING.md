@@ -353,7 +353,7 @@ There is no manual union-gate or pre-merge freshness check to run; enqueue and l
 **It closes it only for a workflow that declares `merge_group`,** which is 10 of the 28.
 Measured 2026-08-08, back when [`doc-links.yml`](.github/workflows/doc-links.yml) did not: #1340 and #1342 each added em-dashes to `docs/development/testing.md`, each was green alone, and the pair landed it at 595 against a ceiling of 594, turning `main` red on a gate the queue had no opportunity to run.
 Q743 gave that workflow the trigger and an aggregate `doc-links-gate` job, so its docs gates now run on the candidate merge.
-They do not yet **block** it: the queue arbitrates on the ruleset's required checks alone, and registering `doc-links-gate` is a repo-settings change that has to follow the workflow onto `main` (Q943).
+They **block** it as of 2026-09-09, when `doc-links-gate` joined `default-protect` as its tenth required context, so a red docs gate on a candidate merge holds the entry.
 Four workflows are still queue-blind — `conflict-markers.yml`, `endpoint-parity.yml`, `metric-tiers.yml`, `reason-tiers.yml` — and a ratcheted gate (em-dash density, the coverage floor) is where that bites: two branches can each sit at the ceiling.
 
 ### When new work blocks an open PR
