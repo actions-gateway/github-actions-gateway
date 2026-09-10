@@ -118,6 +118,16 @@ A gate that cannot first be stated as a rule is one whose failure mode is not ye
 | The agent instruction file (`CLAUDE.md`) | Only when a session must act on it *before* reading any doc. It auto-loads in full, so a line there is charged against every session's context: put the detail in `docs/` and leave a pointer |
 | A skill | The rule is a procedure with steps, and it applies across repos |
 
+#### An upstream filing is deduped when it is filed, not when it is recommended
+
+One rung sends a finding out of the repo altogether, to the tool's own project.
+The `github-issue-filer` skill searches for duplicates at the moment it files, so a "worth filing upstream" offered earlier in a session has had no duplicate check at all.
+Q844 reached exactly that: a recommendation to file a pr-sentinel report duplicating two already-closed upstream issues.
+
+The cost lands on whoever reads the recommendation, because by then it reads as a decision already taken rather than a candidate.
+So search upstream before saying a thing is worth filing, rather than before filing it, and search the tool's recent releases alongside its issues: the behaviour that looks like a defect is often the fix for one that has already shipped.
+`gh issue list` does not return pull requests, and issues and pull requests share one number sequence, so a clean issue search sits perfectly happily beside an open pull request fixing the exact thing.
+
 #### A plan doc is not a destination
 
 Plan docs are archived when their plan completes, so a finding recorded only in one is scheduled for deletion along with it.

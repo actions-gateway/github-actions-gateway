@@ -137,6 +137,21 @@ The row asserted the opposite for that last arm, that dropping the errored path 
 The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where the since-retired piped-gate hook's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
 
+### Prose that defers an open question to a row links it
+
+Step 1 finds every dead link, which works only where the citation was a link to begin with.
+A bare `QNNN` in a sentence is neither a link, a Status cell, nor a roadmap bullet, so none of the typed checks here can see it.
+Closing Q900 left `testing.md` saying "Q900 is measuring which way that actually falls", and with the row already deleted `doc-links` passed over 438 files and 6,592 links; an orchestrator run over six chained PRs was clean too.
+Every row a batch deletes can leave one of these, and a batch deletes a dozen.
+
+**The obvious gate does not survive measurement.** 2,263 file and absent-ID pairs across `docs/` cite a row that is not in the store, and narrowing to the `QNNN is|will|owns` shapes still leaves 81, every sampled one of them correct prose ("Q495 is the worked example").
+A claim that has gone stale is not distinguishable from a citation by any pattern tried here.
+
+So the convention carries the half a gate can reach: **prose deferring an open question to a row links that row**, which turns the row's deletion into a dead anchor `make doc-links` names.
+[`scripts/docs/check-plan-index.sh`](../../scripts/docs/check-plan-index.sh) already holds that discriminator for one table, linked if and only if live, and keeps the bare form where the ID "describes what the plan was about and stays true".
+Keep the bare form for exactly that, a citation of what a row was about.
+Use the link whenever the sentence depends on the row still being open.
+
 ### Repurposing an ID is a closure with every step skipped
 
 A measurement that refutes a row's asserted defect usually hands you a different one, and the cheapest edit is to rewrite the row in place: same anchor, same ID, new title, new Notes.

@@ -180,6 +180,21 @@ jobs:
       - name: upgrade.md's index matches its headings (make upgrade-toc-check)
         run: make upgrade-toc-check
 
+  # Hold prose naming a `make` target to the targets that exist (Q1012). It
+  # belongs here for the reason doc-links does: a named-but-absent target is the
+  # same class as a dead href, and it was the last one of that family unguarded.
+  # Its own job so a stale command reads apart from a dead link. No setup-go: the
+  # gate is python3 over `make -qp`, both of which the runner image carries.
+  make-targets:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: prose names only targets that exist (make make-targets-check)
+        run: make make-targets-check
+
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
   # Q831 worth measuring: it lived in CHECK_FAST_GATES alone, so prose that had

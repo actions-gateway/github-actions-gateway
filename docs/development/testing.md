@@ -2313,6 +2313,21 @@ So when a harness call stands in for a product code path, **write down what it d
 Then say which of those a follow-up must still confirm.
 A measurement whose write-up names its own blind spots is worth far more than one that quietly implies it has none.
 
+### A gate's failure path is the one path no green run exercises
+
+The three rules above prove that an assertion can fail.
+None of them reaches the code a gate runs *while* it is failing, and that path is the one every passing run skips by construction.
+
+**Q871's checker waited on its child's exit status in two places**, so a fake that died during startup left it blocked on a status the child would never send.
+Every green run reached the first wait with a live child and returned, so the suite exercised the deadlock exactly never.
+A fixture that killed the fake before its first write found the bug in one command.
+
+**A gate that hangs is worse than one that answers wrongly.** A wrong answer is still a verdict, and the fan-out reports it; a blocked gate produces no verdict at all, so `run-parallel.sh` stops with nothing to read and no failing check naming the cause.
+
+So write the error-path fixture when the gate is written, rather than after it hangs: kill the child, hand it a malformed line, remove the file it reads.
+This is distinct from timing a gate, which the fan-out already reports.
+That measures a gate doing its job slowly, where this exercises the branch it takes when the job cannot be done at all.
+
 ### Assert the recovery property, not the mechanism believed to deliver it
 
 A test that exists to pin a safety or recovery property — "the gate cannot starve a tenant", "the queue drains eventually", "the retry budget is bounded" — should assert that property as an observable outcome.
@@ -2438,6 +2453,23 @@ Removing the barrier entirely reproduced the CI symptom exactly, which is what t
 
 Two rules follow: **wait on the client the code under test reads**, since where an object has both the cached one is the later observer; and **a one-shot stimulus needs the stronger barrier**.
 The same file's scale-set test may wait on `k8sClient` because it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects; a single delivered job has no such recovery, which is why `waitForCapacityDeclined` takes its reader as an explicit parameter, making the choice visible at each call site.
+
+### Holding a poll loop out of its own poll: two techniques, and picking wrong costs a session
+
+Arranging "the process stopped *inside* this window" needs the loop held where it cannot make progress.
+The scale-set listener's loop is single-goroutine, so anything it is doing between two polls is such a window, and two helpers exist to hold it there.
+They are not interchangeable.
+
+**`parkInPoll` (Q603) holds the loop inside a poll the stub keeps open.** `srv.SetPollTimeout(30 * time.Second)` raises the window, and the park is observed as the poll count going quiet: the stub records a poll on arrival and only then holds it, so two samples a few hundred milliseconds apart reading the same count mean the current poll is held, rather than that the loop is between two.
+The first attempt waited for two *fresh* polls instead, which cannot happen, because once a poll parks there is no second one.
+Use it when the state under test is already reached by the time the loop parks, as "settled but not yet flushed" is.
+
+**It fails when the event under test is one that wakes a parked poll.** `CompleteAssignedJob` does exactly that, so Q689 could not park: the completion it needed to leave unread is the thing that would end the park.
+Q689 blocked in `Provision` instead ([unreadcompletion_q689_test.go](../../cmd/agc/internal/scalesetlistener/unreadcompletion_q689_test.go)), holding the loop inside the provisioner until the listener's context is cancelled, which puts it where it cannot read the queue at all.
+Provisioning is the widest such window to arrange and the easiest to observe, and it stands in for the narrower ones: `retryDeferred` walks the runner-name ladder against the network, and `reconcileDeferred` spends a session refresh.
+
+So ask first whether the event you are holding the loop away from is one that would wake it.
+Where it is, park nothing and block the loop inside the work instead.
 
 ### Pin the process when the signal comes out of its memory
 
