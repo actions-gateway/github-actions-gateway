@@ -3745,12 +3745,16 @@ That is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/
 An earlier sketch wrote <code>docs/queue/index.md</code> at build time and needed a <code>.gitignore</code> entry plus a gate to stop a stale committed copy reappearing; appending to a page MkDocs already serves needs neither, because there is no artifact to commit.
 On github.com the same README renders as the conventions alone, which is the right reading there: a reader browsing the source does not want 177 rows.</p>
 <p><strong>The table comes from <code>queue.py render</code>, not from a second renderer</strong>, so the page and the CLI cannot disagree about order, truncation or status.</p>
-<p>Two things this wiring depends on, both of which fail quietly:</p>
+<p>Three things this wiring depends on, all of which fail quietly:</p>
 <ul>
 <li><strong><code>queue_page.py</code> must precede <code>source_links.py</code> in <code>mkdocs.yml</code>.</strong> Hooks run in listed order and both use <code>on_page_markdown</code>; an item's <code>target</code> routinely points outside <code>docs/</code> (a Go file, a workflow), which is exactly what <code>source_links</code> absolutizes.
   Appended after it, those links reach the build unrewritten: 56 <code>--strict</code> warnings, all of them the same shape.</li>
 <li><strong>The guard counts item rows, not bytes.</strong> <code>render</code> against an absent or empty store exits 0 and prints the two header lines, so a non-empty-output check reads 67 characters of table furniture as a healthy render.
   Measured: pointing the hook at a missing directory built green until the guard counted rows, which is the empty backlog publishing as a current one.</li>
+<li><strong>A row's link may leave <code>docs/</code>, but it must not come back.</strong> MkDocs resolves a <code>docs/queue/</code> page's links from <code>queue/</code> inside <code>docs/</code>, so <code>../../scripts/go/coverage.sh</code> is fine: it stays out, and <code>source_links</code> rewrites it to a <code>repo_url</code> blob URL.
+  <code>../../docs/development/go-workspaces.md</code> escapes and re-enters, which <code>source_links</code> reads as a published page and leaves alone, so <code>--strict</code> aborts; a link leaving the repository altogether is dead the same way, since no URL can be built for it either.
+  <code>make queue-rules-check</code> rule 14 catches that shape without building the site, because nothing in <code>make check</code> or <code>make docs-gates</code> does (Q1054).
+  Write it relative to the store: <code>../development/go-workspaces.md</code>.</li>
 </ul>
 <h2 id="publication-scope">Publication scope<a class="headerlink" href="#publication-scope" title="Permanent link">&para;</a></h2>
 <p>Scope is <strong>per version</strong>, not per site (Q558):</p>

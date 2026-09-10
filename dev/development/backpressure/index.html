@@ -2829,7 +2829,7 @@ Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p
 </tr>
 <tr>
 <td>Structural rules</td>
-<td><code>scripts/docs/lint-queue.sh</code> — the backlog store's format: frontmatter shape, rank shape, filename/id agreement, the 72-character title cap, targets that no longer resolve. Its sibling <code>check-queue-rules.sh</code> carries the three rules that are functions of what the branch changed</td>
+<td><code>scripts/docs/lint-queue.sh</code> — the backlog store's format: frontmatter shape, rank shape, filename/id agreement, the 72-character title cap, targets that no longer resolve. Its sibling <code>check-queue-rules.sh</code> carries the rules that are functions of what the branch changed, plus the one that keeps a row's links resolvable by the site build</td>
 <td><code>.githooks/pre-commit</code> (also enforces isolated STATUS.md commits); <code>make check</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint.yml</code></a></td>
 </tr>
 <tr>

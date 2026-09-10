@@ -2663,11 +2663,14 @@ Gate labels for shipped releases are retired rather than kept, because no open i
 Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an outside operator or user ask · <strong>Event:</strong> an observable outside-our-control condition · <strong>Decision:</strong> our own call, where we are the blocker.</p>
 <h2 id="rules-the-gates-enforce">Rules the gates enforce<a class="headerlink" href="#rules-the-gates-enforce" title="Permanent link">&para;</a></h2>
 <p><code>queue.py lint</code> checks the store's shape: unique ranks, a closed status set, a title within 72 characters, and a note that opens with what a blocked item waits on.</p>
-<p><code>check-queue-rules.sh</code> checks what a per-item store makes silent, and each of the three guards a loss no other gate can see:</p>
+<p><code>check-queue-rules.sh</code> checks what a per-item store makes silent, and each of these guards a loss no other gate can see:</p>
 <ul>
 <li><strong>A <code>flake</code> item may not simply vanish.</strong> Retiring one means recording it in <a href="../development/flake-watch-retired/">the flake-watch ledger</a>, so a flake closed without a fix leaves a trace.</li>
 <li><strong>The last item targeting a plan flips that plan's row</strong> in <a href="../plan/"><code>docs/plan/README.md</code></a>, so a plan cannot read open once nothing points at it.</li>
 <li><strong>Every label is declared here.</strong></li>
+<li><strong>A link a row carries resolves for MkDocs.</strong> This page publishes at <code>/dev/queue/</code>, so a link that leaves <code>docs/</code> and either points back into it or leaves the repository aborts <code>mkdocs --strict</code>, a class no local gate builds the site to catch.
+  Write it relative to the store: <code>../development/website.md</code>, never <code>../../docs/development/website.md</code>.
+  Notes count as well as <code>target:</code>, and a link quoted inside a fenced block or a code span does not.</li>
 </ul>
 <p>Maintained per <a href="../development/maintaining-backlog/"><code>maintaining-backlog.md</code></a>: completed items are deleted and git is the archive, the open PR is the in-flight signal, and new items enter at the rank they deserve.</p>
 <h2 id="the-backlog-in-priority-order">The backlog, in priority order<a class="headerlink" href="#the-backlog-in-priority-order" title="Permanent link">&para;</a></h2>
@@ -3067,14 +3070,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Inv.</td>
-</tr>
-<tr>
-<td><a href="Q1054/">Q1054</a></td>
-<td><a href="../development/website/">Filing a queue row adds a page no local gate builds</a></td>
-<td><code>ci</code> <code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>docs/queue/</code> publishes at <code>/dev/queue/</code>, so every new row is a new page under <code>docs/</code>.</td>
 </tr>
 <tr>
 <td><a href="Q1028/">Q1028</a></td>
