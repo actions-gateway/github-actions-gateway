@@ -732,6 +732,21 @@ queue-id: export QUEUE_ID_TARGET = $(TARGET)
 queue-id: ## Search the backlog for near-duplicates, then allocate a Q-ID (make queue-id TITLE="..." [TARGET=path])
 	@scripts/docs/alloc-queue-id.sh $${QUEUE_ID_TARGET:+--target "$$QUEUE_ID_TARGET"} "$$QUEUE_ID_TITLE"
 
+# The rank half of filing a row. An id is minted by the target above and a rank
+# was minted by hand, which is why 33 rows shared one at 25edfb0c4: base-36 order
+# keys are not something to eyeball. `queue.py rank` mints from the neighbours it
+# is given AND warns when the key it just produced is one the store already
+# holds — the one thing the caller cannot see, told to the only party who can
+# still choose differently. Nothing on the path a session takes reached it before
+# this target existed (Q1096).
+#
+# A tie is legal: the store breaks it by id and both rows stay adjacent. The
+# warning says it happened, never that it is wrong.
+.PHONY: queue-rank
+queue-rank: export QUEUE_RANK_ARGS = $(ARGS)
+queue-rank: ## Mint a backlog rank key between two neighbours (make queue-rank ARGS="--after b1c --before b1f"; also --head / --tail)
+	@python3 scripts/docs/queue.py rank $${QUEUE_RANK_ARGS:---tail}
+
 # The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
 # found six of seven "near-term" items already shipped. Because done Queue rows
 # are deleted, a roadmap bullet naming a Q-ID the store no longer holds is an

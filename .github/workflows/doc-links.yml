@@ -287,7 +287,13 @@ jobs:
   # It belongs beside release-links rather than in unit-test.yml for the reason
   # em-dash gives: its only input is Markdown, which that workflow path-ignores.
   # Its own job so a duplicate h1 reads apart from a link that does not resolve
-  # — and unlike release-links it is offline, so it needs no venv and no tags.
+  # — and unlike release-links it is offline, so it needs no venv.
+  #
+  # It DOES need tags: the commit-count rule counts between the tag a note names
+  # and the tag it is named for, and a default depth-1 checkout has neither, so
+  # every note would take the gate's skip path and the job would pass having
+  # checked no count at all (Q1002). The gate says how many it checked, so that
+  # state is visible rather than inferred.
   release-notes:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
@@ -295,6 +301,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: release notes meet the mechanical rules (make release-notes-check)
         run: make release-notes-check
 

@@ -188,6 +188,15 @@ main() {
 	slug=$(repo_slug)
 	sha=$(sentinel_sha)
 
+	# The rank is the other half of filing a row and this script does not mint
+	# it: a rank is a position between two neighbours, which only the filer
+	# knows. What it can do is say where the mint lives, because nothing else on
+	# this path did — 33 rows shared a rank at 25edfb0c4, all hand-written, and
+	# `queue.py rank` warns about exactly that at mint time (Q1096). Stderr, so
+	# `ID=$(...)` still captures only the id.
+	printf 'alloc-queue-id: rank the row with: make queue-rank ARGS="--after <rank> --before <rank>"  (also --head / --tail)\n' >&2
+	printf '                It warns when the key it mints is one the store already holds, which a hand-written rank cannot.\n' >&2
+
 	while ((issued < count)); do
 		if claim "Q$candidate" "$slug" "$sha"; then
 			printf 'Q%d\n' "$candidate"

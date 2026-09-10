@@ -429,6 +429,27 @@ release_pin_exempt_versions_regexp() {
 	printf '%s' '^v2\.0\.0$'
 }
 
+# release_thirdparty_projects_regexp — print the pattern matching the name a
+# THIRD-PARTY version may be attributed to, immediately before the version
+# itself. A pin-bearing page has to be able to say which upstream release a
+# measurement was taken against: the release pre-flight asks for that
+# re-measurement every cycle, and until Q728 the only way to write it was a
+# commit SHA, because a bare `0.14.0` read as a stale GAG pin and failed the
+# gate.
+#
+# Attribution is VISIBLE PROSE, deliberately, and an HTML comment would not do.
+# verify-published-docs.sh scans the rendered page through article_text, which
+# splits on `<` and keeps only what follows the `>` — so a `<!-- marker -->`
+# is dropped while the version beside it survives. A marker the source gate
+# honoured and the published-site gate could not see would break the one
+# property these two share an extractor for.
+#
+# Keep the list short and add to it deliberately: every name here is a hole in a
+# gate whose whole tractability rests on a two-literal noise floor.
+release_thirdparty_projects_regexp() {
+	printf '%s' 'ARC|actions-runner-controller'
+}
+
 # release_version_literals FILE — emit one `<line>\t<literal>\t<kind>` record per
 # release-version literal in FILE.
 #
@@ -438,14 +459,17 @@ release_pin_exempt_versions_regexp() {
 # longer dotted run (a four-part version, a dotted-quad address) and is not a
 # release version. A line beginning `Measured on kind ` records what was actually
 # installed for a measurement, so its versions are skipped: bumping one would
-# falsify the record.
+# falsify the record. A version introduced by a third-party project name is that
+# project's, not a pin, and is skipped for the same reason (Q728) — the name has
+# to sit immediately before it, so one attributed version on a line leaves every
+# other literal there still checked.
 #
 # Shared by check-release-pins.sh, which reads the working tree, and
 # verify-published-docs.sh, which reads the pages that tree published (Q784) —
 # one extractor, so a pin shape the source gate sees cannot be invisible to the
 # published-site gate.
 release_version_literals() {
-	awk '
+	awk -v projects="$(release_thirdparty_projects_regexp)" '
 		function flanked(before, after, after2) {
 			if (before ~ /[0-9]/) return 1
 			if (before == "." ) return 1
@@ -453,19 +477,28 @@ release_version_literals() {
 			if (after == "." && after2 ~ /[0-9]/) return 1
 			return 0
 		}
+		# Everything on the line up to where this token starts, so the test is
+		# what the version is attached to rather than what the line mentions.
+		# `ARC 0.14.0` and `actions-runner-controller v0.14.0` are attributed;
+		# an unrelated pin later on the same line still has GAG text before it.
+		function attributed(lead) {
+			return lead ~ ("(^|[^A-Za-z0-9-])(" projects ")[[:space:]]+v?$")
+		}
 		/^Measured on kind / { next }
 		{
 			rest = $0
 			offset = 0
 			while (match(rest, /v?[0-9]+\.[0-9]+\.([0-9]+|z)/)) {
 				tok = substr(rest, RSTART, RLENGTH)
-				before = (RSTART + offset > 1) ? substr($0, RSTART + offset - 1, 1) : ""
+				start = RSTART + offset
+				before = (start > 1) ? substr($0, start - 1, 1) : ""
 				end = RSTART + RLENGTH
 				after  = substr(rest, end, 1)
 				after2 = substr(rest, end + 1, 1)
 				offset += end - 1
 				rest = substr(rest, end)
 				if (flanked(before, after, after2)) continue
+				if (attributed(substr($0, 1, start - 1))) continue
 				printf "%d\t%s\t%s\n", NR, tok, (tok ~ /z$/ ? "patchline" : "semver")
 			}
 		}

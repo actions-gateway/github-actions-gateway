@@ -56,6 +56,22 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   An audit row inheriting an unverified premise is the sharpest case, but the rule is general — [what a row can be wrong about, and what each mistake cost](#a-rows-asserted-defect-is-a-claim-not-a-finding).
 - **The isolated-commit rule is gone with the table it protected.** A backlog edit no longer has to be its own commit, because the cost it was avoiding was a rebase conflict on one contended file, and one file per item removes it at the source ([what it was, and what replaced it](#isolated-commits-and-what-replaced-them)).
 
+## Mint the rank, don't write one
+
+An id comes from `make queue-id`; the rank is the other half, and until Q1096 nothing on the path a session takes ever offered to mint one.
+So ranks were hand-written, and base-36 order keys are not something to eyeball: 33 rows shared a rank at `25edfb0c4`.
+
+```bash
+make queue-rank ARGS="--after b1c --before b1f"   # also --head / --tail
+```
+
+Two rows sharing a rank is **legal**: [`Item.sort_key`](../../scripts/docs/queue.py) breaks the tie by id and both stay adjacent.
+So this is not a defect being caught, and `queue-lint` deliberately says nothing about it.
+What the mint adds is the one thing the filer cannot see: it warns when the key it just produced is one the store already holds, to the only party who can still choose differently.
+
+Bounds do not pin the gap they look like they pin.
+`--after b1c --before b1f` mints a key between those two *values*, whatever has since landed there, so the warning is the check and the bounds are not.
+
 ## Isolated commits, and what replaced them
 
 **The rule was: a commit touching `docs/STATUS.md` touches nothing else.** Not "no code" — nothing.

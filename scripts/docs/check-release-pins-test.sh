@@ -97,6 +97,40 @@ fail_case 'the measurement exemption does not leak to other lines' \
     "$(fixture "Measured on kind v1.36.1: install \`v1.2.0\`." "Pin \`--version 1.2.0\`.")" \
     ':2: pins 1.2.0'
 
+# A version attributed to a third-party project is that project's, not a pin.
+# The release pre-flight asks for the ARC-side re-measurement every cycle, and
+# before Q728 the only way to record one was a commit SHA.
+pass_case 'a version attributed to a third-party project is not a pin' \
+    "$(fixture "Pin \`--version 1.3.0\`." \
+               'ARC-side claims re-read against ARC 0.14.0 on 2026-09-10.')"
+
+pass_case 'the attribution takes the full project name and a v prefix' \
+    "$(fixture "Pin \`--version 1.3.0\`." \
+               'Read at actions-runner-controller v0.13.1.')"
+
+# The attribution is anchored to what sits immediately before the version, not
+# to the line, so a real pin sharing the line is still checked. Without this the
+# exemption would be a per-line off switch.
+#
+# The needle alone cannot settle that: an unskipped `0.14.0` would be reported
+# too and the case would still find `pins 1.2.0`. So this one asserts the
+# attributed version is ABSENT from the output as well.
+mixed_line_doc="$(fixture "Measured against ARC 0.14.0; pin \`--version 1.2.0\`.")"
+run "$mixed_line_doc"
+die_if_killed 'attribution does not exempt the rest of its line' "$status"
+if (( status == 1 )) && [[ "$output" == *':1: pins 1.2.0'* && "$output" != *'0.14.0'* ]]; then
+    printf 'ok   %s\n' 'attribution does not exempt the rest of its line'
+else
+    printf 'FAIL %s: wanted exit 1 naming 1.2.0 and never 0.14.0, got %d:\n%s\n' \
+        'attribution does not exempt the rest of its line' "$status" "$output" >&2
+    fails=$((fails + 1))
+fi
+
+# A project name that merely appears on the line attributes nothing.
+fail_case 'a project name elsewhere on the line is not an attribution' \
+    "$(fixture "ARC users should pin \`--version 1.2.0\`.")" \
+    'pins 1.2.0'
+
 # v2.0.0 is the announced v1alpha1/v2alpha1 removal release — a future version
 # these pages name on purpose.
 pass_case 'the announced removal release is exempt' \
