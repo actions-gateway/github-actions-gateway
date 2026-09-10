@@ -2598,10 +2598,10 @@
 
 
 <h1 id="worker-contention-sweep-false-positives-on-unrelated-histories">Worker contention sweep false-positives on unrelated histories<a class="headerlink" href="#worker-contention-sweep-false-positives-on-unrelated-histories" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>karlkfi/claude-skills</code> fixes the sweep snippet, after which this repo's playbook can drop its own caveat.
-<code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the <code>session-worker</code> contention sweep reads <code>origin/gh-pages</code> as touching the file.
+<p><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the contention sweep reads <code>origin/gh-pages</code> as touching the file.
 Measured 2026-08-18 and again 2026-08-21, where it was the only reproducible false positive in the loop.
-The fix is upstream, not here: filed 2026-08-21 as gap 2 of <code>karlkfi/claude-skills</code> issue 288, alongside a second defect in the same six lines, that a reader extending the loop to several paths writes <code>for path in</code>, which destroys <code>PATH</code> under zsh.</p>
+The upstream half shipped in <code>karlkfi/claude-skills</code> commit <code>bae3cbe</code> on 2026-08-21, which skips a branch whose merge base cannot be read and loops over <code>b</code> rather than the <code>path</code> that destroyed <code>PATH</code> under zsh.
+What is left is this repo's own copy: <a href="../../development/parallel-dispatch/">parallel-dispatch.md</a> still prints the unguarded loop and still carries the caveat naming this row, so adopt the guard in the snippet and drop the caveat with it.</p>
 
 
 
