@@ -176,6 +176,19 @@ A listed file may not gain em-dashes; a file with no entry, including every new 
 As it lands, `make em-dash-baseline` re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done.
 `make em-dash-report` prints every file's density, worst first, which is the worklist.
 
+### Splitting an em-dash sentence must not strand the connective
+
+The ratchet puts every prose change to a listed file under standing pressure to split an em-dash sentence, and splitting one strands the connective from both halves.
+Measured 2026-08-24 from the gate's own output on a single PR: `testing.md` at 573 against a base of 570, `Q929.md` at 3 against 0, and on a later run `testing.md` at 572 against 570.
+One of the rewrites that pressure forced left `which also rules out staticcheck having been quiet on its own, which is the third cause below` in `testing.md`, where the second `which` no longer has a clause to attach to.
+
+**Nothing automated checks whether the result still parses.** No member of `DOCS_GATES` has an opinion on prose grammar, and `md-reflow-check` is `mdreflow --check`, which is about line breaks alone.
+The only instrument is a human reading the diff, and that is the instrument that failed here: the artifact was a plain `+` line in the branch diff, and the author reading it did not see what a reviewer reading the rendered prose did.
+
+The gate stays, because the pressure it applies is the point and the stranded connective is a side effect.
+The habit that avoids it is to re-read the split sentence as prose rather than as a diff line, and to recast the connective into whichever half keeps it (`…on its own: the third cause below`) instead of leaving it pointing at a clause that is now a separate sentence.
+Nothing about this is unique to em-dashes, since no edit in this repo has its grammar checked; the ratchet is simply what makes the rewrite frequent enough to notice.
+
 ## An upstream-behavior claim cites a measurement
 
 A sentence about how something outside this repo behaves is a claim nobody here can check, and it goes stale with no commit, no red gate, and no other signal.
@@ -358,6 +371,26 @@ The dispatcher wrote that trap into the playbook on the worker's evidence, then 
 
 Neither was carelessness, which is the point: both had the mechanism in working memory, and that is what made the next check feel redundant.
 If the check does not fire on real cases, demote this to an observation rather than leaving it stated as a rule.
+
+## Prose that counts a set goes stale on an insertion nothing checks
+
+A sentence asserting a property of a set is falsified by an insertion that never touches that sentence.
+Nothing here reads prose adjacency: `metric-tiers` reads the ledger, `promql-check` reads expressions, `queue-gates` reads the store, and `observability-dashboards.md` is read by no semantic gate at all.
+
+Q906 produced three instances in one change, none of them reachable by any gate:
+
+- `observability-dashboards.md` said "the first three capacity panels union the v1 `RunnerGroup` family with its v2 twin", after a v2-only panel went in third.
+- A godoc named `TestApplyWorkerCapacityConditions_SetsAllThree` and "all three conditions" sat above a function renamed to `SetsAllFour`, with the test body correct and green throughout.
+- `v2_runnerset_capacity_metrics_test.go` said "explicit zeros on the other two families" where three now exist.
+
+The first two were caught in review rather than shipped, which is the whole defence available today.
+
+**Name the members instead of counting them.** "the `RunnerGroup` and `RunnerScaleSet` families" survives the insertion that "both families" does not, and a reader who meets a third member sees an omission rather than a sentence that is simply wrong.
+The count is the part with nothing to check it against; the names are checkable against the thing itself, which is also what makes a later reader able to repair the sentence without re-deriving what it once meant.
+
+The sibling defect is the same failure from the layout side, and it is worth repairing in the same pass because the tell is identical: a true statement about a set, invalidated by a change that never touches it.
+Six dashboard panels at `w=4` is exactly 24 columns, so the arithmetic stays right while four previously-full titles come back ellipsed, which the source cannot answer and only the render can.
+Two instances already ship on the tenant dashboard (`Denied CONNECTs/s (SSRF signal)` at 31 chars, `Tunnel duration p95` at 19), which is what makes it a class rather than one mistake.
 
 ## Conventions
 

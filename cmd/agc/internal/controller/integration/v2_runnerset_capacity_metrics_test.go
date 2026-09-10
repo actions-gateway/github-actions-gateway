@@ -167,8 +167,9 @@ func TestV2_RunnerSet_CapacityGauges_QuotaExceeded(t *testing.T) {
 
 // TestV2_RunnerSet_CapacityGauges_WorkersUnschedulable proves the scheduler-verdict
 // signal reaches its own gauge, and that a set with no capacity problem emits
-// explicit zeros on the other two families rather than no series at all — a frozen
-// or absent series is what an operator's alert would misread as healthy.
+// explicit zeros on the quota_pressure and quota_exceeded families rather than no
+// series at all — a frozen or absent series is what an operator's alert would
+// misread as healthy.
 func TestV2_RunnerSet_CapacityGauges_WorkersUnschedulable(t *testing.T) {
 	const ns = "v2-rs-cap-gauge-unsched"
 	const setName = "gauge-unsched-set"

@@ -2313,6 +2313,21 @@ So when a harness call stands in for a product code path, **write down what it d
 Then say which of those a follow-up must still confirm.
 A measurement whose write-up names its own blind spots is worth far more than one that quietly implies it has none.
 
+### A gate's failure path is the one path no green run exercises
+
+The three rules above prove that an assertion can fail.
+None of them reaches the code a gate runs *while* it is failing, and that path is the one every passing run skips by construction.
+
+**Q871's checker waited on its child's exit status in two places**, so a fake that died during startup left it blocked on a status the child would never send.
+Every green run reached the first wait with a live child and returned, so the suite exercised the deadlock exactly never.
+A fixture that killed the fake before its first write found the bug in one command.
+
+**A gate that hangs is worse than one that answers wrongly.** A wrong answer is still a verdict, and the fan-out reports it; a blocked gate produces no verdict at all, so `run-parallel.sh` stops with nothing to read and no failing check naming the cause.
+
+So write the error-path fixture when the gate is written, rather than after it hangs: kill the child, hand it a malformed line, remove the file it reads.
+This is distinct from timing a gate, which the fan-out already reports.
+That measures a gate doing its job slowly, where this exercises the branch it takes when the job cannot be done at all.
+
 ### Assert the recovery property, not the mechanism believed to deliver it
 
 A test that exists to pin a safety or recovery property — "the gate cannot starve a tenant", "the queue drains eventually", "the retry budget is bounded" — should assert that property as an observable outcome.
