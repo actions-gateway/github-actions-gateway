@@ -62,7 +62,7 @@ CHECK_FAST_GATES := roadmap-check \
                     registry-mirror-render-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check rung-order-check \
-                    upgrade-toc-check \
+                    upgrade-toc-check make-targets-check \
                     endpoint-parity-check \
                     release-notes-check \
                     dashboard-render-check \
@@ -125,6 +125,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   release-pins-check   an install/upgrade page pinning a superseded release
 #   release-notes-check  a release note with a duplicate h1, a dead in-page anchor, or a `v`-prefixed chart version
 #   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
+#   make-targets-check   prose naming a `make` target that exists in no Makefile
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
 #   roadmap-check        a roadmap or features.md bullet over its word cap, or naming an item that moved
@@ -160,7 +161,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               getting-started-check \
               queue-lint queue-rules-check queue-claims-check \
               md-reflow-check page-density-check release-pins-check \
-              release-notes-check upgrade-toc-check \
+              release-notes-check upgrade-toc-check make-targets-check \
               conflict-markers-check \
               release-ladder-check \
               roadmap-check comparison-stamps-check promql-check \
@@ -246,7 +247,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
-                 docs/check-upgrade-toc-test \
+                 docs/check-upgrade-toc-test docs/check-make-targets-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \

@@ -214,6 +214,10 @@ page-density-check: ## Fail on an admonition wall, or a stat tile saying the sam
 upgrade-toc-check: ## Fail when upgrade.md's Table of Contents has lost, gained, or reordered a heading
 	scripts/docs/check-upgrade-toc.sh
 
+.PHONY: make-targets-check
+make-targets-check: ## Fail when prose names a `make` target that exists in no Makefile
+	scripts/docs/check-make-targets.sh
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
 # dashboards beside it had their panel queries parsed by nothing either (Q910):
