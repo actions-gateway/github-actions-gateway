@@ -102,6 +102,13 @@ shopt -s inherit_errexit
 # kubectl carries no floor on purpose: the charts' `kubeVersion: ">=1.30.0-0"`
 # constrains the CLUSTER, and kubectl's own skew policy is relative to whatever
 # server it talks to, so neither yields a client floor this project depends on.
+# make carries none on purpose either, and the reason is the brew column rather
+# than the dependency: GNU make installs as `gmake`, so a 4.x floor probed
+# through `make --version` stays red after this row's own install instruction is
+# followed, and macOS's 3.81 builds every target here regardless. What the
+# version DOES change is the `make -p` database, which check-tool-pins.sh parses
+# — that divergence is asserted by its own test seam and written up in
+# docs/development/testing.md § The probe is not the gate (Q945).
 tools_registry() {
   cat <<'EOF'
 bash|required|bash|bash|https://www.gnu.org/software/bash/||5.1|

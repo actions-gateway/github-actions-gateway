@@ -103,6 +103,30 @@ Anything describing a *policy* or a *method* should be a string enum from birth.
 The same rule is sharper for label and annotation values, where a bare `true` is also a YAML coercion footgun: use an enum keyword (`allowed`, `managed`).
 See [kubernetes-conventions.md](kubernetes-conventions.md#label--annotation-value-conventions).
 
+#### An enum value YAML reads as a boolean rejects a value the operator never typed
+
+YAML 1.1 resolves bare `Off`, `On`, `Yes` and `No`, in any case, to booleans, so a string enum offering one of those keywords has a value an operator cannot write plainly.
+The decoder never errors on it; it coerces, and the two client paths coerce differently, so the rejection an operator sees depends on how they applied the manifest.
+
+Measured 2026-09-10 against the repo's `sigs.k8s.io/yaml` v1.6.0, on `auditLogging: Off`:
+
+| Path | Decodes to | Rejected on |
+|---|---|---|
+| `YAMLToJSON`, the unstructured path `kubectl apply` takes | JSON `false` | type, against `type: string` |
+| `Unmarshal` into a typed client's string field | the string `"false"` | the enum |
+
+`"Off"` decodes to `Off` on both.
+Reproduce through the wrong path and the error text does not match the report, which is what makes a live instance of this look stale.
+
+Four shipped fields carry an `Off` keyword and are all exposed to it: `spec.auditLogging` on `ActionsGateway` and on `EgressProxy`, `spec.agcAutoscaling.mode`, and `spec.capacityGate.mode` on `RunnerSet`.
+So this is a convention question rather than one field's bug:
+
+- **Prefer a keyword YAML cannot resolve** when naming a new "does nothing" state: `None`, `Disabled` and `Never` are all unambiguous, and cost nothing at design time.
+- **`Off` is still defensible** where a neighbouring rule already argues for it.
+  `agcAutoscaling.mode` mirrors the autoscaling.k8s.io `updateMode` set, so renaming it would trade one confusion for a worse one, and `capacityGate.mode` is `Off`/`Observe` because [name the method, not the on-state](#name-the-method-not-the-on-state) rejected `On` (Q476).
+- **Where it is kept, the operator-facing doc says to quote it** at every place an operator is shown how to set that field, not once per page.
+  All four carry the note today: [tenant-onboarding.md](../operations/tenant-onboarding.md) for `auditLogging` (Q564) and the two `mode` fields, [observability-logging.md](../operations/observability-logging.md) for the proxy's, and [runbook.md](../operations/runbook.md) where the incident rollback writes one.
+
 ### Don't collide with an established meaning
 
 `observe`/`audit`/`dry-run` mean *report-only, do not enforce* in Pod Security Admission and Gatekeeper.
