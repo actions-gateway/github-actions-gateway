@@ -2740,7 +2740,7 @@ Secure-by-default: an empty/unset allowlist forbids <em>all</em> <code>priorityT
 Same "platform owns it, not the tenant" family as <a href="../platform-owned-quota/">Q130</a> (platform-owned <code>ResourceQuota</code>) and the <a href="../q121-q122-q125-gmc-confinement/">Q121/Q122/Q125</a> GMC write confinement.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
 <p><code>priorityTiers[].priorityClassName</code> is <strong>tenant-authored and unvalidated</strong>.
-The GMC copies the <code>RunnerGroupSpec</code> verbatim into the namespaced <code>RunnerGroup</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go#L813">builder.go:813</a>, <code>Spec: spec</code>), and the AGC provisioner stamps it onto worker pods (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go#L809">provisioner.go:809</a>, <code>pod.Spec.PriorityClassName = priorityClass</code>).</p>
+The GMC copies the <code>RunnerGroupSpec</code> verbatim into the namespaced <code>RunnerGroup</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a>, <code>Spec: spec</code>), and the AGC provisioner stamps it onto worker pods (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>, <code>pod.Spec.PriorityClassName = priorityClass</code>).</p>
 <p><code>PriorityClass</code> is <strong>cluster-scoped</strong> and carries a <code>value</code> (priority) and a <code>preemptionPolicy</code> (k8s default <code>PreemptLowerPriority</code>).
 A tenant who names a high-<code>value</code> class with <code>PreemptLowerPriority</code> gets the scheduler to <strong>preempt (evict) other tenants' running worker pods</strong> to make room for its own.
 That breaks the cross-tenant isolation the whole per-tenant model promises — the same class of hole Q130 closed for quota.</p>
@@ -2762,7 +2762,7 @@ Rejected for the cost above.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="api--crd-breaking-pre-10">API / CRD (breaking, pre-1.0)<a class="headerlink" href="#api--crd-breaking-pre-10" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Remove the dead <code>PreemptionPolicy</code> field</strong> from <code>PriorityTier</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go#L19">runnergroup_types.go:19-24</a>).
+<li><strong>Remove the dead <code>PreemptionPolicy</code> field</strong> from <code>PriorityTier</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>).
   It has existed since Milestone 2 but is <strong>never consumed</strong> — the provisioner only sets <code>PriorityClassName</code>, never <code>pod.Spec.PreemptionPolicy</code>.
   The design doc already calls it "informational only."
   Keeping a tenant-settable preemption field is misleading <em>and</em> a latent preemption lever; preemption is governed by the platform-owned <code>PriorityClass</code> object's own <code>preemptionPolicy</code>.

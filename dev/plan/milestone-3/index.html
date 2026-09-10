@@ -3630,7 +3630,7 @@ Confirmed via local <code>docker pull</code> + <code>docker run</code>:</p>
 <ol>
 <li><code>Runner.Worker</code> is present in the image (no tarball extraction needed).</li>
 <li>Path: <code>/home/runner/bin/Runner.Worker</code>.
-   This directory is <strong>not</strong> on the default <code>$PATH</code>, so the worker Dockerfile sets <code>ENV PATH=/home/runner/bin:$PATH</code> to keep <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go#L91">cmd/worker/main.go:91</a>'s <code>exec.LookPath("Runner.Worker")</code> resolving correctly.</li>
+   This directory is <strong>not</strong> on the default <code>$PATH</code>, so the worker Dockerfile sets <code>ENV PATH=/home/runner/bin:$PATH</code> to keep <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>'s <code>exec.LookPath("Runner.Worker")</code> resolving correctly.</li>
 <li>.NET runtime + shared libraries ship inside the image (no host dependency on <code>ubuntu:24.04</code>).</li>
 <li>Image runs as <code>USER runner</code> (UID 1001) — tenants need <code>runAsUser: 1001</code> in the RunnerGroup <code>podTemplate</code> for PSA <code>restricted</code> admission.
    Already documented in <a href="../security/">security.md D-2</a>.</li>

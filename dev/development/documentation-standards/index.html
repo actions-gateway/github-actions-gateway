@@ -3034,7 +3034,7 @@ A caller that arranged a base sets <code>EM_DASH_REQUIRE_BASE=1</code> and the s
 That failure names itself a checkout fault and points at the job, because a reader who meets it in a red PR must not go looking at their own prose.
 Keying it on <code>CI</code> instead would read a variable the caller never set, and it fired inside the gate's own fixtures, whose repos have no <code>origin/main</code> by construction.</p>
 <p>One case stays outside the ratchet: a file <em>inside</em> the rule may legitimately gain, so two PRs can still push one across 3 per 1,000 between them, and only the run on the candidate sees that.
-<code>doc-links-gate</code> is not yet a required check (<a href="../../queue/Q943/">Q943</a>), so its verdict there is visible rather than binding.</p>
+<code>doc-links-gate</code> became a required check on 2026-09-09, so its verdict there is binding.</p>
 <p><strong>What it does not count.</strong> A raw <code>grep -o '—' | wc -l</code> was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
 The counter reads the parsed document instead (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/emdash"><code>devtools/docs/emdash</code></a>, over the goldmark layer Q612 built), and skips:</p>
 <table>

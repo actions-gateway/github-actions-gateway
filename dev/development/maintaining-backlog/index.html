@@ -3202,6 +3202,9 @@ The lifecycle:</p>
 <li><strong>Recurs</strong> → back to Queue top, escalated.</li>
 <li><strong>Soaked or obsolete</strong> → retire to the ledger (below).</li>
 </ul>
+<p><strong>A groom is the usual moment, not the only legal one.</strong> Where the fix itself makes the row obsolete, the fixing change may retire it directly: rule 8 reads the ledger entry, not who wrote it or when.
+<a href="../flake-watch-retired/">Q982</a> is the precedent: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1747">#1747</a> deleted the row and added its ledger line in one commit, because a flake-watch trigger turns on recurrence observed on <code>main</code> and that path had never run on <code>main</code>, so parking it would have soaked against an event that could not happen.
+Parking remains the default: retire at fix time only when you can state, in the ledger entry, why the trigger can no longer fire.</p>
 <p>A sighting on a <strong>PR branch</strong> does not meet the trigger, so the row stays in Flake watch — but it is still evidence the mitigation is incomplete: record it (on the row, or in the doc the row links) and count the soak from that date rather than from the fix.
 Record <em>which mode</em> failed, too, where the row's fix addressed a specific one: <a href="../../queue/Q549/">Q549</a>'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.</p>
 <p>This is the one place the general "done rows are deleted" rule does <strong>not</strong> apply, which makes it easy to miss when a flake fix otherwise looks like a routine change.
@@ -3210,7 +3213,7 @@ It keys on the label alone, so an item already parked in flake watch is protecte
 Retiring per the ledger rules below needs no exception: the ledger entry clears rule 8 by itself, and <code>QUEUE_ALLOW_FLAKE_DELETE="Q123"</code> is for the other case, a deliberate drop that reaches no ledger at all.</p>
 <h3 id="retiring-a-flake-watch-row">Retiring a flake-watch row<a class="headerlink" href="#retiring-a-flake-watch-row" title="Permanent link">&para;</a></h3>
 <p>Flake watch must not grow without bound — a row whose recurrence-memory has decayed to ~zero still costs a live-table scan every grooming pass and a slice of context budget, for no signal.
-During a grooming pass (never automatically), retire a row when <strong>either</strong> holds:</p>
+Retire a row when <strong>either</strong> holds (never automatically; retirement is always a judgement someone records):</p>
 <ul>
 <li><strong>Soaked</strong> — the covering spec has passed its <strong>blast-radius run threshold</strong> on <code>main</code> since the fix merged (table below), with no recurrence (any recurrence bounces the row back to the Queue, so "since the fix" passes are necessarily consecutive); <strong>or</strong></li>
 <li><strong>Obsolete</strong> — the flaky test or the mitigated code path no longer exists or was materially rewritten, so the old memory can no longer map to today's code (auto-retire regardless of age).</li>

@@ -2731,7 +2731,7 @@ The site (correctly) says "the platform team caps each tenant," but today:</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="api--crd">API / CRD<a class="headerlink" href="#api--crd" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>NamespaceQuota corev1.ResourceList</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go#L133">actionsgateway_types.go:133</a>); regenerate with <code>make manifests generate</code>.</li>
+<li>Remove <code>NamespaceQuota corev1.ResourceList</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a>); regenerate with <code>make manifests generate</code>.</li>
 <li>Confirm + document that structural-schema pruning drops the field from existing CRs silently (no apply rejection) pre-1.0.</li>
 </ul>
 <h3 id="controller--builder">Controller / builder<a class="headerlink" href="#controller--builder" title="Permanent link">&para;</a></h3>
@@ -2741,7 +2741,7 @@ The site (correctly) says "the platform team caps each tenant," but today:</p>
 </ul>
 <h3 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>resourcequotas</code> (and <code>limitranges</code> if present) verbs from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml#L27">role.yaml:27</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml#L33">charts rbac.yaml:33</a>; <code>make manifests</code>.</li>
+<li>Remove <code>resourcequotas</code> (and <code>limitranges</code> if present) verbs from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml">role.yaml</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml">charts rbac.yaml</a>; <code>make manifests</code>.</li>
 <li>Partially subsumes <a href="../../../queue/">Q122</a>: its proposed quota-write <em>confinement</em> becomes moot once we drop the write entirely.</li>
 </ul>
 <h3 id="docs-operator-facing--design--website">Docs (operator-facing + design + website)<a class="headerlink" href="#docs-operator-facing--design--website" title="Permanent link">&para;</a></h3>

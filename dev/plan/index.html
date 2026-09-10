@@ -2785,7 +2785,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
 <td>Whether <code>v2.0.0</code> retires <code>v2beta1</code> or keeps serving it, which decides whether GA <code>v2</code> defines the deprecated FQDN aliases: the doc conflict, what upstream requires, and the two paths costed against each other</td>
-<td>✅ Decided 2026-09-08 (Q1082): <code>v2beta1</code> is not served past <code>v2.0.0</code>, because a major release may break. Q452 flips to <em><code>v2</code> omits the aliases</em>, and the aliases move off their own clock onto <code>v2.0.0</code>, walking the published <code>v3.0.0</code> floor back across the operator docs, the enum godoc and the admission warning. Rule #4b still forces an overlap release, so the notice, the admission reject and the pre-upgrade check are <a href="../queue/Q1085/">Q1085</a>. Sibling <a href="../queue/Q1083/">Q1083</a> on the notice period stays open</td>
+<td>✅ Decided 2026-09-08 (Q1082): <code>v2beta1</code> is not served past <code>v2.0.0</code>, because a major release may break. Q452 flips to <em><code>v2</code> omits the aliases</em>, and the aliases move off their own clock onto <code>v2.0.0</code>, walking the published <code>v3.0.0</code> floor back across the operator docs, the enum godoc and the admission warning. Rule #4b still forces an overlap release, so the notice, the admission reject and the pre-upgrade check are <a href="../queue/Q1085/">Q1085</a>. Sibling Q1083 proposed a wall-clock floor beside the release count and was declined 2026-09-09; the policy stays release-count only</td>
 </tr>
 </tbody>
 </table>

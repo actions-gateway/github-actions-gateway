@@ -3037,14 +3037,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured across this family: Q596 2418 runs, Q703 240, Q803 5 at GOMAXPROCS=2, none reproducing a CI-only trigger.</td>
 </tr>
 <tr>
-<td><a href="Q943/">Q943</a></td>
-<td><a href="../plan/merge-queue/"><code>doc-links-gate</code> runs on the candidate merge but nothing blocks on it</a></td>
-<td><code>ci</code></td>
-<td>🔲</td>
-<td>XS</td>
-<td>Q743 gave <code>doc-links.yml</code> its <code>merge_group</code> trigger and an aggregate <code>doc-links-gate</code> job, so the docs gates now see the queue's candidate …</td>
-</tr>
-<tr>
 <td><a href="Q832/">Q832</a></td>
 <td><a href="../roadmap/">Roadmap bullets lose sentence-per-line: mdreflow declines every <code>q:</code></a></td>
 <td><code>ci</code> <code>docs</code> <code>retro</code></td>
@@ -3211,14 +3203,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A row's <code>target:</code> may name a heading anchor (<code>../plan/v2-ga.md#some-heading</code>), and nothing that runs on a pull request checks that the …</td>
-</tr>
-<tr>
-<td><a href="Q1083/">Q1083</a></td>
-<td><a href="../roadmap/">Deprecation notice is release-count only, with no wall-clock floor</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The stated policy, cited from <a href="../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>, is that "a removal lands on a named release …</td>
 </tr>
 <tr>
 <td><a href="Q1087/">Q1087</a></td>
@@ -3413,14 +3397,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Distinct from Q705 (comment-only): <code>go list -deps</code> reports directories, so a <code>_test.go</code> beside compiled source reads as shipped.</td>
 </tr>
 <tr>
-<td><a href="Q783/">Q783</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#skip-the-reflow-commit-in-git-blame">Re-point <code>.git-blame-ignore-revs</code> at the squashed reflow commit</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The file names <code>0acea95c</code>, the pre-merge branch SHA, which is not on <code>main</code>, so on git 2.55.0 it is a silent no-op rather than an error.</td>
-</tr>
-<tr>
 <td><a href="Q804/">Q804</a></td>
 <td><a href="../development/testing/#test-doubles-must-long-poll"><code>brokertest</code> answers <code>GET /message</code> 202 at once instead of long-polling</a></td>
 <td><code>tests</code> <code>debt</code></td>
@@ -3539,14 +3515,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> the next live-GitHub run reports <code>Q501 candidate A outcome</code> — the cancel spec now takes that reading, and nothing is buildable …</td>
-</tr>
-<tr>
-<td><a href="Q905/">Q905</a></td>
-<td><a href="../development/testing/">A testing.md sentence sits under the bullet after the one it belongs to</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>"The tier now says it for you" closes the derived-gate bullet, but what it describes is the envtest suite clock naming a bystander test …</td>
 </tr>
 <tr>
 <td><a href="Q530/">Q530</a></td>
@@ -3853,14 +3821,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>make docs-gates</code> runs neither <code>queue-lint</code> nor <code>queue-rules-check</code> (zero "queue" in its output), so a session that …</td>
 </tr>
 <tr>
-<td><a href="Q1009/">Q1009</a></td>
-<td><a href="../development/maintaining-backlog/">Rule 8's prose forbids the fix-time retirement its ledger records</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>check-queue-rules.py</code> states rule 8 as an invariant: a shipped mitigation parks a <code>flake</code> item in flake watch, and <em>only a groom</em> retires …</td>
-</tr>
-<tr>
 <td><a href="Q998/">Q998</a></td>
 <td><a href="../plan/q727-container-steps/">Broker-mediated pod-per-step <code>container:</code> and <code>services:</code> execution</a></td>
 <td><code>feature</code> <code>security</code></td>
@@ -4053,14 +4013,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Both module Makefiles pass <code>./...</code> to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">go-test-integration.sh</a>, while …</td>
 </tr>
 <tr>
-<td><a href="Q950/">Q950</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt">19 em-dash ceilings overstate their file's count by 91 in total</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>XS</td>
-<td>The baseline documents itself as freezing each listed file at its current count, and 19 of its 228 entries no longer do: measured …</td>
-</tr>
-<tr>
 <td><a href="Q953/">Q953</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-test-cache-inputs.py">The test-cache-input gate cannot see a subprocess's reads</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code></td>
@@ -4077,28 +4029,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Decision:</strong> whether CI may hold a read token for the private <code>karlkfi/claude-skills</code>, or upstream drift stays a thing somebody looks at.</td>
 </tr>
 <tr>
-<td><a href="Q952/">Q952</a></td>
-<td><a href="../plan/make/">Line-numbered citations in <code>docs/plan/make.md</code> land on unrelated code</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-21 over <code>docs/plan/</code>: 21 citations carry a <code>path:N</code> line anchor into a repo file, and 14 have a target that changed after …</td>
-</tr>
-<tr>
 <td><a href="Q954/">Q954</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh"><code>compute_scope</code> reads <code>CI</code> ambiently and no test pins it</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-21: four scripts branch on <code>${CI:-}</code> and no test in the repo sets or unsets it, so whichever branch the runner takes is …</td>
-</tr>
-<tr>
-<td><a href="Q1057/">Q1057</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/rank-vectors.tsv">A discarded Go queuestore is cited as a live second implementation</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Three files under <code>scripts/docs/</code> tell a reader that the magnitude-head rank algebra is implemented twice and that both implementations run …</td>
 </tr>
 <tr>
 <td><a href="Q1063/">Q1063</a></td>
@@ -4195,14 +4131,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q740 removed the library's <code>.invalid</code> placeholder, so an overlay that lost its <code>workerImage</code> patch now gap-fills the default runner instead …</td>
-</tr>
-<tr>
-<td><a href="Q981/">Q981</a></td>
-<td><a href="../development/building/">building.md still names the per-module Dockerfiles #870 removed</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>XS</td>
-<td>It describes "the four production images (<code>cmd/{agc,gmc,proxy,worker}/Dockerfile</code>)" and "all five Dockerfiles", two lines above its own …</td>
 </tr>
 <tr>
 <td><a href="Q991/">Q991</a></td>
