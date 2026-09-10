@@ -2604,8 +2604,8 @@ Zero throughput is not an imprecise reading, it is an inverted one, and the prun
 <p>Two candidate fixes, and the choice is the work.
 Either the convention gets enforced, which needs a gate on the deleting commit's subject rather than on the tree, and the gate has to accept <code>retire</code> as well, since <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">the flake lifecycle</a> sends rows to the ledger under that word and <code>maintaining-backlog.md</code> never told anyone to write a verb at all.
 Or the verb is abandoned as the signal and closure is derived instead, which is available here: a flake row that lands in <code>flake-watch-retired.md</code> retired, an item whose ID appears in a merged PR's body shipped.</p>
-<p>Note that <code>queue.py</code> is <a href="../../development/maintaining-backlog/">vendored byte-identical from the skill</a> and never edited here, so a fix to the matcher belongs upstream and only the convention half is this repo's to change.
-Related: Q955 owns the vendored-drift detection and Q956 the re-vendor.</p>
+<p>Note that <code>queue.py</code> is <a href="../../development/skills/#vendored-from-the-skills-repo">vendored from the skill</a> and carries only two declared local edits, neither of them in the matcher, so a fix there belongs upstream and only the convention half is this repo's to change.
+Related: Q955 owns the vendored-drift detection; the re-vendor Q956 asked for has shipped, so the matcher here is upstream's current one and the measurement above wants re-taking before either fix is chosen.</p>
 
 
 

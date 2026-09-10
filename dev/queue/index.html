@@ -2888,14 +2888,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</td>
 </tr>
 <tr>
-<td><a href="Q956/">Q956</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py">Re-vendor <code>queue.py</code> for the citation window the worker contract assumes</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>session-worker</code>'s contract tells a worker that <code>queue.py lint</code> reports citation drift as an advisory note and that its `CITATION_WINDOW = …</td>
-</tr>
-<tr>
 <td><a href="Q1010/">Q1010</a></td>
 <td><a href="../development/parallel-dispatch/">A dispatcher's error reaches further than its correction</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
@@ -3968,12 +3960,36 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-21: four scripts branch on <code>${CI:-}</code> and no test in the repo sets or unsets it, so whichever branch the runner takes is …</td>
 </tr>
 <tr>
+<td><a href="Q1094/">Q1094</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/vendored-skills.tsv"><code>rank-vectors-test.sh</code> is vendored from the skill and registered nowhere</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>scripts/docs/rank-vectors-test.sh</code> came out of <code>karlkfi/claude-skills</code> in <code>bbc2578f5</code>, beside the four files …</td>
+</tr>
+<tr>
+<td><a href="Q1096/">Q1096</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh">Rank-collision signal is gone from this repo's allocation path</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Before the Q956 re-vendor, <code>queue.py lint</code> noted every pair of items sharing a rank: <code>shares rank X with Y; order falls back to id</code>.</td>
+</tr>
+<tr>
 <td><a href="Q1063/">Q1063</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Migrate the ctrl.Result{Requeue: true} returns off the deprecated field</a></td>
 <td><code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>controller-runtime v0.24 deprecates <code>Result.Requeue</code> ("Use <code>RequeueAfter</code> instead"): a rate-limited requeue reuses a limiter meant for …</td>
+</tr>
+<tr>
+<td><a href="Q1097/">Q1097</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue-test.sh"><code>queue.py</code>'s new lint rules are our contract and have no coverage</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The Q956 re-vendor brought <code>CITATION_WINDOW</code> and <code>--citation-window</code>, the <code>exhibit:</code> prefix, the citation fragment and line-range checks …</td>
 </tr>
 <tr>
 <td><a href="Q1067/">Q1067</a></td>

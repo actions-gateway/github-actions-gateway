@@ -3028,12 +3028,16 @@ A PR comment reaches the dispatcher, which reads the PR; it does not reach the m
 What is local is the watch itself:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scripts/agent/pr-mergeability-watch.sh<span class="w"> </span>&lt;pr&gt;
 </code></pre></div>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.sh"><code>pr-mergeability-watch.sh</code></a> narrows the self-managed fallback to three fields, <code>state</code>, <code>mergeStateStatus</code> and <code>baseRefName</code>.
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.sh"><code>pr-mergeability-watch.sh</code></a> narrows the self-managed fallback to four fields, <code>state</code>, <code>mergeStateStatus</code>, <code>baseRefName</code> and <code>headRefOid</code>.
 It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit; <code>baseRefName</code> is a branch in this repository rather than authored text, and the watch refuses one that is not a plain refname instead of quoting it into the wake.
 The base is read because the wake has to name a branch, and a stacked PR told to rebase onto <code>main</code> absorbs its own base into its diff (Q839).
 The wake names the base and never a <code>git rebase --onto</code> line: that needs the old base head, which <code>merge-base</code> cannot recover once the base has been force-pushed.
 It carries no CI output, so a batch of them does not fill the dispatcher's context with logs for failures the owning worker is fixing.</p>
 <p>On <code>conflict</code> the dispatcher wakes the owning worker; the worker rebases onto the branch the wake names, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.</p>
+<p><strong><code>head_change</code> is the fourth exit, and it is the only signal a push under a green PR produces.</strong> The Q956 re-vendor brought it: the watch arms on the first readable head and exits when a later poll reads a different one, because whatever was verified against the armed head is void and the PR stayed mergeable throughout, so nothing else moved.
+A conflict outranks it, since the rebase a <code>conflict</code> asks for moves the head anyway and that signal regenerates.
+A head that is not a whole object name is a reading not taken, so it arms nothing and fires nothing rather than being compared.
+Treat the exit as a re-arm rather than as the end of the coverage.</p>
 <p><strong>A <code>ready</code> names a pull request, never a revision.</strong> pr-sentinel reports the PR number and its state, so a push during the watcher's sleep redirects what the verdict is about while the event still reads correct, green and unambiguous.
 Measured 2026-08-18: a watcher launched on head <code>0d458d95</code> fired <code>ready</code> after the branch had moved to <code>2c2d14b4</code>, and nothing in the event named either SHA.
 That is <a href="../testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">the <code>--branch</code> filter's defect</a> one door over, and worse, because no flag makes it right.
@@ -3272,11 +3276,11 @@ The local probe now runs first and the paginated timeline read stays behind the 
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.</p>
 </li>
 <li>
-<p><strong>A <code>WAKE</code> refusal is recorded, a probe that could not run is not.</strong> So an absent record means either that the assessment never ran or that it ran and could not measure, and the file cannot tell you which.
-  <code>--confirm</code> fails closed either way, since no record is not <code>ELIGIBLE</code>; what is lost is diagnostic, on exactly the after-the-fact question the record exists for.
-  The shell predecessor wrote a third verdict, <code>UNMEASURABLE</code>, for this; the Python treats a probe that could not run as never a verdict, which is defensible and is filed upstream as <a href="https://github.com/karlkfi/claude-skills/issues/129">claude-skills#129</a> rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite.
+<p><strong>A <code>WAKE</code> refusal is recorded, and so is a probe that could not run.</strong> The shell predecessor wrote a third verdict, <code>UNMEASURABLE</code>, for the second case; the Python vendored at Q889 dropped it, so an absent record meant either that the assessment never ran or that it ran and could not measure, and the file could not tell you which.
+  That was filed upstream as <a href="https://github.com/karlkfi/claude-skills/issues/129">claude-skills#129</a> rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite, and the Q956 re-vendor is that fix arriving, so <code>UNMEASURABLE</code> is back and an absent record now means the assessment never ran.
+  <code>--confirm</code> fails closed either way, since neither is <code>ELIGIBLE</code>.
   Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
-  That trade has an expiry, and <a href="../skills/#vendored-from-the-skills-repo">skills.md § Vendored from the skills repo</a> records where it stands: this file is still an unmodified vendor and <code>make vendored-skills-check</code> holds it there, while <code>queue.py</code> has drifted 264 diff lines from its own upstream, so a fix there is a re-vendor rather than an overwrite (Q890).</p>
+  That trade has an expiry, and <a href="../skills/#vendored-from-the-skills-repo">skills.md § Vendored from the skills repo</a> records where it stands: this file is still an unmodified vendor and <code>make vendored-skills-check</code> holds it there, while <code>queue.py</code> is the one declared fork, so a fix there is a re-vendor rather than an overwrite (Q890, Q956).</p>
 </li>
 <li>
 <p><strong>It is not a registry.</strong> <code>tmp/</code> is gitignored and session-local; nothing reconciles it and no gate reads it.

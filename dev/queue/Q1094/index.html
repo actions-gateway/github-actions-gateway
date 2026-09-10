@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q956/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1094/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Re-vendor queue.py for the citation window the worker contract assumes - GitHub Actions Gateway</title>
+        <title>rank-vectors-test.sh is vendored from the skill and registered nowhere - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#re-vendor-queuepy-for-the-citation-window-the-worker-contract-assumes" class="md-skip">
+        <a href="#rank-vectors-testsh-is-vendored-from-the-skill-and-registered-nowhere" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Re-vendor queue.py for the citation window the worker contract assumes
+              rank-vectors-test.sh is vendored from the skill and registered nowhere
             
           </span>
         </div>
@@ -2597,12 +2597,18 @@
   
 
 
-<h1 id="re-vendor-queuepy-for-the-citation-window-the-worker-contract-assumes">Re-vendor <code>queue.py</code> for the citation window the worker contract assumes<a class="headerlink" href="#re-vendor-queuepy-for-the-citation-window-the-worker-contract-assumes" title="Permanent link">&para;</a></h1>
-<p><code>session-worker</code>'s contract tells a worker that <code>queue.py lint</code> reports citation drift as an advisory note and that its <code>CITATION_WINDOW = 10</code> suppresses drift of ten lines or fewer outright, so the check can wait until after an edit.
-Measured 2026-08-21: this repo's vendored copy has no <code>CITATION_WINDOW</code> and no drift-window logic at all, because it predates upstream <code>f969655</code>, which added it.
-So a worker here follows an instruction about behaviour its own tool does not have.
-Re-vendoring picks it up, and <code>make vendored-skills-check</code> then needs its digest re-stamped in the same change.
-<a href="../Q955/">Q955</a> owns the detection half, that nothing asks whether the vendored files have moved upstream; this row is one measured instance of the drift that row cannot see.</p>
+<h1 id="rank-vectors-testsh-is-vendored-from-the-skill-and-registered-nowhere"><code>rank-vectors-test.sh</code> is vendored from the skill and registered nowhere<a class="headerlink" href="#rank-vectors-testsh-is-vendored-from-the-skill-and-registered-nowhere" title="Permanent link">&para;</a></h1>
+<p><code>scripts/docs/rank-vectors-test.sh</code> came out of <code>karlkfi/claude-skills</code> in <code>bbc2578f5</code>, beside the four files <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/vendored-skills.tsv">vendored-skills.tsv</a> declares, and holds no row of its own.
+It is <code>session-backlog/scripts/test-rank-vectors.sh</code> upstream: <code>bbc2578f5</code> renamed it on adoption, so grepping upstream for the local name finds nothing.
+So <code>make vendored-skills-check</code> cannot see it: it is the unregistered fifth file <a href="../../development/skills/#vendored-from-the-skills-repo">skills.md</a> warns nothing derives, because nothing in the tree marks a file as vendored.
+An edit to it is an ordinary hunk rather than a declared fork, and an upstream fix reaches it only if somebody remembers the file came from there.</p>
+<p>Measured 2026-09-10 on <code>origin/main</code>: the manifest holds four data rows and none names this file, against a control of the four that are named, all of which <code>--report</code> classifies.</p>
+<p>The repair is a row in the manifest and a line in <code>skills.md</code>'s table, which makes the file's provenance and its fork state both readable.
+It is forked rather than byte-identical, so the row's two digests will differ and <code>--report</code> will say <code>forked</code>; that is the state to declare, not one to remove.</p>
+<p><strong>This finding was Q1057's second half and outlived it.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1888">#1888</a> closed Q1057 as already fixed, correctly for the finding it addressed — three files citing a discarded Go queuestore, repaired by <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1855">#1855</a> — but that reasoning does not reach this one, and deleting the row took it with it.
+So a row carrying two findings was closed on one of them.
+The general lesson is <a href="../Q1045/">Q1045</a>'s neighbour rather than its case: a row whose findings have different fixes is closed one finding at a time, and nothing today asks whether a deletion leaves any behind.</p>
+<p><a href="../Q955/">Q955</a> owns whether anything asks if the vendored files have moved upstream, which is the gap that let Q1057's first finding age in the first place.</p>
 
 
 
