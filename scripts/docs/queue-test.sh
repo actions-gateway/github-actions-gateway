@@ -392,10 +392,13 @@ else
 fi
 
 # The quiet half. The file has to exist under the store's parent for the
-# resolve branch to be the reason for the silence.
+# resolve branch to be the reason for the silence, and it has to be long enough
+# to hold the cited line: since the Q956 re-vendor, lint also reads the line the
+# citation names, so a zero-line file is a citation past the end of the file
+# rather than one that resolved.
 S="$TMP/dotok"
 mkdir -p "$TMP/.github/workflows"
-: > "$TMP/.github/workflows/real.yml"
+printf 'x\n%.0s' $(seq 20) > "$TMP/.github/workflows/real.yml"
 item "$S" Q1 a0 ready "The defect is at .github/workflows/real.yml:12 today."
 rc=0
 python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?

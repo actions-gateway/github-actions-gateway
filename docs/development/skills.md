@@ -112,18 +112,25 @@ Four files are copied out of `karlkfi/claude-skills` and run here as ordinary re
 
 | Here | Upstream | Taken from |
 |---|---|---|
-| [`scripts/docs/queue.py`](../../scripts/docs/queue.py) | `session-backlog/scripts/queue.py` | `b0330e0f`, 2026-08-16 |
-| [`scripts/docs/rank-vectors.tsv`](../../scripts/docs/rank-vectors.tsv) | `session-backlog/scripts/rank-vectors.tsv` | `b0330e0f`, 2026-08-16 |
-| [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `8f65c5b6`, 2026-08-16 |
-| [`scripts/agent/pr-mergeability-watch.py`](../../scripts/agent/pr-mergeability-watch.py) | `session-orchestrator/scripts/pr-mergeability-watch.py` | `0d38df40`, 2026-08-15 |
+| [`scripts/docs/queue.py`](../../scripts/docs/queue.py) | `session-backlog/scripts/queue.py` | `b776ff82`, 2026-09-10 |
+| [`scripts/docs/rank-vectors.tsv`](../../scripts/docs/rank-vectors.tsv) | `session-backlog/scripts/rank-vectors.tsv` | `4b2af1fb`, 2026-09-05 |
+| [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `f961cba6`, 2026-08-16 |
+| [`scripts/agent/pr-mergeability-watch.py`](../../scripts/agent/pr-mergeability-watch.py) | `session-orchestrator/scripts/pr-mergeability-watch.py` | `08d11e9d`, 2026-09-05 |
 
 [Q889](../plan/q889-backlog-item-store.md) phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
 Nothing held them there, and nothing in the tree said they were vendored at all.
 
-**Measured 2026-08-21, and it is not the drift the backlog row assumed.** Each file as of the vendoring commit hashes to an upstream commit exactly, so phase 1 did what it claimed.
-Upstream has since taken 8 commits on `queue.py` and 1 to 2 on each of the others, and this repo took none until Q935 forked `queue.py` to fix its stale-citation pattern.
-So the fork ran one way for five days, in the direction nobody here controls.
-A clean overwrite is no longer available for `queue.py` in any case: it and its upstream now differ by 264 diff lines, which is a re-vendor rather than a patch.
+**Measured 2026-08-21, and it was not the drift the backlog row assumed.** Each file as of its vendoring commit hashed to an upstream commit exactly, so phase 1 did what it claimed.
+The drift was entirely upstream's: 8 commits on `queue.py` and 1 to 2 on each of the others, against none here until Q935 forked `queue.py` to fix its stale-citation pattern.
+So the fork ran one way, in the direction nobody here controls.
+
+**Re-vendored 2026-09-09 under Q956, which is what one-way drift costs when nothing asks.** The stale copies were missing behaviour the skills themselves cite by name — `queue.py`'s `CITATION_WINDOW` and `--citation-window`, `pr-mergeability-watch.py`'s `head_change` exit, `pr-requeue-eligible.py`'s `UNMEASURABLE` record — so a session following the `session-worker` contract here was following instructions about a tool it did not have.
+Three of the four came across as clean overwrites; `queue.py` did not, its fork and upstream having diverged past a patch, so it was merged three-way against the vendoring commit.
+What survives that merge is the open-PR check on `next` (Q990), and one comment: the rank-scheme paragraph in the module docstring, where upstream still asserts a second implementation of the algebra exists and its own `rank-vectors.tsv` says the Go queuestore was discarded.
+`claude-skills#489` is open against that paragraph as of 2026-09-10, so the disagreement is upstream's to settle and the fork ends when it lands.
+The rest of what the fork carried is gone from it.
+The cross-repo provenance stripped out of the comments, upstream has since removed itself.
+The stale-citation lookbehind (Q935) was carried here for three weeks and landed upstream as `claude-skills#488` on 2026-09-10, so this re-vendor takes upstream's copy of it and the edit stops being local at all — which is the vendoring model working, one round late.
 
 `make vendored-skills-check` asserts the half a local read can reach.
 Each file still hashes to the digest its row declares, so forking one moves the digest in the same diff and a reviewer sees it.

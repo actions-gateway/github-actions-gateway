@@ -115,13 +115,18 @@ What is local is the watch itself:
 scripts/agent/pr-mergeability-watch.sh <pr>
 ```
 
-[`pr-mergeability-watch.sh`](../../scripts/agent/pr-mergeability-watch.sh) narrows the self-managed fallback to three fields, `state`, `mergeStateStatus` and `baseRefName`.
+[`pr-mergeability-watch.sh`](../../scripts/agent/pr-mergeability-watch.sh) narrows the self-managed fallback to four fields, `state`, `mergeStateStatus`, `baseRefName` and `headRefOid`.
 It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit; `baseRefName` is a branch in this repository rather than authored text, and the watch refuses one that is not a plain refname instead of quoting it into the wake.
 The base is read because the wake has to name a branch, and a stacked PR told to rebase onto `main` absorbs its own base into its diff (Q839).
 The wake names the base and never a `git rebase --onto` line: that needs the old base head, which `merge-base` cannot recover once the base has been force-pushed.
 It carries no CI output, so a batch of them does not fill the dispatcher's context with logs for failures the owning worker is fixing.
 
 On `conflict` the dispatcher wakes the owning worker; the worker rebases onto the branch the wake names, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
+
+**`head_change` is the fourth exit, and it is the only signal a push under a green PR produces.** The Q956 re-vendor brought it: the watch arms on the first readable head and exits when a later poll reads a different one, because whatever was verified against the armed head is void and the PR stayed mergeable throughout, so nothing else moved.
+A conflict outranks it, since the rebase a `conflict` asks for moves the head anyway and that signal regenerates.
+A head that is not a whole object name is a reading not taken, so it arms nothing and fires nothing rather than being compared.
+Treat the exit as a re-arm rather than as the end of the coverage.
 
 **A `ready` names a pull request, never a revision.** pr-sentinel reports the PR number and its state, so a push during the watcher's sleep redirects what the verdict is about while the event still reads correct, green and unambiguous.
 Measured 2026-08-18: a watcher launched on head `0d458d95` fired `ready` after the branch had moved to `2c2d14b4`, and nothing in the event named either SHA.
@@ -408,11 +413,11 @@ The local probe now runs first and the paginated timeline read stays behind the 
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.
 
-- **A `WAKE` refusal is recorded, a probe that could not run is not.** So an absent record means either that the assessment never ran or that it ran and could not measure, and the file cannot tell you which.
-  `--confirm` fails closed either way, since no record is not `ELIGIBLE`; what is lost is diagnostic, on exactly the after-the-fact question the record exists for.
-  The shell predecessor wrote a third verdict, `UNMEASURABLE`, for this; the Python treats a probe that could not run as never a verdict, which is defensible and is filed upstream as [claude-skills#129](https://github.com/karlkfi/claude-skills/issues/129) rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite.
+- **A `WAKE` refusal is recorded, and so is a probe that could not run.** The shell predecessor wrote a third verdict, `UNMEASURABLE`, for the second case; the Python vendored at Q889 dropped it, so an absent record meant either that the assessment never ran or that it ran and could not measure, and the file could not tell you which.
+  That was filed upstream as [claude-skills#129](https://github.com/karlkfi/claude-skills/issues/129) rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite, and the Q956 re-vendor is that fix arriving, so `UNMEASURABLE` is back and an absent record now means the assessment never ran.
+  `--confirm` fails closed either way, since neither is `ELIGIBLE`.
   Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
-  That trade has an expiry, and [skills.md § Vendored from the skills repo](skills.md#vendored-from-the-skills-repo) records where it stands: this file is still an unmodified vendor and `make vendored-skills-check` holds it there, while `queue.py` has drifted 264 diff lines from its own upstream, so a fix there is a re-vendor rather than an overwrite (Q890).
+  That trade has an expiry, and [skills.md § Vendored from the skills repo](skills.md#vendored-from-the-skills-repo) records where it stands: this file is still an unmodified vendor and `make vendored-skills-check` holds it there, while `queue.py` is the one declared fork, so a fix there is a re-vendor rather than an overwrite (Q890, Q956).
 
 - **It is not a registry.** `tmp/` is gitignored and session-local; nothing reconciles it and no gate reads it.
   It is evidence for whoever asks, and it expires with the worktree.

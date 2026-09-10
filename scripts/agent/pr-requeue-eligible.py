@@ -45,6 +45,14 @@ answer: no state as "not OPEN", no queue entry as "not queued", no timeline as
 "nobody enqueued it". An unmeasurable probe therefore exits 2 rather than
 deciding.
 
+It still writes a record, as UNMEASURABLE — not an eligibility answer, an
+account of an assessment that ran and could not measure. Without it the file
+answers "the assessment refused to measure" and "no assessment ever ran" with
+the same silence, and the record exists for exactly that after-the-fact
+question. The record carries whatever had been measured before the read failed,
+so a queue or timeline read that dies after the merge probe still preserves the
+conflict set the rebase is about to erase.
+
 Exit: 0 eligible, 1 not eligible (reason on stdout), 2 usage error or a probe
       that could not run (reason on stderr).
 """
@@ -60,12 +68,19 @@ from pathlib import Path
 OID = re.compile(r"^[0-9a-f]{40}$")
 # Bumped when the record's shape changes. An older record is then refused as
 # skew, naming both versions, rather than parsed into an empty verdict and
-# reported as corruption.
+# reported as corruption. A new *verdict* value is not a shape change: the keys
+# are the same, and a reader that does not know the value compares it against
+# ELIGIBLE and wakes.
 RECORD_VERSION = 1
 
 
 class Unmeasurable(Exception):
-    """A probe that could not run. Never a verdict."""
+    """A probe that could not run. Recorded, but never an eligibility answer.
+
+    `--assess` writes it as UNMEASURABLE so the record says what happened;
+    `--confirm` reads anything other than ELIGIBLE as a wake, so recording it
+    cannot let one through.
+    """
 
 
 class Wake(Exception):
@@ -287,6 +302,10 @@ def write_record(path, verdict, reason, base, base_oid, head_oid, conflicts):
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # One record is a run of `key value` lines, so a reason carrying a newline
+    # would parse as further keys — and a git or gh error quoted verbatim is
+    # the reason most likely to carry one.
+    reason = " ".join(str(reason).split())
     lines = [f"version {RECORD_VERSION}", f"verdict {verdict}", f"at {stamp}",
              f"base {base or '-'}", f"base_oid {base_oid or '-'}",
              f"head_oid {head_oid or '-'}", f"reason {reason}"]
@@ -333,54 +352,64 @@ def read_last_record(path):
 # --- the two modes --------------------------------------------------------
 
 def assess(pr, gh, record_path, gitattributes, git=run_git):
-    state, draft, base, head = gh.pr_fields()
-    if state != "OPEN":
-        raise Wake(f"the PR is {state}, not OPEN")
-    if draft:
-        raise Wake("the PR is a draft")
-
-    owned, names = driver_config(gitattributes)
-
-    # The probe runs BEFORE the eligibility checks, which is the fix for the
-    # capture that used to be lost on the wake that most needed it: a session
-    # healing its own not-yet-enqueued PR fails the human-enqueued check, and
-    # the record then carried no OIDs and no conflict set — the measurement the
-    # capture exists to preserve, missing from exactly the ordinary dirty wake.
-    #
-    # The original ordering was cheapest-first, and that intent survives: the
-    # merge probe is local, while the timeline read is paginated network. Only
-    # the local half moved ahead of the checks.
-    git(["fetch", "origin", base, "--quiet"])
-    base_oid, head_oid = resolve_commits(f"origin/{base}", head, pr, git)
-    conflicts = conflicting_paths(base_oid, head_oid, names, git)
-    not_owned = [p for p in conflicts if p not in owned]
+    # Bound ahead of the first read so `record` can write whatever a failing
+    # one had already established. A read that dies after the merge probe still
+    # knows the conflict set, and that is the half no later run can recover.
+    base = base_oid = head_oid = None
+    conflicts = []
 
     def record(verdict, reason, paths):
         write_record(record_path, verdict, reason, base, base_oid, head_oid, paths)
 
-    # Printed before the verdict, so a wake carries the re-runnable measurement
-    # whichever way the verdict goes.
-    measured = (f"measured: git merge-tree --write-tree {base_oid} {head_oid}\n"
-                f"conflicts: {' '.join(conflicts) if conflicts else 'none'}")
-
     try:
-        if gh.in_queue():
-            raise Wake("the PR is already in the merge queue; nothing to restore")
-        if not gh.human_enqueued():
-            raise Wake("no human has enqueued this PR, so a re-enqueue would be "
-                       "a first enqueue")
-        if not_owned:
-            raise Wake("the rebase resolves conflicts outside the "
-                       f"merge-driver-owned files: {' '.join(not_owned)}",
-                       conflicts)
-    except Wake as w:
-        record("WAKE", w.reason, w.conflicts or conflicts)
-        w.measured = measured
-        raise
+        state, draft, base, head = gh.pr_fields()
+        if state != "OPEN":
+            raise Wake(f"the PR is {state}, not OPEN")
+        if draft:
+            raise Wake("the PR is a draft")
 
-    reason = ("conflicts confined to merge-driver-owned files" if conflicts
-              else "the rebase resolves no conflicts at all")
-    record("ELIGIBLE", reason, conflicts)
+        owned, names = driver_config(gitattributes)
+
+        # The probe runs BEFORE the eligibility checks, which is the fix for the
+        # capture that used to be lost on the wake that most needed it: a session
+        # healing its own not-yet-enqueued PR fails the human-enqueued check, and
+        # the record then carried no OIDs and no conflict set — the measurement the
+        # capture exists to preserve, missing from exactly the ordinary dirty wake.
+        #
+        # The original ordering was cheapest-first, and that intent survives: the
+        # merge probe is local, while the timeline read is paginated network. Only
+        # the local half moved ahead of the checks.
+        git(["fetch", "origin", base, "--quiet"])
+        base_oid, head_oid = resolve_commits(f"origin/{base}", head, pr, git)
+        conflicts = conflicting_paths(base_oid, head_oid, names, git)
+        not_owned = [p for p in conflicts if p not in owned]
+
+        # Printed before the verdict, so a wake carries the re-runnable
+        # measurement whichever way the verdict goes.
+        measured = (f"measured: git merge-tree --write-tree {base_oid} {head_oid}\n"
+                    f"conflicts: {' '.join(conflicts) if conflicts else 'none'}")
+
+        try:
+            if gh.in_queue():
+                raise Wake("the PR is already in the merge queue; nothing to restore")
+            if not gh.human_enqueued():
+                raise Wake("no human has enqueued this PR, so a re-enqueue would be "
+                           "a first enqueue")
+            if not_owned:
+                raise Wake("the rebase resolves conflicts outside the "
+                           f"merge-driver-owned files: {' '.join(not_owned)}",
+                           conflicts)
+        except Wake as w:
+            record("WAKE", w.reason, w.conflicts or conflicts)
+            w.measured = measured
+            raise
+
+        reason = ("conflicts confined to merge-driver-owned files" if conflicts
+                  else "the rebase resolves no conflicts at all")
+        record("ELIGIBLE", reason, conflicts)
+    except Unmeasurable as e:
+        record("UNMEASURABLE", str(e), conflicts)
+        raise
     detail = f" ({' '.join(conflicts)})" if conflicts else ""
     return f"{measured}\nELIGIBLE: {reason}{detail}"
 

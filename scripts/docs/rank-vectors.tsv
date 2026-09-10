@@ -1,14 +1,19 @@
 # rank-vectors.tsv — test vectors for the magnitude-head rank scheme.
 #
-# queue.py, beside this file, is the only implementation that runs these. A Go
-# one was drafted and never merged, so no second suite checks these vectors.
+# One implementation runs these: queue.py beside this file. The scheme was
+# ported from a Go queuestore in the gateway
+# (actions-gateway/github-actions-gateway), and that package is gone — its
+# branch closed unmerged, the work discarded. The gateway runs these vectors
+# against its own copy of queue.py, which is a second copy rather than a second
+# implementation, so nothing here is cross-checked against anything.
 #
-# The fixture holds its value regardless, because that value was never a second
-# consumer. Every expected key here is derived from the scheme's rules — a head
-# letter fixing the integer part's length, base-36 digits, plain string
-# comparison as the order — rather than read off a run. Vectors taken from a run
-# prove only that the run agrees with itself; vectors derived from the rules can
-# contradict the implementation, which is what this file is for.
+# They are still written against the scheme rather than against a run, and that
+# is what the file is for. Every expected key was derived from the scheme's
+# rules — a head letter fixing the integer part's length, base-36 digits, plain
+# string comparison as the order — rather than by running queue.py, so this is
+# the one check on the algebra that its own implementation did not produce.
+# Vectors read off a run would prove only that the run agrees with itself. That
+# property does not depend on a second consumer arriving.
 #
 # Tab-separated columns: lo, hi, want, note.
 #   lo, hi  the neighbours the new key goes between; "-" means open-ended
@@ -18,9 +23,9 @@
 # A runner must also check that the result orders strictly between lo and hi,
 # which catches a wrong expectation here as well as a wrong implementation.
 #
-# The cases sit where the two could drift rather than where they agree easily:
-# magnitude-head boundaries, a magnitude exhausted between adjacent keys, and
-# both ends of the space.
+# The cases sit where an implementation is most likely to drift from the
+# scheme rather than where agreement is easy: magnitude-head boundaries, a
+# magnitude exhausted between adjacent keys, and both ends of the space.
 
 # --- open ends -------------------------------------------------------------
 -	-	a0	both ends open: the first item in an empty store

@@ -350,6 +350,12 @@ Both hit two sessions independently on 2026-08-27, and neither is inferable from
 **`queue-lint` keys on the bare `name.go:NNN` text wherever it appears, link label included.** A row citing a source line is asked to re-point or drop it, and the obvious remedy does *not* clear the note: turning the citation into a proper Markdown link leaves the pattern matching inside the label.
 Only moving the number out of the pattern works: write "at line 457 of [`pod_provisioning_test.go`](../../cmd/agc/internal/controller/integration/pod_provisioning_test.go)" rather than linking the `file:line` string itself.
 
+**Since the Q956 re-vendor, `queue-lint` also reads the line a citation names.** Write it as `` `path:N:the distinctive words on that line` ``, which is the `grep -n` form, and the checker asserts the fragment is still there, so a number that has drifted is reported rather than resolving forever against a file that grew.
+Three things follow for a row author.
+Drift of ten lines or fewer is not reported at all (`CITATION_WINDOW`), because a number that lands a reader within a screen of the thing still works; `--citation-window 0` demands the fragment on the line named, and `--strict stale-citation` cannot reach the window, since promotion decides what a note costs and never what counts as one.
+A citation with no fragment is checked only for the file resolving and the line existing, so a pointer past the end of the file is now a note where it used to be silence.
+A row that is *about* a stale citation writes `exhibit:` inside the code span immediately before the path, as `` `exhibit:path:N:fragment` ``, and `lint` reads none of it rather than handing a sweeping session a one-character repair that deletes the exhibit and passes every gate.
+
 **`mdreflow` silently collapses a header-less table onto one line, and the gate then passes.** `md-reflow-check` is sentence-per-line, so a Markdown table written without its `|---|` separator row is not a table to the parser; it is prose, and the formatter joins its rows.
 Running the formatter to satisfy the gate therefore turns two rows into one unreadable line **and exits 0**, so nothing downstream reports it.
 Confirm the file after formatting rather than reading the gate's status, per [the status-is-a-claim rule](testing.md#the-status-you-report-is-a-claim-too): a file change is verified by reading the file, never by the exit code of the call that wrote it.
