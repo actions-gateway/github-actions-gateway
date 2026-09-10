@@ -62,6 +62,14 @@ spec:
     - port: metrics
       interval: 15s
       path: /metrics
+      # exporter.py fakes a two-tenant fleet from one pod, emitting explicit
+      # namespace="team-a"/"team-b" labels. Without this the scrape default
+      # (honorLabels: false) resolves the collision in the target's favour: the
+      # exposed label is renamed exported_namespace and every series reads
+      # namespace="team-a", making each per-tenant panel single-tenant (Q1077).
+      # Preview-only. A real install runs one AGC pod per tenant, so there the
+      # target's own namespace is the tenant's and the default is correct.
+      honorLabels: true
 ---
 # Dummy proxy Deployment/HPA/ResourceQuota so the kube-state-metrics
 # Proxy & Quota panels populate (the panels query deployment="actions-gateway-proxy").
