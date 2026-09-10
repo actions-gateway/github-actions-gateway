@@ -89,6 +89,35 @@ ev, _ = w.watch(1, replies({**OPEN_CLEAN, "mergeStateStatus": "BLOCKED"}),
 check("BLOCKED does not wake as conflict", ev, "timeout")
 check("BLOCKED keeps polling until the budget", len(slept), 2)
 
+# --- a head move on a PR that stays mergeable -----------------------------
+
+# The only signal there is when a push lands under a green, CLEAN PR: nothing
+# else moves. Whatever was verified against the armed head is void, so the
+# watch exits rather than polling on.
+A = "0" * 40
+B = "1" * 40
+ev, detail = w.watch(1, replies({**OPEN_CLEAN, "headRefOid": A},
+                                {**OPEN_CLEAN, "headRefOid": B}),
+                     lambda s: None, interval=1, budget=10)
+check("a head move on a clean PR wakes as head_change", ev, "head_change")
+check("head_change names both heads", A in detail and B in detail, True)
+
+# A head that is not a whole object name is a reading not taken, so it arms
+# nothing and fires nothing rather than being compared against a real one.
+slept, sleeper = counting_sleeper()
+ev, _ = w.watch(1, replies({**OPEN_CLEAN, "headRefOid": "abc"},
+                           {**OPEN_CLEAN, "headRefOid": "def"}),
+                sleeper, interval=60, budget=120)
+check("an unreadable head fires nothing", ev, "timeout")
+
+# Conflict outranks a head move: the rebase it asks for moves the head anyway,
+# so that signal regenerates while the conflict's does not.
+ev, _ = w.watch(1, replies({**OPEN_CLEAN, "headRefOid": A},
+                           {**OPEN_CLEAN, "headRefOid": B,
+                            "mergeStateStatus": "DIRTY"}),
+                lambda s: None, interval=1, budget=10)
+check("a conflict outranks a simultaneous head move", ev, "conflict")
+
 # --- the budget is counted in slept time, not wall clock ------------------
 
 slept, sleeper = counting_sleeper()
@@ -116,15 +145,21 @@ check("a recovered failure resets the counter", ev, "conflict")
 _, detail = w.watch(1, replies({"state": "OPEN", "mergeStateStatus": "DIRTY",
                                 "baseRefName": "main"}), lambda s: None)
 check("targeting trunk says rebase onto it", "origin/main" in detail, True)
-check("targeting trunk does not claim stacked", "stacked" not in detail, True)
+# A trunk-based conflict cannot be told from a branch whose squash-merged
+# parent has been retargeted onto trunk, so the wake says so and hands over the
+# log that discriminates. What it must never do is assert the PR *is* stacked.
+check("targeting trunk does not claim the PR is stacked",
+      "The PR is stacked" not in detail, True)
+check("targeting trunk hands over the discriminating log",
+      "origin/main..HEAD" in detail, True)
 
 _, detail = w.watch(1, replies({"state": "OPEN", "mergeStateStatus": "DIRTY",
                                 "baseRefName": "claude/base-pr"}),
                     lambda s: None)
 check("a stacked PR is named as stacked", "stacked" in detail, True)
 check("stacked names its own base", "origin/claude/base-pr" in detail, True)
-check("stacked carries the already-merged clause",
-      "already merged" in detail, True)
+check("stacked carries the merged-parent clause",
+      "its PR has merged" in detail, True)
 
 # An unreadable base must drop to the branchless wording rather than being
 # interpolated — this is the injection boundary, not a formatting nicety.
@@ -137,15 +172,15 @@ check("an unusable base is refused, not interpolated", True, True)
 
 # --- the field boundary ---------------------------------------------------
 
-check("only three fields are ever requested", set(w.FIELDS),
-      {"state", "mergeStateStatus", "baseRefName"})
+check("only these four fields are ever requested", set(w.FIELDS),
+      {"state", "mergeStateStatus", "baseRefName", "headRefOid"})
 for forbidden in ("body", "comments", "reviews", "title"):
     if forbidden in w.FIELDS:
         fails.append(f"{forbidden} is readable, which is an injection channel")
 
 # read_fields must not crash on a payload missing everything.
 check("a missing payload degrades rather than raising",
-      w.read_fields({}), ("", "", ""))
+      w.read_fields({}), ("", "", "", ""))
 
 for f in fails:
     print(f"FAIL {f}")
