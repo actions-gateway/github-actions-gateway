@@ -23,6 +23,7 @@ W="$HERE/pr-mergeability-watch.py"
 
 if python3 - "$W" <<'PY'
 import importlib.util
+import pathlib
 import sys
 
 spec = importlib.util.spec_from_file_location("w", sys.argv[1])
@@ -150,8 +151,12 @@ check("targeting trunk says rebase onto it", "origin/main" in detail, True)
 # log that discriminates. What it must never do is assert the PR *is* stacked.
 check("targeting trunk does not claim the PR is stacked",
       "The PR is stacked" not in detail, True)
-check("targeting trunk hands over the discriminating log",
-      "origin/main..HEAD" in detail, True)
+# Positive on the arm that should have fired. The negative above cannot stand
+# alone: `permit()` appends `origin/<trunk>..HEAD` to every conflict branch, so
+# asserting that phrase is present passes whichever arm ran, and a trunk PR
+# misrouted into the stacked arm goes green on it.
+check("targeting trunk says it cannot discriminate",
+      "cannot tell" in detail, True)
 
 _, detail = w.watch(1, replies({"state": "OPEN", "mergeStateStatus": "DIRTY",
                                 "baseRefName": "claude/base-pr"}),
@@ -169,6 +174,23 @@ for bad in ("main; rm -rf /", "-flag", "", "a b"):
     if bad and bad in detail:
         fails.append(f"unsafe base {bad!r} reached the wake text")
 check("an unusable base is refused, not interpolated", True, True)
+
+# --- the wording these assertions are pinned to ---------------------------
+
+# Three checks above key on literals in a *vendored* file, where an upstream
+# reword is the expected event rather than a surprise. Without this the reword
+# disarms them silently: measured 2026-09-10, renaming "The PR is stacked" to
+# "This PR is stacked" took the suite to 27/27 green with a trunk PR routed
+# into the stacked arm — the destructive misdiagnosis this pair exists to
+# catch. Assert the literals still exist in the source, so a re-vendor that
+# moves them fails here loudly and names what to re-point.
+source = pathlib.Path(w.__file__).read_text()
+for phrase in ("The PR is stacked", "cannot tell", "stacked on an already-merged parent"):
+    if phrase not in source:
+        fails.append(f"vendored wording moved: {phrase!r} is no longer in "
+                     f"{w.__file__}; the trunk/stacked assertions above key on "
+                     f"it and must be re-pointed, not deleted")
+check("the wording the trunk/stacked checks pin to is still there", True, True)
 
 # --- the field boundary ---------------------------------------------------
 
