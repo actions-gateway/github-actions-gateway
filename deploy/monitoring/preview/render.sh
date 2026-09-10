@@ -136,6 +136,9 @@ lock_path() {
 # serialize_on_cluster — re-exec this script holding an exclusive lock on
 # $CLUSTER, and hold it for the whole run. Pass the script's own "$@".
 serialize_on_cluster() {
+	# Re-entry guard, and cluster-blind on purpose: a locked run re-invoking this
+	# script for a *different* CLUSTER would skip the lock. Nothing calls
+	# render.sh today, so that is a trap for a future caller rather than a path.
 	[[ -n "${GAG_PREVIEW_LOCK_HELD:-}" ]] && return 0
 	local lock why=""
 	lock="$(lock_path)"
@@ -156,7 +159,12 @@ serialize_on_cluster() {
 	# the lock fd lives in perl and releases when perl exits.
 	exec perl -MFcntl=:flock -e '
 		my ($path, $cluster) = splice(@ARGV, 0, 2);
-		open(my $fh, ">", $path) or exec @ARGV;
+		# Same posture as the bash-side degrade above, and the same reason to
+		# be loud about it: running on is right, running on in silence is not.
+		open(my $fh, ">", $path) or do {
+			printf STDERR "\033[1;33mwarning:\033[0m cannot open %s (%s), so this run holds no lock on %s: a concurrent run will silently render its dashboards instead\n", $path, $!, $cluster;
+			exec @ARGV;
+		};
 		my ($start, $next) = (time, 0);
 		until (flock($fh, LOCK_EX|LOCK_NB)) {
 			my $queued = time - $start;

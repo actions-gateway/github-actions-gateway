@@ -102,6 +102,10 @@ That buys wall-clock at the cost of a second full `kube-prometheus-stack` instal
 The lock file lives outside the repo (`~/Library/Caches/github-actions-gateway/` on macOS, `$XDG_CACHE_HOME` on Linux) because the sessions contending for the cluster are in different worktrees.
 It is an advisory `flock`, so killing a render releases it: there is no stale lock to clear.
 
+The case to know about is a **wedged** run, because `down` is what you reach for and `down` queues behind the wedge like anything else.
+Kill the wedged render first, which releases the lock, and then `down` proceeds.
+Kill it with Ctrl-C, or by signalling the process group; killing the launcher process alone leaves the render running without its lock.
+
 ### Reading a render
 
 Open the PNG.
