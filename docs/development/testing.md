@@ -130,6 +130,11 @@ Every edit made while the gate is running is unverified, and that includes the p
 **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
 A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
+**So the cheapest move is to stop editing, then run, not to run and then re-run (Q841).** "Run the doc gates once the prose is written" and "keep writing while the gate runs" both read as compliant, and together they void the run: measured 2026-08-12, one session took 4 `make check` runs and 3 were voided by one-line prose edits made under them.
+The failure mode is worse than a wasted cycle, because a voided run can also come back **red**, and the red reads as the change's.
+Measured 2026-08-29 (Q1035): a `make check` left running while docs were edited beneath it exited 2, and the failure was attributed to the diff until the log was reconciled against the tree that actually existed when each gate ran.
+When a background run goes red, establish which tree it saw before diagnosing what it found.
+
 **The exit code you read has to belong to the gate.** A verdict is only as good as the command that reported it, and the usual way that breaks is wrapping the gate in something that has an exit status of its own.
 Three shapes, all seen in real sessions:
 
@@ -1643,6 +1648,22 @@ Each is a claim about state, and each has a cheap way of being wrong:
 
 The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.
+
+#### Which of these has a mechanism, and which is care alone (Q918)
+
+Fifteen clean-but-meaningless readings were collected across two batches: five on 2026-08-18, ten in one 2026-08-27 dispatch run, six of those the dispatcher's own.
+The rule against them already existed at two rungs when they happened, in this section and in the global agent instructions, so **another sentence is not the fix**: fourteen of the fifteen were caught by a *different* session re-deriving the reading, and the one self-caught instance was corrected only after the claim had been sent.
+What is worth knowing is which class can be made to fail loudly, because for the rest a second reader is the only instrument there is.
+
+Three convert to a stop:
+
+- **A silent `grep` zero.** `grep` in this environment dispatches to `ugrep`, which rejects some GNU flags outright and exits non-zero while printing usage to stderr, so a counting pipeline reports `0` and reads as a finding.
+  Prefer the Grep tool or `python3` wherever a zero is about to mean something, and never use `grep -c`, which counts *lines* rather than matches.
+- **A run-level conclusion read for a job-level claim.** `gh run view <id> --json jobs`, or the commit's check-runs list, is the instrument; see [the path-gated section](#path-gated-workflows-verify-the-heavy-gates-actually-ran).
+- **An empty-string `conclusion`.** `--jq '.conclusion // .status'` prints blank for a check still in flight, because the field is an empty string rather than null, and `//` does not fall through an empty string.
+  Wherever this repo's own scripts read it, test the string rather than relying on the alternative operator.
+
+The rest have no instrument and are recorded so they are recognised, not so they are checked: a heading regex that is not fence-aware; `gh run list --commit` empty on queue-merged commits, because runs attach to the `merge_group` ref; `git diff HEAD..origin/main` reporting both directions where `...` was meant; cwd drift making a path-scoped `git diff` read clean; a ratchet read as a ceiling; an agent's absence from `ListAgents` read as a session exit rather than a rename, three times, costing two wrongly dispatched takeovers; a plus-or-minus-2-line census window narrowing the population before the count; `actor.login` naming a shared credential rather than a person; and turn timestamps read as CI latency.
 
 ### The probe is not the gate
 
@@ -3487,11 +3508,23 @@ The e2e verdict for a change arrives on its queue entry; to get one earlier, run
 ```bash
 gh pr view <n> --json headRefOid --jq .headRefOid   # the SHA every check must be attached to
 gh pr checks <n>                                    # are the expected gates PRESENT — not merely un-red?
-gh run list --commit <sha> --limit 30               # which workflows actually ran, for THAT commit only
+gh api "repos/:owner/:repo/commits/<sha>/check-runs?per_page=100" \
+  --jq '.check_runs[] | "\(.conclusion // .status)\t\(.name)"'   # which JOBS ran, for THAT commit only
 ```
 
 Read the output as a **checklist against the expected set above**, not as a pass/fail summary.
 A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
+
+**Read jobs, not workflow runs: `gh run list --commit` cannot answer this question (Q1028).** It reports *workflow-run* conclusions, and a workflow whose heavy job correctly skipped still concludes `success`, because the `<workflow>-gate` job exists to make it do so.
+So at workflow level "ran and passed" and "correctly skipped" are indistinguishable **by construction**, and no amount of care at that level recovers the difference.
+`--commit` fixes *which commit*, which is why it reads as the fix; it says nothing about *which job*, which is what the claim needs.
+Measured 2026-08-28 on [#1787](https://github.com/actions-gateway/github-actions-gateway/pull/1787), head `fad48c715`: `gh run list --commit` reported `success` for `unit-test.yml`, `integration-test.yml`, `e2e-test.yml`, `e2e (calico)` and `security-scan`, while the check-runs read on the same head showed `unit-test`, `integration-test`, `coverage`, `e2e` and `e2e-calico` all `skipped`, only the `-gate` jobs and `shellcheck` green, and **no `security-scan` job on that head at all**.
+A session read the workflow-level green and wrote "unit-test, integration-test, security-scan and both e2e lanes ran and passed" into the PR body; an independent review caught it, and no gate could have, since none opens a PR body.
+This is the shape [the status you report is a claim too](#the-status-you-report-is-a-claim-too) names, a correct instrument aimed at a narrower question than the claim built on it, and it evades that rule because nothing is missing from the output you read.
+
+**When the heavy jobs legitimately skip, positive evidence is a job that did exercise the change.** Name it and read its log, rather than reporting the gate's green.
+On #1787 that job was `shellcheck`, which carries `make scripts-test` (`.github/workflows/unit-test.yml`), and whose log held 90 and 48 passing assertion lines from the two suites the PR added.
+A negative result of nothing red and nothing missing is evidence only once the instrument has been shown able to go positive.
 
 **Each gate now says this itself, in its job summary (Q872 for the two e2e lanes, Q898 for the other nine).** Every `<workflow>-gate` writes a `which gated jobs ran` table (one row per needed job and its result) before it evaluates the gate, so a skipped heavy job is legible on the run page instead of being assembled from `gh` by hand.
 When anything skipped, the table is followed by a line saying a `skipped` is a path-skip rather than a pass, which is the reading a green gate otherwise invites.
@@ -3499,11 +3532,11 @@ The e2e pair says something else because their case is different: their heavy jo
 The table is built from `toJSON(needs)` rather than a hand-written entry per job, so a job added to a gate's `needs:` appears in it with no second edit.
 It is narration and is ordered before the gate step so a failing gate still reports it, but it is not `continue-on-error`: a summary step that breaks fails its gate, on the same reasoning as the fail-closed half of Q363 above.
 
-**The summary does not replace the commands above, because it cannot see the hole they can.** It reports the jobs a gate *needs*; `gh run list --commit` reports what actually ran on that SHA.
-A job missing from `needs:` altogether (the Q845 case above) is absent from the summary for the same reason it is absent from the gate, so only the run list shows it.
+**The summary does not replace the commands above, because it cannot see the hole they can.** It reports the jobs a gate *needs*; the check-runs read reports every check attached to that SHA.
+A job missing from `needs:` altogether (the Q845 case above) is absent from the summary for the same reason it is absent from the gate, so only the commit's own check list shows it.
 
-**Filter the runs by commit, not by branch.** `gh run list --branch <branch>` lists every run the branch has ever had, so after a rebase heal and force-push it still shows the superseded runs, and a success from the pre-rebase head reads as a success on the code you are about to merge.
-`--commit <sha>` is the flag that answers the question asked.
+**Whatever you read, pin it to the commit, not the branch.** `gh run list --branch <branch>` lists every run the branch has ever had, so after a rebase heal and force-push it still shows the superseded runs, and a success from the pre-rebase head reads as a success on the code you are about to merge.
+The check-runs read above is commit-scoped by construction, which is one reason to prefer it.
 Do not hand-roll the equivalent as a `--jq` filter on `headSha`: a malformed expression matches everything and exits 0, which produces a confident, wrong "the heavy gates ran".
 
 **At a release tag, `scripts/release/check-gates-green.sh <ref>` asks this for you**, across every required context in the ruleset rather than a list someone kept by hand.
