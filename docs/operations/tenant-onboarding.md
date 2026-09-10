@@ -449,6 +449,9 @@ spec:
     mode: Observe   # Off (default) | Observe — Observe gates, it is not a dry-run tier
 ```
 
+**Quote `Off` if you set it back explicitly.** YAML reads a bare `Off` as the boolean false, so `mode: Off` is rejected as the wrong type for a string field, naming a value you never typed.
+Write `mode: "Off"`, or drop the `capacityGate` block, which means the same thing (Q985).
+
 **You turn it on; the platform decides what it reads.** "Can this pod be placed" has two different sound answers depending on whether anything is waiting on the unplaceable pod to make capacity appear — and that is a fact about the *cluster*, not about your runner set.
 So the gate takes one input from each party, and a runner set cannot choose a signal that is wrong for the cluster it runs in:
 
@@ -1009,6 +1012,9 @@ spec:
 | `Recreate` | Lets the autoscaler evict the AGC pod to resize it. Safe — in-flight listener sessions deregister on SIGTERM and re-register within GitHub's redelivery window — but it *is* a control-plane restart. |
 
 Upstream's `Auto` mode is not offered: it is an alias whose actuation mechanism changes between autoscaler releases, so this API names `Recreate` explicitly instead.
+
+**Quote `Off` if you write it out.** YAML reads a bare `Off` as the boolean false, so `mode: Off` is rejected as the wrong type for a string field, naming a value you never typed.
+Write `mode: "Off"`, or leave `mode` out, since `agcAutoscaling: {}` above already means recommendation-only (Q985).
 
 **How it interacts with `agcResources` — they compose, neither one silently wins:**
 

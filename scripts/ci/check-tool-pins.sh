@@ -26,8 +26,12 @@
 # form makes `TOOL_PKG`, `:=` and the package path three prerequisites of
 # .build/mdreflow; measured on run 32275796483, where every Go tool rule failed
 # that way while the same tree passed locally. Assignment lines are dropped
-# below, and parse_rules is exercised against a captured 4.x database so the
-# shape this box cannot produce is still asserted.
+# below, and parse_rules is exercised against a 4.x database RECONSTRUCTED from
+# that run's output — no make 4.x runs here — so the shape this box cannot
+# produce is asserted, and nothing else about 4.x formatting is vouched for.
+# There is deliberately no make version floor in check-tools.sh: brew installs
+# GNU make 4.x as `gmake`, so a floor probing `make --version` would stay red
+# after the registry's own install instruction was followed (Q945).
 #
 # A tool binary is a `.build/` target that is not a prerequisite of another
 # `.build/` target. That is what separates the tools from the pin sentinels

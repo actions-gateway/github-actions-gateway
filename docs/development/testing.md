@@ -159,6 +159,23 @@ Every line is prefixed with its gate's label, so a failure stays attributable.
 (`make -j` is not used: macOS ships GNU make 3.81, which has no `-O` output sync, so two failing gates would interleave unreadably.)
 The heavy phases then run in sequence, each taking a slot of its own.
 
+**Every fan-out ends with per-label wall time, slowest first**, and that block is the only place a gate's cost is legible (Q819).
+A fan-out's total is its slowest member, so the `elapsed` line below it answers how long the wait was and never which gate to go and shorten.
+
+```
+[run-parallel] wall time, slowest first:
+[run-parallel]      12s  gate-lists-check
+[run-parallel]      11s  queue-rules-check
+[run-parallel]      11s  md-reflow-check
+...
+[run-parallel]       0s  release-pins-check
+[run-parallel] elapsed 15s across 23 command(s)
+```
+
+That is `make docs-gates` on 2026-09-10: 23 gates, 130 suite-seconds, 15 s of wall clock.
+A label whose child never wrote a duration prints `?` rather than `0s`, so a timing write lost to a full disk reads as unmeasured instead of as instant.
+The block prints on green runs too, which is when a reader is actually choosing what to move out of the [inner loop](#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr).
+
 **A red `run-parallel` summary has two kinds of line, and they call for different responses.** `FAILED: label (exit N)` means the gate ran to a verdict and the verdict was bad, so it names a defect to go and read.
 `KILLED: label (signal N, exit 128+N)` means a signal ended the command before it reached any verdict.
 The runner never kills a child (every pid is waited, siblings are never cancelled), so the signal came from elsewhere.
@@ -1689,6 +1706,11 @@ Five instances measured across 2026-08-11 and 2026-08-12, in one session, each a
   Acting on them would have "fixed" seven correctly-used variables in each of two scripts.
 - **A top-level run is not the run the suite gets.** A suite that reads a value off `make`'s stdout passed locally and failed on CI: under `make scripts-test` it runs as a sub-make, where GNU make writes `Entering directory ...` to stdout and those words land in the value.
   Reproduce it with `make -w`, suppress it with `--no-print-directory`.
+- **The `make` database this box can produce is not the one CI parses.** A target-specific variable (`$(MDREFLOW): TOOL_PKG := ...`) prints as a comment under the GNU make 3.81 macOS ships, and in rule position under the 4.x CI runs, where a naive read takes `TOOL_PKG`, `:=` and a package path for three prerequisites.
+  Measured on [#1671](https://github.com/actions-gateway/github-actions-gateway/pull/1671), run 32275796483: 24 failures on CI against a suite green on the dev box, because 3.81 cannot emit the shape the parser got wrong (Q945).
+  There is deliberately no version floor on `make` in [`check-tools.sh`](../../scripts/ci/check-tools.sh): its brew column installs GNU make 4.x as `gmake`, so a floor probing `make --version` would stay red after a contributor followed the registry's own install instruction.
+  What covers it instead is a test seam: `check-tool-pins.sh --database PATH --print-rules` parses a 4.x dump reconstructed from that run's output, so the shape this box cannot emit is still asserted locally.
+  Reconstructed, not captured, which bounds what it buys: it pins the one defect CI found and vouches for nothing else about 4.x formatting, so the gate still runs in CI.
 - **A cached test result is not a test run, and the cache cannot see what the change touched.** Go keys its test cache on package inputs.
   A file the package *reads* but does not import, `.gitattributes` here, is not one of them, so no edit to it can invalidate the entry: `make check` reported `ok ... (cached)` for the one package the change broke, and only a cold CI run caught it.
   When a change alters a file a test reads rather than compiles, re-run that package with `-count=1` before believing the gate.

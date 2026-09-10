@@ -68,6 +68,9 @@ spec:
 It needs a second opt-in on the consuming side to be useful: see [attributing a record to a tenant and a job](#attributing-a-record-to-a-tenant-and-a-job) below.
 
 Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.
+
+**Turning it back off wants quotes.** YAML reads a bare `Off` as the boolean false, so `auditLogging: Off` is rejected as the wrong type for a string field, naming a value you never typed.
+Write `auditLogging: "Off"`, or remove the field, which means the same thing (Q985).
 See [tenant onboarding: per-pool egress audit record](tenant-onboarding.md#per-pool-egress-audit-record) for when to turn it on and what it costs.
 
 A record looks like this (one JSON object per line, on the same stdout stream as everything else the pool logs):

@@ -266,7 +266,8 @@ The gate throttles rather than seals, so intake continues at roughly one claim p
    The gauge keys on `runner_set` while this alert's series keys on `runner_group`; both carry the same set's name, because the rejection counter is shared with v1 `RunnerGroup` owners.
 2. Work the reason with [RunnerSet Reports WorkerCapacityDeclined](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs), which maps each one to the node, taint, quota, or image fix that clears it.
    `PodsNotStarting` is the odd one out and the quickest: the cluster placed the pod, so read the pod's own backoff message for the image it cannot pull rather than looking at nodes at all.
-3. The one-line rollback, if the gate is wrong about the cluster, is `spec.capacityGate.mode: Off`; the same section covers when that is the right call.
+3. The one-line rollback, if the gate is wrong about the cluster, is `spec.capacityGate.mode: "Off"`; the same section covers when that is the right call.
+   **Quote the `Off`.** YAML reads a bare one as the boolean false, so an unquoted rollback is rejected naming a value you never typed, during an incident, which is the worst time to debug a manifest (Q985).
 
 ### ActionsGatewayScaleSetCapacityWithheld
 
