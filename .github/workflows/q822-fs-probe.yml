@@ -1,0 +1,61 @@
+# Q822 filesystem probe — dispatch-only, never runs in normal CI.
+#
+# Answers one unmeasured question behind the Q822 fix (#1898): does `go build
+# -o` reach its destination by rename or by unlink-and-copy on a CI runner?
+# go writes the linked binary into its temp work dir and then calls
+# moveOrCopyFile, which is os.Rename when source and destination share a
+# filesystem and a stream copy over an unlinked destination when they do not.
+# Only the copy path opens the ETXTBSY/ENOENT window a concurrent execve can
+# land in, so the answer decides whether the pre-#1898 shared-path build was
+# ever hazardous here or only on a cross-filesystem layout.
+#
+# Two readings, because the device numbers explain and the rebuild decides:
+#   1. device id + filesystem type for the go work dir and the repo .build/;
+#   2. the EXDEV condition go itself branches on — a link and a rename(2) from
+#      that work dir into .build/, which succeed on one filesystem and fail
+#      across two;
+#   3. a control: a second `go build -o` to one path really does replace the
+#      file, so the reading describes a path go takes here.
+#
+# Dispatch-only and self-contained: no repo state is read or written beyond the
+# checkout, and .build/ is scratch.
+name: q822-fs-probe
+on:
+  workflow_dispatch:
+    inputs:
+      target_gag:
+        description: 'Route the probe to the GAG dogfood runner (vars.GAG_RUNNER), matching unit-test.yml shellcheck'
+        type: boolean
+        default: false
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe
+  # session take the reading from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q822-fs-probe.yml"]
+
+# Reads nothing but its own checkout and writes nothing back.
+permissions:
+  contents: read
+
+jobs:
+  fs-probe:
+    # A plain push touching this file (editing the fixture itself) skips the
+    # job, so the run concludes green instead of taking a reading nobody asked
+    # for. The opt-in tag is the branch-side dispatch path.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q822-probe]')
+    # The same expression unit-test.yml's shellcheck job uses, so the reading is
+    # taken on the runner that actually builds merge drivers.
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: device and filesystem of the go work dir vs .build/
+        run: scripts/ci/q822-fs-probe.sh devices
+      - name: rename or copy — the EXDEV condition go branches on
+        run: scripts/ci/q822-fs-probe.sh placement
+      - name: control — a real `go build -o` places a file
+        run: scripts/ci/q822-fs-probe.sh build

@@ -430,8 +430,12 @@ Same filesystem it renames, which is atomic; cross filesystem it unlinks and str
 Measured 2026-09-10 on go1.26.8/linux-amd64 in a container, replicating that shape against a concurrent `execve`: 4,106 of 4,109 execs failed, almost all `ETXTBSY`; reproduced independently at 99.8% with a larger `ENOENT` share, so the split moves with timing and the total does not.
 The build now writes a sibling path and renames it in, which takes the atomic route whichever way go placed the temp, and relays the build's output on stderr instead of dropping it.
 
-**Whether any runner here takes the copy path is unmeasured.** It needs `$GOTMPDIR`/`$TMPDIR` and `.build/` on different filesystems; on a dev Mac they are not (`TMPDIR` and the worktree both on `/dev/disk3s5`, and `go build -x` shows `mv`), and nobody has read the layout on the CI runners.
-So this is a hazard closed by construction rather than one observed here.
+**The runner that builds merge drivers does not take the copy path**, so this was a hazard closed by construction rather than one observed.
+It needs `$GOTMPDIR`/`$TMPDIR` and `.build/` on different filesystems, and nothing here has them apart.
+On a dev Mac `TMPDIR` and the worktree are both on `/dev/disk3s5` and `go build -x` shows `mv`.
+On `ubuntu-latest`, measured 2026-09-10, `GOTMPDIR` and `TMPDIR` are unset so go's work dir is `/tmp`, and `/tmp` and the checkout's `.build/` are one ext4 filesystem (`dev=66305`), and `ln` and `rename(2)` across that boundary both succeed, which is the condition go branches on.
+The GAG dogfood runner is unread: it is reachable only by a `workflow_dispatch` with `target_gag`, which needs the probe on `main` first.
+[`q822-fs-probe.yml`](../../.github/workflows/q822-fs-probe.yml) is the instrument, and [`q822-fs-probe.sh`](../../scripts/ci/q822-fs-probe.sh) reads the EXDEV condition go branches on rather than an inode, because go's copy branch unlinks the destination first and both paths therefore leave a fresh one.
 `scripts/lib/merge-driver-common-test.sh` holds both halves.
 
 **That is a hazard removed, not Q822 diagnosed.** Q822's sightings report `the driver could not be built`, which is a build failing; the race above kills an exec after the build succeeded, so it cannot be the same event.
