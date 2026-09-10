@@ -24,7 +24,7 @@ The corrected model: the platform provisions the namespace + quota (+ optional `
 ## Scope
 
 ### API / CRD
-- Remove `NamespaceQuota corev1.ResourceList` from `ActionsGatewaySpec` ([actionsgateway_types.go:133](../../../cmd/gmc/api/v1alpha1/actionsgateway_types.go:133)); regenerate with `make manifests generate`.
+- Remove `NamespaceQuota corev1.ResourceList` from `ActionsGatewaySpec` ([actionsgateway_types.go](../../../cmd/gmc/api/v1alpha1/actionsgateway_types.go)); regenerate with `make manifests generate`.
 - Confirm + document that structural-schema pruning drops the field from existing CRs silently (no apply rejection) pre-1.0.
 
 ### Controller / builder
@@ -32,7 +32,7 @@ The corrected model: the platform provisions the namespace + quota (+ optional `
 - **Keep** `maxQuotaRetries` / `quotaRetryDelay` — those are the AGC reacting to a *full* quota (operating within it), not owning it.
 
 ### RBAC
-- Remove `resourcequotas` (and `limitranges` if present) verbs from [role.yaml:27](../../../cmd/gmc/config/rbac/role.yaml:27) and [charts rbac.yaml:33](../../../charts/actions-gateway/templates/rbac.yaml:33); `make manifests`.
+- Remove `resourcequotas` (and `limitranges` if present) verbs from [role.yaml](../../../cmd/gmc/config/rbac/role.yaml) and [charts rbac.yaml](../../../charts/actions-gateway/templates/rbac.yaml); `make manifests`.
 - Partially subsumes [Q122](../../queue/README.md): its proposed quota-write *confinement* becomes moot once we drop the write entirely.
 
 ### Docs (operator-facing + design + website)
