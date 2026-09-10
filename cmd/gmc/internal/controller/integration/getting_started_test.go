@@ -172,11 +172,14 @@ const skippedDeployRefFloor = 3
 // blocks means the gate rewriting a block first, and a walk over rewritten text
 // is weaker evidence than the doc's own bytes.
 //
-// What that buys is small, which is the other half of the answer: everything in
-// those two blocks is stock kubectl except one identifier, `deploy/` plus the AGC
-// Deployment name, and that identifier needs no kubelet to check. So it is checked
-// here, against the constant the GMC builds the Deployment from, and both blocks
-// stay declared uncovered with their reasons.
+// What that buys is small, which is the other half of the answer: the blocks are
+// mostly stock kubectl, and what they do name from the tree needs no kubelet to
+// check. This pins the AGC Deployment name against the constant the GMC builds it
+// from. It does NOT pin the log strings `rotate-verify-logs` tells the operator to
+// look for — those are inline literals in cmd/agc/internal/token/manager.go with no
+// constant to compare against, and one of them was wrong on the page until Q958
+// (`token refresh successful`, which the AGC has never logged). Both blocks stay
+// declared uncovered with their reasons.
 func TestGettingStarted_SkipBlockNames(t *testing.T) {
 	doc, err := os.ReadFile(gettingStartedDoc)
 	require.NoError(t, err)

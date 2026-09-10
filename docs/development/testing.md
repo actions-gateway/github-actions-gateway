@@ -767,7 +767,7 @@ The gate runs in three places off one parser, `scripts/docs/doc-blocks.sh`, so t
 | `make getting-started-check` | the annotations parse, ids are unique, every `needs=` names a block declared earlier, the floor holds | `make check` and `make docs-gates`; CI in `doc-links.yml` |
 | `make getting-started-render-check` | a `mode=render` block's chart still renders | CI in `manifest-validate.yml`'s `validate` job, which already has helm |
 | `TestGettingStarted_Executable` | the blocks are **executed** against a real apiserver | the GMC envtest integration suite |
-| `TestGettingStarted_SkipBlockNames` | a `mode=skip` block still names the objects the tree owns | the GMC envtest integration suite |
+| `TestGettingStarted_SkipBlockNames` | a `mode=skip` block still names the AGC Deployment the tree owns | the GMC envtest integration suite |
 
 The venue is the existing GMC envtest suite rather than a kind cluster of its own, because that suite already stands up every CRD, the validating webhooks, the v2 conversion webhook and the CEL guardrails, so the walk costs **about a second on a job that is already running** against a median 14 min for the e2e lane (n=11 runs that actually ran, 2.9-23.8 min), which is merge-group-only anyway (Q675).
 Teardown is free there: the objects land in the tenant namespace the doc's own first step creates, one `t.Cleanup` retires them, and the apiserver is destroyed at suite end, so the walk is safe to run twice by construction.
@@ -777,8 +777,11 @@ The test reads the doc and the parser through committed `testdata/` symlinks, be
 The kubelet is not the whole price.
 The page's own Secret block supplies a placeholder private key that does not PEM-decode, and `buildTokenProvider` parses it eagerly at AGC startup, so the pod crash-loops and the rollout never completes in a kind cluster either.
 Reaching the two blocks means the gate rewriting a block first, and a walk over text the gate rewrote is weaker evidence than the doc's own bytes.
-Set against that, the blocks carry one project-specific identifier between them: everything else in both is stock `kubectl`, and `deploy/` plus the AGC Deployment name needs no kubelet to check.
-`TestGettingStarted_SkipBlockNames` checks it against `agcnames.ControllerName`, the constant the GMC builds that Deployment from.
+Set against that, what the blocks name from the tree needs no kubelet to check.
+`TestGettingStarted_SkipBlockNames` pins the AGC Deployment name against `agcnames.ControllerName`, the constant the GMC builds that Deployment from.
+It does not pin the log strings `rotate-verify-logs` tells the operator to look for: those are inline literals in `cmd/agc/internal/token/manager.go` with no constant to compare against, and the page named one the AGC has never logged (`token refresh successful`) until Q958 corrected it to `token ready`.
+A kubelet would not have caught that either, since `kubectl logs --tail=20` asserts nothing about content.
+What is left for a kubelet to settle is narrower still: `credential_rotation_test.go` already drives the whole rotation in this same suite (patch `gitHubAppRef`, watch the `actions-gateway/github-app-secret` pod-template annotation flip), so the residual is whether a kubelet rolls a pod, which is Kubernetes' behaviour rather than this repo's.
 
 Its own failure mode is the one it exists to catch, so `scripts/docs/doc-blocks-test.sh` asserts a known-bad document goes **red** for each rule, paired with the good document that must stay green: a parser that stopped matching the annotation would report every page clean.
 
