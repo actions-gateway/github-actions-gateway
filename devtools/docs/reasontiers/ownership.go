@@ -20,16 +20,26 @@ package main
 //	            against one of its entries, which is a second membership site
 //	            at its own width — the defect the marker exists to close
 //
-// The check's silence is its verdict, so both halves are written to read every
-// spelling of their question rather than the one the tree happens to use today.
-// The consumer half reads `==`/`!=` and a `switch` case alike, against a Reason*
-// constant or the bare string — the switch matters most, being the spelling the
-// enumeration itself uses and the one a second reason makes somebody reach for.
-// The producer half reads a setter call and a metav1.Condition literal, the
-// latter with its type elided as a slice element, and follows the condition type
-// through a local. What it cannot read it reports: a reason it cannot resolve, a
-// wrapper pinning the type while forwarding the reason (only a registered setter
-// earns the forwarding exemption), and two setters whose shape collides.
+// The check's silence is its verdict, so what each half reads is worth stating,
+// and so is what it does not. The consumer half reads `==`/`!=` and a `switch`
+// case alike, against a Reason* constant or the bare string — the switch matters
+// most, being the spelling the enumeration itself uses and the one a second
+// reason makes somebody reach for. The producer half reads a setter call and a
+// metav1.Condition literal, the latter with its type elided as a slice element,
+// and follows the condition type through a single-assignment local. What it
+// cannot read it reports: a reason it cannot resolve, a wrapper pinning the type
+// while forwarding the reason (only a registered setter earns the forwarding
+// exemption), and two setters whose shape collides.
+//
+// That set is NOT closed, and enumerating spellings has no fixed point. This
+// scan builds no type information, so a reference one indirection away is
+// invisible to it: a local or a const initialised from a member constant, a
+// `slices.Contains` over a slice holding one, a condition type declared in a
+// ValueSpec rather than assigned. Each is measured green today. Closing the
+// consumer half needs a different shape rather than more spellings — any
+// reference to a member reason from a package that is neither the producer nor
+// the enumeration's own, on the same over-approximation argument
+// collectConditions already makes — and that is Q1095, not this.
 //
 // The polarity is the enumerated side's, deliberately, and the check does not
 // widen it: the OTHER producer's reasons are never enumerated anywhere, so a
