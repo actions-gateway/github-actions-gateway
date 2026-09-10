@@ -2848,14 +2848,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>Admit</code> reserves before the scale-up rung refuses (Q717), so inside the reserve-to-release window a concurrent delivery reads an inflated …</td>
 </tr>
 <tr>
-<td><a href="Q994/">Q994</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnercore/runnerversion.go">Nothing pins the listener's <code>RunnerVersionTooOld</code> reason set</a></td>
-<td><code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Two sites decide which reasons the classic listener owns on this condition type, at different widths, and neither is derived from what the …</td>
-</tr>
-<tr>
 <td><a href="Q1065/">Q1065</a></td>
 <td><a href="../design/05-security/#the-registry-read-behind-runnerversiontooold">Decide whether a scoped AGC egress policy should admit the registry read</a></td>
 <td><code>security</code> <code>docs</code></td>
@@ -2870,6 +2862,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's …</td>
+</tr>
+<tr>
+<td><a href="Q1095/">Q1095</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go">Close the ownership consumer half by reference, not by spelling</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>checkConsumers</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go"><code>ownership.go</code></a> asks whether a package outside the enumeration's own …</td>
 </tr>
 <tr>
 <td><a href="Q989/">Q989</a></td>

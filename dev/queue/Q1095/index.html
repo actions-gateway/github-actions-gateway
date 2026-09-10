@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q994/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1095/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing pins the listener's RunnerVersionTooOld reason set - GitHub Actions Gateway</title>
+        <title>Close the ownership consumer half by reference, not by spelling - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-pins-the-listeners-runnerversiontooold-reason-set" class="md-skip">
+        <a href="#close-the-ownership-consumer-half-by-reference-not-by-spelling" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing pins the listener's RunnerVersionTooOld reason set
+              Close the ownership consumer half by reference, not by spelling
             
           </span>
         </div>
@@ -2597,40 +2597,28 @@
   
 
 
-<h1 id="nothing-pins-the-listeners-runnerversiontooold-reason-set">Nothing pins the listener's <code>RunnerVersionTooOld</code> reason set<a class="headerlink" href="#nothing-pins-the-listeners-runnerversiontooold-reason-set" title="Permanent link">&para;</a></h1>
-<p>Two sites decide which reasons the classic listener owns on this condition type, at different widths, and neither is derived from what the listener emits.
-<code>isSessionSourcedRunnerVersion</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnercore/runnerversion.go"><code>runnerversion.go</code></a> switches on <code>VersionTooOld</code>/<code>VersionAccepted</code> and gates whether the listener's clear is dropped.
-<code>setRunnerVersionStatus</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go"><code>runnerset_controller.go</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go"><code>runnergroup_controller.go</code></a> compares <code>prev.Reason</code> against <code>ReasonVersionTooOld</code> alone, not through the switch, and gates whether the image reading defers.
-The listener emits its two from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>session.go</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>.</p>
-<p>The two widths coincide today only by accident of arithmetic.
-<code>VersionAccepted</code> is only ever pushed <code>False</code>, so restricted to a live <code>True</code> the listener owns exactly one reason and both sites agree on <code>{VersionTooOld}</code>.
-A second <code>True</code>-capable listener reason ends that.</p>
-<p>Measured 2026-08-25 with a stand-in reason <code>VersionRejectedByPolicy</code>, probing each path directly.
-<code>DropListenerCondition</code> returns <code>true</code> for it, identically to <code>WorkerImageBelowMinimum</code>, so the listener's clear is refused.
-<code>setRunnerVersionStatus</code> does not defer either, so the image reading overwrites the live <code>True</code> with <code>False</code>/<code>WorkerImageCurrent</code>.
-The godoc's "merely stays stale … rather than a wipe" is true of the drain in isolation, and the second site is not in that argument: a rejection GitHub actually made is gone from status, which is the failure direction the switch's polarity was chosen to forbid.
-Stale-forever is the narrower case, reached only where no reconcile gets as far as the image reading (<code>template == nil</code>, or no provisioner).</p>
-<p><strong>Updating the switch does not fix this</strong>, which is the trap, because it is what the godoc sends a reader to do.
-Measured the same day by adding the stand-in reason to the switch and re-probing: the drain is repaired (<code>DropListenerCondition</code> returns <code>false</code>, the clear lands) and the image reading still returns <code>False</code>/<code>WorkerImageCurrent</code>.
-The wipe is unchanged, because <code>setRunnerVersionStatus</code> never consults the switch.</p>
-<p>Four prose sites now describe the guard by ownership role, since <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1717">#1717</a> landed.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/conditions.go"><code>conditions.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnercore/runnerversion.go"><code>runnerversion.go</code></a> and <a href="../../design/02-architecture/"><code>02-architecture.md</code></a> each say the clear is dropped when a live condition stands whose reason is not the listener's own, and the last pins the cardinality outright ("the listener's own two").
-A forgotten listener reason <em>is</em> the listener's own, so all four read as kept while the code drops, and they go false together.
-That wording is correct for the reason set as it stands, and naming the set by role is what buys it: add a reason and a membership entry together and the three role-only sites stay true.
-The fourth does not, because it pins the count: a third listener reason falsifies "two" whatever the membership sites say, so it needs an edit of its own.
-Dropping the count from that sentence would fold it back into the pairing permanently.
-The gate below pins membership and cannot see a stale count, so that one stays a prose obligation.</p>
-<p>Nothing gates either site.
-<code>isSessionSourcedRunnerVersion</code> has one call site and no other reference in Go or shell.
-<code>conditions_parity_test.go</code> asserts constant aliasing across <code>v1alpha1</code>/<code>v2alpha1</code>/<code>v2beta1</code>, not membership.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-reason-tiers.sh"><code>check-reason-tiers.sh</code></a> reconciles emitted reasons against the ledger and the runbook, as its own godoc says, and never against either site.
-The only future-reason test is <code>WorkerImageSomeFutureReason</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_version_status_test.go"><code>runner_version_status_test.go</code></a>, an unknown <em>image</em> reason whose assertion would be wrong for a listener one.</p>
-<p><strong>This is a gate row, not a prose row, and it must pin both sites.</strong> A gate reconciling only the switch against the listener's emitted reasons passes while the wipe stays live, so it would close this row with the defect intact.
-Collapsing the two into one membership site is the better shape: have <code>setRunnerVersionStatus</code> call <code>isSessionSourcedRunnerVersion</code> on a <code>True</code> condition, leaving a single place a gate has to pin.
-The assertion must go red when a reason emitted on <code>RunnerVersionTooOld</code> from <code>internal/listener</code> is absent from the membership the reconcilers honour.
-Two controls must stay green: today's tree, where the listener's two reasons are honoured by both sites; and adding a fourth <code>WorkerImage*</code> reason, which must stay <em>out</em> of the session set, since enumerating the image half is the failure direction the polarity already rejects.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/main.go"><code>devtools/docs/reasontiers</code></a> is the nearest seam, already resolving each reason argument from source and classifying it by tier directory, but it does not pair a reason to its condition type today and that pairing is the work.
-A new gate registers in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mk/gate-lists.mk"><code>mk/gate-lists.mk</code></a>, which the <code>gatelists</code> merge driver merges as a set; <code>reason-tiers-check</code> is already an entry there to model.</p>
+<h1 id="close-the-ownership-consumer-half-by-reference-not-by-spelling">Close the ownership consumer half by reference, not by spelling<a class="headerlink" href="#close-the-ownership-consumer-half-by-reference-not-by-spelling" title="Permanent link">&para;</a></h1>
+<p><code>checkConsumers</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go"><code>ownership.go</code></a> asks whether a package outside the enumeration's own compares a reason against one of its entries, and it answers by enumerating the <em>spellings</em> of that comparison: <code>==</code>/<code>!=</code> operands and <code>switch</code> case clauses, resolved through a <code>Reason*</code> selector or a bare string.
+That set is open and cannot be closed by adding to it.
+The scan builds no type information, so a reference one indirection away is invisible.</p>
+<p>Measured 2026-09-10 on <code>41dac001c</code>, each reinstating the exact defect Q994 closed with <code>make reason-tiers-check</code> green at <code>EXIT=0</code>:</p>
+<ul>
+<li><code>sessionTooOld := v2alpha1.ReasonVersionTooOld</code> then <code>prev.Reason == sessionTooOld</code></li>
+<li><code>const listenerTooOld = v2alpha1.ReasonVersionTooOld</code> then the same comparison</li>
+<li><code>slices.Contains([]string{v2alpha1.ReasonVersionTooOld}, prev.Reason)</code></li>
+</ul>
+<p>The first two are the strongest: a straight <code>==</code> against the same constant, one named indirection away, and a const alias is a plausible way somebody writes a local membership decision.
+Four such spellings surfaced in one review round after five had just been fixed, which is the signal that the enumeration has no fixed point rather than a coincidence.</p>
+<p><strong>The fix is a different shape, not more spellings.</strong> Any <em>reference</em> to a member <code>Reason*</code> constant, from a package that is neither the producer subtree nor the enumeration's own, is the finding, whatever is done with the value.
+That needs no new AST shapes: a <code>SelectorExpr</code> walk through <code>constValue</code>, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/main.go"><code>collectConditions</code></a> already does for the inventory.
+Its godoc argues this exact trade already, saying that references rather than writes are the inventory, and that over-approximating adds a ledger row but never drops one.
+Same direction, and it catches all three consumer rows above, because an alias and a local are both initialized from the constant.</p>
+<p>The producer half has the same class of hole and it belongs here rather than in a row of its own, since fixing it alone buys one spelling and restates the exhaustiveness claim: <code>var ct = v1alpha1.ConditionRunnerVersionTooOld</code> is a <code>ValueSpec</code>, not an <code>AssignStmt</code>, so <code>resolveConditionType</code> never sees it, measured green the same day.</p>
+<p><strong>The cost is unmeasured and is the whole question.</strong> Predicted green on today's tree: the only non-test references to <code>VersionTooOld</code>/<code>VersionAccepted</code> are <code>internal/listener</code>, <code>internal/runnercore</code>, and, since Q994, nothing in <code>internal/controller</code>.
+That prediction has not been run, so the false-positive surface is unknown, and a reference-level rule refuses a legitimate non-membership question far more often than the comparison-level one does (a reason re-emitted as an Event, a log line, a test helper outside <code>_test.go</code>).
+Whether the exemption list that buys back stays smaller than the spelling list it replaces is what this row has to establish before the change is worth making — run it first, count the findings, and drop the row if the answer is no.</p>
+<p>Filed out of the Q994 review, where the enumerating approach was shipped deliberately and its claim narrowed to match (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go"><code>ownership.go</code></a> says the set is not closed).
+Nothing is broken today: every spelling above is a defect somebody would have to write, and the gate catches the ones the tree actually uses.</p>
 
 
 
