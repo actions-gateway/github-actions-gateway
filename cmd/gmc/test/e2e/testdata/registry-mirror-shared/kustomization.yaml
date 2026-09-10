@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Test-only composition of the SHIPPED shared-tenants overlay, for the Calico
+# kind lane's mirror_np_test.go (Q1039). The overlay is what renders and is not
+# modified: the only thing added here is an `images:` override moving the two
+# Docker Hub refs onto the lane's local registry, which the kind nodes already
+# resolve (scripts/e2e/kind-with-registry.sh wires certs.d for this host).
+# Without it the five mirror pods pull from Docker Hub on the kind nodes and meet
+# the anonymous 429s the curl and Vault mirror steps in e2e-reusable.yml exist to
+# avoid.
+#
+# `newTag` DROPS the base's digest, deliberately: the digest is Docker Hub's and
+# does not survive a re-push. Identity is preserved upstream of that instead --
+# the workflow pulls BY the digest the base pins, reading the ref out of
+# deployment.yaml rather than restating it, so the bytes the lane runs are still
+# the pinned ones.
+#
+# The refs below must name what e2e-reusable.yml's "Mirror registry-mirror
+# images" step pushes, and that step RECONCILES the two rather than trusting this
+# comment: it derives the refs from the base Deployment and diffs them against
+# the pairs here, so a pin this file stopped matching fails the step. That gate
+# exists because one shape of drift is silent -- `name:` matches the BARE image
+# name, so a pin that gained a namespace (someorg/registry) would leave these
+# entries inert, the Deployments on the Docker Hub ref, and the kind nodes back
+# on Hub for the 429s the step exists to avoid. The count assertion beside it
+# catches a THIRD image, which is the other way this file goes out of date.
+resources:
+  - ../../../../../../deploy/registry-mirror/overlays/shared-tenants
+images:
+  - name: registry
+    newName: 127.0.0.1:5000/library/registry
+    newTag: "3.1.1"
+  - name: haproxy
+    newName: 127.0.0.1:5000/library/haproxy
+    newTag: 3.2.23-alpine

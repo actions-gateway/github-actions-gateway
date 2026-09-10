@@ -370,6 +370,106 @@ jobs:
           docker tag "${E2E_VAULT_UPSTREAM}" "${E2E_VAULT_IMAGE}"
           docker push "${E2E_VAULT_IMAGE}"
 
+      - name: Cache registry-mirror images
+        # Calico-only: mirror_np_test.go is the only consumer and it skips on
+        # kindnet, so the kindnet lane pays nothing for this pair.
+        # Keyed on the Deployment that pins them, so a pin bump invalidates the
+        # cache without a second edit here.
+        # Hosted-only — see the kind node cache step (Q408).
+        if: inputs.kind_cni == 'calico' && runner.environment == 'github-hosted'
+        id: mirror-image-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/mirror-images
+          key: mirror-images-${{ hashFiles('deploy/registry-mirror/base/deployment.yaml') }}
+
+      - name: Mirror registry-mirror images into local registry
+        # Q1039: the Calico lane applies the shared-tenants overlay to grade its
+        # ingress peer live, so the five mirror Deployments run on the kind nodes.
+        # Both their images are Docker Hub digest pins, i.e. the same anonymous-429
+        # class the curl and Vault mirrors above exist for. Same shape: pull once
+        # on the runner (cached, retried), push to the local registry the nodes
+        # resolve, and let the test-only kustomization point the pods at it
+        # (cmd/gmc/test/e2e/testdata/registry-mirror-shared).
+        #
+        # The refs are READ from the base rather than restated in an env pair, so
+        # bumping the pin cannot leave this lane silently exercising the old image.
+        if: inputs.kind_cni == 'calico'
+        run: |
+          set -euo pipefail
+          shopt -s inherit_errexit
+          dir=/tmp/mirror-images
+          tar="$dir/images.tar"
+          stamp="$dir/refs.txt"
+          base=deploy/registry-mirror/base/deployment.yaml
+          kust=cmd/gmc/test/e2e/testdata/registry-mirror-shared/kustomization.yaml
+
+          mapfile -t refs < <(awk '$1=="image:"{print $2}' "$base" | sort -u)
+          if [[ "${#refs[@]}" -ne 2 ]]; then
+            echo "::error::$base pins ${#refs[@]} distinct images (${refs[*]}), expected 2."
+            echo "::error::Add the new one to the images: block in $kust and raise the count here."
+            exit 1
+          fi
+
+          # registry:3.1.1@sha256:… -> 127.0.0.1:5000/library/registry:3.1.1.
+          locals=()
+          for ref in "${refs[@]}"; do
+            locals+=("127.0.0.1:5000/library/${ref%@*}")
+          done
+
+          # Reconcile against the kustomization rather than asking a comment to
+          # keep the two in step. Its `images:` block matches on the BARE image
+          # name, so a pin that gained a namespace (someorg/registry) silently
+          # stops matching: the Deployments keep the Docker Hub ref and the kind
+          # nodes go back to Hub for the 429s this step exists to avoid. That is
+          # intermittent rather than loud, which is the shape worth a gate.
+          mapfile -t want < <(awk '
+            /^images:/ { in_img = 1; next }
+            in_img && /^[^ ]/ { in_img = 0 }
+            in_img && $1 == "-" && $2 == "name:" { if (nm != "") print nm ":" tg; nm = ""; tg = "" }
+            in_img && $1 == "newName:" { nm = $2 }
+            in_img && $1 == "newTag:" { gsub(/"/, "", $2); tg = $2 }
+            END { if (nm != "") print nm ":" tg }
+          ' "$kust" | sort)
+          if ! diff -u <(printf '%s\n' "${want[@]}") <(printf '%s\n' "${locals[@]}" | sort); then
+            echo "::error::$kust does not point at the refs this step pushes (left: kustomization, right: derived from $base)."
+            exit 1
+          fi
+
+          # The stamp is what makes the cache path safe off a hosted runner. The
+          # actions/cache step above is hosted-only, so elsewhere a surviving /tmp
+          # is the only thing gating the load — and because the local ref carries
+          # the TAG and not the digest, a digest-only re-pin reuses the same ref
+          # name and stale bytes would push silently. The sibling curl and Vault
+          # steps are safe without this only because they re-tag from the
+          # upstream ref after loading, so a changed pin fails with "No such
+          # image"; this step loads the local refs and pushes them straight out.
+          if [[ -f "$tar" && -f "$stamp" ]] \
+            && diff -q <(printf '%s\n' "${refs[@]}") "$stamp" >/dev/null; then
+            echo "==> loading registry-mirror images from cache"
+            docker load -i "$tar"
+          else
+            if [[ -f "$tar" ]]; then
+              echo "==> cached tar does not match the pinned refs; re-pulling"
+            fi
+            for i in "${!refs[@]}"; do
+              echo "==> pulling ${refs[$i]}"
+              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+                scripts/fetch/pull-image-with-retry.sh "${refs[$i]}"
+              # Re-tag off the image ID: a `name:tag@digest` source is a
+              # reference `docker tag` need not resolve, and the ID always does.
+              id="$(docker image inspect --format '{{.Id}}' "${refs[$i]}")"
+              docker tag "$id" "${locals[$i]}"
+            done
+            mkdir -p "$dir"
+            docker save -o "$tar" "${locals[@]}"
+            printf '%s\n' "${refs[@]}" > "$stamp"
+          fi
+
+          for local_ref in "${locals[@]}"; do
+            docker push "$local_ref"
+          done
+
       - name: Cache Calico images
         # Calico-only. Keyed on CALICO_VERSION so a Calico bump invalidates it.
         # Hosted-only — see the kind node cache step (Q408).
