@@ -159,7 +159,7 @@ Candidates print to stderr, so `ID=$(make queue-id TITLE="…")` still works, an
 Say which, in the new row's Notes.
 
 **Saying which is rule 13, and it is a gate.** `check-queue-rules.sh` re-scores every item a branch adds against the store as it stood at the merge base, and fails when the matcher flags a candidate the new row names nowhere.
-Naming any one of them clears it, because what the rule asks is that the warning was read rather than that every candidate is a duplicate: [Q830](../queue/Q830.md) was a false positive and answering it was still the right move.
+Naming any one of them clears it, because what the rule asks is that the warning was read rather than that every candidate is a duplicate: Q830 was a false positive and answering it was still the right move.
 `QUEUE_ALLOW_UNCITED_DUPLICATE="Q123"` is the deliberate pass.
 
 **What it cannot reach**: scoring against the merge base means two rows filed on concurrent branches never see each other, since neither branch's base holds the other.
@@ -200,6 +200,10 @@ Naming the near-miss rows is what lets the reader tell a genuinely new class fro
 Two rows describing one page's defect in different vocabulary share neither.
 Q835 was filed on 2026-08-12 after `make queue-id` returned no candidates at all; reading the Queue by hand found Q832, filed the same day, measuring a third cause of the same undercount on the same page.
 The search narrows the set worth reading, and reading is still what recognises the duplicate.
+
+**It searches the store, so a limitation already documented in prose is invisible to it (Q693).** "Known and accepted" is not a row, and the matcher has no way to see it: Q692's session came close to filing the merge-driver gap that this very page already states, with a clean `make queue-id` behind it.
+So grep the page the row would `target:` as well as the store.
+That page is where this project keeps its accepted limitations, and it is one read.
 
 ### What it keys on, and why
 
@@ -477,6 +481,12 @@ The real defect had the opposite sign: a valid reformat made the gate emit twelv
 **A count of instances in a row is a claim too, and usually the least-verified part of it.** The mechanism gets checked because it reads like an assertion; "two live differences" reads like an observation and invites fixing exactly two.
 Q851 named two label values whose tier the ledger got wrong; deriving the set from source found seven, plus seven stale `Help` strings the row had not mentioned at all.
 Where the row names a small N, prefer deriving the population over repairing the named N: the derivation is what catches the rest, and it keeps catching them after the row is closed.
+
+**Refuting a measurement obliges a sweep of the artifacts it justified, which is wider than the row's own citations (Q861).** Closing a row sweeps where the *row* is cited; a refutation has to sweep where the *claim* was spent, and a claim is spent wherever it was used as a reason.
+Q809 was filed on 2026-08-11 asserting that the five Calico-gated egress enforcement negatives intermittently saw traffic the policy should drop.
+Then #1417 shipped on that framing, writing it into a workflow comment and into `testing.md`, and #1441 refuted it ten hours later the same day, having attributed all three failures to one scale-set spec that none of the five negatives was involved in.
+The assertions #1417 had left behind were swept two days later, in #1510, which is the gap this rule closes.
+When a measurement falls, list what it was cited to justify before deciding nothing else moves.
 
 Rows that name an unknown are honest and useful — several in the Queue say "unmeasured live — confirm X before building".
 That phrasing is the pattern: it tells the next session where to start, instead of sending it to repair something that already works.

@@ -77,6 +77,10 @@ The claim is a ratio: one always-on pod per set against one shared pod whatever 
 Saying it that way is shorter *and* stronger.
 A number earns its place when it is a measurement (15 to 26 s) or a declared scenario parameter (the [cost model](../design/appendix-f-cost-model.md)'s ten-set fleet); it is noise when it is an illustration.
 
+**A measurement taken over live data rots, so cite the movement rather than the number.** The rule above is what invites this: a figure that is genuinely measured reads as durable, and a figure measured over a set the repo keeps changing is stale by the time anyone reads it.
+A paragraph in #1437 said a scan fired on six rows; it fired on seven hours later, inside its own merge window.
+Where the subject moves, say what it is a count *of* and when it was taken, or state the invariant instead, so a reader who re-derives a different number learns that it moved rather than that the doc is wrong.
+
 **Scarcity is what makes an emphasis device work, and that is not only true of bold.** Six consecutive admonitions ran 94 lines on one page, and because all six were styled identically the most important of them, the honest where-ARC-is-ahead list, looked exactly like the four routing notes above it.
 Budget roughly one callout per screen; promote anything that needs more to a heading of its own.
 
