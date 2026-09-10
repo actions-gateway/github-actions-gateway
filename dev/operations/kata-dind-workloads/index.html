@@ -3496,7 +3496,8 @@ The fourth is the one that turns the recipe into enforcement, and it is a deleti
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#two-topologies-one-shared-set-or-one-set-per-tenant"><code>deploy/registry-mirror/</code></a> renders both, and the choice is a platform administrator's rather than a default this project can pick for you.
 It turns on your tenant count, your disk budget, and whether your tenants are mutually hostile.</p>
 <p><strong>A shared set is one peer of difference.</strong> The mirror-side ingress admits workload-labelled pods in any namespace carrying the managed-tenant marker, instead of any pod in one namespace named literally, and <code>kubectl apply -k deploy/registry-mirror/overlays/shared-tenants</code> renders it.
-The worker-side egress policy sits in the tenant's own namespace and is per-tenant under either topology, so that half is unchanged.</p>
+The worker-side egress policy sits in the tenant's own namespace and is per-tenant under either topology, so that half is unchanged.
+That peer is graded live on every change to the mirror tree, on a Calico kind cluster: a workload-labelled pod in a marked namespace is admitted, and a pod missing either half is dropped (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#what-is-proven-and-what-is-not">what is proven</a>).</p>
 <p><strong>An isolated set costs a whole set per tenant.</strong> Read off the rendered manifests, one set is 5 Deployments and 5 Services requesting 175m of CPU and 480Mi of memory, with limits of 3000m and 3200Mi; the persistent overlay adds 5 PVCs holding 50Gi, which the deployment README prices at about $5 a month.
 Multiply all of it by tenant count.
 The cache also stops being shared, so each tenant pulls <code>kindest/node</code> cold on its own and pays that upstream bandwidth separately.</p>

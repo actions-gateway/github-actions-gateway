@@ -2712,14 +2712,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The probe ships unexercised against a real mirror, and the step that runs it can fail an e2e job.</td>
 </tr>
 <tr>
-<td><a href="Q1039/">Q1039</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">No cluster this repo stands up runs the shared-tenants mirror topology</a></td>
-<td><code>tests</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The component's NetworkPolicy ships enforced on operator clusters and unexercised on every cluster the repo can boot.</td>
-</tr>
-<tr>
 <td><a href="Q1064/">Q1064</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/orphaned_scaleset.go"><code>ScaleSetWorkerEviction_DoesNotRecover</code> reruns via the orphan scan</a></td>
 <td><code>flake</code> <code>bug</code> <code>tests</code></td>
