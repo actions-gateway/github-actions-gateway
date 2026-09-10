@@ -2666,7 +2666,7 @@ Hand-assembling it has two traps, both of which surface as a confusing envtest f
 
 Unit tests (`make test` / `go test ./...`) do **not** require envtest — the integration packages are excluded by their `//go:build integration` tag.
 
-### A nil reader either re-routes a read or disables it, and only one of those is loud
+### A nil reader either disables a read or re-routes it, and the re-route is the one nothing reports
 
 An omitted field in a harness's reconciler literal is usually safe, because nil *disables* the feature: a nil `Metrics` records nothing, a nil `Recorder` emits no Events, and a suite asserting on neither is right to leave them out.
 Reader fields are where that stops holding uniformly, and `RunnerSetReconciler` carries one of each shape.
