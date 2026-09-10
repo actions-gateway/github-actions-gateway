@@ -1,6 +1,6 @@
 # Q988: read the worker runner version from the registry
 
-> **Status: done 2026-09-07.** Shipped in one PR; the two residuals are [Q1065](../queue/Q1065.md) and [Q1066](../queue/Q1066.md).
+> **Status: done 2026-09-07.** Shipped in one PR; the two residuals are Q1065, since decided, and [Q1066](../queue/Q1066.md).
 
 ## Goal
 
@@ -19,7 +19,7 @@ Measured 2026-09-07 against `ghcr.io/actions/actions-runner:2.335.1` (linux/amd6
   That is once per digest per AGC process.
 - **Reach is the AGC's egress policy's, not the feature's.** By default `buildAGCNetworkPolicy` admits 443 with no `to:` restriction — the breadth [05-security.md](../design/05-security.md#github-app-key-exfiltration-via-agc-apiserver-egress) records as the deliberate default — so any registry is reachable; an install that scopes it with `apiServerCIDRs` (Q145) closes the registry too, and `githubEgressFQDNs` lists no registry host, so an FQDN allowlist would not reopen even `ghcr.io` (whose address, `172.182.252.136` on 2026-09-07, sits in the `actions` and `packages` ranges of `api.github.com/meta`).
   An unreachable registry therefore has to be an ordinary outcome, not an incident: the tag verdict stands and the message says why.
-  Whether a scoped policy should admit a registry is [Q1065](../queue/Q1065.md).
+  A scoped policy admits no registry, decided under Q1065 ([05-security.md](../design/05-security.md#a-scoped-agc-egress-policy-carries-no-registry-allowance)).
 - **Credentials are the pod template's.** The AGC may `get` Secrets in its namespace and nothing else that could carry a pull credential: the tenant Role grants no read on ServiceAccounts, so the worker SA's `imagePullSecrets` are out of reach, and a node-identity registry (GKE/GAR, ECR) has no Secret at all.
   `podTemplate.spec.imagePullSecrets` is what the AGC can use, and what kubelet would use first.
 
@@ -45,7 +45,7 @@ Measured 2026-09-07 against `ghcr.io/actions/actions-runner:2.335.1` (linux/amd6
 | Both reconcilers pass the reading; `main.go` wiring | ✅ transport cloned after the trust pool, secrets through the uncached reader |
 | Unit tests against an in-process registry; envtest proof the async result reaches status | ✅ three inversions red in the unit tier; the envtest holds the layer and requires the verdict inside a window only the wake explains |
 | Operator docs, design appendix, API godoc | ✅ troubleshooting, tenant-onboarding, upgrade, features, 03, 05, appendix-h, `api.md` |
-| Follow-up rows | ✅ [Q1065](../queue/Q1065.md), [Q1066](../queue/Q1066.md) |
+| Follow-up rows | ✅ Q1065 (decided), [Q1066](../queue/Q1066.md) |
 
 ## What the tests proved, and how
 

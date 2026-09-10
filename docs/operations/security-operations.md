@@ -993,6 +993,11 @@ A public managed endpoint is a moving, provider-owned IP — scoping to a guesse
 Symptom: AGC logs show apiserver dial timeouts after a rollout that introduced or changed `apiServerCIDRs`.
 **Remedy: widen the CIDR or clear `apiServerCIDRs` to restore the any-destination default.** Treat this as any egress tightening — validate on one cluster before fleet-wide rollout, and re-confirm after control-plane scaling, upgrades, or IP changes.
 
+**Scoping also closes the AGC's registry read, on purpose.** The AGC reads the worker image out of its registry to learn the runner version it ships, over the same any-destination 443 rule, so a scoped policy stops that read along with everything else it narrows.
+The verdict then falls back to the `workerImage` tag and `RunnerVersionTooOld` carries the failure in its message, which is the designed fallback rather than a fault to chase.
+A scoped policy carries no registry allowance and there is no value to re-open one: widening reach to sharpen a diagnostic is the trade the scoping exists to refuse ([the decision](../design/05-security.md#a-scoped-agc-egress-policy-carries-no-registry-allowance)).
+An FQDN-mode allowlist does not reopen it either, since `githubEgressFQDNs` lists no registry host.
+
 Leave `apiServerCIDRs` unset unless you have a confirmed, stable apiserver CIDR — the any-destination default is bounded by the §5.2 compensating controls (key mounted read-only, never an env var; workers carry no apiserver egress at all; digest-pinned non-root AGC; all GitHub-bound traffic still through the proxy).
 
 ### Why GAG can't discover and tighten this for you (feasibility verdict)
