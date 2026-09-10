@@ -7,9 +7,11 @@ repo's rules cannot be expressed that way, because each is a function of what
 the *branch changed* rather than of what the store holds:
 
   8. A `flake` item may not simply vanish. A shipped mitigation parks it in
-     flake watch and only a groom retires it to the ledger; deleting it throws
+     flake watch, and it leaves only through the ledger; deleting it throws
      away the memory that a fix was already attempted, so a second occurrence
-     reads as a fresh find.
+     reads as a fresh find. A groom retires it once it soaks or goes obsolete,
+     but the fixing change may retire it directly when the fix already makes
+     it obsolete -- what the rule reads is the ledger entry, not who wrote it.
   9. Deleting the last item targeting a plan obliges that plan's index row to
      stop reading as open work.
  11. Every label an item wears is declared, so a typo cannot stick silently.
@@ -148,8 +150,9 @@ def rule8(base_items, head_items, ledger_text, failures):
         failures.append(
             f"rule 8: {qid} carried `flake` and this branch deletes it, but it is "
             f"not in {LEDGER}. A shipped mitigation parks the item in flake "
-            f"watch and only a groom retires it, so a recurrence reads as a "
-            f"recurrence rather than a fresh find. Set "
+            f"watch and a ledger entry is what retires it, so a recurrence "
+            f"reads as a recurrence rather than a fresh find. Retiring at fix "
+            f"time is allowed: add the ledger line in this change. Set "
             f"QUEUE_ALLOW_FLAKE_DELETE={qid} for a deliberate drop.")
 
 

@@ -113,4 +113,6 @@ The floor being walked back is 5 weeks old, announced with `v1.3.0` on 2026-08-0
 - **Whether any external adopter uses an alias** is unknowable for a public project.
   "Known consumers are tests and docs" is a floor, not a rate.
 - **What notice period this project actually owes** is unsettled: the stated policy is "at least one release ahead", which at the measured cadence of `v1.1.0` → `v1.7.0` (6 minors in 49 days) is about 8 days of wall-clock.
-  That gap is [Q1083](../queue/Q1083.md) and is independent of this decision.
+  Q1083 proposed pairing that release count with a wall-clock floor, on upstream's "9 months or 3 minor releases, whichever is longer" shape.
+  Declined 2026-09-09: the project takes no wall-clock commitment, so the policy stays release-count only.
+  Either way it is independent of this decision.
