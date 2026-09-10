@@ -48,6 +48,10 @@
 //     heading, where rules 9 and 10 can reach them.
 //  12. A capped bullet holds one paragraph. A blank line splits it in two, and
 //     what a reader sees as a bullet is then measured over both.
+//  13. A bullet's source lines hold one sentence each. `make md-reflow` cannot
+//     enforce it here: mdreflow declines every paragraph carrying the
+//     `<!-- q:QN -->` annotation rule 1 requires, so this page is the one place
+//     the formatter never reaches.
 //
 // Rules 7 and 8 reconcile the one promise this page makes with a date attached.
 // A release gate lives on an item as an `X.Y-gate` label, meaning the item
@@ -168,6 +172,7 @@ func main() {
 func run(cfg config, findings, summary io.Writer) int {
 	roadmapPath, storePath, featuresPath := cfg.roadmap, cfg.store, cfg.features
 	docs := map[string]*markdown.Document{}
+	srcLines := map[string][]string{}
 	// The backlog is a directory of item files (Q889), so it is read by
 	// storeRows below rather than parsed as one Markdown page here.
 	paths := append([]string{roadmapPath, featuresPath}, cfg.badgeOnly...)
@@ -178,6 +183,7 @@ func run(cfg config, findings, summary io.Writer) int {
 			return 2
 		}
 		docs[p] = markdown.Parse(src)
+		srcLines[p] = strings.Split(string(src), "\n")
 	}
 
 	queue, deferred, labelled, err := storeRows(storePath)
@@ -206,6 +212,7 @@ func run(cfg config, findings, summary io.Writer) int {
 	bound := map[string]bool{}
 	for _, b := range bullets {
 		c.checkRoadmapBullet(roadmapName, b, bound)
+		c.checkSentencePerLine(roadmapName, srcLines[roadmapPath], b)
 	}
 	c.checkGateCoverage(roadmapName, bound)
 
@@ -226,6 +233,7 @@ func run(cfg config, findings, summary io.Writer) int {
 				b.label, b.words, maxFeatureWords, b.span()))
 		}
 		c.checkOrphan(featuresName, b)
+		c.checkSentencePerLine(featuresName, srcLines[featuresPath], b)
 	}
 
 	current, ok := parseRelease(cfg.release)
@@ -262,6 +270,106 @@ type checker struct {
 func (c *checker) report(file string, line int, msg string) {
 	_, _ = fmt.Fprintf(c.findings, "check-roadmap: %s:%d: %s\n", file, line, msg)
 	c.failed = true
+}
+
+// checkSentencePerLine is rule 13, and it exists because the formatter that
+// enforces sentence-per-line everywhere else cannot see these bullets.
+//
+// documentation-standards.md requires one sentence per source line, and
+// `make md-reflow` is what applies it. mdreflow declines any paragraph holding
+// a raw `<!` opener outside a code span, and every gated bullet on this page
+// carries one: the `<!-- q:QN -->` annotation rule 1 requires. Measured
+// 2026-09-10 on mdreflow v0.3.0, `--explain` reports 18 skipped paragraphs for
+// 18 markers, so the decline tracks the bullet count exactly. Nothing else here
+// reads line breaks, so a bullet can pack three sentences onto one line and no
+// gate says a word (Q832).
+//
+// The scan masks code spans, HTML comments and link targets before looking for
+// a boundary, which is what keeps `v2.0.0` and `v1.3.0` from reading as three
+// sentences each. Masking with a capital letter rather than a space is
+// deliberate: a sentence that *opens* with a code span is a real boundary, and
+// blanking the span would hide it.
+//
+// A candidate boundary only counts when what follows is itself terminated. A
+// trailing link is not a second sentence, and that shape is common enough that
+// counting it would make the rule unkeepable.
+func (c *checker) checkSentencePerLine(file string, lines []string, b bullet) {
+	for n := b.line; n <= b.endLine && n <= len(lines); n++ {
+		line := lines[n-1]
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if extra := sentenceStarts(maskInline(line)); extra > 0 {
+			c.report(file, n, fmt.Sprintf(
+				"%d sentences on one line, and documentation-standards.md wants one per line. `make md-reflow` cannot fix it: mdreflow declines every paragraph carrying the bullet's own <!-- q:QN --> annotation, so split it by hand.",
+				extra+1))
+		}
+	}
+}
+
+// maskInline blanks the spans a sentence boundary must not be read inside,
+// replacing each with capital Xs so a boundary *before* one still reads as one.
+func maskInline(s string) string {
+	out := []byte(s)
+	for _, re := range []*regexp.Regexp{codeSpanRE, htmlCommentRE, linkTargetRE} {
+		for _, m := range re.FindAllStringIndex(s, -1) {
+			for i := m[0]; i < m[1] && i < len(out); i++ {
+				out[i] = 'X'
+			}
+		}
+	}
+	return string(out)
+}
+
+// sentenceStarts counts the sentence boundaries inside one line: a terminator,
+// whitespace, then something that can open a sentence. Zero means the line
+// holds at most one sentence.
+func sentenceStarts(s string) int {
+	n := 0
+	for i := 0; i < len(s)-1; i++ {
+		if s[i] != '.' && s[i] != '!' && s[i] != '?' {
+			continue
+		}
+		j := i + 1
+		for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
+			j++
+		}
+		if j == i+1 || j >= len(s) {
+			continue
+		}
+		ch := s[j]
+		if !(ch >= 'A' && ch <= 'Z') && ch != '*' && ch != '[' {
+			continue
+		}
+		if isAbbreviation(s[:i+1]) {
+			continue
+		}
+		// What follows must itself be a sentence, meaning it is terminated.
+		// A bullet ending "... Body text. [detail](plan/thing.md)" is one
+		// sentence with a trailing link, not two, and the link's own dots are
+		// masked out by the time this reads them.
+		if !strings.ContainsAny(s[j:], ".!?") {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+// isAbbreviation reports whether the text ending at a period ends in one of the
+// abbreviations that routinely precede a capital without ending a sentence.
+func isAbbreviation(upTo string) bool {
+	fields := strings.Fields(upTo)
+	if len(fields) == 0 {
+		return false
+	}
+	last := strings.ToLower(fields[len(fields)-1])
+	for _, a := range []string{"e.g.", "i.e.", "etc.", "vs.", "cf.", "al.", "approx."} {
+		if last == a {
+			return true
+		}
+	}
+	return false
 }
 
 // checkOrphan is rule 12. It is reported at the stray paragraph rather than at
@@ -633,6 +741,12 @@ var (
 	qIDRE       = regexp.MustCompile(`^Q[0-9]+$`)
 	annotRE     = regexp.MustCompile(`<!--\s*q:([^-]*)-->`)
 	gateLabelRE = regexp.MustCompile("`([0-9]+\\.[0-9]+)-gate`")
+
+	// The spans a sentence boundary must never be read inside. A version in a
+	// code span (`v2.0.0`) is the shape that makes a naive scan useless here.
+	codeSpanRE    = regexp.MustCompile("`[^`]*`")
+	htmlCommentRE = regexp.MustCompile(`<!--.*?-->`)
+	linkTargetRE  = regexp.MustCompile(`\]\([^)]*\)`)
 
 	// The labels that make a gated row adopter-facing, and so oblige it to
 	// appear on the roadmap. Release scope is not all one kind: a capability or

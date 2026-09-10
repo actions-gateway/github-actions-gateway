@@ -33,7 +33,9 @@ These are intentionally unscheduled.
 Each waits on a real operator need, a measured limit, or a gating release before it becomes scheduled work.
 The first entry is the exception: a firm commitment, waiting only on the release that carries it.
 
-- **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1085,Q1086 --> Committed, not started. **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, after storage-migrating stored objects to `v2`. `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
+- **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1085,Q1086 --> Committed, not started.
+  **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, after storage-migrating stored objects to `v2`.
+  `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
   Gated on the `v2` GA API being validated, not on a date.
 
 - **[Validate GHES against a real appliance](plan/arc-parity.md#where-arc-is-actually-ahead)** <!-- q:Q765 --> Both GitHub Enterprise Server (GHES) capabilities ship marked untested against real hardware: the appliance-addressing path and the private-CA bundle.

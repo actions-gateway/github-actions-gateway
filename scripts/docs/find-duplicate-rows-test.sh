@@ -292,6 +292,75 @@ else
 	fails=$((fails + 1))
 fi
 
+# --- --audit-bodies: the measurement, and the hub it must not produce -------
+#
+# The mode exists to answer whether the body is usable as a signal, so the
+# assertion is on the scoring choice rather than on a count: Jaccard charges a
+# short body for being short, where containment would let it match everything.
+# The planted pair shares body vocabulary and NO title vocabulary, which is the
+# shape the title matcher provably cannot reach (Q1045).
+
+mkdir -p "$WORK/bodies"
+cat >"$WORK/bodies/Q800.md" <<'MD'
+---
+id: Q800
+status: ready
+---
+
+# Alpha widget refuses its input
+
+The scheduler drops a pending record when the queue rotates, so the retry ledger
+disagrees with the pending record it was derived from.
+MD
+cat >"$WORK/bodies/Q801.md" <<'MD'
+---
+id: Q801
+status: ready
+---
+
+# Beta gadget miscounts
+
+The scheduler drops a pending record when the queue rotates, so the ledger under
+it reports a completion that never happened.
+MD
+cat >"$WORK/bodies/Q802.md" <<'MD'
+---
+id: Q802
+status: ready
+---
+
+# Something entirely unrelated
+
+Grafana panels render their legend below the axis on a narrow viewport.
+MD
+
+got="$(run_status "$SEARCH" --store "$WORK/bodies" --audit-bodies)"
+die_if_killed 'the body audit flags a pair sharing no title words' "$got"
+if [[ "$got" == 0 ]] &&
+	grep -q 'Q801' "$WORK/out" &&
+	grep -q 'Q800' "$WORK/out" &&
+	! grep -q 'Q802' "$WORK/out"; then
+	printf 'ok   %s\n' 'the body audit flags a pair sharing no title words'
+else
+	printf 'FAIL %s: got exit %s and:\n' 'the body audit flags a pair sharing no title words' "$got"
+	awk '{ print "    " $0 }' "$WORK/out"
+	fails=$((fails + 1))
+fi
+
+# The control that makes the assertion above about bodies: those same two rows
+# share no title content words, so filing one must not surface the other. Q801
+# matching itself at 1.00 is the store containing the row, not a candidate.
+got="$(run_status "$SEARCH" --store "$WORK/bodies" 'Beta gadget miscounts')"
+die_if_killed 'the title matcher cannot reach the pair the body audit found' "$got"
+if [[ "$got" == 0 ]] && ! grep -q 'Q800' "$WORK/out"; then
+	printf 'ok   %s\n' 'the title matcher cannot reach the pair the body audit found'
+else
+	printf 'FAIL %s: Q800 must not surface, got exit %s and:\n' \
+		'the title matcher cannot reach the pair the body audit found' "$got"
+	awk '{ print "    " $0 }' "$WORK/out"
+	fails=$((fails + 1))
+fi
+
 if ((fails > 0)); then
 	printf '\nfind-duplicate-rows-test: %d assertion(s) failed\n' "$fails" >&2
 	exit 1

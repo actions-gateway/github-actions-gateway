@@ -47,6 +47,7 @@
 #   find-duplicate-rows.sh --store <dir> "<title>"
 #   find-duplicate-rows.sh --porcelain "<title>"   # TSV for a caller, not a reader
 #   find-duplicate-rows.sh --audit    # score every existing pair; how noisy is it?
+#   find-duplicate-rows.sh --audit-bodies  # the same over item bodies, Jaccard
 #
 # Calibration against the shipped backlog: docs/development/maintaining-backlog.md
 
@@ -201,6 +202,86 @@ audit() {
 		"$rows" "$((rows * (rows - 1) / 2))" "$flagged"
 }
 
+# audit_bodies is the body-reading counterpart of the audit above (Q1045).
+#
+# The title matcher cannot reach two rows that describe one defect at different
+# altitudes: Q922 ("docs name the deleted lint-backlog.sh as live") and Q924
+# shared one content word, `backlog`, and scored 0.143 where the bar is 0.25.
+# Their bodies did overlap. Whether that generalises is what this measures.
+#
+# It scores JACCARD, not the containment the title matcher uses, and the
+# difference is the whole finding. Containment divides by the shorter side, so a
+# short body is contained in many long ones and becomes a hub: measured
+# 2026-09-10 over 176 rows, containment at 0.40 flagged 290 pairs with ONE row
+# in 65 of them, which is an advisory nobody would read. Jaccard over the same
+# bodies flags 1 pair at 0.30 and hubs on nothing.
+#
+# So this stays a measurement rather than a second live signal. The pairs it
+# surfaces that the title matcher misses (Q264/Q273, Q1023/Q1055, Q11/Q351 on
+# 2026-09-10) are topical adjacency worth a cross-link, not duplicates worth
+# blocking a filing, and folding it into the live path would re-raise every
+# score for no new cut. Re-run it before anyone proposes changing a threshold.
+audit_bodies() {
+	local store=$1 floor=${2:-0.30}
+	awk -v floor="$floor" '
+	function norm(s,   t) {
+		t = tolower(s)
+		gsub(/`/, " ", t)
+		gsub(/[^a-z0-9]+/, " ", t)
+		return t
+	}
+	function stem(w) {
+		if (length(w) > 3 && w ~ /s$/ && w !~ /ss$/) return substr(w, 1, length(w) - 1)
+		return w
+	}
+	BEGIN {
+		split("the a an and or but so of to on at for from with by is are was were be been " \
+		      "it its that this these those not only every each all any than then when where " \
+		      "what which how why more most other such into over under out up down off no nor " \
+		      "as if does do did has have had can could should would will", sw, " ")
+		for (i in sw) stop[sw[i]] = 1
+	}
+	FNR == 1 { id = ""; fm = 0; seen_title = 0 }
+	FNR == 1 && /^---$/ { fm = 1; next }
+	fm && /^---$/ { fm = 0; next }
+	fm && /^id:/ { id = $2; next }
+	fm { next }
+	# The title is scored by the matcher above; this reads what it cannot.
+	!seen_title && /^# / { seen_title = 1; next }
+	{
+		n = split(norm($0), w, " ")
+		for (i = 1; i <= n; i++) {
+			x = stem(w[i])
+			if (length(x) < 3 || (x in stop)) continue
+			if (!((id SUBSEP x) in tok)) { tok[id, x] = 1; size[id]++ }
+		}
+		if (id != "" && !(id in known)) { known[id] = 1; ids[++nids] = id }
+	}
+	END {
+		pairs = 0
+		for (i = 1; i <= nids; i++) {
+			for (j = i + 1; j <= nids; j++) {
+				a = ids[i]; b = ids[j]
+				if (size[a] == 0 || size[b] == 0) continue
+				shared = 0
+				for (k in tok) {
+					split(k, kp, SUBSEP)
+					if (kp[1] != a) continue
+					if ((b SUBSEP kp[2]) in tok) shared++
+				}
+				union = size[a] + size[b] - shared
+				if (union == 0) continue
+				score = shared / union
+				if (score < floor) continue
+				printf "%.3f\t%s\t%s\n", score, a, b
+				pairs++
+			}
+		}
+		printf "rows=%d pairs=%d flagged=%d floor=%s\n", nids, nids * (nids - 1) / 2, pairs, floor > "/dev/stderr"
+	}
+	' "$store"/Q*.md | sort -rn
+}
+
 main() {
 	local query='' target='' store='' mode=search
 
@@ -208,6 +289,10 @@ main() {
 		case "$1" in
 		--audit)
 			mode=audit
+			shift
+			;;
+		--audit-bodies)
+			mode=audit-bodies
 			shift
 			;;
 		--target)
@@ -237,7 +322,7 @@ main() {
 		esac
 	done
 
-	[[ "$mode" == audit || -n "$query" ]] ||
+	[[ "$mode" == audit || "$mode" == audit-bodies || -n "$query" ]] ||
 		die 'wants the title of the row you are about to file'
 	[[ -n "$store" ]] || store="$(git rev-parse --show-toplevel)/docs/queue"
 	# A missing backlog is not an error here: this runs inside ID allocation,
@@ -253,6 +338,11 @@ main() {
 
 	if [[ "$mode" == audit ]]; then
 		audit "$rows_file"
+		return 0
+	fi
+
+	if [[ "$mode" == audit-bodies ]]; then
+		audit_bodies "$store"
 		return 0
 	fi
 

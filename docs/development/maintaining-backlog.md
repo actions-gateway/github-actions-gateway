@@ -109,7 +109,9 @@ Every one of these is caught by a gate, and every one is cheaper to do up front 
 
 Work through all four:
 
-1. **De-link the ID wherever the repo cites it.** `grep -rn "queue/QNNN.md" docs/` finds every link that is now dead (`make doc-links`).
+1. **De-link the ID wherever the repo cites it.** Search for the link target, not the prefix: `grep -rEn "\]\([^)]*QNNN\.md" docs/` finds every dead link (`make doc-links`).
+   `grep -rn "queue/QNNN.md" docs/` is the query to avoid, and it reads as complete: a **sibling row** links across the store relatively, as `[QNNN](QNNN.md)` with no `queue/` in it, so that pattern returns nothing while the link is live.
+   Measured 2026-09-10 closing Q1045, where the narrow query reported no citations and `doc-links` then failed on Q1094.
    Rewrite them as a **bare `QNNN`**, the form the Archive rows in [`docs/plan/README.md`](../plan/README.md) already use.
    Keep the prose; only the link goes.
    In an active plan's Status cell the de-link is gated rather than tidy: `make plan-index-check` requires a live row to be linked and a closed one to be bare, so the anchor dying is what puts the cell in front of someone (Q800).
@@ -282,6 +284,27 @@ Two of the eleven look like real duplicates nobody caught: Q663 and Q612 are bot
 
 Loosening either ratio by 0.05 roughly doubles the count.
 Re-run the audit before changing a threshold.
+
+### The body is a real signal, and only under Jaccard (Q1045)
+
+The title matcher cannot reach two rows describing one defect at different altitudes.
+Q922 ("docs name the deleted `lint-backlog.sh` as live") and Q924 shared exactly one content word, `backlog`, because `lint-backlog.sh` and `maintaining-backlog.md` both tokenize through it; that scores 0.143 against a 0.25 bar, so the pair stood for twelve days and two sessions picked different rows.
+Their bodies did overlap, which is what `--audit-bodies` was built to test:
+
+```bash
+scripts/docs/find-duplicate-rows.sh --audit-bodies
+```
+
+**Scored the way the title matcher scores, the body signal is unusable, and it fails in a specific way worth knowing.** Containment divides by the shorter side, so a short body is contained in many long ones and becomes a hub rather than a match.
+Measured 2026-09-10 over 176 rows and 15,400 pairs: containment at 0.40 flags 290 pairs with a single row appearing in 65 of them.
+That is not a noisy advisory, it is one row shouting.
+
+**Under Jaccard the same bodies flag one pair and hub on nothing**, because dividing by the union charges a short body for being short.
+The pairs it surfaces are ones the title matcher misses and are worth a cross-link rather than a block: Q264/Q273 (both v1 removal), Q1023/Q1055 (both the signal-death guard), Q11/Q351 (both session-key exchange).
+
+So the body stays a measurement rather than a second live signal.
+Folding it into the filing path would re-raise every score without adding a cut, which is the same objection that keeps Notes cells out.
+Run it when a threshold is in question, or when two rows on one defect got past the search anyway.
 
 ## The merge drivers: resolve registry rows by key, not by line position
 

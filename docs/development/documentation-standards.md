@@ -427,6 +427,16 @@ make md-reflow
 The check is in `make check` and costs about a second for the whole tree.
 `.mdreflow.yaml` at the repo root holds the configuration: `sentence` mode at `max-width: 0`, excluding the two generated docs, `docs/STATUS.md`, and the `AGENTS.md` symlink. mdreflow always excludes `vendor/`, so the 471 tracked vendored Markdown files are never walked.
 
+### The two pages the formatter never reaches
+
+`make md-reflow` applies the rule above, and it declines any paragraph holding a raw `<!` opener outside a code span.
+Every gated bullet on `docs/roadmap.md` carries one, because `roadmapcheck` rule 1 requires a `<!-- q:QN -->` annotation naming the backlog rows behind it.
+Measured 2026-09-10 on mdreflow v0.3.0: `--explain` reports 18 skipped paragraphs against 18 markers, so the decline tracks the bullet count exactly and the whole page is exempt by accident.
+
+So those bullets are held to sentence-per-line by `roadmapcheck` rule 13 instead, over `docs/roadmap.md` and `docs/features.md` both (Q832).
+It masks code spans, HTML comments and link targets before looking for a boundary, which is what stops `v2.0.0` reading as three sentences, and it counts a boundary only where what follows is itself terminated, so a trailing link is not a second sentence.
+Split such a bullet by hand; `make md-reflow` will not do it for you and `make md-reflow-check` will not complain.
+
 ### What stays hard-wrapped, and why it stays that way
 
 Measured 2026-09-04 on mdreflow v0.3.0: 99.76% of interior line breaks in the docset's prose sit at a sentence boundary, 18,400 of 18,444, leaving 44.

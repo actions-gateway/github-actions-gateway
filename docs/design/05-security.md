@@ -310,7 +310,7 @@ That is what lets the reading move the condition where the self-report deliberat
 Three properties bound what the read can cost or leak:
 
 - **No new egress breadth.** The read uses the AGC's existing policy, which admits 443 and 6443 to any destination by default (the exfiltration section above) and no other port, so it opens nothing and a registry on another port is out of reach; an install that scopes egress with `apiServerCIDRs` closes the registry too, and the verdict falls back to the tag with the failure in the message.
-  Whether a scoped policy should carry a registry allowance is [Q1065](../queue/Q1065.md).
+  A scoped policy carries no registry allowance, which is the decision recorded below.
 - **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, read through the `get` on Secrets the tenant Role already grants; it is the credential kubelet reads for the same pull.
   The password is never logged or reported; the username reaches the condition message and the warning log when a read fails, so an operator can tell which login was refused.
   A Bearer challenge's realm must be `https`, since the login rides on that exchange.
@@ -320,6 +320,28 @@ Three properties bound what the read can cost or leak:
   What reaches the condition message is capped at the resolver boundary, so a hostile image or registry cannot push a status write past the 32 KiB a condition message admits.
   The manifest digest is computed from the bytes served and checked against a digest reference; the layers are not digest-verified, which the tenant-authored trust argument above covers.
   Retries and the hourly re-check run on the set's next reconcile rather than on a timer, so a set with nothing else due reads its registry on the reconcile cadence.
+
+#### A scoped AGC egress policy carries no registry allowance
+
+The default policy admits 443 with no `to:` restriction, so the read works out of the box.
+An install that narrows egress with `apiServerCIDRs` closes the registry along with everything else, and an FQDN-mode allowlist does not reopen it either, because `githubEgressFQDNs` lists no registry host and so would not admit `ghcr.io` even for the default worker image.
+In both cases the read fails, the verdict falls back to the tag, and the failure reaches the condition message.
+That is the designed fallback rather than a defect, which is what makes doing nothing a real option here.
+
+**The decision is to leave it closed.** Scoping the AGC's egress is the operator choosing to shrink what a compromised AGC can reach, and a registry allowance widens exactly that, in the one direction the scoping exists to narrow.
+The capability bought is a sharper `RunnerVersionTooOld` verdict on an install that has deliberately cut the AGC off from the internet; the capability lost by leaving it closed is that same sharpening, and the tag-based verdict still stands.
+Trading reach for a better diagnostic is the wrong way round for a default, so the secure option stays the default and no rule is written.
+
+**If an install ever needs it, the shape is the part to decide then, not now.** Three candidates, each widening reach differently:
+
+| Shape | What it admits | The cost |
+|---|---|---|
+| The default image's registry alone | `ghcr.io` | Smallest, and useless to any tenant running its own `workerImage` |
+| The hosts of every `workerImage` the gateway's sets name | A set the tenants control | The allowance moves whenever a tenant edits a set, so the operator no longer decides what the AGC can reach |
+| An operator-listed set on the `ActionsGateway` | Exactly what was listed | The operator keeps the decision, at the cost of a field to maintain and drift when a tenant moves image |
+
+The middle one is the shape to be most careful with: it reads as the convenient default and is the only one that hands the reach decision to the party the scoping is meant to contain.
+Whichever is chosen, it is an explicit opt-in on a policy that is otherwise closed, never a relaxation of the default.
 
 ### Proxy egress audit record
 
