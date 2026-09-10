@@ -74,10 +74,17 @@ MATCHER = "scripts/docs/find-duplicate-rows.sh"
 # STORE rather than written again, so the two cannot drift apart.
 DOCS_DIR = posixpath.dirname(STORE)
 PAGE_DIR = posixpath.basename(STORE)
-# A markdown inline link or image target: the `(...)` of `](...)`. Same shape as
-# hooks/source_links.py's, so the two agree about what a link is; a `../..` path
-# inside a code span is not one.
+# A markdown inline link or image target: the `(...)` of `](...)`, and the
+# destination of a reference-style `[label]: target` definition. Both shapes are
+# hooks/source_links.py's, because Python-Markdown resolves the two into the
+# same link and a reference-style one ships exactly as dead as an inline one.
 INLINE_TARGET = re.compile(r"(?<=]\()([^()\s]+)(?=[)\s])")
+REF_TARGET = re.compile(r"(?m)^ {0,3}\[[^\]\n]+\]:[ \t]+(\S+)")
+# A fenced block or a code span is rendered as text, so a link inside one is not
+# a link and MkDocs never resolves it. Stripping them is what keeps rule 14
+# free of an override: a row documenting the rule quotes a bad link on purpose.
+FENCE = re.compile(r"(?ms)^([ \t]*)(`{3,}|~{3,}).*?^\1?\2[ \t]*$")
+CODE_SPAN = re.compile(r"(`+)(?:.|\n)*?\1")
 # `scheme://…` or `mailto:…`, deliberately narrower than RFC 3986: this repo
 # writes source references as `path/to/file.go:91`, which a general scheme
 # pattern reads as the scheme `path/to/file.go`.
@@ -286,20 +293,23 @@ def rule13(base_items, head_items, root, base_dir, failures):
             f"QUEUE_ALLOW_UNCITED_DUPLICATE={qid} for a deliberate pass.")
 
 
-def reentrant_path(target):
-    """The `docs/`-relative path a link reaches after escaping `docs/`, or None.
+def unservable(target):
+    """`(reason, suggestion)` when MkDocs cannot serve this link, else None.
 
     MkDocs resolves a `docs/queue/` page's links from `queue/` inside
     `docs_dir`, so enough `../` to leave `docs/` puts the link outside anything
-    this build can serve. Where it then points back *into* `docs/`,
-    `hooks/source_links.py` sees a resolved path under `docs/` that the `dev`
-    build publishes and leaves it alone, so the dead link reaches MkDocs and
-    `--strict` aborts.
+    this build can serve. Two ways that ends badly, and one way it does not:
 
-    A link that escapes and stays out — `../../scripts/go/coverage.sh`, a
-    workflow, `../../.mdreflow.yaml` — is the ordinary case and fine: nothing
-    under `docs/` serves it either, and source_links rewrites it to a
-    `repo_url` blob URL.
+    - It points back *into* `docs/`. `hooks/source_links.py` sees a resolved
+      path under `docs/` that the `dev` build publishes and leaves it alone, so
+      the dead link reaches MkDocs and `--strict` aborts. The suggestion is the
+      same file written relative to the store.
+    - It leaves the repository altogether. source_links builds no URL for a
+      path it cannot resolve under the root, so that link is dead too. There is
+      no rewrite to suggest.
+    - It escapes and stays inside the repo — `../../scripts/go/coverage.sh`, a
+      workflow, `../../.mdreflow.yaml`. This is the ordinary case and it is
+      fine: source_links rewrites it to a `repo_url` blob URL.
     """
     path = target.split("#", 1)[0]
     path = LINE_SUFFIX.sub("", path)
@@ -308,9 +318,11 @@ def reentrant_path(target):
     if not posixpath.normpath(posixpath.join(PAGE_DIR, path)).startswith(".."):
         return None  # MkDocs resolves it inside docs_dir
     reached = posixpath.normpath(posixpath.join(STORE, path))
-    if reached != DOCS_DIR and not reached.startswith(DOCS_DIR + "/"):
-        return None  # escapes and stays out, which source_links absolutizes
-    return reached
+    if reached == DOCS_DIR or reached.startswith(DOCS_DIR + "/"):
+        return "re-enters it", posixpath.relpath(reached, STORE)
+    if reached.startswith(".."):
+        return "leaves the repository", None
+    return None  # escapes and stays in the repo, which source_links absolutizes
 
 
 def links_of(body):
@@ -318,14 +330,18 @@ def links_of(body):
 
     The frontmatter `target:` renders as the item's link in the `/dev/queue/`
     table, and the item page publishes on `dev` too, so a prose link breaks the
-    build the same way from the same directory.
+    build the same way from the same directory. Fenced blocks and code spans are
+    stripped first: they render as text, so a link quoted inside one is not a
+    link, and firing on it would be a wrong deny with no way out.
     """
     found = []
     target = target_of(body)
     if target:
         found.append(("its frontmatter `target:`", target))
-    for hit in INLINE_TARGET.findall(prose_of(body)):
-        found.append(("its notes", hit))
+    prose = CODE_SPAN.sub("", FENCE.sub("", prose_of(body)))
+    for pattern in (INLINE_TARGET, REF_TARGET):
+        for hit in pattern.findall(prose):
+            found.append(("its notes", hit))
     return found
 
 
@@ -338,18 +354,21 @@ def rule14(head_items, failures):
     """
     for qid, body in sorted(head_items.items()):
         for where, target in links_of(body):
-            reached = reentrant_path(target)
-            if reached is None:
+            verdict = unservable(target)
+            if verdict is None:
                 continue
-            fixed = posixpath.relpath(reached, STORE)
+            reason, fixed = verdict
             fragment = target.split("#", 1)[1] if "#" in target else ""
+            remedy = (f"Write it relative to the store: "
+                      f"`{fixed}{'#' + fragment if fragment else ''}`."
+                      if fixed else
+                      f"Point it at something inside the repository.")
             failures.append(
                 f"rule 14: {qid} links `{target}` in {where}, which leaves "
-                f"`{DOCS_DIR}/` and points back into it. MkDocs resolves a "
-                f"`{STORE}/` page's links from inside `{DOCS_DIR}/`, so it "
-                f"cannot serve that and `mkdocs --strict` aborts -- a class no "
-                f"local gate builds the site to catch. Write it relative to the "
-                f"store: `{fixed}{'#' + fragment if fragment else ''}`.")
+                f"`{DOCS_DIR}/` and {reason}. MkDocs resolves a `{STORE}/` "
+                f"page's links from inside `{DOCS_DIR}/`, so it cannot serve "
+                f"that and `mkdocs --strict` aborts -- a class no local gate "
+                f"builds the site to catch. {remedy}")
 
 
 def main(argv=None):

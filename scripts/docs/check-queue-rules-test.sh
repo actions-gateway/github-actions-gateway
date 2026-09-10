@@ -4,7 +4,7 @@
 #
 # Every rule is paired: a store that must pass, and the same store carrying one
 # introduced violation that must fail. A rule never shown failing is not
-# evidence that it checks anything, and each of these four guards a loss that
+# evidence that it checks anything, and each of these five guards a loss that
 # is silent by construction, so a vacuous pass would look identical to a real
 # one.
 #
@@ -377,14 +377,69 @@ fi
 # leaves docs/ and STAYS out is the ordinary case -- five shipped in one wave --
 # and source_links.py rewrites each into a repo_url blob URL. A rule banning
 # `../../` would redden all of them.
+# All five are targets Q1054 measured on real rows in that wave.
 R="$TMP/r14-out"; newrepo "$R"
 item "$R" Q1 "docs" "../../scripts/go/coverage.sh"
 item "$R" Q2 "docs" "../../.mdreflow.yaml"
 item "$R" Q3 "docs" "../../.github/workflows/dependabot-go-sync.yml"
-item "$R" Q4 "docs" "../development/website.md"
-item "$R" Q5 "docs" "Q9.md"
+item "$R" Q4 "docs" "../../scripts/manifest/check-registry-mirror-catalog-deny.py"
+item "$R" Q5 "docs" "../../.github/workflows/e2e-reusable.yml"
+# Two shapes that never leave docs/ at all, so the rule cannot reach them.
+item "$R" Q6 "docs" "../development/website.md"
+item "$R" Q7 "docs" "Q9.md"
 seal "$R"
 expect 0 "$R" "rule 14 control: a target that escapes docs/ and stays out passes"
+
+# A link escaping the repository entirely is dead too: source_links builds no
+# URL for a path it cannot resolve under the root, so --strict aborts. There is
+# no store-relative rewrite to suggest, so the remedy differs.
+R="$TMP/r14-outside"; newrepo "$R"
+noted "$R" Q1 "See [a stray](../../../outside/thing.md) for why."
+seal "$R"
+expect 1 "$R" "rule 14: a link leaving the repository fails" "leaves the repository"
+if grep -q -- "Point it at something inside the repository." "$TMP/out"; then
+    ok "rule 14: the escaping-the-repo reason suggests no rewrite"
+else
+    bad "rule 14: the escaping-the-repo reason suggests no rewrite"
+fi
+
+# A reference-style definition resolves into an ordinary link, so it ships
+# exactly as dead as an inline one. source_links.py carries both patterns for
+# this reason and rule 14 must agree with it about what a link is.
+R="$TMP/r14-ref"; newrepo "$R"
+noted "$R" Q1 "See the note below.
+
+[gw]: ../../docs/development/thing.md"
+seal "$R"
+expect 1 "$R" "rule 14: a reference-style definition fails" "rule 14: Q1"
+
+# A bare directory target aborts --strict down a different MkDocs code path
+# (unrecognized relative link rather than not-found), so it gets its own case.
+R="$TMP/r14-dir"; newrepo "$R"
+item "$R" Q1 "docs" "../../docs/development/"
+seal "$R"
+expect 1 "$R" "rule 14: a bare directory target fails" "rule 14: Q1"
+
+# A fenced block renders as text, so MkDocs never resolves a link inside one and
+# the build is green. Firing here would be a wrong deny with no override to take
+# -- and the row most likely to carry one is a row documenting rule 14.
+R="$TMP/r14-fence"; newrepo "$R"
+noted "$R" Q1 'A row must not write:
+
+```markdown
+[bad](../../docs/development/thing.md)
+```
+
+which the site renders as text.'
+seal "$R"
+expect 0 "$R" "rule 14 control: a link inside a fenced block does not fire"
+
+# Same for an inline code span, which is the shorter way to quote one.
+R="$TMP/r14-spanlink"; newrepo "$R"
+# shellcheck disable=SC2016  # the backticks are the code span under test.
+noted "$R" Q1 'Never write `[bad](../../docs/development/thing.md)` in a row.'
+seal "$R"
+expect 0 "$R" "rule 14 control: a link inside a code span does not fire"
 
 # The item page publishes on `dev` too, so a prose link breaks the build from
 # the same directory. Covering only `target:` would leave the next escaping
