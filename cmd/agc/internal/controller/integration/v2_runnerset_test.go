@@ -89,9 +89,7 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
 		// The uncached reader the projected proxy-share ConfigMap is read through
-		// (Q166, Q1078), exactly as main.go wires it: the AGC's Role grants get on
-		// ConfigMaps but not list/watch, so a cached read starts an informer production
-		// has no permission to run.
+		// (Q166, Q1078), exactly as main.go wires it.
 		APIReader: mgr.GetAPIReader(),
 		// The uncached reader the capacity gate reads pod Events through on a cluster
 		// that can grow (Q406, Q470), exactly as main.go wires it.

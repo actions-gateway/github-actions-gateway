@@ -2666,25 +2666,25 @@ Hand-assembling it has two traps, both of which surface as a confusing envtest f
 
 Unit tests (`make test` / `go test ./...`) do **not** require envtest — the integration packages are excluded by their `//go:build integration` tag.
 
-### A harness must wire every reader production wires
+### A nil reader either re-routes a read or disables it, and only one of those is loud
 
-A controller-runtime manager hands out two readers, and a reconciler field left nil falls back to the cached one.
-That fallback is deliberate, because a unit test with a plain fake client has no `APIReader` to give.
-An envtest harness that omits the field therefore compiles, passes, and exercises a code path production never takes.
-Nothing reports it: the read succeeds either way, and the only difference is whether an informer was started for the kind.
+An omitted field in a harness's reconciler literal is usually safe, because nil *disables* the feature: a nil `Metrics` records nothing, a nil `Recorder` emits no Events, and a suite asserting on neither is right to leave them out.
+Reader fields are where that stops holding uniformly, and `RunnerSetReconciler` carries one of each shape.
 
-The reads that carry the divergence are the ones production takes uncached *on purpose*, and each has a reason the cached read defeats:
+- **`EventReader` fails open.** Nil short-circuits the autoscaler-verdict gate, which returns `CapacityAvailable` with "no direct API reader is wired" and never closes.
+  That is deliberate and documented at the declaration, so a suite not exercising the gate is right to omit it.
+- **`APIReader` falls back.** Nil silently substitutes the cached client, so the read still succeeds and the only difference is whether an informer was started for the kind.
+  Nothing reports that, which is what makes it the shape to go looking for.
+
+The reads where the fallback matters are the ones production takes uncached *on purpose*, each for a reason the cached read defeats:
 
 - **A kind the AGC has `get` on but not `list`/`watch`.** The projected proxy-share ConfigMap is the case (`resolveRunnerSetRefs`): a cached read starts an informer the production Role cannot run, so a suite taking it cannot observe the permission production denies.
 - **A kind a deployment may not serve at all.** The v1alpha1 `RunnerGroup` adoption probe: a cached `Get` on an unserved kind wedges the manager's cache.
 - **A read whose staleness is spent once.** The scale-set guard ConfigMap feeds the orphan scan, which claims its one per-process verdict on the first reading of the in-flight set, empty or not (Q1064), so a stale-empty read burns the scan for the life of the process.
 
-Q1078 found three of the five `cmd/agc` envtest harnesses leaving `RunnerSetReconciler.APIReader` nil while two beside them wired it, and two of those three carried a comment claiming parity with `main.go` for the fields next to the missing one.
-A comment claiming parity is scoped to the field it annotates; it says nothing about the field that is absent, which is exactly what makes the gap read as deliberate.
-
-When adding or reviewing a harness, diff its reconciler literal against the production one in `main.go` field by field, rather than reading the comments beside the fields that are there.
-Most omitted fields are safe, because nil *disables* the feature: a nil `Metrics` records nothing, a nil `Recorder` emits no Events, and a suite that asserts on neither is right to leave them out.
-A reader field is the exception: nil does not disable the read, it re-routes it, so the suite goes on passing while testing a different path.
+Q1078 found `APIReader` nil in three of the five harnesses that construct a `RunnerSetReconciler`, while two beside them wired it, and two of the three carried a comment claiming parity with `main.go` for the field next to the missing one.
+A comment claiming parity is scoped to the field it annotates and says nothing about a field that is absent, which is what makes the gap read as deliberate.
+So diff the harness's literal against `main.go` field by field rather than reading the comments beside the fields that are there, and for each reader ask which of the two shapes its nil takes before deciding the omission is safe.
 
 ### The envtest suite budget
 
