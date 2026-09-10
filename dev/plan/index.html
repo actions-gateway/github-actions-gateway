@@ -2695,7 +2695,7 @@
 
 <h1 id="plans">Plans<a class="headerlink" href="#plans" title="Permanent link">&para;</a></h1>
 <p>Topic-organized index of plan files.
-For current status and priorities, see <a href="../queue/">docs/STATUS.md</a>.</p>
+For current status and priorities, see <a href="../queue/">the backlog</a>.</p>
 <p>Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top.
 Where that scope is a change to something other files read, enumerate the readers rather than the references: <a href="../development/maintaining-backlog/#a-plan-enumerates-readers-not-references">maintaining-backlog.md</a>.
 Authoritative state always lives in the individual file.</p>
@@ -3124,7 +3124,7 @@ Each has inline ✓ markers per item.</p>
 </tbody>
 </table>
 <h2 id="archive">Archive<a class="headerlink" href="#archive" title="Permanent link">&para;</a></h2>
-<p>Plans whose work has fully landed and which <code>docs/STATUS.md</code> no longer references.
+<p>Plans whose work has fully landed and which no live backlog item references.
 Moved here so <code>ls docs/plan/</code> shows active work only.
 The doc remains available — the rationale is often more valuable than the diff.</p>
 <table>
@@ -3658,13 +3658,13 @@ The doc remains available — the rationale is often more valuable than the diff
 </ul>
 <p>When a plan fully closes:</p>
 <ul>
-<li>If <code>docs/STATUS.md</code> still references it (Progress table or any Queue row), leave it under <code>docs/plan/</code>.</li>
-<li>Once STATUS.md no longer references it, <code>git mv</code> it to <code>docs/plan/archive/</code> and move its row in this README to the Archive section.
+<li>If a live backlog item still targets it, or an active row's Status cell still links one, leave it under <code>docs/plan/</code>.</li>
+<li>Once no live item references it, <code>git mv</code> it to <code>docs/plan/archive/</code> and move its row in this README to the Archive section.
   Update any other in-repo links to the new path <strong>and the moved doc's own relative links</strong> (dropping into <code>archive/</code> adds one <code>../</code> level).
   The doc stays available; the working directory just gets less noisy.
   See the full protocol in <a href="../development/maintaining-backlog/#archiving-completed-plan-docs"><code>docs/development/maintaining-backlog.md</code></a>.</li>
-<li><strong>Do this on close, not in a later audit</strong> — in the same change that drops the plan's last STATUS reference.
-  <code>make plan-index-check</code> (part of <code>make check</code>) fails when an active, non-<code>ⓘ</code> plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.</li>
+<li><strong>Do this on close, not in a later audit</strong> — in the same change that closes the plan's last backlog item.
+  Nothing gates the archival itself: since Q889 reversed invariant 1, <code>make plan-index-check</code> fails an active row whose Status cell <em>claims</em> open work (⚠️ ❌ 🚧 🔲) that no live item backs, so a finished plan left unarchived under a ✅ is legal and only reading catches it.</li>
 </ul>
 <p>Add a row to this README when creating, completing, or archiving a plan.</p>
 

@@ -3480,14 +3480,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Decision:</strong> the singleton rule (enforced by Q511's preflight) is costing more than parallel live runs are worth.</td>
 </tr>
 <tr>
-<td><a href="Q908/">Q908</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh"><code># status-scope: none</code> is dead syntax that two gates still carry</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>STATUS_GATES</code> retired with Q889 and <code>gate-list.sh</code> no longer mentions it, so the annotation gates nothing: <code>make gate-lists-check</code> passes …</td>
-</tr>
-<tr>
 <td><a href="Q397/">Q397</a></td>
 <td><a href="../plan/gke-dogfood/#recreate-is-proven-end-to-end-q380"><code>validate-cluster.sh</code> metrics-server retry, on a from-zero bootstrap</a></td>
 <td><code>dogfood</code></td>
@@ -3870,22 +3862,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>changes</code> job is abandoned on <code>main</code> outside a GitHub incident window.</td>
-</tr>
-<tr>
-<td><a href="Q897/">Q897</a></td>
-<td><a href="../plan/">The plan index still instructs archival against the deleted STATUS.md</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Its archival protocol reads "if <code>docs/STATUS.md</code> still references it", and states <code>plan-index-check</code>'s pre-Q889 direction; invariant 1 now …</td>
-</tr>
-<tr>
-<td><a href="Q940/">Q940</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">scripts/README.md still says check-plan-index reads docs/STATUS.md</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The registry entry has invariant 1 reading <code>docs/STATUS.md</code> and warns that pointing it at items alone reports 21 plans unreferenced; Q889 …</td>
 </tr>
 <tr>
 <td><a href="Q911/">Q911</a></td>
