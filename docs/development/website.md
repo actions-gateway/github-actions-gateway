@@ -626,12 +626,16 @@ On github.com the same README renders as the conventions alone, which is the rig
 
 **The table comes from `queue.py render`, not from a second renderer**, so the page and the CLI cannot disagree about order, truncation or status.
 
-Two things this wiring depends on, both of which fail quietly:
+Three things this wiring depends on, all of which fail quietly:
 
 - **`queue_page.py` must precede `source_links.py` in `mkdocs.yml`.** Hooks run in listed order and both use `on_page_markdown`; an item's `target` routinely points outside `docs/` (a Go file, a workflow), which is exactly what `source_links` absolutizes.
   Appended after it, those links reach the build unrewritten: 56 `--strict` warnings, all of them the same shape.
 - **The guard counts item rows, not bytes.** `render` against an absent or empty store exits 0 and prints the two header lines, so a non-empty-output check reads 67 characters of table furniture as a healthy render.
   Measured: pointing the hook at a missing directory built green until the guard counted rows, which is the empty backlog publishing as a current one.
+- **A row's link may leave `docs/`, but it must not come back.** MkDocs resolves a `docs/queue/` page's links from `queue/` inside `docs/`, so `../../scripts/go/coverage.sh` is fine: it stays out, and `source_links` rewrites it to a `repo_url` blob URL.
+  `../../docs/development/go-workspaces.md` escapes and re-enters, which `source_links` reads as a published page and leaves alone, so `--strict` aborts; a link leaving the repository altogether is dead the same way, since no URL can be built for it either.
+  `make queue-rules-check` rule 14 catches that shape without building the site, because nothing in `make check` or `make docs-gates` does (Q1054).
+  Write it relative to the store: `../development/go-workspaces.md`.
 
 ## Publication scope
 

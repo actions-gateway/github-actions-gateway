@@ -39,10 +39,13 @@ Each waits on an explicit trigger, tagged by source: **Demand:** an outside oper
 
 `queue.py lint` checks the store's shape: unique ranks, a closed status set, a title within 72 characters, and a note that opens with what a blocked item waits on.
 
-`check-queue-rules.sh` checks what a per-item store makes silent, and each of the three guards a loss no other gate can see:
+`check-queue-rules.sh` checks what a per-item store makes silent, and each of these guards a loss no other gate can see:
 
 - **A `flake` item may not simply vanish.** Retiring one means recording it in [the flake-watch ledger](../development/flake-watch-retired.md), so a flake closed without a fix leaves a trace.
 - **The last item targeting a plan flips that plan's row** in [`docs/plan/README.md`](../plan/README.md), so a plan cannot read open once nothing points at it.
 - **Every label is declared here.**
+- **A link a row carries resolves for MkDocs.** This page publishes at `/dev/queue/`, so a link that leaves `docs/` and either points back into it or leaves the repository aborts `mkdocs --strict`, a class no local gate builds the site to catch.
+  Write it relative to the store: `../development/website.md`, never `../../docs/development/website.md`.
+  Notes count as well as `target:`, and a link quoted inside a fenced block or a code span does not.
 
 Maintained per [`maintaining-backlog.md`](../development/maintaining-backlog.md): completed items are deleted and git is the archive, the open PR is the in-flight signal, and new items enter at the rank they deserve.

@@ -5,8 +5,9 @@
 # The checker is the vendored queue.py, whose `lint` is a pure function of the
 # store directory: frontmatter shape, rank shape, filename/id agreement, the
 # 72-character title cap, and targets that no longer resolve. Its sibling
-# check-queue-rules.sh carries the three rules that are functions of what the
-# *branch* changed instead.
+# check-queue-rules.sh carries the rules that are functions of what the *branch*
+# changed instead, plus the one that keeps a row's links resolvable by the site
+# build.
 #
 # This wrapper exists because every gate in this repo is a scripts/ file: the
 # Makefile recipe, the workflow step and gate-list.sh's own derivation all key

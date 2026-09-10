@@ -12,7 +12,9 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 
 - [`scripts/docs/queue.py`](../../scripts/docs/queue.py) — the store's reader, checker and order tool, vendored byte-identical from the skill and never edited here.
   `queue.py lint` is a pure function of the directory: frontmatter, rank shape, filename/id agreement, the 72-character title cap, unresolvable targets.
-- [`scripts/docs/check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) — the three rules `queue.py lint` cannot express, because each is a function of what the *branch changed* rather than of what the store holds: a `flake` item may not simply vanish, deleting a plan's last item obliges its index row, and the label vocabulary is closed.
+- [`scripts/docs/check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) — the rules `queue.py lint` cannot express.
+  Four are functions of what the *branch changed* rather than of what the store holds: a `flake` item may not simply vanish, deleting a plan's last item obliges its index row, the label vocabulary is closed, and a filed item answers any near-duplicate the matcher flagged.
+  The fifth is a function of where this repo *publishes* the store: a link that leaves `docs/` and points back into it aborts the site build, which no local gate runs (Q1054).
   Backs `make queue-rules-check`; runs in `make check`, `make queue-gates`, and CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml)).
 - [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh) — allocates a new Q-ID (`make queue-id TITLE="…"`) by claiming a ref on the remote, so concurrent sessions never take the same one.
   Rationale, the alternatives weighed, and what it does *not* fix: [queue-id-allocation.md](queue-id-allocation.md).
@@ -351,6 +353,21 @@ Only moving the number out of the pattern works: write "at line 457 of [`pod_pro
 **`mdreflow` silently collapses a header-less table onto one line, and the gate then passes.** `md-reflow-check` is sentence-per-line, so a Markdown table written without its `|---|` separator row is not a table to the parser; it is prose, and the formatter joins its rows.
 Running the formatter to satisfy the gate therefore turns two rows into one unreadable line **and exits 0**, so nothing downstream reports it.
 Confirm the file after formatting rather than reading the gate's status, per [the status-is-a-claim rule](testing.md#the-status-you-report-is-a-claim-too): a file change is verified by reading the file, never by the exit code of the call that wrote it.
+
+### Rule 14: a row's link may leave `docs/`, but it must not come back
+
+`docs/queue/` publishes at `/dev/queue/`, so MkDocs resolves a row's links from `queue/` inside `docs/`, and the item page publishes on `dev` alongside the rendered index.
+A link with enough `../` to leave `docs/` and point back into it is one MkDocs cannot serve: [`hooks/source_links.py`](../../hooks/source_links.py) reads the resolved path as a published page and leaves it alone, so the dead link reaches the build and `mkdocs --strict` aborts.
+Write it relative to the store: `../development/website.md`, never `../../docs/development/website.md`.
+
+**Leaving `docs/` is fine; it is coming back that breaks.** A target pointing at a Go file, a workflow or `../../.mdreflow.yaml` is the ordinary case, and `source_links` rewrites each into a `repo_url` blob URL.
+A link that leaves the *repository* is the third case, dead for the same reason, since no URL can be built for it either; but there is no store-relative rewrite to suggest, so the gate says so instead.
+
+**It reads the notes as well as `target:`**, inline links and reference-style `[label]: target` definitions alike, because Python-Markdown resolves the two into the same link.
+Fenced blocks and code spans are stripped first, so a row quoting a bad link on purpose is not a finding.
+That is why the rule needs no override, and why the examples above sit in code spans.
+
+The gate is `make queue-rules-check`, and it needs no site build, so it runs in `make check` and `make docs-gates` where nothing builds the site (Q1054).
 
 ### A moved row defeated conflict detection, and one file per item ends it
 

@@ -312,12 +312,14 @@ script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md
 script-modes-check: ## Fail when a script under scripts/ carries the wrong executable bit
 	scripts/ci/check-script-modes.sh
 
-# The four backlog rules queue.py lint has no equivalent for, because each is a
-# function of what the branch changed rather than of what the store holds: a
-# flake item may not vanish, deleting a plan's last item obliges its index row,
-# the label vocabulary is closed, and a filed item answers any near-duplicate
-# the matcher flagged (Q1045). Rule 10 was dropped on measurement and rule 12 is
-# `queue.py claims` (Q889).
+# The backlog rules queue.py lint has no equivalent for. Four are functions of
+# what the branch changed rather than of what the store holds: a flake item may
+# not vanish, deleting a plan's last item obliges its index row, the label
+# vocabulary is closed, and a filed item answers any near-duplicate the matcher
+# flagged (Q1045). Rule 14 is a function of where this repo publishes the store
+# instead: a row link that leaves docs/ and points back into it aborts
+# `mkdocs --strict`, and no local gate builds the site (Q1054). Rule 10 was
+# dropped on measurement and rule 12 is `queue.py claims` (Q889).
 # The store's own format lint: frontmatter, rank shape, filename/id agreement,
 # the 72-character title cap, targets that no longer resolve. It replaces what
 # lint-backlog enforced on the table, which Q889 retired with it -- the vendored
@@ -328,7 +330,7 @@ queue-lint: ## Fail when the backlog store breaks its own format rules
 	scripts/docs/lint-queue.sh
 
 .PHONY: queue-rules-check
-queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9, 11 or 13
+queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9, 11, 13 or 14
 	scripts/docs/check-queue-rules.sh
 
 # Rule 12, the half `alloc-queue-id.sh` cannot enforce alone: an id read off the
