@@ -77,7 +77,11 @@ func startScopedRunnerSetReconciler(t *testing.T, gatewayName string) {
 		Registrar:    &brokerRegistrar{stub: brokerStub},
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
-		GatewayName:  gatewayName,
+		// Parity with main.go (Q1078). No read this suite takes routes through it: the
+		// sets are classic, the proxy is colocated, and no legacy agent Secret reaches
+		// the RunnerGroup probe.
+		APIReader:   mgr.GetAPIReader(),
+		GatewayName: gatewayName,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:        brokerStub.URL,
 			RunnerVersion:    "2.335.1",
