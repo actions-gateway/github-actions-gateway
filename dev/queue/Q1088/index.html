@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1074/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1088/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>render.sh reports success on an all-empty dashboard render - GitHub Actions Gateway</title>
+        <title>Shell gates skip every script outside scripts/ - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#rendersh-reports-success-on-an-all-empty-dashboard-render" class="md-skip">
+        <a href="#shell-gates-skip-every-script-outside-scripts" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              render.sh reports success on an all-empty dashboard render
+              Shell gates skip every script outside scripts/
             
           </span>
         </div>
@@ -2597,28 +2597,48 @@
   
 
 
-<h1 id="rendersh-reports-success-on-an-all-empty-dashboard-render">render.sh reports success on an all-empty dashboard render<a class="headerlink" href="#rendersh-reports-success-on-an-all-empty-dashboard-render" title="Permanent link">&para;</a></h1>
-<p><code>render()</code> checks that Grafana's <code>/render</code> call returned HTTP 200 and prints the file size.
-Neither reading can tell a populated dashboard from one where every panel says "No data", so the harness exits 0 and writes four PNGs a session then commits.</p>
-<p>Measured 2026-09-07 while working Q1061.
-An <code>exporter.py</code> edit tripped the Q704 counter floor (<code>ValueError: counter rate 0.004 is below 0.01/s</code>), so the process died at startup: <code>__main__</code> calls <code>render()</code> unconditionally before <code>HTTPServer(...).serve_forever()</code> and outside any <code>try</code>, and <code>counter_total</code> raises on <code>rate &lt; MIN_COUNTER_RATE</code> alone, with no dependence on <code>elapsed</code>.
-Confirmed by running the edited file directly, which exited 1 on that line without binding :9100.
-That startup crash is the Q704 design working as its docstring says it should.
-Prometheus scraped nothing for the whole 660s window, every panel on all four dashboards rendered "No data", and <code>render.sh</code> exited 0 and wrote the PNGs.</p>
-<p><strong>Why <code>kubectl rollout status</code> still passed is not established, and the row does not need it.</strong> The container carries no <code>readinessProbe</code> and no <code>livenessProbe</code>, so a pod counts Ready the moment the container is Running, which a process that starts and exits satisfies for a moment.
-That fits <code>render.sh</code> logging <code>successfully rolled out</code>, and it is a hypothesis: a peer session re-applied the shared cluster from its own worktree before the pod state was inspected, so the ReplicaSet sequence this run actually produced was not observed and cannot be recovered.
-What is verified is the pair that makes the gap real either way: <code>rollout status</code> on a probe-less Deployment is the only liveness gate the harness has, and nothing afterwards checks that a single series exists.
-The security PNG was 223,577 bytes against the committed one's 281,994, so size is not a signal either: a dark-theme dashboard of empty panels compresses to the same order as a full one, and <code>trim_bottom</code> crops to the last non-background row, which the panel chrome supplies regardless.</p>
-<p>What caught it was opening the PNG.
-Nothing else in the loop would have: <code>make dashboard-render-check</code> compares <em>whether</em> the PNG changed against the JSON diff, never what it shows, so a committed empty render satisfies it exactly as a good one does.</p>
-<p><strong>The check belongs before the render, not after it.</strong> A sentinel query against Prometheus once the accumulation window closes fails in seconds with a cause (<code>actions_gateway_build_info</code> has no <code>namespace</code> label and no rate, so it is present or the scrape is broken), where a post-hoc pixel heuristic on the PNG would be both slower and vaguer.
-Worth also failing on a <code>/metrics</code> fetch that does not return 200 before the wait starts, which would have caught this instance 11 minutes earlier.</p>
-<p><strong>A sentinel proves the data exists, not that the render is readable</strong>, and the second failure mode is the one nothing here can reach.
-A panel populated <em>wrongly</em> passes every check in the loop: the Q969 session's own render of this same harness came back with two stacked panels auto-scaling their y-axis to a ~50 floor, truncating the bottom band of a stack whose entire claim is that the total equals a declared ceiling, and with refusal bands at roughly 1% of the acquired series, rendering the panel as one solid blob.
-Both are legible only to a human or a vision pass opening the image.
-So the sentinel is the cheap floor rather than the answer, and a session that adds one has not been relieved of looking at the PNG.</p>
-<p>Q1072, the harness's other shared-state problem, is closed: <code>render.sh</code> holds an exclusive lock on <code>$CLUSTER</code> for the whole of <code>up</code>, <code>shot</code>, and <code>down</code>, so two sessions no longer overwrite each other's Grafana.
-That does not close this row, and the two never overlapped: a locked run still renders an empty exporter, because serializing the cluster says nothing about whether a single series exists in it.</p>
+<h1 id="shell-gates-skip-every-script-outside-scripts">Shell gates skip every script outside <code>scripts/</code><a class="headerlink" href="#shell-gates-skip-every-script-outside-scripts" title="Permanent link">&para;</a></h1>
+<p><code>shellcheck</code>, <code>errexit-prologue-check</code> and <code>script-modes-check</code> all select their files with the same expression, <code>git_candidates 'scripts/*.sh'</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/shellcheck-scripts.sh">shellcheck-scripts.sh:33</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-errexit-prologue.sh">check-errexit-prologue.sh:57</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-script-modes.sh">check-script-modes.sh:99</a>).
+The rationale each states is about shell, not about a directory: <code>check-errexit-prologue.sh</code> exists because <code>set -e</code> does not reach inside a command substitution (Q733), which is true of any bash file in the tree.</p>
+<p><strong>Measured 2026-09-09.</strong> Four non-vendored, non-testdata scripts sit outside that selection, and every one of them declares <code>set -euo pipefail</code> without <code>shopt -s inherit_errexit</code>, which is the exact state <code>errexit-prologue-check</code> exists to reject:</p>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Reader</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh"><code>deploy/monitoring/preview/render.sh</code></a></td>
+<td>the dashboard preview harness</td>
+</tr>
+<tr>
+<td><a href="../../operations/examples/install-apiserver-audit-policy.sh"><code>docs/operations/examples/install-apiserver-audit-policy.sh</code></a></td>
+<td><strong>operators</strong>, who copy and run it</td>
+</tr>
+<tr>
+<td><a href="../../assets/render-wormhole-animation.sh"><code>docs/assets/render-wormhole-animation.sh</code></a></td>
+<td>the website asset build</td>
+</tr>
+<tr>
+<td><code>cmd/gmc/.devcontainer/post-install.sh</code></td>
+<td>devcontainer setup</td>
+</tr>
+</tbody>
+</table>
+<p>All four are shellcheck-clean today, which is what makes this worth adding rather than urgent, and also why "it passes" proves nothing on its own: assert a seeded fault fails.
+The operator example is the one with a reader outside this repo.</p>
+<p><strong>What it already cost.</strong> Q1072 added a lock to <code>render.sh</code> and had to hand-run <code>shellcheck</code> to get any verdict on it at all, because no target in the tree would read the file.
+A hand-run check is not a gate: it holds for exactly the session that remembered.</p>
+<p><strong>The gap has a second layer, and CI measured it on that PR.</strong> The file selection above is what the gate reads once it runs; whether it runs at all is a path filter, and that filter misses the same tree.
+<code>unit-test.yml:134:            scripts:</code> lists <code>scripts/**</code> plus <code>deploy/templates/**</code>, <code>deploy/dogfood-e2e/**</code> and the MkDocs hooks, but not <code>deploy/monitoring/preview/**</code>.
+Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1887">#1887</a> at head <code>13bf50b2e</code>, whose largest single-file change is 90 inserted lines of bash in <code>render.sh</code>: <code>gh pr checks</code> reported 40 pass and 26 skipping, and <code>shellcheck</code> was one of the 26.
+So a PR can be entirely a shell change and still show a green check set in which no shellcheck ran: the <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">skipped-is-not-passed</a> shape, reached through the filter rather than the gate.
+Widening one half without the other fixes nothing: the filter decides whether the job starts, the pathspec decides what it then reads.</p>
+<p><strong>The open question is the selection, not the gates.</strong> Widening the pathspec to every tracked <code>*.sh</code> pulls in ~50 vendored scripts under <code>vendor/</code> and <code>tools/vendor/</code> and the two <code>testdata/</code> fixtures, none of which this repo may reformat.
+So the shape to settle is whether to enumerate the non-vendored roots, exclude <code>vendor/</code> and <code>testdata/</code> by pattern, or keep a registry file the way <code>mk/gate-lists.mk</code> does for gates.
+<code>script-modes-check</code> is the one that may not want widening as-is: a <code>docs/operations/examples/</code> script an operator copies has different mode expectations than an entry point under <code>scripts/</code>.</p>
 
 
 

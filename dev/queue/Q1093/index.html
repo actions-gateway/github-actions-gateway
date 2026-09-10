@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1072/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1093/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Dashboard preview harness has no lock on its shared kind cluster - GitHub Actions Gateway</title>
+        <title>Signalling the perl lock launcher orphans its child and frees the lock - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dashboard-preview-harness-has-no-lock-on-its-shared-kind-cluster" class="md-skip">
+        <a href="#signalling-the-perl-lock-launcher-orphans-its-child-and-frees-the-lock" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dashboard preview harness has no lock on its shared kind cluster
+              Signalling the perl lock launcher orphans its child and frees the lock
             
           </span>
         </div>
@@ -2597,24 +2597,26 @@
   
 
 
-<h1 id="dashboard-preview-harness-has-no-lock-on-its-shared-kind-cluster">Dashboard preview harness has no lock on its shared kind cluster<a class="headerlink" href="#dashboard-preview-harness-has-no-lock-on-its-shared-kind-cluster" title="Permanent link">&para;</a></h1>
-<p><code>render.sh</code> keys on a single fixed cluster name (<code>CLUSTER=gag-obs</code>) and a single Helm release (<code>RELEASE=kps</code>), and nothing stops two sessions entering it at once.
-Measured 2026-09-07: two sessions started a render six minutes apart, the second reused the first's cluster and died on <code>Error: UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress</code>, having already spent the cluster-create step.</p>
-<p>The collision is worse than the wasted run, and the session that fails is not the session that is harmed.
-Both runs apply <code>../grafana-dashboard-*.json</code> from their <strong>own</strong> worktree into the shared Grafana, and neither notices the other.
-Applying is not the race the operator sees, though: the whole 660s accumulation window sits between the apply and the render, so <strong>the harm lands entirely on whichever session applied first</strong>.
-It renders the <em>other</em> branch's JSON, and gets a PNG that looks plausible and is a different branch's work — the same silent drift <code>dashboard-render-check</code> exists to catch (Q868), arriving through the harness rather than around it.
-The session that applied last is unaffected and has no way to tell it just corrupted a peer's run.</p>
-<p>Measured again the same evening, on the second collision: two sessions were mid-<code>shot</code> together, and the cluster's <code>cm/ag-grafana-dashboard-security</code> held the title from the branch that had <em>not</em> changed it, with zero occurrences of the metric the changing branch had added.
-The session about to shoot that dashboard was the one that had applied first.
-It killed its run on the strength of that read; nothing in the harness would have told it.</p>
-<p>Every dashboard-touching PR must render, so this fires whenever two are in flight, which parallel dispatch makes routine.
-Both sessions here hand-rolled the same <code>pgrep</code>-for-<code>render.sh</code> wait, and the second collision happened <em>because</em> of it: the poll fired in the four-minute gap between one render exiting and the same session starting its next.
-A wait built on observing the peer's process cannot see an intent to re-enter, which is the argument for a real lock over better etiquette.</p>
-<p>Two candidate fixes, and the row does not pick one: a per-session cluster name (<code>CLUSTER</code> already defaults through the environment, so deriving it from the session or worktree is small, but each cluster is a full kube-prometheus-stack install and the box runs oversubscribed); or a lock around the shared one, which keeps the single install and makes the second session wait instead of fail.</p>
-<p><strong>Notes:</strong> the harness is a preview tool, so a failure never reaches CI.
-It costs a session its render and, in the interleaved case, ships a wrong screenshot past a green gate.
-A lock does not subsume <a href="../Q1074/">Q1074</a>: a locked run can still render an empty exporter, and a series sentinel can still be overwritten by a peer's apply.</p>
+<h1 id="signalling-the-perl-lock-launcher-orphans-its-child-and-frees-the-lock">Signalling the perl lock launcher orphans its child and frees the lock<a class="headerlink" href="#signalling-the-perl-lock-launcher-orphans-its-child-and-frees-the-lock" title="Permanent link">&para;</a></h1>
+<p><code>serialize_heavy_build</code> re-execs the calling script under perl, which takes an advisory <code>flock</code> and then runs the real work as a <code>system</code> child.
+The lock fd lives in perl; the work lives in the bash child.
+Signal perl alone and the kernel drops the lock while the child keeps running, reparented to init and still inside the critical section, so the next contender acquires and enters beside it.
+That is the exact state the lock exists to prevent, reached through it rather than around it.</p>
+<p><strong>Measured 2026-09-09</strong>, on a verbatim reduction of the same pattern in <code>deploy/monitoring/preview/render.sh</code> (Q1072, which copied the mechanism from here).
+A's child (pid 19380) entered its 20s section at <code>t=1789026381</code> and was still alive after <code>kill &lt;launcher&gt;</code>; B acquired and entered at <code>t=1789026386</code>.
+Two concurrent entries under one lock.</p>
+<p><strong>Every reachable path is safe today, which is what makes this debt rather than a defect in flight.</strong> Group signals kill the child, verified on both <code>SIGINT</code> (Ctrl-C) and <code>SIGTERM</code> (<code>kill -TERM -- -PID</code>, which is how <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>record-launch.sh</code></a> stops a recorded run when <code>pgid == pid</code>), and <code>timeout</code> takes the child too.
+The one path that orphans today is a hand-typed <code>kill &lt;pid&gt;</code> against the launcher pid read off <code>ps</code>, which is a plausible thing for a session to do to a wedged gate.</p>
+<p><code>record-launch.sh</code> is safe by construction rather than by luck, and it carries a fallback worth knowing about.
+<code>launch()</code> sets <code>set -m</code> so the run is its own process group, and the stop command is chosen on a measured <code>pgid == RUN_PID</code> rather than assumed; when that holds it group-kills.
+The <code>else</code> arm records a single-pid <code>kill -TERM ${RUN_PID}</code>, which is exactly the orphaning shape, and it is reached only if job control did not give the run its own group.
+So a fix here should keep that arm safe too, rather than relying on the group arm always being the one taken.</p>
+<p><strong>The repair is unmeasured and the row does not prescribe one.</strong> The shapes worth weighing: have perl trap <code>INT</code>/<code>TERM</code> and relay to the child before exiting; or <code>setpgid</code> the child and signal the group; or hold the lock in the child instead of the parent, which changes what "released on death" means.
+Whichever is picked, assert the inverse as well: the child must still die on the paths that already work, or the fix trades a rare orphan for a routine one.</p>
+<p><strong>Do not fix this in <code>render.sh</code> alone.</strong> Both copies share the mechanism, and diverging them leaves the harness and the heavy-build semaphore reasoning differently about the same failure.
+The change belongs in the shared helper, with <code>render.sh</code> following.</p>
+<p><strong>Notes:</strong> found reviewing <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1887">#1887</a>.
+It predates that PR and is inherited, not introduced: a lock with this hole is still strictly better than the unserialized cluster Q1072 fixed.</p>
 
 
 

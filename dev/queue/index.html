@@ -4141,14 +4141,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or …</td>
 </tr>
 <tr>
-<td><a href="Q1072/">Q1072</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh">Dashboard preview harness has no lock on its shared kind cluster</a></td>
-<td><code>debt</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>render.sh</code> keys on a single fixed cluster name (<code>CLUSTER=gag-obs</code>) and a single Helm release (<code>RELEASE=kps</code>), and nothing stops two …</td>
-</tr>
-<tr>
 <td><a href="Q996/">Q996</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/monitoring/promqlcheck/main.go">promql-check and dashboard-render-check guard less than they read as</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -4261,12 +4253,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> …</td>
 </tr>
 <tr>
+<td><a href="Q1088/">Q1088</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-errexit-prologue.sh">Shell gates skip every script outside <code>scripts/</code></a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>shellcheck</code>, <code>errexit-prologue-check</code> and <code>script-modes-check</code> all select their files with the same expression, `git_candidates …</td>
+</tr>
+<tr>
 <td><a href="Q1025/">Q1025</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate cannot drive the placeability rung on real infra</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> <code>spec.capacityGate.mode</code> gains a value that yields a negative placeability verdict without a scale-up: the <code>Probe</code> mode sketched …</td>
+</tr>
+<tr>
+<td><a href="Q1093/">Q1093</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">Signalling the perl lock launcher orphans its child and frees the lock</a></td>
+<td><code>debt</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>serialize_heavy_build</code> re-execs the calling script under perl, which takes an advisory <code>flock</code> and then runs the real work as a <code>system</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1050/">Q1050</a></td>
