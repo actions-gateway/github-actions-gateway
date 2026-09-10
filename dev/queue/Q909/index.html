@@ -2600,7 +2600,7 @@
 <h1 id="a-queue-store-edit-passes-every-gate-a-session-actually-runs">A queue-store edit passes every gate a session actually runs<a class="headerlink" href="#a-queue-store-edit-passes-every-gate-a-session-actually-runs" title="Permanent link">&para;</a></h1>
 <p>Measured 2026-08-18: <code>make docs-gates</code> runs neither <code>queue-lint</code> nor <code>queue-rules-check</code> (zero "queue" in its output), so a session that edits a row and runs the fast prose gate has not linted the store.
 <code>check-queue-rules</code> then reads the store at HEAD, so a staged-only edit reports "150 item(s), 150 at the merge base" and reads exactly like a pass.
-Reading HEAD is deliberate, the script exits 2 rather than guess; nothing says the reading is void before committing, as in <a href="../Q841/">Q841</a>.</p>
+Reading HEAD is deliberate, the script exits 2 rather than guess; nothing says the reading is void before committing, as in Q841.</p>
 
 
 
