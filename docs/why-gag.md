@@ -200,7 +200,7 @@ Under the per-cell stamp an aging claim degrades to unverified instead of to wro
     rather than trusting it, and
     [tell us what changed](https://github.com/actions-gateway/github-actions-gateway/issues).
 
-### Two rows with fine print
+### Rows with fine print
 
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
@@ -218,6 +218,10 @@ Nor do workers the reaper took, with one exception: a worker reaped while still 
 **Right-sizing is structural, not a feature race.** An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
 The loop only closes inside the controller that builds the pods.
 [Appendix D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
+
+**The capacity gate is off by default because gating can destroy the rescue.** Refusing intake on a signal is safe only where nothing else is waiting on that signal to make capacity appear.
+Quota headroom qualifies and the scheduler's `Unschedulable` verdict does not, because on a cluster that can grow a Pending pod *is* the request for a node, so elasticity is a property of your cluster rather than of the signal.
+[Appendix D.8](design/appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on) works it through for four signals.
 
 ## Where ARC is ahead
 

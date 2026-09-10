@@ -159,7 +159,8 @@ It is the natural off-the-shelf tool to reach for when someone asks "why not jus
 **What it does.** Kueue arbitrates workloads against declarative quota.
 Its core objects are `ClusterQueue` and `LocalQueue` (the quota and submission surfaces), `ResourceFlavor` (heterogeneous resource pools, e.g. GPU vs CPU), `Cohort` (quota borrowing between queues), and `WorkloadPriorityClass` (priority-ordered preemption).
 Per its own documentation, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted."
-It installs as Custom Resource Definitions (CRDs), a cluster-wide controller, and admission webhooks, and therefore requires cluster-admin to deploy.
+It installs cluster-scoped objects, so deploying it needs cluster-scoped permissions.
+Measured on the v0.18.8 Helm chart, 2026-09-10: it ships 11 Custom Resource Definitions (CRDs), ClusterRoles and their bindings, a `MutatingWebhookConfiguration` and a `ValidatingWebhookConfiguration`, and two `APIService` registrations for its visibility API.
 
 **Where it overlaps.** Kueue's quota-and-priority model overlaps the same need this design addresses with a shared `ResourceQuota` ceiling plus per-`RunnerGroup` `priorityTiers`: keeping a high-priority runner type from being starved by a flood of lower-priority work, and expressing a shared budget across heterogeneous pools.
 A cluster that already runs Kueue has a credible answer to the priority/quota half of the problem at the pod layer.
@@ -168,7 +169,7 @@ A cluster that already runs Kueue has a credible answer to the priority/quota ha
 A worker pod only exists *after* the Actions Gateway Controller (AGC) has already claimed the job from GitHub (`acquirejob`), at which point GitHub considers the job owned by that session and the job lock is ticking.
 Kueue has no visibility into the broker and cannot defer a job that is not yet a Kubernetes workload; if it defers the *pod* after the claim, the work is queued while the lock the design must renew counts down — the exact failure the broker-layer admission gate exists to prevent.
 So Kueue **augments** rather than **replaces** the design's gate: in a cluster that already runs Kueue, this design's worker pods can still participate in a `ClusterQueue` for cluster-wide quota and preemption at the pod layer, while the broker-layer decision of *whether to claim the job at all* stays upstream of anything Kueue can act on.
-Kueue also requires cluster-admin to install, which is in tension with this design's self-service-without-cluster-admin requirement, so making it a hard dependency would regress that goal.
+Kueue also needs those cluster-scoped permissions to install, which is in tension with this design's self-service-without-cluster-admin requirement, so making it a hard dependency would regress that goal.
 
 The full argument — why admission is gated before `acquirejob` rather than delegated to an in-cluster queue, and why a durable internal queue was also rejected — is developed in the pre-acquisition admission-control plan (Q59; see [Relationship to Kueue](../plan/archive/acquire-admission-control.md#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer)) and is not duplicated here.
 
@@ -251,6 +252,7 @@ A third, obvious-looking rung is deliberately **not** implemented on the same te
 That looks inconsistent, and the reason it is not is worth recording, because it does not appear to be written down anywhere in the ecosystem and it explains why every other runner controller settled for timeouts instead.
 
 **The principle.** A capacity signal is safe to gate intake on if, and only if, **no other actor is waiting on that signal to make capacity appear.** Gating suppresses the signal; suppressing a signal that something else acts on destroys the rescue.
+It is not specific to runners or to GitHub: it generalises to any admission controller sitting above an autoscaler, which is why [why-gag.md](../why-gag.md#rows-with-fine-print) carries the reader-facing half and this section keeps the derivation.
 
 Applied to the four signals:
 
