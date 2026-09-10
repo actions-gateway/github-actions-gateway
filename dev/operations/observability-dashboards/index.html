@@ -3097,7 +3097,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 </tbody>
 </table>
-<p><strong>Row 7 — Reliability Signals (Q315)</strong></p>
+<p><strong>Row 8 — Reliability Signals (Q315)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3134,7 +3134,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 </tbody>
 </table>
-<p><strong>Row 8 — Fan-out Safety (Q260 / Q266)</strong></p>
+<p><strong>Row 9 — Fan-out Safety (Q260 / Q266)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3261,6 +3261,11 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <td>Time series</td>
 </tr>
 <tr>
+<td>Pod creation p99 by namespace</td>
+<td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
+<td>Time series, both acquisition tiers</td>
+</tr>
+<tr>
 <td>Jobs assigned/min by namespace (scale-set)</td>
 <td><code>sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60</code></td>
 <td>Time series</td>
@@ -3286,7 +3291,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </table>
 <p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
 The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
-<code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
+<code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row.</p>
 <h2 id="budget-dashboard">Budget dashboard<a class="headerlink" href="#budget-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity and refused classic jobs by the admission rung that took them." src="../../assets/grafana-dashboard-budget.png" /></p>
 <p>For the <a href="../personas/#budget-owner">budget owner</a>, who owns the spend and usually cannot read the cluster at all.

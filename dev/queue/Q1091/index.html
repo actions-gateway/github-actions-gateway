@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1080/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1091/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Registry read: the http bearer-realm failure is undocumented - GitHub Actions Gateway</title>
+        <title>Nothing compares the dashboard doc's panel tables to the shipped JSON - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#registry-read-the-http-bearer-realm-failure-is-undocumented" class="md-skip">
+        <a href="#nothing-compares-the-dashboard-docs-panel-tables-to-the-shipped-json" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Registry read: the http bearer-realm failure is undocumented
+              Nothing compares the dashboard doc's panel tables to the shipped JSON
             
           </span>
         </div>
@@ -2597,14 +2597,53 @@
   
 
 
-<h1 id="registry-read-the-http-bearer-realm-failure-is-undocumented">Registry read: the http bearer-realm failure is undocumented<a class="headerlink" href="#registry-read-the-http-bearer-realm-failure-is-undocumented" title="Permanent link">&para;</a></h1>
-<p><code>WorkerImageVersionUnknown</code>'s resolution names three of the ten failures <code>client.go</code> can return on the authentication path, and the other seven fall to the catch-all sentence about a registry that is out of reach or cannot be authenticated to.
-That is correct advice for six of them.
-The seventh is <code>registry &lt;host&gt;: bearer realm "&lt;url&gt;" is not https</code>, raised where a registry answers a <code>401</code> with a Bearer challenge whose realm is <code>http</code> (<code>fetchToken</code> refuses it, since the login would ride on that exchange in the clear).
-Re-tagging cannot fix it and the registry is reachable, so the catch-all points the operator at the wrong remedy.</p>
-<p>An internal or air-gapped mirror is exactly where an http realm shows up, which is also the audience Q1066's operator docs are written for, so the gap is not in an exotic corner.
-Closing it is a clause in the same paragraph naming the message and saying the fix is on the registry: serve the token realm over TLS.</p>
-<p>Whether any registry in use here actually emits an http realm is unmeasured; the code path is read from <code>cmd/agc/internal/runnerimage/client.go</code>.</p>
+<h1 id="nothing-compares-the-dashboard-docs-panel-tables-to-the-shipped-json">Nothing compares the dashboard doc's panel tables to the shipped JSON<a class="headerlink" href="#nothing-compares-the-dashboard-docs-panel-tables-to-the-shipped-json" title="Permanent link">&para;</a></h1>
+<p>Q961 reconciled the four sections by hand and closed.
+The drift it fixed was silent in both directions: the tenant section numbered nine rows 1..7, <strong>7</strong>, 8, and a Cross-tenant Throughput panel had escaped its table to render as literal pipe-separated text mid-paragraph.
+Neither is visible to any gate.
+<code>promql-check</code> parses panel expressions out of the JSON (Q910) and never reads the prose; <code>dashboard-render-check</code> is a screenshot gate (Q868).</p>
+<p>Both sides are machine-readable, so a comparison is cheap: row titles and order, and the set of panel titles per row.</p>
+<p><strong>Row titles and order already match exactly</strong> across all four dashboards, measured 2026-09-09 after Q961.
+<strong>Panel titles do not</strong>, and that is what a gate has to decide about first.
+Six panels carry a shortened label in the doc:</p>
+<table>
+<thead>
+<tr>
+<th>JSON</th>
+<th>doc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>p95 pod creation latency</code></td>
+<td><code>p95 latency</code></td>
+</tr>
+<tr>
+<td><code>p99 pod creation latency</code></td>
+<td><code>p99 latency</code></td>
+</tr>
+<tr>
+<td><code>Pod creation latency heatmap</code></td>
+<td><code>Latency heatmap</code></td>
+</tr>
+<tr>
+<td><code>Jobs assigned vs provisioned/min</code></td>
+<td><code>Jobs assigned vs. provisioned/min</code></td>
+</tr>
+<tr>
+<td><code>Proxy HPA desired vs current</code></td>
+<td><code>HPA desired vs. current</code></td>
+</tr>
+<tr>
+<td><code>Jobs acquired/min by namespace</code></td>
+<td><code>Jobs acquired/min by namespace (classic)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <code>(1h)</code> window suffixes the Job Throughput table drops.
+The doc's labels read better in a table that already carries the query beside them, so verbatim parity is a real cost rather than a free win.</p>
+<p>So the gate is a design question, not a transcription: assert row title and order parity strictly, and assert panel <strong>count</strong> per row rather than title equality; or align the labels first and assert titles too.
+The count rule alone would have caught the escaped panel, and the order rule the duplicate <code>Row 7</code>, which is both of Q961's instances.</p>
 
 
 
