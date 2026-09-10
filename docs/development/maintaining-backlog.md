@@ -104,6 +104,20 @@ Work through all four:
 3. **Archive the plan doc if this was its last backlog reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
 4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
 
+**A pathspec commit resolves against the tree, not against the commit (Q946).** Closing a row deletes a file, so this is where the shape turns up.
+Measured 2026-09-10 on a four-arm probe in a throwaway repo, because the row asserted more than reproduced:
+
+| Arm | Result |
+|---|---|
+| `git commit -- <new untracked file>` | fails, `did not match any file(s) known to git` |
+| `git commit -- <deleted tracked file>` | **succeeds**, and records the deletion |
+| `git commit --amend -- <path the amended commit already deleted>` | fails, same message |
+| drop the path that errored, amend again | **the deletion survives** |
+
+So a new row file needs `git add` before it can be named, while a deleted one does not: the pathspec form commits a tracked file's deletion on its own.
+And the amend hazard is an error rather than a silent loss, because `--amend` starts from `HEAD`'s tree and the pathspec adds to it instead of resetting what it does not name.
+The row asserted the opposite for that last arm, that dropping the errored path rewrites the commit to hold only the paths still named and drops the deletion; it does not, and the refutation is recorded here rather than left in the closing PR.
+
 The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where the since-retired piped-gate hook's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
 
@@ -351,8 +365,12 @@ Re-running `make queue-rules-check` after the commit reproduces it immediately (
 
 Both hit two sessions independently on 2026-08-27, and neither is inferable from what the gate prints.
 
-**`queue-lint` keys on the bare `name.go:NNN` text wherever it appears, link label included.** A row citing a source line is asked to re-point or drop it, and the obvious remedy does *not* clear the note: turning the citation into a proper Markdown link leaves the pattern matching inside the label.
-Only moving the number out of the pattern works: write "at line 457 of [`pod_provisioning_test.go`](../../cmd/agc/internal/controller/integration/pod_provisioning_test.go)" rather than linking the `file:line` string itself.
+**`queue-lint` keys on the bare `name.go:NNN` text wherever it appears, link label included.** A row citing a source line is asked to re-point or drop it, and turning the citation into a proper Markdown link does *not* clear the note, because the pattern matches inside the label.
+**Rooting the path does clear it, with the number left in place (Q1090).** The note fires on a path that does not resolve, never on a number being present: `queue.py` looks for the cited path under `docs/` and under the repo root and skips the citation when either finds it, which is why the tool's own message asks you to re-point it first.
+Measured 2026-09-09: Q1089 cited an eviction test by bare filename and reported the note twice, and re-pointing to `cmd/agc/internal/provisioner/eviction_internal_test.go:274` cleared both, pattern still matching and line number still in the text.
+So re-point the citation rather than dismantling it.
+Moving the number outside any pattern also silences the note, and it costs the addressability the store is built on: [`docs/queue/README.md`](../queue/README.md) and the `session-backlog` skill both carry a citation as path, line and fragment, so a reader on a different tree finds the line by its text once the number has drifted.
+The note is advisory either way, printed to stderr with `queue-lint` still exiting 0, unless `--strict stale-citation` promotes the class to a failure.
 
 **Since the Q956 re-vendor, `queue-lint` also reads the line a citation names.** Write it as `` `path:N:the distinctive words on that line` ``, which is the `grep -n` form, and the checker asserts the fragment is still there, so a number that has drifted is reported rather than resolving forever against a file that grew.
 Three things follow for a row author.
