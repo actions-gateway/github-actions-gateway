@@ -620,7 +620,10 @@ func (r *R) defer_(prev metav1.Condition) bool {
 `
 	src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
 	findings := runCase(t, src, goodLedger, goodRunbook)
-	requireFinding(t, findings, "ReasonVersionTooOld is compared against here")
+	// The operator-visible value, not the constant name: it is what the
+	// membership finding prints, and one vocabulary across both is what lets a
+	// reader grep the two against each other.
+	requireFinding(t, findings, "VersionTooOld is compared against here")
 	requireFinding(t, findings, "second membership site at its own width")
 }
 
@@ -728,4 +731,148 @@ func (l *L) accepted() {`, 1)
 	src := srcTree(t, map[string]string{"internal/listener/version.go": split})
 	findings := runCase(t, src, goodLedger, goodRunbook)
 	requireFinding(t, findings, "does not name a reason this scan can read")
+}
+
+// --- ownership: the spellings that used to slip past (review of #1890) --------
+//
+// Each case below reinstates the defect the check exists for, in a spelling the
+// first version of the scanner did not read, and demands red. A gate whose
+// silence is its verdict is only as good as the shapes it can see.
+
+// The idiomatic Go spelling of the membership question, and the one the
+// enumeration itself uses — so it is what a second reason makes somebody reach
+// for, which is exactly the change this check exists to catch.
+func TestOwnershipSwitchIsASecondMembershipSite(t *testing.T) {
+	consumer := `package controller
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+)
+
+func (r *R) defer_(prev metav1.Condition) bool {
+	switch prev.Reason {
+	case v2alpha1.ReasonVersionTooOld:
+		return true
+	}
+	return false
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "VersionTooOld is compared against here")
+}
+
+// The same question asked with the string rather than the constant. It reads as
+// an unrelated literal to a scan that only follows selectors.
+func TestOwnershipStringLiteralIsASecondMembershipSite(t *testing.T) {
+	consumer := `package controller
+
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+func (r *R) defer_(prev metav1.Condition) bool {
+	return prev.Reason == "VersionTooOld"
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "VersionTooOld is compared against here")
+}
+
+// An element of a []metav1.Condition literal has its type elided, so the node
+// carries nothing naming it a condition. Admitting it on its keys is safe
+// because the Type key still has to resolve to a claimed condition type.
+func TestOwnershipElidedConditionLiteralIsScanned(t *testing.T) {
+	elided := `package listener
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+)
+
+func (l *L) baseline() []metav1.Condition {
+	return []metav1.Condition{{
+		Type:   agcv1alpha1.ConditionRunnerVersionTooOld,
+		Status: metav1.ConditionTrue,
+		Reason: agcv1alpha1.ReasonQuotaExhausted,
+	}}
+}
+`
+	src := srcTree(t, map[string]string{"internal/listener/elided.go": elided})
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "QuotaExhausted is published on RunnerVersionTooOld here")
+}
+
+// A wrapper that pins the condition type and forwards the reason is not
+// plumbing: it decides the type, and its callers decide reasons the scan would
+// never see. Only a registered setter earns the forwarding exemption.
+func TestOwnershipWrapperInsideTheProducerIsNotPlumbing(t *testing.T) {
+	wrapper := `package listener
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+)
+
+func reject(cfg Config, reason, msg string) {
+	setCondition(cfg, agcv1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue, reason, msg)
+}
+
+func (l *L) byPolicy() { reject(l.cfg, agcv1alpha1.ReasonQuotaExhausted, "policy") }
+`
+	src := srcTree(t, map[string]string{"internal/listener/wrapper.go": wrapper})
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "does not name a reason this scan can read")
+}
+
+// Hoisting the condition type into a local took the write out of scope in
+// silence. Both directions: a non-member reason must be found, and the clean
+// tree's own reasons must stay quiet.
+func TestOwnershipConditionTypeInALocalResolves(t *testing.T) {
+	local := `package listener
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+)
+
+func (l *L) hoisted() {
+	ct := agcv1alpha1.ConditionRunnerVersionTooOld
+	setCondition(l.cfg, ct, metav1.ConditionTrue, agcv1alpha1.ReasonQuotaExhausted, "policy")
+}
+`
+	src := srcTree(t, map[string]string{"internal/listener/hoisted.go": local})
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "QuotaExhausted is published on RunnerVersionTooOld here")
+
+	member := strings.Replace(local, "ReasonQuotaExhausted", "ReasonVersionTooOld", 1)
+	src = srcTree(t, map[string]string{"internal/listener/hoisted.go": member})
+	for _, f := range runCase(t, src, goodLedger, goodRunbook) {
+		if strings.Contains(f, "is published on RunnerVersionTooOld here") {
+			t.Fatalf("a listed reason reached through a local was reported: %s", f)
+		}
+	}
+}
+
+// A call is placed on name and argument count alone, so two setters sharing both
+// while disagreeing on where their arguments sit would be read at the first
+// one's indexes — a bogus finding or a silent skip. It refuses rather than
+// guesses.
+func TestOwnershipAmbiguousSetterShapeIsAnError(t *testing.T) {
+	clash := `package provisioner
+
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+func setCondition(condType string, status metav1.ConditionStatus, reason, msg string, extra string) {
+	_ = condType
+}
+`
+	src := srcTree(t, map[string]string{"internal/provisioner/clash.go": clash})
+	dir := t.TempDir()
+	lPath := filepath.Join(dir, "observability-metrics.md")
+	rPath := filepath.Join(dir, "troubleshooting.md")
+	writeFile(t, lPath, goodLedger)
+	writeFile(t, rPath, goodRunbook)
+	if _, err := run(src, apiTree(t), lPath, rPath); err == nil {
+		t.Fatal("expected an error rather than placing calls at one of two disagreeing shapes")
+	}
 }

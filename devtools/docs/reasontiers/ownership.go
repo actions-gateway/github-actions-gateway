@@ -20,6 +20,17 @@ package main
 //	            against one of its entries, which is a second membership site
 //	            at its own width — the defect the marker exists to close
 //
+// The check's silence is its verdict, so both halves are written to read every
+// spelling of their question rather than the one the tree happens to use today.
+// The consumer half reads `==`/`!=` and a `switch` case alike, against a Reason*
+// constant or the bare string — the switch matters most, being the spelling the
+// enumeration itself uses and the one a second reason makes somebody reach for.
+// The producer half reads a setter call and a metav1.Condition literal, the
+// latter with its type elided as a slice element, and follows the condition type
+// through a local. What it cannot read it reports: a reason it cannot resolve, a
+// wrapper pinning the type while forwarding the reason (only a registered setter
+// earns the forwarding exemption), and two setters whose shape collides.
+//
 // The polarity is the enumerated side's, deliberately, and the check does not
 // widen it: the OTHER producer's reasons are never enumerated anywhere, so a
 // reason added there is out of scope here by construction. That is the failure
@@ -254,7 +265,26 @@ func conditionSetters(srcDir string) ([]condSetterSig, error) {
 		})
 		return nil
 	})
-	return sigs, err
+	if err != nil {
+		return nil, err
+	}
+	// A call is matched on name and argument count alone — the callee's package
+	// and receiver are not derivable without type information, which this scan
+	// does not build. Two setters sharing both while disagreeing on where their
+	// arguments sit would therefore be read at the first one's indexes, giving
+	// either a bogus finding or a silent skip. Nothing in the tree collides
+	// today (the two setCondition declarations have arity 5 and 4), and the
+	// collision is one signature change away, so it refuses rather than guesses.
+	byShape := map[string]condSetterSig{}
+	for _, sig := range sigs {
+		k := fmt.Sprintf("%s/%d", sig.name, sig.arity)
+		if prev, ok := byShape[k]; ok && (prev.typeIdx != sig.typeIdx || prev.reasonIdx != sig.reasonIdx) {
+			return nil, fmt.Errorf("two condition setters are called %s with %d arguments and disagree on where their arguments sit (type %d vs %d, reason %d vs %d) — a call cannot be placed against either, so rename one or give them different arities",
+				sig.name, sig.arity, prev.typeIdx, sig.typeIdx, prev.reasonIdx, sig.reasonIdx)
+		}
+		byShape[k] = sig
+	}
+	return sigs, nil
 }
 
 type condSetterSig struct {
@@ -291,7 +321,7 @@ func collectEmissions(srcDir string, o ownership, setters []condSetterSig, reaso
 			if typeArg == nil {
 				return true
 			}
-			if v, ok := literalOrConst(typeArg, imports, conditions); !ok || v != o.condType {
+			if v, ok := resolveConditionType(typeArg, enclosingFunc(stack), imports, conditions); !ok || v != o.condType {
 				return true
 			}
 			site := fmt.Sprintf("%s:%d", rel, fset.Position(n.Pos()).Line)
@@ -301,8 +331,15 @@ func collectEmissions(srcDir string, o ownership, setters []condSetterSig, reaso
 			}
 			// A parameter is the setter forwarding its caller's choice, not a site
 			// that decides one — config.go's own setCondition body is this shape.
-			if id, ok := reasonArg.(*ast.Ident); ok && isParam(enclosingFunc(stack), id.Name) {
-				return true
+			// The exemption is limited to a registered setter, because a plain
+			// wrapper that pins the condition type and forwards the reason is not
+			// plumbing: it decides the type, and its callers decide reasons this
+			// scan would then never see.
+			if id, ok := reasonArg.(*ast.Ident); ok {
+				fn := enclosingFunc(stack)
+				if isParam(fn, id.Name) && isRegisteredSetter(fn, setters) {
+					return true
+				}
 			}
 			unplaceable = append(unplaceable, fmt.Sprintf(
 				"%s: this write to %s does not name a reason this scan can read, so membership against %s cannot be checked — pass a Reason* constant",
@@ -316,6 +353,69 @@ func collectEmissions(srcDir string, o ownership, setters []condSetterSig, reaso
 	}
 	sort.Slice(emitted, func(i, j int) bool { return emitted[i].site < emitted[j].site })
 	return emitted, unplaceable, nil
+}
+
+// isRegisteredSetter reports whether fn is itself one of the condition setters,
+// which is what separates the setter forwarding its parameter from a wrapper
+// around it. A function literal has no declaration to match and is never one.
+func isRegisteredSetter(fn ast.Node, setters []condSetterSig) bool {
+	decl, ok := fn.(*ast.FuncDecl)
+	if !ok || decl.Type.Params == nil {
+		return false
+	}
+	n := 0
+	for _, f := range decl.Type.Params.List {
+		if len(f.Names) == 0 {
+			n++
+			continue
+		}
+		n += len(f.Names)
+	}
+	for _, s := range setters {
+		if s.name == decl.Name.Name && s.arity == n {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveConditionType reads the condition type an emission names, following a
+// local the enclosing function assigns it from. The reason side already resolves
+// a local (placeReason's resolveLocal); without the same on this side, hoisting
+// the type into a variable takes the write out of scope in silence.
+func resolveConditionType(e ast.Expr, fn ast.Node, imports, conditions map[string]string) (string, bool) {
+	if v, ok := literalOrConst(e, imports, conditions); ok {
+		return v, true
+	}
+	id, ok := e.(*ast.Ident)
+	if !ok || fn == nil {
+		return "", false
+	}
+	var found string
+	var count int
+	ast.Inspect(fn, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for i, lhs := range as.Lhs {
+			lid, ok := lhs.(*ast.Ident)
+			if !ok || lid.Name != id.Name || i >= len(as.Rhs) {
+				continue
+			}
+			count++
+			if v, ok := literalOrConst(as.Rhs[i], imports, conditions); ok {
+				found = v
+			}
+		}
+		return true
+	})
+	// One assignment, and it resolved: anything else is a type this scan cannot
+	// pin, which the caller reports rather than skips.
+	if count == 1 && found != "" {
+		return found, true
+	}
+	return "", false
 }
 
 // conditionWrite returns the type and reason expressions of a condition write, or
@@ -333,9 +433,16 @@ func conditionWrite(n ast.Node, setters []condSetterSig) (typeArg, reasonArg ast
 			}
 		}
 	case *ast.CompositeLit:
-		sel, ok := x.Type.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "Condition" {
-			return nil, nil
+		// Two shapes. An explicit `metav1.Condition{…}`, and an element of a
+		// `[]metav1.Condition{{…}}`, whose type is elided and so is nil here. The
+		// elided form carries nothing naming it a condition, so it is admitted on
+		// its keys alone and the caller's own filter is what bounds it: the Type
+		// key has to resolve to a condition type some marker claims.
+		if x.Type != nil {
+			sel, ok := x.Type.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Condition" {
+				return nil, nil
+			}
 		}
 		for _, elt := range x.Elts {
 			kv, ok := elt.(*ast.KeyValueExpr)
@@ -399,16 +506,27 @@ func checkConsumers(srcDir string, o ownership, reasons map[string]string) ([]st
 		}
 		imports := importedPkgs(file)
 		ast.Inspect(file, func(n ast.Node) bool {
-			bin, ok := n.(*ast.BinaryExpr)
-			if !ok || (bin.Op != token.EQL && bin.Op != token.NEQ) {
+			var operands []ast.Expr
+			switch x := n.(type) {
+			case *ast.BinaryExpr:
+				if x.Op != token.EQL && x.Op != token.NEQ {
+					return true
+				}
+				operands = []ast.Expr{x.X, x.Y}
+			case *ast.CaseClause:
+				// `switch reason { case pkg.ReasonX: }` asks the same question an
+				// `==` does, and it is the spelling the enumeration itself uses —
+				// so it is what a second reason makes somebody reach for, which is
+				// exactly the change this check exists to catch.
+				operands = x.List
+			default:
 				return true
 			}
-			for _, side := range []ast.Expr{bin.X, bin.Y} {
-				sel, ok := side.(*ast.SelectorExpr)
-				if !ok {
-					continue
-				}
-				v, ok := constValue(sel, imports, reasons)
+			for _, operand := range operands {
+				// literalOrConst rather than constValue: a bare "VersionTooOld"
+				// asks the question just as well as the constant does, and reads
+				// as an unrelated string to a scan that only follows selectors.
+				v, ok := literalOrConst(operand, imports, reasons)
 				if !ok {
 					continue
 				}
@@ -416,8 +534,8 @@ func checkConsumers(srcDir string, o ownership, reasons map[string]string) ([]st
 					continue
 				}
 				findings = append(findings, fmt.Sprintf(
-					"%s:%d: %s is compared against here, and it is one of the reasons %s enumerates — call that instead, or this is a second membership site at its own width",
-					rel, fset.Position(bin.Pos()).Line, sel.Sel.Name, o.site))
+					"%s:%d: %s is compared against here, and it is one of the reasons %s enumerates — call that instead, or move the question in beside the enumeration; open-coded, this is a second membership site at its own width",
+					rel, fset.Position(operand.Pos()).Line, v, o.site))
 			}
 			return true
 		})
