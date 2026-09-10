@@ -23,6 +23,7 @@ A ready-to-paste template:
 > **`/goal`** Act as the **dispatcher** for a parallel-dispatch run, following `docs/development/parallel-dispatch.md`.
 > Clear **[BATCH — e.g. "the remaining `1.0-gate` items in `docs/queue/`"]**: one worker session (task chip) and one PR per task, **max [N] concurrent** (from `scripts/agent/local-throttle.sh workers`).
 > Spawn each worker by invoking `/session-worker` with only the delta; the skill carries the contract.
+> Open every chip prompt with the literal first line `[dispatched-session]`.
 > **You own assignment, merge ordering, and scope.** Verify each PR's scope and that its heavy gates ran, then **report it ready.
 > I merge; you never do.** **No secret may be read, printed, logged, or passed to a model** — exclude any task needing real credentials and tell me.
 > Minimize asks (only genuine decisions, e.g. a license choice).
@@ -37,7 +38,12 @@ The knobs to set each run:
 - **Exclusions** — anything needing real secrets or a live cluster; state it up front rather than making the dispatcher discover it mid-run.
 - **Model per task** — the dispatcher sets each worker's model in its spawn prompt, and records the choice in the `tmp/` tracker alongside task → chip → PR → state.
 
-Three practical notes:
+Four practical notes:
+
+- **The `[dispatched-session]` marker is a contract, and the wordings around it are not.** `claude-usage/compute_metrics.py` separates prompts a person wrote from openings the dispatcher composed, and before the marker it keyed on the `"You are "` prefix and on a brief naming the worker skill by path.
+  Measured across 569 local sessions: 96 persona openings, a closed set running 2026-07-27 to 2026-08-04, 49 slash invocations, and 21 prose briefs carrying no marker at all.
+  Two wordings sharing a prefix by luck is what that reading rests on, so a dispatcher who rephrases a brief silently re-files its sessions as human-authored.
+  The literal marker is the one signal the dispatcher emits on purpose; keep it as the prompt's first line, where a `lstrip` finds it.
 
 - You will **click each task chip** to start its session — that is the intended, secure mechanism.
   Do not ask for headless auto-start; the safety classifier blocks it.
@@ -498,10 +504,13 @@ Only the items this repo adds; the skills' own checks are theirs.
 ## Anti-patterns paid for here
 
 `session-orchestrator`'s own list carries the portable ones.
-These three were paid for in this repo:
+These four were paid for in this repo:
 
 - **Relaunching pr-sentinel on `ready`.** It re-reports `ready` at once and the relaunch loop spins without sleeping.
   Measured, not assumed: the first draft of this doc shipped that rule and PR #892 span on it immediately.
 - **Decorating the watcher launch with an env prefix.** It costs the launch its auto-allow, so every relaunch prompts and an unattended worker stops relaunching.
   This is what made a stale "branch-guard blocks force-push" note expensive: it forced a `PR_SENTINEL_HEAL=merge` prefix onto every launch, for a restriction branch-guard's default `strict` policy does not actually impose.
 - **Burning a session in an active `gh pr checks --watch` loop.** It pins the main thread so you cannot iterate while CI runs, and pr-sentinel's `PreToolUse` hook denies it outright.
+- **Filing a row for work a dispatched worker is already shipping.** A dispatcher filed Q766 while its own worker filed the same row and deleted it inside one PR, so landing both would have re-opened shipped work as an open item.
+  A row that is filed and closed within a single PR is never an open row anywhere the dispatcher looks, and the store the dispatcher searches cannot show it.
+  Before filing anything that names a dispatched item's subject, read that worker's PR diff for `docs/queue/` rather than searching the store.

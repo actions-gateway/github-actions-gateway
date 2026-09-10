@@ -560,6 +560,25 @@ class AuthoredPrompts(unittest.TestCase):
         self.assertFalse(cm.is_authored_prompt(self.rec(old)))
 
 
+    def test_the_marker_classifies_a_brief_the_heuristics_would_miss(self):
+        """The marker's whole point: a brief carrying neither older signal."""
+        r = self.rec("%s\nClear Q1012. Open one PR." % cm.MACHINE_MARKER)
+        self.assertTrue(cm.is_human_prompt(r), "accepting a chip is presence")
+        self.assertFalse(cm.is_authored_prompt(r))
+        # The same brief without the marker reads as authored, which is what makes
+        # the assertion above about the marker rather than about the wording.
+        self.assertTrue(cm.is_authored_prompt(self.rec("Clear Q1012. Open one PR.")))
+
+    def test_the_marker_is_read_through_leading_whitespace(self):
+        r = self.rec("\n  %s\nClear Q1012." % cm.MACHINE_MARKER)
+        self.assertFalse(cm.is_authored_prompt(r))
+
+    def test_the_marker_must_open_the_prompt(self):
+        """A prompt discussing the marker is authored, not dispatched."""
+        r = self.rec("why does the dispatcher emit %s at all?" % cm.MACHINE_MARKER)
+        self.assertTrue(cm.is_authored_prompt(r))
+
+
 class PullRequestFetch(unittest.TestCase):
     """The fetch must fail soft, and must never re-ask for what it already holds."""
 

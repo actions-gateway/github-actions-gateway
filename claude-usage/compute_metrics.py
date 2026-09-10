@@ -1154,8 +1154,10 @@ def is_human_prompt(rec):
 # The skill-name half is deliberately a set, not a literal, because the skill was
 # renamed (``dispatch-worker`` -> ``session-worker``, karlkfi/claude-skills #45).
 # A further rename appends a name and leaves the history classified. Both shapes
-# remain conventions rather than contracts; Q883 is deferred on the dispatcher
-# emitting a deliberate marker to read instead.
+# remain conventions rather than contracts, which is why the marker below outranks
+# them: the dispatcher emits it deliberately (Q883, parallel-dispatch.md § How to
+# start a run), where these two are wordings that happen to agree.
+MACHINE_MARKER = "[dispatched-session]"
 MACHINE_PERSONA = "You are "
 WORKER_SKILLS = ("dispatch-worker", "session-worker")
 MACHINE_BRIEF = re.compile(
@@ -1176,6 +1178,10 @@ def is_authored_prompt(rec):
     submitted text and one timestamp. So this separates machine-composed openings
     from everything else, and everything else still mixes writing with pasting.
 
+    ``MACHINE_MARKER`` is the deliberate signal and is checked first. The two
+    heuristics under it read the closed historical set, where no marker was
+    emitted; they stay because removing them would re-file that history.
+
     Nothing here keys on a prompt's position in its session, so an authored
     prompt discussing the worker skill by path would be misfiled. Measured at
     zero across 1,585 human prompts: every match is its session's first.
@@ -1183,6 +1189,8 @@ def is_authored_prompt(rec):
     if not is_human_prompt(rec):
         return False
     text = record_text(rec).lstrip()
+    if text.startswith(MACHINE_MARKER):
+        return False
     return not (text.startswith(MACHINE_PERSONA) or MACHINE_BRIEF.search(text))
 
 

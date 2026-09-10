@@ -2454,6 +2454,23 @@ Removing the barrier entirely reproduced the CI symptom exactly, which is what t
 Two rules follow: **wait on the client the code under test reads**, since where an object has both the cached one is the later observer; and **a one-shot stimulus needs the stronger barrier**.
 The same file's scale-set test may wait on `k8sClient` because it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects; a single delivered job has no such recovery, which is why `waitForCapacityDeclined` takes its reader as an explicit parameter, making the choice visible at each call site.
 
+### Holding a poll loop out of its own poll: two techniques, and picking wrong costs a session
+
+Arranging "the process stopped *inside* this window" needs the loop held where it cannot make progress.
+The scale-set listener's loop is single-goroutine, so anything it is doing between two polls is such a window, and two helpers exist to hold it there.
+They are not interchangeable.
+
+**`parkInPoll` (Q603) holds the loop inside a poll the stub keeps open.** `srv.SetPollTimeout(30 * time.Second)` raises the window, and the park is observed as the poll count going quiet: the stub records a poll on arrival and only then holds it, so two samples a few hundred milliseconds apart reading the same count mean the current poll is held, rather than that the loop is between two.
+The first attempt waited for two *fresh* polls instead, which cannot happen, because once a poll parks there is no second one.
+Use it when the state under test is already reached by the time the loop parks, as "settled but not yet flushed" is.
+
+**It fails when the event under test is one that wakes a parked poll.** `CompleteAssignedJob` does exactly that, so Q689 could not park: the completion it needed to leave unread is the thing that would end the park.
+Q689 blocked in `Provision` instead ([unreadcompletion_q689_test.go](../../cmd/agc/internal/scalesetlistener/unreadcompletion_q689_test.go)), holding the loop inside the provisioner until the listener's context is cancelled, which puts it where it cannot read the queue at all.
+Provisioning is the widest such window to arrange and the easiest to observe, and it stands in for the narrower ones: `retryDeferred` walks the runner-name ladder against the network, and `reconcileDeferred` spends a session refresh.
+
+So ask first whether the event you are holding the loop away from is one that would wake it.
+Where it is, park nothing and block the loop inside the work instead.
+
 ### Pin the process when the signal comes out of its memory
 
 Synchronizing on the right signal is not enough when the controller produces that signal from state it holds **in memory**, downstream of something durable it has already written.
