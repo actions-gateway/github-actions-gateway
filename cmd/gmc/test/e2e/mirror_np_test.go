@@ -76,14 +76,21 @@ var mirrorScaledDown = []string{
 // worker's source address resolves to its workload-labelled pod under GKE
 // Dataplane V2 across the Kata bridge. That reading is
 // scripts/dogfood/e2e-mirror-clients.sh (Q1048).
-// ContinueOnFailure: the three specs are independent readings of one policy, and
-// the default Ordered behaviour skips the rest after the first failure. That
-// masks exactly what a failure most needs to say -- if the positive breaks for an
-// infrastructure reason, both negatives are skipped and the run cannot tell a
-// fail-OPEN peer from an untested one (measured on the Q1039 inversion run: the
-// unmarked-namespace negative reported `skipped 0s`, which reads like a pass in a
-// count and is not one). BeforeAll failures still skip everything, correctly:
-// there is no cluster state to probe.
+// ContinueOnFailure: the two negatives read different halves of one AND, so the
+// default Ordered behaviour -- stop after the first failure -- loses the second
+// reading exactly when the first says the peer is wrong. Measured on the Q1039
+// inversion run: with the peer's podSelector dropped, DeniesUnlabeledPod failed
+// and DeniesUnmarkedNamespace reported `skipped 0s`, which reads like a pass in
+// any count over the report and is not one. With the decorator it reports
+// `passed 23.0s`.
+//
+// This buys a second reading; it does NOT make either negative self-sufficient.
+// A mirror that is not serving fails the positive and lets both negatives pass
+// on CURL_RC=7/HTTP_CODE=000 for the wrong reason, so the three results are read
+// together or not at all -- the positive is the serving check, which is why its
+// own failure message says the negatives below would be vacuous. The run is red
+// either way. BeforeAll failures still skip every spec, correctly: there is no
+// cluster state to probe.
 var _ = Describe("E2E_Mirror_SharedTenantsNP", Ordered, ContinueOnFailure, func() {
 	// /v2/ is answered by the registry's own API layer, which is why it is the
 	// readiness probe. That is deliberate: what grades the peer is whether a

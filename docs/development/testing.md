@@ -3044,6 +3044,7 @@ Run them with the Calico profile when validating NetworkPolicy enforcement chang
 **A spurious allow is a claim about the enforcer, not only the policy.** All five containers that assert a drop therefore call `utils.DumpCNIEnforcerState()` from their failure path, which reads both lanes' enforcers (`app=kindnet`, `k8s-app=calico-node`) and prints restart attribution, termination reason, and cgroup pressure.
 The `e2e-reusable.yml` diagnostic step reads the same two selectors for the case where the suite process died before its `AfterEach` could run, the same two-probe split as the [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
 Both read kindnet only until #1417, which is the lane where the enforcement specs *skip*, so a failure on the Calico lane captured no enforcer state at all.
+The figure is re-derived rather than inherited: it read five while only four files called it, and Q1039's mirror-ingress container is the fifth, so it is accurate now by addition rather than by anyone having corrected it.
 That PR was filed against a suspected run of enforcement-negative failures which [turned out to be a different spec entirely](maintaining-backlog.md#repurposing-an-id-is-a-closure-with-every-step-skipped); the instrument it added stands on its own.
 CI runs this profile per-PR whenever a change touches NetworkPolicy/proxy code — see [the Calico e2e lane](#the-calico-e2e-lane) below.
 
