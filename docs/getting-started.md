@@ -354,7 +354,8 @@ When your GitHub App private key expires or is compromised, follow these steps t
    <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
    ```sh
    kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
-   # Look for: "token refresh successful" or no token refresh errors
+   # Look for: "token ready", logged on every refresh. A failure reads
+   # "token fetch failed; retrying after backoff".
    ```
 
 6. **Delete the old Secret** once the rollout is confirmed healthy:
