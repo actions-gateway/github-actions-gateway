@@ -2947,7 +2947,9 @@ The apiserver attaches such a warning to every read and write of a deprecated AP
 </code></pre></div>
 <p><code>ConnectionsWithSource</code> writes the same record with the client's source address added, which is what makes a connection attributable to one consumer namespace and one job rather than to the pool.
 It needs a second opt-in on the consuming side to be useful: see <a href="#attributing-a-record-to-a-tenant-and-a-job">attributing a record to a tenant and a job</a> below.</p>
-<p>Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.
+<p>Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.</p>
+<p><strong>Turning it back off wants quotes.</strong> YAML reads a bare <code>Off</code> as the boolean false, so <code>auditLogging: Off</code> is rejected as the wrong type for a string field, naming a value you never typed.
+Write <code>auditLogging: "Off"</code>, or remove the field, which means the same thing (Q985).
 See <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding: per-pool egress audit record</a> for when to turn it on and what it costs.</p>
 <p>A record looks like this (one JSON object per line, on the same stdout stream as everything else the pool logs):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>

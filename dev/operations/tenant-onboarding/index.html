@@ -3735,6 +3735,8 @@ With it, those jobs stay queued at GitHub instead.</p>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">capacityGate</span><span class="p">:</span>
 <a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Observe</span><span class="w">   </span><span class="c1"># Off (default) | Observe — Observe gates, it is not a dry-run tier</span>
 </code></pre></div>
+<p><strong>Quote <code>Off</code> if you set it back explicitly.</strong> YAML reads a bare <code>Off</code> as the boolean false, so <code>mode: Off</code> is rejected as the wrong type for a string field, naming a value you never typed.
+Write <code>mode: "Off"</code>, or drop the <code>capacityGate</code> block, which means the same thing (Q985).</p>
 <p><strong>You turn it on; the platform decides what it reads.</strong> "Can this pod be placed" has two different sound answers depending on whether anything is waiting on the unplaceable pod to make capacity appear — and that is a fact about the <em>cluster</em>, not about your runner set.
 So the gate takes one input from each party, and a runner set cannot choose a signal that is wrong for the cluster it runs in:</p>
 <table>
@@ -4333,6 +4335,8 @@ Setting the field without it does <strong>not</strong> break the gateway — see
 </tbody>
 </table>
 <p>Upstream's <code>Auto</code> mode is not offered: it is an alias whose actuation mechanism changes between autoscaler releases, so this API names <code>Recreate</code> explicitly instead.</p>
+<p><strong>Quote <code>Off</code> if you write it out.</strong> YAML reads a bare <code>Off</code> as the boolean false, so <code>mode: Off</code> is rejected as the wrong type for a string field, naming a value you never typed.
+Write <code>mode: "Off"</code>, or leave <code>mode</code> out, since <code>agcAutoscaling: {}</code> above already means recommendation-only (Q985).</p>
 <p><strong>How it interacts with <code>agcResources</code> — they compose, neither one silently wins:</strong></p>
 <ul>
 <li><code>agcResources</code> still decides what is stamped on the Deployment, and is the sizing in effect whenever the autoscaler is not actuating (<code>mode: Off</code>, VPA components down, or before the first recommendation).</li>

@@ -3961,7 +3961,8 @@ The gate throttles rather than seals, so intake continues at roughly one claim p
    The gauge keys on <code>runner_set</code> while this alert's series keys on <code>runner_group</code>; both carry the same set's name, because the rejection counter is shared with v1 <code>RunnerGroup</code> owners.</li>
 <li>Work the reason with <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">RunnerSet Reports WorkerCapacityDeclined</a>, which maps each one to the node, taint, quota, or image fix that clears it.
    <code>PodsNotStarting</code> is the odd one out and the quickest: the cluster placed the pod, so read the pod's own backoff message for the image it cannot pull rather than looking at nodes at all.</li>
-<li>The one-line rollback, if the gate is wrong about the cluster, is <code>spec.capacityGate.mode: Off</code>; the same section covers when that is the right call.</li>
+<li>The one-line rollback, if the gate is wrong about the cluster, is <code>spec.capacityGate.mode: "Off"</code>; the same section covers when that is the right call.
+   <strong>Quote the <code>Off</code>.</strong> YAML reads a bare one as the boolean false, so an unquoted rollback is rejected naming a value you never typed, during an incident, which is the worst time to debug a manifest (Q985).</li>
 </ol>
 <h3 id="actionsgatewayscalesetcapacitywithheld">ActionsGatewayScaleSetCapacityWithheld<a class="headerlink" href="#actionsgatewayscalesetcapacitywithheld" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> The same gate on the <strong>scale-set</strong> (default) tier, where a declined job is never assigned at all, so there is no rejected delivery to count.

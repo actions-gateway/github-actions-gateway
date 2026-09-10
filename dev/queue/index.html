@@ -2896,14 +2896,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Decision:</strong> we spend a session on the upstream-report batch.</td>
 </tr>
 <tr>
-<td><a href="Q945/">Q945</a></td>
-<td><a href="../development/testing/">Nothing records that make's database format differs by make version</a></td>
-<td><code>ci</code> <code>debt</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A target-specific variable prints as a comment under the GNU make 3.81 macOS ships, and in rule position, <code>target: VAR := value</code>, under the …</td>
-</tr>
-<tr>
 <td><a href="Q402/">Q402</a></td>
 <td><a href="../operations/troubleshooting/">GKE DPv2 NodeLocal DNSCache NP repro — file against Google's docs</a></td>
 <td><code>docs</code></td>
@@ -3336,14 +3328,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>back_word</code> matches the literal <code>**N of the original M are back.**</code>, so a page down to a single revived item can only say "One ...</td>
 </tr>
 <tr>
-<td><a href="Q985/">Q985</a></td>
-<td><a href="../development/api-review/#prefer-a-string-enum-to-a-bool">A bare Off enum value decodes as a YAML boolean</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>YAML reads bare <code>Off</code>/<code>On</code>/<code>Yes</code>/<code>No</code> as booleans, so an operator writing <code>auditLogging: Off</code> in a manifest has admission reject a value …</td>
-</tr>
-<tr>
 <td><a href="Q1069/">Q1069</a></td>
 <td><a href="../operations/observability-metrics/">Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef</a></td>
 <td><code>feature</code> <code>security</code></td>
@@ -3664,14 +3648,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> a bandwidth-heavy runner group saturates a co-tenant's pool.</td>
 </tr>
 <tr>
-<td><a href="Q909/">Q909</a></td>
-<td><a href="../development/maintaining-backlog/">A queue-store edit passes every gate a session actually runs</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-18: <code>make docs-gates</code> runs neither <code>queue-lint</code> nor <code>queue-rules-check</code> (zero "queue" in its output), so a session that …</td>
-</tr>
-<tr>
 <td><a href="Q998/">Q998</a></td>
 <td><a href="../plan/q727-container-steps/">Broker-mediated pod-per-step <code>container:</code> and <code>services:</code> execution</a></td>
 <td><code>feature</code> <code>security</code></td>
@@ -3782,14 +3758,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q871's checker waited on the child's exit status in two places, so a fake dying during startup deadlocked it.</td>
-</tr>
-<tr>
-<td><a href="Q933/">Q933</a></td>
-<td><a href="../development/testing/">testing.md's run-parallel section omits the wall-time block</a></td>
-<td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>testing.md § Run order documents <code>run-parallel.sh</code>'s FAILED/KILLED lines but not the per-label wall time Q819 added, and that section is …</td>
 </tr>
 <tr>
 <td><a href="Q934/">Q934</a></td>

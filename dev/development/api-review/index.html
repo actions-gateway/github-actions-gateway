@@ -2689,6 +2689,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Prefer a string enum to a bool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#an-enum-value-yaml-reads-as-a-boolean-rejects-a-value-the-operator-never-typed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An enum value YAML reads as a boolean rejects a value the operator never typed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3113,6 +3130,42 @@ A <code>bool</code> is defensible when the axis is genuinely two-valued and cann
 Anything describing a <em>policy</em> or a <em>method</em> should be a string enum from birth.</p>
 <p>The same rule is sharper for label and annotation values, where a bare <code>true</code> is also a YAML coercion footgun: use an enum keyword (<code>allowed</code>, <code>managed</code>).
 See <a href="../kubernetes-conventions/#label--annotation-value-conventions">kubernetes-conventions.md</a>.</p>
+<h4 id="an-enum-value-yaml-reads-as-a-boolean-rejects-a-value-the-operator-never-typed">An enum value YAML reads as a boolean rejects a value the operator never typed<a class="headerlink" href="#an-enum-value-yaml-reads-as-a-boolean-rejects-a-value-the-operator-never-typed" title="Permanent link">&para;</a></h4>
+<p>YAML 1.1 resolves bare <code>Off</code>, <code>On</code>, <code>Yes</code> and <code>No</code>, in any case, to booleans, so a string enum offering one of those keywords has a value an operator cannot write plainly.
+The decoder never errors on it; it coerces, and the two client paths coerce differently, so the rejection an operator sees depends on how they applied the manifest.</p>
+<p>Measured 2026-09-10 against the repo's <code>sigs.k8s.io/yaml</code> v1.6.0, on <code>auditLogging: Off</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Decodes to</th>
+<th>Rejected on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>YAMLToJSON</code>, the unstructured path <code>kubectl apply</code> takes</td>
+<td>JSON <code>false</code></td>
+<td>type, against <code>type: string</code></td>
+</tr>
+<tr>
+<td><code>Unmarshal</code> into a typed client's string field</td>
+<td>the string <code>"false"</code></td>
+<td>the enum</td>
+</tr>
+</tbody>
+</table>
+<p><code>"Off"</code> decodes to <code>Off</code> on both.
+Reproduce through the wrong path and the error text does not match the report, which is what makes a live instance of this look stale.</p>
+<p>Four shipped fields carry an <code>Off</code> keyword and are all exposed to it: <code>spec.auditLogging</code> on <code>ActionsGateway</code> and on <code>EgressProxy</code>, <code>spec.agcAutoscaling.mode</code>, and <code>spec.capacityGate.mode</code> on <code>RunnerSet</code>.
+So this is a convention question rather than one field's bug:</p>
+<ul>
+<li><strong>Prefer a keyword YAML cannot resolve</strong> when naming a new "does nothing" state: <code>None</code>, <code>Disabled</code> and <code>Never</code> are all unambiguous, and cost nothing at design time.</li>
+<li><strong><code>Off</code> is still defensible</strong> where a neighbouring rule already argues for it.
+  <code>agcAutoscaling.mode</code> mirrors the autoscaling.k8s.io <code>updateMode</code> set, so renaming it would trade one confusion for a worse one, and <code>capacityGate.mode</code> is <code>Off</code>/<code>Observe</code> because <a href="#name-the-method-not-the-on-state">name the method, not the on-state</a> rejected <code>On</code> (Q476).</li>
+<li><strong>Where it is kept, the operator-facing doc says to quote it</strong> at every place an operator is shown how to set that field, not once per page.
+  All four carry the note today: <a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a> for <code>auditLogging</code> (Q564) and the two <code>mode</code> fields, <a href="../../operations/observability-logging/">observability-logging.md</a> for the proxy's, and <a href="../../operations/runbook/">runbook.md</a> where the incident rollback writes one.</li>
+</ul>
 <h3 id="dont-collide-with-an-established-meaning">Don't collide with an established meaning<a class="headerlink" href="#dont-collide-with-an-established-meaning" title="Permanent link">&para;</a></h3>
 <p><code>observe</code>/<code>audit</code>/<code>dry-run</code> mean <em>report-only, do not enforce</em> in Pod Security Admission and Gatekeeper.
 Our <code>Observe</code> gates.
