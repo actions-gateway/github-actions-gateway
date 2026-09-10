@@ -74,6 +74,12 @@ fi
 }
 
 findings=0
+# Reconciliation for the commit-count rule: without tags every note takes the
+# skip path, and a run that checked no count at all must not read as a clean
+# one. Reported on the ok line rather than failed, because a tagless fork is a
+# legitimate tree (Q1002).
+counts_checked=0
+counts_skipped=0
 for note in "${notes[@]}"; do
 	name="${note#"${REPO_ROOT}"/}"
 	[[ -f "$note" ]] || {
@@ -112,6 +118,43 @@ for note in "${notes[@]}"; do
 		findings=$((findings + 1))
 	fi
 
+	# The "Everything since" commit count, against the range the note names.
+	#
+	# The number is the opening line of the most-read paragraph in the notes and
+	# nothing derived it, so it went stale silently: during 1.6 it was written as
+	# 158 at the rc.1 cut, was still 158 after rc.2 (actual 165), and reached 166
+	# only because the promote pass happened to re-derive it. A stale count reads
+	# exactly like a fresh one, which is what makes this worth a gate (Q1002).
+	#
+	# The note declares its own range — the heading names the previous tag and the
+	# filename names this one — so nothing here guesses at tag ordering. That also
+	# means a note is checked against the range it claims, not the range it should
+	# have claimed; getting the heading wrong is a different defect.
+	from_tag="$(awk '/^## Everything since v/ { print $4; exit }' "$note")"
+	to_tag="$(basename "$note" .md)"
+	claimed="$(awk '/^[0-9]+ commits[,. ]/ { print $1; exit }' "$note")"
+
+	if [[ -n "$from_tag" && -n "$claimed" ]]; then
+		# Both tags must exist to count between them. A shallow CI checkout has
+		# neither, and reporting a mismatch from a tagless tree would be noise
+		# about the checkout rather than about the note.
+		if git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$from_tag" >/dev/null &&
+			git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$to_tag" >/dev/null; then
+			actual="$(git -C "$REPO_ROOT" rev-list --no-merges --count "$from_tag..$to_tag")"
+			counts_checked=$((counts_checked + 1))
+			if [[ "$claimed" != "$actual" ]]; then
+				printf '%s: says %s commits since %s, but %s..%s holds %s (merges excluded)\n' \
+					"$name" "$claimed" "$from_tag" "$from_tag" "$to_tag" "$actual" >&2
+				printf '  scripts/release/semver-floor.sh %s %s prints the figure\n' "$from_tag" "$to_tag" >&2
+				findings=$((findings + 1))
+			fi
+		else
+			counts_skipped=$((counts_skipped + 1))
+			printf '%s: SKIP commit count — %s or %s is not a tag here (shallow checkout?)\n' \
+				"$name" "$from_tag" "$to_tag" >&2
+		fi
+	fi
+
 	# What the index shows before "Read more": the sections that fall entirely
 	# above the cut, and the first fold's position relative to it.
 	total="$(wc -c <"$note" | tr -d ' ')"
@@ -144,4 +187,5 @@ if ((findings > 0)); then
 	printf '\ncheck-release-notes: %d finding(s)\n' "$findings" >&2
 	exit 1
 fi
-echo "check-release-notes: ok (${#notes[@]} note(s))"
+printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags)\n' \
+	"${#notes[@]}" "$counts_checked" "$counts_skipped"

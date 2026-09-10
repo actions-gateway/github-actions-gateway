@@ -195,6 +195,28 @@ All four were wrong:
 Q594 is the fifth, and the one caught in time: it asserted that `plan-hygiene.yml`'s `**.go` filter matched no Go file.
 Running the pinned action measured the opposite, so no fix was needed, and what landed instead is a compliant version of the finding ([testing.md § Where a globstar works in a filter glob](testing.md#where-a-globstar-works-in-a-filter-glob)).
 
+### Naming that version on a pin-bearing page
+
+Five pages are read by [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh): `README.md`, `docs/index.md`, and `install.md`, `upgrade.md`, `gitops.md` under `docs/operations/`.
+On those it asserts that *every* release-version literal names the current release.
+That is only tractable because their noise floor is tiny, so a third-party version written plainly there used to read as a stale pin and fail the gate.
+It is why the README's ARC stamp cited a commit SHA and no version.
+
+Write the project's name immediately before the version and the gate reads it as attribution rather than a pin (Q728):
+
+```markdown
+ARC-side claims were re-read on 2026-08-12, against the `gha-runner-scale-set` chart at ARC 0.14.2.
+```
+
+Two properties worth knowing before relying on it.
+The name has to sit **immediately** before the version, so one attributed version leaves every other literal on that line still checked.
+The exemption is not a per-line off switch.
+And the recognised names are a short list in `release_thirdparty_projects_regexp` ([`scripts/lib/common.sh`](../../scripts/lib/common.sh)); adding one is a deliberate act, because each is a hole in a gate whose whole tractability rests on that small noise floor.
+
+The attribution is visible prose on purpose.
+An HTML comment would be invisible to `verify-published-docs.sh`, which scans the rendered page and drops comment text while keeping the version beside it, so the source gate would skip what the published-site gate still flagged.
+Those two share one extractor precisely so that cannot happen.
+
 ### What counts as upstream
 
 Anything whose behavior can change with no commit in this repo: a third-party library, a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary, **or a Claude Code hook, plugin, or harness decision** (what workspace-guard denies, which paths are exempt, what a slash command does).

@@ -29,7 +29,7 @@ Each team self-serves a fully isolated gateway from a single `ActionsGateway` cu
 | **0** | Idle GPU pods between jobs. Workers exist only while a job runs |
 | **20** | Alert rules shipped as code, with a tenant dashboard and a platform dashboard beside them |
 
-ARC-side claims were re-read on 2026-08-12, against the `gha-runner-scale-set` chart at commit [`9bb16ae`](https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8).
+ARC-side claims were re-read on 2026-08-12, against the `gha-runner-scale-set` chart at ARC 0.14.2, commit [`9bb16ae`](https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8).
 [Capability by capability](docs/why-gag.md) names the chart version, stamps every competitor cell with the version and date it was read at, and fails our own build if one of them is missing.
 
 ## Is this for you?

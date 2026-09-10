@@ -205,7 +205,8 @@ If those files are gone and a claim here needs re-verifying, the method section 
 - ~~`go-to-market.md` §2 and the two-tier positioning~~ ✅ reconciled 2026-08-06. §2 is now three lanes with the location filter, §4 carries both tiers (site claims versus the thesis the strategy plays for), and §11 records that Q60's closure was a false record.
 - ~~`README.md` scannability pass~~ ✅ done 2026-08-06.
   It now leads with the measured numbers and an "Is this for you?" router, and both its problem and solution sections follow the validated messaging order rather than opening on priority tiers.
-  One finding fell out of it: [Q728](../queue/Q728.md), since `check-release-pins.sh` reads any bare `X.Y.Z` in a pin-bearing doc as a GAG release pin, so the README cannot name the ARC version its comparison was measured against.
+  One finding fell out of it: `check-release-pins.sh` read any bare `X.Y.Z` in a pin-bearing doc as a GAG release pin, so the README could not name the ARC version its comparison was measured against and cited a commit SHA instead.
+  Q728 closed that: a version introduced by the project's own name is read as attribution, and the README now says ARC 0.14.2.
 - ~~Caching and GPU umbrella goals~~ ✅ written 2026-08-07 as [caching-and-worker-storage](caching-and-worker-storage.md) and [gpu-and-accelerated-ci](gpu-and-accelerated-ci.md).
   Each surfaced a collision the individual rows do not state: closing untrusted-PR egress removes the `actions/cache` path that works today, and GPU plus Kata do not compose on managed cloud (not for want of nested virtualization, which A2/A3/G2 have, but because the Kata passthrough path needs BIOS and host-driver control a node pool does not expose).
   Both corrected a published claim in passing.

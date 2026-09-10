@@ -91,6 +91,73 @@ case_ "the = form of the version flag is caught too" 1 '## Install
 `helm upgrade gag --version=v1.5.0`
 '
 
+# --- the "Everything since" commit count -------------------------------------
+
+# This rule reads real tags, so its fixtures are named for a range this repo
+# actually has. named_case_ exists only for that: case_ always writes note.md,
+# whose basename is no tag, which is the SKIP path every other case takes.
+#
+# v1.6.0..v1.7.0 is used because v1.7.0's count is the one the promote pass
+# re-derived, so its correct value is a fact about the repo rather than about
+# this suite. The number is read from git here for the same reason the gate
+# reads it from git: a literal would be this suite asserting its own arithmetic.
+named_case_() {
+	local desc="$1" want="$2" file="$3" body="$4" rc=0 out
+	printf '%s' "$body" >"$WORK/$file"
+	out="$("$SUBJECT" "$WORK/$file" 2>&1)" || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
+	if [[ "$rc" == "$want" ]]; then
+		ok "$desc"
+	else
+		bad "$desc (want exit $want, got $rc)"
+		printf '       %s\n' "$out" >&2
+	fi
+}
+
+if git rev-parse -q --verify refs/tags/v1.7.0 >/dev/null 2>&1; then
+	real_count="$(git rev-list --no-merges --count v1.6.0..v1.7.0)"
+	wrong_count=$((real_count + 1))
+
+	named_case_ "the commit count matching its range passes" 0 v1.7.0.md \
+		"## Everything since v1.6.0
+
+${real_count} commits, some of them carrying a \`feat\` subject.
+"
+
+	named_case_ "a stale commit count fails" 1 v1.7.0.md \
+		"## Everything since v1.6.0
+
+${wrong_count} commits, some of them carrying a \`feat\` subject.
+"
+
+	# The tags come from the note, not from tag ordering, so a note naming a
+	# range the repo does not have must skip rather than fail: on a shallow CI
+	# checkout that would otherwise fail every note at once.
+	named_case_ "a range this tree has no tags for skips, it does not fail" 0 v9.9.9.md \
+		'## Everything since v9.9.8
+
+4 commits.
+'
+
+	# The skip above is why the summary reconciles: a depth-1 checkout takes it
+	# for every note, and the job would pass having checked no count at all. So
+	# the counts are asserted, not just the exit status — this suite's own
+	# increments were dead on the first run and the exit status could not say so.
+	printf '## Everything since v1.6.0\n\n%s commits.\n' "$real_count" >"$WORK/v1.7.0.md"
+	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
+	expect "the summary reports the count it checked" \
+		"1 commit count(s) checked, 0 skipped for want of tags" \
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+
+	printf '## Everything since v9.9.8\n\n4 commits.\n' >"$WORK/v9.9.9.md"
+	summary="$("$SUBJECT" "$WORK/v9.9.9.md" 2>&1)"
+	expect "the summary reports a skip as a skip, not as a check" \
+		"0 commit count(s) checked, 1 skipped for want of tags" \
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+else
+	printf '[check-release-notes-test] SKIP commit-count cases — no v1.7.0 tag here\n' >&2
+fi
+
 # --- and none fires where it should not --------------------------------------
 #
 # The exclusions matter as much as the rules: a gate that flagged these would be
