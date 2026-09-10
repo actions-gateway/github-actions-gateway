@@ -341,10 +341,49 @@ expect "roadmap cap is looser than features" 0 \
 # by hand; it is expected to find nothing once the chip is derived, which is why
 # it is not the half the reconciliation rests on.
 
-GATED_NEAR='- **Near thing.** <!-- q:Q1 --> Body text. [detail](plan/thing.md) Gating the 1.5 release.'
+GATED_NEAR=$'- **Near thing.** <!-- q:Q1 --> Body text. [detail](plan/thing.md)\n  Gating the 1.5 release.'
 
 expect "gate label bound to a bullet" 0 \
     "$(roadmap "$GATED_NEAR" -- "$EXPL")" "$(status "Q1:feature,1.5-gate" "Q2")"
+
+# --- rule 13: sentence-per-line, which mdreflow cannot enforce here ---------
+#
+# Every gated bullet carries the <!-- q:QN --> annotation rule 1 requires, and
+# mdreflow declines any paragraph holding a raw `<!` opener, so `make md-reflow`
+# skips this page entirely (18 of 18 markers on v0.3.0, 2026-09-10). The rule
+# below is the only thing reading line breaks here (Q832).
+
+# shellcheck disable=SC2016 # backticks are Markdown code spans in the fixture
+TWO_SENTENCES='- **Near thing.** <!-- q:Q1 --> Committed, not started. It removes all four. [detail](plan/thing.md)'
+expect "two sentences on one line" 1 \
+    "$(roadmap "$TWO_SENTENCES" -- "$EXPL")" "$(status "Q1" "Q2")" \
+    '2 sentences on one line'
+
+# The control: the same content split, which is what the finding asks for.
+SPLIT_SENTENCES=$'- **Near thing.** <!-- q:Q1 --> Committed, not started.\n  It removes all four. [detail](plan/thing.md)'
+expect "the same content, split, is clean" 0 \
+    "$(roadmap "$SPLIT_SENTENCES" -- "$EXPL")" "$(status "Q1" "Q2")"
+
+# A version inside a code span is not three sentences. This is the shape that
+# makes a naive scan useless: `v2.0.0` carries two periods, each followed by a
+# digit, and the masking is what keeps them out of the count.
+# shellcheck disable=SC2016 # backticks are Markdown code spans in the fixture
+VERSION_SPAN='- **Near thing.** <!-- q:Q1 --> Removing it lands in **`v2.0.0`** after `v1.3.0` announced it. [detail](plan/thing.md)'
+expect "a version in a code span is one sentence" 0 \
+    "$(roadmap "$VERSION_SPAN" -- "$EXPL")" "$(status "Q1" "Q2")"
+
+# A trailing link is not a second sentence, which is why a boundary only counts
+# when what follows is itself terminated.
+# shellcheck disable=SC2016 # backticks are Markdown code spans in the fixture
+TRAILING_LINK='- **Near thing.** <!-- q:Q1 --> Body text ends here. [detail](plan/thing.md)'
+expect "a trailing link is not a sentence" 0 \
+    "$(roadmap "$TRAILING_LINK" -- "$EXPL")" "$(status "Q1" "Q2")"
+
+# An abbreviation before a capital is not a boundary either.
+# shellcheck disable=SC2016 # backticks are Markdown code spans in the fixture
+ABBREV='- **Near thing.** <!-- q:Q1 --> Several kinds, e.g. Cilium and Calico, are covered. [detail](plan/thing.md)'
+expect "an abbreviation is not a boundary" 0 \
+    "$(roadmap "$ABBREV" -- "$EXPL")" "$(status "Q1" "Q2")"
 
 # Rule 7: the label has nowhere to render, so the release is committed nowhere
 # an adopter reads. A gated row no bullet names is invisible to every other rule
@@ -410,7 +449,7 @@ expect "a v-prefixed patch version normalizes" 0 \
 # "a bullet naming a version must carry the matching label" fails this page as
 # written, which is the false fire that would have forced a wrong edit.
 # shellcheck disable=SC2016 # backticks are Markdown code spans in the fixture
-Q273_SHAPE='- **[Retiring the old APIs](operations/v1alpha1-deprecation.md)** <!-- q:Q2 --> Committed, but not yet started. `v1.3.0` is the one-release-ahead announcement; **`v2.0.0`** is the named release that removes all three together. Gated on the `v2` GA API being validated, not on a date.'
+Q273_SHAPE=$'- **[Retiring the old APIs](operations/v1alpha1-deprecation.md)** <!-- q:Q2 --> Committed, but not yet started.\n  `v1.3.0` is the one-release-ahead announcement; **`v2.0.0`** is the named release that removes all three together.\n  Gated on the `v2` GA API being validated, not on a date.'
 expect "naming a release is not claiming one" 0 \
     "$(roadmap "$NEAR" -- "$Q273_SHAPE")" "$(status "Q1" "Q2")"
 
