@@ -65,7 +65,7 @@ CHECK_FAST_GATES := roadmap-check \
                     upgrade-toc-check make-targets-check card-bullets-check \
                     endpoint-parity-check \
                     release-notes-check \
-                    dashboard-render-check \
+                    dashboard-render-check dashboard-tables-check \
                     tool-pin-check \
                     release-ladder-check \
                     vendored-skills-check \
@@ -127,6 +127,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
 #   make-targets-check   prose naming a `make` target that exists in no Makefile
 #   card-bullets-check   a .gag-pillars card bullet too long for the column it renders in
+#   dashboard-tables-check the dashboard doc's panel tables drifted from the shipped dashboard JSON
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
 #   roadmap-check        a roadmap or features.md bullet over its word cap, or naming an item that moved
@@ -163,7 +164,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               queue-lint queue-rules-check queue-claims-check \
               md-reflow-check page-density-check release-pins-check \
               release-notes-check upgrade-toc-check make-targets-check \
-              card-bullets-check \
+              card-bullets-check dashboard-tables-check \
               conflict-markers-check \
               release-ladder-check \
               roadmap-check comparison-stamps-check promql-check \
@@ -249,7 +250,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
-                 docs/check-upgrade-toc-test docs/check-make-targets-test docs/check-card-bullets-test \
+                 docs/check-upgrade-toc-test docs/check-make-targets-test docs/check-card-bullets-test manifest/check-dashboard-tables-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \

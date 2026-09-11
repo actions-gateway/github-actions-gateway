@@ -247,6 +247,15 @@ promql-check: ## Fail on unparseable PromQL in the rules or the dashboards, or a
 dashboard-render-check: ## Fail when a dashboard changed beyond its panel descriptions and its screenshot did not
 	scripts/manifest/check-dashboard-render.sh
 
+# Q961 reconciled the dashboard doc's four panel tables against the shipped JSON
+# by hand, and both instances it found were invisible to every gate: a duplicate
+# `Row 7` in the tenant section, and a panel that had escaped its table to render
+# as literal pipe-separated text. promql-check reads the JSON's expressions and
+# never the prose; dashboard-render-check is a screenshot gate (Q1091).
+.PHONY: dashboard-tables-check
+dashboard-tables-check: ## Fail when the dashboard doc's panel tables have drifted from the shipped dashboards
+	scripts/manifest/check-dashboard-tables.sh
+
 # Three files hold one endpoint set between them: the mirror Deployments, their
 # Services, and the tenant ConfigMap wiring the e2e job's image clients to them
 # (Q408 Phase 3). A sixth upstream added on one side only leaves its pulls going
