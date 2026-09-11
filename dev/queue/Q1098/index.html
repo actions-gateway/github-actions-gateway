@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1091/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1098/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing compares the dashboard doc's panel tables to the shipped JSON - GitHub Actions Gateway</title>
+        <title>Operator docs address the v1 AGC Deployment name under v2 - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-compares-the-dashboard-docs-panel-tables-to-the-shipped-json" class="md-skip">
+        <a href="#operator-docs-address-the-v1-agc-deployment-name-under-v2" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing compares the dashboard doc's panel tables to the shipped JSON
+              Operator docs address the v1 AGC Deployment name under v2
             
           </span>
         </div>
@@ -2597,53 +2597,61 @@
   
 
 
-<h1 id="nothing-compares-the-dashboard-docs-panel-tables-to-the-shipped-json">Nothing compares the dashboard doc's panel tables to the shipped JSON<a class="headerlink" href="#nothing-compares-the-dashboard-docs-panel-tables-to-the-shipped-json" title="Permanent link">&para;</a></h1>
-<p>Q961 reconciled the four sections by hand and closed.
-The drift it fixed was silent in both directions: the tenant section numbered nine rows 1..7, <strong>7</strong>, 8, and a Cross-tenant Throughput panel had escaped its table to render as literal pipe-separated text mid-paragraph.
-Neither is visible to any gate.
-<code>promql-check</code> parses panel expressions out of the JSON (Q910) and never reads the prose; <code>dashboard-render-check</code> is a screenshot gate (Q868).</p>
-<p>Both sides are machine-readable, so a comparison is cheap: row titles and order, and the set of panel titles per row.</p>
-<p><strong>Row titles and order already match exactly</strong> across all four dashboards, measured 2026-09-09 after Q961.
-<strong>Panel titles do not</strong>, and that is what a gate has to decide about first.
-Six panels carry a shortened label in the doc:</p>
+<h1 id="operator-docs-address-the-v1-agc-deployment-name-under-v2">Operator docs address the v1 AGC Deployment name under v2<a class="headerlink" href="#operator-docs-address-the-v1-agc-deployment-name-under-v2" title="Permanent link">&para;</a></h1>
+<p>Twenty-six <code>kubectl</code> invocations across eight docs address the AGC as <code>deploy/actions-gateway-controller</code> (or <code>deployment/...</code>), which is the v1 name.
+Under v2 the AGC is named per gateway, <code>&lt;gateway&gt;-agc</code>, from <code>agcNameV2</code> in <code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go</code>.
+So every one of those commands names nothing on a v2 tenant.
+None of the 26 is scoped to v1 in its surrounding prose, so a reader on the recommended path has no signal that the command does not apply to them.</p>
+<p>Measured 2026-09-10 on <code>claude/backlog-docs-burndown-7c33e5</code>:</p>
 <table>
 <thead>
 <tr>
-<th>JSON</th>
-<th>doc</th>
+<th>File</th>
+<th>Instances</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>p95 pod creation latency</code></td>
-<td><code>p95 latency</code></td>
+<td><code>docs/operations/troubleshooting.md</code></td>
+<td>14</td>
 </tr>
 <tr>
-<td><code>p99 pod creation latency</code></td>
-<td><code>p99 latency</code></td>
+<td><code>docs/operations/runbook.md</code></td>
+<td>4</td>
 </tr>
 <tr>
-<td><code>Pod creation latency heatmap</code></td>
-<td><code>Latency heatmap</code></td>
+<td><code>docs/operations/upgrade.md</code></td>
+<td>3</td>
 </tr>
 <tr>
-<td><code>Jobs assigned vs provisioned/min</code></td>
-<td><code>Jobs assigned vs. provisioned/min</code></td>
+<td><code>docs/development/local-kind-demo.md</code></td>
+<td>1</td>
 </tr>
 <tr>
-<td><code>Proxy HPA desired vs current</code></td>
-<td><code>HPA desired vs. current</code></td>
+<td><code>docs/development/kind-iteration.md</code></td>
+<td>1</td>
 </tr>
 <tr>
-<td><code>Jobs acquired/min by namespace</code></td>
-<td><code>Jobs acquired/min by namespace (classic)</code></td>
+<td><code>docs/development/github-app-credentials.md</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>docs/operations/tenant-onboarding.md</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>docs/operations/security-operations.md</code></td>
+<td>1</td>
 </tr>
 </tbody>
 </table>
-<p>Plus the <code>(1h)</code> window suffixes the Job Throughput table drops.
-The doc's labels read better in a table that already carries the query beside them, so verbatim parity is a real cost rather than a free win.</p>
-<p>So the gate is a design question, not a transcription: assert row title and order parity strictly, and assert panel <strong>count</strong> per row rather than title equality; or align the labels first and assert titles too.
-The count rule alone would have caught the escaped panel, and the order rule the duplicate <code>Row 7</code>, which is both of Q961's instances.</p>
+<p>This is the class Q1092 scoped down from.
+Q1092 repaired <code>docs/getting-started.md</code> § Rotating GitHub App Credentials alone, splitting each affected block into a v2 form and a <code>-v1</code> sibling; the three remaining hits in that page are the v1 siblings, which are correct.</p>
+<p><strong>The name is derivable now, which is what makes a gate possible.</strong> Q1092 exported <code>AGCResourceSuffix</code> from <code>cmd/gmc/internal/controller</code>, so a checker can join a page's own gateway name to it rather than hardcoding a string.
+<code>TestGettingStarted_SkipBlockNames</code> already does exactly this for the install page; the open question is whether the same assertion generalizes to pages that carry no CR of their own: troubleshooting and the runbook use <code>&lt;namespace&gt;</code> placeholders and never name a gateway, so there is nothing for a test to join.</p>
+<p><strong>Decide the presentation before editing 26 sites.</strong> The install page's split-block shape is verbose and does not obviously scale to a 14-hit troubleshooting page.
+A placeholder convention (<code>deploy/&lt;gateway&gt;-agc</code>, with one paragraph per page saying that v1 tenants substitute <code>actions-gateway-controller</code>) may be the cheaper answer, but it changes copy-paste-ability, which <a href="../../development/documentation-standards/">documentation-standards.md</a> treats as load-bearing.
+Settle that first; the sweep is mechanical once it is settled, and a mechanical sweep is verified by reconciliation, not by an empty leftover grep.</p>
 
 
 

@@ -3489,8 +3489,10 @@ Treat a bullet within a few characters of its budget as unverified.</p>
 <p>An expansion that does not fit is the wrong fix, not the bullet's fault.
 Prefer the plain term over <code>Term (ACR)</code> in a card, and bind the acronym in prose elsewhere on the page, where the layout imposes no budget.
 Where no such prose exists, let the linked detail page carry the definition.</p>
-<p>Verify by rendering.
-Reading the Markdown cannot answer this question, and neither can counting characters:</p>
+<p><code>make card-bullets-check</code> holds the budgets above, measuring the rendered text rather than the source (Q711).
+It is a proxy for a proportional face, so it catches a bullet that is over budget in characters and not one that is under budget and wraps on its glyphs.
+Verify that second case by rendering.
+Reading the Markdown cannot answer it, and neither can counting characters:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// make docs-serve, then on / or /why-gag/</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">'.gag-pillars li li'</span><span class="p">)]</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">round</span><span class="p">(</span><span class="nx">b</span><span class="p">.</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">height</span><span class="w"> </span><span class="o">/</span>

@@ -3207,7 +3207,7 @@ The discipline is the "won't strand you" signal while the track record accumulat
 <li>App keys read-only; never in env, never cached</li>
 <li>Or opt in to <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">no App key in the cluster at all</a></li>
 <li>Controller writes confined to tenant namespaces</li>
-<li><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Sharing a proxy across namespaces needs the owner's consent</a></li>
+<li><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Sharing a proxy needs the owner's consent</a></li>
 </ul>
 </li>
 <li>
@@ -3228,7 +3228,7 @@ The discipline is the "won't strand you" signal while the track record accumulat
 <li>Default-deny ingress, cluster-only DNS</li>
 <li>Per-tenant egress IPs, mutual-TLS metrics</li>
 <li>Signed images, SBOM, and SLSA provenance</li>
-<li><a href="../operations/runner-template-library/">Three validated worker templates</a>, one <code>kubectl apply -k</code></li>
+<li><a href="../operations/runner-template-library/">Three worker templates</a>, one <code>kubectl apply -k</code></li>
 </ul>
 </li>
 </ul>

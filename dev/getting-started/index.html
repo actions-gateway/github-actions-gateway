@@ -3109,41 +3109,60 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 <a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span><span class="no">-----END RSA PRIVATE KEY-----</span>
 </code></pre></div>
 <ol>
-<li><strong>Update the <code>ActionsGateway</code> CR</strong> to reference the new Secret name:</li>
+<li><strong>Update the <code>ActionsGateway</code> CR</strong> to reference the new Secret name.
+   The field differs between the two APIs, so take the one matching the gateway you created:</li>
 </ol>
-<!-- gag:verify id=rotate-patch-ref mode=run needs=v1-gateway,github-app-secret-rotated teardown=none -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'</span>
+<!-- gag:verify id=rotate-patch-ref mode=run needs=v2-gateway-set,github-app-secret-rotated teardown=none -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># v2 (the shape Step 4 creates): the credentials union names the Secret.</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway.actions-gateway.com<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"credentials":{"githubApp":{"name":"my-github-app-v2"}}}}'</span>
+</code></pre></div>
+<!-- gag:verify id=rotate-patch-ref-v1 mode=skip reason=needs-the-legacy-v1-gateway-applied -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># v1 (legacy): the Secret is named by a top-level ref.</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway.actions-gateway.github.com<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'</span>
 </code></pre></div>
 <p>The GMC detects the Secret reference change, updates the AGC pod template (including an <code>actions-gateway/github-app-secret</code> annotation that records the new Secret name), and triggers a rolling update.
    The new pod mounts the new Secret and immediately begins using the new credentials.</p>
 <ol>
-<li><strong>Confirm the rollout completed:</strong></li>
+<li><strong>Confirm the rollout completed</strong>, against the right Deployment: the AGC is named <strong>per gateway</strong> in v2, as <code>&lt;gateway-name&gt;-agc</code>, so a <code>team-a-gateway</code> tenant rolls <code>deploy/team-a-gateway-agc</code>.
+   Under v1 there is one AGC Deployment per namespace, named <code>actions-gateway-controller</code>.</li>
 </ol>
 <!-- gag:verify id=rotate-rollout-status mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Optionally inspect rotation history:</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/team-a-gateway-agc<span class="w"> </span>-n<span class="w"> </span>team-a
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Optionally inspect rotation history:</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/team-a-gateway-agc<span class="w"> </span>-n<span class="w"> </span>team-a
+</code></pre></div>
+<!-- gag:verify id=rotate-rollout-status-v1 mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
 </code></pre></div>
 <ol>
 <li><strong>Verify the new token is working:</strong></li>
 </ol>
 <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Look for: "token ready", logged on every refresh. A failure reads</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># "token fetch failed; retrying after backoff".</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/team-a-gateway-agc<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Look for: "token ready", logged on every refresh. A failure reads</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># "token fetch failed; retrying after backoff".</span>
+</code></pre></div>
+<!-- gag:verify id=rotate-verify-logs-v1 mode=skip reason=needs-a-running-agc-pod -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
 </code></pre></div>
 <ol>
 <li><strong>Delete the old Secret</strong> once the rollout is confirmed healthy:</li>
 </ol>
 <!-- gag:verify id=rotate-delete-old-secret mode=run needs=rotate-patch-ref teardown=none -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>secret<span class="w"> </span>my-github-app<span class="w"> </span>-n<span class="w"> </span>team-a
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>secret<span class="w"> </span>my-github-app<span class="w"> </span>-n<span class="w"> </span>team-a
 </code></pre></div>
 <ol>
 <li><strong>Revoke the old key</strong> in the GitHub App settings.</li>
 </ol>
 <p><strong>Important:</strong> Do not update the Secret in-place.
-The GMC watches the <code>gitHubAppRef.name</code> reference, not the Secret's contents.
+The GMC watches the reference, not the Secret's contents: <code>spec.credentials.githubApp.name</code> in v2, <code>spec.gitHubAppRef.name</code> in v1.
 Changing the Secret data without changing the reference name does not trigger an AGC rollout.
 The AGC continues using the cached token derived from the old key until it restarts or the token expires.
 Creating a new Secret and updating the reference is the correct rotation path.</p>
@@ -3151,7 +3170,7 @@ Creating a new Secret and updating the reference is the correct rotation path.</
 Recreating the Secret (with the same name, or updating <code>gitHubAppRef.name</code>) clears the condition and resumes normal operation.
 To inspect the condition:</p>
 <!-- gag:verify id=credential-condition mode=run needs=v1-gateway teardown=none -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
 </code></pre></div>
 
 
