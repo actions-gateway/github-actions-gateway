@@ -2168,17 +2168,35 @@ proxy:
       memory: "64Mi"
 ```
 
-After updating the spec, patch the proxy Deployment or trigger a rollout; the HPA will start computing utilization on the next metrics scrape cycle (~30s).
+After updating the spec, patch the proxy Deployment or trigger a rollout.
+Recovery takes longer than one scrape: the patch recreates the pod, and metrics-server has to observe the new one for a resolution interval before the HPA controller reads it on a sync of its own.
+Measured on Kubernetes v1.36.1 with metrics-server v0.8.1 at its shipped `--metric-resolution=15s`, 2026-09-11, patching `requests.cpu` onto a pool that declared none: `ScalingActive` went `True` 37s, 45s and 45s after the patch across three runs.
+Budget a minute, and read the `ScalingActive` condition rather than watching `TARGETS`: the condition flips in one step, while `TARGETS` shows `<unknown>` until it does.
 
 **Second likely cause: the namespace `ResourceQuota` won't admit the replicas the HPA wants.** The HPA computes utilization correctly but the proxy Deployment cannot create more pods because the platform-owned namespace `ResourceQuota` is the hard cap.
-Under load the pool wedges below its target and the Deployment/ReplicaSet logs `FailedCreate ... exceeded quota` events instead of scaling out.
+Under load the pool wedges below its target and the rejected creates surface in two places at once.
+The **ReplicaSet** records a `Warning` Event with reason `FailedCreate`, and the **Deployment** carries the same text as `ReplicaFailure=True`, also with reason `FailedCreate`:
+
+```text
+Error creating: pods "actions-gateway-proxy-<replicaset>-<id>" is forbidden: exceeded quota: <quota-name>, requested: limits.cpu=100m,limits.memory=64Mi,pods=1,requests.cpu=10m,requests.memory=32Mi, used: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi, limited: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi
+```
+
+Match on the reason rather than the message, as with the `<unknown>` causes above: `FailedCreate` is stable API surface and the message names every quota dimension, not only the one that bound.
+(Measured on Kubernetes v1.36.1, 2026-09-11, against a namespace `ResourceQuota` capping `pods: 2` and a five-replica proxy Deployment requesting `cpu: 10m`.)
+
+```sh
+# The rejected creates, and the same text on the Deployment.
+kubectl get events -n <namespace> --field-selector reason=FailedCreate
+kubectl get deploy -n <namespace> actions-gateway-proxy \
+  -o jsonpath='{range .status.conditions[?(@.type=="ReplicaFailure")]}{.reason}: {.message}{"\n"}{end}'
+```
 
 The GMC surfaces this as two non-blocking conditions on the `ActionsGateway` (neither gates `Ready` — the pool keeps serving at its current scale), each also exported as a gauge for alerting:
 
 | Condition / metric | Meaning | Action |
 |---|---|---|
 | `ProxyQuotaPressure` (warning) — `actions_gateway_proxy_quota_pressure` | The pool can't grow to `maxReplicas` within the quota's remaining headroom (`hard − used`). Load-dependent. | Raise the quota or lower `maxReplicas` before the next spike. |
-| `ProxyQuotaExceeded` (error) — `actions_gateway_proxy_quota_exceeded` | Replica creates are being **rejected now** (Deployment `ReplicaFailure` with `exceeded quota`). | Raise the quota now; the pool is degraded below the HPA's target. |
+| `ProxyQuotaExceeded` (error) — `actions_gateway_proxy_quota_exceeded` | Replica creates are being **rejected now** (Deployment `ReplicaFailure=True`, reason `FailedCreate`). | Raise the quota now; the pool is degraded below the HPA's target. |
 
 ```sh
 # Read both conditions (Exceeded supersedes Pressure when firing).
