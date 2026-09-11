@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 )
 
 // The install doc and its block parser, both reached through committed
@@ -158,7 +160,14 @@ var deployRefRE = regexp.MustCompile(`\bdeploy/([a-z0-9][a-z0-9.-]*)`)
 // and it is the assertion that stops a vacuous pass: a parser returning nothing,
 // or a doc edit that drops the references, satisfies the per-reference check
 // below by having nothing to check.
-const skippedDeployRefFloor = 3
+const skippedDeployRefFloor = 6
+
+// docV2GatewayName is the ActionsGateway the install page's v2 block creates, so
+// `<name>` + controller.AGCResourceSuffix is the Deployment its rotation steps
+// address. The v2 AGC is named per gateway, so unlike the v1 name there is no
+// single constant to pin: the page's own gateway name is half the answer and the
+// suffix the GMC derives with is the other (Q1092).
+const docV2GatewayName = "team-a-gateway"
 
 // TestGettingStarted_SkipBlockNames pins the object names a `mode=skip` block
 // hardcodes to the constant that owns them.
@@ -184,6 +193,8 @@ func TestGettingStarted_SkipBlockNames(t *testing.T) {
 	doc, err := os.ReadFile(gettingStartedDoc)
 	require.NoError(t, err)
 
+	agcNameV2 := docV2GatewayName + controller.AGCResourceSuffix
+
 	refs := 0
 	for _, b := range parseBlocks(t, doc) {
 		if b.mode != "skip" {
@@ -191,9 +202,9 @@ func TestGettingStarted_SkipBlockNames(t *testing.T) {
 		}
 		for _, m := range deployRefRE.FindAllStringSubmatch(blockBody(t, doc, b.id), -1) {
 			refs++
-			require.Equalf(t, agcName, m[1],
-				"%s:%s: skipped block %q addresses %q, but the GMC names the AGC Deployment %q (agcnames.ControllerName). Nothing executes a skipped block, so this rename would reach an operator uncaught.",
-				gettingStartedDoc, b.line, b.id, m[1], agcName)
+			require.Containsf(t, []string{agcName, agcNameV2}, m[1],
+				"%s:%s: skipped block %q addresses %q, but the GMC names the AGC Deployment %q under v1 (agcnames.ControllerName) or %q under v2 (the gateway name plus controller.AGCResourceSuffix). Nothing executes a skipped block, so this rename would reach an operator uncaught.",
+				gettingStartedDoc, b.line, b.id, m[1], agcName, agcNameV2)
 		}
 	}
 

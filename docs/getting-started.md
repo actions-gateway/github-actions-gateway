@@ -329,23 +329,41 @@ When your GitHub App private key expires or is compromised, follow these steps t
        -----END RSA PRIVATE KEY-----
    ```
 
-3. **Update the `ActionsGateway` CR** to reference the new Secret name:
+3. **Update the `ActionsGateway` CR** to reference the new Secret name.
+   The field differs between the two APIs, so take the one matching the gateway you created:
 
-   <!-- gag:verify id=rotate-patch-ref mode=run needs=v1-gateway,github-app-secret-rotated teardown=none -->
+   <!-- gag:verify id=rotate-patch-ref mode=run needs=v2-gateway-set,github-app-secret-rotated teardown=none -->
    ```sh
-   kubectl patch actionsgateway -n team-a team-a-gateway \
+   # v2 (the shape Step 4 creates): the credentials union names the Secret.
+   kubectl patch actionsgateway.actions-gateway.com -n team-a team-a-gateway \
+     --type=merge -p '{"spec":{"credentials":{"githubApp":{"name":"my-github-app-v2"}}}}'
+   ```
+
+   <!-- gag:verify id=rotate-patch-ref-v1 mode=skip reason=needs-the-legacy-v1-gateway-applied -->
+   ```sh
+   # v1 (legacy): the Secret is named by a top-level ref.
+   kubectl patch actionsgateway.actions-gateway.github.com -n team-a team-a-gateway \
      --type=merge -p '{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'
    ```
 
    The GMC detects the Secret reference change, updates the AGC pod template (including an `actions-gateway/github-app-secret` annotation that records the new Secret name), and triggers a rolling update.
    The new pod mounts the new Secret and immediately begins using the new credentials.
 
-4. **Confirm the rollout completed:**
+4. **Confirm the rollout completed**, against the right Deployment: the AGC is named **per gateway** in v2, as `<gateway-name>-agc`, so a `team-a-gateway` tenant rolls `deploy/team-a-gateway-agc`.
+   Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
 
    <!-- gag:verify id=rotate-rollout-status mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
    ```sh
-   kubectl rollout status deploy/actions-gateway-controller -n team-a
+   # v2
+   kubectl rollout status deploy/team-a-gateway-agc -n team-a
    # Optionally inspect rotation history:
+   kubectl rollout history deploy/team-a-gateway-agc -n team-a
+   ```
+
+   <!-- gag:verify id=rotate-rollout-status-v1 mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
+   ```sh
+   # v1 (legacy)
+   kubectl rollout status deploy/actions-gateway-controller -n team-a
    kubectl rollout history deploy/actions-gateway-controller -n team-a
    ```
 
@@ -353,9 +371,16 @@ When your GitHub App private key expires or is compromised, follow these steps t
 
    <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
    ```sh
-   kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
+   # v2
+   kubectl logs -n team-a deploy/team-a-gateway-agc --tail=20
    # Look for: "token ready", logged on every refresh. A failure reads
    # "token fetch failed; retrying after backoff".
+   ```
+
+   <!-- gag:verify id=rotate-verify-logs-v1 mode=skip reason=needs-a-running-agc-pod -->
+   ```sh
+   # v1 (legacy)
+   kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
    ```
 
 6. **Delete the old Secret** once the rollout is confirmed healthy:
@@ -368,7 +393,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 7. **Revoke the old key** in the GitHub App settings.
 
 **Important:** Do not update the Secret in-place.
-The GMC watches the `gitHubAppRef.name` reference, not the Secret's contents.
+The GMC watches the reference, not the Secret's contents: `spec.credentials.githubApp.name` in v2, `spec.gitHubAppRef.name` in v1.
 Changing the Secret data without changing the reference name does not trigger an AGC rollout.
 The AGC continues using the cached token derived from the old key until it restarts or the token expires.
 Creating a new Secret and updating the reference is the correct rotation path.
