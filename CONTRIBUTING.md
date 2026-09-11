@@ -232,7 +232,7 @@ See [`docs/development/code-generation.md`](docs/development/code-generation.md)
 - Spell out acronyms on first use: full term, then the acronym in parentheses — e.g. "Actions Gateway Controller (AGC)".
 - Long docs (roughly 400+ lines) carry a `## Table of Contents` section after the intro, listing h2 headings (plus h3 for operator-facing docs) in document order.
   Anchors follow GitHub's slug rules — duplicate headings get `-1`/`-2` suffixes — so verify links against the rendered page.
-  On `docs/operations/upgrade.md` this is machine-checked by `make upgrade-toc-check`: add a heading there and the gate names the entry to add.
+  This is machine-checked by `make doc-toc-check` on every page that carries one: add a heading and the gate names the entry to add.
 
 ## Commits
 

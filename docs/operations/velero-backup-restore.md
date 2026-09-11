@@ -25,6 +25,7 @@ Use this page when Velero is your namespace-level backup tool.
   - [Why not restore the owned children directly](#why-not-restore-the-owned-children-directly)
 - [Secret Handling Caveats](#secret-handling-caveats)
 - [Verification](#verification)
+- [Reference Links](#reference-links)
 
 ---
 

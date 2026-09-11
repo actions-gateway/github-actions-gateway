@@ -21,6 +21,7 @@ For *why* GAG chose Kata over Sysbox/rootless and the provider-agnostic design, 
 - [Prerequisite — nested-virtualization nodes](#prerequisite--nested-virtualization-nodes)
 - [Cluster setup — Kata runtime and RuntimeClass](#cluster-setup--kata-runtime-and-runtimeclass)
 - [Configure the worker podTemplate](#configure-the-worker-podtemplate)
+- [What an unprivileged dockerd actually needs inside the guest](#what-an-unprivileged-dockerd-actually-needs-inside-the-guest)
 - [The security rationale](#the-security-rationale)
 - [Untrusted pull requests — the tight-egress posture](#untrusted-pull-requests--the-tight-egress-posture)
 - [Caveats and limitations](#caveats-and-limitations)
