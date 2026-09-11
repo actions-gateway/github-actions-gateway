@@ -54,11 +54,16 @@ const (
 	githubCABundleKey  = "ca.crt"
 )
 
+// AGCResourceSuffix is the AGC's per-gateway resource-name suffix. Exported so
+// the getting-started doc test can derive the Deployment name the install page
+// tells an operator to address; nothing under internal/ is on the wire or in
+// api/, so this is not an API surface change (Q1092).
+const AGCResourceSuffix = "-agc"
+
 // Per-gateway resource-name suffixes (§H.16 #1). Kept under the §H.6 52-char CR
 // name cap so the derived names stay within RFC 1123's 63-char label-value /
 // Service-name ceiling.
 const (
-	agcResourceSuffix      = "-agc"
 	agcWorkerSuffix        = "-worker"
 	agcWorkloadNPSuffix    = "-workload"
 	agcMetricsTLSSuffix    = "-agc-metrics-tls"
@@ -69,7 +74,7 @@ const (
 // RoleBinding, Service, and AGC NetworkPolicy all use it, and it is the pod `app`
 // label value so the NetworkPolicy and Service select exactly this gateway's AGC
 // pods (never a sibling gateway's).
-func agcNameV2(ag *gmcv2alpha1.ActionsGateway) string { return ag.Name + agcResourceSuffix }
+func agcNameV2(ag *gmcv2alpha1.ActionsGateway) string { return ag.Name + AGCResourceSuffix }
 
 // workerSANameV2 is the per-gateway worker ServiceAccount the AGC stamps on its
 // worker pods (threaded via WORKER_SERVICE_ACCOUNT); owner-referenced to the

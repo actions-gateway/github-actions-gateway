@@ -53,6 +53,7 @@ jobs:
       manifests: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.manifests || 'true' }}
       promql: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.promql || 'true' }}
       dashboards: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.dashboards || 'true' }}
+      dashboard_tables: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.dashboard_tables || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -130,6 +131,18 @@ jobs:
             # judges the branch's whole diff against the merge base, so the PNG
             # half has to trigger it too: a PR whose only later push is the
             # render must re-run and go green.
+            # The tables gate compares the doc's panel tables to the shipped
+            # dashboards, so its trigger set is both sides of that comparison
+            # (Q1091). It shares the JSON half with `dashboards` and adds the
+            # doc, which the render gate never reads.
+            dashboard_tables:
+              - 'deploy/monitoring/grafana-dashboard-*.json'
+              - 'docs/operations/observability-dashboards.md'
+              - 'scripts/manifest/check-dashboard-tables.py'
+              - 'scripts/manifest/check-dashboard-tables.sh'
+              - 'Makefile'
+              - 'mk/gate-lists.mk'
+              - '.github/workflows/manifest-validate.yml'
             dashboards:
               - 'deploy/monitoring/grafana-dashboard-*.json'
               - 'docs/assets/grafana-dashboard-*.png'
@@ -271,13 +284,30 @@ jobs:
       - name: dashboards ship their screenshots (make dashboard-render-check)
         run: make dashboard-render-check
 
+  # Hold the dashboard doc's panel tables to the shipped dashboards (Q1091).
+  # Its own job rather than a step in `promql`: that one installs Go to parse
+  # expressions, and this reads only the row structure, in python3 the runner
+  # image already carries. Separate from `dashboard-render` too, because a
+  # drifted table and a missing screenshot are different verdicts on the PR.
+  dashboard-tables:
+    needs: [changes]
+    if: needs.changes.outputs.dashboard_tables == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the dashboard doc's tables match the dashboards (make dashboard-tables-check)
+        run: make dashboard-tables-check
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`manifest-validate-gate`) required in the branch ruleset — never the
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Passes only when every needed job succeeded or was
   # legitimately skipped. See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   manifest-validate-gate:
-    needs: [changes, validate, promql, dashboard-render]
+    needs: [changes, validate, promql, dashboard-render, dashboard-tables]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

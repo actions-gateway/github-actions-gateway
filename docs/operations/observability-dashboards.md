@@ -162,7 +162,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 |-------|-------|---------------|
 | Gateway condition rollups | `actions_gateway_runnergroups_degraded` / `_egress_rules_stale` / `_proxy_quota_pressure` / `_proxy_quota_exceeded` (v1); `_runnersets_degraded` / `_agc_available` / `_egress_unattributed` / `_scale_set_name_collision` (v2); `_github_egress_incomplete` (v2 `EgressProxy` only) | State timeline (1 = firing) |
 
-**Row 4 — Cross-tenant Throughput** (requires the per-tenant AGC scrapes)
+**Row 4 — Cross-tenant Throughput (requires per-tenant scrape)**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|

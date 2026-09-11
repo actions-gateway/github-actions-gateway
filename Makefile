@@ -218,6 +218,15 @@ upgrade-toc-check: ## Fail when upgrade.md's Table of Contents has lost, gained,
 make-targets-check: ## Fail when prose names a `make` target that exists in no Makefile
 	scripts/docs/check-make-targets.sh
 
+# The .gag-pillars grid is a scanning surface, so a bullet that wraps to a
+# second line reads as prose among labels. website.md stated the invariant and
+# its two measured column budgets and nothing checked them: two bullets on
+# why-gag.md had drifted over, on a page the doc recorded as compliant a month
+# earlier (Q711).
+.PHONY: card-bullets-check
+card-bullets-check: ## Fail when a card-grid bullet is too long for the column it renders in
+	scripts/docs/check-card-bullets.sh
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
 # dashboards beside it had their panel queries parsed by nothing either (Q910):
@@ -237,6 +246,15 @@ promql-check: ## Fail on unparseable PromQL in the rules or the dashboards, or a
 .PHONY: dashboard-render-check
 dashboard-render-check: ## Fail when a dashboard changed beyond its panel descriptions and its screenshot did not
 	scripts/manifest/check-dashboard-render.sh
+
+# Q961 reconciled the dashboard doc's four panel tables against the shipped JSON
+# by hand, and both instances it found were invisible to every gate: a duplicate
+# `Row 7` in the tenant section, and a panel that had escaped its table to render
+# as literal pipe-separated text. promql-check reads the JSON's expressions and
+# never the prose; dashboard-render-check is a screenshot gate (Q1091).
+.PHONY: dashboard-tables-check
+dashboard-tables-check: ## Fail when the dashboard doc's panel tables have drifted from the shipped dashboards
+	scripts/manifest/check-dashboard-tables.sh
 
 # Three files hold one endpoint set between them: the mirror Deployments, their
 # Services, and the tenant ConfigMap wiring the e2e job's image clients to them
