@@ -385,6 +385,7 @@ jobs:
       - page-density
       - doc-toc
       - card-bullets
+      - make-targets
       - md-reflow
       - comparison-stamps
       - script-docs
