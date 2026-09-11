@@ -195,6 +195,28 @@ jobs:
       - name: prose names only targets that exist (make make-targets-check)
         run: make make-targets-check
 
+  # Hold the .gag-pillars card bullets to their column budgets (Q711). It
+  # belongs here for the reason em-dash does: its only input is two Markdown
+  # pages, and unit-test.yml path-ignores docs, so a bullet that outgrew its
+  # column would reach no gate there. Its own job so an over-long bullet reads
+  # apart from a dead link.
+  #
+  # setup-go because the gate builds .build/cardbullets from devtools/ first.
+  # Pinned to go.work for the reason the md-reflow job gives: it keeps the
+  # verdict off whatever the runner image happens to default to.
+  card-bullets:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: card bullets fit their column (make card-bullets-check)
+        run: make card-bullets-check
+
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
   # Q831 worth measuring: it lived in CHECK_FAST_GATES alone, so prose that had

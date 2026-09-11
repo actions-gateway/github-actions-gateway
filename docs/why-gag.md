@@ -264,7 +264,7 @@ Built for shared clusters running other teams' code: the multi-tenant hardening 
     - App keys read-only; never in env, never cached
     - Or opt in to [no App key in the cluster at all](design/05-security.md#57-workload-identity-the-no-pem-delegation-model)
     - Controller writes confined to tenant namespaces
-    - [Sharing a proxy across namespaces needs the owner's consent](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)
+    - [Sharing a proxy needs the owner's consent](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)
 
 -   :material-clipboard-check:{ .lg .middle } __Lower operational cost__
 
@@ -285,7 +285,7 @@ Built for shared clusters running other teams' code: the multi-tenant hardening 
     - Default-deny ingress, cluster-only DNS
     - Per-tenant egress IPs, mutual-TLS metrics
     - Signed images, SBOM, and SLSA provenance
-    - [Three validated worker templates](operations/runner-template-library.md), one `kubectl apply -k`
+    - [Three worker templates](operations/runner-template-library.md), one `kubectl apply -k`
 
 </div>
 </div>

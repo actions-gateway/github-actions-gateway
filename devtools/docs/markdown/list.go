@@ -42,6 +42,11 @@ type ListItem struct {
 	// paragraph however many lines it spans, so more than one entry means a
 	// blank line separates two blocks inside the item.
 	ParagraphLines []int
+	// Depth is the item's list nesting, 1 for an item of a list the document
+	// holds directly and one more for each list inside an item. Text includes
+	// an item's nested items, so a gate measuring a bullet on its own has to
+	// say which depth it means.
+	Depth int
 }
 
 // TopLevelListItems returns, in source order, the items of every list that is a
@@ -56,10 +61,37 @@ func (d *Document) TopLevelListItems() []ListItem {
 		}
 		for c := list.FirstChild(); c != nil; c = c.NextSibling() {
 			if item, ok := c.(*ast.ListItem); ok {
-				items = append(items, d.listItem(item))
+				it := d.listItem(item)
+				it.Depth = 1
+				items = append(items, it)
 			}
 		}
 	}
+	return items
+}
+
+// ListItems returns every list item in the document, at any nesting, in
+// source order. Each carries its Depth, so a caller wanting only the bullets
+// inside a card — rather than the cards themselves — filters on it.
+func (d *Document) ListItems() []ListItem {
+	var items []ListItem
+	depth := 0
+	_ = ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if _, ok := n.(*ast.List); ok {
+			if entering {
+				depth++
+			} else {
+				depth--
+			}
+			return ast.WalkContinue, nil
+		}
+		if item, ok := n.(*ast.ListItem); ok && entering {
+			it := d.listItem(item)
+			it.Depth = depth
+			items = append(items, it)
+		}
+		return ast.WalkContinue, nil
+	})
 	return items
 }
 

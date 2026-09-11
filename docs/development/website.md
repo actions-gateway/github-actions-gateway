@@ -416,8 +416,10 @@ An expansion that does not fit is the wrong fix, not the bullet's fault.
 Prefer the plain term over `Term (ACR)` in a card, and bind the acronym in prose elsewhere on the page, where the layout imposes no budget.
 Where no such prose exists, let the linked detail page carry the definition.
 
-Verify by rendering.
-Reading the Markdown cannot answer this question, and neither can counting characters:
+`make card-bullets-check` holds the budgets above, measuring the rendered text rather than the source (Q711).
+It is a proxy for a proportional face, so it catches a bullet that is over budget in characters and not one that is under budget and wraps on its glyphs.
+Verify that second case by rendering.
+Reading the Markdown cannot answer it, and neither can counting characters:
 
 ```js
 // make docs-serve, then on / or /why-gag/
