@@ -990,18 +990,26 @@ SYMLINK_MODE = "120000"
 
 
 def tracked_files():
-    """Tracked paths with symlinks dropped, so a linked file is counted once.
+    """Tracked paths present in the working tree, with symlinks dropped.
 
     Opening every path from ``git ls-files`` follows the link and counts the
     target a second time: `AGENTS.md` -> `CLAUDE.md` and two `testdata/` doc
     links put 623 Markdown lines into the head snapshot that the series never
     had, which is most of the gap between the two counts.
+
+    ``ls-files`` reads the index, so it still lists a tracked file the working
+    tree no longer has. The snapshot below opens every path it is handed, so an
+    unstaged deletion raised ``FileNotFoundError`` and reddened the whole gate
+    (Q964) — in exactly the state a session mid-deletion runs ``make check``
+    from. Dropping the absent path here rather than guarding each ``open`` keeps
+    the file census and the line counts derived from one list.
     """
     paths = []
     for ln in git("ls-files", "-s").splitlines():
         meta, _, path = ln.partition("\t")
         if path and not meta.startswith(SYMLINK_MODE):
-            paths.append(path)
+            if os.path.exists(os.path.join(REPO, path)):
+                paths.append(path)
     return paths
 
 
