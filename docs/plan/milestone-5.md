@@ -340,7 +340,7 @@ The following e2e §7.3 specs already exist; M5 reuses them at higher scale rath
 
 ## 8. Deferred / out of scope
 
-- **Cost benchmarking** under realistic load — covered by [docs/plan/docs.md §3.4](docs.md) and [docs/design/appendix-f-cost-model.md](../design/appendix-f-cost-model.md).
+- **Cost benchmarking** under realistic load — covered by [docs/plan/archive/docs.md §3.4](archive/docs.md) and [docs/design/appendix-f-cost-model.md](../design/appendix-f-cost-model.md).
   Use the M5 harness as data source once it lands.
 - **Long-running soak test** (24h+) — useful but separate; not in the 4-day design budget.
 - **Chaos testing** (pod kill, network partition) — defer to a future hardening pass.

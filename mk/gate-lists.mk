@@ -62,7 +62,7 @@ CHECK_FAST_GATES := roadmap-check \
                     registry-mirror-render-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check rung-order-check \
-                    upgrade-toc-check make-targets-check card-bullets-check \
+                    doc-toc-check make-targets-check card-bullets-check \
                     endpoint-parity-check \
                     release-notes-check \
                     dashboard-render-check dashboard-tables-check \
@@ -105,7 +105,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
                  roadmap-check plan-index-check \
                  conflict-markers-check doc-links em-dash-check md-reflow-check \
-                 page-density-check \
+                 page-density-check doc-toc-check \
                  release-ladder-check
 
 # The gates a prose change can fail, for the same reason QUEUE_GATES exists one
@@ -124,7 +124,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   page-density-check   an admonition wall, or a stat tile repeated across pages
 #   release-pins-check   an install/upgrade page pinning a superseded release
 #   release-notes-check  a release note with a duplicate h1, a dead in-page anchor, or a `v`-prefixed chart version
-#   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
+#   doc-toc-check        a heading added to a page that its own hand-kept index never gained
 #   make-targets-check   prose naming a `make` target that exists in no Makefile
 #   card-bullets-check   a .gag-pillars card bullet too long for the column it renders in
 #   dashboard-tables-check the dashboard doc's panel tables drifted from the shipped dashboard JSON
@@ -163,7 +163,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               getting-started-check \
               queue-lint queue-rules-check queue-claims-check \
               md-reflow-check page-density-check release-pins-check \
-              release-notes-check upgrade-toc-check make-targets-check \
+              release-notes-check doc-toc-check make-targets-check \
               card-bullets-check dashboard-tables-check \
               conflict-markers-check \
               release-ladder-check \
@@ -250,7 +250,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
-                 docs/check-upgrade-toc-test docs/check-make-targets-test docs/check-card-bullets-test manifest/check-dashboard-tables-test \
+                 docs/check-doc-toc-test docs/check-make-targets-test docs/check-card-bullets-test manifest/check-dashboard-tables-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \

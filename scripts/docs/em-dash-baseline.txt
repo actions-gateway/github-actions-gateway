@@ -96,6 +96,7 @@
 13 docs/plan/archive/backlog-dev-site-page.md
 7 docs/plan/archive/claude-md-hook-rule-retirement.md
 15 docs/plan/archive/competitive-analysis.md
+26 docs/plan/archive/docs.md
 6 docs/plan/archive/drop-kustomize.md
 17 docs/plan/archive/e2e-progress-visibility.md
 9 docs/plan/archive/gaps.md
@@ -182,7 +183,6 @@
 42 docs/plan/docker-image-speed.md
 13 docs/plan/docs-page-boundaries.md
 32 docs/plan/docs-six-layer-audit.md
-27 docs/plan/docs.md
 64 docs/plan/dogfood-runner-rightsizing.md
 33 docs/plan/e2e-ci-speed-round-2.md
 49 docs/plan/e2e-tests-speed.md

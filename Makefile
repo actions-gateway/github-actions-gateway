@@ -204,15 +204,14 @@ em-dash-check: ## Fail when a doc gains em-dashes above its baseline, or a new d
 page-density-check: ## Fail on an admonition wall, or a stat tile saying the same thing on two pages
 	scripts/docs/check-page-density.sh
 
-# upgrade.md's hand-kept index against its own headings (Q865). doc-links can
-# only fail an anchor that is written, so a heading the index never mentions has
-# no link to check and drops out of the page's own map in silence: three had,
-# and the entries for three more had drifted out of document order. Scoped to
-# that one page — every other doc either has no hand-kept index or is short
-# enough to read whole, and a repo-wide version wants its own item.
-.PHONY: upgrade-toc-check
-upgrade-toc-check: ## Fail when upgrade.md's Table of Contents has lost, gained, or reordered a heading
-	scripts/docs/check-upgrade-toc.sh
+# Every hand-kept index in docs/ against its own headings (Q865, widened by
+# Q911). doc-links can only fail an anchor that is written, so a heading the
+# index never mentions has no link to check and drops out of the page's own map
+# in silence: 31 had, across five operator pages. How deep a page indexes is
+# read off its own entries, so no page is registered anywhere.
+.PHONY: doc-toc-check
+doc-toc-check: ## Fail when a hand-kept Table of Contents has lost, gained, or reordered a heading
+	scripts/docs/check-doc-toc.sh
 
 .PHONY: make-targets-check
 make-targets-check: ## Fail when prose names a `make` target that exists in no Makefile

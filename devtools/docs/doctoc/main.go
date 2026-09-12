@@ -1,14 +1,14 @@
-// Command upgradetoc holds the hand-kept Table of Contents in
-// docs/operations/upgrade.md to the headings it indexes (Q865). It is the
-// checker behind scripts/docs/check-upgrade-toc.sh, which resolves the file.
+// Command doctoc holds a page's hand-kept Table of Contents to the headings it
+// indexes (Q865, widened to the tree by Q911). It is the checker behind
+// scripts/docs/check-doc-toc.sh, which selects the pages.
 //
 // doc-links already resolves every `#anchor` in the tree, but it can only fail
 // an anchor that is *written*: a heading the TOC never mentions has no link to
 // check, so the page's own index silently stops covering it. Measured
-// 2026-08-18 on upgrade.md: 50 indexable headings against 47 entries, with two
-// migration notes and one GMC subsection reachable only by scrolling, plus one
-// entry listed two places early, which left three of them out of document
-// order.
+// 2026-09-11 over the 20 pages carrying a `## Table of Contents`: five have
+// headings their own index never names — security-operations.md 16,
+// troubleshooting.md 12, and one each on backup-restore.md,
+// kata-dind-workloads.md and velero-backup-restore.md.
 //
 // It fails on:
 //
@@ -17,15 +17,27 @@
 //  3. An entry sequence that does not follow document order, or whose nesting
 //     does not follow heading level.
 //
-// Indexable means level 2 or 3, excluding the page title and the Table of
-// Contents heading itself: the depth documentation-standards.md already asks
-// of an operator-facing doc, not a rule invented here. The level-4 steps under
-// a migration note are procedure detail the index stops above.
+// # How deep a page indexes is read off the page
 //
-// Out of scope, deliberately: an entry's link *text*. The TOC writes some
+// documentation-standards.md asks for h2s "plus h3 for operator docs", which
+// is a choice each page makes rather than one rule to apply to all 20. The
+// page states its choice in its own index: a TOC whose entries already name a
+// level-3 heading indexes level 3, and one that names only level-2 headings
+// indexes level 2. Nothing is registered anywhere, so a page gaining a TOC
+// needs no edit here.
+//
+// The blind spot that leaves: the gate cannot tell a page that indexes level 2
+// by convention from one that indexed level 3 and has since lost every level-3
+// entry, because both look the same from the index. It holds each page to the
+// depth the page currently demonstrates, so drift within a depth is caught and
+// a ratchet down a whole level is not. Level 4 and deeper are never indexable:
+// those are the procedure steps under a migration note, which the index stops
+// above whatever the page does.
+//
+// Out of scope, deliberately: an entry's link *text*. The TOCs write some
 // heading titles with their code spans and some without, so holding the text
-// to the heading would be a rewrite of the page rather than a gate on its
-// index — and the text is not what makes a section reachable. A heading
+// to the heading would be a rewrite of the pages rather than a gate on their
+// indexes — and the text is not what makes a section reachable. A heading
 // renamed within one slug therefore leaves the entry's text stale, which no
 // gate here reports.
 //
@@ -35,10 +47,10 @@
 //
 // Usage:
 //
-//	upgradetoc <upgrade.md>
+//	doctoc <page.md> [page.md ...]
 //
 // Findings print as `file:line: message`, or as GitHub `::error::` annotations
-// when GITHUB_ACTIONS is set. Exits 1 on any finding, and 2 when the page's
+// when GITHUB_ACTIONS is set. Exits 1 on any finding, and 2 when a page's
 // shape drifted far enough that the gate would otherwise pass by checking
 // nothing.
 package main
@@ -56,30 +68,45 @@ import (
 	"github.com/yuin/goldmark/ast"
 )
 
-// tocHeading is the section the entries live under, and maxLevel the deepest
-// heading it indexes.
+// tocHeading is the section the entries live under, and deepestLevel the
+// deepest heading any page's index may reach. A page's own depth is read off
+// its entries and never exceeds this.
 const (
-	tocHeading = "Table of Contents"
-	maxLevel   = 3
+	tocHeading   = "Table of Contents"
+	deepestLevel = 3
 )
 
 func main() {
 	flag.Parse()
-	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: upgradetoc <upgrade.md>")
+	if flag.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, "usage: doctoc <page.md> [page.md ...]")
 		os.Exit(2)
 	}
 
 	out := bufio.NewWriter(os.Stdout)
-	findings, err := run(flag.Arg(0), out, os.Getenv("GITHUB_ACTIONS") != "")
-	if ferr := out.Flush(); err == nil {
-		err = ferr
+	gha := os.Getenv("GITHUB_ACTIONS") != ""
+	total, refused := 0, false
+	for _, file := range flag.Args() {
+		n, err := run(file, out, gha)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "doctoc: %v\n", err)
+			refused = true
+			continue
+		}
+		total += n
 	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "upgradetoc: %v\n", err)
+	if err := out.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "doctoc: %v\n", err)
+		refused = true
+	}
+
+	// A refusal outranks a finding: it means some page was not checked at all,
+	// and reporting only the findings would read as a complete pass over the
+	// set.
+	if refused {
 		os.Exit(2)
 	}
-	if findings > 0 {
+	if total > 0 {
 		os.Exit(1)
 	}
 }
@@ -101,12 +128,13 @@ func run(file string, out io.Writer, gha bool) (int, error) {
 	if len(entries) == 0 {
 		return 0, fmt.Errorf("%s: the `## %s` section holds no links, so this gate would check nothing", file, tocHeading)
 	}
-	want := indexable(doc)
+	depth := indexedDepth(doc, entries)
+	want := indexable(doc, depth)
 	if len(want) == 0 {
-		return 0, fmt.Errorf("%s has no level-2 or level-3 headings outside its index, so this gate would check nothing", file)
+		return 0, fmt.Errorf("%s has no level-2 heading outside its index, so this gate would check nothing", file)
 	}
 
-	findings := compare(want, entries)
+	findings := compare(want, entries, depth)
 	for _, f := range findings {
 		if gha {
 			_, _ = fmt.Fprintf(out, "::error file=%s,line=%d::%s\n", file, f.line, f.msg)
@@ -116,11 +144,11 @@ func run(file string, out io.Writer, gha bool) (int, error) {
 	}
 	name := filepath.Base(file)
 	if n := len(findings); n > 0 {
-		_, _ = fmt.Fprintf(out, "check-upgrade-toc: FAILED — %s's Table of Contents does not match its headings (%d finding%s)\n",
+		_, _ = fmt.Fprintf(out, "doctoc: FAILED — %s's Table of Contents does not match its headings (%d finding%s)\n",
 			name, n, plural(n))
 		return n, nil
 	}
-	_, _ = fmt.Fprintf(out, "check-upgrade-toc: ok (%s, %d headings indexed by %d entries)\n", name, len(want), len(entries))
+	_, _ = fmt.Fprintf(out, "doctoc: ok (%s, %d headings to level %d indexed by %d entries)\n", name, len(want), depth, len(entries))
 	return 0, nil
 }
 
@@ -153,17 +181,39 @@ type finding struct {
 }
 
 // indexable returns, in document order, the headings the TOC is expected to
-// carry. Level 2 sits at the top of the list and each further level nests one
-// deeper, which is how the page already writes it.
-func indexable(doc *markdown.Document) []heading {
+// carry, down to the level this page indexes. Level 2 sits at the top of the
+// list and each further level nests one deeper, which is how the pages already
+// write it.
+func indexable(doc *markdown.Document, depth int) []heading {
 	var out []heading
 	for _, h := range doc.Headings() {
-		if h.Level < 2 || h.Level > maxLevel || h.Text == tocHeading {
+		if h.Level < 2 || h.Level > depth || h.Text == tocHeading {
 			continue
 		}
 		out = append(out, heading{text: h.Text, anchor: h.Slug, depth: h.Level - 1, line: h.Line})
 	}
 	return out
+}
+
+// indexedDepth reports how deep this page's index reaches: the deepest heading
+// level its own entries already name, floored at 2 and capped at deepestLevel.
+// The entries are read rather than the bullet nesting, so an entry written flat
+// still says the page indexes that level — which keeps a mis-nested entry a
+// nesting finding rather than turning it into a dangling one.
+func indexedDepth(doc *markdown.Document, entries []entry) int {
+	level := map[string]int{}
+	for _, h := range doc.Headings() {
+		if _, dup := level[h.Slug]; !dup {
+			level[h.Slug] = h.Level
+		}
+	}
+	depth := 2
+	for _, e := range entries {
+		if l := level[e.anchor]; l > depth && l <= deepestLevel {
+			depth = l
+		}
+	}
+	return depth
 }
 
 // tocEntries returns the same-page links in the TOC section, in source order,
@@ -234,7 +284,7 @@ func enclosingItem(n ast.Node) ast.Node {
 // each is a section a reader cannot reach from the index; order and nesting are
 // then reported against what remains, at the first bullet that departs, since
 // one moved entry displaces every entry after it.
-func compare(want []heading, got []entry) []finding {
+func compare(want []heading, got []entry, depth int) []finding {
 	seen := map[string]int{}
 	for _, e := range got {
 		seen[e.anchor]++
@@ -258,7 +308,7 @@ func compare(want []heading, got []entry) []finding {
 		switch {
 		case known[e.anchor].anchor == "":
 			findings = append(findings, finding{e.line, fmt.Sprintf(
-				"Table of Contents entry #%s names no level-2 or level-3 heading in this page", e.anchor)})
+				"Table of Contents entry #%s names no heading this page indexes, whose index reaches level %d", e.anchor, depth)})
 		case counted[e.anchor] > 1:
 			findings = append(findings, finding{e.line, fmt.Sprintf(
 				"Table of Contents lists #%s more than once", e.anchor)})

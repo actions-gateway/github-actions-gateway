@@ -1,7 +1,7 @@
 # Six-Layer Documentation Audit
 
 Bring the `docs/` set into line with the six-layer model of technical documentation (terminology, cross-references, version/conditional logic, metadata/taxonomy, navigation/hierarchy, reusable blocks).
-This is a **consistency audit plus small fixes**, not a content-gap roadmap (that is [`docs.md`](docs.md), Phases 1–3, done) and not a restructure.
+This is a **consistency audit plus small fixes**, not a content-gap roadmap (that is [`archive/docs.md`](archive/docs.md), Phases 1–3, done) and not a restructure.
 
 ## Status at a glance
 

@@ -2,37 +2,30 @@
 
 ## Status at a glance
 
-Last refreshed 2026-08-01.
-All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 ([Q568](../queue/Q568.md)).
+Last refreshed 2026-09-11.
+Every Phase 1, Phase 2, and Phase 3 item has shipped.
 
 | # | Item | File | Status |
 |---|---|---|---|
-| 1.1 | Troubleshooting guide | [docs/operations/troubleshooting.md](../operations/troubleshooting.md) | ✅ Done |
-| 1.2 | Production runbook | [docs/operations/runbook.md](../operations/runbook.md) | ✅ Done |
-| 1.3 | Upgrade and rollback | [docs/operations/upgrade.md](../operations/upgrade.md) | ✅ Done |
+| 1.1 | Troubleshooting guide | [docs/operations/troubleshooting.md](../../operations/troubleshooting.md) | ✅ Done |
+| 1.2 | Production runbook | [docs/operations/runbook.md](../../operations/runbook.md) | ✅ Done |
+| 1.3 | Upgrade and rollback | [docs/operations/upgrade.md](../../operations/upgrade.md) | ✅ Done |
 | 2.1 | Fix `maxEvictionRetries` inconsistency | `docs/design/03-api-contracts.md §3.1` | ✅ Done — fields now in CRD spec (lines 364, 382) |
 | 2.2 | Failure paths in operational flows | `docs/design/04-operational-flows.md §4.3` | ✅ Done — provisioning failure, broker error, eviction retry sections added |
 | 2.3 | Worked examples in capacity-planning appendix | `docs/design/appendix-e-capacity-planning.md` | ✅ Done — §E.10 has three concrete scenarios (GPU team, CPU team, shard walkthrough) |
-| 2.4 | Expand observability.md (alerts, symptoms, cardinality, ServiceMonitor) | [docs/operations/observability.md](../operations/observability.md) | ✅ Done |
+| 2.4 | Expand observability.md (alerts, symptoms, cardinality, ServiceMonitor) | [docs/operations/observability.md](../../operations/observability.md) | ✅ Done |
 | 2.5 | Credential rotation in getting-started | `docs/getting-started.md:101` | ✅ Done |
 | 2.6 | `DefaultWorkerImage` note in API contracts | `docs/design/03-api-contracts.md` | ✅ Done — constant name, location, and --worker-image override documented in WorkerImage field comment |
 | 2.7 | HPA silent-failure callout on ProxyConfig | `docs/design/03-api-contracts.md` | ✅ Done — Resources comment already includes the HPA `<unknown>` warning |
 | 2.8 | Reading-path guide in design README | `docs/design/README.md` | ✅ Done |
-| 3.1 | Network architecture doc | [docs/design/network-architecture.md](../design/network-architecture.md) | ✅ Done |
-| 3.2 | Alerting and dashboards doc | [docs/operations/observability-alerting.md](../operations/observability-alerting.md) | ⚠️ Mostly done — alert rules, SLO recording rules and runbook links shipped (under `observability-alerting.md`, not the planned `alerting.md`); Grafana dashboards remain, tracked as [Q568](../queue/Q568.md) |
-| 3.3 | Tenant onboarding checklist | [docs/operations/tenant-onboarding.md](../operations/tenant-onboarding.md) | ✅ Done |
-| 3.4 | Cost modeling appendix | [docs/design/appendix-f-cost-model.md](../design/appendix-f-cost-model.md) | ✅ Done |
+| 3.1 | Network architecture doc | [docs/design/network-architecture.md](../../design/network-architecture.md) | ✅ Done |
+| 3.2 | Alerting and dashboards doc | [docs/operations/observability-alerting.md](../../operations/observability-alerting.md) | ✅ Done — alert rules, SLO recording rules and runbook links shipped as `observability-alerting.md` rather than the planned `alerting.md`; the four dashboards ship under [`deploy/monitoring/`](../../../deploy/monitoring/README.md) and are documented in [observability-dashboards.md](../../operations/observability-dashboards.md) (Q568) |
+| 3.3 | Tenant onboarding checklist | [docs/operations/tenant-onboarding.md](../../operations/tenant-onboarding.md) | ✅ Done |
+| 3.4 | Cost modeling appendix | [docs/design/appendix-f-cost-model.md](../../design/appendix-f-cost-model.md) | ✅ Done |
 | X | Token-refresh alerting threshold cross-link | `docs/design/07-test-plan.md §7.1` | ✅ Done |
 | X | Appendices C, E in design README TOC | `docs/design/README.md` | ✅ Done |
 | X | `observability.md` linked from design README | `docs/design/README.md` | ✅ Done |
 | X | `getting-started.md` linked from design README | `docs/design/README.md` | ✅ Done |
-
-### Open work
-
-1. **3.2** — Alerting/dashboards reference.
-   Deferred until a real Prometheus setup exists (💤 in STATUS.md queue).
-
----
 
 ## Current state
 

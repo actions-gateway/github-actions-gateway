@@ -163,22 +163,22 @@ jobs:
       - name: admonition + stat-tile density (make page-density-check)
         run: make page-density-check
 
-  # Hold upgrade.md's hand-kept index to its own headings (Q865). It belongs
-  # here for the reason doc-links does, and it is the blind spot doc-links
-  # leaves: that gate resolves the anchors a page writes, so a heading the index
-  # never mentions has no link for it to fail. Its own job so a section that has
-  # dropped out of the page's map reads apart from a dead link. No setup-go, as
-  # with the em-dash job it shares a module with — the runner image's toolchain
-  # builds devtools/.
-  upgrade-toc:
+  # Hold every hand-kept index in docs/ to its own headings (Q865, widened by
+  # Q911). It belongs here for the reason doc-links does, and it is the blind
+  # spot doc-links leaves: that gate resolves the anchors a page writes, so a
+  # heading the index never mentions has no link for it to fail. Its own job so
+  # a section that has dropped out of a page's map reads apart from a dead link.
+  # No setup-go, as with the em-dash job it shares a module with — the runner
+  # image's toolchain builds devtools/.
+  doc-toc:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: upgrade.md's index matches its headings (make upgrade-toc-check)
-        run: make upgrade-toc-check
+      - name: hand-kept indexes match their headings (make doc-toc-check)
+        run: make doc-toc-check
 
   # Hold prose naming a `make` target to the targets that exist (Q1012). It
   # belongs here for the reason doc-links does: a named-but-absent target is the
@@ -383,7 +383,9 @@ jobs:
       - doc-links
       - em-dash
       - page-density
-      - upgrade-toc
+      - doc-toc
+      - card-bullets
+      - make-targets
       - md-reflow
       - comparison-stamps
       - script-docs

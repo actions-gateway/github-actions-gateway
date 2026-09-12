@@ -11,6 +11,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [How to Validate a Fresh Deployment](#how-to-validate-a-fresh-deployment)
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
+- [helm upgrade Fails With nil pointer evaluating interface {}.FIELD](#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field)
 - [Every RunnerGroup / RunnerSet Write Denied: no params found for policy binding](#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding)
 - [GMC Exits at Startup: an Installed CRD Schema Is Older Than the GMC](#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
@@ -27,12 +28,15 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
 - [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
+- [Self-Serviced PriorityClasses Stopped Being Accepted All At Once](#self-serviced-priorityclasses-stopped-being-accepted-all-at-once)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [ScaleSet RunnerSet Stuck Not Ready: `ScaleSetListenerStartFailed` Naming the Guard ConfigMap](#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap)
 - [AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing](#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing)
 - [AGC Exits at Startup: Proxy CA Cert Present but Unreadable](#agc-exits-at-startup-proxy-ca-cert-present-but-unreadable)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
+- [Listener Stalls for Minutes After a Black-Holed Broker Connection](#listener-stalls-for-minutes-after-a-black-holed-broker-connection)
+- [Reconcile or Token Mint Hangs on a Slow GitHub Endpoint](#reconcile-or-token-mint-hangs-on-a-slow-github-endpoint)
 - [Orphaned RunnerGroup After Removing It From the Spec](#orphaned-runnergroup-after-removing-it-from-the-spec)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created)
@@ -46,19 +50,24 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [ActionsGateway Deletion Hangs on WaitingForWorkerDrain](#actionsgateway-deletion-hangs-on-waitingforworkerdrain)
 - [Agent Pool Blocked: Another Tenant Owns the Agent Secret](#agent-pool-blocked-another-tenant-owns-the-agent-secret)
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
+- [Scale-Set Jobs Waiting at the Worker Ceiling (WorkerCeilingReached)](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached)
+- [Scale-Set Assignments Abandoned (AssignmentAbandoned)](#scale-set-assignments-abandoned-assignmentabandoned)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
 - [Worker Image Runner Version](#worker-image-runner-version)
 - [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
+- [Proxy Tunnel Cut During a Rollout](#proxy-tunnel-cut-during-a-rollout)
 - [Metrics scrape returns a TLS / connection error](#metrics-scrape-returns-a-tls--connection-error)
+- [Jobs Targeting One of a Runner Set's Labels Never Start (RunnerLabelsIncomplete)](#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete)
 - [RateLimited Condition on ActionsGateway](#ratelimited-condition-on-actionsgateway)
 - [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration)
 - [Token Refresh Errors Spiking](#token-refresh-errors-spiking)
 - [RenewJob Failures Rising](#renewjob-failures-rising)
 - [Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)](#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero)
 - [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner)
+- [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition)
 - [Network Connectivity Failures](#network-connectivity-failures)
 - [AGC Crash-Loops Dialling the API Server Through the Egress Proxy](#agc-crash-loops-dialling-the-api-server-through-the-egress-proxy)
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
@@ -73,6 +82,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
 - [Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)](#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)
+- [Why Is My RunnerSet Not Being Offered Jobs?](#why-is-my-runnerset-not-being-offered-jobs)
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
 - [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
 - [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
@@ -80,11 +90,13 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
 - [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
+- [RunnerSet or ActionsGateway Rejected: Agent Identity Already Claimed](#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed)
 - [`ActionsGateway` Reports `ScaleSetNameCollision`](#actionsgateway-reports-scalesetnamecollision)
 - [`RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory](#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [`RunnerSet` Stuck `Ready=False` With `RunnerGroupNotFound`](#runnerset-stuck-readyfalse-with-runnergroupnotfound)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
+- [RunnerSet or gateway reports EgressUnattributed (direct egress) (v2alpha1)](#runnerset-or-gateway-reports-egressunattributed-direct-egress-v2alpha1)
 - [`AGCAutoscalingUnavailable` — the VPA CRDs are not installed](#agcautoscalingunavailable--the-vpa-crds-are-not-installed)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
 - [v2 Objects Not Reconciling After Installing the CRD Chart](#v2-objects-not-reconciling-after-installing-the-crd-chart)
@@ -2156,17 +2168,35 @@ proxy:
       memory: "64Mi"
 ```
 
-After updating the spec, patch the proxy Deployment or trigger a rollout; the HPA will start computing utilization on the next metrics scrape cycle (~30s).
+After updating the spec, patch the proxy Deployment or trigger a rollout.
+Recovery takes longer than one scrape: the patch recreates the pod, and metrics-server has to observe the new one for a resolution interval before the HPA controller reads it on a sync of its own.
+Measured on Kubernetes v1.36.1 with metrics-server v0.8.1 at its shipped `--metric-resolution=15s`, 2026-09-11, patching `requests.cpu` onto a pool that declared none: `ScalingActive` went `True` 37s, 45s and 45s after the patch across three runs.
+Budget a minute, and read the `ScalingActive` condition rather than watching `TARGETS`: the condition flips in one step, while `TARGETS` shows `<unknown>` until it does.
 
 **Second likely cause: the namespace `ResourceQuota` won't admit the replicas the HPA wants.** The HPA computes utilization correctly but the proxy Deployment cannot create more pods because the platform-owned namespace `ResourceQuota` is the hard cap.
-Under load the pool wedges below its target and the Deployment/ReplicaSet logs `FailedCreate ... exceeded quota` events instead of scaling out.
+Under load the pool wedges below its target and the rejected creates surface in two places at once.
+The **ReplicaSet** records a `Warning` Event with reason `FailedCreate`, and the **Deployment** carries the same text as `ReplicaFailure=True`, also with reason `FailedCreate`:
+
+```text
+Error creating: pods "actions-gateway-proxy-<replicaset>-<id>" is forbidden: exceeded quota: <quota-name>, requested: limits.cpu=100m,limits.memory=64Mi,pods=1,requests.cpu=10m,requests.memory=32Mi, used: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi, limited: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi
+```
+
+Match on the reason rather than the message, as with the `<unknown>` causes above: `FailedCreate` is stable API surface and the message names every quota dimension, not only the one that bound.
+(Measured on Kubernetes v1.36.1, 2026-09-11, against a namespace `ResourceQuota` capping `pods: 2` and a five-replica proxy Deployment requesting `cpu: 10m`.)
+
+```sh
+# The rejected creates, and the same text on the Deployment.
+kubectl get events -n <namespace> --field-selector reason=FailedCreate
+kubectl get deploy -n <namespace> actions-gateway-proxy \
+  -o jsonpath='{range .status.conditions[?(@.type=="ReplicaFailure")]}{.reason}: {.message}{"\n"}{end}'
+```
 
 The GMC surfaces this as two non-blocking conditions on the `ActionsGateway` (neither gates `Ready` — the pool keeps serving at its current scale), each also exported as a gauge for alerting:
 
 | Condition / metric | Meaning | Action |
 |---|---|---|
 | `ProxyQuotaPressure` (warning) — `actions_gateway_proxy_quota_pressure` | The pool can't grow to `maxReplicas` within the quota's remaining headroom (`hard − used`). Load-dependent. | Raise the quota or lower `maxReplicas` before the next spike. |
-| `ProxyQuotaExceeded` (error) — `actions_gateway_proxy_quota_exceeded` | Replica creates are being **rejected now** (Deployment `ReplicaFailure` with `exceeded quota`). | Raise the quota now; the pool is degraded below the HPA's target. |
+| `ProxyQuotaExceeded` (error) — `actions_gateway_proxy_quota_exceeded` | Replica creates are being **rejected now** (Deployment `ReplicaFailure=True`, reason `FailedCreate`). | Raise the quota now; the pool is degraded below the HPA's target. |
 
 ```sh
 # Read both conditions (Exceeded supersedes Pressure when firing).

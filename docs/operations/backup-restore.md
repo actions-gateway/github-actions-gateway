@@ -27,6 +27,7 @@ For symptom-driven diagnosis see [troubleshooting.md](troubleshooting.md).
   - [Scenario C: Full Cluster / etcd Restore](#scenario-c-full-cluster--etcd-restore)
   - [CR Stuck Terminating](#cr-stuck-terminating)
 - [Verification](#verification)
+- [Reference Links](#reference-links)
 
 ---
 
