@@ -239,6 +239,26 @@ jobs:
       - name: AGC Deployment names are version-scoped (make agc-names-check)
         run: make agc-names-check
 
+  # Hold a prose tier claim to the canonical section it paraphrases (Q848).
+  # why-gag.md called the Pending-reap re-run classic-only for a whole release
+  # after Q766 made it reach both tiers: the paragraph's upkeep comment asked for
+  # a re-read when a case was added or removed, and that change did neither.
+  #
+  # The stamp digests only the tier-bearing lines of the named section, so a tier
+  # move goes red and an unrelated edit to the same section does not — a gate that
+  # fired on every edit would be re-stamped unread.
+  #
+  # No Go toolchain: the checker is Python over two Markdown files.
+  tier-claims:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: prose tier claims match their source (make tier-claims-check)
+        run: make tier-claims-check
+
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
   # Q831 worth measuring: it lived in CHECK_FAST_GATES alone, so prose that had
@@ -408,6 +428,7 @@ jobs:
       - doc-toc
       - card-bullets
       - agc-names
+      - tier-claims
       - make-targets
       - md-reflow
       - comparison-stamps

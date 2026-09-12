@@ -209,7 +209,10 @@ Under the per-cell stamp an aging claim degrades to unverified instead of to wro
      and is what this paragraph missed for a whole release: the Pending-reap
      re-run read "classic tier" from Q691 until Q766 had made it both, in
      v1.4.0. Neither added nor removed a case, so the instruction above did not
-     fire. -->
+     fire. The stamp below is what makes that second case a gate rather than a
+     request: `make tier-claims-check` digests the tier-bearing lines of the
+     section named in it, so a tier move there goes red here. -->
+<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=c7781d75 -->
 **Auto-re-run covers disruption, never failure.** Eviction, preemption, a drain and a stray `kubectl delete pod` all come back, on both acquisition tiers.
 A job that *failed* and a run you *cancelled* never do.
 Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run on both tiers once capacity returns.

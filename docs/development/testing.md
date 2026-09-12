@@ -848,6 +848,29 @@ What the gate does **not** cover is the adjacent identifier class: the pod `app=
 
 Behaviour is asserted by `scripts/docs/check-agc-names-test.sh` under `make scripts-test`, against throwaway repos holding only the builder constant and one page: the unlabelled command that must go red beside its labelled control, a label pushed just past the window, and the two shapes that must refuse with exit 2 rather than pass by checking nothing, an unreadable suffix constant and a scope that resolved to no files.
 
+### The prose tier-claim gate
+
+`make tier-claims-check` (`scripts/docs/check-tier-claims.sh`) fails when a prose acquisition-tier claim drifts from the canonical section it paraphrases.
+
+The failure it exists to catch is measured (Q848).
+`docs/why-gag.md` called the Pending-reap re-run classic-only for the whole `v1.4.0` cycle after Q766 had made it reach both tiers.
+The paragraph carried an upkeep comment, and that comment asked for a re-read when a case was *added or removed*, which Q766 did neither of, so nothing fired.
+The metric half of the same drift has a gate (`make metric-tiers-check`, Q776) and the `gag-tier-badge` has the roadmap checker's rule 10, but that rule is one-directional by construction: it fails a badge that outlived its gap, never a gap nobody badged.
+Prose had nothing at all.
+
+**The rule is a stamp, not a semantic judgement.** A paragraph making a tier claim carries `<!-- tier-source: <path>#<anchor> sha=<8 hex> -->`, and the gate recomputes that digest over the **tier-bearing lines** of the section the annotation names.
+A tier move upstream changes those lines, the digest changes, and the gate says to re-read the paraphrase.
+
+That narrow trigger is the design rather than a limitation.
+Digesting the whole section would fire on every edit to a long troubleshooting page, and a stamp that goes red weekly is re-stamped without anyone reading the paragraph, which is the same nothing the upkeep comment already was.
+Verified in both directions before shipping: replaying Q766's exact tier move goes red, and an edit to a non-tier row of the same table stays green.
+
+It is checked in both directions for the reason the badge rule is worth contrasting with: an unstamped tier claim on a watched page is a finding too, so deleting a stamp cannot quietly turn the gate off.
+`make tier-claims-check-write` re-stamps, once the paraphrase has actually been re-read.
+
+Watched pages are named in the script rather than discovered, like `check-card-bullets.sh`'s two: a third page adopting the pattern should be a deliberate edit.
+Behaviour is asserted by `scripts/docs/check-tier-claims-test.sh` under `make scripts-test`, including the block shape that made this gate pass its own first run by checking nothing: an upkeep comment and the paragraph under it are one block whenever no blank line separates them, and a "skip any block opening with a comment" exemption swallowed exactly the paragraph being watched.
+
 ### The release-pin gate
 
 `make release-pins-check` (`scripts/docs/check-release-pins.sh`) fails when an install/upgrade page still pins a release older than the newest stable `vX.Y.Z` tag.

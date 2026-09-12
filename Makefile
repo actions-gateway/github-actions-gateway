@@ -230,6 +230,14 @@ card-bullets-check: ## Fail when a card-grid bullet is too long for the column i
 agc-names-check: ## Fail when an operator doc names the v1 AGC Deployment with no version label
 	scripts/docs/check-agc-names.sh
 
+.PHONY: tier-claims-check
+tier-claims-check: ## Fail when a prose tier claim's canonical section has moved tiers under it
+	scripts/docs/check-tier-claims.sh
+
+.PHONY: tier-claims-check-write
+tier-claims-check-write: ## Re-stamp the tier-source annotations, once the paraphrase has been re-read
+	scripts/docs/check-tier-claims.sh --write
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
 # dashboards beside it had their panel queries parsed by nothing either (Q910):
