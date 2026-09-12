@@ -37,6 +37,22 @@ $extra
 EOF
 }
 
+# A metric registration and a flag declaration in the shapes the two readers
+# match. Both are already published at the seed tag, so neither reads as new.
+operator_src() {
+	local extra="${1:-}"
+	cat <<EOF
+package controller
+
+const SeedMetric = "actions_gateway_seed_total"
+$extra
+
+func flags(fs *FlagSet) {
+	fs.StringVar(&opts.Seed, "seed-mode", "", "help")
+}
+EOF
+}
+
 controller_src() {
 	local reason="$1"
 	cat <<EOF
@@ -99,7 +115,8 @@ EOF
 build_repo() {
 	local d="$WORK/$1"
 	rm -rf "$d"
-	mkdir -p "$d/api/apiconditions" "$d/cmd/agc/internal/controller" "$d/cmd/gmc/internal/controller"
+	mkdir -p "$d/api/apiconditions" "$d/cmd/agc/internal/controller" \
+		"$d/cmd/gmc/internal/controller" "$d/charts/actions-gateway"
 	(
 		cd "$d"
 		printf 'devtools\n' >.gitignore
@@ -107,6 +124,12 @@ build_repo() {
 		api_src >api/apiconditions/conditions.go
 		controller_src WorkerPodStuckPending >cmd/agc/internal/controller/shared.go
 		gmc_src ProxyCertificateIssued >cmd/gmc/internal/controller/gateway.go
+		# The operator surfaces the fixture has to carry for a window over it to
+		# mean anything: a section refuses when its set is empty at the older
+		# tag, so a fixture with no metric and no flag would refuse in every
+		# test rather than report.
+		operator_src >cmd/agc/internal/controller/operator.go
+		printf 'replicas: 1\nmetrics:\n  enabled: true\n' >charts/actions-gateway/values.yaml
 		git init -q -b main
 		# Q820: no detached maintenance racing the next command in a fixture repo.
 		git config maintenance.auto false
@@ -232,11 +255,107 @@ test_gmc_reason_is_listed() {
 	check gmc-reason-listed "$(event_section "$out")" "WorkerDrainTimeout"
 }
 
+# section_body OUTPUT TITLE — the body of any section, indentation stripped.
+section_body() {
+	printf '%s\n' "$1" | awk -v want="$2" '
+		/^== / { inside = (index($0, want) > 0); next }
+		inside { sub(/^  /, ""); print }
+	'
+}
+
+# The operator-facing surfaces added by Q1037. Each one is asserted in both
+# directions, because the defect being fixed was a query that reported an empty
+# diff while matching nothing at all: "none new" is only worth reading if the
+# reader can be shown to find something when there IS something.
+test_new_metric_is_listed() {
+	local d out
+	d="$(build_repo new-metric)"
+	(
+		cd "$d"
+		operator_src 'const Widgets = "actions_gateway_widgets_total"' \
+			>cmd/agc/internal/controller/operator.go
+		git commit -q -am "feat: a new metric"
+	)
+	out="$(run_script "$d")"
+	check new-metric-listed "$(section_body "$out" "New metric names")" \
+		"actions_gateway_widgets_total"
+}
+
+test_unchanged_metrics_report_none() {
+	local d out
+	d="$(build_repo same-metric)"
+	(
+		cd "$d"
+		operator_src 'const Widgets = "actions_gateway_widgets_total"' \
+			>cmd/agc/internal/controller/operator.go
+		git commit -q -am "feat: a metric"
+		git tag v0.2.0
+		operator_src 'const Widgets = "actions_gateway_widgets_total" // a comment' \
+			>cmd/agc/internal/controller/operator.go
+		# Something unrelated must change in the window, or the run exits early
+		# with nothing to review and prints no sections at all — which would let
+		# this assertion pass on an absent section rather than an empty one.
+		api_src '	ReasonListenerPaused = "ListenerPaused"' >api/apiconditions/conditions.go
+		git commit -q -am "feat: a condition reason, and a comment on a metric"
+	)
+	out="$(run_script "$d" v0.2.0)"
+	check unchanged-metrics-none "$(section_body "$out" "New metric names")" "(none)"
+}
+
+test_new_flag_is_listed() {
+	local d out
+	d="$(build_repo new-flag)"
+	(
+		cd "$d"
+		printf 'package controller\n\nfunc more(fs *FlagSet) {\n\tfs.StringVar(&opts.W, "widget-mode", "", "help")\n}\n' \
+			>cmd/agc/internal/controller/moreflags.go
+		git add -A && git commit -q -m "feat: a new flag"
+	)
+	out="$(run_script "$d")"
+	check new-flag-listed "$(section_body "$out" "New CLI flags")" "widget-mode"
+}
+
+# The refusal, and the reason both sections exist. Drafting the v1.7.0 notes a
+# hand-rolled flag query matched the wrong declaration shape and returned zero
+# at BOTH ends; an empty diff of two empty sets is indistinguishable from a real
+# "nothing changed". A tree carrying no flag at the older tag must say it could
+# not enumerate rather than print an empty section.
+test_unenumerable_surface_refuses() {
+	local d out body
+	d="$(build_repo enumerable)"
+	(
+		cd "$d"
+		# Strip the flag declaration from the seed while leaving the metric, so
+		# one section refuses and the other reports in the same run. Both ends
+		# lose it, which is exactly the shape that produced the defect: two
+		# empty sets diff to an empty set and read as "nothing changed".
+		printf 'package controller\n\nconst SeedMetric = "actions_gateway_seed_total"\n' \
+			>cmd/agc/internal/controller/operator.go
+		git commit -q -am "chore: a tree with no flags"
+		git tag v0.2.0
+		printf 'package controller\n\nconst SeedMetric = "actions_gateway_seed_total"\nconst Extra = "actions_gateway_extra_total"\n' \
+			>cmd/agc/internal/controller/operator.go
+		git commit -q -am "feat: another metric"
+	)
+	out="$(run_script "$d" v0.2.0)"
+	body="$(section_body "$out" "New CLI flags")"
+	check_contains flags-refuse-when-empty-at-ref "$body" "COULD NOT ENUMERATE"
+	check_contains flags-refusal-blocks-the-claim "$body" "not a report of none-new"
+	# The control that makes the refusal mean something rather than being the
+	# script's only answer: the metric section reads the same tree and reports.
+	check metrics-do-not-refuse-in-the-same-tree \
+		"$(section_body "$out" "New metric names")" "actions_gateway_extra_total"
+}
+
 test_new_reason_is_the_only_surface
 test_unchanged_reasons_report_none
 test_gmc_reason_is_listed
 test_empty_window_is_quiet
 test_unscannable_window_says_so
+test_new_metric_is_listed
+test_unchanged_metrics_report_none
+test_new_flag_is_listed
+test_unenumerable_surface_refuses
 
 if ((fails > 0)); then
 	printf '\n%d test(s) failed\n' "$fails" >&2

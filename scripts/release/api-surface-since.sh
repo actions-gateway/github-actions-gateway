@@ -57,6 +57,16 @@ REASON_SRC=(
 	"api"
 )
 
+# OPERATOR_PATHS — where the two surfaces an operator configures and watches are
+# declared. Wider than API_PATHS on purpose: a metric is registered in the binary
+# and a chart value is neither Go nor a CRD, so neither is reachable from a wire
+# contract tree.
+OPERATOR_PATHS=(
+	"cmd"
+	"api"
+	"charts"
+)
+
 quiet=0
 ref=""
 for arg in "$@"; do
@@ -88,6 +98,11 @@ git rev-parse --verify --quiet "$ref^{commit}" >/dev/null || {
 existing_paths=()
 for path in "${API_PATHS[@]}"; do
 	[[ -e "$path" ]] && existing_paths+=("$path")
+done
+
+operator_paths=()
+for path in "${OPERATOR_PATHS[@]}"; do
+	[[ -e "$path" ]] && operator_paths+=("$path")
 done
 
 changed="$(git diff --name-only "$ref"..HEAD -- "${existing_paths[@]}")"
@@ -187,9 +202,114 @@ if [[ -n "$(git diff --name-only "$ref"..HEAD -- "${REASON_SRC[@]}")" ]]; then
 	fi
 fi
 
+# literals_at REV REGEX PATHS… — every distinct string literal at REV whose
+# surrounding text matches REGEX. Unlike values_at, which takes every quoted
+# string on a matching line, this reads the literal out of the match itself: a
+# metric registration and a flag declaration both sit on lines carrying other
+# strings (a help string, a label list), and taking the line's strings would
+# enumerate those too.
+literals_at() {
+	local rev="$1" regex="$2"
+	shift 2
+	git grep -h -oE "$regex" "$rev" -- "$@" 2>/dev/null |
+		grep -oE '"[^"]+"' |
+		tr -d '"' |
+		sort -u || true
+}
+
+# new_literals WHAT REGEX PATHS… — the literals new at HEAD, or a refusal when
+# the enumeration came back empty at REF.
+#
+# The refusal is the whole point of this helper, and it is what these two
+# surfaces had no way to say before. Measured 2026-08-29 drafting the 1.7.0
+# notes: a hand-rolled CLI-flag query matched the wrong declaration shape and
+# returned zero on BOTH sides of the window. Two empty sets diff to an empty
+# set, which is indistinguishable from a real "nothing changed", and the reading
+# survives into the notes as a published claim; a corrected query then found 33
+# flags at each end.
+#
+# A released tag has metrics and it has flags, so an empty set at REF is this
+# query matching nothing — never the surface being empty. Saying so is the same
+# discipline the Event-reason scanner already applies, and the reason it is
+# worth having: an unenumerable surface has to block the claim rather than
+# report a silent none.
+new_literals() {
+	local what="$1" regex="$2"
+	shift 2
+	local at_ref
+	at_ref="$(literals_at "$ref" "$regex" "$@")"
+	if [[ -z "$at_ref" ]]; then
+		printf 'COULD NOT ENUMERATE: no %s found at %s, so this query is matching nothing.\n' "$what" "$ref"
+		printf 'This is not a report of none-new. Fix the query, or enumerate by hand, before publishing.'
+		return
+	fi
+	comm -13 <(printf '%s\n' "$at_ref") <(literals_at HEAD "$regex" "$@")
+}
+
+# CHART_VALUES — the values files whose keys an operator sets. Enumerated by
+# path rather than by glob so a chart added without being listed here is a
+# reviewer's omission rather than a silent widening of what the notes claim.
+CHART_VALUES=(
+	"charts/actions-gateway/values.yaml"
+	"charts/actions-gateway-crds-v2/values.yaml"
+)
+
+# chart_values_at REV — every key path in REV's values files, as dotted paths.
+# A YAML key is not a string literal, so literals_at cannot see one: this tracks
+# indentation instead, which is enough for the flat-to-three-deep shape these
+# files have and reports a nested key as parent.child so two charts' `enabled`
+# do not collide. A file absent at REV contributes nothing.
+chart_values_at() {
+	local rev="$1" file
+	for file in "${CHART_VALUES[@]}"; do
+		git cat-file -e "${rev}:${file}" 2>/dev/null || continue
+		git show "${rev}:${file}" | awk -v chart="${file}" '
+			/^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+			match($0, /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/) {
+				line = $0
+				indent = match(line, /[^ ]/) - 1
+				key = line
+				sub(/^[[:space:]]*/, "", key)
+				sub(/:.*$/, "", key)
+				depth = int(indent / 2)
+				path[depth] = key
+				out = chart
+				for (i = 0; i <= depth; i++) out = out " " path[i]
+				print out
+			}
+		'
+	done | sort -u
+}
+
+# new_chart_values — chart keys new at HEAD, with the same refusal as
+# new_literals: a released tag has chart values, so an empty set at REF is the
+# reader failing rather than the surface being empty.
+new_chart_values() {
+	local at_ref
+	at_ref="$(chart_values_at "$ref")"
+	if [[ -z "$at_ref" ]]; then
+		printf 'COULD NOT ENUMERATE: no chart value found at %s, so this reader is matching nothing.\n' "$ref"
+		printf 'This is not a report of none-new. Fix the reader, or enumerate by hand, before publishing.'
+		return
+	fi
+	comm -13 <(printf '%s\n' "$at_ref") <(chart_values_at HEAD)
+}
+
+# The operator surfaces are computed here rather than at their sections because
+# they participate in the early exit below. A window that adds only a metric or
+# only a flag touches none of API_PATHS and emits no Event reason, so deciding
+# "nothing changed" without them would report exactly the silent false negative
+# these sections were added to stop (Q1037).
+new_metric_names="$(new_literals 'metric name' '"actions_gateway_[a-z0-9_]+"' "${operator_paths[@]}")"
+new_cli_flags="$(new_literals 'CLI flag' '\.(String|Int|Int64|Uint|Bool|Duration|Float64|StringSlice|StringArray|IntSlice)Var[P]?\(&?[A-Za-z0-9_.]+, "[a-zA-Z0-9._-]+"' "${operator_paths[@]}")"
+new_chart_keys="$(new_chart_values)"
+
 # A failed scan counts as "something to review" for the same reason it is not an
-# empty section: nobody can say the Event surface is unchanged until it runs.
-if [[ -z "$changed" && -z "$new_event_reasons" && -z "$reason_error" ]]; then
+# empty section: nobody can say the Event surface is unchanged until it runs. A
+# refusal from an operator surface counts for the same reason, which is why the
+# test is on the section bodies rather than on a separate error flag.
+if [[ -z "$changed" && -z "$new_event_reasons" && -z "$reason_error" &&
+	-z "$new_metric_names" && -z "$new_cli_flags" && -z "$new_chart_keys" ]]; then
 	if ((quiet)); then
 		exit 1
 	fi
@@ -253,6 +373,9 @@ section "Added or changed defaults" "$(added_lines 'kubebuilder:default')"
 section "New condition types and reasons" "$(new_values '^[[:space:]]*(Condition|Reason)[A-Z][A-Za-z0-9]*[[:space:]]*=[[:space:]]*"')"
 section "New Event reasons" "$(event_reason_body)"
 section "New label and annotation keys" "$(new_values '=[[:space:]]*"(actions-gateway\.com|actions-gateway\.github\.com)/')"
+section "New metric names" "$new_metric_names"
+section "New CLI flags" "$new_cli_flags"
+section "New chart values" "$new_chart_keys"
 
 echo
 echo "Everything above is published for the first time by a release cut from HEAD."
