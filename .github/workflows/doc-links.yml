@@ -259,6 +259,32 @@ jobs:
       - name: prose tier claims match their source (make tier-claims-check)
         run: make tier-claims-check
 
+  # Fail a branch that states an operator-visible scope in docs/design/ and
+  # nowhere else (Q774). doc-update-matrix.md calls this the classic miss and
+  # nothing enforced it; the 1.4 cycle missed it three times.
+  #
+  # The trigger is a scope sentence the branch ADDED, not the file pair, so a
+  # typo fix in a design doc does not demand an operations edit.
+  #
+  # fetch-depth: 0 and the explicit main fetch are what the diff is taken
+  # against, for the reason the em-dash job gives; REQUIRE_BASE turns this job's
+  # fail-open into a hard error, since the step above has provided the base.
+  design-scope:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: fetch the diff base
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - name: operator scope leaves docs/design/ (make design-scope-check)
+        run: make design-scope-check
+        env:
+          DESIGN_SCOPE_REQUIRE_BASE: '1'
+
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
   # Q831 worth measuring: it lived in CHECK_FAST_GATES alone, so prose that had
@@ -429,6 +455,7 @@ jobs:
       - card-bullets
       - agc-names
       - tier-claims
+      - design-scope
       - make-targets
       - md-reflow
       - comparison-stamps

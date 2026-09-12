@@ -238,6 +238,10 @@ tier-claims-check: ## Fail when a prose tier claim's canonical section has moved
 tier-claims-check-write: ## Re-stamp the tier-source annotations, once the paraphrase has been re-read
 	scripts/docs/check-tier-claims.sh --write
 
+.PHONY: design-scope-check
+design-scope-check: ## Fail when a branch states an operator-visible scope in docs/design/ alone
+	scripts/docs/check-design-scope.sh
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
 # dashboards beside it had their panel queries parsed by nothing either (Q910):

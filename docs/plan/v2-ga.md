@@ -176,7 +176,7 @@ Q851 took the same obligation inside the series, to the label values a `Both` ro
 The re-walk it required found two: `renew_job_errors_total` and `renew_job_teardowns_total` were classic-only by construction and on no list, and `eviction_recovery_evidence_lost_total` reached no operator doc at all.
 
 That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.
-Until [Q774](../queue/Q774.md) gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
+Q774 now gates scope statements mechanically as `make design-scope-check`, which fires on an admission rejection or a changed default added under `docs/design/` with no operator doc touched; adding a row to the table above is still a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
 
 ## Phase 4 — docs and the cut
 

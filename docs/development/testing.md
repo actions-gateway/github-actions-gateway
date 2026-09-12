@@ -848,6 +848,28 @@ What the gate does **not** cover is the adjacent identifier class: the pod `app=
 
 Behaviour is asserted by `scripts/docs/check-agc-names-test.sh` under `make scripts-test`, against throwaway repos holding only the builder constant and one page: the unlabelled command that must go red beside its labelled control, a label pushed just past the window, and the two shapes that must refuse with exit 2 rather than pass by checking nothing, an unreadable suffix constant and a scope that resolved to no files.
 
+### The design-doc scope gate
+
+`make design-scope-check` (`scripts/docs/check-design-scope.sh`) fails a branch that states an operator-visible scope under `docs/design/` and changes nothing under `docs/operations/`.
+
+[doc-update-matrix.md](doc-update-matrix.md) already called this out in so many words: "A design-doc-only update is the classic miss: the operator who hits the rejection never reads `docs/design/`."
+Nothing enforced it, and the 1.4 cycle missed it three times (Q774).
+
+**The trigger is a scope sentence the branch added, never the file pair.** Keying on "a design file changed, so an operations file must too" would fire on every typo fix and be waived into meaninglessness within a week.
+Keying on the sentence that states something an operator can trip fires only where there is an operator surface to propagate.
+
+The vocabulary is calibrated rather than guessed.
+Measured 2026-09-12 over the whole `docs/design/` tree, 65 lines match across 10 of its files, and both categories carrying them are things an operator meets directly: an **admission rejection** (29), which they see as an error on `kubectl apply`, and a **changed default** (36), which reaches every existing tenant without anyone editing a manifest.
+Three further categories were drafted and cut because each matched zero lines in the corpus: a pattern never validated against real prose is a guess about how this project writes, and a gate is a bad place to keep one.
+Add one when a real sentence needs it, with the count that justified it.
+
+The escape is inline and reviewable, following `no-plan-refs`: a line carrying `operator-surface: <reason>` is silenced, and only that line.
+A design doc restating a rejection an operations page already documents is the legitimate case, and it belongs in the diff rather than under a whole-file allowlist.
+
+Base resolution and the fail-open posture follow the em-dash ratchet's, with `DESIGN_SCOPE_REQUIRE_BASE=1` turning the skip into a hard error where CI has arranged a base.
+`scripts/docs/check-design-scope-test.sh` asserts the red case and **two** controls: the same statement alongside an operations edit, and an edit to the same design file stating no scope.
+The second control is what stops a gate that had degenerated into "design changed, operations did not" from passing the suite.
+
 ### The prose tier-claim gate
 
 `make tier-claims-check` (`scripts/docs/check-tier-claims.sh`) fails when a prose acquisition-tier claim drifts from the canonical section it paraphrases.

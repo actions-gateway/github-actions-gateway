@@ -140,7 +140,7 @@ It found two things the one-time walk had not, which is the argument for the gat
   It was described in the design docs and the troubleshooting runbook, and the metrics reference an operator actually reads never gained a row.
 
 Neither is a capability gap, so the parity result above stands: **the tier axis is closed on the full metric inventory, not only on the tracked one.** The gate covers metrics rather than capabilities, so a capability with no series behind it still joins the parity table by hand.
-That residual is recorded in [v2-ga.md](../v2-ga.md#what-this-audit-checked-and-found-already-covered) and belongs to [Q774](../../queue/Q774.md).
+That residual is recorded in [v2-ga.md](../v2-ga.md#what-this-audit-checked-and-found-already-covered) and belonged to Q774, which shipped as `make design-scope-check`.
 
 The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission.
 `cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../../queue/Q264.md)).
