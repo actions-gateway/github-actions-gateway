@@ -8,6 +8,11 @@
 # the store and incremented by hand allocates nothing, and surfaces at the
 # rebase that collides rather than at the commit that files the row.
 #
+# Its second check is that no added id is one this repository has already
+# completed. Searching the store cannot find that — a completed row is deleted,
+# so the id reads as unfiled rather than as done, and history is the only copy
+# left. --allow-shipped is for a branch reverting a completion.
+#
 # Its sibling lint-queue.sh carries the rules that are a pure function of the
 # store, and check-queue-rules.sh the three that are functions of the branch but
 # need no network.
@@ -21,7 +26,7 @@
 # belongs in CI, which always has a network. Pass it there, not here — this
 # entry point is also the local `make queue-claims-check`.
 #
-# Usage: check-queue-claims.sh [--strict] [--allow QNNN]
+# Usage: check-queue-claims.sh [--strict] [--allow QNNN] [--allow-shipped QNNN]
 set -euo pipefail
 shopt -s inherit_errexit
 

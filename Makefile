@@ -359,7 +359,7 @@ queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9, 11, 13
 # green; status-lint.yml passes --strict, so the one place with a guaranteed
 # network is the one place a skip is a failure (Q1042).
 .PHONY: queue-claims-check
-queue-claims-check: ## Fail when a backlog id this branch adds holds no refs/queue-ids claim
+queue-claims-check: ## Fail when a backlog id this branch adds holds no refs/queue-ids claim, or re-files completed work
 	scripts/docs/check-queue-claims.sh
 
 # Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as

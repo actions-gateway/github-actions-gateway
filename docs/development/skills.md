@@ -112,7 +112,7 @@ Four files are copied out of `karlkfi/claude-skills` and run here as ordinary re
 
 | Here | Upstream | Taken from |
 |---|---|---|
-| [`scripts/docs/queue.py`](../../scripts/docs/queue.py) | `session-backlog/scripts/queue.py` | `b776ff82`, 2026-09-10 |
+| [`scripts/docs/queue.py`](../../scripts/docs/queue.py) | `session-backlog/scripts/queue.py` | `46a4f185`, 2026-09-12 |
 | [`scripts/docs/rank-vectors.tsv`](../../scripts/docs/rank-vectors.tsv) | `session-backlog/scripts/rank-vectors.tsv` | `4b2af1fb`, 2026-09-05 |
 | [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `f961cba6`, 2026-08-16 |
 | [`scripts/agent/pr-mergeability-watch.py`](../../scripts/agent/pr-mergeability-watch.py) | `session-orchestrator/scripts/pr-mergeability-watch.py` | `08d11e9d`, 2026-09-05 |
@@ -127,10 +127,16 @@ So the fork ran one way, in the direction nobody here controls.
 **Re-vendored 2026-09-09 under Q956, which is what one-way drift costs when nothing asks.** The stale copies were missing behaviour the skills themselves cite by name — `queue.py`'s `CITATION_WINDOW` and `--citation-window`, `pr-mergeability-watch.py`'s `head_change` exit, `pr-requeue-eligible.py`'s `UNMEASURABLE` record — so a session following the `session-worker` contract here was following instructions about a tool it did not have.
 Three of the four came across as clean overwrites; `queue.py` did not, its fork and upstream having diverged past a patch, so it was merged three-way against the vendoring commit.
 What survives that merge is the open-PR check on `next` (Q990), and one comment: the rank-scheme paragraph in the module docstring, where upstream still asserts a second implementation of the algebra exists and its own `rank-vectors.tsv` says the Go queuestore was discarded.
-`claude-skills#489` is open against that paragraph as of 2026-09-10, so the disagreement is upstream's to settle and the fork ends when it lands.
+`claude-skills#489` settled that paragraph upstream on 2026-09-10, so the re-vendor below takes upstream's copy and that half of the fork has ended.
 The rest of what the fork carried is gone from it.
 The cross-repo provenance stripped out of the comments, upstream has since removed itself.
 The stale-citation lookbehind (Q935) was carried here for three weeks and landed upstream as `claude-skills#488` on 2026-09-10, so this re-vendor takes upstream's copy of it and the edit stops being local at all — which is the vendoring model working, one round late.
+
+**Re-vendored 2026-09-12 under Q959, whose defect was upstream's to fix and now has been.** `queue.py metrics` classified a removal by matching a closure verb against the *subject* of the commit deleting the row, and under a squash merge that subject is the pull request title: measured at `32312254e`, all 141 commits here that delete a row carry a trailing `(#N)`, so the verb the session wrote was folded into the body and never read.
+The store reported 1 completion and 8 prunes against 214 removals, leaving 205 unclassified, which is an inverted reading rather than an imprecise one.
+`claude-skills#501` reads `%B` instead and scopes the match to the message's `docs(queue):`/`docs(status):` lines, so a verb comes from the isolated row commit rather than from the work commits beside it and attribution is per row; the summary here now reads 146 completed, 6 pruned, 34 retired and 28 unclassified out of 214 removals.
+`queue.py` was again merged three-way against its vendoring commit, and the open-PR check on `next` (Q990) is now the whole of the fork.
+The merge also takes the two upstream commits this copy was behind, one of which changes a gate: `claims` now runs a second check, rejecting an id this repository has already completed, which the store cannot show because a completed row is deleted and history is the only copy left.
 
 `make vendored-skills-check` asserts the half a local read can reach.
 Each file still hashes to the digest its row declares, so forking one moves the digest in the same diff and a reviewer sees it.
