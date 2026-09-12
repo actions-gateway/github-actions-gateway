@@ -771,6 +771,14 @@ It fails on two classes of breakage: **dead relative file links** (a `[text](pat
 Anchors are resolved with GitHub's heading-slug algorithm (strip inline markdown — respecting code spans — lowercase, drop everything outside `[a-z0-9 _-]`, spaces to hyphens, de-dupe repeats with `-1`/`-2`), so the verdict matches what GitHub renders.
 External URLs (http/https/mailto/tel), links inside fenced or inline code, and anchors into non-Markdown or vendored targets are out of scope.
 
+**It also resolves the backlog store's `target:` frontmatter field (Q1081).** A row's `target:` is a relative path with an optional heading anchor, written in YAML where no Markdown parser looks, so a one-character anchor typo passed `make check` and `make docs-gates` twice and reached CI only through two jobs that happen to run `mkdocs build --strict` for their own reasons.
+Those two caught it because a row renders into `docs/queue/README.md`; a `target:` naming a page they do not build, or a non-Markdown file, would have merged broken.
+Running `--strict` on every pull request was the other candidate and is structurally incomplete for the same reason, besides being the expensive answer.
+
+The checker takes the keys as `-frontmatter-keys target` rather than knowing about the store: which frontmatter field holds a link is the entry point's knowledge, and `check-doc-links.sh` is where the store is already known about.
+The value is recorded as an ordinary link and resolved by the same pass, so the anchor rules are identical by construction rather than by a second slug implementation that can drift.
+Both controls are asserted: a key nobody named is not read (`id:` and `status:` are not paths, and resolving them would fail every row), and with no keys declared the frontmatter is not read at all.
+
 **The script selects the files *and* the existence oracle; [`devtools/docs/doclinks`](../../devtools/docs/doclinks/) does the checking**, over the shared goldmark parse layer in [`devtools/docs/markdown`](../../devtools/docs/markdown/) (Q612).
 The `awk` it replaces collected links with a regular expression, which cannot count brackets: `[![badge](img)](target)` matched the inner image, so the outer target went unchecked — three of those are live in `README.md` — and a link whose text wrapped across a line break was collected by neither half (25 of those).
 The parse layer also carries the MkDocs dialect the site renders (`!!!` admonitions, `markdown="1"` HTML), because a stock parser reads an admonition body as an indented code block and every link in it disappears.
@@ -3664,6 +3672,18 @@ Both modules added after the initial filters were written hit this: `api/` and `
 The whole-workspace half of that is now mechanical: the [path-filter gate](#the-path-filter-gate) (`make path-filters-check`, in `make check` and CI) fails when a `go.work` module is missing from a filter whose jobs exercise the whole workspace, when a filter is not classified, or when a pattern points at a path that no longer exists.
 The judgement half is not automatable and remains yours: for the deliberately narrow filters, walk every `filters:` block in `.github/workflows/` and ask what that gate actually compiles, scans, or bakes — not what its filter happens to list today.
 The same applies in reverse to a gate that names files individually (`manifest-validate.sh`'s `standalone_manifests`): adding a path there means adding its directory to the filter.
+
+**A job left out of the gate's `needs:` is the same false negative from the other side (Q845, Q856).** The ruleset names the `*-gate` context and never the jobs behind it, so a job the gate does not wait on runs, reports red, and blocks nothing.
+A path filter that omits a path makes a gate green by *skipping*; a `needs:` that omits a job makes it green by *not waiting*.
+`uses-pinned` was live in that state on `unit-test.yml`, which is what Q845 fixed.
+
+That half is now mechanical too: `make gate-needs-check` ([`scripts/ci/check-gate-needs.sh`](../../scripts/ci/check-gate-needs.sh)) fails when a job is absent from its workflow's `*-gate` `needs:` list.
+It reads the jobs through the same `devtools/ci/pathfilters` extractor the path-filter gate uses, via that command's `jobs` mode, so the two cannot disagree about what a workflow declares.
+Gate jobs are excluded from the requirement rather than forbidden: no workflow here has two, and an aggregator waiting on an aggregator is a shape to decide on rather than to mandate.
+An exemption goes in the script's own list with a reason, where a reviewer meets it in the diff; it is empty today.
+
+The gate found nothing when it was written, which is the point: the aggregators were all complete, and the list grows by hand every time somebody adds a job.
+It was red-proved against the tree one commit before Q845's fix, where it names `uses-pinned` and nothing else.
 
 **Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed **on the PR's head commit** — green is not enough if a gate was skipped, and *no red checks* is not the same as *the checks ran*.
 For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `security-scan` (trivy + govulncheck), and `manifest-validate`:

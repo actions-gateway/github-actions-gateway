@@ -227,6 +227,10 @@ jobs:
               # subject, covered by the tree above, but the gate's own rules
               # must re-run it too.
               - 'scripts/ci/check-publish-digest.sh'
+              # And the gate-needs job (Q856): the workflows are its whole subject,
+              # covered by the tree above, but the reconciliation's own rules must
+              # re-run it too.
+              - 'scripts/ci/check-gate-needs.sh'
               # devtools/ backs the two gates here whose logic outgrew shell:
               # devtools/ci/pathfilters and devtools/ci/usespin.
               - 'devtools/**'
@@ -527,6 +531,27 @@ jobs:
       - name: path filters cover go.work (make path-filters-check)
         run: make path-filters-check
 
+  # Reconcile each `*-gate` aggregator's `needs:` with its workflow's job ids
+  # (Q856). Branch protection names the gate and never the jobs, so a job left
+  # out of that list reports red while the required check reports green — Q845
+  # was exactly that, with `uses-pinned` absent from this workflow's own gate.
+  #
+  # Its own job for the same reason path-filters above is: a workflow-only change
+  # must re-run this and nothing else. setup-go because the checker builds the
+  # same devtools/ YAML extractor path-filters uses.
+  gate-needs:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: gate jobs wait on every job (make gate-needs-check)
+        run: make gate-needs-check
+
   # Lint the workflows themselves (Q579). Three docs credited actionlint with
   # keeping SHA-pinned `uses:` clean and with linting inline `run:` blocks while
   # nothing in CI ran it, so a workflow-only PR shipped unlinted. Its own job
@@ -684,7 +709,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
+    needs: [changes, lint, shellcheck, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, gate-needs, semver-floor-sources, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

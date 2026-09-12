@@ -38,9 +38,16 @@ func fixture(t *testing.T, files map[string]string) (root, existFile string, mdF
 
 func check(t *testing.T, files map[string]string) (broken int, output string) {
 	t.Helper()
+	return checkKeys(t, files, nil)
+}
+
+// checkKeys is check with -frontmatter-keys set, so the frontmatter rule's cases
+// declare the keys they are about and every other case runs with none.
+func checkKeys(t *testing.T, files map[string]string, fmKeys []string) (broken int, output string) {
+	t.Helper()
 	root, existFile, mdFiles := fixture(t, files)
 	var out bytes.Buffer
-	broken, err := run(root, existFile, mdFiles, &out, false)
+	broken, err := run(root, existFile, fmKeys, mdFiles, &out, false)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -280,7 +287,7 @@ func TestOutputShape(t *testing.T) {
 	root, existFile, mdFiles := fixture(t, files)
 
 	var plain bytes.Buffer
-	broken, err := run(root, existFile, mdFiles, &plain, false)
+	broken, err := run(root, existFile, nil, mdFiles, &plain, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +299,7 @@ func TestOutputShape(t *testing.T) {
 	}
 
 	var gha bytes.Buffer
-	if _, err := run(root, existFile, mdFiles, &gha, true); err != nil {
+	if _, err := run(root, existFile, nil, mdFiles, &gha, true); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(gha.String(), "::error file=a.md,line=1::dead link: missing.md") {
@@ -312,4 +319,93 @@ func TestCleanRunReportsCounts(t *testing.T) {
 	if !strings.Contains(out, "check-doc-links: ok (2 markdown files, 2 links/anchors checked)") {
 		t.Errorf("unexpected summary: %s", out)
 	}
+}
+
+// The `target:` a backlog row carries is a relative path with an optional
+// heading anchor, written in YAML frontmatter where no Markdown parser looks. A
+// one-character anchor typo passed every gate that runs on a pull request
+// (Q1081), so the rule is asserted in both directions and against the two ways
+// it could degenerate: reading nothing, and reading every frontmatter key.
+func TestFrontmatterTargets(t *testing.T) {
+	page := "# Page\n\n## Some Heading\n\nBody.\n"
+
+	t.Run("a dead anchor in a named key is a finding", func(t *testing.T) {
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md":     page,
+			"docs/queue/Q1.md": "---\nid: Q1\ntarget: ../page.md#some-headinX\n---\n\n# Row\n",
+		}, []string{"target"})
+		if broken != 1 {
+			t.Fatalf("broken = %d, want 1 (%s)", broken, out)
+		}
+		if !strings.Contains(out, "Q1.md:3") {
+			t.Errorf("finding should name the frontmatter line: %s", out)
+		}
+	})
+
+	t.Run("the same key resolving passes", func(t *testing.T) {
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md":     page,
+			"docs/queue/Q1.md": "---\nid: Q1\ntarget: ../page.md#some-heading\n---\n\n# Row\n",
+		}, []string{"target"})
+		if broken != 0 {
+			t.Fatalf("broken = %d, want 0 (%s)", broken, out)
+		}
+	})
+
+	t.Run("a dead file path in a named key is a finding", func(t *testing.T) {
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md":     page,
+			"docs/queue/Q1.md": "---\nid: Q1\ntarget: ../gone.md\n---\n\n# Row\n",
+		}, []string{"target"})
+		if broken != 1 {
+			t.Fatalf("broken = %d, want 1 (%s)", broken, out)
+		}
+	})
+
+	t.Run("a key nobody named is not read", func(t *testing.T) {
+		// The control that keeps the rule from degenerating into "resolve every
+		// frontmatter value": `id: Q1` and `status: ready` are not paths, and a
+		// checker reading them would fail every row in the store.
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md":     page,
+			"docs/queue/Q1.md": "---\nid: Q1\nstatus: ready\ntarget: ../page.md\n---\n\n# Row\n",
+		}, []string{"target"})
+		if broken != 0 {
+			t.Fatalf("broken = %d, want 0 (%s)", broken, out)
+		}
+	})
+
+	t.Run("with no keys declared the frontmatter is not read at all", func(t *testing.T) {
+		// The other control: the same broken target must pass when the caller
+		// declares no keys, or every document in the tree would be scanned for
+		// fields this program has no business resolving.
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md":     page,
+			"docs/queue/Q1.md": "---\nid: Q1\ntarget: ../gone.md\n---\n\n# Row\n",
+		}, nil)
+		if broken != 0 {
+			t.Fatalf("broken = %d, want 0 (%s)", broken, out)
+		}
+	})
+
+	t.Run("a key after the closing marker is not frontmatter", func(t *testing.T) {
+		// `---` also spells a thematic break, so the block has to end at the
+		// first closing marker rather than at the last one in the file.
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md":     page,
+			"docs/queue/Q1.md": "---\nid: Q1\n---\n\n# Row\n\ntarget: ../gone.md\n",
+		}, []string{"target"})
+		if broken != 0 {
+			t.Fatalf("broken = %d, want 0 (%s)", broken, out)
+		}
+	})
+
+	t.Run("a document that does not open with a marker has no frontmatter", func(t *testing.T) {
+		broken, out := checkKeys(t, map[string]string{
+			"docs/page.md": "# Page\n\ntarget: ../gone.md\n",
+		}, []string{"target"})
+		if broken != 0 {
+			t.Fatalf("broken = %d, want 0 (%s)", broken, out)
+		}
+	})
 }

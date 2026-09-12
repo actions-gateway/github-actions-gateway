@@ -30,6 +30,12 @@
 # count makes the emptiness legal: a page naming no ID while still claiming one
 # has drifted, which is the case the emptiness check exists for.
 #
+# Every count reads `is|are`, and so does the marker that finds the paragraph at
+# all. A section down to one item takes the singular, and pinning the plural left
+# "One of the original M are back" as the only sentence this gate would accept
+# (Q965). The verb is still required rather than wildcarded: dropping it must
+# refuse, so a rewrite cannot quietly take the count out of the gate's reach.
+#
 # Assertion 1 alone would pass a tree where every punted row is correctly
 # deferred and the revived paragraph still named one of them.
 #
@@ -78,7 +84,10 @@ done
 # The heading each section is read from. Matched on the heading text rather than
 # a line number so ordinary edits above them cannot shift the read.
 PUNTED_HEADING='## What is punted past'
-REVIVED_MARKER='are back\.\*\*'
+# `is|are` for the same reason the counts below take it: a single revived item
+# takes a singular verb, and pinning the plural here made the paragraph itself
+# unfindable, so the count fix alone would have left the gate refusing (Q965).
+REVIVED_MARKER='(is|are) back\.\*\*'
 
 # The Q-IDs inside the punted table: the rows between its heading and the next
 # heading, table rows only, so the prose around it cannot contribute an ID.
@@ -203,13 +212,18 @@ count_word() {
 # string variables, and BSD awk drops the backslash while parsing the string, so
 # `\(` arrives as a bare `(` and is rejected as an illegal primary. A character
 # class needs no escaping in either awk.
-still_word="$(count_word '[(][a-z]+ of them still are[)]' '[(]')"
-back_word="$(count_word '[*][*][A-Za-z]+ of the original [a-z]+ are back[.][*][*]' '[*][*]')"
-total_word="$(count_word 'of the original [a-z]+ are back' 'of the original ')"
+# `is|are` in all three: a section down to a single item takes a singular verb,
+# and pinning the plural made the only grammatical sentence one the gate rejected
+# (Q965). `(is|are)` rather than a wildcard, so a rewrite that drops the verb
+# still fails to match and the refusal below fires rather than the count drifting.
+still_word="$(count_word '[(][a-z]+ of them still (is|are)[)]' '[(]')"
+back_word="$(count_word '[*][*][A-Za-z]+ of the original [a-z]+ (is|are) back[.][*][*]' '[*][*]')"
+total_word="$(count_word 'of the original [a-z]+ (is|are) back' 'of the original ')"
 
 if [[ -z "$still_word" || -z "$back_word" || -z "$total_word" ]]; then
 	printf 'release-ladder: %s no longer states its punted/revived/original counts in the expected wording, so they cannot be checked\n' "$PAGE" >&2
 	printf 'expected a "(N of them still are)" aside and a "**N of the original M are back.**" sentence\n' >&2
+	printf 'a section down to one item takes the singular: "(one of them still is)", "**One of the original M is back.**"\n' >&2
 	exit 2
 fi
 

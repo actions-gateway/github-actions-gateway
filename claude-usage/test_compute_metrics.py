@@ -895,32 +895,64 @@ class TrackedFiles(unittest.TestCase):
 
     The daily series greps and `git grep` skips symlinks, so the head snapshot has
     to skip them too or the two counts disagree by whatever the links point at.
+
+    A tracked path the working tree no longer has is the other way this list can
+    misrepresent the tree. `ls-files` reads the index, so it lists one; the
+    snapshot opens everything it is handed, so it used to raise `FileNotFoundError`
+    on any unstaged deletion (Q964).
     """
 
     def setUp(self):
         self._git = cm.git
+        self._repo = cm.REPO
+        self._dir = tempfile.TemporaryDirectory()
+        cm.REPO = self._dir.name
 
     def tearDown(self):
         cm.git = self._git
+        cm.REPO = self._repo
+        self._dir.cleanup()
 
-    def feed(self, stream):
+    def feed(self, stream, on_disk=()):
+        """Run tracked_files over `stream`, with `on_disk` existing in the tree."""
+        for rel in on_disk:
+            path = os.path.join(cm.REPO, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as fh:
+                fh.write("x\n")
         cm.git = lambda *a, **k: stream
         return cm.tracked_files()
 
     def test_a_symlink_is_dropped_and_a_regular_file_is_kept(self):
-        got = self.feed("100644 abc 0\tCLAUDE.md\n120000 def 0\tAGENTS.md\n")
+        got = self.feed("100644 abc 0\tCLAUDE.md\n120000 def 0\tAGENTS.md\n",
+                        on_disk=["CLAUDE.md", "AGENTS.md"])
         self.assertEqual(got, ["CLAUDE.md"])
 
     def test_an_executable_file_is_kept(self):
         """Mode is read for the symlink bit alone: 100755 is a script, not a link."""
-        got = self.feed("100755 abc 0\tscripts/ci/gate.sh\n")
+        got = self.feed("100755 abc 0\tscripts/ci/gate.sh\n",
+                        on_disk=["scripts/ci/gate.sh"])
         self.assertEqual(got, ["scripts/ci/gate.sh"])
 
     def test_a_path_with_a_space_survives_the_split(self):
         """The metadata is tab-separated from the path, so a spaced filename is
         only intact if the split is on the tab."""
-        got = self.feed("100644 abc 0\tdocs/a file.md\n")
+        got = self.feed("100644 abc 0\tdocs/a file.md\n",
+                        on_disk=["docs/a file.md"])
         self.assertEqual(got, ["docs/a file.md"])
+
+    def test_a_tracked_file_deleted_from_the_working_tree_is_dropped(self):
+        """The Q964 case: `git rm`-less deletion, which is a session mid-edit."""
+        got = self.feed("100644 abc 0\tdocs/kept.md\n100644 def 0\tdocs/gone.md\n",
+                        on_disk=["docs/kept.md"])
+        self.assertEqual(got, ["docs/kept.md"])
+
+    def test_the_drop_is_by_absence_and_not_by_name(self):
+        """The control: with both files present, both are kept, so the case above
+        is measuring the deletion rather than anything about the path."""
+        got = self.feed("100644 abc 0\tdocs/kept.md\n100644 def 0\tdocs/gone.md\n",
+                        on_disk=["docs/kept.md", "docs/gone.md"])
+        self.assertEqual(got, ["docs/kept.md", "docs/gone.md"])
 
 
 class BandUnits(unittest.TestCase):
