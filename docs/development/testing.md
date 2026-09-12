@@ -876,6 +876,30 @@ Base resolution and the fail-open posture follow the em-dash ratchet's, with `DE
 `scripts/docs/check-design-scope-test.sh` asserts the red case and **two** controls: the same statement alongside an operations edit, and an edit to the same design file stating no scope.
 The second control is what stops a gate that had degenerated into "design changed, operations did not" from passing the suite.
 
+### The row-deletion commit gate
+
+`make row-commits-check` (`scripts/docs/check-row-commits.sh`) fails a branch that deletes a backlog row no commit on it records.
+
+`queue.py metrics` attributes each removal to a closure verb, read off the `docs(queue):`/`docs(status):` lines of the deleting commit's message.
+A squash merge folds a whole pull request into one message, so those lines survive the merge, but only if somebody wrote one: a `git rm` committed inline with the work carries none, and the row lands in the residual however clearly the pull request describes it.
+The convention that fixes it was already written down in `CLAUDE.md` and the `session-backlog` skill, and nothing checked it.
+
+**The rung is a branch-commit walk, which is the part worth reading before adding a rule like this.** No tree check can see this defect: staging is one tree, and the question is which commit the deletion landed in.
+`check-queue-rules.py` scores the store's tree at base against head, so commit shape sits outside every rule it has.
+So the gate resolves the same merge-base `design-scope-check` does and reads the commits above it, which is the first commit-message rule in the repo.
+
+**It asks the metric rather than re-deriving what the metric asks.** The verb test is `queue.py`'s own `_closure_verb`, imported from the vendored copy, so the gate and the summary cannot disagree about what counts: a row line naming *other* rows is a sibling's and is declined for this one, an unnamed row line is the single-row case, and the verb table is whatever upstream ships.
+A re-vendor that renames the function is a refusal here, exit 2, never a silent pass.
+
+The case for it is measured rather than asserted, and it is the recency that carries it.
+At `fb0ca1aa5`, after the Q959 re-vendor made the metric readable at all, 33 of 221 removals were unclassified.
+Twenty carry no row line whatever, and that class has tailed off, the last one landing 2026-09-04.
+The other thirteen carry a row line that names other rows, and **five of those are a single pull request merged the morning this gate was written**: #1913 deleted five rows inside their feature commits while its only `docs(queue):` line filed a sixth.
+A class that recurs from an author who knows the rule is the class prose cannot hold, which is the whole argument for spending a rung on it.
+
+`scripts/docs/check-row-commits-test.sh` asserts the red case and **two** controls: the same deletion in its own row commit, and a branch that deletes no row at all.
+Without the second, a gate that had degenerated into "this branch touched `docs/queue/`" would pass the suite.
+
 ### The prose tier-claim gate
 
 `make tier-claims-check` (`scripts/docs/check-tier-claims.sh`) fails when a prose acquisition-tier claim drifts from the canonical section it paraphrases.

@@ -64,6 +64,7 @@ CHECK_FAST_GATES := roadmap-check \
                     metric-tiers-check reason-tiers-check rung-order-check \
                     doc-toc-check make-targets-check card-bullets-check \
                     agc-names-check tier-claims-check design-scope-check \
+                    row-commits-check \
                     endpoint-parity-check \
                     release-notes-check \
                     dashboard-render-check dashboard-tables-check \
@@ -103,7 +104,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # status-isolation-check took docs/STATUS.md as their subject rather than as a
 # source; queue-drift-check held the table and the store to the same items
 # through the migration and has nothing left to compare.
-QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
+QUEUE_GATES := queue-lint queue-rules-check queue-claims-check row-commits-check \
                  roadmap-check plan-index-check \
                  conflict-markers-check doc-links em-dash-check md-reflow-check \
                  page-density-check doc-toc-check \
@@ -118,6 +119,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 # becomes one command rather than six things to remember.
 #   doc-links            a relative link re-based by a move, or a dangling #QNNN
 #   plan-index-check     a plan doc left active with no Queue row citing it
+#   row-commits-check    a row deleted by a branch with no commit recording the closure
 #   no-plan-refs-check   code or a workflow comment citing a plan path that moved
 #   em-dash-check        a file pushed over its baseline ceiling, or a new doc over the density rule
 #   getting-started-check an install-doc block that lost its gag:verify annotation, or dropped below the executed floor
@@ -131,6 +133,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   agc-names-check      an AGC Deployment named for v1 in an operator doc with no version label
 #   tier-claims-check    a prose tier claim whose canonical section has moved tiers under it
 #   design-scope-check   an operator-visible scope statement added under docs/design/ alone
+#   row-commits-check    a row deleted by a branch with no commit recording the closure
 #   dashboard-tables-check the dashboard doc's panel tables drifted from the shipped dashboard JSON
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
@@ -170,6 +173,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               release-notes-check doc-toc-check make-targets-check \
               card-bullets-check dashboard-tables-check \
               agc-names-check tier-claims-check design-scope-check \
+              row-commits-check \
               conflict-markers-check \
               release-ladder-check \
               roadmap-check comparison-stamps-check promql-check \
@@ -257,6 +261,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-em-dash-test docs/check-page-density-test \
                  docs/check-doc-toc-test docs/check-make-targets-test docs/check-card-bullets-test manifest/check-dashboard-tables-test \
                  docs/check-agc-names-test docs/check-tier-claims-test docs/check-design-scope-test \
+                 docs/check-row-commits-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \

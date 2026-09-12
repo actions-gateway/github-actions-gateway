@@ -285,6 +285,33 @@ jobs:
         env:
           DESIGN_SCOPE_REQUIRE_BASE: '1'
 
+  # Require a deleted backlog row to be recorded by a commit that names it
+  # (Q1100). `queue.py metrics` reads the closure verb off the
+  # `docs(queue):`/`docs(status):` lines of the squashed message, so a row
+  # deleted inside a feature commit lands in the residual however clearly the
+  # pull request describes it.
+  #
+  # fetch-depth: 0 and the explicit base fetch for the same reason design-scope
+  # needs them: this gate reads the commits above the merge-base, and a shallow
+  # clone has none. REQUIRE_BASE turns the local fail-open skip into a hard
+  # error here, where the base is arranged and a skip would mean the job passed
+  # by checking nothing.
+  row-commits:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: fetch the diff base
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - name: a deleted row is recorded by a commit (make row-commits-check)
+        run: make row-commits-check
+        env:
+          ROW_COMMITS_REQUIRE_BASE: '1'
+
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
   # Q831 worth measuring: it lived in CHECK_FAST_GATES alone, so prose that had
@@ -456,6 +483,7 @@ jobs:
       - agc-names
       - tier-claims
       - design-scope
+      - row-commits
       - make-targets
       - md-reflow
       - comparison-stamps

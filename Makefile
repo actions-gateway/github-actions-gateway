@@ -230,6 +230,10 @@ card-bullets-check: ## Fail when a card-grid bullet is too long for the column i
 agc-names-check: ## Fail when an operator doc names the v1 AGC Deployment with no version label
 	scripts/docs/check-agc-names.sh
 
+.PHONY: row-commits-check
+row-commits-check: ## Fail when this branch deletes a backlog row no commit records
+	scripts/docs/check-row-commits.sh
+
 .PHONY: tier-claims-check
 tier-claims-check: ## Fail when a prose tier claim's canonical section has moved tiers under it
 	scripts/docs/check-tier-claims.sh
