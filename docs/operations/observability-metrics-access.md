@@ -70,10 +70,14 @@ Each provisioned tenant runs its own AGC and egress-proxy pods, which serve `/me
 Unlike the GMC manager, the listener **requires a client certificate** signed by that tenant's metrics CA — there is no bearer-token or `insecureSkipVerify` fallback.
 Three things are wired per tenant so Prometheus can scrape them:
 
-1. **Metrics Services (always created).** The GMC creates a `metrics`-named `:8443` port on the proxy `Service` (`actions-gateway-proxy`) and a dedicated AGC `Service` (`actions-gateway-controller`), both in the tenant namespace.
+1. **Metrics Services (always created).** The GMC creates a `metrics`-named `:8443` port on the proxy `Service` and a dedicated AGC `Service`, both in the tenant namespace.
+   Under v2 the AGC Service is named for the gateway, as `<gateway>-agc`; under v1 it is the fixed `actions-gateway-controller`, and the proxy Service is `actions-gateway-proxy`.
    These exist regardless of the scrape toggle.
-2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`, the GMC also creates one `ServiceMonitor` per component in the tenant namespace (`actions-gateway-proxy-metrics`, `actions-gateway-controller-metrics`).
+2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`, the GMC creates one `ServiceMonitor` per component in the tenant namespace (`actions-gateway-proxy-metrics`, `actions-gateway-controller-metrics`).
    Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.
+   **This is a v1 path.** A v2 `ActionsGateway` gets no AGC `ServiceMonitor`: the reconciler that applies them runs only for v1, so a v2 tenant's AGC Service is created and never scraped unless you write the monitor yourself.
+   A v2 `EgressProxy` does get one, from its own reconciler.
+   Q1101 tracks whether that gap is intended.
 3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the per-tenant scraper client bundle from the `actions-gateway-metrics-client` Secret in the tenant namespace — `tls.crt`/`tls.key` authenticate the scraper to the listener and `ca.crt` verifies the listener's server cert.
    `serverName` is the component's `<service>.<namespace>.svc` DNS name (a SAN on the server cert), so the scrape is verified end-to-end and **not** MITM-able:
 

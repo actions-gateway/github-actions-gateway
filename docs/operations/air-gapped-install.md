@@ -162,13 +162,23 @@ For each tenant namespace, first create the pull Secret there (repeat step 3 wit
 ```sh
 TENANT_NS=team-a
 
-# AGC pods run as the fixed AGC ServiceAccount "actions-gateway-controller"
-# (one per tenant namespace; the name is not derived from the gateway name).
+# AGC pods run as the AGC ServiceAccount. Under v2 it is named for the gateway,
+# so a namespace holding two gateways has two of them and both need patching;
+# under v1 there is one per namespace, named "actions-gateway-controller".
+# v2
+kubectl patch serviceaccount <gateway>-agc -n "$TENANT_NS" \
+  -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
+# v1 (legacy)
 kubectl patch serviceaccount actions-gateway-controller -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
-# Worker pods run as "actions-gateway-worker" — this SA also pulls the injected
-# wrapper init container, so no separate wrapper Secret/SA is needed.
+# Worker pods run as the worker ServiceAccount, named for the gateway under v2 and
+# fixed under v1. It also pulls the injected wrapper init container, so no separate
+# wrapper Secret/SA is needed.
+# v2
+kubectl patch serviceaccount <gateway>-worker -n "$TENANT_NS" \
+  -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
+# v1 (legacy)
 kubectl patch serviceaccount actions-gateway-worker -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
@@ -177,7 +187,8 @@ kubectl patch serviceaccount default -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 ```
 
-The GMC creates the `actions-gateway-controller` and `actions-gateway-worker` ServiceAccounts when it reconciles the `ActionsGateway` CR; create the gateway first, then patch.
+The GMC creates both ServiceAccounts when it reconciles the `ActionsGateway` CR, so create the gateway first, then patch.
+Under v2 they are `<gateway>-agc` and `<gateway>-worker`, one pair per gateway, so a namespace holding two gateways has two pairs to patch; under v1 they are the fixed `actions-gateway-controller` and `actions-gateway-worker`, one pair per namespace.
 The patch **survives GMC reconciliation** — the GMC only manages those SAs' labels and owner reference, never their `imagePullSecrets` — and it never touches the `default` SA at all.
 
 > Alternative: if your registry is reachable by the cluster but only needs auth, a cluster-wide approach (e.g. a `default`-SA mutating policy, or a registry pull-through cache that injects credentials) also works.

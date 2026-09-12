@@ -500,7 +500,7 @@ The alternatives and their tradeoffs:
 The chosen path makes the per-tenant egress-IP property hold for *all* GitHub-bound traffic, which is what enables GitHub-side IP allowlisting and per-tenant audit attribution to be coherent claims.
 The cost is that the proxy pool must be sized to carry worker data-plane bandwidth (multi-GB image pulls and artifact uploads under heavy load); CONNECT-only TCP forwarding without TLS termination keeps the per-byte CPU cost low, and the HPA absorbs burst load.
 
-See [docs/plan/worker-egress-proxy.md](../plan/worker-egress-proxy.md) for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.
+See [docs/plan/worker-egress-proxy.md](../plan/archive/worker-egress-proxy.md) for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.
 
 ---
 

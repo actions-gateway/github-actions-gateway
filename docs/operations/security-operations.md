@@ -267,7 +267,7 @@ The table specifies *what to alert on* once that policy is in place.
 
 | Detection | Audit predicate | Why it matters | Response |
 |---|---|---|---|
-| **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:actions-gateway-controller`) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
+| **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc` under v2, `…:actions-gateway-controller` under v1) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
 | **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway/runner-group=*` or the AGC's `gitHubAppRef` | The AGC only needs its agent-pool and payload Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
 | **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `gitHubAppRef` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
 | **GMC namespace-PSA escalation attempt** | `namespace-psa-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)) blocks the GMC relabelling non-tenant namespaces (e.g. `kube-system` → `privileged`). A denial means the GMC tried. | A denial is a successful block, but a *signal* of compromise. Isolate the GMC and investigate. |
@@ -364,7 +364,7 @@ The provider's default policy is broader than this sample (it logs more than the
   | where e.verb in ("list","watch") or e.objectRef.namespace != "<a-tenant-namespace>"
   ```
 
-  Repeat the per-provider queries for each AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:actions-gateway-controller`), alerting on `verb == "list"` or a `get` on a Secret the AGC does not own.
+  Repeat the per-provider queries for each AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc` under v2, `…:actions-gateway-controller` under v1), alerting on `verb == "list"` or a `get` on a Secret the AGC does not own.
 
 **Read the events.** Audit events are one JSON object per line.
 To see GMC Secret reads (substitute your GMC user string):
@@ -537,7 +537,7 @@ Threat-model rationale: [design 5.2](../design/05-security.md).
 
 **The secure default is controller-managed and not opt-in.** For every tenant, the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to exactly what the design requires: DNS to the cluster DNS service only, and all GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are attributable).
 Worker pods cannot reach arbitrary destinations directly — that is the per-tenant egress-IP isolation property, and it is present automatically the moment a tenant is provisioned.
-Do **not** hand-edit the GMC-managed policies (`actions-gateway-workload`, `actions-gateway-controller`, `actions-gateway-proxy`): the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted or go stale.
+Do **not** hand-edit the GMC-managed policies (under v2 `<gateway>-workload`, `<gateway>-agc` and the `EgressProxy`'s own; under v1 the fixed `actions-gateway-workload`, `actions-gateway-controller`, `actions-gateway-proxy`): the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted or go stale.
 See [network-architecture.md](../design/network-architecture.md#networkpolicy-rules) for the full policy set.
 
 > **Running a service mesh?** A mesh sidecar transparently intercepts the worker's outbound TCP and can re-route GitHub-bound traffic through a mesh egress gateway, silently bypassing the per-tenant proxy and dropping the egress-IP attribution this isolation property rests on.
@@ -970,7 +970,7 @@ In-flight connections through the proxy end when their pods do, so drain the con
 ## Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist
 
 The AGC pod holds the tenant's GitHub App private key and is the only workload that needs the Kubernetes API server.
-The GMC therefore reconciles a NetworkPolicy (`actions-gateway-controller`) admitting AGC egress on the apiserver ports **443 and 6443**.
+The GMC therefore reconciles a NetworkPolicy admitting AGC egress on the apiserver ports **443 and 6443**: `<gateway>-agc` under v2, the fixed `actions-gateway-controller` under v1.
 By default that rule has **no destination restriction** (any-dest): kube-proxy DNATs the `kubernetes` Service ClusterIP to a provider-specific apiserver IP *before* NetworkPolicy is evaluated, so a precise `ipBlock` is not portable and a wrong one silently severs the AGC's apiserver access (the PR #59 post-DNAT trap).
 That breadth is a documented residual ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)): a compromised AGC could in principle reach an arbitrary external HTTPS endpoint on 443, not just the apiserver.
 

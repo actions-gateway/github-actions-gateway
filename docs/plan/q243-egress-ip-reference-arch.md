@@ -35,7 +35,7 @@ What source IP GitHub actually *sees*, however, is decided one layer lower, by h
   That node IP is **shared** across every pod on the node — including other tenants' proxy pods — and is **not stable** across a proxy pod rescheduling to a different node (HPA scale, node drain, rolling update).
 - So today, absent an egress-IP mechanism, "distinct set of egress IPs per tenant" is **aspirational**: the choke point exists, but the source IP at GitHub is the cluster's shared egress IP set, not a per-tenant one.
 
-This is visible in the existing tradeoff table ([02-architecture.md](../design/02-architecture.md#23-tier-3--egress-proxy-pool), [worker-egress-proxy.md](worker-egress-proxy.md)), which lists the chosen path as "Egress IP at GitHub: Per-tenant, stable."
+This is visible in the existing tradeoff table ([02-architecture.md](../design/02-architecture.md#23-tier-3--egress-proxy-pool), [worker-egress-proxy.md](archive/worker-egress-proxy.md)), which lists the chosen path as "Egress IP at GitHub: Per-tenant, stable."
 That column is only true once an **egress-IP mechanism** binds each tenant's choke-point traffic to a distinct, stable source IP.
 **This plan specifies that mechanism.** It does not change the proxy pool; it adds the source-IP binding underneath it.
 
@@ -74,7 +74,7 @@ Because dogfood runs single-tenant-direct, the production multi-tenant isolation
 
 ## What "per-tenant egress IP" actually requires
 
-Four downstream properties depend on the egress IP being per-tenant, distinct, and stable (from [worker-egress-proxy.md](worker-egress-proxy.md#why-route-worker-traffic-through-the-proxy)):
+Four downstream properties depend on the egress IP being per-tenant, distinct, and stable (from [worker-egress-proxy.md](archive/worker-egress-proxy.md#why-route-worker-traffic-through-the-proxy)):
 
 1. **GitHub-side IP allowlisting** — GHES / GitHub App IP-allowlist filters inbound by source IP.
    Only works if a tenant's traffic arrives from a *known, stable, tenant-specific* IP set.
@@ -421,7 +421,7 @@ What remains is genuinely deferred and out of the critical path: Approach A's (C
 - [01-executive-summary.md](../design/01-executive-summary.md) — the per-tenant egress-IP claim
 - [02-architecture.md §2.3](../design/02-architecture.md#23-tier-3--egress-proxy-pool) — Tier-3 proxy pool
 - [network-architecture.md](../design/network-architecture.md) — NetworkPolicy topology + FQDN modes
-- [worker-egress-proxy.md](worker-egress-proxy.md) — why worker traffic routes through the proxy
+- [worker-egress-proxy.md](archive/worker-egress-proxy.md) — why worker traffic routes through the proxy
 - [q242-g1-proxy-destination-allowlist.md](archive/q242-g1-proxy-destination-allowlist.md) — destination allowlist
 - [gke-dogfood.md](gke-dogfood.md) — single-tenant-direct dogfood posture
 - [Cilium Egress Gateway docs](https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/)

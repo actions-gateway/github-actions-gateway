@@ -223,7 +223,7 @@
 20 docs/plan/v2-ga.md
 25 docs/plan/v2beta1.md
 39 docs/plan/website.md
-28 docs/plan/worker-egress-proxy.md
+28 docs/plan/archive/worker-egress-proxy.md
 4 docs/reference/README.md
 107 docs/reference/api.md
 9 docs/releases/README.md

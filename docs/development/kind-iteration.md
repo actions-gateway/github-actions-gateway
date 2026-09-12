@@ -18,7 +18,7 @@ The `scripts/e2e/kind-with-registry.sh` script wires the kind nodes' containerd 
 
 ### CNI selection: kindnet (default) vs Calico
 
-`make e2e-cluster` builds a kindnet cluster by default. kindnet's bundled `kube-network-policies` enforcer does **not** drop egress traffic for the NetworkPolicy negative cases (two CI iterations observed successful HTTP exchanges the workload NP does not authorise — see [`docs/plan/worker-egress-proxy.md`](../plan/worker-egress-proxy.md)).
+`make e2e-cluster` builds a kindnet cluster by default. kindnet's bundled `kube-network-policies` enforcer does **not** drop egress traffic for the NetworkPolicy negative cases (two CI iterations observed successful HTTP exchanges the workload NP does not authorise — see [`docs/plan/worker-egress-proxy.md`](../plan/archive/worker-egress-proxy.md)).
 To observe egress NetworkPolicy *enforcement* at runtime, build the Calico profile instead:
 
 ```bash
@@ -145,11 +145,14 @@ The Deployment controller will recreate it with the latest spec and pull policy.
 ### Distroless pods can't be `kubectl exec`'d
 
 The AGC, GMC, and proxy images are distroless — no shell, no `nc`, no `curl`.
-For connectivity checks from a pod that *should* be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod:
+For connectivity checks from a pod that *should* be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod.
+The AGC NetworkPolicy selects on the bare `app` label, whose value is the AGC's own name: `<gateway>-agc` under v2, the fixed `actions-gateway-controller` under v1.
+The recommended `app.kubernetes.io/name` label will not do here, because it is not what the policy selects on.
 
 ```bash
+# v2: substitute your own gateway name
 kubectl run dbg --image=alpine --restart=Never --rm -i \
-  --labels='actions-gateway/component=workload,app=actions-gateway-controller' \
+  --labels='actions-gateway/component=workload,app=<gateway>-agc' \
   --command -- sh -c '
     apk add --no-cache curl bind-tools >/dev/null 2>&1
     nc -zv -w 5 actions-gateway-proxy 8080

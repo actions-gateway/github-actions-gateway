@@ -5,9 +5,13 @@
 For initial setup steps see [Getting Started](../getting-started.md).
 For detailed symptom → diagnosis steps see [Troubleshooting](troubleshooting.md).
 
-**Addressing the AGC Deployment.** Under v2 the AGC is named per gateway, as `<gateway>-agc`, so a `team-a-gateway` tenant addresses `deploy/team-a-gateway-agc`.
-Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+**Addressing the AGC.** Under v2 every AGC control-plane object is named per gateway, as `<gateway>-agc`: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+A `team-a-gateway` tenant therefore addresses `deploy/team-a-gateway-agc`, `sa/team-a-gateway-agc`, and so on.
+Under v1 there is one AGC per namespace and all of them carry the fixed name `actions-gateway-controller`.
 Commands below give both forms; substitute your own gateway name for `<gateway>`.
+
+**Selecting AGC pods needs neither form.** The bare `app` label carries the per-gateway name under v2 and the fixed name under v1, so `-l app=actions-gateway-controller` selects nothing on a v2 tenant.
+The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` under both, so `-l app.kubernetes.io/name=actions-gateway-controller` is the selector that works on either and is what the commands below use.
 
 ---
 
@@ -302,7 +306,7 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 
 ### `active_sessions` Flatlining at Zero
 
-1. Check AGC pod status: `kubectl get pod -n <namespace> -l app=actions-gateway-controller`.
+1. Check AGC pod status: `kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller`.
 2. Check AGC logs:
 
    ```sh
