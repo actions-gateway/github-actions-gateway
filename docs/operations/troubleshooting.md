@@ -4,9 +4,13 @@
 
 Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.
 
-**Addressing the AGC Deployment.** Under v2 the AGC is named per gateway, as `<gateway>-agc`, so a `team-a-gateway` tenant addresses `deploy/team-a-gateway-agc`.
-Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+**Addressing the AGC.** Under v2 every AGC control-plane object is named per gateway, as `<gateway>-agc`: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+A `team-a-gateway` tenant therefore addresses `deploy/team-a-gateway-agc`, `sa/team-a-gateway-agc`, and so on.
+Under v1 there is one AGC per namespace and all of them carry the fixed name `actions-gateway-controller`.
 Commands below give both forms; substitute your own gateway name for `<gateway>`.
+
+**Selecting AGC pods needs neither form.** The bare `app` label carries the per-gateway name under v2 and the fixed name under v1, so `-l app=actions-gateway-controller` selects nothing on a v2 tenant.
+The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` under both, so `-l app.kubernetes.io/name=actions-gateway-controller` is the selector that works on either and is what the commands below use.
 
 ---
 
@@ -439,7 +443,7 @@ On GMC versions without the Q552 fix, the reconciler rebuilt the whole pod templ
 - **Workaround on an older GMC:** delete the pod and let the Deployment recreate it.
 
   ```sh
-  kubectl delete pod -n <namespace> -l app=actions-gateway-controller
+  kubectl delete pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller
   ```
 
   This is a hard restart, not a rolling one: the replacement pod is only scheduled after the old one terminates, so the tenant's control plane is down for the pod's startup time.
@@ -452,7 +456,7 @@ The reaper runs on the live AGC on deadlines measured from each pod, so a fresh 
 **Verify either path took effect** — check that the pod is actually new rather than trusting the rollout message:
 
 ```sh
-kubectl get pods -n <namespace> -l app=actions-gateway-controller \
+kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
   -o custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp
 ```
 
@@ -1105,7 +1109,7 @@ See [Disjointness is enforced on every edit](security-operations.md#disjointness
 
 ```sh
 # Check pod status and restarts
-kubectl get pod -n <namespace> -l app=actions-gateway-controller
+kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller
 
 # Check logs for startup errors
 # v2
@@ -2905,7 +2909,7 @@ kubectl get svc -n <namespace> actions-gateway-proxy
 kubectl get endpoints -n <namespace> actions-gateway-proxy
 
 # Check the AGC container's HTTPS_PROXY env var (distroless — inspect spec, not the running process)
-kubectl get pod -n <namespace> -l app=actions-gateway-controller \
+kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
   -o jsonpath='{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="HTTPS_PROXY")]}{.name}={.value}{"\n"}{end}'
 
 # Test proxy connectivity using an ephemeral curl pod in the same namespace
@@ -2960,7 +2964,7 @@ kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}{"\n"}'
 
 # 2. The NO_PROXY the GMC generated for the tenant's AGC. It must contain the
 #    address from step 1 (distroless image — read the spec, not the process).
-kubectl get deploy -n <namespace> -l app=actions-gateway-controller \
+kubectl get deploy -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
   -o jsonpath='{range .items[0].spec.template.spec.containers[0].env[?(@.name=="NO_PROXY")]}{.value}{"\n"}{end}'
 ```
 
@@ -2994,13 +2998,17 @@ kubectl get endpointslice -n default -l kubernetes.io/service-name=kubernetes \
   -o jsonpath='{.items[0].ports[0].port}{"\n"}'
 
 # 2. Confirm the AGC NetworkPolicy actually allows both 443 and 6443.
+# v2
+kubectl get networkpolicy -n <namespace> <gateway>-agc -o yaml \
+  | yq '.spec.egress[].ports[].port' | sort -u
+# v1 (legacy)
 kubectl get networkpolicy -n <namespace> actions-gateway-controller -o yaml \
   | yq '.spec.egress[].ports[].port' | sort -u
 
 # 3. If the cluster uses kindnet / kube-network-policies, check the verdict log
 #    on the node hosting the AGC pod. Look for lines like:
 #      "Pod is not allowed to connect to port" pod="<ns>/<agc-pod>" port=6443
-kubectl get pod -n <namespace> -l app=actions-gateway-controller \
+kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
   -o jsonpath='{.items[0].spec.nodeName}{"\n"}'
 kubectl logs -n kube-system -l app=kindnet --tail=200 --field-selector spec.nodeName=<node-name>
 ```
@@ -3094,7 +3102,7 @@ kubectl get pod -n <namespace> <worker-pod-name> -o yaml \
 # If empty: the AGC was deployed without PROXY_TLS_SECRET_NAME.
 
 # 2. Confirm the AGC has the PROXY_TLS_SECRET_NAME env wired.
-kubectl get pod -n <namespace> -l app=actions-gateway-controller \
+kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
   -o jsonpath='{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="PROXY_TLS_SECRET_NAME")]}{.name}={.value}{"\n"}{end}'
 # Expected: PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls
 # Empty means the GMC needs to roll the AGC Deployment (likely an upgrade across the 5h boundary).

@@ -74,7 +74,7 @@ Before upgrading any component, confirm the system is healthy:
 kubectl get actionsgateway --all-namespaces
 
 # 2. All AGC pods healthy
-kubectl get pods --all-namespaces -l app=actions-gateway-controller
+kubectl get pods --all-namespaces -l app.kubernetes.io/name=actions-gateway-controller
 
 # 3. All proxy pools healthy — the recommended label covers v1 inline pools and v2
 #    EgressProxy pools alike; `app=actions-gateway-proxy` finds only v1's.
@@ -814,6 +814,9 @@ kubectl delete pods -n <tenant-namespace> \
 
 ### AGC Deployment renamed from `actions-gateway-agc` to `actions-gateway-controller`
 
+This section is v1 history: it is the rename that gave v1 its fixed per-namespace name.
+Under v2 the AGC is named per gateway as `<gateway>-agc`, so the v1 name below is the *old* name a second time over; see the v1 to v2 [migration guide](migration-v1-to-v2.md) for that move.
+
 Deployments and resources created by the GMC are now named `actions-gateway-controller` instead of `actions-gateway-agc`.
 After upgrading the GMC:
 
@@ -825,8 +828,8 @@ After upgrading the GMC:
    kubectl delete deploy actions-gateway-agc -n <namespace>
    ```
 
-3. Pods labelled `app=actions-gateway-agc` become `app=actions-gateway-controller`.
-   Update any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old label before upgrading.
+3. Pods labelled `app=actions-gateway-agc` become `app=actions-gateway-controller`, which is v1's fixed label; on v2 the same label carries `<gateway>-agc` instead.
+   Update any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old label before upgrading, and prefer `app.kubernetes.io/name=actions-gateway-controller` where the selector has to survive the move to v2 as well.
 
 ### GMC manager NetworkPolicy is now enabled by default
 

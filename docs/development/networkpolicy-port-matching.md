@@ -20,10 +20,11 @@ This is the **port axis** analogue of the `ipBlock: <ClusterIP>/32` trap PR #59 
 ## Reproduction
 
 Fresh kind cluster (v0.31.0, `kindest/node:v1.35.0`, `kindest/kindnetd:v20251212-v0.29.0-alpha-105-g20ccfc88`), one namespace `repro`, two NetworkPolicies copying the exact shape of `buildAGCNetworkPolicy` and `buildWorkloadNetworkPolicy` at HEAD (commit `15c8c10`, before PR #62).
-One debug pod (`alpine:3.20`) labelled with **both** labels:
+One debug pod (`alpine:3.20`) labelled with **both** labels.
+The repro predates v2, so `<agc-name>` below is v1's fixed `actions-gateway-controller`; under v2 it is `<gateway>-agc`, and the trap is unchanged either way, because the AGC policy still selects on the bare `app` label and only its value moved.
 
 ```
-app=actions-gateway-controller,actions-gateway/component=workload
+app=<agc-name>,actions-gateway/component=workload
 ```
 
 Manifests are not checked in — copy `buildAGCNetworkPolicyFrom` ([`shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go)) and `buildWorkloadNetworkPolicy` ([`builder.go`](../../cmd/gmc/internal/controller/builder.go)) into a single YAML, point them at a `repro` namespace, add a stand-in proxy pod so the workload NP's proxy podSelector has a real target.
@@ -32,10 +33,10 @@ Manifests are not checked in — copy `buildAGCNetworkPolicyFrom` ([`shared_netw
 
 | Pod labels                                                  | NPs that apply                | `nc -zv 10.96.0.1 443` |
 |-------------------------------------------------------------|-------------------------------|------------------------|
-| `app=actions-gateway-controller, component=workload`        | AGC NP **+** workload NP      | Times out (drop)       |
-| `app=actions-gateway-controller`                            | AGC NP only                   | Times out (drop)       |
-| `app=actions-gateway-controller, component=workload` + AGC NP patched to add a `port: 6443` egress rule | AGC NP + workload NP | **Open** (success)     |
-| `app=actions-gateway-controller, component=workload` (additivity sanity check: `nc -zv <proxy-pod-ip> 8080`) | AGC NP + workload NP | Open (success)         |
+| `app=<agc-name>, component=workload`                        | AGC NP **+** workload NP      | Times out (drop)       |
+| `app=<agc-name>`                                            | AGC NP only                   | Times out (drop)       |
+| `app=<agc-name>, component=workload` + AGC NP patched to add a `port: 6443` egress rule | AGC NP + workload NP | **Open** (success)     |
+| `app=<agc-name>, component=workload` (additivity sanity check: `nc -zv <proxy-pod-ip> 8080`) | AGC NP + workload NP | Open (success)         |
 
 The second row is the key finding: with **only** the AGC NP applying — i.e. the exact configuration PR #62 makes permanent — the 443 connection still fails.
 Whatever PR #59 observers thought they were testing when they reported "removing the workload NP restored access" was either confounded by a race or measured a different code path.

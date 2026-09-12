@@ -61,7 +61,7 @@ Q7b ran 2026-06-11, so the bucket-E egress caveat is lifted (replaced by the pro
   Two documented security controls that are **false in the install artifact**.
   Resolve each = the confining ValidatingAdmissionPolicy(s) **or** correct the docs — it gates either way.
 - [x] **Worker egress negatives observed enforcing** (Q7b, *recommended*, ran 2026-06-11): `WorkloadEgressBlockedToNonProxyPod` + `WorkerCannotReachK8sAPI` observed dropping traffic on a Calico v3.31.5 kind cluster (`make e2e-cluster KIND_CNI=calico`), alongside the green positive `ProxyConnectWorks` on the same cluster (14/14 provisioning specs).
-  Evidence and reproduction: [worker-egress-proxy.md](../worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11).
+  Evidence and reproduction: [worker-egress-proxy.md](worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11).
   A CI leg for the Calico profile is tracked as Q119.
 
 ### C. Packaging & supply chain — *gating + recommended*

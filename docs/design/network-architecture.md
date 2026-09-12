@@ -81,7 +81,19 @@ The split (over a single combined policy) closes M-12 — worker pods inherit eg
 Only the AGC Deployment has API-server egress.
 
 The policies below are the v1 (`actions-gateway.github.com`) shape, whose names and selectors are fixed because v1 permits one gateway and one proxy pool per namespace.
-**v2 emits the same three policies with the same posture**, per-object rather than per-namespace: the workload and AGC policies are named for the gateway, the proxy policy for the `EgressProxy`, and every selector keys on the owning object's identity label (`actions-gateway.com/gateway` / `actions-gateway.com/egress-proxy`) instead of `app`.
+**v2 emits the same three policies with the same posture**, per-object rather than per-namespace: the workload and AGC policies are named for the gateway (`<gateway>-workload`, `<gateway>-agc`), the proxy policy for the `EgressProxy`.
+The *selectors* move less than the names do, and only one of the three reaches for an identity label.
+Read off [`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go) and [`egressproxy_builder.go`](../../cmd/gmc/internal/controller/egressproxy_builder.go):
+
+| Policy | v1 `podSelector` | v2 `podSelector` |
+|---|---|---|
+| workload | `actions-gateway/component: workload` | unchanged |
+| AGC | `app: actions-gateway-controller` | `app: <gateway>-agc` |
+| proxy | `app: actions-gateway-proxy` | `actions-gateway.com/egress-proxy: <proxy>` |
+
+The AGC policy therefore still keys on `app`; what changed is the value, which is the AGC's own per-gateway name.
+The workload policy is untouched, which is what lets co-located gateways share one egress lockdown.
+`actions-gateway.com/gateway` is metadata carried on every v2 child and is the selector of no policy at all; the identity label that *is* selected on is the `EgressProxy`'s.
 Two consequences follow from that, both load-bearing during a [v1→v2 migration](../operations/migration-v1-to-v2.md)'s coexistence window, when a namespace holds both:
 
 - A v2 pool's pods do **not** carry `app: actions-gateway-proxy`, so v1's policy, `PodDisruptionBudget`, `HorizontalPodAutoscaler`, and hostname anti-affinity — all keyed on that one bare label — govern only v1's pool (Q582).
@@ -373,7 +385,7 @@ Instead, schedule a short-lived `curlimages/curl` pod and apply the same labels 
 > **The negative checks below only hold on a CNI that enforces egress NetworkPolicy** (Calico, Cilium, …).
 > NetworkPolicy objects are inert without a CNI enforcer, and kind's default kindnet demonstrably does *not* drop egress for these cases — a "blocked" expectation will spuriously succeed there.
 > Production clusters must run an egress-enforcing CNI for the workload isolation described in this document to exist at runtime.
-> The workload-pod negatives below are automated as the cluster-only specs `E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` and `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`, observed enforcing on a Calico kind cluster (`make e2e-cluster KIND_CNI=calico`) on 2026-06-11 — see [the worker-egress-proxy plan](../plan/worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11).
+> The workload-pod negatives below are automated as the cluster-only specs `E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` and `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`, observed enforcing on a Calico kind cluster (`make e2e-cluster KIND_CNI=calico`) on 2026-06-11 — see [the worker-egress-proxy plan](../plan/archive/worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11).
 
 ### Confirm a workload pod can reach GitHub via the proxy
 

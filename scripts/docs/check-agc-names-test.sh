@@ -14,10 +14,16 @@
 # demonstrated nothing, because a checker whose pattern stopped matching passes
 # those too.
 #
+# Rule 3 (Q1099) carries its own red case and two controls, because its remedy
+# differs from rule 1's: the `app=` selector has a version-neutral answer in
+# `app.kubernetes.io/name`, so that form must pass unmarked, while the bare label
+# a NetworkPolicy selects on still takes the v1 marker.
+#
 # The remaining cases pin the parts that would otherwise pass by checking
 # nothing: an unreadable suffix constant and an empty scope are refusals (exit 2)
-# rather than clean runs, a misspelled v2 suffix is caught, and the sibling
-# suffixes the same builder mints are left alone.
+# rather than clean runs, a misspelled v2 suffix is caught, the sibling suffixes
+# the same builder mints are left alone, and an upstream version string
+# (`v1.35.0`) does not pass for a version label.
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -163,6 +169,56 @@ The per-gateway metrics bundle is `<gateway>-agc-metrics-{tls,client}`, and the
 worker ServiceAccount is `<gateway>-worker`.
 MD
 run_gate "the builder's sibling suffixes are left alone" 0
+
+# --- rule 3: the app= selector (Q1099) --------------------------------------
+
+new_repo <<'MD'
+# Page
+
+```sh
+kubectl get pod -n <namespace> -l app=actions-gateway-controller
+```
+MD
+run_gate "an unlabelled v1 app= selector fails" 1
+expect_out "the finding offers the version-neutral label" 'app.kubernetes.io/name=actions-gateway-controller'
+
+# The control that keeps rule 3 from degenerating into "the v1 name appears": the
+# recommended label spells the same name and is correct under both versions, so it
+# must pass with no marker at all.
+new_repo <<'MD'
+# Page
+
+```sh
+kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller
+```
+MD
+run_gate "the recommended label needs no version marker" 0
+
+# Where a NetworkPolicy selector is the subject the bare label is the only correct
+# one, so stating the version is the escape, exactly as for a Deployment name.
+new_repo <<'MD'
+# Page
+
+The v1 AGC NetworkPolicy selects on the bare label:
+
+```sh
+kubectl run dbg --labels='app=actions-gateway-controller'
+```
+MD
+run_gate "a v1-labelled app= selector passes" 0
+
+# A version *string* is not a version label. `kindest/node:v1.35.0` satisfied a
+# bare \bv1\b and told the reader nothing, which is why the pattern excludes it.
+new_repo <<'MD'
+# Page
+
+Reproduced on a fresh kind cluster (`kindest/node:v1.35.0`).
+
+```sh
+kubectl get pod -n <namespace> -l app=actions-gateway-controller
+```
+MD
+run_gate "an upstream version string does not count as a version label" 1
 
 # --- refusals: a gate that checked nothing would otherwise read as clean -----
 

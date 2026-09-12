@@ -9,7 +9,7 @@ pages were measured on 2026-09-12, of which one was correct — a page applying 
 and four were bare-name forms (`get deploy … <name>`) that Q1098's own `deploy/` pattern
 could not see.
 
-Two rules, both functions of the tree alone:
+Three rules, all functions of the tree alone:
 
 1. **Every v1 AGC Deployment reference is version-labelled.** A `deploy/…`,
    `deployment/…` or `get deploy … <name>` reference to `actions-gateway-controller`
@@ -22,14 +22,24 @@ Two rules, both functions of the tree alone:
    `<gateway>-agc` in the docs is checked against `AGCResourceSuffix` in the GMC
    builder, so renaming the suffix in code cannot leave the docs silently wrong.
 
+3. **Every v1 AGC `app=` selector is version-labelled** (Q1099). The bare `app` label
+   carries `<gateway>-agc` under v2 and the fixed name under v1, so
+   `-l app=actions-gateway-controller` selects nothing on a v2 tenant. Unlike a
+   Deployment name, this one has a version-neutral answer: `app.kubernetes.io/name`
+   is `actions-gateway-controller` under both, pinned by
+   `TestAGCPodSelectorIsVersionNeutral`. So the finding names that remedy rather than
+   a v2/v1 split, which is only right where the selector is what a NetworkPolicy
+   matches on and the recommended label will not do.
+
+The version label is deliberately not `\bv1\b`: an upstream version string
+(`kindest/node:v1.35.0`) would satisfy that while telling a reader nothing about which
+API version the command is for. `v1alpha1` does count, since a page applying a v1 CR is
+v1-scoped by that fact.
+
 Scope is the pages an operator or contributor follows: `docs/operations/`,
 `docs/development/` and `docs/getting-started.md`. Design docs describe v1's
 NetworkPolicy and label set as design, and archived plans are history; neither is a
 command anyone runs, so neither is in scope.
-
-What this gate does NOT cover is the adjacent identifier class — the pod `app=`
-selector, and the ServiceAccount, Service and NetworkPolicy names, which are also
-per-gateway under v2. Those are Q1099.
 
 Exit status: 0 clean, 1 on any finding, 2 when the scope resolved to no files or the
 suffix constant could not be read, either of which would pass by checking nothing.
@@ -51,7 +61,10 @@ DEP_RE = re.compile(
     r"deploy(?:ment)?s?/" + V1_NAME
     + r"|\bdeploy(?:ment)?s?\b(?:\s+-[^\s]+(?:[= ]\S+)?)*\s+" + V1_NAME
 )
-V1_LABEL_RE = re.compile(r"\bv1\b")
+V1_LABEL_RE = re.compile(r"\bv1(?:alpha\d+)?\b(?!\.\d)")
+# A pod/Deployment selector on the bare `app` label. `app.kubernetes.io/name=` does
+# not match: the character before `=` is `e`, not the end of a bare `app`.
+APP_SELECTOR_RE = re.compile(r"(?<![\w./-])app=" + V1_NAME)
 SUFFIX_RE = re.compile(r'AGCResourceSuffix\s*=\s*"([^"]+)"')
 # The other per-gateway suffixes the same builder mints. They are not Deployment
 # names, but they are spelled `<gateway>-…` in the docs the same way, and several
@@ -98,11 +111,11 @@ def agc_suffix(root: pathlib.Path) -> tuple[str, set[str]] | None:
     return m.group(1), {m.group(1), *SIBLING_SUFFIX_RE.findall(text)}
 
 
-def unlabelled(lines: list[str]) -> list[tuple[int, str]]:
-    """Return every v1 Deployment reference with no version label in its window."""
+def unlabelled(lines: list[str], pattern: re.Pattern[str]) -> list[tuple[int, str]]:
+    """Return every match of `pattern` with no version label in its window."""
     found = []
     for i, line in enumerate(lines):
-        if not DEP_RE.search(line):
+        if not pattern.search(line):
             continue
         preceding = [x for x in lines[:i] if x.strip()][-LABEL_WINDOW:]
         if any(V1_LABEL_RE.search(w) for w in [line, *preceding]):
@@ -133,12 +146,21 @@ def main() -> int:
     for f in files:
         rel = f.relative_to(root)
         lines = f.read_text().splitlines()
-        for lineno, text in unlabelled(lines):
+        for lineno, text in unlabelled(lines, DEP_RE):
             findings += 1
             print(
                 f"{rel}:{lineno}: AGC Deployment named for v1 with no version label "
                 f"nearby — give it a `# v1 (legacy)` sibling and the v2 form "
                 f"`{v2_form}`: {text}"
+            )
+        for lineno, text in unlabelled(lines, APP_SELECTOR_RE):
+            findings += 1
+            print(
+                f"{rel}:{lineno}: `app={V1_NAME}` selects nothing on a v2 tenant, "
+                f"where the label carries `{v2_form}`. Prefer "
+                f"`app.kubernetes.io/name={V1_NAME}`, which is correct under both; "
+                f"where a NetworkPolicy selector is the subject and only the bare "
+                f"label will do, state the version nearby: {text}"
             )
         for i, line in enumerate(lines, 1):
             for m in re.finditer(r"<gateway>(-[a-z0-9-]+)", line):

@@ -169,7 +169,7 @@ The Gateway Manager Controller (GMC) always emits the proxy `Deployment`, `Servi
 `spec.proxy.managedNetworkPolicy: false` is **not** a disable switch — it only drops the GitHub-CIDR rule from the proxy's own NetworkPolicy (for FQDN-based CNI policies); the proxy still runs and still carries all traffic.
 
 **Why it was left out.** Routing *all* GitHub-bound traffic — AGC control-plane and worker data-plane alike — through the per-tenant proxy is what makes the gateway's differentiating claim coherent: stable per-tenant egress IPs at GitHub.
-Four downstream capabilities rest on it (see [docs/plan/worker-egress-proxy.md](../plan/worker-egress-proxy.md)): GitHub-side IP allowlisting, per-tenant audit attribution, GitHub-side incident containment (a rate-limit / abuse-flag / IP-ban hits one tenant, not whoever shares the node), and the one-operation per-tenant kill-switch (drain the pool).
+Four downstream capabilities rest on it (see [docs/plan/worker-egress-proxy.md](../plan/archive/worker-egress-proxy.md)): GitHub-side IP allowlisting, per-tenant audit attribution, GitHub-side incident containment (a rate-limit / abuse-flag / IP-ban hits one tenant, not whoever shares the node), and the one-operation per-tenant kill-switch (drain the pool).
 These are network-attribution, compliance, and operability properties — **not** a security boundary against a compromised worker, which the installation token already scopes.
 Making the proxy optional therefore forfeits attribution and containment without breaching the token boundary.
 For the multi-tenant deployments the design targets, that trade is not worth a default, so the proxy stays mandatory.
@@ -193,7 +193,7 @@ It must never become the default or a silent behavior.
 
 **What would trigger building it.** A concrete operator ask for a single-tenant / dev / cost-sensitive deployment, or a deployment that already provides per-tenant egress attribution at the node or cloud layer and wants to shed the proxy's always-on cost.
 
-**Related finding.** [docs/plan/worker-egress-proxy.md](../plan/worker-egress-proxy.md) (the four properties forfeited); [02-architecture.md §2.3](02-architecture.md#23-tier-3--egress-proxy-pool).
+**Related finding.** [docs/plan/worker-egress-proxy.md](../plan/archive/worker-egress-proxy.md) (the four properties forfeited); [02-architecture.md §2.3](02-architecture.md#23-tier-3--egress-proxy-pool).
 
 ---
 

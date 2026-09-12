@@ -632,10 +632,11 @@ kubectl get serviceaccount,role,rolebinding -n <tenant-namespace> | grep actions
 
 # Confirm NetworkPolicies and ResourceQuota were applied
 kubectl get networkpolicy,resourcequota -n <tenant-namespace>
-# Expected NetworkPolicies (3):
-#   actions-gateway-workload — restricts AGC and worker pods to proxy + DNS
-#   actions-gateway-controller      — adds Kubernetes API server egress for the AGC only
-#   actions-gateway-proxy    — restricts proxy pods to GitHub CIDRs + DNS
+# Expected NetworkPolicies (3). Under v2 the first two are named for the gateway and
+# the third for the EgressProxy; the v1 names are in parentheses.
+#   <gateway>-workload (actions-gateway-workload)     restricts AGC and worker pods to proxy + DNS
+#   <gateway>-agc (actions-gateway-controller)        adds Kubernetes API server egress for the AGC only
+#   <proxy> (actions-gateway-proxy)                   restricts proxy pods to GitHub CIDRs + DNS
 
 # Confirm the Pod Security Admission label matches the chosen securityProfile
 kubectl get namespace <tenant-namespace> \

@@ -2,11 +2,12 @@
 // pinned actions/runner version — shared between the Gateway Manager Controller
 // (GMC) and the Actions Gateway Controller (AGC).
 //
-// Both controllers must use the same string for the AGC Deployment name, its
-// ServiceAccount, the NetworkPolicy that grants it Kubernetes API egress, and the
-// app.kubernetes.io/managed-by label on worker pods and agent Secrets. A single
-// constant here is the single source of truth; changing it in only one place would
-// silently break the NetworkPolicy pod-selector match at runtime.
+// Both controllers must use the same string for the app.kubernetes.io/managed-by
+// label on worker pods and agent Secrets, and, on the v1 API, for the AGC
+// Deployment name, its ServiceAccount, and the NetworkPolicy that grants it
+// Kubernetes API egress. A single constant here is the single source of truth;
+// changing it in only one place would silently break the v1 NetworkPolicy
+// pod-selector match at runtime.
 //
 // The same single-source-of-truth discipline applies to the runner version: it
 // must be identical in the default worker image the AGC pulls, the agent.version
@@ -17,10 +18,14 @@
 package names
 
 // ControllerName is the canonical name used for:
-//   - the AGC Deployment (and its app: label)
-//   - the AGC ServiceAccount, Role, and RoleBinding
-//   - the NetworkPolicy that selects AGC pods (app: actions-gateway-controller)
-//   - the value of app.kubernetes.io/managed-by on worker pods and agent Secrets
+//   - the value of app.kubernetes.io/managed-by on worker pods and agent Secrets,
+//     under both API versions, because the AGC creates them either way
+//   - app.kubernetes.io/name on the AGC's own pods, under both versions, which is
+//     what makes it the one selector that reaches a mixed fleet (Q1099)
+//   - on v1 ONLY: the AGC Deployment and its app: label, the AGC ServiceAccount,
+//     Role and RoleBinding, and the NetworkPolicy that selects AGC pods. v2 mints
+//     each of those per gateway as <gateway>-agc from AGCResourceSuffix, so the
+//     bare app: label and every v1 resource name carry a different value there.
 const ControllerName = "actions-gateway-controller"
 
 // WorkerSAName is the ServiceAccount name assigned to worker pods. The GMC
