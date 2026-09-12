@@ -53,7 +53,8 @@ There were two ways to hold an ID without reserving it, and both are closed:
   **Removed.** Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.
 - **Reading the file's highest ID and adding one.** No tool can prevent that, so it fails loudly instead.
   `queue.py claims` requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, measured against the merge base rather than `origin/main`'s tip, and skips rather than fails when the remote cannot be read unless `--strict` is passed.
-  The message names the fix, and `QUEUE_CLAIMS_ALLOW="Q1 Q2"` (or `--allow`) is there for an ID claimed from another clone.
+  It also rejects an ID this repository has already completed: ids are never reused, and a completed row is deleted, so history is the only place that shows one.
+  The message names the fix, and `QUEUE_CLAIMS_ALLOW="Q1 Q2"` (or `--allow`) is there for an ID claimed from another clone, `--allow-shipped QNNN` for a branch reverting a completion.
   `scripts/docs/check-queue-claims.sh` points it at this store, backing `make queue-claims-check` in `make check` and `make queue-gates`, and the `status-lint` workflow runs the same script with `--strict` (Q1042).
   It reads the working tree rather than `HEAD`, so a row that has been written and not yet committed is already its subject, which is when a hand-picked ID is cheapest to fix.
 
