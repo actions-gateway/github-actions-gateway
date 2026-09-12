@@ -3936,15 +3936,16 @@ Under v1 there is one AGC Deployment per namespace, named <code>actions-gateway-
 <a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>
 <a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a><span class="c1"># Confirm NetworkPolicies and ResourceQuota were applied</span>
 <a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy,resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;
-<a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a><span class="c1"># Expected NetworkPolicies (3):</span>
-<a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a><span class="c1">#   actions-gateway-workload — restricts AGC and worker pods to proxy + DNS</span>
-<a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a><span class="c1">#   actions-gateway-controller      — adds Kubernetes API server egress for the AGC only</span>
-<a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a><span class="c1">#   actions-gateway-proxy    — restricts proxy pods to GitHub CIDRs + DNS</span>
-<a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a>
-<a id="__codelineno-21-25" name="__codelineno-21-25" href="#__codelineno-21-25"></a><span class="c1"># Confirm the Pod Security Admission label matches the chosen securityProfile</span>
-<a id="__codelineno-21-26" name="__codelineno-21-26" href="#__codelineno-21-26"></a>kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-21-27" name="__codelineno-21-27" href="#__codelineno-21-27"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.metadata.labels.pod-security\.kubernetes\.io/enforce}{"\n"}'</span>
-<a id="__codelineno-21-28" name="__codelineno-21-28" href="#__codelineno-21-28"></a><span class="c1"># Expected: baseline (default), or restricted / privileged if explicitly chosen</span>
+<a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a><span class="c1"># Expected NetworkPolicies (3). Under v2 the first two are named for the gateway and</span>
+<a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a><span class="c1"># the third for the EgressProxy; the v1 names are in parentheses.</span>
+<a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a><span class="c1">#   &lt;gateway&gt;-workload (actions-gateway-workload)     restricts AGC and worker pods to proxy + DNS</span>
+<a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a><span class="c1">#   &lt;gateway&gt;-agc (actions-gateway-controller)        adds Kubernetes API server egress for the AGC only</span>
+<a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a><span class="c1">#   &lt;proxy&gt; (actions-gateway-proxy)                   restricts proxy pods to GitHub CIDRs + DNS</span>
+<a id="__codelineno-21-25" name="__codelineno-21-25" href="#__codelineno-21-25"></a>
+<a id="__codelineno-21-26" name="__codelineno-21-26" href="#__codelineno-21-26"></a><span class="c1"># Confirm the Pod Security Admission label matches the chosen securityProfile</span>
+<a id="__codelineno-21-27" name="__codelineno-21-27" href="#__codelineno-21-27"></a>kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-21-28" name="__codelineno-21-28" href="#__codelineno-21-28"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.metadata.labels.pod-security\.kubernetes\.io/enforce}{"\n"}'</span>
+<a id="__codelineno-21-29" name="__codelineno-21-29" href="#__codelineno-21-29"></a><span class="c1"># Expected: baseline (default), or restricted / privileged if explicitly chosen</span>
 </code></pre></div>
 <p><strong>If <code>TARGETS: &lt;unknown&gt;</code> on the HPA:</strong> <code>resources.requests.cpu</code> is not set on proxy pods.
 Add it to <code>spec.proxy.resources.requests.cpu</code> in the <code>ActionsGateway</code> spec.

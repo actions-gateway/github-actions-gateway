@@ -525,10 +525,6 @@
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/worker-egress-proxy/</loc>
-         <lastmod>2026-09-12</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/archive/acquire-admission-control/</loc>
          <lastmod>2026-09-12</lastmod>
     </url>
@@ -1021,6 +1017,10 @@
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/worker-egress-proxy/</loc>
+         <lastmod>2026-09-12</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/plan/archive/worker-sidecar-reap-warning/</loc>
          <lastmod>2026-09-12</lastmod>
     </url>
@@ -1269,15 +1269,11 @@
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q1099/</loc>
-         <lastmod>2026-09-12</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/queue/Q11/</loc>
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q1100/</loc>
+         <loc>https://actions-gateway.com/dev/queue/Q1101/</loc>
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>

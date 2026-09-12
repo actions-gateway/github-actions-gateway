@@ -2726,8 +2726,9 @@ A NetworkPolicy that allows only port <code>443</code> sees post-DNAT port <code
 </ul>
 <h2 id="reproduction">Reproduction<a class="headerlink" href="#reproduction" title="Permanent link">&para;</a></h2>
 <p>Fresh kind cluster (v0.31.0, <code>kindest/node:v1.35.0</code>, <code>kindest/kindnetd:v20251212-v0.29.0-alpha-105-g20ccfc88</code>), one namespace <code>repro</code>, two NetworkPolicies copying the exact shape of <code>buildAGCNetworkPolicy</code> and <code>buildWorkloadNetworkPolicy</code> at HEAD (commit <code>15c8c10</code>, before PR #62).
-One debug pod (<code>alpine:3.20</code>) labelled with <strong>both</strong> labels:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>app=actions-gateway-controller,actions-gateway/component=workload
+One debug pod (<code>alpine:3.20</code>) labelled with <strong>both</strong> labels.
+The repro predates v2, so <code>&lt;agc-name&gt;</code> below is v1's fixed <code>actions-gateway-controller</code>; under v2 it is <code>&lt;gateway&gt;-agc</code>, and the trap is unchanged either way, because the AGC policy still selects on the bare <code>app</code> label and only its value moved.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>app=&lt;agc-name&gt;,actions-gateway/component=workload
 </code></pre></div>
 <p>Manifests are not checked in — copy <code>buildAGCNetworkPolicyFrom</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>shared_networkpolicy.go</code></a>) and <code>buildWorkloadNetworkPolicy</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>) into a single YAML, point them at a <code>repro</code> namespace, add a stand-in proxy pod so the workload NP's proxy podSelector has a real target.</p>
 <h3 id="observations">Observations<a class="headerlink" href="#observations" title="Permanent link">&para;</a></h3>
@@ -2741,22 +2742,22 @@ One debug pod (<code>alpine:3.20</code>) labelled with <strong>both</strong> lab
 </thead>
 <tbody>
 <tr>
-<td><code>app=actions-gateway-controller, component=workload</code></td>
+<td><code>app=&lt;agc-name&gt;, component=workload</code></td>
 <td>AGC NP <strong>+</strong> workload NP</td>
 <td>Times out (drop)</td>
 </tr>
 <tr>
-<td><code>app=actions-gateway-controller</code></td>
+<td><code>app=&lt;agc-name&gt;</code></td>
 <td>AGC NP only</td>
 <td>Times out (drop)</td>
 </tr>
 <tr>
-<td><code>app=actions-gateway-controller, component=workload</code> + AGC NP patched to add a <code>port: 6443</code> egress rule</td>
+<td><code>app=&lt;agc-name&gt;, component=workload</code> + AGC NP patched to add a <code>port: 6443</code> egress rule</td>
 <td>AGC NP + workload NP</td>
 <td><strong>Open</strong> (success)</td>
 </tr>
 <tr>
-<td><code>app=actions-gateway-controller, component=workload</code> (additivity sanity check: <code>nc -zv &lt;proxy-pod-ip&gt; 8080</code>)</td>
+<td><code>app=&lt;agc-name&gt;, component=workload</code> (additivity sanity check: <code>nc -zv &lt;proxy-pod-ip&gt; 8080</code>)</td>
 <td>AGC NP + workload NP</td>
 <td>Open (success)</td>
 </tr>

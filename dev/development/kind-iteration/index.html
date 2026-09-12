@@ -2863,7 +2863,7 @@ The full kind e2e test design lives in <a href="../../design/07-test-plan/#73-en
 The <code>scripts/e2e/kind-with-registry.sh</code> script wires the kind nodes' containerd to resolve <code>127.0.0.1:5000/*</code> against the host registry.
 (The literal IPv4 loopback is used, not <code>localhost</code>: the registry is published IPv4-only, so a pusher that resolves <code>localhost</code> to IPv6 <code>[::1]</code> first fails intermittently with "connection refused".)</p>
 <h3 id="cni-selection-kindnet-default-vs-calico">CNI selection: kindnet (default) vs Calico<a class="headerlink" href="#cni-selection-kindnet-default-vs-calico" title="Permanent link">&para;</a></h3>
-<p><code>make e2e-cluster</code> builds a kindnet cluster by default. kindnet's bundled <code>kube-network-policies</code> enforcer does <strong>not</strong> drop egress traffic for the NetworkPolicy negative cases (two CI iterations observed successful HTTP exchanges the workload NP does not authorise — see <a href="../../plan/worker-egress-proxy/"><code>docs/plan/worker-egress-proxy.md</code></a>).
+<p><code>make e2e-cluster</code> builds a kindnet cluster by default. kindnet's bundled <code>kube-network-policies</code> enforcer does <strong>not</strong> drop egress traffic for the NetworkPolicy negative cases (two CI iterations observed successful HTTP exchanges the workload NP does not authorise — see <a href="../../plan/archive/worker-egress-proxy/"><code>docs/plan/worker-egress-proxy.md</code></a>).
 To observe egress NetworkPolicy <em>enforcement</em> at runtime, build the Calico profile instead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>e2e-cluster<span class="w"> </span><span class="nv">KIND_CNI</span><span class="o">=</span>calico<span class="w">   </span><span class="c1"># disableDefaultCNI + pinned Calico manifest</span>
 </code></pre></div>
@@ -2943,14 +2943,17 @@ On a GMC older than the Q552 fix, a GMC-managed Deployment (the tenant AGC, the 
 <p>The Deployment controller will recreate it with the latest spec and pull policy.</p>
 <h3 id="distroless-pods-cant-be-kubectl-execd">Distroless pods can't be <code>kubectl exec</code>'d<a class="headerlink" href="#distroless-pods-cant-be-kubectl-execd" title="Permanent link">&para;</a></h3>
 <p>The AGC, GMC, and proxy images are distroless — no shell, no <code>nc</code>, no <code>curl</code>.
-For connectivity checks from a pod that <em>should</em> be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg<span class="w"> </span>--image<span class="o">=</span>alpine<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload,app=actions-gateway-controller'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--command<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">'</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s1">    apk add --no-cache curl bind-tools &gt;/dev/null 2&gt;&amp;1</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s1">    nc -zv -w 5 actions-gateway-proxy 8080</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s1">    curl -sv --max-time 10 --proxy-insecure --proxy https://actions-gateway-proxy:8080 https://api.github.com/zen</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s1">  '</span>
+For connectivity checks from a pod that <em>should</em> be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod.
+The AGC NetworkPolicy selects on the bare <code>app</code> label, whose value is the AGC's own name: <code>&lt;gateway&gt;-agc</code> under v2, the fixed <code>actions-gateway-controller</code> under v1.
+The recommended <code>app.kubernetes.io/name</code> label will not do here, because it is not what the policy selects on.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># v2: substitute your own gateway name</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg<span class="w"> </span>--image<span class="o">=</span>alpine<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload,app=&lt;gateway&gt;-agc'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--command<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">'</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s1">    apk add --no-cache curl bind-tools &gt;/dev/null 2&gt;&amp;1</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s1">    nc -zv -w 5 actions-gateway-proxy 8080</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s1">    curl -sv --max-time 10 --proxy-insecure --proxy https://actions-gateway-proxy:8080 https://api.github.com/zen</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="s1">  '</span>
 </code></pre></div>
 <p>NetworkPolicy enforces on labels, so the test only validates the path if the labels match the real pod's.
 Ephemeral containers (<code>kubectl debug --image=...</code>) don't work on the kind versions this project pins (<code>failed to call webhook</code> / <code>no kind "EphemeralContainers" is registered</code>).</p>

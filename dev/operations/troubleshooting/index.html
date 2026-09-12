@@ -5195,9 +5195,12 @@
 <p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
 <p>Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.</p>
-<p><strong>Addressing the AGC Deployment.</strong> Under v2 the AGC is named per gateway, as <code>&lt;gateway&gt;-agc</code>, so a <code>team-a-gateway</code> tenant addresses <code>deploy/team-a-gateway-agc</code>.
-Under v1 there is one AGC Deployment per namespace, named <code>actions-gateway-controller</code>.
+<p><strong>Addressing the AGC.</strong> Under v2 every AGC control-plane object is named per gateway, as <code>&lt;gateway&gt;-agc</code>: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+A <code>team-a-gateway</code> tenant therefore addresses <code>deploy/team-a-gateway-agc</code>, <code>sa/team-a-gateway-agc</code>, and so on.
+Under v1 there is one AGC per namespace and all of them carry the fixed name <code>actions-gateway-controller</code>.
 Commands below give both forms; substitute your own gateway name for <code>&lt;gateway&gt;</code>.</p>
+<p><strong>Selecting AGC pods needs neither form.</strong> The bare <code>app</code> label carries the per-gateway name under v2 and the fixed name under v1, so <code>-l app=actions-gateway-controller</code> selects nothing on a v2 tenant.
+The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gateway-controller</code> under both, so <code>-l app.kubernetes.io/name=actions-gateway-controller</code> is the selector that works on either and is what the commands below use.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
@@ -5548,7 +5551,7 @@ On GMC versions without the Q552 fix, the reconciler rebuilt the whole pod templ
   Fixed versions carry an operator-injected <code>kubectl.kubernetes.io/restartedAt</code> through reconcile, so <code>kubectl rollout restart</code> performs a real rolling update.
   Nothing else on the pod template is tolerated — a hand-edited image, env var, or any other annotation is still reconciled back to the CR, which remains the source of truth.
 - <strong>Workaround on an older GMC:</strong> delete the pod and let the Deployment recreate it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller
 </code></pre></div>
 <p>This is a hard restart, not a rolling one: the replacement pod is only scheduled after the old one terminates, so the tenant's control plane is down for the pod's startup time.
   The AGC's 60s termination grace period still applies, so in-flight session work drains as it would on a rollout.</p>
@@ -5556,7 +5559,7 @@ On GMC versions without the Q552 fix, the reconciler rebuilt the whole pod templ
 It deletes no worker pod — see <a href="#workers-left-behind-by-an-agc-that-was-down">Workers Left Behind by an AGC That Was Down</a> for what actually reclaims those — so a restart is not a remedy for workers that will not drain.
 The reaper runs on the live AGC on deadlines measured from each pod, so a fresh one reaps no sooner than the one it replaced.</p>
 <p><strong>Verify either path took effect</strong> — check that the pod is actually new rather than trusting the rollout message:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span>NAME:.metadata.name,AGE:.metadata.creationTimestamp
 </code></pre></div>
 <hr />
@@ -6116,7 +6119,7 @@ See <a href="../security-operations/#disjointness-is-enforced-on-every-edit-not-
 - The AGC binary was built with an incompatible runner version (GitHub returns 400 on session creation).</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="c1"># Check pod status and restarts</span>
-<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller
+<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller
 <a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a>
 <a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a><span class="c1"># Check logs for startup errors</span>
 <a id="__codelineno-52-5" name="__codelineno-52-5" href="#__codelineno-52-5"></a><span class="c1"># v2</span>
@@ -7651,7 +7654,7 @@ Logs show <code>connection refused</code>, <code>dial tcp: i/o timeout</code>, o
 <a id="__codelineno-124-6" name="__codelineno-124-6" href="#__codelineno-124-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
 <a id="__codelineno-124-7" name="__codelineno-124-7" href="#__codelineno-124-7"></a>
 <a id="__codelineno-124-8" name="__codelineno-124-8" href="#__codelineno-124-8"></a><span class="c1"># Check the AGC container's HTTPS_PROXY env var (distroless — inspect spec, not the running process)</span>
-<a id="__codelineno-124-9" name="__codelineno-124-9" href="#__codelineno-124-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-124-9" name="__codelineno-124-9" href="#__codelineno-124-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-124-10" name="__codelineno-124-10" href="#__codelineno-124-10"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="HTTPS_PROXY")]}{.name}={.value}{"\n"}{end}'</span>
 <a id="__codelineno-124-11" name="__codelineno-124-11" href="#__codelineno-124-11"></a>
 <a id="__codelineno-124-12" name="__codelineno-124-12" href="#__codelineno-124-12"></a><span class="c1"># Test proxy connectivity using an ephemeral curl pod in the same namespace</span>
@@ -7694,7 +7697,7 @@ Current releases derive the exemption from the cluster's own <code>KUBERNETES_SE
 <a id="__codelineno-126-3" name="__codelineno-126-3" href="#__codelineno-126-3"></a>
 <a id="__codelineno-126-4" name="__codelineno-126-4" href="#__codelineno-126-4"></a><span class="c1"># 2. The NO_PROXY the GMC generated for the tenant's AGC. It must contain the</span>
 <a id="__codelineno-126-5" name="__codelineno-126-5" href="#__codelineno-126-5"></a><span class="c1">#    address from step 1 (distroless image — read the spec, not the process).</span>
-<a id="__codelineno-126-6" name="__codelineno-126-6" href="#__codelineno-126-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-126-6" name="__codelineno-126-6" href="#__codelineno-126-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-126-7" name="__codelineno-126-7" href="#__codelineno-126-7"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[0].spec.template.spec.containers[0].env[?(@.name=="NO_PROXY")]}{.value}{"\n"}{end}'</span>
 </code></pre></div>
 <p><strong>Resolution.</strong></p>
@@ -7721,15 +7724,19 @@ This is the port-axis equivalent of the <code>ipBlock: &lt;ClusterIP&gt;/32</cod
 <a id="__codelineno-127-3" name="__codelineno-127-3" href="#__codelineno-127-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].ports[0].port}{"\n"}'</span>
 <a id="__codelineno-127-4" name="__codelineno-127-4" href="#__codelineno-127-4"></a>
 <a id="__codelineno-127-5" name="__codelineno-127-5" href="#__codelineno-127-5"></a><span class="c1"># 2. Confirm the AGC NetworkPolicy actually allows both 443 and 6443.</span>
-<a id="__codelineno-127-6" name="__codelineno-127-6" href="#__codelineno-127-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-127-7" name="__codelineno-127-7" href="#__codelineno-127-7"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>yq<span class="w"> </span><span class="s1">'.spec.egress[].ports[].port'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
-<a id="__codelineno-127-8" name="__codelineno-127-8" href="#__codelineno-127-8"></a>
-<a id="__codelineno-127-9" name="__codelineno-127-9" href="#__codelineno-127-9"></a><span class="c1"># 3. If the cluster uses kindnet / kube-network-policies, check the verdict log</span>
-<a id="__codelineno-127-10" name="__codelineno-127-10" href="#__codelineno-127-10"></a><span class="c1">#    on the node hosting the AGC pod. Look for lines like:</span>
-<a id="__codelineno-127-11" name="__codelineno-127-11" href="#__codelineno-127-11"></a><span class="c1">#      "Pod is not allowed to connect to port" pod="&lt;ns&gt;/&lt;agc-pod&gt;" port=6443</span>
-<a id="__codelineno-127-12" name="__codelineno-127-12" href="#__codelineno-127-12"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-127-13" name="__codelineno-127-13" href="#__codelineno-127-13"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].spec.nodeName}{"\n"}'</span>
-<a id="__codelineno-127-14" name="__codelineno-127-14" href="#__codelineno-127-14"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>kindnet<span class="w"> </span>--tail<span class="o">=</span><span class="m">200</span><span class="w"> </span>--field-selector<span class="w"> </span>spec.nodeName<span class="o">=</span>&lt;node-name&gt;
+<a id="__codelineno-127-6" name="__codelineno-127-6" href="#__codelineno-127-6"></a><span class="c1"># v2</span>
+<a id="__codelineno-127-7" name="__codelineno-127-7" href="#__codelineno-127-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gateway&gt;-agc<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-127-8" name="__codelineno-127-8" href="#__codelineno-127-8"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>yq<span class="w"> </span><span class="s1">'.spec.egress[].ports[].port'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<a id="__codelineno-127-9" name="__codelineno-127-9" href="#__codelineno-127-9"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-127-10" name="__codelineno-127-10" href="#__codelineno-127-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-127-11" name="__codelineno-127-11" href="#__codelineno-127-11"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>yq<span class="w"> </span><span class="s1">'.spec.egress[].ports[].port'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<a id="__codelineno-127-12" name="__codelineno-127-12" href="#__codelineno-127-12"></a>
+<a id="__codelineno-127-13" name="__codelineno-127-13" href="#__codelineno-127-13"></a><span class="c1"># 3. If the cluster uses kindnet / kube-network-policies, check the verdict log</span>
+<a id="__codelineno-127-14" name="__codelineno-127-14" href="#__codelineno-127-14"></a><span class="c1">#    on the node hosting the AGC pod. Look for lines like:</span>
+<a id="__codelineno-127-15" name="__codelineno-127-15" href="#__codelineno-127-15"></a><span class="c1">#      "Pod is not allowed to connect to port" pod="&lt;ns&gt;/&lt;agc-pod&gt;" port=6443</span>
+<a id="__codelineno-127-16" name="__codelineno-127-16" href="#__codelineno-127-16"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-127-17" name="__codelineno-127-17" href="#__codelineno-127-17"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].spec.nodeName}{"\n"}'</span>
+<a id="__codelineno-127-18" name="__codelineno-127-18" href="#__codelineno-127-18"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>kindnet<span class="w"> </span>--tail<span class="o">=</span><span class="m">200</span><span class="w"> </span>--field-selector<span class="w"> </span>spec.nodeName<span class="o">=</span>&lt;node-name&gt;
 </code></pre></div>
 <p><strong>Resolution.</strong> Ensure <code>buildAGCNetworkPolicy</code> allows both port 443 (production Service shape) <em>and</em> port 6443 (kind / Endpoints-on-6443 clusters).
 The shipped policy does this.
@@ -7794,7 +7801,7 @@ UntrustedRoot means one of those steps did not happen.</p>
 <a id="__codelineno-132-5" name="__codelineno-132-5" href="#__codelineno-132-5"></a><span class="c1"># If empty: the AGC was deployed without PROXY_TLS_SECRET_NAME.</span>
 <a id="__codelineno-132-6" name="__codelineno-132-6" href="#__codelineno-132-6"></a>
 <a id="__codelineno-132-7" name="__codelineno-132-7" href="#__codelineno-132-7"></a><span class="c1"># 2. Confirm the AGC has the PROXY_TLS_SECRET_NAME env wired.</span>
-<a id="__codelineno-132-8" name="__codelineno-132-8" href="#__codelineno-132-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-132-8" name="__codelineno-132-8" href="#__codelineno-132-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-132-9" name="__codelineno-132-9" href="#__codelineno-132-9"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="PROXY_TLS_SECRET_NAME")]}{.name}={.value}{"\n"}{end}'</span>
 <a id="__codelineno-132-10" name="__codelineno-132-10" href="#__codelineno-132-10"></a><span class="c1"># Expected: PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls</span>
 <a id="__codelineno-132-11" name="__codelineno-132-11" href="#__codelineno-132-11"></a><span class="c1"># Empty means the GMC needs to roll the AGC Deployment (likely an upgrade across the 5h boundary).</span>

@@ -4084,7 +4084,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># 2. All AGC pods healthy</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>--all-namespaces<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>--all-namespaces<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># 3. All proxy pools healthy — the recommended label covers v1 inline pools and v2</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">#    EgressProxy pools alike; `app=actions-gateway-proxy` finds only v1's.</span>
@@ -4770,6 +4770,8 @@ Two operator-visible consequences:</p>
 <a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">  </span>--field-selector<span class="w"> </span><span class="s1">'status.phase!=Running,status.phase!=Pending'</span>
 </code></pre></div>
 <h3 id="agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller">AGC Deployment renamed from <code>actions-gateway-agc</code> to <code>actions-gateway-controller</code><a class="headerlink" href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller" title="Permanent link">&para;</a></h3>
+<p>This section is v1 history: it is the rename that gave v1 its fixed per-namespace name.
+Under v2 the AGC is named per gateway as <code>&lt;gateway&gt;-agc</code>, so the v1 name below is the <em>old</em> name a second time over; see the v1 to v2 <a href="../migration-v1-to-v2/">migration guide</a> for that move.</p>
 <p>Deployments and resources created by the GMC are now named <code>actions-gateway-controller</code> instead of <code>actions-gateway-agc</code>.
 After upgrading the GMC:</p>
 <ol>
@@ -4780,8 +4782,8 @@ After upgrading the GMC:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>deploy<span class="w"> </span>actions-gateway-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <ol>
-<li>Pods labelled <code>app=actions-gateway-agc</code> become <code>app=actions-gateway-controller</code>.
-   Update any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old label before upgrading.</li>
+<li>Pods labelled <code>app=actions-gateway-agc</code> become <code>app=actions-gateway-controller</code>, which is v1's fixed label; on v2 the same label carries <code>&lt;gateway&gt;-agc</code> instead.
+   Update any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old label before upgrading, and prefer <code>app.kubernetes.io/name=actions-gateway-controller</code> where the selector has to survive the move to v2 as well.</li>
 </ol>
 <h3 id="gmc-manager-networkpolicy-is-now-enabled-by-default">GMC manager NetworkPolicy is now enabled by default<a class="headerlink" href="#gmc-manager-networkpolicy-is-now-enabled-by-default" title="Permanent link">&para;</a></h3>
 <p>The default install ships the GMC manager NetworkPolicy enabled (<code>networkPolicy.enabled=true</code>).

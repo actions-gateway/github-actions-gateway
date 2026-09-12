@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1100/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1101/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>No gate requires a row deletion to ride its own docs(queue): commit - GitHub Actions Gateway</title>
+        <title>A v2 ActionsGateway gets no AGC ServiceMonitor - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#no-gate-requires-a-row-deletion-to-ride-its-own-docsqueue-commit" class="md-skip">
+        <a href="#a-v2-actionsgateway-gets-no-agc-servicemonitor" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              No gate requires a row deletion to ride its own docs(queue): commit
+              A v2 ActionsGateway gets no AGC ServiceMonitor
             
           </span>
         </div>
@@ -2597,18 +2597,18 @@
   
 
 
-<h1 id="no-gate-requires-a-row-deletion-to-ride-its-own-docsqueue-commit">No gate requires a row deletion to ride its own docs(queue): commit<a class="headerlink" href="#no-gate-requires-a-row-deletion-to-ride-its-own-docsqueue-commit" title="Permanent link">&para;</a></h1>
-<p><code>queue.py metrics</code> attributes a removal per row, reading the closure verb off the <code>docs(queue):</code>/<code>docs(status):</code> line that names it.
-A <code>git rm</code> committed inline with the work carries no such line, so the row falls to the residual however clearly the PR describes it.</p>
-<p><strong>Measured 2026-09-12</strong> at <code>32312254e</code>, after the Q959 re-vendor: 28 of 214 removals classify as <code>removed</code>.
-Twenty of those have a deletion commit with no <code>docs(queue):</code>/<code>docs(status):</code> line at all.
-<code>fix(coverage): force a fresh pass over the uncacheable package (Q992) (#1844)</code> is the shape, and Q1003, Q1040 and Q1042 closed the same way.
-The other eight do carry a row line, but one naming other rows, which the walk declines rather than spending on whichever rows the diff holds.</p>
-<p>The isolated row commit is already what <a href="../../development/skills/#session-backlog"><code>session-backlog</code></a> asks for and what <code>CLAUDE.md</code> states, and nothing checks it: <code>check-queue-rules.py</code> scores the store's tree at base against head, so commit shape is outside every rule it has, and the repo has no commit-message gate of any kind.</p>
-<p>The rung is the question, not the rule.
-A <code>--staged</code> check cannot see it, because staging is one tree and the defect is which commit the deletion lands in.
-So this is a pre-push or CI walk over the branch's own commits, which is a rung this repo has never used for anything.
-Weigh that against leaving the residual: 28 of 214 is a 13% unread rate on a metric nobody gates on, and the verb is advisory.</p>
+<h1 id="a-v2-actionsgateway-gets-no-agc-servicemonitor">A v2 ActionsGateway gets no AGC ServiceMonitor<a class="headerlink" href="#a-v2-actionsgateway-gets-no-agc-servicemonitor" title="Permanent link">&para;</a></h1>
+<p><code>applyOrPruneServiceMonitors</code> builds the two per-tenant <code>ServiceMonitor</code>s that let Prometheus scrape a tenant's AGC and proxy over mTLS.
+Measured 2026-09-12: its only caller is <code>actionsgateway_controller.go:289</code>, the <strong>v1</strong> reconciler.
+The v2 reconciler has no call to it and no ServiceMonitor path of its own, so a v2 <code>ActionsGateway</code> gets the AGC metrics <code>Service</code> (<code>buildAGCServiceV2</code>) and nothing that scrapes it.
+<code>buildMetricsServiceMonitor</code> takes a <code>*gmcv1alpha1.ActionsGateway</code>, so it cannot be called from the v2 path as it stands.</p>
+<p>A v2 <code>EgressProxy</code> is unaffected: <code>egressproxy_metrics.go</code> reconciles its own monitor.
+So the gap is the AGC half only, and a v2 fleet's proxy metrics arriving normally is what makes it quiet.</p>
+<p><strong>Whether this is a defect or a decision is the first question, and it is not answerable from the code</strong>. v2 moved metrics to a per-gateway mTLS identity (<code>&lt;gateway&gt;-agc-metrics-{tls,client}</code>), so one plausible reading is that a per-gateway monitor was deferred to whatever replaces the v1 pair.
+The other is that it was missed, which is what the v1 code path being intact and uncalled suggests.
+Settle it against <a href="../../design/appendix-h-v2-api-decomposition/">appendix-h</a> and the M3b history before writing either a monitor or a design note.</p>
+<p><a href="../../operations/observability-metrics-access/">observability-metrics-access.md</a> now says v2 gets no AGC monitor and points here; that line comes out when this row resolves, whichever way it goes.
+Found while sweeping the v1-only AGC identifiers (Q1099), which is why it is filed rather than fixed: the sweep was a naming change and this is a missing reconciler.</p>
 
 
 

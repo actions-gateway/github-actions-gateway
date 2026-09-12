@@ -2596,6 +2596,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#both-remaining-triggers-identified-2026-09-12-and-the-row-parks-on-upstream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Both remaining triggers identified, 2026-09-12, and the row parks on upstream
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2624,7 +2635,7 @@
 The class is therefore unfixable by hand, and the reason is the gate rather than any hook: the tracked <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.githooks/pre-commit">.githooks/pre-commit</a> runs gofmt and em-dash density and mentions <code>reflow</code> nowhere, so nothing rewrites the file behind the author.
 <code>max-width: 0</code> means nothing re-wraps, so the defect is in the sentence-boundary detector rather than the wrapper.</p>
 <p><strong>One trigger is identified and verified.</strong> A sentence whose terminating period falls <em>inside</em> an emphasis or code span defeats the splitter: <code>**Bold sentence ends here.** Next sentence follows.</code> stays joined, while moving the period outside the span (<code>**…here**. Next…</code>) splits correctly.</p>
-<p><strong>A second trigger exists and is NOT identified</strong>, which is the part to start from rather than assume closed.
+<p><strong>A second trigger existed and is now identified; see the 2026-09-12 section at the end.</strong> The paragraph below is kept because its exclusions are what the isolation was built on.
 The live instance is <code>docs/queue/Q970.md</code> file line 14, two sentences: it joins although its terminating period is <em>outside</em> its span, so the identified trigger does not explain it.
 Q970 has since completed and its file is gone from <code>main</code>, so read the instance out of git rather than the tree: <code>git show 073da2f5a:docs/queue/Q970.md | sed -n 14p</code>, 579 chars at that blob.
 Re-anchor to a live instance before working it if that blob will not serve.
@@ -2664,6 +2675,21 @@ The gate ratifies it in exactly the shape this row already states: <code>--check
 <p><strong>It does not explain this row's open instance</strong>, so the unidentified trigger above is still unidentified and this row does not close on it.
 <code>Q970</code> file line 14's second sentence opens with a link, and a leading link, a leading <code>[bracket]</code>, a leading code span and a leading plain word all split correctly on the same fixture, which agrees with the exclusions already recorded above.</p>
 <p>The workaround is to open the sentence with a word, which is what both prose sites now do.</p>
+<h2 id="both-remaining-triggers-identified-2026-09-12-and-the-row-parks-on-upstream">Both remaining triggers identified, 2026-09-12, and the row parks on upstream<a class="headerlink" href="#both-remaining-triggers-identified-2026-09-12-and-the-row-parks-on-upstream" title="Permanent link">&para;</a></h2>
+<p>Isolated against the pinned mdreflow (<code>github.com/jbeda/mdreflow v0.3.0</code>) with minimal fixtures, one variable at a time.
+Neither is this repo's to fix: <code>mdreflow</code> is an outside project, so the row parks on the upstream release the way Q959 did.</p>
+<p><strong>Trigger 3: a sentence whose first character is a lowercase letter is never split onto its own line.</strong> Holding everything else fixed and varying only the second sentence's opening token, <code>The</code> splits and <code>then</code> joins; <code>V2</code> splits and <code>v2</code> joins; a leading digit, code span, link or emphasis all split, whatever case sits inside them.
+So it is a bare lowercase letter in first position specifically.
+This is the common one in technical prose, where a sentence legitimately opens with an identifier.</p>
+<p><strong>Trigger 4: a <code>$</code> on each side of the boundary pairs into a math span and swallows it.</strong> One <code>$</code> in either sentence alone splits; two in the same sentence split; one in <strong>each</strong> joins.
+A bare <code>$</code> outside any code span behaves identically to one inside, so code-span quoting does not protect it and the <code>$</code> scan evidently runs before code spans are resolved.</p>
+<p><strong>This is what the open instance was.</strong> Q970 file line 14 carries one <code>$</code> in its first sentence and three in its second, so the boundary sits between an odd count on each side and the first <code>$</code> of the second sentence pairs back across it.
+Bisecting confirmed it: each half of that line beside a plain sentence splits correctly, and only the two together join.
+That also explains the exclusions recorded above, all of which held every component's markup constant while moving the <code>$</code> count on neither side.</p>
+<p><strong>Event:</strong> an <code>mdreflow</code> release past v0.3.0 fixes either trigger, and <code>tools/go.mod</code> takes it.
+Re-run the two fixtures in the chip's report before closing; a fix for one is not a fix for both.
+Routed to <code>jbeda/mdreflow</code> on 2026-09-12 with both fixture tables.
+Until then the workaround stands and is now precise: open the sentence with a capital, and keep a <code>$</code> off one side of the boundary.</p>
 
 
 

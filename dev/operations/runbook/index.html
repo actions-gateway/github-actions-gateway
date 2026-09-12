@@ -3722,9 +3722,12 @@
 </blockquote>
 <p>For initial setup steps see <a href="../../getting-started/">Getting Started</a>.
 For detailed symptom → diagnosis steps see <a href="../troubleshooting/">Troubleshooting</a>.</p>
-<p><strong>Addressing the AGC Deployment.</strong> Under v2 the AGC is named per gateway, as <code>&lt;gateway&gt;-agc</code>, so a <code>team-a-gateway</code> tenant addresses <code>deploy/team-a-gateway-agc</code>.
-Under v1 there is one AGC Deployment per namespace, named <code>actions-gateway-controller</code>.
+<p><strong>Addressing the AGC.</strong> Under v2 every AGC control-plane object is named per gateway, as <code>&lt;gateway&gt;-agc</code>: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+A <code>team-a-gateway</code> tenant therefore addresses <code>deploy/team-a-gateway-agc</code>, <code>sa/team-a-gateway-agc</code>, and so on.
+Under v1 there is one AGC per namespace and all of them carry the fixed name <code>actions-gateway-controller</code>.
 Commands below give both forms; substitute your own gateway name for <code>&lt;gateway&gt;</code>.</p>
+<p><strong>Selecting AGC pods needs neither form.</strong> The bare <code>app</code> label carries the per-gateway name under v2 and the fixed name under v1, so <code>-l app=actions-gateway-controller</code> selects nothing on a v2 tenant.
+The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gateway-controller</code> under both, so <code>-l app.kubernetes.io/name=actions-gateway-controller</code> is the selector that works on either and is what the commands below use.</p>
 <hr />
 <h2 id="day-2-operations">Day-2 Operations<a class="headerlink" href="#day-2-operations" title="Permanent link">&para;</a></h2>
 <h3 id="adding-a-tenant">Adding a Tenant<a class="headerlink" href="#adding-a-tenant" title="Permanent link">&para;</a></h3>
@@ -3992,7 +3995,7 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 </ol>
 <h3 id="active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero<a class="headerlink" href="#active_sessions-flatlining-at-zero" title="Permanent link">&para;</a></h3>
 <ol>
-<li>Check AGC pod status: <code>kubectl get pod -n &lt;namespace&gt; -l app=actions-gateway-controller</code>.</li>
+<li>Check AGC pod status: <code>kubectl get pod -n &lt;namespace&gt; -l app.kubernetes.io/name=actions-gateway-controller</code>.</li>
 <li>Check AGC logs:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># v2</span>

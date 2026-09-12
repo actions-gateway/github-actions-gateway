@@ -2997,7 +2997,7 @@ What source IP GitHub actually <em>sees</em>, however, is decided one layer lowe
   That node IP is <strong>shared</strong> across every pod on the node — including other tenants' proxy pods — and is <strong>not stable</strong> across a proxy pod rescheduling to a different node (HPA scale, node drain, rolling update).</li>
 <li>So today, absent an egress-IP mechanism, "distinct set of egress IPs per tenant" is <strong>aspirational</strong>: the choke point exists, but the source IP at GitHub is the cluster's shared egress IP set, not a per-tenant one.</li>
 </ul>
-<p>This is visible in the existing tradeoff table (<a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md</a>, <a href="../worker-egress-proxy/">worker-egress-proxy.md</a>), which lists the chosen path as "Egress IP at GitHub: Per-tenant, stable."
+<p>This is visible in the existing tradeoff table (<a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md</a>, <a href="../archive/worker-egress-proxy/">worker-egress-proxy.md</a>), which lists the chosen path as "Egress IP at GitHub: Per-tenant, stable."
 That column is only true once an <strong>egress-IP mechanism</strong> binds each tenant's choke-point traffic to a distinct, stable source IP.
 <strong>This plan specifies that mechanism.</strong> It does not change the proxy pool; it adds the source-IP binding underneath it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>   What exists today (proxy pool = choke point)      What Q243 adds (source-IP binding)
@@ -3059,7 +3059,7 @@ That column is only true once an <strong>egress-IP mechanism</strong> binds each
 <p>Because dogfood runs single-tenant-direct, the production multi-tenant isolation claim is currently <strong>un-substantiated by any running system</strong> — the reason Q243 is a v2beta1 blocker.</p>
 <hr />
 <h2 id="what-per-tenant-egress-ip-actually-requires">What "per-tenant egress IP" actually requires<a class="headerlink" href="#what-per-tenant-egress-ip-actually-requires" title="Permanent link">&para;</a></h2>
-<p>Four downstream properties depend on the egress IP being per-tenant, distinct, and stable (from <a href="../worker-egress-proxy/#why-route-worker-traffic-through-the-proxy">worker-egress-proxy.md</a>):</p>
+<p>Four downstream properties depend on the egress IP being per-tenant, distinct, and stable (from <a href="../archive/worker-egress-proxy/#why-route-worker-traffic-through-the-proxy">worker-egress-proxy.md</a>):</p>
 <ol>
 <li><strong>GitHub-side IP allowlisting</strong> — GHES / GitHub App IP-allowlist filters inbound by source IP.
    Only works if a tenant's traffic arrives from a <em>known, stable, tenant-specific</em> IP set.</li>
@@ -3461,7 +3461,7 @@ What remains is genuinely deferred and out of the critical path: Approach A's (C
 <li><a href="../../design/01-executive-summary/">01-executive-summary.md</a> — the per-tenant egress-IP claim</li>
 <li><a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md §2.3</a> — Tier-3 proxy pool</li>
 <li><a href="../../design/network-architecture/">network-architecture.md</a> — NetworkPolicy topology + FQDN modes</li>
-<li><a href="../worker-egress-proxy/">worker-egress-proxy.md</a> — why worker traffic routes through the proxy</li>
+<li><a href="../archive/worker-egress-proxy/">worker-egress-proxy.md</a> — why worker traffic routes through the proxy</li>
 <li><a href="../archive/q242-g1-proxy-destination-allowlist/">q242-g1-proxy-destination-allowlist.md</a> — destination allowlist</li>
 <li><a href="../gke-dogfood/">gke-dogfood.md</a> — single-tenant-direct dogfood posture</li>
 <li><a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium Egress Gateway docs</a></li>

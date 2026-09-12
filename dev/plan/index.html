@@ -2765,11 +2765,6 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Done — every workstream shipped; sole residual is the deferred live Ed25519 probe (M-11b, <a href="../queue/Q11/">Q11</a>). Phase 1 live <code>kind</code> validation covered by the M3/M4 live runs</td>
 </tr>
 <tr>
-<td><a href="worker-egress-proxy/">worker-egress-proxy.md</a></td>
-<td>Worker traffic must route through per-tenant proxy pool</td>
-<td>✅ Done — NetworkPolicy split shipped (commit <code>4932ce7</code>); proxied worker→GitHub egress live-validated via M4 §12</td>
-</tr>
-<tr>
 <td><a href="q243-egress-ip-reference-arch/">q243-egress-ip-reference-arch.md</a></td>
 <td>Per-tenant egress-IP reference architecture: how the proxy pool's per-tenant choke point is bound to a distinct, stable source IP at GitHub — Cilium Egress Gateway vs per-tenant cloud NAT — plus single-tenant-direct (dogfood) vs production multi-tenant topology, cost model, and a deferred live-validation plan</td>
 <td>ⓘ Design reference — design + full live validation done: per-range Cloud NAT gives distinct+stable per-tenant IPs (<a href="q243-q245-q230-live-validation-campaign/">campaign</a>), and a real GMC-provisioned EgressProxy pins to a single per-tenant egress IP (live PASS 2026-07-13, <code>scripts/dev/validate-egress-ip.sh</code>). Approach-A (Cilium EG) fail-open/kill-switch/SNAT-headroom validation stays deferred</td>
@@ -3630,6 +3625,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/required-status-checks/">archive/required-status-checks.md</a></td>
 <td>Make the CI quality gates merge-blocking: an always-running <code>gate</code> summary job per workflow (safe to require despite path-gating) + the ruleset edit that marks them required</td>
 <td>2026-07-13 — Q297</td>
+</tr>
+<tr>
+<td><a href="archive/worker-egress-proxy/">archive/worker-egress-proxy.md</a></td>
+<td>Worker traffic must route through per-tenant proxy pool</td>
+<td>Archived 2026-09-12, Q1099. NetworkPolicy split shipped (commit <code>4932ce7</code>); proxied worker→GitHub egress live-validated via M4 §12</td>
 </tr>
 </tbody>
 </table>

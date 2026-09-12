@@ -3866,13 +3866,13 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:103-151</a></li>
 <li><strong>Category:</strong> OWASP A05:2025 — Security Misconfiguration</li>
 <li><strong>Why Medium:</strong> Listed here as a security finding because the gap weakens GitHub-side incident containment (a flag against a node IP affects every tenant whose workers share that node), but the underlying issue is an implementation deviation from a documented design choice, not a privilege boundary failure.
-  The design choice (route worker traffic through the proxy) and its rationale, tradeoffs, and acceptance criteria are tracked in <a href="../worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a>.
+  The design choice (route worker traffic through the proxy) and its rationale, tradeoffs, and acceptance criteria are tracked in <a href="../archive/worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a>.
   Bypassing the proxy does not grant a compromised worker any new capability — same OAuth token, same set of reachable endpoints (GitHub CIDRs), no cross-tenant impersonation.</li>
 <li><strong>Description:</strong> <code>buildNetworkPolicy</code> creates a single <code>NetworkPolicy</code> with an empty <code>PodSelector</code> (the default value), which selects every pod in the namespace.
   The egress rules are the <em>union</em> of <code>proxyEgress</code> (DNS + GitHub CIDRs:443) and <code>agcWorkerEgress</code> (proxy ClusterIP:8080).
   Because both rule sets apply to every pod, worker pods are allowed to talk directly to GitHub on :443 — bypassing the egress proxy entirely.
   The <a href="../../design/network-architecture/">network-architecture.md</a> design document already shows the intended two-policy structure; the implementation never converged on it.</li>
-<li><strong>Mitigation:</strong> Emit two NetworkPolicy objects (or one with multiple <code>podSelector</code>-scoped rules) as described in <a href="../worker-egress-proxy/#implementation-status">docs/plan/worker-egress-proxy.md "Implementation status"</a>:</li>
+<li><strong>Mitigation:</strong> Emit two NetworkPolicy objects (or one with multiple <code>podSelector</code>-scoped rules) as described in <a href="../archive/worker-egress-proxy/#implementation-status">docs/plan/worker-egress-proxy.md "Implementation status"</a>:</li>
 <li><code>np-proxy</code>: <code>podSelector: { app: actions-gateway-proxy }</code>, egress = DNS + GitHub CIDRs on 443.</li>
 <li><code>np-agc-worker</code>: <code>podSelector</code> matching the AGC and worker labels, egress = DNS + proxy ClusterIP on 8080 only.</li>
 </ul>
@@ -4387,7 +4387,7 @@ The status column distinguishes blockers (work cannot start without the call) fr
 <p>Closes the only privilege-escalation surface (C-1), the two single-tenant credential-exposure weakenings (H-1, H-2 — H-2 accepted with compensating controls), and the documented-contract gap that the worker-egress plan covers (M-1, M-8, M-9).
 W4 is the only Phase 1 workstream still carrying residual risk; see the inline status block below.</p>
 <h4 id="w1--networkpolicy-split-closes-m-1-m-8-m-9--done-2026-05-23-commit-4932ce7">W1 — NetworkPolicy split (closes M-1, M-8, M-9) — <strong>Done (2026-05-23, commit <code>4932ce7</code>)</strong><a class="headerlink" href="#w1--networkpolicy-split-closes-m-1-m-8-m-9--done-2026-05-23-commit-4932ce7" title="Permanent link">&para;</a></h4>
-<p>See <a href="../worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a> for the full rationale.</p>
+<p>See <a href="../archive/worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a> for the full rationale.</p>
 <ul>
 <li><strong>What shipped:</strong></li>
 <li><code>cmd/gmc/internal/controller/builder.go</code> — replaced the single empty-selector <code>buildNetworkPolicy</code> with three policies: <code>buildProxyNetworkPolicy</code> (proxy → DNS + GitHub CIDRs:443; ingress restricted to workload-labelled pods), <code>buildWorkloadNetworkPolicy</code> (AGC + workers → DNS + proxy:proxyPort), <code>buildAGCNetworkPolicy</code> (additive: AGC also gets 443 for k8s API).</li>

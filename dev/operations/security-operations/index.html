@@ -4231,7 +4231,7 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <tbody>
 <tr>
 <td><strong>AGC full-body Secret list</strong></td>
-<td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:actions-gateway-controller</code>) returning object bodies</td>
+<td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:&lt;gateway&gt;-agc</code> under v2, <code>…:actions-gateway-controller</code> under v1) returning object bodies</td>
 <td>Legit AGC code lists Secret <em>metadata</em> only (<a href="../../plan/security/">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
 <td>Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image.</td>
 </tr>
@@ -4338,7 +4338,7 @@ The provider's default policy is broader than this sample (it logs more than the
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="k">and</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">username</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"system:serviceaccount:gmc-system:gmc-controller-manager"</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">verb</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="p">(</span><span class="s">"list"</span><span class="p">,</span><span class="s">"watch"</span><span class="p">)</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">namespace</span><span class="w"> </span><span class="p">!=</span><span class="w"> </span><span class="s">"&lt;a-tenant-namespace&gt;"</span>
 </code></pre></div>
-<p>Repeat the per-provider queries for each AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:actions-gateway-controller</code>), alerting on <code>verb == "list"</code> or a <code>get</code> on a Secret the AGC does not own.</p>
+<p>Repeat the per-provider queries for each AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:&lt;gateway&gt;-agc</code> under v2, <code>…:actions-gateway-controller</code> under v1), alerting on <code>verb == "list"</code> or a <code>get</code> on a Secret the AGC does not own.</p>
 <p><strong>Read the events.</strong> Audit events are one JSON object per line.
 To see GMC Secret reads (substitute your GMC user string):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">'select(.user.username == "system:serviceaccount:gmc-system:gmc-controller-manager"</span>
@@ -4498,7 +4498,7 @@ Threat-model rationale: <a href="../../design/05-security/">design 5.2</a>.</p>
 <h2 id="tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening<a class="headerlink" href="#tenant-egress-posture--deliberate-widening" title="Permanent link">&para;</a></h2>
 <p><strong>The secure default is controller-managed and not opt-in.</strong> For every tenant, the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to exactly what the design requires: DNS to the cluster DNS service only, and all GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are attributable).
 Worker pods cannot reach arbitrary destinations directly — that is the per-tenant egress-IP isolation property, and it is present automatically the moment a tenant is provisioned.
-Do <strong>not</strong> hand-edit the GMC-managed policies (<code>actions-gateway-workload</code>, <code>actions-gateway-controller</code>, <code>actions-gateway-proxy</code>): the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is refreshed from <code>api.github.com/meta</code> every 24h, so a hand-edit would be reverted or go stale.
+Do <strong>not</strong> hand-edit the GMC-managed policies (under v2 <code>&lt;gateway&gt;-workload</code>, <code>&lt;gateway&gt;-agc</code> and the <code>EgressProxy</code>'s own; under v1 the fixed <code>actions-gateway-workload</code>, <code>actions-gateway-controller</code>, <code>actions-gateway-proxy</code>): the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is refreshed from <code>api.github.com/meta</code> every 24h, so a hand-edit would be reverted or go stale.
 See <a href="../../design/network-architecture/#networkpolicy-rules">network-architecture.md</a> for the full policy set.</p>
 <blockquote>
 <p><strong>Running a service mesh?</strong> A mesh sidecar transparently intercepts the worker's outbound TCP and can re-route GitHub-bound traffic through a mesh egress gateway, silently bypassing the per-tenant proxy and dropping the egress-IP attribution this isolation property rests on.
@@ -4888,7 +4888,7 @@ Until it does the set keeps acquiring jobs, and their worker pods fail to reach 
 <hr />
 <h2 id="tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">Tightening AGC apiserver egress: the <code>apiserver-cidrs</code> allowlist<a class="headerlink" href="#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist" title="Permanent link">&para;</a></h2>
 <p>The AGC pod holds the tenant's GitHub App private key and is the only workload that needs the Kubernetes API server.
-The GMC therefore reconciles a NetworkPolicy (<code>actions-gateway-controller</code>) admitting AGC egress on the apiserver ports <strong>443 and 6443</strong>.
+The GMC therefore reconciles a NetworkPolicy admitting AGC egress on the apiserver ports <strong>443 and 6443</strong>: <code>&lt;gateway&gt;-agc</code> under v2, the fixed <code>actions-gateway-controller</code> under v1.
 By default that rule has <strong>no destination restriction</strong> (any-dest): kube-proxy DNATs the <code>kubernetes</code> Service ClusterIP to a provider-specific apiserver IP <em>before</em> NetworkPolicy is evaluated, so a precise <code>ipBlock</code> is not portable and a wrong one silently severs the AGC's apiserver access (the PR #59 post-DNAT trap).
 That breadth is a documented residual (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>): a compromised AGC could in principle reach an arbitrary external HTTPS endpoint on 443, not just the apiserver.</p>
 <p><strong>If your platform exposes the apiserver on a <em>stable</em> CIDR</strong>, you can close that residual by scoping the rule to it.

@@ -3628,7 +3628,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q993/">Q993</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.mdreflow.yaml"><code>mdreflow</code> joins an author's sentence split, and the gate ratifies it</a></td>
 <td><code>ci</code> <code>docs</code> <code>debt</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
 <td><code>make md-reflow</code> rejoins two sentences an author has split onto separate source lines, producing a line that violates the …</td>
 </tr>
@@ -3769,12 +3769,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or …</td>
 </tr>
 <tr>
-<td><a href="Q1099/">Q1099</a></td>
-<td><a href="../operations/troubleshooting/">Operator docs address v1-only AGC labels, SA, Service and NetworkPolicy</a></td>
-<td><code>docs</code> <code>bug</code></td>
+<td><a href="Q1101/">Q1101</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">A v2 ActionsGateway gets no AGC ServiceMonitor</a></td>
+<td><code>bug</code> <code>docs</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Twenty sites select or name the AGC by an identifier that is v1-only, in the same pages and often the same code blocks as the Deployment …</td>
+<td><code>applyOrPruneServiceMonitors</code> builds the two per-tenant <code>ServiceMonitor</code>s that let Prometheus scrape a tenant's AGC and proxy over mTLS.</td>
 </tr>
 <tr>
 <td><a href="Q996/">Q996</a></td>
@@ -3919,14 +3919,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>RunnerSetCustomValidator</code> now runs two cross-object guards that each build their own cluster-wide inventory on the uncached API reader …</td>
-</tr>
-<tr>
-<td><a href="Q1100/">Q1100</a></td>
-<td>No gate requires a row deletion to ride its own docs(queue): commit</td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>queue.py metrics</code> attributes a removal per row, reading the closure verb off the <code>docs(queue):</code>/<code>docs(status):</code> line that names it.</td>
 </tr>
 </tbody>
 </table>

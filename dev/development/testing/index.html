@@ -2897,6 +2897,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-row-deletion-commit-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The row-deletion commit gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-prose-tier-claim-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5108,15 +5119,21 @@ The AGC is one Deployment per namespace under v1, named <code>actions-gateway-co
 A command carrying the v1 name therefore names nothing at all on a v2 tenant, and 30 such references were live across eight pages when this gate was written, so a reader on the recommended path had no signal that the command did not apply (Q1098).
 Four of the 30 were bare-name forms (<code>kubectl get deploy … actions-gateway-controller</code>) that the row's own <code>deploy/</code> pattern could not see, and one was already correct, on a page that applies a <code>v1alpha1</code> CR.
 The gate is written against the class rather than against that count, which is why it matches both syntaxes and accepts a label carried by prose.</p>
-<p>Two rules, both functions of the tree alone.
+<p>Three rules, all functions of the tree alone.
 A v1 reference must carry <code>v1</code> on its own line or on one of the <strong>two</strong> preceding non-blank lines: the <code># v1 (legacy)</code> comment the split blocks use, or prose scoping the page to v1.
 The window is short deliberately: a label further back than that is not what a reader skimming to a command sees, which is the failure the gate exists to catch rather than a stricter version of it.
+A version <em>string</em> does not count: <code>kindest/node:v1.35.0</code> satisfied the original <code>\bv1\b</code> while telling a reader nothing about which API version the command was for, and five sites passed on exactly that.
+<code>v1alpha1</code> does count, since a page applying a v1 CR is v1-scoped by that fact.
 And any <code>&lt;gateway&gt;-agc</code> the docs spell is reconciled against <code>AGCResourceSuffix</code> in the GMC builder, so renaming the suffix in code cannot leave the docs quietly wrong.
 That constant is the gate's second input, which is why the one file holding it is named in <code>doc-links.yml</code>'s path filter: a Go-only diff would otherwise route here not at all.</p>
 <p>Scope is <code>docs/operations/</code>, <code>docs/development/</code> and <code>docs/getting-started.md</code>, the pages someone runs commands from.
 The design docs describe v1's NetworkPolicy and label set <em>as design</em> and the archived plans are history; neither is a command anyone runs, so widening to <code>docs/</code> at large would only buy exemptions.
-What the gate does <strong>not</strong> cover is the adjacent identifier class: the pod <code>app=</code> selector, and the ServiceAccount, Service and NetworkPolicy names, which are per-gateway under v2 for the same reason and were measured at 20 further sites (Q1099).</p>
-<p>Behaviour is asserted by <code>scripts/docs/check-agc-names-test.sh</code> under <code>make scripts-test</code>, against throwaway repos holding only the builder constant and one page: the unlabelled command that must go red beside its labelled control, a label pushed just past the window, and the two shapes that must refuse with exit 2 rather than pass by checking nothing, an unreadable suffix constant and a scope that resolved to no files.</p>
+The third rule is the pod <code>app=</code> selector (Q1099), which diverges the same way and takes a different remedy.
+<code>-l app=actions-gateway-controller</code> selects nothing on a v2 tenant, because the bare <code>app</code> label carries the AGC's own per-gateway name there.
+Unlike a Deployment name this one has a version-neutral answer: <code>app.kubernetes.io/name</code> is <code>actions-gateway-controller</code> under <strong>both</strong>, so one selector reaches a mixed fleet and the finding names it rather than asking for a v2/v1 split.
+<code>TestAGCPodSelectorIsVersionNeutral</code> in <code>cmd/gmc/internal/controller</code> pins that, asserting both that the bare labels differ and that the recommended one does not; delete <code>copyRecommendedLabels</code> from the shared Deployment builder and it goes red.
+The v1 marker is still the escape where the bare label is the subject, which is the NetworkPolicy case: a policy selects on <code>app</code>, so a debugger pod built to sit in the AGC's position has to carry the same value, and the recommended label will not do.</p>
+<p>Behaviour is asserted by <code>scripts/docs/check-agc-names-test.sh</code> under <code>make scripts-test</code>, against throwaway repos holding only the builder constant and one page: the unlabelled command that must go red beside its labelled control, a label pushed just past the window, the recommended-label form that must pass with no marker at all, a version string that must not read as a version label, and the two shapes that must refuse with exit 2 rather than pass by checking nothing, an unreadable suffix constant and a scope that resolved to no files.</p>
 <h3 id="the-design-doc-scope-gate">The design-doc scope gate<a class="headerlink" href="#the-design-doc-scope-gate" title="Permanent link">&para;</a></h3>
 <p><code>make design-scope-check</code> (<code>scripts/docs/check-design-scope.sh</code>) fails a branch that states an operator-visible scope under <code>docs/design/</code> and changes nothing under <code>docs/operations/</code>.</p>
 <p><a href="../doc-update-matrix/">doc-update-matrix.md</a> already called this out in so many words: "A design-doc-only update is the classic miss: the operator who hits the rejection never reads <code>docs/design/</code>."
@@ -5132,6 +5149,23 @@ A design doc restating a rejection an operations page already documents is the l
 <p>Base resolution and the fail-open posture follow the em-dash ratchet's, with <code>DESIGN_SCOPE_REQUIRE_BASE=1</code> turning the skip into a hard error where CI has arranged a base.
 <code>scripts/docs/check-design-scope-test.sh</code> asserts the red case and <strong>two</strong> controls: the same statement alongside an operations edit, and an edit to the same design file stating no scope.
 The second control is what stops a gate that had degenerated into "design changed, operations did not" from passing the suite.</p>
+<h3 id="the-row-deletion-commit-gate">The row-deletion commit gate<a class="headerlink" href="#the-row-deletion-commit-gate" title="Permanent link">&para;</a></h3>
+<p><code>make row-commits-check</code> (<code>scripts/docs/check-row-commits.sh</code>) fails a branch that deletes a backlog row no commit on it records.</p>
+<p><code>queue.py metrics</code> attributes each removal to a closure verb, read off the <code>docs(queue):</code>/<code>docs(status):</code> lines of the deleting commit's message.
+A squash merge folds a whole pull request into one message, so those lines survive the merge, but only if somebody wrote one: a <code>git rm</code> committed inline with the work carries none, and the row lands in the residual however clearly the pull request describes it.
+The convention that fixes it was already written down in <code>CLAUDE.md</code> and the <code>session-backlog</code> skill, and nothing checked it.</p>
+<p><strong>The rung is a branch-commit walk, which is the part worth reading before adding a rule like this.</strong> No tree check can see this defect: staging is one tree, and the question is which commit the deletion landed in.
+<code>check-queue-rules.py</code> scores the store's tree at base against head, so commit shape sits outside every rule it has.
+So the gate resolves the same merge-base <code>design-scope-check</code> does and reads the commits above it, which is the first commit-message rule in the repo.</p>
+<p><strong>It asks the metric rather than re-deriving what the metric asks.</strong> The verb test is <code>queue.py</code>'s own <code>_closure_verb</code>, imported from the vendored copy, so the gate and the summary cannot disagree about what counts: a row line naming <em>other</em> rows is a sibling's and is declined for this one, an unnamed row line is the single-row case, and the verb table is whatever upstream ships.
+A re-vendor that renames the function is a refusal here, exit 2, never a silent pass.</p>
+<p>The case for it is measured rather than asserted, and it is the recency that carries it.
+At <code>fb0ca1aa5</code>, after the Q959 re-vendor made the metric readable at all, 33 of 221 removals were unclassified.
+Twenty carry no row line whatever, and that class has tailed off, the last one landing 2026-09-04.
+The other thirteen carry a row line that names other rows, and <strong>five of those are a single pull request merged the morning this gate was written</strong>: #1913 deleted five rows inside their feature commits while its only <code>docs(queue):</code> line filed a sixth.
+A class that recurs from an author who knows the rule is the class prose cannot hold, which is the whole argument for spending a rung on it.</p>
+<p><code>scripts/docs/check-row-commits-test.sh</code> asserts the red case and <strong>two</strong> controls: the same deletion in its own row commit, and a branch that deletes no row at all.
+Without the second, a gate that had degenerated into "this branch touched <code>docs/queue/</code>" would pass the suite.</p>
 <h3 id="the-prose-tier-claim-gate">The prose tier-claim gate<a class="headerlink" href="#the-prose-tier-claim-gate" title="Permanent link">&para;</a></h3>
 <p><code>make tier-claims-check</code> (<code>scripts/docs/check-tier-claims.sh</code>) fails when a prose acquisition-tier claim drifts from the canonical section it paraphrases.</p>
 <p>The failure it exists to catch is measured (Q848).

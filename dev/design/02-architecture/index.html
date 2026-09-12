@@ -3395,7 +3395,7 @@ The alternatives and their tradeoffs:</p>
 </table>
 <p>The chosen path makes the per-tenant egress-IP property hold for <em>all</em> GitHub-bound traffic, which is what enables GitHub-side IP allowlisting and per-tenant audit attribution to be coherent claims.
 The cost is that the proxy pool must be sized to carry worker data-plane bandwidth (multi-GB image pulls and artifact uploads under heavy load); CONNECT-only TCP forwarding without TLS termination keeps the per-byte CPU cost low, and the HPA absorbs burst load.</p>
-<p>See <a href="../../plan/worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a> for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.</p>
+<p>See <a href="../../plan/archive/worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a> for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.</p>
 <hr />
 <h2 id="24-tier-4--ephemeral-worker-pod">2.4. Tier 4 — Ephemeral Worker Pod<a class="headerlink" href="#24-tier-4--ephemeral-worker-pod" title="Permanent link">&para;</a></h2>
 <p>A highly secure, short-lived pod optimized to do exactly one thing: execute a single allocated workflow job.
