@@ -159,7 +159,7 @@ For teams migrating from runners on host machines or virtual machines — where 
 In a traditional self-hosted runner setup (host or VM), each registered runner slot runs a full .NET `Runner.Listener` process held resident around the clock: 1,000 concurrent slots means 1,000 always-on listener processes across the fleet, regardless of whether any jobs are pending.
 ARC's `RunnerScaleSet` mode improves on this — it runs one listener per scale set rather than one per slot (a Go binary, `ghalistener`, distinct from the runner's .NET `Runner.Listener`) — but each listener is still its own always-on pod with its own cluster IP: a tenant operating 10 RunnerScaleSets holds 10 listener pods at rest.
 
-In contrast, this system runs every listener session as a goroutine inside one shared AGC pod, at a measured ~12 KiB of AGC state per session (~60 KiB as the conservative design bound; see [Appendix A](appendix-a-capacity-slos.md)).
+In contrast, this system runs every listener session as a goroutine inside one shared AGC pod, at a measured ~7.7 KiB of AGC state per scale set on the default scale-set tier, and ~12.6 KiB per session on the classic tier (~60 KiB as the conservative design bound; see [Appendix A](appendix-a-capacity-slos.md)).
 At the 1,000-session burst ceiling, the AGC's goroutine working set is roughly 60 MiB under that conservative bound; the steady-state cost at rest is one goroutine per RunnerGroup regardless of how many slots are configured — and still one pod, one cluster IP per tenant.
 
 The IP address problem compounds this for pod-per-slot deployments.

@@ -105,6 +105,11 @@ mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked session
 	MEM_TENANTS=$(or $(MEM_TENANTS),10) MEM_LISTENERS_PER_TENANT=$(or $(MEM_LISTENERS_PER_TENANT),100) \
 		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestAGCPerSessionMemory -v ./test/load/...
 
+.PHONY: scaleset-mem-profile
+scaleset-mem-profile: ## Isolate AGC-only per-scale-set memory on the scale-set tier (Q722): 200 parked sessions, in-process transport, no protocol stub
+	SCALESET_MEM_SETS=$(or $(SCALESET_MEM_SETS),200) \
+		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestScaleSetPerListenerMemory -v ./test/load/...
+
 .PHONY: generate
 generate: manifests deepcopy ## Regenerate CRD/RBAC manifests and DeepCopy methods
 

@@ -22,7 +22,7 @@ They are intended as starting points to be refined against real production data;
 
 | Resource | Target | Rationale |
 | --- | --- | --- |
-| Concurrent virtual sessions (peak burst) | ≤ 1,000 | Memory-bound burst ceiling: each goroutine stack + HTTP buffer + token-manager indirection averages ~60 KiB resident (a deliberately conservative sizing figure — the AGC's own per-session structures measure **~12 KiB**, see [Per-session memory & density](#per-session-memory--density-measured)); 1,000 sessions ≈ 60 MiB at peak. Steady-state cost is 1 session per RunnerGroup, far below this ceiling for typical deployments. |
+| Concurrent virtual sessions (peak burst) | ≤ 1,000 | Memory-bound burst ceiling: each goroutine stack + HTTP buffer + token-manager indirection averages ~60 KiB resident (a deliberately conservative sizing figure — the AGC's own per-session structures measure **~12.6 KiB** on the classic tier and **~7.7 KiB** per scale set on the scale-set tier, see [Per-session memory & density](#per-session-memory--density-measured)); 1,000 sessions ≈ 60 MiB at peak. Steady-state cost is 1 session per RunnerGroup, far below this ceiling for typical deployments. |
 | Memory request | 2 GiB | Sized for the peak burst ceiling of 1,000 concurrent goroutines (~60 MiB) with 4× safety margin for Go runtime overhead, heap churn, and reconcile storms. Actual steady-state resident size will be much smaller. |
 | Memory limit | 4 GiB | Allows transient bursts during reconcile storms without triggering OOM. |
 | CPU request | 500m | Predominantly I/O-bound; request reflects baseline scheduling weight rather than steady CPU draw. |
@@ -80,8 +80,31 @@ The pre-registered agent struct (Ed25519 key + credentials, no JIT blob in this 
 The measured ~12.2 KiB is **~5× below** the ~60 KiB design estimate — the gap is the per-connection HTTP transport buffers that an active long-poll holds in production, which the in-process transport omits.
 The design estimate is therefore confirmed as a conservative upper bound.
 
+Re-measured 2026-09-12 on the same harness and machine: **12.57 KiB/session** (8.32 KiB stack, 4.25 KiB heap), so the figure is stable.
+
+### The scale-set tier measures a different unit, and a smaller one
+
+The probe above drives the **classic** tier, where one listener goroutine holds one virtual runner session, so per-session and per-goroutine are the same quantity.
+The scale-set tier is the default protocol and had never been measured (Q722).
+`TestScaleSetPerListenerMemory` (`cmd/agc/test/load/scaleset_mem_test.go`, `make scaleset-mem-profile`) isolates it the same way, against `scalesetMemTransport` rather than `scalesettest`, whose `httptest.Server` would hold a parked goroutine and its read/write buffers per session in the same process.
+
+**The unit differs, which is the substance rather than a detail.** One scale-set `Listener` holds one *scale set's* acquisition session and multiplexes every job assigned to that set through it, so the resident cost scales with the **RunnerSet count**, not with the number of concurrent jobs.
+
+**Result (200 scale sets, Go on `darwin/arm64`, 2026-09-12):**
+
+| Component | Per scale set |
+|---|---|
+| listener goroutine stack | ~4.8 KiB |
+| heap (live session state) | ~2.9 KiB |
+| **AGC-only total (measured)** | **~7.7 KiB** |
+
+The `scaleset.Client` and `Listener` structs add ~1.2 KiB per set, built before any session opens and so held out of the marginal figure.
+
+So the scale-set tier is cheaper per session *and* needs far fewer sessions: a tenant running one RunnerSet holds one long poll however many jobs are in flight, where the classic tier holds one per concurrent runner.
+The probe asserts every one of its 200 polls is actually parked before sampling, since a goroutine count cannot tell a resting long poll from one spinning in a backoff retry and the figure divides by the set count.
+
 **Density versus ARC — a pod-count argument, not a memory ratio.** The honest comparison against ARC scale-set mode is structural: ARC runs **one always-on listener pod per scale set** (a Go binary, `cmd/ghalistener` in `actions/actions-runner-controller`, built on the same official `github.com/actions/scaleset` client library this repo tracks), each costing a pod slot, a cluster IP, a scheduling unit, an image pull, an upgrade surface, and a Go runtime baseline.
-GAG runs every listener as a goroutine in **one shared AGC pod per tenant** — N runner sets is N pods and N cluster IPs there, 1 pod and 1 cluster IP here, at ~12.2 KiB of measured AGC state per session.
+GAG runs every listener as a goroutine in **one shared AGC pod per tenant** — N runner sets is N pods and N cluster IPs there, 1 pod and 1 cluster IP here, at ~7.7 KiB of measured AGC state per scale set on the default scale-set tier (~12.6 KiB per session on the classic tier).
 
 > **Why no memory ratio is published.** Earlier revisions published a "~4,000×" figure derived from a "~256 MiB .NET listener" baseline.
 > That baseline was retired ([#781](https://github.com/actions-gateway/github-actions-gateway/issues/781)): ARC's scale-set listener is the Go `ghalistener`, not the .NET `Runner.Listener` (which runs inside the runner pod, a different component), and the `gha-runner-scale-set` chart ships **no default listener resource requests or limits** — so there was no measured denominator to ratio against.

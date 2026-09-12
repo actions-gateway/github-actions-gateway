@@ -106,6 +106,25 @@ This figure is published, with the density-multiple derivation, in [appendix-a-c
 > **Boundary.** This isolates the AGC session *structures*.
 > It excludes the per-connection HTTP transport buffers an active long-poll holds in production (a real but bounded additional cost) — which is why the published density multiple keeps the conservative ~60 KiB design figure rather than the ~12 KiB floor.
 
+## The same figure on the scale-set tier (Q722)
+
+The probe above drives the **classic** tier, where one listener goroutine holds one virtual runner session.
+The scale-set tier is the default protocol, and the published density figure had never been measured against it.
+
+`TestScaleSetPerListenerMemory` (`scaleset_mem_test.go`) isolates it the same way, against `scalesetMemTransport` rather than `scalesettest`.
+`scalesettest` serves the real protocol model and is the right venue for behaviour, but its `httptest.Server` holds a parked goroutine and its read/write buffers per session in this same process, which is the very inflation `memTransport` exists to strip out.
+
+```bash
+make scaleset-mem-profile   # 200 parked scale-set sessions; prints bytes/set
+```
+
+**The unit differs, and that is the finding rather than a detail of the harness.** One scale-set `Listener` holds one *scale set's* acquisition session and multiplexes every job assigned to that set through it, so the resident cost scales with the RunnerSet count and not with the number of concurrent jobs.
+
+A representative run holds 200 scale sets at **~7.7 KiB/set** (≈ 4.8 KiB goroutine stack + ≈ 2.9 KiB heap), with the `scaleset.Client` and `Listener` structs a further ~1.2 KiB built before any session opens.
+So the default tier is cheaper per session *and* needs far fewer of them.
+
+The probe asserts every one of its polls is actually parked before it samples: a goroutine count cannot tell a resting long poll from one spinning in a backoff retry, and the figure divides by the set count, so a short parked count would compute it over the wrong denominator.
+
 ## Design
 
 See [docs/plan/milestone-5.md §2](../../../../docs/plan/milestone-5.md) for the rationale (why an in-process Go load test is the tier that observes the claim, and why the harness lives here rather than in a kind e2e).
@@ -120,5 +139,7 @@ See [docs/plan/milestone-5.md §2](../../../../docs/plan/milestone-5.md) for the
 | `report.go` | SLO evaluation + Markdown/log report |
 | `load_test.go` | `TestAGCLoad` entrypoint (reads `LOAD_*` env knobs) |
 | `mem_transport.go` | stub-free in-process `RoundTripper` + registrar for the per-session memory probe |
-| `mem_test.go` | `TestAGCPerSessionMemory` — isolates AGC-only bytes/session (Q181), reads `MEM_*` env knobs |
+| `mem_test.go` | `TestAGCPerSessionMemory`, isolating AGC-only bytes/session on the classic tier (Q181); reads `MEM_*` env knobs |
+| `scaleset_mem_transport.go` | stub-free in-process `RoundTripper` for the scale-set protocol's bootstrap and resting long poll |
+| `scaleset_mem_test.go` | `TestScaleSetPerListenerMemory`, isolating AGC-only bytes/scale-set on the default tier (Q722); reads `SCALESET_MEM_*` env knobs |
 | `results/` | committed sample run; `make load-test-full` writes `latest.md` here (gitignored) |

@@ -731,6 +731,10 @@ load-test-full: ## Load acceptance: 1,000 concurrent virtual sessions, realistic
 mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked sessions, in-process transport, no broker stub
 	$(MAKE) -C cmd/agc mem-profile
 
+.PHONY: scaleset-mem-profile
+scaleset-mem-profile: ## Isolate AGC-only per-scale-set memory on the scale-set tier (Q722)
+	$(MAKE) -C cmd/agc scaleset-mem-profile
+
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped locally to modules affected vs origin/main (LINT_ALL=1 or CI = full sweep; includes govet)
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go/go-lint.sh
