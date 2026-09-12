@@ -3737,14 +3737,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>go-work-tidy.sh</code> line 103 runs <code>realpath --relative-to="." "$mod_dir"</code> for every module <code>go list -m all</code> returns.</td>
 </tr>
 <tr>
-<td><a href="Q959/">Q959</a></td>
-<td>Queue metrics report zero completions because removals name no verb</td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>queue.py metrics</code> splits throughput from garbage collection by matching <code>complete\|prune\|merge\|defer</code> in the subject of the commit that …</td>
-</tr>
-<tr>
 <td><a href="Q966/">Q966</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh">Is 2 heavy slots at 16 jobs on 18 cores the right point?</a></td>
 <td><code>ci</code> <code>speed</code> <code>debt</code></td>
@@ -3959,6 +3951,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>RunnerSetCustomValidator</code> now runs two cross-object guards that each build their own cluster-wide inventory on the uncached API reader …</td>
+</tr>
+<tr>
+<td><a href="Q1100/">Q1100</a></td>
+<td>No gate requires a row deletion to ride its own docs(queue): commit</td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>queue.py metrics</code> attributes a removal per row, reading the closure verb off the <code>docs(queue):</code>/<code>docs(status):</code> line that names it.</td>
 </tr>
 </tbody>
 </table>

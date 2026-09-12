@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q959/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1100/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Queue metrics report zero completions because removals name no verb - GitHub Actions Gateway</title>
+        <title>No gate requires a row deletion to ride its own docs(queue): commit - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#queue-metrics-report-zero-completions-because-removals-name-no-verb" class="md-skip">
+        <a href="#no-gate-requires-a-row-deletion-to-ride-its-own-docsqueue-commit" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Queue metrics report zero completions because removals name no verb
+              No gate requires a row deletion to ride its own docs(queue): commit
             
           </span>
         </div>
@@ -2597,21 +2597,18 @@
   
 
 
-<h1 id="queue-metrics-report-zero-completions-because-removals-name-no-verb">Queue metrics report zero completions because removals name no verb<a class="headerlink" href="#queue-metrics-report-zero-completions-because-removals-name-no-verb" title="Permanent link">&para;</a></h1>
-<p><code>queue.py metrics</code> splits throughput from garbage collection by matching <code>complete|prune|merge|defer</code> in the subject of the commit that deletes an item, and falls back to <code>removed</code> when none is present.
-Measured 2026-08-23 over the store's whole history: of 86 removals, 81 classify as <code>removed</code> and 5 as <code>merge</code>, so the summary reads <code>completed 0</code> and <code>pruned 5</code> for a repo that has shipped 239 filed items.
-Zero throughput is not an imprecise reading, it is an inverted one, and the prune ratio derived from it is meaningless.</p>
-<p>Two candidate fixes, and the choice is the work.
-Either the convention gets enforced, which needs a gate on the deleting commit's subject rather than on the tree, and the gate has to accept <code>retire</code> as well, since <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">the flake lifecycle</a> sends rows to the ledger under that word and <code>maintaining-backlog.md</code> never told anyone to write a verb at all.
-Or the verb is abandoned as the signal and closure is derived instead, which is available here: a flake row that lands in <code>flake-watch-retired.md</code> retired, an item whose ID appears in a merged PR's body shipped.</p>
-<p>Note that <code>queue.py</code> is <a href="../../development/skills/#vendored-from-the-skills-repo">vendored from the skill</a> and carries only two declared local edits, neither of them in the matcher, so a fix there belongs upstream and only the convention half is this repo's to change.
-Related: Q955 owns the vendored-drift detection; the re-vendor Q956 asked for has shipped, so the matcher here is upstream's current one.</p>
-<p><strong>Re-measured 2026-09-11, and the choice is settled against the convention half.</strong> <code>queue.py metrics</code> now reads <code>filed 372, completed 1, pruned 8, removed 201, open 162</code>, so the inversion is unchanged at four times the volume: one completion recorded for 210 rows closed.
-The reason is not that nobody writes the verb.
-Of the 141 commits that delete a <code>docs/queue/QNNN.md</code>, <strong>139 carry a trailing <code>(#NNNN)</code></strong> — they landed as squash merges, so the subject the matcher reads is the <em>pull request title</em>, and the <code>docs(queue): close QNNN</code> commit that does carry the verb is folded away inside it.
-Only 17 of the 141 subjects hold a closure verb at all, and a PR closing several rows at once has no single verb-and-row to name in its title.
-So enforcing the convention would mean gating PR titles rather than commit subjects, which is the wrong rung for a metric: closure is derivable from evidence that survives the squash, and deriving it is the fix.</p>
-<p>That fix is upstream in the vendored matcher, not here.</p>
+<h1 id="no-gate-requires-a-row-deletion-to-ride-its-own-docsqueue-commit">No gate requires a row deletion to ride its own docs(queue): commit<a class="headerlink" href="#no-gate-requires-a-row-deletion-to-ride-its-own-docsqueue-commit" title="Permanent link">&para;</a></h1>
+<p><code>queue.py metrics</code> attributes a removal per row, reading the closure verb off the <code>docs(queue):</code>/<code>docs(status):</code> line that names it.
+A <code>git rm</code> committed inline with the work carries no such line, so the row falls to the residual however clearly the PR describes it.</p>
+<p><strong>Measured 2026-09-12</strong> at <code>32312254e</code>, after the Q959 re-vendor: 28 of 214 removals classify as <code>removed</code>.
+Twenty of those have a deletion commit with no <code>docs(queue):</code>/<code>docs(status):</code> line at all.
+<code>fix(coverage): force a fresh pass over the uncacheable package (Q992) (#1844)</code> is the shape, and Q1003, Q1040 and Q1042 closed the same way.
+The other eight do carry a row line, but one naming other rows, which the walk declines rather than spending on whichever rows the diff holds.</p>
+<p>The isolated row commit is already what <a href="../../development/skills/#session-backlog"><code>session-backlog</code></a> asks for and what <code>CLAUDE.md</code> states, and nothing checks it: <code>check-queue-rules.py</code> scores the store's tree at base against head, so commit shape is outside every rule it has, and the repo has no commit-message gate of any kind.</p>
+<p>The rung is the question, not the rule.
+A <code>--staged</code> check cannot see it, because staging is one tree and the defect is which commit the deletion lands in.
+So this is a pre-push or CI walk over the branch's own commits, which is a rung this repo has never used for anything.
+Weigh that against leaving the residual: 28 of 214 is a 13% unread rate on a metric nobody gates on, and the verb is advisory.</p>
 
 
 
