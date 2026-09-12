@@ -3355,7 +3355,7 @@ Two instances already ship on the tenant dashboard (<code>Denied CONNECTs/s (SSR
 </tr>
 <tr>
 <td><strong>Table of contents</strong></td>
-<td>Long docs (~400+ lines) carry a <code>## Table of Contents</code> after the intro listing h2s (plus h3 for operator docs), in document order. Anchors follow GitHub slug rules (duplicate headings get <code>-1</code>/<code>-2</code>); verify against the rendered page. <strong>Gated on <a href="../../operations/upgrade/">upgrade.md</a> only</strong> (Q865): <code>make upgrade-toc-check</code> fails a heading that page's index never gained, an entry naming no heading, or entries out of document order. <code>make doc-links</code> does not cover this: it resolves the anchors a page writes, so a heading the index never mentions has no link for it to fail. Q911 is the rest of the tree.</td>
+<td>Long docs (~400+ lines) carry a <code>## Table of Contents</code> after the intro listing h2s (plus h3 for operator docs), in document order. Anchors follow GitHub slug rules (duplicate headings get <code>-1</code>/<code>-2</code>); verify against the rendered page. <strong>Gated on every page that carries one</strong> (Q865, Q911): <code>make doc-toc-check</code> fails a heading the page's index never gained, an entry naming no heading, or entries out of document order. <code>make doc-links</code> does not cover this: it resolves the anchors a page writes, so a heading the index never mentions has no link for it to fail. How deep each page is held is read off its own entries: an index already naming an h3 is held to h3, one naming only h2s is held to h2, so the choice above stays the page's.</td>
 </tr>
 <tr>
 <td><strong>Cut filler</strong></td>

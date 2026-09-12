@@ -2605,7 +2605,13 @@ Zero throughput is not an imprecise reading, it is an inverted one, and the prun
 Either the convention gets enforced, which needs a gate on the deleting commit's subject rather than on the tree, and the gate has to accept <code>retire</code> as well, since <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">the flake lifecycle</a> sends rows to the ledger under that word and <code>maintaining-backlog.md</code> never told anyone to write a verb at all.
 Or the verb is abandoned as the signal and closure is derived instead, which is available here: a flake row that lands in <code>flake-watch-retired.md</code> retired, an item whose ID appears in a merged PR's body shipped.</p>
 <p>Note that <code>queue.py</code> is <a href="../../development/skills/#vendored-from-the-skills-repo">vendored from the skill</a> and carries only two declared local edits, neither of them in the matcher, so a fix there belongs upstream and only the convention half is this repo's to change.
-Related: Q955 owns the vendored-drift detection; the re-vendor Q956 asked for has shipped, so the matcher here is upstream's current one and the measurement above wants re-taking before either fix is chosen.</p>
+Related: Q955 owns the vendored-drift detection; the re-vendor Q956 asked for has shipped, so the matcher here is upstream's current one.</p>
+<p><strong>Re-measured 2026-09-11, and the choice is settled against the convention half.</strong> <code>queue.py metrics</code> now reads <code>filed 372, completed 1, pruned 8, removed 201, open 162</code>, so the inversion is unchanged at four times the volume: one completion recorded for 210 rows closed.
+The reason is not that nobody writes the verb.
+Of the 141 commits that delete a <code>docs/queue/QNNN.md</code>, <strong>139 carry a trailing <code>(#NNNN)</code></strong> — they landed as squash merges, so the subject the matcher reads is the <em>pull request title</em>, and the <code>docs(queue): close QNNN</code> commit that does carry the verb is folded away inside it.
+Only 17 of the 141 subjects hold a closure verb at all, and a PR closing several rows at once has no single verb-and-row to name in its title.
+So enforcing the convention would mean gating PR titles rather than commit subjects, which is the wrong rung for a metric: closure is derivable from evidence that survives the squash, and deriving it is the fix.</p>
+<p>That fix is upstream in the vendored matcher, not here.</p>
 
 
 

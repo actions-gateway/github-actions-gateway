@@ -3022,11 +3022,6 @@ Each has inline ✓ markers per item.</p>
 <td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../queue/Q501/">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
 </tr>
 <tr>
-<td><a href="docs/">docs.md</a></td>
-<td>Documentation roadmap across phases</td>
-<td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../queue/Q568/">Q568</a></td>
-</tr>
-<tr>
 <td><a href="docs-six-layer-audit/">docs-six-layer-audit.md</a></td>
 <td>Six-layer consistency audit of <code>docs/</code> (terminology, cross-refs, nav, reuse)</td>
 <td>✅ Done — all six layers resolved; Layer 3 metrics gap closed by Q51; the optional link-check CI gate is a separate non-blocking decision</td>
@@ -3136,6 +3131,11 @@ The doc remains available — the rationale is often more valuable than the diff
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="archive/docs/">archive/docs.md</a></td>
+<td>Documentation roadmap across phases: the three operational docs that did not exist, the design-doc corrections, and the Phase 3 reference material</td>
+<td>2026-09-11, Q568. The last open item was 3.2's dashboard half, and it had shipped without the row being flipped: four reference dashboards under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>, an <a href="../operations/observability-dashboards/">operator page</a> documenting every panel, a <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md">reproducible render harness</a> that stands up Prometheus and Grafana in kind and screenshots each one, and a gate holding the page's panel tables to the shipped JSON</td>
+</tr>
 <tr>
 <td><a href="archive/q793-labels-patch/">archive/q793-labels-patch.md</a></td>
 <td>Investigation I (Q793): is a scale-set labels <code>PATCH</code> honoured? The unknown Q726 left open, which decided whether label drift could be reconciled in place or only reported</td>

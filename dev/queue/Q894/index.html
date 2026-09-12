@@ -2599,8 +2599,11 @@
 
 <h1 id="archive-the-plans-left-active-only-by-the-deleted-progress-table">Archive the plans left active only by the deleted Progress table<a class="headerlink" href="#archive-the-plans-left-active-only-by-the-deleted-progress-table" title="Permanent link">&para;</a></h1>
 <p>Q889 deleted the Progress table, whose ✅ rows were 21 active plans' only backlog reference, and rekeyed <code>plan-index-check</code> invariant 1.
-Measured 2026-08-17: 21 plans, 142 inbound references.
 Reconcile, do not eyeball.</p>
+<p>Re-measured 2026-09-11, and the set has grown: <strong>39 of the 68 active rows in <code>docs/plan/README.md</code> carry ✅</strong>, of which <strong>24 are cited by no live queue row</strong> and so are the archive candidates; the other 15 stay put, which several rows say in so many words (<code>runner-sizing-profiles.md</code> is retained as the validation record Q416 still cites).</p>
+<p><code>make plan-index-check</code> passes over all of them and always will: its invariant is an <em>open</em>-marked row backed by no live item, and a ✅ row is not open-marked, so the gate that catches a plan which should have been archived cannot see one that already claims to be done.
+Whether that gap gets a rule of its own is part of this item, because 24 is what one audit found and audits are what the archive-on-close protocol exists to avoid.</p>
+<p>Each move is <code>git mv</code> plus four edits the protocol names, and one more it does not: a plan carrying an em-dash ceiling in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt"><code>em-dash-baseline.txt</code></a> needs the entry re-pathed, or the gate fails the moved file at its new path with no ceiling.</p>
 
 
 
