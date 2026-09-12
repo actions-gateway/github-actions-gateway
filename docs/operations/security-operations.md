@@ -413,7 +413,19 @@ The abuse-specific first moves:
 
 ### Suspected compromised AGC (tenant-scoped)
 
-1. **Contain.** Scale the AGC to zero so it stops acting: `kubectl scale deploy/actions-gateway-controller -n <namespace> --replicas=0`.
+1. **Contain.** Scale the AGC to zero so it stops acting.
+   The AGC Deployment is named per gateway under v2, as `<gateway>-agc`; under v1 there is one per namespace, named `actions-gateway-controller`.
+
+   ```sh
+   # v2
+   kubectl scale deploy/<gateway>-agc -n <namespace> --replicas=0
+   ```
+
+   ```sh
+   # v1 (legacy)
+   kubectl scale deploy/actions-gateway-controller -n <namespace> --replicas=0
+   ```
+
    In-flight jobs will be cancelled by GitHub when `renewjob` lapses; this is acceptable during a suspected breach.
 2. **Rotate.** Rotate the tenant's GitHub App key ([runbook.md § GitHub App Key Compromise](runbook.md#github-app-key-compromise)) — the AGC held it in memory.
 3. **Scope.** Check the API-server audit log for Secret `get`/`list` calls by the AGC ServiceAccount; enumerate which tenant Secrets may have been read.

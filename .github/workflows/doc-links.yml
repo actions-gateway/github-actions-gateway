@@ -39,6 +39,7 @@ on:
       - 'requirements-docs.txt'
       - '.mdreflow.yaml'
       - 'tools/go.mod'
+      - 'cmd/gmc/internal/controller/actionsgateway_v2_builder.go'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
 
@@ -92,6 +93,7 @@ jobs:
               - 'requirements-docs.txt'
               - '.mdreflow.yaml'
               - 'tools/go.mod'
+              - 'cmd/gmc/internal/controller/actionsgateway_v2_builder.go'
               - 'Makefile'
               - '.github/workflows/doc-links.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
@@ -216,6 +218,26 @@ jobs:
           go-version-file: go.work
       - name: card bullets fit their column (make card-bullets-check)
         run: make card-bullets-check
+
+  # Hold every AGC Deployment reference in the operator docs to a stated API
+  # version (Q1098). The AGC is `actions-gateway-controller` on v1 and
+  # `<gateway>-agc` on v2, so a v1-named command names nothing on a v2 tenant —
+  # 26 of them were live across eight pages with no version scope in their prose.
+  #
+  # Its second input is the GMC builder holding AGCResourceSuffix, which is why
+  # that one file is in the filter above: renaming the suffix in code must re-run
+  # this gate, and a Go-only diff would otherwise route here not at all.
+  #
+  # No Go toolchain: the checker is Python and reads the constant as text.
+  agc-names:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: AGC Deployment names are version-scoped (make agc-names-check)
+        run: make agc-names-check
 
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
@@ -385,6 +407,7 @@ jobs:
       - page-density
       - doc-toc
       - card-bullets
+      - agc-names
       - make-targets
       - md-reflow
       - comparison-stamps

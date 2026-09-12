@@ -609,8 +609,14 @@ kubectl get actionsgateway -n <tenant-namespace> <name> \
 #   ProxyQuotaExceeded=False  (True means proxy replica creates are being rejected by the ResourceQuota)
 ```
 
+The AGC Deployment is named per gateway under v2, as `<gateway>-agc`, so a `team-a-gateway` tenant runs `deploy/team-a-gateway-agc`.
+Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+
 ```sh
 # Confirm the AGC Deployment is running
+# v2
+kubectl get deploy -n <tenant-namespace> <gateway>-agc
+# v1 (legacy)
 kubectl get deploy -n <tenant-namespace> actions-gateway-controller
 # Expected: READY 1/1
 
@@ -649,6 +655,9 @@ The AGC should begin polling GitHub within seconds of starting.
 
 ```sh
 # Check AGC logs for session registration
+# v2
+kubectl logs -n <tenant-namespace> deploy/<gateway>-agc --tail=30
+# v1 (legacy)
 kubectl logs -n <tenant-namespace> deploy/actions-gateway-controller --tail=30
 # Look for: "session registered" or "starting listener goroutine"
 

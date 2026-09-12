@@ -226,6 +226,10 @@ make-targets-check: ## Fail when prose names a `make` target that exists in no M
 card-bullets-check: ## Fail when a card-grid bullet is too long for the column it renders in
 	scripts/docs/check-card-bullets.sh
 
+.PHONY: agc-names-check
+agc-names-check: ## Fail when an operator doc names the v1 AGC Deployment with no version label
+	scripts/docs/check-agc-names.sh
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
 # dashboards beside it had their panel queries parsed by nothing either (Q910):

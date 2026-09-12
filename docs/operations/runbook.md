@@ -5,6 +5,10 @@
 For initial setup steps see [Getting Started](../getting-started.md).
 For detailed symptom → diagnosis steps see [Troubleshooting](troubleshooting.md).
 
+**Addressing the AGC Deployment.** Under v2 the AGC is named per gateway, as `<gateway>-agc`, so a `team-a-gateway` tenant addresses `deploy/team-a-gateway-agc`.
+Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+Commands below give both forms; substitute your own gateway name for `<gateway>`.
+
 ---
 
 ## Day-2 Operations
@@ -299,7 +303,18 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 ### `active_sessions` Flatlining at Zero
 
 1. Check AGC pod status: `kubectl get pod -n <namespace> -l app=actions-gateway-controller`.
-2. Check AGC logs: `kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100`.
+2. Check AGC logs:
+
+   ```sh
+   # v2
+   kubectl logs -n <namespace> deploy/<gateway>-agc --tail=100
+   ```
+
+   ```sh
+   # v1 (legacy)
+   kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100
+   ```
+
 3. Check RunnerGroup conditions: `kubectl get runnergroup -n <namespace> -o yaml`.
 4. If pod is `CrashLoopBackOff` or `Error`: see [Troubleshooting — AGC CrashLoopBackOff](troubleshooting.md#agc-crashloopbackoff-or-not-acquiring-jobs).
 5. If pod is running but sessions are zero: check for token errors (see [Token Refresh Errors](troubleshooting.md#token-refresh-errors-spiking)) and network connectivity (see [Network Connectivity Failures](troubleshooting.md#network-connectivity-failures)).
@@ -318,7 +333,18 @@ The scale-set tier is the default protocol; it emits no `active_sessions` gauge,
 
 1. Confirm the wedge: `scaleset_jobs_assigned_total` is rising but `scaleset_jobs_provisioned_total` is not, for the affected `namespace`/`runner_set`.
 2. Check the provision-error rate: `rate(actions_gateway_scaleset_provision_errors_total[5m])`.
-   A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs (`kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100`) for `generate-jitconfig` errors and worker-pod create rejections.
+   A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs for `generate-jitconfig` errors and worker-pod create rejections.
+
+   ```sh
+   # v2
+   kubectl logs -n <namespace> deploy/<gateway>-agc --tail=100
+   ```
+
+   ```sh
+   # v1 (legacy)
+   kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100
+   ```
+
 3. Check the worker-pod `ResourceQuota` (see [Adjusting Tenant Quota](#adjusting-tenant-quota)) and the `WorkerQuotaExceeded` / `WorkersUnschedulable` conditions — a full quota or an unschedulable pod stalls provisioning with no provision *error*.
 4. If provision errors are zero and quota is healthy, check the listener session itself: the RunnerSet's `Ready`/`RateLimited`/`Degraded` conditions (`kubectl get runnerset -n <namespace> -o yaml`) surface a rate-limited or unauthorized scale-set session (Q325).
    The conditions are a *state* signal that only trips once an episode persists (`RateLimited` after ten minutes), so pair them with the *rate* signal `rate(actions_gateway_message_poll_errors_total[5m])` for the same namespace — a stream of brief 429 or transport episodes throttles polling without ever setting a condition (Q446).
@@ -356,6 +382,12 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
    ```
 6. Confirm the AGC Deployment has rolled and the new pod is healthy:
    ```sh
+   # v2
+   kubectl rollout status deploy/<gateway>-agc -n <namespace>
+   ```
+
+   ```sh
+   # v1 (legacy)
    kubectl rollout status deploy/actions-gateway-controller -n <namespace>
    ```
 7. Confirm `actions_gateway_token_refresh_errors_total` is no longer incrementing.
@@ -373,7 +405,18 @@ If the AGC pod is destroyed and cannot restart (e.g. node failure without resche
 1. **In-flight jobs** whose `renewjob` loop has lapsed will be cancelled by GitHub.
    There is no automatic recovery for these — they require manual re-run.
 2. **Queued jobs** (not yet acquired) will be redelivered by GitHub to the next healthy session within ~2 minutes of the AGC restarting.
-3. **To force restart:** `kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`.
+3. **To force restart:**
+
+   ```sh
+   # v2
+   kubectl rollout restart deploy/<gateway>-agc -n <namespace>
+   ```
+
+   ```sh
+   # v1 (legacy)
+   kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
+   ```
+
 4. Monitor `actions_gateway_active_sessions` — it should reach 1 per RunnerGroup within a few seconds of the pod starting.
 
 **State that persists:** All RunnerGroup CRs, Secrets, and Kubernetes resources are durable.

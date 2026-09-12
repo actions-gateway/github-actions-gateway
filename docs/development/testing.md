@@ -828,6 +828,26 @@ Its own failure mode is the one it exists to catch, so `scripts/docs/doc-blocks-
 It earned its keep on the first run.
 Both Step 4 examples were rejected with `priorityClassName "runner-critical" is not in the platform allowlist`: the chart ships `allowedPriorityClasses` empty, and the quickstart named tier classes it never told the operator to allowlist, so the page could not be followed to the end.
 
+### The AGC Deployment-name gate
+
+`make agc-names-check` (`scripts/docs/check-agc-names.sh`) fails when an operator doc addresses the AGC Deployment by its v1 name with nothing nearby to say which API version the command is for.
+The AGC is one Deployment per namespace under v1, named `actions-gateway-controller`, and one per gateway under v2, named `<gateway>-agc`.
+A command carrying the v1 name therefore names nothing at all on a v2 tenant, and 30 such references were live across eight pages when this gate was written, so a reader on the recommended path had no signal that the command did not apply (Q1098).
+Four of the 30 were bare-name forms (`kubectl get deploy … actions-gateway-controller`) that the row's own `deploy/` pattern could not see, and one was already correct, on a page that applies a `v1alpha1` CR.
+The gate is written against the class rather than against that count, which is why it matches both syntaxes and accepts a label carried by prose.
+
+Two rules, both functions of the tree alone.
+A v1 reference must carry `v1` on its own line or on one of the **two** preceding non-blank lines: the `# v1 (legacy)` comment the split blocks use, or prose scoping the page to v1.
+The window is short deliberately: a label further back than that is not what a reader skimming to a command sees, which is the failure the gate exists to catch rather than a stricter version of it.
+And any `<gateway>-agc` the docs spell is reconciled against `AGCResourceSuffix` in the GMC builder, so renaming the suffix in code cannot leave the docs quietly wrong.
+That constant is the gate's second input, which is why the one file holding it is named in `doc-links.yml`'s path filter: a Go-only diff would otherwise route here not at all.
+
+Scope is `docs/operations/`, `docs/development/` and `docs/getting-started.md`, the pages someone runs commands from.
+The design docs describe v1's NetworkPolicy and label set *as design* and the archived plans are history; neither is a command anyone runs, so widening to `docs/` at large would only buy exemptions.
+What the gate does **not** cover is the adjacent identifier class: the pod `app=` selector, and the ServiceAccount, Service and NetworkPolicy names, which are per-gateway under v2 for the same reason and were measured at 20 further sites (Q1099).
+
+Behaviour is asserted by `scripts/docs/check-agc-names-test.sh` under `make scripts-test`, against throwaway repos holding only the builder constant and one page: the unlabelled command that must go red beside its labelled control, a label pushed just past the window, and the two shapes that must refuse with exit 2 rather than pass by checking nothing, an unreadable suffix constant and a scope that resolved to no files.
+
 ### The release-pin gate
 
 `make release-pins-check` (`scripts/docs/check-release-pins.sh`) fails when an install/upgrade page still pins a release older than the newest stable `vX.Y.Z` tag.

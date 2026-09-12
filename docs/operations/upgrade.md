@@ -1196,11 +1196,19 @@ It is harmless but wastes a runner slot for the TTL; a burst of these lines duri
 The GMC manages the AGC Deployment, so the AGC image is a GMC-level setting, not a per-namespace one: update the GMC's Helm values with the new AGC image and upgrade the GMC, which then rolls **every** tenant's AGC Deployment at once — see [A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them](#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them) before you schedule it.
 
 There is no per-namespace alternative.
-`kubectl set image deploy/actions-gateway-controller -n <namespace>` appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.
+`kubectl set image` on the AGC Deployment appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.
 
 **Step 3: Watch the rollout**
 
+The AGC Deployment is named per gateway under v2, as `<gateway>-agc`; under v1 there is one per namespace, named `actions-gateway-controller`.
+
 ```sh
+# v2
+kubectl rollout status deploy/<gateway>-agc -n <namespace>
+```
+
+```sh
+# v1 (legacy)
 kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 
@@ -1228,6 +1236,9 @@ Roll the AGC image back where the GMC reads it, not on the Deployment — `kubec
 helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --version <chart-version> --namespace gmc-system --reset-then-reuse-values \
   --set agc.image.digest=sha256:<previous-agc>
+# v2
+kubectl rollout status deploy/<gateway>-agc -n <namespace>
+# v1 (legacy)
 kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 
