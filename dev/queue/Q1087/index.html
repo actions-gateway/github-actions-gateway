@@ -2613,9 +2613,9 @@ Read the mapping off the ladder table, which already states it, rather than deri
 <p>Direction 2 needs a definition of <em>names as gating</em> that a plan can express, since a plan doc mentions many rows.
 The existing vocabulary is the gating-versus-rides split in <a href="../../plan/release-1.8/">release-1.8.md</a>, which is prose and a table column rather than a marker.
 Settle that before building: the cheap form may be a <code>&lt;!-- gates --&gt;</code> marker like the roadmap's <code>&lt;!-- q: --&gt;</code>, and that is a change to how plans are written, not only a checker.</p>
-<p><strong>Lands in the same script as <a href="../Q965/">Q965</a>, and is not that row.</strong> Q965 is a defect in the existing punted-table parsing: <code>back_word</code> matches a literal plural, so a revived count of one reads ungrammatically.
+<p><strong>Lands in the same script as Q965, which has shipped, and is not that row.</strong> Q965 was a defect in the existing punted-table parsing: every count matched a literal plural, so a revived count of one read ungrammatically.
 This row adds an assertion that does not exist yet, over a different part of the page: the rung table rather than the punted table.
-They are worth doing together because both touch <code>check-release-ladder.sh</code> and the second would otherwise re-read the same page a third way, but neither blocks the other and Q965 is <code>S</code> against this <code>M</code>.</p>
+The overlap was never a dependency, so Q965 shipping alone costs this row only a second read of the same page.</p>
 <p>The inversion the gate needs: a fixture row labelled <code>2.0-gate</code> that no plan names must go red, and a fixture plan naming a gating row that carries no label must go red.
 An empty-result grep cannot be either, since it passes equally when the rule works and when the query matches nothing.</p>
 
