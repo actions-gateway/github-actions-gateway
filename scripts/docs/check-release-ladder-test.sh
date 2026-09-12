@@ -142,6 +142,30 @@ expect revived-claimed-empty 2 'a paragraph claiming revived items while naming 
 	"$(write_page rce "$TWO_ROWS" three "$CLAIMED_BACK")" \
 	"$(write_store rce Q565:deferred Q566:deferred Q765:deferred)"
 
+# A section down to one item takes a singular verb, which the gate used to reject
+# outright: the only grammatical sentence was unmatchable, so the page had to say
+# "One ... are back" to stay green (Q965). Both counts, because the punted aside
+# carries the identical wording and would otherwise be half-fixed.
+ONE_ROW='| Demand | [Q565](../queue/Q565.md) rate limiting |'
+SINGULAR_BACK='**One of the original two is back.** [Q408](../queue/Q408.md) waited on an ask, and it fired.'
+expect singular-revived 0 'a single revived item may take a singular verb' \
+	"$(write_page sr "$ONE_ROW" one "$SINGULAR_BACK")" \
+	"$(write_store sr Q565:deferred Q408:ready)"
+
+# The control: the plural still parses, so the change widened the wording rather
+# than moving it.
+PLURAL_BACK='**One of the original two are back.** [Q408](../queue/Q408.md) waited on an ask, and it fired.'
+expect plural-still-read 0 'the plural wording still parses' \
+	"$(write_page ps "$ONE_ROW" one "$PLURAL_BACK")" \
+	"$(write_store ps Q565:deferred Q408:ready)"
+
+# And the verb is still required: dropping it entirely must refuse rather than
+# let the count drift unread, which a wildcard in its place would have allowed.
+VERBLESS_BACK='**One of the original two back.** [Q408](../queue/Q408.md) waited on an ask, and it fired.'
+expect verbless 2 'a sentence with no verb at all still refuses' \
+	"$(write_page vb "$ONE_ROW" one "$VERBLESS_BACK")" \
+	"$(write_store vb Q565:deferred Q408:ready)"
+
 # Refusals: a page whose shape moved must not report every claim in it verified.
 expect no-punted 2 'a page whose punted table names no item refuses' \
 	"$(write_page np '| Waiting on | nothing yet |' three "$BACK")" \
