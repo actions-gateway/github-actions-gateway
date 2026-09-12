@@ -3871,7 +3871,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/prometheus/client_model (v0.6.2)
+Module: github.com/prometheus/client_model (v0.6.3)
 License file: github.com/prometheus/client_model/LICENSE
 ================================================================================
 
@@ -4078,7 +4078,7 @@ License file: github.com/prometheus/client_model/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/prometheus/client_model (v0.6.2)
+Module: github.com/prometheus/client_model (v0.6.3)
 License file: github.com/prometheus/client_model/NOTICE
 ================================================================================
 
@@ -8511,7 +8511,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: google.golang.org/protobuf (v1.36.12-0.20260120151049-f2248ac996af)
+Module: google.golang.org/protobuf (v1.36.12)
 License file: google.golang.org/protobuf/LICENSE
 ================================================================================
 
