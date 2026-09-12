@@ -76,4 +76,11 @@ bin="$SCRIPT_DIR/../../.build/doclinks"
 mkdir -p "$(dirname "$bin")"
 (cd "$DEVTOOLS_DIR" && GOWORK=off go build -o "$bin" ./docs/doclinks)
 
-"$bin" -root "$REPO_ROOT" -exist-file "$exist_file" "${scan_files[@]}"
+# `target` is the backlog store's own frontmatter field: a relative path with an
+# optional heading anchor, written where no Markdown parser looks. A one-character
+# anchor typo passed every gate that runs on a pull request (Q1081), and the two
+# CI jobs that happened to catch one did so only because a row renders into
+# docs/queue/README.md — a target naming a page they do not build would have
+# merged broken. Which key holds a link is this script's knowledge rather than the
+# checker's, which is why it is a flag.
+"$bin" -root "$REPO_ROOT" -exist-file "$exist_file" -frontmatter-keys target "${scan_files[@]}"

@@ -14,6 +14,13 @@
 //     worth forbidding: move the section into the destination and every later
 //     rename is caught, where the prose form is verbatim the day it is written
 //     and silently wrong afterwards.
+//  4. Dead links in named YAML frontmatter fields, when `-frontmatter-keys`
+//     names them (Q1081). A backlog row's `target:` is a relative path with an
+//     optional heading anchor, written where no Markdown parser looks, so a
+//     one-character anchor typo passed every gate that runs on a pull request.
+//     The keys are a flag rather than a constant so this program stays a link
+//     checker: which frontmatter fields hold links is the caller's knowledge,
+//     and check-doc-links.sh is where the backlog store is already known about.
 //
 // Out of scope, deliberately: external URLs (http/https/mailto/tel and every
 // other scheme, which is what an autolink always is), links inside fenced or
@@ -23,7 +30,7 @@
 //
 // Usage:
 //
-//	doclinks -root <repo-root> -exist-file <paths> <file.md>...
+//	doclinks -root <repo-root> -exist-file <paths> [-frontmatter-keys k1,k2] <file.md>...
 //
 // Findings print as `file:line: message`, or as GitHub `::error::` annotations
 // when GITHUB_ACTIONS is set. Exits 1 if anything is broken.
@@ -38,6 +45,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
@@ -48,10 +56,11 @@ import (
 func main() {
 	root := flag.String("root", ".", "repo root that link paths resolve against")
 	existFile := flag.String("exist-file", "", "file listing the paths that exist, one per line")
+	fmKeys := flag.String("frontmatter-keys", "", "comma-separated YAML frontmatter keys whose values are links")
 	flag.Parse()
 
 	out := bufio.NewWriter(os.Stdout)
-	broken, err := run(*root, *existFile, flag.Args(), out, os.Getenv("GITHUB_ACTIONS") != "")
+	broken, err := run(*root, *existFile, splitKeys(*fmKeys), flag.Args(), out, os.Getenv("GITHUB_ACTIONS") != "")
 	if ferr := out.Flush(); err == nil {
 		err = ferr
 	}
@@ -67,7 +76,19 @@ func main() {
 // run checks every file and reports how many broken links and anchors it
 // found. Paths are repo-relative, as they appear in the output; root is where
 // they are read from.
-func run(root, existFile string, files []string, out io.Writer, gha bool) (int, error) {
+// splitKeys parses the -frontmatter-keys flag, dropping empty entries so a
+// trailing comma or an unset flag yields no keys rather than one empty one.
+func splitKeys(s string) []string {
+	var out []string
+	for _, k := range strings.Split(s, ",") {
+		if k = strings.TrimSpace(k); k != "" {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+func run(root, existFile string, fmKeys, files []string, out io.Writer, gha bool) (int, error) {
 	if existFile == "" {
 		return 0, fmt.Errorf("-exist-file is required")
 	}
@@ -76,7 +97,7 @@ func run(root, existFile string, files []string, out io.Writer, gha bool) (int, 
 		return 0, err
 	}
 
-	c := &checker{root: root, exists: exists, anchors: map[string]map[string]bool{}}
+	c := &checker{root: root, exists: exists, anchors: map[string]map[string]bool{}, fmKeys: fmKeys}
 	for _, f := range files {
 		if err := c.scan(f); err != nil {
 			return 0, err
@@ -125,6 +146,8 @@ type checker struct {
 	anchors  map[string]map[string]bool
 	links    []link
 	findings []finding
+	// fmKeys are the YAML frontmatter keys whose values are links (Q1081).
+	fmKeys []string
 }
 
 // scan parses one file, registering its anchors and queuing its links.
@@ -153,7 +176,49 @@ func (c *checker) scan(file string) error {
 		c.links = append(c.links, link{src: file, line: l.Line, target: l.Destination})
 	}
 	c.checkSectionRefs(file, doc)
+	c.scanFrontmatter(file, src)
 	return nil
+}
+
+// frontmatterKey matches a top-level `key: value` line inside a frontmatter
+// block: no leading space, so a key nested under another one is not read as a
+// field of the document.
+var frontmatterKey = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$`)
+
+// scanFrontmatter records the value of each -frontmatter-keys field as a link.
+// The block is the YAML between a leading `---` line and the next one; a file
+// that does not open with `---` has none, which is every document but a backlog
+// row. Values are recorded verbatim and resolved by the same pass that resolves
+// Markdown links, so the anchor rules are identical by construction rather than
+// by a second implementation that can drift from the first.
+func (c *checker) scanFrontmatter(file string, src []byte) {
+	if len(c.fmKeys) == 0 {
+		return
+	}
+	lines := strings.Split(string(src), "\n")
+	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != "---" {
+		return
+	}
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimRight(lines[i], "\r")
+		if line == "---" {
+			return
+		}
+		m := frontmatterKey.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		if !slices.Contains(c.fmKeys, m[1]) {
+			continue
+		}
+		// Quotes are the one YAML scalar decoration a path is plausibly written
+		// with; anything richer is not a link and resolving it would be a guess.
+		v := strings.Trim(strings.TrimSpace(m[2]), `"'`)
+		if v == "" {
+			continue
+		}
+		c.links = append(c.links, link{src: file, line: i + 1, target: v})
+	}
 }
 
 // sectionMark is the character the convention uses for a section citation. A

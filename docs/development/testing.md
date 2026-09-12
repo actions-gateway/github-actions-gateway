@@ -771,6 +771,14 @@ It fails on two classes of breakage: **dead relative file links** (a `[text](pat
 Anchors are resolved with GitHub's heading-slug algorithm (strip inline markdown — respecting code spans — lowercase, drop everything outside `[a-z0-9 _-]`, spaces to hyphens, de-dupe repeats with `-1`/`-2`), so the verdict matches what GitHub renders.
 External URLs (http/https/mailto/tel), links inside fenced or inline code, and anchors into non-Markdown or vendored targets are out of scope.
 
+**It also resolves the backlog store's `target:` frontmatter field (Q1081).** A row's `target:` is a relative path with an optional heading anchor, written in YAML where no Markdown parser looks, so a one-character anchor typo passed `make check` and `make docs-gates` twice and reached CI only through two jobs that happen to run `mkdocs build --strict` for their own reasons.
+Those two caught it because a row renders into `docs/queue/README.md`; a `target:` naming a page they do not build, or a non-Markdown file, would have merged broken.
+Running `--strict` on every pull request was the other candidate and is structurally incomplete for the same reason, besides being the expensive answer.
+
+The checker takes the keys as `-frontmatter-keys target` rather than knowing about the store: which frontmatter field holds a link is the entry point's knowledge, and `check-doc-links.sh` is where the store is already known about.
+The value is recorded as an ordinary link and resolved by the same pass, so the anchor rules are identical by construction rather than by a second slug implementation that can drift.
+Both controls are asserted: a key nobody named is not read (`id:` and `status:` are not paths, and resolving them would fail every row), and with no keys declared the frontmatter is not read at all.
+
 **The script selects the files *and* the existence oracle; [`devtools/docs/doclinks`](../../devtools/docs/doclinks/) does the checking**, over the shared goldmark parse layer in [`devtools/docs/markdown`](../../devtools/docs/markdown/) (Q612).
 The `awk` it replaces collected links with a regular expression, which cannot count brackets: `[![badge](img)](target)` matched the inner image, so the outer target went unchecked — three of those are live in `README.md` — and a link whose text wrapped across a line break was collected by neither half (25 of those).
 The parse layer also carries the MkDocs dialect the site renders (`!!!` admonitions, `markdown="1"` HTML), because a stock parser reads an admonition body as an indented code block and every link in it disappears.
