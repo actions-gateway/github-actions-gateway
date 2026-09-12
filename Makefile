@@ -511,6 +511,9 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 .PHONY: path-filters-check
 path-filters-check: ## Fail if a CI path filter misses a go.work module or names a path that no longer exists
 	scripts/ci/check-path-filters.sh
+.PHONY: gate-needs-check
+gate-needs-check: ## Fail if a `*-gate` job does not wait on every job in its workflow
+	scripts/ci/check-gate-needs.sh
 
 
 # The trace dir turns this run into the measurement behind

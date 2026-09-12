@@ -13,6 +13,7 @@
 //
 //	pathfilters filters <workflow.yml>     # one "<filter>\t<pattern>" per line
 //	pathfilters push-paths <workflow.yml>  # one path per line
+//	pathfilters jobs <workflow.yml>        # one "<job id>\t<needs entry>" per line
 //
 // Output is in document order, which is what the caller's `sort` and its
 // set comparisons expect.
@@ -45,6 +46,8 @@ func main() {
 		err = writeFilters(out, root)
 	case "push-paths":
 		err = writePushPaths(out, root)
+	case "jobs":
+		err = writeJobs(out, root)
 	default:
 		fmt.Fprintf(os.Stderr, "pathfilters: unknown mode %q\n", mode)
 		os.Exit(2)
@@ -120,6 +123,33 @@ func scalars(n *yaml.Node) []string {
 	default:
 		return nil
 	}
+}
+
+// writeJobs emits one line per job, "<job id>\t<needs entry>", with an empty
+// second field for a job that needs nothing. `needs` accepts a lone scalar as
+// well as a sequence, and scalars already flattens both, which is the whole
+// reason this reuses that helper rather than reading the key by hand.
+func writeJobs(w *bufio.Writer, root *yaml.Node) error {
+	jobs := mapValue(root, "jobs")
+	if jobs == nil || jobs.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(jobs.Content); i += 2 {
+		id, body := jobs.Content[i], jobs.Content[i+1]
+		needs := scalars(mapValue(body, "needs"))
+		if len(needs) == 0 {
+			if _, err := fmt.Fprintf(w, "%s\t\n", id.Value); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, n := range needs {
+			if _, err := fmt.Fprintf(w, "%s\t%s\n", id.Value, n); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // filterBlocks collects the scalar value of every `filters` key in the tree, in

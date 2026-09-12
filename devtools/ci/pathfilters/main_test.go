@@ -197,3 +197,75 @@ jobs:
 		t.Errorf("got %q, want empty", got)
 	}
 }
+
+func jobs(t *testing.T, src string) string {
+	t.Helper()
+	var sb strings.Builder
+	w := bufio.NewWriter(&sb)
+	if err := writeJobs(w, rootOf(t, src)); err != nil {
+		t.Fatalf("writeJobs: %v", err)
+	}
+	if err := w.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	return sb.String()
+}
+
+func TestJobsEmitsOneLinePerDependency(t *testing.T) {
+	got := jobs(t, `
+jobs:
+  alpha:
+    runs-on: ubuntu-latest
+  t-gate:
+    needs: [alpha, beta]
+  beta:
+    runs-on: ubuntu-latest
+`)
+	want := "alpha\t\nt-gate\talpha\nt-gate\tbeta\nbeta\t\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestJobsReadsAScalarNeeds(t *testing.T) {
+	// `needs: alpha` is valid YAML for a single dependency. Reading only the
+	// sequence form would report the gate as waiting on nothing, which its
+	// caller cannot distinguish from a job list that failed to parse.
+	got := jobs(t, `
+jobs:
+  alpha:
+    runs-on: ubuntu-latest
+  t-gate:
+    needs: alpha
+`)
+	want := "alpha\t\nt-gate\talpha\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestJobsKeepsDocumentOrder(t *testing.T) {
+	// The caller compares a gate's needs against its siblings by id, so the
+	// order is only a readability property — but a map-ordered walk would make
+	// its output unstable between runs, and a diff nobody can read is a gate
+	// nobody trusts.
+	got := jobs(t, `
+jobs:
+  zulu:
+    runs-on: ubuntu-latest
+  alpha:
+    runs-on: ubuntu-latest
+  mike:
+    runs-on: ubuntu-latest
+`)
+	want := "zulu\t\nalpha\t\nmike\t\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestJobsIsEmptyWithoutAJobsBlock(t *testing.T) {
+	if got := jobs(t, "name: t\non: [push]\n"); got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}

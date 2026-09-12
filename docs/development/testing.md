@@ -3665,6 +3665,18 @@ The whole-workspace half of that is now mechanical: the [path-filter gate](#the-
 The judgement half is not automatable and remains yours: for the deliberately narrow filters, walk every `filters:` block in `.github/workflows/` and ask what that gate actually compiles, scans, or bakes — not what its filter happens to list today.
 The same applies in reverse to a gate that names files individually (`manifest-validate.sh`'s `standalone_manifests`): adding a path there means adding its directory to the filter.
 
+**A job left out of the gate's `needs:` is the same false negative from the other side (Q845, Q856).** The ruleset names the `*-gate` context and never the jobs behind it, so a job the gate does not wait on runs, reports red, and blocks nothing.
+A path filter that omits a path makes a gate green by *skipping*; a `needs:` that omits a job makes it green by *not waiting*.
+`uses-pinned` was live in that state on `unit-test.yml`, which is what Q845 fixed.
+
+That half is now mechanical too: `make gate-needs-check` ([`scripts/ci/check-gate-needs.sh`](../../scripts/ci/check-gate-needs.sh)) fails when a job is absent from its workflow's `*-gate` `needs:` list.
+It reads the jobs through the same `devtools/ci/pathfilters` extractor the path-filter gate uses, via that command's `jobs` mode, so the two cannot disagree about what a workflow declares.
+Gate jobs are excluded from the requirement rather than forbidden: no workflow here has two, and an aggregator waiting on an aggregator is a shape to decide on rather than to mandate.
+An exemption goes in the script's own list with a reason, where a reviewer meets it in the diff; it is empty today.
+
+The gate found nothing when it was written, which is the point: the aggregators were all complete, and the list grows by hand every time somebody adds a job.
+It was red-proved against the tree one commit before Q845's fix, where it names `uses-pinned` and nothing else.
+
 **Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed **on the PR's head commit** — green is not enough if a gate was skipped, and *no red checks* is not the same as *the checks ran*.
 For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
 
