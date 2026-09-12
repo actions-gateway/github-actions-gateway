@@ -6,7 +6,7 @@ The mechanics live in adjacent docs and are linked rather than repeated:
 
 - [maintaining-backlog.md](maintaining-backlog.md) — how to record and prioritize a debt item in [the backlog](../queue/README.md).
 - [backpressure.md](backpressure.md): the automated feedback loops that stop debt at authoring time.
-- [release-1.0.md](../plan/release-1.0.md) — the quality gates that block the 1.0 release (bucket F).
+- [release-1.0.md](../plan/archive/release-1.0.md) — the quality gates that block the 1.0 release (bucket F).
 - [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md) — long-horizon non-commitments.
 
 ## What we mean by technical debt
@@ -201,7 +201,7 @@ A script that must reproduce its input **byte for byte** is worse off with an ab
 #### Worked examples
 
 Line counts measured 2026-08-03 with `wc -l`.
-The [Q612 survey](../plan/markdown-gates-parser.md) and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.
+The [Q612 survey](../plan/archive/markdown-gates-parser.md) and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.
 
 | Script | Lines | Reads | Verdict |
 |---|---|---|---|
@@ -276,7 +276,7 @@ The principle: **a metric earns a place only when it changes a decision.** A num
 ## Quality gates as debt brakes
 
 A quality gate turns "do not let this class of debt accumulate" into machine enforcement.
-The release-1.0 plan groups them as [bucket F — engineering quality gates](../plan/release-1.0.md): coverage, duplication, `-race`, `gosec`, `errcheck`, and install-artifact validation, on top of the formatting, lint, `govulncheck`, and `trivy` gates that already run ([backpressure.md](backpressure.md)).
+The release-1.0 plan groups them as [bucket F — engineering quality gates](../plan/archive/release-1.0.md): coverage, duplication, `-race`, `gosec`, `errcheck`, and install-artifact validation, on top of the formatting, lint, `govulncheck`, and `trivy` gates that already run ([backpressure.md](backpressure.md)).
 Each gate is the durable form of a detect-and-pay-down cycle: once paid, it does not regress.
 
 Where a gate is threshold-shaped (coverage, `dupl`, `funlen`), it gates by **not getting worse** — a ratchet or tuned threshold — rather than an arbitrary absolute bar, so it raises quality without manufacturing low-value work.
@@ -290,6 +290,6 @@ Where a gate is threshold-shaped (coverage, `dupl`, `funlen`), it gates by **not
 | Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/queue/](../queue/README.md) |
 | Escalating a session *finding* into a rule, a gate, or a prompt line | this doc ([the ladder](#the-ladder)) |
 | The automated prevention loops | [backpressure.md](backpressure.md) |
-| Release-blocking gates | [release-1.0.md](../plan/release-1.0.md) (bucket F) |
+| Release-blocking gates | [release-1.0.md](../plan/archive/release-1.0.md) (bucket F) |
 | Long-horizon non-commitments | [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md) |
 | Choosing the right test tier | [testing.md](testing.md), [07-test-plan.md](../design/07-test-plan.md) |

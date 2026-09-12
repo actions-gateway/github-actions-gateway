@@ -9,7 +9,7 @@ This plan moves the stack to Go in `devtools/`, keeping every `scripts/` entry p
 
 ## Why, and why the existing answer does not cover it
 
-[markdown-gates-parser.md](markdown-gates-parser.md) moved four `awk` Markdown *gates* onto goldmark and excluded the drivers, on this reasoning:
+[markdown-gates-parser.md](archive/markdown-gates-parser.md) moved four `awk` Markdown *gates* onto goldmark and excluded the drivers, on this reasoning:
 
 > A merge driver must reconstruct the file line for line, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 

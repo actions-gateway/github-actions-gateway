@@ -105,7 +105,7 @@ spec:
 3. Verify it round-trips with the `openssl rsa -check` command from that same section.
    Do this **before** step 6: a silently truncated entry and a revoked old key together leave no working credential.
 4. Delete the downloaded `.pem` file from `~/Downloads`.
-5. Recreate the Kubernetes Secret using the `mktemp` + `--from-file` flow from the previous section (the `trap` ensures the temp file is removed even if `kubectl` fails), then restart the consumers so they re-read it — for the dogfood tenant, `kubectl rollout restart deployment/actions-gateway-controller`.
+5. Recreate the Kubernetes Secret using the `mktemp` + `--from-file` flow from the previous section (the `trap` ensures the temp file is removed even if `kubectl` fails), then restart the consumers so they re-read it — for the dogfood tenant, `kubectl rollout restart deployment/<gateway>-agc` on v2, or `deployment/actions-gateway-controller` on v1, where the AGC is one per namespace rather than one per gateway.
    Worker pods are single-job and interrupting one costs a job, so check `kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller` first and roll during a quiet window.
 6. Delete the old key from the GitHub App settings page.
    **This is the step that actually ends the exposure** — everything before it only migrates you onto the new key.

@@ -1,7 +1,7 @@
 # Competitive analysis, August 2026
 
 > **Status: research complete 2026-08-06, corrections shipped, several findings still unactioned.** This is the evidence behind the marketing changes made on that date.
-> The decisions live in [release-1.4](release-1.4.md), [release-1.5](release-1.5.md), and [Appendix D.9–D.14](../design/appendix-d-alternatives-considered.md); this records what was measured, what it means, and what has not been done yet.
+> The decisions live in [release-1.4](archive/release-1.4.md), [release-1.5](archive/release-1.5.md), and [Appendix D.9–D.14](../design/appendix-d-alternatives-considered.md); this records what was measured, what it means, and what has not been done yet.
 
 ## Method, so it can be re-checked
 

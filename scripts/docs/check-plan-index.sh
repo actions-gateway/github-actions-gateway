@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # check-plan-index.sh — keep docs/plan/README.md and the docs/plan/ tree in sync,
-# in both directions. Five invariants, all fail-fast so drift can't ship:
+# in both directions. Six invariants, all fail-fast so drift can't ship:
 #
 #   1. An open plan has open work. An active (non-Archive) row in
 #      docs/plan/README.md whose Status cell carries an open marker (⚠️ ❌ 🚧 🔲)
@@ -22,6 +22,22 @@
 #
 #      A plan that has genuinely finished is archived — see
 #      docs/development/maintaining-backlog.md#archiving-completed-plan-docs.
+#
+#   6. A done plan is archived. An active (non-Archive) row whose Status cell
+#      carries ✅ and which no live backlog item references must be moved to
+#      docs/plan/archive/. This is invariant 1 in its other direction, and it is
+#      the direction that goes stale silently: invariant 1 fires on a row
+#      *claiming* open work, so a plan that already says it is done is invisible
+#      to it however long it sits in the active tree.
+#
+#      Measured 2026-09-12: 39 of the 68 active rows carried ✅, and 24 of those
+#      were referenced by no live item, i.e. were archive-ready and had been for
+#      some time (Q894). `make plan-index-check` passed over all 24 and always
+#      would have.
+#
+#      Escape hatch is the same ⓘ the other invariants respect: a plan retained
+#      deliberately as a validation record or standing rationale marks its row ⓘ,
+#      which says there is no progress to track and takes it out of this rule.
 #
 #   2. disk ↔ README.  Every plan file on disk must have a row in README, in the
 #      matching section (docs/plan/*.md → an active row; docs/plan/archive/*.md →
@@ -141,6 +157,30 @@ mapfile -t open_rows < <(awk '
     }
 ' "$readme" | sort -u)
 
+# Active plans whose Status cell says the work is done — these must be archived
+# unless a live item still references them (invariant 6). Same column-3 read and
+# same ⓘ exemption as open_rows above, for the same reasons.
+mapfile -t done_rows < <(awk '
+    /^## Archive/ { exit }
+    /^\| \[/ && $0 !~ /ⓘ/ {
+        line = $0
+        gsub(/\\\|/, "\001", line)
+        if (split(line, col, "|") != 5) next
+        if (col[4] !~ /✅/) next
+        if (col[4] ~ /⚠️|❌|🚧|🔲/) next
+        if (!match($0, "\\]\\([^/):]+\\.md\\)")) next
+        plan = substr($0, RSTART + 2, RLENGTH - 3)
+        ids = ""
+        cell = col[4]
+        while (match(cell, "\\.\\./queue/Q[0-9]+\\.md")) {
+            id = substr(cell, RSTART + 9, RLENGTH - 12)
+            ids = ids " " id
+            cell = substr(cell, RSTART + RLENGTH)
+        }
+        print plan "\t" ids
+    }
+' "$readme" | sort -u)
+
 # Active plans INCLUDING ⓘ rows — the full active index (invariant 2, active side).
 mapfile -t indexed_active < <(awk '
     /^## Archive/ { exit }
@@ -209,6 +249,36 @@ if (( ${#unbacked[@]} > 0 )); then
         printf 'progress to track, mark its README row ⓘ. See\n'
         printf 'docs/development/maintaining-backlog.md#archiving-completed-plan-docs\n'
         for c in "${unbacked[@]}"; do printf '  - docs/plan/%s\n' "$c"; done
+    } >&2
+fi
+
+# Invariant 6: a row saying the work is done, referenced by no live item, is
+# archive-ready and must be archived. The backing test is invariant 1's, read the
+# other way round: there, backing is what makes an open claim legal; here, the
+# ABSENCE of backing is what makes a done plan due for the archive.
+unarchived=()
+for row in ${done_rows+"${done_rows[@]}"}; do
+    IFS=$'\t' read -r plan ids <<<"$row"
+    referenced=""
+    if grep -rqF --include='Q*.md' "$plan" "$store"; then
+        referenced=1
+    fi
+    for id in $ids; do
+        [[ -f "$store/$id.md" ]] && referenced=1
+    done
+    [[ -n "$referenced" ]] || unarchived+=("$plan")
+done
+if (( ${#unarchived[@]} > 0 )); then
+    errors=1
+    {
+        printf 'check-plan-index: %d active plan(s) in docs/plan/README.md are done and referenced by no live item.\n' "${#unarchived[@]}"
+        printf 'Archive each one in this change rather than leaving it for an audit: git mv to\n'
+        printf 'docs/plan/archive/, move its README row to the Archive table, rebase the links in the\n'
+        printf 'moved doc and the links pointing at it, and re-path any em-dash ceiling it carries.\n'
+        printf 'If the plan is retained deliberately — a validation record, or standing rationale with\n'
+        printf 'no progress to track — mark its README row ⓘ. See\n'
+        printf 'docs/development/maintaining-backlog.md#archiving-completed-plan-docs\n'
+        for c in "${unarchived[@]}"; do printf '  - docs/plan/%s\n' "$c"; done
     } >&2
 fi
 
@@ -556,5 +626,5 @@ if (( errors )); then
     exit 1
 fi
 
-printf 'check-plan-index: ok (%d active, %d archived; every open-marked row backed by a live item, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open, %d plan Status paragraph(s) read)\n' \
-    "${#indexed_active[@]}" "${#indexed_archive[@]}" "$release_checked" "$preambles_checked"
+printf 'check-plan-index: ok (%d active, %d archived; every open-marked row backed by a live item, %d done row(s) still referenced rather than archive-ready, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open, %d plan Status paragraph(s) read)\n' \
+    "${#indexed_active[@]}" "${#indexed_archive[@]}" "${#done_rows[@]}" "$release_checked" "$preambles_checked"

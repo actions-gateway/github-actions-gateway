@@ -1,6 +1,6 @@
 # Milestone 3 Implementation Plan — Worker Pod & Pipe Handoff
 
-← [Milestone 2](milestone-2.md) | [Back to implementation phases](../design/06-implementation-phases.md)
+← [Milestone 2](milestone-2.md) | [Back to implementation phases](../../design/06-implementation-phases.md)
 
 ---
 
@@ -34,15 +34,15 @@ The re-run also surfaced an unrelated GMC readiness-probe bug (`/readyz` returne
 | Real workflow job completes with green checkmark | ✅ Done | 2026-05-30 — live-GitHub `E2E_GitHub_RealDispatch` passes; run [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172) on `actions-gateway/gateway-test` concludes `success`. Required both 5h (worker proxy-CA trust) and the GMC `/readyz` webhook-gating fix. |
 | `go test -race ./...` passes across all modules | ✅ Done | Per-module test commands pass |
 | Worker container exits 0 on success, non-zero on failure | ✅ Done | Exercised by the 2026-05-30 live-GitHub re-run: worker pod exited 0 and the GitHub-side run concluded `success`. |
-| Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../cmd/agc/internal/provisioner/provisioner.go) |
-| `maxWorkers` ceiling enforced | ✅ Done | `activePodCount` check at [provisioner.go:335](../../cmd/agc/internal/provisioner/provisioner.go) |
+| Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../../cmd/agc/internal/provisioner/provisioner.go) |
+| `maxWorkers` ceiling enforced | ✅ Done | `activePodCount` check at [provisioner.go:335](../../../cmd/agc/internal/provisioner/provisioner.go) |
 | `priorityTiers` ceiling + PriorityClass assignment | ✅ Done | Tier walk in provisioner pod builder |
-| Eviction auto-retry up to `maxEvictionRetries` | ✅ Done | `handleEviction` + `rerunFailedJobs` at [provisioner.go:210-276](../../cmd/agc/internal/provisioner/provisioner.go) |
+| Eviction auto-retry up to `maxEvictionRetries` | ✅ Done | `handleEviction` + `rerunFailedJobs` at [provisioner.go:210-276](../../../cmd/agc/internal/provisioner/provisioner.go) |
 | Retry budget exhausted → no rerun, exhausted metric | ✅ Done | Counter check at line 218; `actions_gateway_eviction_retries_exhausted_total` |
-| Message body decryption (AES-CBC w/ session key) | ✅ Done | `aesKey` plumbed through `handleJob` ([goroutine.go:105,177,224](../../cmd/agc/internal/listener/goroutine.go)) |
-| Investigation A — Named Pipe protocol documented (§11.A) | ✅ Done | Anonymous pipes + LE int32 type + LE int32 byte-len + UTF-16LE body confirmed from runner source; implementation updated in [worker/main.go](../../cmd/worker/main.go); findings in §11.A |
+| Message body decryption (AES-CBC w/ session key) | ✅ Done | `aesKey` plumbed through `handleJob` ([goroutine.go:105,177,224](../../../cmd/agc/internal/listener/goroutine.go)) |
+| Investigation A — Named Pipe protocol documented (§11.A) | ✅ Done | Anonymous pipes + LE int32 type + LE int32 byte-len + UTF-16LE body confirmed from runner source; implementation updated in [worker/main.go](../../../cmd/worker/main.go); findings in §11.A |
 | Investigation B — Worker image source documented (§11.B) | ⚠️ Partial | Dockerfile pins `ghcr.io/actions/actions-runner:2.327.1` (ARC-aligned base, UID 1001, Runner.Worker at `/home/runner/bin/`); §11.B still says "TBD" |
-| RBAC markers regenerated and committed | ✅ Done | Pod + Secret markers in [controller/doc.go](../../cmd/agc/internal/controller/doc.go) |
+| RBAC markers regenerated and committed | ✅ Done | Pod + Secret markers in [controller/doc.go](../../../cmd/agc/internal/controller/doc.go) |
 
 ### Critical path
 
@@ -122,7 +122,7 @@ Regenerate RBAC manifests with `make manifests` and commit them.
 
 ### 1.4 New metrics (`cmd/agc/internal/listener/metrics.go`)
 
-Add the M3-specific metrics defined in [§2.5 of the architecture doc](../design/02-architecture.md#25-observability):
+Add the M3-specific metrics defined in [§2.5 of the architecture doc](../../design/02-architecture.md#25-observability):
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -520,10 +520,10 @@ Confirmed via local `docker pull` + `docker run`:
 
 1. `Runner.Worker` is present in the image (no tarball extraction needed).
 2. Path: `/home/runner/bin/Runner.Worker`.
-   This directory is **not** on the default `$PATH`, so the worker Dockerfile sets `ENV PATH=/home/runner/bin:$PATH` to keep [cmd/worker/main.go](../../cmd/worker/main.go)'s `exec.LookPath("Runner.Worker")` resolving correctly.
+   This directory is **not** on the default `$PATH`, so the worker Dockerfile sets `ENV PATH=/home/runner/bin:$PATH` to keep [cmd/worker/main.go](../../../cmd/worker/main.go)'s `exec.LookPath("Runner.Worker")` resolving correctly.
 3. .NET runtime + shared libraries ship inside the image (no host dependency on `ubuntu:24.04`).
 4. Image runs as `USER runner` (UID 1001) — tenants need `runAsUser: 1001` in the RunnerGroup `podTemplate` for PSA `restricted` admission.
-   Already documented in [security.md D-2](security.md).
+   Already documented in [security.md D-2](../security.md).
 
 **Document findings:** Add §8.B to the Investigation Findings section.
 
@@ -716,10 +716,10 @@ Without them Runner.Worker fails at job start with `ArgumentNullException: confi
 
 The end-to-end plumbing is now:
 
-1. `GithubRegistrar.Register` retains the raw `encoded_jit_config` it already parsed and exposes it on `AgentCredentials` ([github_registrar.go](../../cmd/agc/internal/agentpool/github_registrar.go)).
-2. `Pool.createAgent` writes the blob into the agent Secret under `encodedJITConfig`; `secretToAgent` restores it onto the `Agent` struct so the AGC reconciler picks it up on restart ([pool.go](../../cmd/agc/internal/agentpool/pool.go)).
-3. The listener passes `cfg.Agent.EncodedJITConfig` into `JobHandlerFunc`, which the provisioner forwards into the worker Secret under the `jitconfig` key ([goroutine.go](../../cmd/agc/internal/listener/goroutine.go), [provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)).
-4. The wrapper reads `<payloadDir>/jitconfig`, base64-decodes the outer blob, JSON-unmarshals the file map, base64-decodes each entry, and writes the three runner-config files into `$RUNNER_HOME_DIR` (default `/home/runner`) with mode 0600 before exec'ing Runner.Worker ([worker/main.go](../../cmd/worker/main.go) — `materializeJITConfig`).
+1. `GithubRegistrar.Register` retains the raw `encoded_jit_config` it already parsed and exposes it on `AgentCredentials` ([github_registrar.go](../../../cmd/agc/internal/agentpool/github_registrar.go)).
+2. `Pool.createAgent` writes the blob into the agent Secret under `encodedJITConfig`; `secretToAgent` restores it onto the `Agent` struct so the AGC reconciler picks it up on restart ([pool.go](../../../cmd/agc/internal/agentpool/pool.go)).
+3. The listener passes `cfg.Agent.EncodedJITConfig` into `JobHandlerFunc`, which the provisioner forwards into the worker Secret under the `jitconfig` key ([goroutine.go](../../../cmd/agc/internal/listener/goroutine.go), [provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go)).
+4. The wrapper reads `<payloadDir>/jitconfig`, base64-decodes the outer blob, JSON-unmarshals the file map, base64-decodes each entry, and writes the three runner-config files into `$RUNNER_HOME_DIR` (default `/home/runner`) with mode 0600 before exec'ing Runner.Worker ([worker/main.go](../../../cmd/worker/main.go) — `materializeJITConfig`).
 
 Unit tests pin: the agent Secret round-trip (`TestPool_EnsureAgents_StoresEncodedJITConfig`), the worker Secret hand-off (`TestProvisioner_ForwardsJITConfigIntoSecret` / `TestProvisioner_OmitsJITKeyWhenEmpty`), and the wrapper-side materialization (`TestMaterializeJITConfig_*`).
 Live-cluster validation remains gated on Q5c.
@@ -764,8 +764,8 @@ The .NET HttpClient validates the proxy's TLS certificate before sending `CONNEC
 The proxy's cert is signed by a cert-manager-issued self-signed CA (the `actions-gateway-proxy-tls` Secret in the tenant namespace).
 The runner image's default OS trust store (`/etc/ssl/certs/ca-certificates.crt`) does not contain that CA, so the outer TLS handshake fails before any traffic ever reaches GitHub.
 
-The GMC already mounts this Secret into the AGC pod (cert only, via `Items: [tls.crt]`) at `/etc/actions-gateway/proxy-tls/tls.crt` — see `buildAGCDeployment` in [cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go) ~lines 494-509 — and the AGC code path reads it via the `appendProxyCAToSystemPool` helper landed under Q5f.
-Worker pods need the symmetric treatment, but the AGC provisioner's `BuildPod` ([cmd/agc/internal/provisioner/provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)) never adds that volume.
+The GMC already mounts this Secret into the AGC pod (cert only, via `Items: [tls.crt]`) at `/etc/actions-gateway/proxy-tls/tls.crt` — see `buildAGCDeployment` in [cmd/gmc/internal/controller/builder.go](../../../cmd/gmc/internal/controller/builder.go) ~lines 494-509 — and the AGC code path reads it via the `appendProxyCAToSystemPool` helper landed under Q5f.
+Worker pods need the symmetric treatment, but the AGC provisioner's `BuildPod` ([cmd/agc/internal/provisioner/provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go)) never adds that volume.
 
 **Fix sketch (tracked as Q5h):**
 
@@ -793,14 +793,14 @@ Once Q5h ships, Q6 can be re-run against the same kind cluster and should reach 
 
 **Resolution (Q5h shipped):**
 
-- AGC pod provisioner gained `Provisioner.ProxyTLSSecretName` ([cmd/agc/internal/provisioner/provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)).
+- AGC pod provisioner gained `Provisioner.ProxyTLSSecretName` ([cmd/agc/internal/provisioner/provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go)).
   When non-empty, `buildPod` adds an `Items: [tls.crt]` Secret volume
   + read-only mount at `/etc/actions-gateway/proxy-ca/tls.crt` and exports `PROXY_CA_CERT_PATH` on the runner container.
     `tls.key` is never projected, keeping the proxy private key off worker pods.
-    Two new unit tests pin the mount shape and the empty-secret-name no-op path ([provisioner_test.go](../../cmd/agc/internal/provisioner/provisioner_test.go) — `TestBuildPod_MountsProxyCASecret`, `TestBuildPod_NoProxyCAWhenSecretNameEmpty`).
+    Two new unit tests pin the mount shape and the empty-secret-name no-op path ([provisioner_test.go](../../../cmd/agc/internal/provisioner/provisioner_test.go) — `TestBuildPod_MountsProxyCASecret`, `TestBuildPod_NoProxyCAWhenSecretNameEmpty`).
 - AGC `main.go` reads `PROXY_TLS_SECRET_NAME` and plumbs it into the provisioner.
-- GMC `buildAGCDeployment` sets `PROXY_TLS_SECRET_NAME= actions-gateway-proxy-tls` on the AGC Deployment so each tenant's AGC finds the right Secret automatically ([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)); `TestBuildAGCDeployment_PlumbsProxyTLSSecretName` guards the env.
-- Worker entrypoint wrapper installs the CA into a combined trust bundle and sets `SSL_CERT_FILE` on the child Runner.Worker env before exec'ing ([cmd/worker/main.go](../../cmd/worker/main.go) — `installProxyCATrust` / `readSystemCABundle`).
+- GMC `buildAGCDeployment` sets `PROXY_TLS_SECRET_NAME= actions-gateway-proxy-tls` on the AGC Deployment so each tenant's AGC finds the right Secret automatically ([cmd/gmc/internal/controller/builder.go](../../../cmd/gmc/internal/controller/builder.go)); `TestBuildAGCDeployment_PlumbsProxyTLSSecretName` guards the env.
+- Worker entrypoint wrapper installs the CA into a combined trust bundle and sets `SSL_CERT_FILE` on the child Runner.Worker env before exec'ing ([cmd/worker/main.go](../../../cmd/worker/main.go) — `installProxyCATrust` / `readSystemCABundle`).
   System bundle missing, CA file missing, CA file empty, and `PROXY_CA_CERT_PATH=""` are all tolerated as no-ops so unit-test and non-proxied deployments keep working.
   Five unit tests cover the helper plus an end-to-end test (`TestWrapper_PropagatesProxyTrustEnvToChild`) that asserts the child process sees `SSL_CERT_FILE` pointing at the combined bundle.
 
@@ -827,17 +827,17 @@ context deadline exceeded
 Once readyz returns 200, the kubelet marks the pod Ready and the EndpointSlice for `gmc-webhook-service` adds the new pod IP.
 The kube-apiserver routes admission calls to that pod — but its webhook listener may not yet be bound, so every `kubectl apply ActionsGateway` racing a GMC rollout hangs for the admission `timeout=10s` and fails.
 
-**Fix:** Added a second readyz check gated on `mgr.GetWebhookServer().StartedChecker()` ([cmd/gmc/cmd/main.go](../../cmd/gmc/cmd/main.go)) — the controller-runtime helper returns nil only after the webhook listener is bound *and* a TLS self-dial succeeds.
+**Fix:** Added a second readyz check gated on `mgr.GetWebhookServer().StartedChecker()` ([cmd/gmc/cmd/main.go](../../../cmd/gmc/cmd/main.go)) — the controller-runtime helper returns nil only after the webhook listener is bound *and* a TLS self-dial succeeds.
 Conditional on `ENABLE_WEBHOOKS != "false"` so envtest runs that disable webhooks keep marking themselves Ready.
 
 **Production impact:** This race affected every GMC rolling update in production, not just the e2e suite.
 Any concurrent `kubectl apply` of an `ActionsGateway` CR during a GMC image roll or env-var change had a 1–2s window where it could time out.
 The fix is a one-line addition and ships in the same branch as the Q6 re-run.
 
-**Follow-up identified — resolved by Q42.** The egress proxy ([cmd/proxy/proxy.go](../../cmd/proxy/proxy.go)) had the same class of bug — its `/healthz` returned OK as soon as the health-port server bound, but the CONNECT listener on port 8080 was started in a separate goroutine.
-The GMC's per-tenant proxy Deployment ([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)) used `/healthz` for both liveness and readiness, so worker pods could hit `connection refused` on `HTTPS_PROXY` traffic during a proxy rollout or HPA scale-up.
+**Follow-up identified — resolved by Q42.** The egress proxy ([cmd/proxy/proxy.go](../../../cmd/proxy/proxy.go)) had the same class of bug — its `/healthz` returned OK as soon as the health-port server bound, but the CONNECT listener on port 8080 was started in a separate goroutine.
+The GMC's per-tenant proxy Deployment ([cmd/gmc/internal/controller/builder.go](../../../cmd/gmc/internal/controller/builder.go)) used `/healthz` for both liveness and readiness, so worker pods could hit `connection refused` on `HTTPS_PROXY` traffic during a proxy rollout or HPA scale-up.
 
 Fixed by Q42: `ListenAndServe` now pre-binds both listeners synchronously before either serve goroutine starts, then closes a `ready` channel.
 A new `/readyz` endpoint returns 200 only after the channel closes, and the proxy `Deployment`'s `readinessProbe` was re-pointed to `/readyz`.
 `/healthz` remains the liveness probe.
-Runbook: [troubleshooting.md — Worker `HTTPS_PROXY` Returns `connection refused` During Proxy Rollout](../operations/troubleshooting.md#worker-https_proxy-returns-connection-refused-during-proxy-rollout).
+Runbook: [troubleshooting.md — Worker `HTTPS_PROXY` Returns `connection refused` During Proxy Rollout](../../operations/troubleshooting.md#worker-https_proxy-returns-connection-refused-during-proxy-rollout).

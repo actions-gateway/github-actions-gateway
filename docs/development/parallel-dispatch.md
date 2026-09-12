@@ -212,7 +212,7 @@ A `-gate` row that the stated theme would exclude is the disagreement the skill 
 Both skills state it: auto-*fix* is delegated to each session, auto-*merge* is the maintainer's and no agent takes it, and a request to go faster is a request to shorten everything **before** that step.
 The mechanics here:
 
-- **The merge queue is the mechanical half, not a delegation of the gate** (active on `main` since 2026-08-03; see [merge-queue.md](../plan/merge-queue.md)).
+- **The merge queue is the mechanical half, not a delegation of the gate** (active on `main` since 2026-08-03; see [merge-queue.md](../plan/archive/merge-queue.md)).
   The queue is entered from the PR's web UI, then validates the candidate merge result, including the union with whatever is ahead of it, and kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session.
   It arbitrates green-ness, freshness, and the jointly-red case.
   It does **not** decide whether a change should land, so enqueueing is the maintainer's action, taken after their review.

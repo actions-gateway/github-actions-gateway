@@ -291,7 +291,10 @@ Useful one-shots:
 # GMC
 kubectl logs -n gmc-system deployment/gmc-controller-manager --tail=50
 
-# AGC in a tenant
+# AGC in a tenant — named per gateway on v2, one per namespace on v1
+# v2
+kubectl logs -n <tenant-ns> deployment/<gateway>-agc --tail=50
+# v1 (legacy)
 kubectl logs -n <tenant-ns> deployment/actions-gateway-controller --tail=50
 
 # Worker pods (selected by the managed-by label; the canonical worker labels are

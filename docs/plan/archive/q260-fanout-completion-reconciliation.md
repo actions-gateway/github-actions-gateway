@@ -335,7 +335,7 @@ It FAILS against pre-Q266 behaviour (the eager losers exit) and needs no GKE tur
 **But full-matrix green / "holds at `maxWorkers`" was STILL not obtained.** The residual is neither Q266's seam nor the `completejob` tax (0 `worker capacity full`) — it is a **two-way bind**: throughput needs `maxListeners ≈ maxWorkers × fan-out`, yet a wide `maxListeners` (48) multiplies GitHub runner records and inflates the **broker-credential / registration recycle churn** (Q259/Q114 — `"Registration … was not found"`) that keeps the **online idle pool near 0**, collapsing to `online = 0`; a moderate `maxListeners` (12) is stable but serializes to ≈ `maxListeners / fan-out ≈ 2` concurrent jobs.
 Un-cleanable stale records (guard-blocked mass-delete) compound it.
 A clean measurement needs the **online-session / broker-credential recycle seam** fixed *and* a clean namespace — both still blocked in-session, so [Q224](../../queue/README.md) full-matrix green **cannot yet be claimed**.
-Separately, the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** — not via an SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota entirely), see [`dogfood-runner-rightsizing.md`](../dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
+Separately, the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** — not via an SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota entirely), see [`dogfood-runner-rightsizing.md`](dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
 
 ## 9. Re-route #8 — Q267 confirmed, and the residual isolated to fan-out *dispatch* (2026-07-05)
 

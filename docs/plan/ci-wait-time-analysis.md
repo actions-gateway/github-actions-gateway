@@ -41,9 +41,9 @@ The gate is also one of `make check`'s 30 concurrent fast gates, so the same fix
 
 | Round | Scope | Outcome |
 |---|---|---|
-| [e2e-tests-speed.md](e2e-tests-speed.md) | Ginkgo parallelism, port-per-process, suite structure | Done, §1 to §18 |
-| [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) | The image bake (~570s of contended compile) and the suite's `Serial` tail (150s, over half the suite wall) | Done, both poles shipped |
-| [merge-queue.md](merge-queue.md) | Adopt the queue; Phase 3 then demoted e2e to merge-group-only | Done, all three phases |
+| [e2e-tests-speed.md](archive/e2e-tests-speed.md) | Ginkgo parallelism, port-per-process, suite structure | Done, §1 to §18 |
+| [e2e-ci-speed-round-2.md](archive/e2e-ci-speed-round-2.md) | The image bake (~570s of contended compile) and the suite's `Serial` tail (150s, over half the suite wall) | Done, both poles shipped |
+| [merge-queue.md](archive/merge-queue.md) | Adopt the queue; Phase 3 then demoted e2e to merge-group-only | Done, all three phases |
 | Integration matrix (#1416) | GMC and AGC ran back to back in one job | 617s to 392s, measured |
 
 ## Five traps, one per wasted attempt

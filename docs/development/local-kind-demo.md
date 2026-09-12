@@ -92,6 +92,7 @@ kubectl create secret generic team-a-github-app -n team-a \
 ```
 
 Apply one `ActionsGateway` CR.
+This walkthrough stays on the **v1** API, where one AGC Deployment per namespace is named `actions-gateway-controller`; under v2 it is named per gateway, as `<gateway>-agc`.
 `completedPodTTL: 0s` deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):
 
 ```yaml
@@ -118,6 +119,7 @@ spec:
 
 ```sh
 kubectl apply -f actionsgateway.yaml
+# v1: one AGC per namespace. On v2 this is deploy/<gateway>-agc.
 kubectl wait --for=condition=Available deploy/actions-gateway-controller -n team-a --timeout=5m
 ```
 

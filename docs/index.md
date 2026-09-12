@@ -134,7 +134,7 @@ Each cell there carries the chart version and the date it was read at, so read t
 
     Listeners are goroutines, not pods:
 
-    - ~12 KiB per listener session
+    - ~7.7 KiB per scale-set listener session
     - One shared pod per tenant
     - ARC: one always-on pod per set
 

@@ -77,7 +77,7 @@ A roadmap bullet's release commitment is **derived, never typed**.
 [`hooks/release_gates.py`](../../hooks/release_gates.py) reads the `X.Y-gate` labels out of each item's frontmatter in `docs/queue/`, follows each bullet's existing `<!-- q:QN -->` annotation, and injects the pill:
 
 ```markdown
-- **[Bind each runner set to a GitHub runner group](plan/release-1.5.md)** <!-- q:Q712 -->
+- **[Bind each runner set to a GitHub runner group](plan/archive/release-1.5.md)** <!-- q:Q712 -->
 ```
 
 renders with a `1.5` pill beside the title, and loses it the day the label comes off.
@@ -765,13 +765,13 @@ Publishing the repo-internal docs made it load-bearing — 724 links across the 
 
 "Does not publish" is decided **per build, from its own file set** — `on_files` records the src_uris whose `inclusion.is_included()`, the same derivation [`hooks/backlog_link.py`](../../hooks/backlog_link.py) uses for the banner link.
 Escaping `docs/` is only one way to qualify.
-The other is [publication scope](#publication-scope): `plan/`, `development/` and `queue/` are pages on `dev` and absent from every release, so a `design/` page citing `../plan/milestone-4.md` must resolve **in-site on `dev`** and **on github.com from a release**.
+The other is [publication scope](#publication-scope): `plan/`, `development/` and `queue/` are pages on `dev` and absent from every release, so a `design/` page citing `../plan/archive/milestone-4.md` must resolve **in-site on `dev`** and **on github.com from a release**.
 One markdown source, both renderings, no per-version editing:
 
-| Scope | `../plan/milestone-4.md` becomes |
+| Scope | `../plan/archive/milestone-4.md` becomes |
 |---|---|
 | `dev` | `../../plan/milestone-4/` — the published page |
-| `stable`, every release | `{repo_url}/blob/{ref}/docs/plan/milestone-4.md` |
+| `stable`, every release | `{repo_url}/blob/{ref}/docs/plan/archive/milestone-4.md` |
 
 Fragments ride along verbatim (`#12-live-multi-tenant-validation-evidence…`), which is why the two gates still get the last word on anchors: `make doc-links` already validates them with GitHub's slugger, and GitHub's blob view is exactly where a release now sends the reader.
 

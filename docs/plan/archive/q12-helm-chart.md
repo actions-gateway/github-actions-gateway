@@ -1,6 +1,6 @@
 # Q12 — Production Helm chart (`charts/actions-gateway/`)
 
-← [Milestone 5 §1](../milestone-5.md#1-packaging-helm-chart) | [Release 1.0 §C](../release-1.0.md#c-packaging--supply-chain--gating--recommended) | [STATUS](../../queue/README.md)
+← [Milestone 5 §1](../milestone-5.md#1-packaging-helm-chart) | [Release 1.0 §C](release-1.0.md#c-packaging--supply-chain--gating--recommended) | [STATUS](../../queue/README.md)
 
 **Goal.** Ship a Helm chart that an operator can `helm install` to deploy the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook, and admission policy — with every default at the secure posture already encoded in the `cmd/gmc/config/` kustomize bases.
 Helm was decided over Kustomize ([D-M5-1](../milestone-5.md#11-install-vehicle--decided-helm-chart)).
@@ -74,7 +74,7 @@ Reconciling the two bases (so `make manifests` keeps them in sync) is **[Q73](..
 
 ## Live validation (track A) — 2026-06-12
 
-The chart's "working tenant from a single `helm install`" gate was proven live on a 3-node kind cluster with real GitHub App credentials, as part of the [Milestone 4 live validation session](../milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112) (full evidence there).
+The chart's "working tenant from a single `helm install`" gate was proven live on a 3-node kind cluster with real GitHub App credentials, as part of the [Milestone 4 live validation session](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112) (full evidence there).
 Chart-specific observations:
 
 - `helm install actions-gateway charts/actions-gateway -n gmc-system --create-namespace` with `gmc.image.digest`, `agc.image.digest`, and `proxy.image.digest` all set (local-registry digests) — i.e. the **secure digest-pinned default path**, no `allowFloatingImageTags` — rendered, installed, and rolled out 2/2 replicas in ~10 s.

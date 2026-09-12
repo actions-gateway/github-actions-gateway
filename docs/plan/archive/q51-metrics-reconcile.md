@@ -24,4 +24,4 @@ This task makes a per-metric decision — implement, re-point, or mark `(planned
 
 ## Docs touched
 
-`docs/operations/observability.md`, `runbook.md`, `troubleshooting.md`, `upgrade.md`, `docs/design/02-architecture.md`, `appendix-a-capacity-slos.md`, `plan/milestone-5.md`, and `plan/docs-six-layer-audit.md` (mark the Layer 3 finding resolved).
+`docs/operations/observability.md`, `runbook.md`, `troubleshooting.md`, `upgrade.md`, `docs/design/02-architecture.md`, `appendix-a-capacity-slos.md`, `plan/milestone-5.md`, and `plan/archive/docs-six-layer-audit.md` (mark the Layer 3 finding resolved).

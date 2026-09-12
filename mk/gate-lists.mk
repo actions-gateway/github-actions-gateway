@@ -63,6 +63,7 @@ CHECK_FAST_GATES := roadmap-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check rung-order-check \
                     doc-toc-check make-targets-check card-bullets-check \
+                    agc-names-check tier-claims-check design-scope-check \
                     endpoint-parity-check \
                     release-notes-check \
                     dashboard-render-check dashboard-tables-check \
@@ -127,6 +128,9 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check \
 #   doc-toc-check        a heading added to a page that its own hand-kept index never gained
 #   make-targets-check   prose naming a `make` target that exists in no Makefile
 #   card-bullets-check   a .gag-pillars card bullet too long for the column it renders in
+#   agc-names-check      an AGC Deployment named for v1 in an operator doc with no version label
+#   tier-claims-check    a prose tier claim whose canonical section has moved tiers under it
+#   design-scope-check   an operator-visible scope statement added under docs/design/ alone
 #   dashboard-tables-check the dashboard doc's panel tables drifted from the shipped dashboard JSON
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
@@ -165,6 +169,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               md-reflow-check page-density-check release-pins-check \
               release-notes-check doc-toc-check make-targets-check \
               card-bullets-check dashboard-tables-check \
+              agc-names-check tier-claims-check design-scope-check \
               conflict-markers-check \
               release-ladder-check \
               roadmap-check comparison-stamps-check promql-check \
@@ -251,6 +256,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
                  docs/check-doc-toc-test docs/check-make-targets-test docs/check-card-bullets-test manifest/check-dashboard-tables-test \
+                 docs/check-agc-names-test docs/check-tier-claims-test docs/check-design-scope-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \

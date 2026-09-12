@@ -117,7 +117,7 @@ Four files are copied out of `karlkfi/claude-skills` and run here as ordinary re
 | [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `f961cba6`, 2026-08-16 |
 | [`scripts/agent/pr-mergeability-watch.py`](../../scripts/agent/pr-mergeability-watch.py) | `session-orchestrator/scripts/pr-mergeability-watch.py` | `08d11e9d`, 2026-09-05 |
 
-[Q889](../plan/q889-backlog-item-store.md) phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
+[Q889](../plan/archive/q889-backlog-item-store.md) phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
 Nothing held them there, and nothing in the tree said they were vendored at all.
 
 **Measured 2026-08-21, and it was not the drift the backlog row assumed.** Each file as of its vendoring commit hashed to an upstream commit exactly, so phase 1 did what it claimed.

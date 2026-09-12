@@ -9,7 +9,7 @@ A capability that reaches only the classic tier is therefore still invisible if 
 That is the failure mode Q683, Q691, Q713 and Q844 each demonstrated after parity had been declared.
 
 **The goal:** a completeness claim about tier reach that covers all three signal surfaces, not one of them.
-That is the precondition [release-1.5.md](../release-1.5.md#scope-reopened-2026-08-14-what-a-question-cost) records for saying *parity* in the marketing surfaces rather than *parity on the metric surface*.
+That is the precondition [release-1.5.md](release-1.5.md#scope-reopened-2026-08-14-what-a-question-cost) records for saying *parity* in the marketing surfaces rather than *parity on the metric surface*.
 
 ---
 
@@ -20,7 +20,7 @@ Both get a ledger row naming the tier, and a gate that fails a missing row, a ba
 
 **Out.** The GMC and proxy binaries: neither acquires jobs, so neither has a tier.
 That is the exclusion the metric ledger already states.
-Label values were Q851, a separate row, since shipped as [Label-value reach](../../operations/observability-metrics.md#label-value-reach); prose surfaces are [Q848](../../queue/Q848.md).
+Label values were Q851, a separate row, since shipped as [Label-value reach](../../operations/observability-metrics.md#label-value-reach); prose surfaces were Q848, shipped as the [prose tier-claim gate](../../development/testing.md#the-prose-tier-claim-gate).
 
 ## 2. Decisions
 
@@ -40,7 +40,7 @@ Over-approximating adds a row; it never drops one, which is the safe direction f
 
 An Event's reason reaches the recorder as a literal at some call sites and through a variable at others, and the recorder wrappers themselves pass it through as a parameter.
 A scan that keys on the call name alone therefore counts plumbing as emission and misses the computed cases.
-The [1.5 pre-flight](../release-1.5.md#scope-reopened-2026-08-14-what-a-question-cost) already hit that trap once, where keying on `recordEvent(` missed the two additions that record through `RecordEvent(`.
+The [1.5 pre-flight](release-1.5.md#scope-reopened-2026-08-14-what-a-question-cost) already hit that trap once, where keying on `recordEvent(` missed the two additions that record through `RecordEvent(`.
 
 The scanner classifies each recorder call's reason argument into one of five forms, and fails anything it cannot place:
 
@@ -85,7 +85,7 @@ It is the condition/Event analogue of the Q809 metric that reached the ledger an
 **The first scanner was wrong in the way this repo keeps being wrong about extraction.** Keying the reason's argument index on the function name read the scale-set listener's action string `"ProvisionWorker"` as a reason, and missed `AssignmentAbandoned`, `JobProvisionStalled`, `WorkerCeilingReached` and `SessionUnauthorized`, because two methods here are called `recordEvent` and two are called `Event`, with the reason at a different index in each.
 It was caught by checking the output against reasons the runbook already documented, not by the scan reporting anything.
 The fix reads the index off the callee's own declaration, and `TestReasonIndexComesFromTheCalleesDeclaration` pins both directions.
-This is the third instance of the same class in the 1.5 cycle: a CRD property scan that matched a wrapped godoc line, and an Event scan keyed on `recordEvent(` that missed the `RecordEvent(` sites ([release-1.5.md](../release-1.5.md#scope-reopened-2026-08-14-what-a-question-cost)).
+This is the third instance of the same class in the 1.5 cycle: a CRD property scan that matched a wrapped godoc line, and an Event scan keyed on `recordEvent(` that missed the `RecordEvent(` sites ([release-1.5.md](release-1.5.md#scope-reopened-2026-08-14-what-a-question-cost)).
 
 **No condition reason was found reaching one tier by accident.** Every single-tier row is single-tier by design, and the two prose claims most at risk, `VersionTooOld` and `RunnerVersionTooOld`, were already correct: the condition *type* reaches both tiers, and only the classic tier's GitHub-rejection reason does not.
 That is a narrower result than the metric walk's, which found two classic-only series on no list.

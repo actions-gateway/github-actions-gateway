@@ -27,7 +27,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.
 - **[Priority tiers per runner set](design/02-architecture.md)**: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
-- **[Scale-to-zero workers](design/02-architecture.md)**: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.
+- **[Scale-to-zero workers](design/02-architecture.md)**: worker pods exist only while a job runs; listeners are single-digit-KiB goroutines in one shared pod, not a listener pod per runner group.
 - **[Unmodified upstream runner images](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock `actions/runner` image, or any derivative, runs with no rebuild.
 - **[A job conclusion survives losing the process](design/02-architecture.md)**: conclusions are persisted before any message delete is issued, so a hard kill leaves the message to be replayed rather than the conclusion lost.
   Measured over 60 graceful stops at maximum pressure.

@@ -226,6 +226,22 @@ make-targets-check: ## Fail when prose names a `make` target that exists in no M
 card-bullets-check: ## Fail when a card-grid bullet is too long for the column it renders in
 	scripts/docs/check-card-bullets.sh
 
+.PHONY: agc-names-check
+agc-names-check: ## Fail when an operator doc names the v1 AGC Deployment with no version label
+	scripts/docs/check-agc-names.sh
+
+.PHONY: tier-claims-check
+tier-claims-check: ## Fail when a prose tier claim's canonical section has moved tiers under it
+	scripts/docs/check-tier-claims.sh
+
+.PHONY: tier-claims-check-write
+tier-claims-check-write: ## Re-stamp the tier-source annotations, once the paraphrase has been re-read
+	scripts/docs/check-tier-claims.sh --write
+
+.PHONY: design-scope-check
+design-scope-check: ## Fail when a branch states an operator-visible scope in docs/design/ alone
+	scripts/docs/check-design-scope.sh
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
 # dashboards beside it had their panel queries parsed by nothing either (Q910):
@@ -726,6 +742,10 @@ load-test-full: ## Load acceptance: 1,000 concurrent virtual sessions, realistic
 .PHONY: mem-profile
 mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked sessions, in-process transport, no broker stub
 	$(MAKE) -C cmd/agc mem-profile
+
+.PHONY: scaleset-mem-profile
+scaleset-mem-profile: ## Isolate AGC-only per-scale-set memory on the scale-set tier (Q722)
+	$(MAKE) -C cmd/agc scaleset-mem-profile
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped locally to modules affected vs origin/main (LINT_ALL=1 or CI = full sweep; includes govet)

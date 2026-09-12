@@ -12,7 +12,7 @@ The goal hierarchy below makes that ordering explicit; the rest of the page is h
 
 ## The docset in one paragraph
 
-`docs/` is plain GitHub-native Markdown — no MkDocs front matter, no transclusion, no versioned-docs tree (a [deliberate choice](../plan/docs-six-layer-audit.md): renders on GitHub, git is the single source of truth).
+`docs/` is plain GitHub-native Markdown — no MkDocs front matter, no transclusion, no versioned-docs tree (a [deliberate choice](../plan/archive/docs-six-layer-audit.md): renders on GitHub, git is the single source of truth).
 The taxonomy is the per-directory `README.md` index.
 There are two audiences: `docs/design/` (how the system works, for contributors) and `docs/operations/` (what an operator does and sees).
 A change that alters operator-visible behaviour must update the operations docs too — design-only is the classic miss.

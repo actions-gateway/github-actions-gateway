@@ -20,7 +20,7 @@ Operators who prefer AI-assisted implementation can consult [Appendix C](appendi
 
 ## Milestone 1: Wire Protocol Probe (Days 1–4)
 
-See [docs/plan/milestone-1.md](../plan/milestone-1.md) for the implementation plan and current status.
+See [docs/plan/archive/milestone-1.md](../plan/archive/milestone-1.md) for the implementation plan and current status.
 
 * **Deliverable:** A standalone Go binary under `cmd/probe/` that runs the full pre-execution sequence: authenticate via GitHub App credentials → `POST /sessions` → long-poll `GET /message` → `POST /acquirejob` on the `run_service_url` extracted from the message body → start a `renewjob` loop every 60 seconds.
   The probe prints the decrypted job payload to stdout and continues renewing until cancelled.
@@ -51,7 +51,7 @@ See [docs/plan/milestone-1.md](../plan/milestone-1.md) for the implementation pl
 
 ## Milestone 2: AGC Controller & Reconciler (Days 5–10)
 
-See [docs/plan/milestone-2.md](../plan/milestone-2.md) for the implementation plan and current status.
+See [docs/plan/archive/milestone-2.md](../plan/archive/milestone-2.md) for the implementation plan and current status.
 
 * **Deliverable:** A deployable AGC scaffolded with `controller-runtime`/`kubebuilder` that reconciles `RunnerGroup` CRs into adaptive listener goroutine pools: one permanent goroutine at rest, spawning additional goroutines on demand up to `maxListeners` during bursts, with idle goroutines shutting down once the queue drains.
   Includes the Token Manager (mutex-protected installation token with T-5min proactive refresh), the per-job RenewJob loop, the `maxWorkers` simple pod-count ceiling (enforced without PriorityClass when `priorityTiers` is absent), and the polling implementation lifted from the Milestone 1 probe.
@@ -64,7 +64,7 @@ See [docs/plan/milestone-2.md](../plan/milestone-2.md) for the implementation pl
 
 ## Milestone 3: Worker Pod & Pipe Handoff (Days 11–16)
 
-See [docs/plan/milestone-3.md](../plan/milestone-3.md) for the implementation plan and current status.
+See [docs/plan/archive/milestone-3.md](../plan/archive/milestone-3.md) for the implementation plan and current status.
 
 * **Deliverable:** A worker container image plus the pod-provisioning logic in the AGC: Dockerfile, entrypoint wrapper (Go binary that reads the mounted payload Secret and writes to Named Pipes), Secret mount logic, and the `AcquireJob` → pod-create handoff sequence.
   The Named Pipe handoff is the underdocumented part of this milestone — start by validating the wrapper with the static decrypted payload from Milestone 1 before wiring it into pod creation, so the pipe semantics can be debugged without a live GitHub trigger in the loop.
@@ -75,7 +75,7 @@ See [docs/plan/milestone-3.md](../plan/milestone-3.md) for the implementation pl
 
 ## Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)
 
-See [docs/plan/milestone-4.md](../plan/milestone-4.md) for the implementation plan and current status.
+See [docs/plan/archive/milestone-4.md](../plan/archive/milestone-4.md) for the implementation plan and current status.
 
 * **Deliverable:** A second operator (`cmd/gmc/`) sharing the repo with the AGC, reconciling `ActionsGateway` CRs into the full tenant resource set: ServiceAccount, Role, RoleBinding, NetworkPolicy, proxy Deployment, proxy Service, PodDisruptionBudget, HPA, AGC Deployment, and bootstrap RunnerGroups.
   (The namespace `ResourceQuota` is platform-owned — the GMC operates within it but never creates or mutates it; see Q130.)

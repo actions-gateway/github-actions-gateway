@@ -88,7 +88,7 @@ The histogram quantiles are bucket-interpolated — read them as the bucket rang
 
 ## Step 2 — derive `requests`/`limits`
 
-Apply the resource-model rules (proven in the [dogfood right-sizing exercise](../plan/dogfood-runner-rightsizing.md#resource-model-principles) that this feature automates the measurement half of):
+Apply the resource-model rules (proven in the [dogfood right-sizing exercise](../plan/archive/dogfood-runner-rightsizing.md#resource-model-principles) that this feature automates the measurement half of):
 
 | Field | Set to | Why |
 |---|---|---|

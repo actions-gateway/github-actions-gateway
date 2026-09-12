@@ -39,6 +39,7 @@ on:
       - 'requirements-docs.txt'
       - '.mdreflow.yaml'
       - 'tools/go.mod'
+      - 'cmd/gmc/internal/controller/actionsgateway_v2_builder.go'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
 
@@ -92,6 +93,7 @@ jobs:
               - 'requirements-docs.txt'
               - '.mdreflow.yaml'
               - 'tools/go.mod'
+              - 'cmd/gmc/internal/controller/actionsgateway_v2_builder.go'
               - 'Makefile'
               - '.github/workflows/doc-links.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
@@ -216,6 +218,72 @@ jobs:
           go-version-file: go.work
       - name: card bullets fit their column (make card-bullets-check)
         run: make card-bullets-check
+
+  # Hold every AGC Deployment reference in the operator docs to a stated API
+  # version (Q1098). The AGC is `actions-gateway-controller` on v1 and
+  # `<gateway>-agc` on v2, so a v1-named command names nothing on a v2 tenant —
+  # 26 of them were live across eight pages with no version scope in their prose.
+  #
+  # Its second input is the GMC builder holding AGCResourceSuffix, which is why
+  # that one file is in the filter above: renaming the suffix in code must re-run
+  # this gate, and a Go-only diff would otherwise route here not at all.
+  #
+  # No Go toolchain: the checker is Python and reads the constant as text.
+  agc-names:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: AGC Deployment names are version-scoped (make agc-names-check)
+        run: make agc-names-check
+
+  # Hold a prose tier claim to the canonical section it paraphrases (Q848).
+  # why-gag.md called the Pending-reap re-run classic-only for a whole release
+  # after Q766 made it reach both tiers: the paragraph's upkeep comment asked for
+  # a re-read when a case was added or removed, and that change did neither.
+  #
+  # The stamp digests only the tier-bearing lines of the named section, so a tier
+  # move goes red and an unrelated edit to the same section does not — a gate that
+  # fired on every edit would be re-stamped unread.
+  #
+  # No Go toolchain: the checker is Python over two Markdown files.
+  tier-claims:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: prose tier claims match their source (make tier-claims-check)
+        run: make tier-claims-check
+
+  # Fail a branch that states an operator-visible scope in docs/design/ and
+  # nowhere else (Q774). doc-update-matrix.md calls this the classic miss and
+  # nothing enforced it; the 1.4 cycle missed it three times.
+  #
+  # The trigger is a scope sentence the branch ADDED, not the file pair, so a
+  # typo fix in a design doc does not demand an operations edit.
+  #
+  # fetch-depth: 0 and the explicit main fetch are what the diff is taken
+  # against, for the reason the em-dash job gives; REQUIRE_BASE turns this job's
+  # fail-open into a hard error, since the step above has provided the base.
+  design-scope:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: fetch the diff base
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - name: operator scope leaves docs/design/ (make design-scope-check)
+        run: make design-scope-check
+        env:
+          DESIGN_SCOPE_REQUIRE_BASE: '1'
 
   # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
   # same reason em-dash does, and it is the gate whose absence from CI made
@@ -385,6 +453,9 @@ jobs:
       - page-density
       - doc-toc
       - card-bullets
+      - agc-names
+      - tier-claims
+      - design-scope
       - make-targets
       - md-reflow
       - comparison-stamps

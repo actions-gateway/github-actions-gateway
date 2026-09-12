@@ -7,7 +7,7 @@
 This appendix is a practical guide for operators and tenant teams deciding how to structure their `RunnerGroup`s, size their `maxListeners` counts, and plan for growth.
 The raw constraint numbers live in [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget) and [Appendix A](appendix-a-capacity-slos.md); this appendix explains how to reason about them in practice.
 
-> **Milestone 1 protocol findings** (see [docs/plan/milestone-1.md §8](../plan/milestone-1.md#8-investigation-findings)):
+> **Milestone 1 protocol findings** (see [docs/plan/archive/milestone-1.md §8](../plan/archive/milestone-1.md#8-investigation-findings)):
 >
 > *Session reuse confirmed* (Investigation C) — a session remains live after `acquirejob`; goroutines loop without a delete→create cycle.
 > The steady-state cost remains **one session per RunnerGroup**.

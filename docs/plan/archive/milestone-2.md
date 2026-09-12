@@ -1,6 +1,6 @@
 # Milestone 2 Implementation Plan — AGC Controller & Reconciler
 
-← [Milestone 1](milestone-1.md) | [Back to implementation phases](../design/06-implementation-phases.md)
+← [Milestone 1](milestone-1.md) | [Back to implementation phases](../../design/06-implementation-phases.md)
 
 ---
 
@@ -139,7 +139,7 @@ No additional GitHub App or crypto dependencies are needed — those are in the 
 
 ### 2.1 Type definition (`api/v1alpha1/runnergroup_types.go`)
 
-The full Go struct and kubebuilder markers are specified in [§3.1 of the API contracts](../design/03-api-contracts.md).
+The full Go struct and kubebuilder markers are specified in [§3.1 of the API contracts](../../design/03-api-contracts.md).
 Key field summary:
 
 | Field | Default | Notes |
@@ -538,7 +538,7 @@ The probe's `runner_auth.go` handles the OAuth exchange for an already-registere
 
 **Expected outcomes:**
 
-- Document the registration endpoint, request/response schema, and required auth token in a code comment block at the top of `agentpool/pool.go`, and update [§3.3](../design/03-api-contracts.md#33-re-implemented-broker-api-endpoints) of the API contracts doc.
+- Document the registration endpoint, request/response schema, and required auth token in a code comment block at the top of `agentpool/pool.go`, and update [§3.3](../../design/03-api-contracts.md#33-re-implemented-broker-api-endpoints) of the API contracts doc.
 - If the installation token is not sufficient for registration (requires a separate registration token): add a `RegisterRunner` function to the `githubapp` package and its test.
 - If agents expire: add a proactive re-registration step to the Pool, analogous to the Token Manager's proactive refresh.
 
@@ -557,10 +557,10 @@ Now that `NewInstallationTokenProvider` and `BrokerClient` are both fully integr
 
 **Expected outcomes:**
 
-- If all calls succeed: remove the `TODO(investigation-b)` marker and update §8.B in `docs/plan/milestone-1.md` to record that the live test has now been confirmed.
+- If all calls succeed: remove the `TODO(investigation-b)` marker and update §8.B in `docs/plan/archive/milestone-1.md` to record that the live test has now been confirmed.
 - If any call fails: evaluate `sessionAffinity: ClientIP` on the Milestone 4 proxy Service and document the revised proxy design before Milestone 4 begins.
 
-**Document findings:** Update §8.B in `docs/plan/milestone-1.md`.
+**Document findings:** Update §8.B in `docs/plan/archive/milestone-1.md`.
 
 ---
 
@@ -796,7 +796,7 @@ Every API call (CreateSession, GetMessage, AcquireJob, RenewJob, DeleteSession) 
   GITHUB_BROKER_URL=... GITHUB_RUNNER_VERSION=... GITHUB_AGENT_ID=... \
   go test -v -run TestEgressIPVariance_Live ./broker/
   ```
-- See also `docs/plan/milestone-1.md §8.B` for the original M1 finding (stateless broker design).
+- See also `docs/plan/archive/milestone-1.md §8.B` for the original M1 finding (stateless broker design).
 
 **Conclusion:** No proxy affinity is required.
 The Milestone 4 egress proxy pool can use round-robin or any stateless load-balancing strategy across proxy pods without risk of session disruption.

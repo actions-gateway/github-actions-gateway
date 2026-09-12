@@ -4,6 +4,10 @@
 
 Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.
 
+**Addressing the AGC Deployment.** Under v2 the AGC is named per gateway, as `<gateway>-agc`, so a `team-a-gateway` tenant addresses `deploy/team-a-gateway-agc`.
+Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+Commands below give both forms; substitute your own gateway name for `<gateway>`.
+
 ---
 
 ## Table of Contents
@@ -121,6 +125,10 @@ Run these checks immediately after deploying a new tenant gateway or upgrading e
 kubectl get actionsgateway -n <namespace> -o yaml | grep -A 20 status:
 
 # 2. Confirm the AGC pod is running
+# v2
+kubectl get deploy -n <namespace> <gateway>-agc
+kubectl logs -n <namespace> deploy/<gateway>-agc --tail=50
+# v1 (legacy)
 kubectl get deploy -n <namespace> actions-gateway-controller
 kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=50
 
@@ -1100,6 +1108,9 @@ See [Disjointness is enforced on every edit](security-operations.md#disjointness
 kubectl get pod -n <namespace> -l app=actions-gateway-controller
 
 # Check logs for startup errors
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller
 
 # Check that the referenced Secret exists and has the right keys
@@ -1244,6 +1255,13 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls -o jsonpath='{.data.
 ```
 
 ```bash
+# v2
+kubectl get deploy -n <namespace> <gateway>-agc \
+  -o jsonpath='{.spec.template.spec.volumes[?(@.name=="proxy-ca")]}'
+```
+
+```bash
+# v1 (legacy)
 kubectl get deploy -n <namespace> actions-gateway-controller \
   -o jsonpath='{.spec.template.spec.volumes[?(@.name=="proxy-ca")]}'
 ```
@@ -1266,7 +1284,7 @@ Fixed versions make the multiplexer start idempotent, so the race cannot stack b
 
 **Resolution.**
 - Upgrade the AGC image to a version with the Q100 fix.
-- To clear excess listeners immediately on an affected version, restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`).
+- To clear excess listeners immediately on an affected version, restart the AGC Deployment (`kubectl rollout restart deploy/<gateway>-agc -n <namespace>` on v2, `deploy/actions-gateway-controller` on v1).
   Listener sessions are in-memory; the restarted AGC re-creates exactly one baseline per RunnerGroup.
   On a GMC older than the Q552 fix the restart is a silent no-op — see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
 
@@ -1284,7 +1302,7 @@ On AGC versions without the Q137 fix the RunnerGroup was only re-reconciled on a
 **Resolution.**
 - Upgrade the AGC image to a version with the Q137 fix.
   Fixed versions requeue the RunnerGroup on a bounded interval while the listener count is below the desired ceiling, so the reconciler re-runs its zero-listener recovery and revives the baseline within seconds; `status.activeSessions` and `Ready` then track reality again.
-- To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`); the restarted AGC re-creates one baseline per RunnerGroup from scratch.
+- To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (`kubectl rollout restart deploy/<gateway>-agc -n <namespace>` on v2, `deploy/actions-gateway-controller` on v1); the restarted AGC re-creates one baseline per RunnerGroup from scratch.
   On a GMC older than the Q552 fix the restart is a silent no-op — see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
 - If the baseline keeps exiting non-retriably after revival, the underlying credential or runner-version problem is real — check `kubectl describe runnergroup` for `Degraded` / `Unauthorized` / `VersionTooOld` conditions and resolve per the [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) section.
 
@@ -1421,6 +1439,9 @@ kubectl get events -n <namespace> --field-selector reason=WorkerPodCreateFailed
 
 ```sh
 # The same rejection in the AGC log, with the pod name it tried to create.
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep -i "rejected worker pod"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejected worker pod"
 ```
 
@@ -2553,6 +2574,12 @@ kubectl get secret -n <namespace> <name> -o jsonpath='{.data.privateKey}' | base
 To trigger a rolling update on the AGC Deployment after fixing the Secret, change `gitHubAppRef.name` in the `ActionsGateway` spec to reference the new Secret name (the GMC will roll the AGC Deployment automatically) or manually restart the Deployment:
 
 ```sh
+# v2
+kubectl rollout restart deploy/<gateway>-agc -n <namespace>
+```
+
+```sh
+# v1 (legacy)
 kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
 ```
 
@@ -2579,6 +2606,9 @@ GitHub App installation tokens expire after one hour; if refresh fails, new sess
 # Metric: rate(actions_gateway_token_refresh_errors_total[5m])
 
 # Check AGC logs for the error detail
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep "token refresh"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "token refresh"
 
 # Test connectivity to GitHub via the tenant proxy (AGC is distroless — use an
@@ -2648,10 +2678,16 @@ An **AGC restart or rollout does not** delete live workers — only a per-job te
 # Metric: rate(actions_gateway_renew_job_errors_total[5m])
 
 # Check AGC logs for renewal errors and job IDs
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep "renewjob"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "renewjob"
 
 # Definitive-loss teardowns (worker self-cancelled), split by reason
 # Metric: sum by (reason) (rate(actions_gateway_renew_job_teardowns_total[15m]))
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep "job lock definitively lost"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "job lock definitively lost"
 
 # Confirm the proxy pool is healthy
@@ -2688,12 +2724,15 @@ When a lock is *definitively* lost, current versions self-cancel the worker and 
 - `RunnerGroup` `status.activeSessions` decays over time; after roughly `maxListeners` completed jobs, queued workflow jobs wait forever even though the AGC pod is healthy.
 
 **Cause.** GitHub deletes a JIT-registered runner record once it acquires a job (single-use runners).
-Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot ([M4 §12, bug 2](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)).
+Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot ([M4 §12, bug 2](../plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)).
 
 **Diagnostics.**
 
 ```sh
 # Repeating EOF/401 poll errors
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep -E "decode response: EOF|unauthorized"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -E "decode response: EOF|unauthorized"
 
 # Listener slots remaining
@@ -2711,6 +2750,9 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].status.activeSess
 
   ```sh
   kubectl delete secret -n <namespace> -l actions-gateway/runner-group=<group>
+  # v2
+  kubectl rollout restart deploy/<gateway>-agc -n <namespace>
+  # v1 (legacy)
   kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
   ```
 
@@ -2740,6 +2782,9 @@ GitHub then had one online runner to dispatch to, so it dispatched ~1 job at a t
 
 ```sh
 # Recycle errors climbing in lockstep with a burst (pre-fix: fatal 422s)
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep -iE "currently running|recycle"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "currently running|recycle"
 
 # Metric: actions_gateway_agent_recycle_errors_total — spikes during the burst on pre-fix versions
@@ -2786,6 +2831,9 @@ A gateway version that freed the plan-ID claim on *completion* (rather than on p
 ```sh
 # Multiple sessions provisioning the SAME job (the duplicate-acquisition signature)
 # — the Secret variant (burst) and the Pod variant (late redelivery)
+# v2
+kubectl logs -n <namespace> deploy/<gateway>-agc | grep -iE "create (Secret|Pod).*already exists|duplicate job delivery"
+# v1 (legacy)
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "create (Secret|Pod).*already exists|duplicate job delivery"
 
 # Metric: actions_gateway_jobs_duplicate_delivery_total — on fixed versions, this
@@ -3586,6 +3634,9 @@ kubectl get runnergroup -n <namespace> <name> \
 kubectl describe resourcequota -n <namespace>
 
 # Check AGC logs for quota errors
+# v2
+kubectl logs -n <agc-namespace> deploy/<gateway>-agc | grep "exceeded quota"
+# v1 (legacy)
 kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceeded quota"
 
 # See the abandonment event on the owner (RunnerGroup or RunnerSet)
@@ -3744,6 +3795,9 @@ kubectl describe pod -n <tenant-namespace> <pod> | sed -n '/Events:/,$p'
 kubectl get ns <tenant-namespace> -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}'; echo
 
 # Confirm the SECURITY_PROFILE the AGC is running with
+# v2
+kubectl get deploy <gateway>-agc -n <tenant-namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SECURITY_PROFILE")].value}'; echo
+# v1 (legacy)
 kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SECURITY_PROFILE")].value}'; echo
 ```
 

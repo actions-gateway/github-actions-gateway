@@ -2,7 +2,7 @@
 
 **Status: in progress.**
 
-Primary source: [milestone-4.md §12](../milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112), bug 2 — live-found 2026-06-12 during the M4 validation run.
+Primary source: [milestone-4.md §12](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112), bug 2 — live-found 2026-06-12 during the M4 validation run.
 
 ## Problem
 
@@ -143,7 +143,7 @@ fake-GitHub (kind): a dedicated e2e test toggles `/control/singleuse` on, runs a
 - `docs/design/07-test-plan.md` — single-use simulation in the fake-GitHub criteria.
 - `docs/operations/troubleshooting.md` — runbook: symptom on pre-fix versions (sessions stuck in `decode response: EOF` / 401 GetMessage loops, runner list emptying, tenant throughput decaying to zero after ~maxListeners jobs), cause, remediation (upgrade; interim: delete agentpool Secrets + restart AGC pod, expect 409s for surviving names).
 - `docs/operations/observability.md` — new metrics.
-- `docs/plan/milestone-4.md` §12 — note the fix.
+- `docs/plan/archive/milestone-4.md` §12 — note the fix.
 - `docs/STATUS.md` — drop Q114 row (isolated commit).
 
 ## Progress

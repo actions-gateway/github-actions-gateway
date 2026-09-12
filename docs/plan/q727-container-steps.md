@@ -7,7 +7,7 @@
 ## The question
 
 [arc-parity.md criterion 3](arc-parity.md#definition-of-done) closes two ways: `container:` and `services:` steps run without privilege, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
-Q727 was filed as a decision rather than a design, and [release-1.6.md](release-1.6.md#the-gating-row-q727-decided-as-a-documented-decline) made this doc the first deliverable so the choice would be an output of a costing rather than an input to one.
+Q727 was filed as a decision rather than a design, and [release-1.6.md](archive/release-1.6.md#the-gating-row-q727-decided-as-a-documented-decline) made this doc the first deliverable so the choice would be an output of a costing rather than an input to one.
 
 Q719 settled the storage half on 2026-08-24 with a `ReadWriteMany` volume mounted into the pod the provisioner really builds, validated across two nodes against a live class ([worker-shared-storage.md](../operations/worker-shared-storage.md)).
 What was left is the pod-per-step execution model itself.
@@ -65,7 +65,7 @@ It is not permanent for pod-per-step execution as a capability, which C could st
 **The cost of declining is a named population, not a rounding error.** Kata's nested-virtualization prerequisite is hardware ARC does not require.
 A team on GKE Autopilot, on AMD or Arm node families, or on most AWS fleets cannot run Kata at all, and for them the supported answer degrades to a platform-granted privileged `ClusterRunnerTemplate` where their ARC setup needed no *pod* privilege.
 The cost is real and it is a trade, not a straight loss: ARC's unprivileged pod is bought with the namespace-wide API grant above, which needs no exploit to use.
-[release-1.6.md](release-1.6.md#the-gating-row-q727-decided-as-a-documented-decline) required that population be named rather than left for a reader to discover; it is named on every comparison surface that claims the gap, and in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
+[release-1.6.md](archive/release-1.6.md#the-gating-row-q727-decided-as-a-documented-decline) required that population be named rather than left for a reader to discover; it is named on every comparison surface that claims the gap, and in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 This is why C is deferred with a demand trigger rather than declined.
 The gap is real for that population, and the trigger is an adopter reporting it, the same pattern the proxy-hardening cluster used, where Q725 revived Q564 and the other three stayed parked.

@@ -1,6 +1,6 @@
 # Milestone 4 Implementation Plan — Gateway Manager Controller + Proxy
 
-← [Milestone 3](milestone-3.md) | [Back to implementation phases](../design/06-implementation-phases.md)
+← [Milestone 3](milestone-3.md) | [Back to implementation phases](../../design/06-implementation-phases.md)
 
 ---
 
@@ -24,21 +24,21 @@
 ## Status at a glance
 
 Last refreshed 2026-06-12.
-**All success criteria are now live-validated.** The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see [§12 Live multi-tenant validation evidence](#12-live-multi-tenant-validation-evidence-2026-06-1112) for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in [STATUS.md](../queue/README.md)).
+**All success criteria are now live-validated.** The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see [§12 Live multi-tenant validation evidence](#12-live-multi-tenant-validation-evidence-2026-06-1112) for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in [STATUS.md](../../queue/README.md)).
 
 | Success criterion | Status | Notes |
 |---|---|---|
 | Two `ActionsGateway` CRs → two independent tenants | ✅ Done | 2026-06-12 live on kind via `helm install` (digest-pinned): `tenant-a`+`tenant-b` both `Ready=True` with 2/2 proxy pods in <1 min — see §12 |
 | Deleting one CR removes only that tenant's resources | ✅ Done | 2026-06-12 live: deleting `gateway-b` removed all GMC-managed resources in `tenant-b` only; `tenant-a` stayed Ready and ran a subsequent green job — see §12 |
-| `spec.proxy.maxReplicas` change reflected in HPA | ✅ Done in code | `buildHPA` reads `ag.Spec.Proxy.MaxReplicas` ([builder.go:385](../../cmd/gmc/internal/controller/builder.go)); `hpa_update_test.go` covers it |
-| Webhook rejects CRs in `kube-system`/`kube-public`/`gmc-system`/`$POD_NAMESPACE` | ✅ Done | [actionsgateway_webhook.go:21-47](../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go) |
+| `spec.proxy.maxReplicas` change reflected in HPA | ✅ Done in code | `buildHPA` reads `ag.Spec.Proxy.MaxReplicas` ([builder.go:385](../../../cmd/gmc/internal/controller/builder.go)); `hpa_update_test.go` covers it |
+| Webhook rejects CRs in `kube-system`/`kube-public`/`gmc-system`/`$POD_NAMESPACE` | ✅ Done | [actionsgateway_webhook.go:21-47](../../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go) |
 | End-to-end job via proxy (green checkmark + `HTTPS_PROXY` in worker env) | ✅ Done | 2026-06-12 live: runs [27386891757](https://github.com/actions-gateway/gateway-test/actions/runs/27386891757) + [27395702908](https://github.com/actions-gateway/gateway-test/actions/runs/27395702908) concluded `success`; worker pod env carried `HTTPS_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080` — see §12 (needed the Q115 `runAsUser` workaround) |
 | RBAC: no `*` verbs on `secrets`/`pods`/`nodes` in GMC ClusterRole | ✅ Done | `rbac_test.go` has 2 wildcard-detection tests |
 | `go test -race ./...` passes across all four modules | ✅ Done | Per-module test commands pass |
-| Worker ServiceAccount `actions-gateway-worker` created by GMC | ✅ Done | `buildWorkerServiceAccount` ([builder.go:77](../../cmd/gmc/internal/controller/builder.go)); injected into AGC via `WORKER_SERVICE_ACCOUNT` env |
-| Proxy pods: `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false` | ✅ Done | [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); also `Caps Drop ALL` + `Seccomp RuntimeDefault` via W8 |
-| IP range reconciler updates NetworkPolicy on 24h tick | ✅ Done | `time.NewTicker(24 * time.Hour)` in [ipranges.go:135-151](../../cmd/gmc/internal/controller/ipranges.go); `ipranges_test.go` covers the path |
-| GMC runs with leader election | ✅ Done | `--leader-elect` flag wired ([cmd/gmc/cmd/main.go:61,158](../../cmd/gmc/cmd/main.go)); enabled in `config/manager/manager.yaml:64` |
+| Worker ServiceAccount `actions-gateway-worker` created by GMC | ✅ Done | `buildWorkerServiceAccount` ([builder.go:77](../../../cmd/gmc/internal/controller/builder.go)); injected into AGC via `WORKER_SERVICE_ACCOUNT` env |
+| Proxy pods: `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false` | ✅ Done | [builder.go:323-327](../../../cmd/gmc/internal/controller/builder.go); also `Caps Drop ALL` + `Seccomp RuntimeDefault` via W8 |
+| IP range reconciler updates NetworkPolicy on 24h tick | ✅ Done | `time.NewTicker(24 * time.Hour)` in [ipranges.go:135-151](../../../cmd/gmc/internal/controller/ipranges.go); `ipranges_test.go` covers the path |
+| GMC runs with leader election | ✅ Done | `--leader-elect` flag wired ([cmd/gmc/cmd/main.go:61,158](../../../cmd/gmc/cmd/main.go)); enabled in `config/manager/manager.yaml:64` |
 | Code committed | ✅ Done | |
 
 ### Critical path
@@ -910,7 +910,7 @@ After integration tests pass, deploy the full stack to a `kind` cluster:
 ## 12. Live multi-tenant validation evidence (2026-06-11/12)
 
 One session on a 3-node kind cluster (`make e2e-cluster`, kindnet CNI, cert-manager installed) with the real GitHub App `actions-gateway-test` (App ID 3752347, installation 135739122) against the repo `actions-gateway/gateway-test` (workflow `test-job.yml`, `runs-on: e2e`).
-This session also served as the [Q12 track-A live `helm install` proof](archive/q12-helm-chart.md#live-validation-track-a--2026-06-12) and closed Q71.
+This session also served as the [Q12 track-A live `helm install` proof](q12-helm-chart.md#live-validation-track-a--2026-06-12) and closed Q71.
 
 ### Setup
 
@@ -960,7 +960,7 @@ Recorded as Q118 (set the env in the GMC + fix the Dockerfile-vs-`DefaultWorkerI
 `tenant-a` was untouched (`Ready=True`, AGC + 2/2 proxy pods running, RunnerGroup intact) and subsequently ran run 27395702908 to green.
 Deleting `gateway-a` at the end, with a healthy session, also **deregistered its runners from GitHub** — the repo runner list went empty.
 
-### Product bugs surfaced (all filed in [STATUS.md](../queue/README.md))
+### Product bugs surfaced (all filed in [STATUS.md](../../queue/README.md))
 
 The live run worked **only after** working around these; none are caught by unit/cluster-only/fake-GitHub tiers:
 
@@ -971,11 +971,11 @@ The live run worked **only after** working around these; none are caught by unit
 2. **Q114 — JIT agents are single-use and the AGC cannot self-heal.** GitHub removed each JIT runner after it completed (or had acquired a then-cancelled) job; the never-used agent survived.
    The AGC kept polling with the stale agent/session — `GetMessage` looped on `200`-with-empty-body (`decode response: EOF`) and later `401 unauthorized` for hours with no re-registration; recovery required deleting the agentpool Secrets + restarting the AGC, and re-registration of a *surviving* name then failed `409 Already exists` (no deregister-then-retry).
    This breaks the multiplex-many-jobs-per-agent assumption at its root.
-   **Fixed (Q114):** the listener now re-registers its agent after every job (and heals 401/EOF-stale sessions found after a restart, resolving the surviving-name 409 by ID lookup); fakegithub can simulate the single-use behaviour for fake-GitHub regression coverage — see [q114-jit-agent-selfheal.md](archive/q114-jit-agent-selfheal.md).
+   **Fixed (Q114):** the listener now re-registers its agent after every job (and heals 401/EOF-stale sessions found after a restart, resolving the surviving-name 409 by ID lookup); fakegithub can simulate the single-use behaviour for fake-GitHub regression coverage — see [q114-jit-agent-selfheal.md](q114-jit-agent-selfheal.md).
 3. **Q117 — RunnerGroup `podTemplate` changes don't reach running listeners.** After patching the CR (observedGeneration advanced), newly provisioned worker pods still used the old template until the AGC pod was restarted.
    **Fixed (Q117):** the provisioner re-reads the RunnerGroup from the shared (cache-backed) client at pod-build time instead of using the listener-start snapshot, so a `podTemplate` (and any other spec) edit takes effect on the next acquired job with no AGC restart.
    The start-time snapshot is kept only as a fallback when the cached read fails (e.g. the group was deleted mid-shutdown).
 4. **Q116 — no production path for the GitHub org URL** (see Setup deviation above).
    **Fixed (Q116):** added the required first-class `ActionsGateway.spec.gitHubURL` field, threaded to the AGC Deployment as `GITHUB_ORG_URL` and validated (https scheme + org/owner path) by the GMC webhook; the testing-only `--allow-agc-extra-env` flag is retained for genuinely-extra env but is no longer required for the org URL.
 
-Operator-facing runbook entry for (1): [troubleshooting.md](../operations/troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).
+Operator-facing runbook entry for (1): [troubleshooting.md](../../operations/troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).

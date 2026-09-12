@@ -8,7 +8,7 @@
 
 ## Why this is a release rather than a row that lands whenever
 
-[release-1.6.md § Why untrusted-PR CI on Kata is 1.7](release-1.6.md#why-untrusted-pr-ci-on-kata-is-17) recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
+[release-1.6.md § Why untrusted-PR CI on Kata is 1.7](archive/release-1.6.md#why-untrusted-pr-ci-on-kata-is-17) recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
 Neither advances the other, because Kata already makes Docker-in-Docker unprivileged.
 
 What makes the axis a release is Phase 5, not Phase 4.
@@ -39,7 +39,7 @@ Nothing had to be arranged for it: Phase 1 removed every `actions/cache` step fr
 
 ## The three questions 1.6 left for this scope
 
-[release-1.6.md](release-1.6.md#why-untrusted-pr-ci-on-kata-is-17) named these rather than deciding them, on the ground that they were not that release's to settle.
+[release-1.6.md](archive/release-1.6.md#why-untrusted-pr-ci-on-kata-is-17) named these rather than deciding them, on the ground that they were not that release's to settle.
 Two are settled here; the third is a real conflict and is scoped as work.
 
 ### Q215's trigger has not fired, and the row now says which reading it takes
@@ -69,7 +69,7 @@ It shipped anyway, and the row was right that the identifier alone closes nothin
 A worker pod is deleted when its job ends, so a source address resolves to nothing after the fact and the binding has to be recorded live.
 The answer is two opted-in records rather than one wider one: `EgressProxy.spec.auditLogging: ConnectionsWithSource` puts the client address on the egress record, and `ActionsGateway.spec.auditLogging: WorkerAddresses` has the AGC say which job holds each address while its pod lives.
 Both default `Off`, because neither is a movement log alone and the join of the two is.
-Scope and the rejected alternatives are in [q986-egress-attribution.md](q986-egress-attribution.md).
+Scope and the rejected alternatives are in [q986-egress-attribution.md](archive/q986-egress-attribution.md).
 
 ### The default-versus-opt-in conflict is real and is this release's to resolve
 
@@ -87,7 +87,7 @@ The criterion now also records the decline, so a later reading cannot revive the
 - **[Q215](../queue/Q215.md) as a build.** Deferred with an unfired trigger, per the section above.
 - **Controller or API changes.** Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.
   A 1.7 that grows an API field has lost the plot of what the release is.
-- **The remaining proxy-hardening cluster.** [Q565](../queue/Q565.md), [Q566](../queue/Q566.md) and [Q567](../queue/Q567.md) keep their demand triggers, unchanged since [release-1.4.md](release-1.4.md#deferred-out-of-14-and-why) shelved them.
+- **The remaining proxy-hardening cluster.** [Q565](../queue/Q565.md), [Q566](../queue/Q566.md) and [Q567](../queue/Q567.md) keep their demand triggers, unchanged since [release-1.4.md](archive/release-1.4.md#deferred-out-of-14-and-why) shelved them.
 
 ## Definition of done
 
@@ -119,7 +119,7 @@ Re-run any whose window has moved before the stable tag.
 | Semver floor | `c54b712a9` | **MINOR**, over 56 commits, set by eight touching the released surface. `v1.7.0` is forced by merged work rather than chosen. |
 | API surface | `c54b712a9` | **PASS, ship as-is.** Exactly what [Definition of done #6](#definition-of-done) predicted and nothing else: one added wire field `auditLogging`, the `Off;Connections;ConnectionsWithSource` enum on `EgressProxy`, a new `Off;WorkerAddresses` enum on `ActionsGateway`, defaulting `Off`. No new condition types, Event reasons, labels or annotations. |
 
-Both `auditLogging` fields default `Off` and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is ([q986-egress-attribution.md](q986-egress-attribution.md)).
+Both `auditLogging` fields default `Off` and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is ([q986-egress-attribution.md](archive/q986-egress-attribution.md)).
 
 **Deferred to the stable tag, deliberately.** The marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
 

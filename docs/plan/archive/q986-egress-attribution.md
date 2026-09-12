@@ -3,7 +3,7 @@
 ## Goal
 
 Let an operator answer "which host did this job reach", from the proxy's opt-in per-connection audit record, on a shared pool as well as an unshared one.
-That is Definition of Done #5 of [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md), which the record does not meet today on either dimension.
+That is Definition of Done #5 of [secure-multi-tenant-oss-ci.md](../secure-multi-tenant-oss-ci.md), which the record does not meet today on either dimension.
 
 ## What the record is missing, and why one field is not enough
 
@@ -16,7 +16,7 @@ Nothing on it identifies the caller, which costs two separate things:
 Both need a per-connection source identifier, which Q564 declined: the client IP on every record is a per-worker movement log, and the trade had not been weighed.
 Adding the IP alone still closes neither gap, and one measurement says why.
 
-**Worker pods are deleted at job completion** ([completion.go](../../cmd/agc/internal/provisioner/completion.go)), so a source IP resolved after the fact against live cluster state resolves to nothing.
+**Worker pods are deleted at job completion** ([completion.go](../../../cmd/agc/internal/provisioner/completion.go)), so a source IP resolved after the fact against live cluster state resolves to nothing.
 The pod that held the address is gone, and the address is back in the CNI's pool.
 Whatever turns an IP into a tenant and a job has to be recorded while the pod still exists.
 
@@ -28,7 +28,7 @@ Two records, joined by the operator's log pipeline on address plus time.
 The source address comes from the accepted connection, not from a request header, so a worker cannot forge it — the same property that makes the pool namespace trustworthy.
 
 **The AGC** gains its own `auditLogging` field, defaulting `Off`, whose `WorkerAddresses` value writes one record when a worker pod's address is first observed and one when the pod goes away.
-That record carries the consuming tenant's namespace and the job's run ID and repository, both of which the AGC already holds: the annotations are stamped on every worker pod ([payload.go](../../cmd/agc/internal/provisioner/payload.go)), and the shared pod informer already watches every worker pod on both acquisition tiers.
+That record carries the consuming tenant's namespace and the job's run ID and repository, both of which the AGC already holds: the annotations are stamped on every worker pod ([payload.go](../../../cmd/agc/internal/provisioner/payload.go)), and the shared pod informer already watches every worker pod on both acquisition tiers.
 
 Neither record is a movement log by itself.
 The proxy's says where a pool went; the AGC's says which job held an address, and names no destination at all.
@@ -68,5 +68,5 @@ The deprecated `v1alpha1` `ActionsGateway` gets nothing: it is served until `v2.
 ## Status
 
 ✅ Shipped 2026-08-28.
-Both opt-ins landed with their own unit coverage, and the Definition of Done #5 row in [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md) is claimed.
+Both opt-ins landed with their own unit coverage, and the Definition of Done #5 row in [secure-multi-tenant-oss-ci.md](../secure-multi-tenant-oss-ci.md) is claimed.
 Not yet exercised end-to-end on a cluster: the join's CNI assumption is asserted in the operator docs rather than measured on a dogfood run.

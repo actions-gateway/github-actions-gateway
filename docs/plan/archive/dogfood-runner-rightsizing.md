@@ -86,7 +86,7 @@ Keep `e2e` on its `n2-standard-4` nested-virt pool, sized for `kind`-in-DinD mem
 
 **Phase 4 — Validate.** Run the full suite on GAG; confirm zero OOM and no throttle-induced slowdown; compare job durations and total spot-node-hours to the baseline; adjust.
 
-**Phase 5 — Persist.** Bake the final `requests`/`limits` into the `RunnerTemplate`(s) and the node sizes into [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) + the [runbook](gke-dogfood.md); record the measurement table here, then archive this plan.
+**Phase 5 — Persist.** Bake the final `requests`/`limits` into the `RunnerTemplate`(s) and the node sizes into [`scripts/dogfood/setup.sh`](../../../scripts/dogfood/setup.sh) + the [runbook](../gke-dogfood.md); record the measurement table here, then archive this plan.
 
 ## e2e track — validate, then size (Kata deferred)
 
@@ -118,7 +118,7 @@ Setup for step 1 (no nested virt): a dedicated `e2-standard-8` spot e2e pool (ta
 - **Interim (accepted):** an **additive allow-all-egress `NetworkPolicy`** on the `gag-dogfood-e2e` workload pods (unions with GAG's managed default-deny to open egress).
   This is a **deliberate, documented property of the DinD variant** (trusted CI only) — **never** for untrusted PRs (that's the Kata variant's job).
 - **Collecting the allowlist:** the e2e job's external destinations are gathered (from the job + `dockerd` logs; the deps are also pinned in `e2e-reusable.yml`) to seed a future precise allowlist.
-- **Durable hardening (deferred, backlog):** the destinations are CDN-fronted (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a precise **FQDN** allowlist isn't *enforced* on the dogfood cluster today — its managed Cilium has no `CiliumNetworkPolicy`, and while GKE's alpha `FQDNNetworkPolicy` is now emitted by GAG's `gke` backend, dogfood doesn't enable the opt-in `--enable-fqdn-network-policy` it needs ([Q245](q245-fqdn-intent-backend-split.md)).
+- **Durable hardening (deferred, backlog):** the destinations are CDN-fronted (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a precise **FQDN** allowlist isn't *enforced* on the dogfood cluster today — its managed Cilium has no `CiliumNetworkPolicy`, and while GKE's alpha `FQDNNetworkPolicy` is now emitted by GAG's `gke` backend, dogfood doesn't enable the opt-in `--enable-fqdn-network-policy` it needs ([Q245](../q245-fqdn-intent-backend-split.md)).
   The durable answer is an **in-cluster pull-through mirror** (collapses e2e egress to one in-cluster destination — air-gappable, no CDN rot), pairing with the Kata variant for untrusted jobs.
 
 ## Phase 1 results — general workers (2026-06-30, first pass)
@@ -162,7 +162,7 @@ With 4 worker nodes + 2 system nodes up: `DISKS_TOTAL_GB` usage = **400** (= the
 Under the old `pd-balanced` config those same 4 workers would have pushed SSD to ~620 > 500 → blocked.
 The SSD ceiling is gone; `maxWorkers` is now limited by CPU/mem (≈ 48 `e2-standard-4` nodes' worth of headroom), not disk quota.
 
-**Persisted.** [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) `create_worker_pool` and the mirrored recipe in [`gke-dogfood.md`](gke-dogfood.md) now provision the `workers` pool with `--disk-type=pd-standard` and `max-nodes=8`.
+**Persisted.** [`scripts/dogfood/setup.sh`](../../../scripts/dogfood/setup.sh) `create_worker_pool` and the mirrored recipe in [`gke-dogfood.md`](../gke-dogfood.md) now provision the `workers` pool with `--disk-type=pd-standard` and `max-nodes=8`.
 `RunnerSet.maxWorkers` raised 4→8 (still far under the CPU-bound ceiling; the dogfood matrix is ~7 concurrent jobs).
 Remaining Q248 work: the pod `requests`/`limits` refinement (drop the CPU limit, memory limit → peak×1.3) is still open — orthogonal to the disk-class fix.
 
@@ -205,11 +205,11 @@ Across the extensive live dogfood runs (Q224/Q259/Q260/Q267 re-routes, up to `ma
 
 ## e2e worker sizing — measured, then derived (DinD, 2026-07-07)
 
-The e2e worker is the DinD variant ([`deploy/dogfood-e2e/overlays/dind`](../../deploy/dogfood-e2e/overlays/dind)): a `runner` container + a native-sidecar `docker:dind` initContainer, on the `e2-standard-8` spot e2e pool (no nested virt).
-This is the plan's step-2 sizing target — the Kata end-state (step 3, [Q286](archive/kata-on-gke.md)) is deferred and, per the finding below, needs a *bigger* nested-virt node than the current `n2-standard-4`, so its sizing is tracked separately.
+The e2e worker is the DinD variant ([`deploy/dogfood-e2e/overlays/dind`](../../../deploy/dogfood-e2e/overlays/dind)): a `runner` container + a native-sidecar `docker:dind` initContainer, on the `e2-standard-8` spot e2e pool (no nested virt).
+This is the plan's step-2 sizing target — the Kata end-state (step 3, [Q286](kata-on-gke.md)) is deferred and, per the finding below, needs a *bigger* nested-virt node than the current `n2-standard-4`, so its sizing is tracked separately.
 
 **Measurement (Phase 1).** Routed a full **Calico** e2e run (the heaviest lane — most container images, so the conservative peak) to GAG and sampled `kubectl top pod --containers` every 3s over the ~18-min run.
-The pod reached `Completed` (clean; no [Q247](archive/gke-dogfood-turnup-findings.md) orphan this run) with **zero OOM events**:
+The pod reached `Completed` (clean; no [Q247](gke-dogfood-turnup-findings.md) orphan this run) with **zero OOM events**:
 
 | Container | Peak CPU | Peak memory | Role |
 |---|---|---|---|
@@ -250,7 +250,7 @@ GKE reserves ~90m CPU + ~3.6 GiB → **≈7.4 vCPU / ≈28 GiB allocatable**; sy
   **Deferred, not taken:** the surplus memory is cheap insurance for the OOM-sensitive `kind` bringup (esp. on a heavier future suite), and the node-type swap warrants its own validation run.
   Recorded as a cost lever if memory stays low across more runs.
 
-**Kata-track finding (informs [Q286](archive/kata-on-gke.md)).** The runner's ~5-vCPU peak *exceeds a whole `n2-standard-4`* (4 vCPU) — the node the current Kata `e2e-setup.sh` provisions.
+**Kata-track finding (informs [Q286](kata-on-gke.md)).** The runner's ~5-vCPU peak *exceeds a whole `n2-standard-4`* (4 vCPU) — the node the current Kata `e2e-setup.sh` provisions.
 So the Kata end-state needs a bigger nested-virt node (e.g.
 `n2-standard-8`) to avoid CPU-starving e2e; the DinD pod `requests` above do **not** port 1:1 to the smaller Kata node.
 Left for the Kata stand-up, not changed here.
@@ -273,14 +273,14 @@ The measured data confirms the standing deferral rather than overturning it — 
 
 ## Phase 5 — persisted (2026-07-06)
 
-The right-sized general-worker `requests`/`limits` are baked into the dogfood `RunnerTemplate` in [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) (`apply_cr`) and mirrored in the [`gke-dogfood.md`](gke-dogfood.md) runbook.
+The right-sized general-worker `requests`/`limits` are baked into the dogfood `RunnerTemplate` in [`scripts/dogfood/setup.sh`](../../../scripts/dogfood/setup.sh) (`apply_cr`) and mirrored in the [`gke-dogfood.md`](../gke-dogfood.md) runbook.
 The node sizes and `maxWorkers=8` were already persisted with the disk-class fix.
 The tenant-onboarding quota formula is unchanged and remains correct — it sums only declared container `limits`, so dropping the worker CPU limit simply drops that term (documented there as "a term with no value drops out").
 
-The right-sized **e2e-worker** `requests`/`limits` are baked into the DinD `ClusterRunnerTemplate`, promoted under Q554 into the shipped library at [`deploy/templates/privileged-dind/template.yaml`](../../deploy/templates/privileged-dind/template.yaml) (the dind overlay now consumes it as a base), and its rationale mirrored in the deploy [`README`](../../deploy/dogfood-e2e/README.md).
+The right-sized **e2e-worker** `requests`/`limits` are baked into the DinD `ClusterRunnerTemplate`, promoted under Q554 into the shipped library at [`deploy/templates/privileged-dind/template.yaml`](../../../deploy/templates/privileged-dind/template.yaml) (the dind overlay now consumes it as a base), and its rationale mirrored in the deploy [`README`](../../../deploy/dogfood-e2e/README.md).
 Applied live and re-validated by a second clean-green Calico run.
 **All Q248 work is complete**: node disk class, general-worker sizing, e2e-worker sizing, and the (declined) small tier.
-The only residual is the deferred Kata end-state, tracked separately under [Q286](archive/kata-on-gke.md).
+The only residual is the deferred Kata end-state, tracked separately under [Q286](kata-on-gke.md).
 
 ## Open questions
 
@@ -291,5 +291,5 @@ The only residual is the deferred Kata end-state, tracked separately under [Q286
   See [§ Small tier](#small-tier--measured-then-declined-2026-07-07).
 - ~~`e2e` pod sizing~~ — **RESOLVED (2026-07-07):** the DinD path is validated and the pod is right-sized from a measured clean-green run.
   See [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
-  Kata (step 3) remains the deferred secure end-state ([Q286](archive/kata-on-gke.md)).
-- Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC re-provisions cleanly (interacts with the [Q247](archive/gke-dogfood-turnup-findings.md) session- recovery investigation).
+  Kata (step 3) remains the deferred secure end-state ([Q286](kata-on-gke.md)).
+- Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC re-provisions cleanly (interacts with the [Q247](gke-dogfood-turnup-findings.md) session- recovery investigation).

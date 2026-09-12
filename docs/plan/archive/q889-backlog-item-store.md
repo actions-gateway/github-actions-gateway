@@ -76,7 +76,7 @@ Which is why the fourth is dropped: measurement found it guards nothing the layo
 
 The rule exists because a *relocated* row and a *deleted* row are indistinguishable to a line-position merge.
 One file per item makes them a modify and a delete of one path, which git refuses rather than resolves, so the silent default the rule was built for is gone and what remains is a careless resolution of a loud conflict.
-That residual belongs to the reconciliation habit [already documented for hand-resolved conflicts](../development/maintaining-backlog.md#a-hand-resolved-conflict-drops-rows-the-markers-never-named), not to a new gate.
+That residual belongs to the reconciliation habit [already documented for hand-resolved conflicts](../../development/maintaining-backlog.md#a-hand-resolved-conflict-drops-rows-the-markers-never-named), not to a new gate.
 
 The first control run got this wrong in the informative direction: a four-row fixture put the relocation inside the deletion's diff context, so the table arm conflicted too and the comparison read as "no difference".
 Reproducing the documented silent case needed twenty rows and a relocation from position 18 to the top.
@@ -114,7 +114,7 @@ The prose half came to one wrong paragraph in `maintaining-backlog.md` and two l
 The website.** ✅ `/dev/queue/` is the store's README with the ordered backlog appended by `hooks/queue_page.py`, which inserts `queue.py render`'s own table.
 **The gitignore entry and the committed-index gate this phase planned are both unnecessary**, because appending to a page MkDocs already serves generates no file: there is no artifact to ignore and none to gate.
 No second Pages deploy, as planned.
-Two dependencies that fail quietly are recorded in [website.md](../development/website.md#the-backlog-renders-at-build-time): the hook must precede `source_links.py`, and its guard counts item rows rather than bytes.
+Two dependencies that fail quietly are recorded in [website.md](../../development/website.md#the-backlog-renders-at-build-time): the hook must precede `source_links.py`, and its guard counts item rows rather than bytes.
 
 **6.
 Delete `docs/STATUS.md`, then groom.** ✅ The table, its five gates, the Progress table, the `/dev/STATUS/` page, and the prose describing all of them.
@@ -140,7 +140,7 @@ Sorting by that question rather than by "does it mention `STATUS.md`" is what ke
 **Invariant 1 reversed direction and gained by it.** It asked whether the backlog referenced a plan, counting a Progress row; the store has no Progress, and 21 plans had no other reference.
 It now asks whether a plan *claiming open work* is backed by a live item.
 The old form could not see a plan whose phases had all shipped while its marker never moved, and the new one found two on arrival, both reading "all phases shipped" under a `⚠️`.
-The 21 archivals it no longer demands are [Q894](../queue/Q894.md); folding 21 moves and 142 inbound references into the cutover was the larger risk.
+The 21 archivals it no longer demands were Q894, done as a batch of 24 on 2026-09-12 and gated since by `plan-index-check` invariant 6; folding 21 moves and 142 inbound references into the cutover was the larger risk.
 
 **The metrics series is bridged rather than restarted**, on the maintainer's call.
 Both eras produce the same event, so the series is continuous; the two bulk commits at the seam are storage rather than flow and are suppressed, and the seam is reported instead of hidden — an era boundary in the summary and an `era` column in the event stream, so a chart can draw its delimiter where the storage changed.

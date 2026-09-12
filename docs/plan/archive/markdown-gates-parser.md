@@ -22,33 +22,33 @@ That is the same class as the path-filter gap (Q400/Q429) where a filter missing
 
 ### `check-doc-links.sh` is blind to a link shape the README uses today
 
-[`scripts/docs/check-doc-links.sh`](../../scripts/docs/check-doc-links.sh) is 235 lines, ~190 of them a single `awk` program implementing a Markdown parser *and* the github-slugger algorithm.
+[`scripts/docs/check-doc-links.sh`](../../../scripts/docs/check-doc-links.sh) is 235 lines, ~190 of them a single `awk` program implementing a Markdown parser *and* the github-slugger algorithm.
 Of the four gates in this plan it is the **only one with no `-test.sh` companion**: `lint-backlog`, `check-roadmap`, and `backlog-metrics` all have one.
 The most parser-dense gate is the untested one.
 
 Repointing the README's license badge at a nonexistent file left the gate green; the identical target as a plain link failed it:
 
 ```
-[![License: Apache 2.0](…badge.svg)](THIS-FILE-DOES-NOT-EXIST.md)
+[![License: Apache 2.0](../…badge.svg)](../THIS-FILE-DOES-NOT-EXIST.md)
   → check-doc-links: ok (242 files, 5134 links checked)   exit=0
 
-[plain](THIS-FILE-DOES-NOT-EXIST.md)
+[plain](../THIS-FILE-DOES-NOT-EXIST.md)
   → README.md:219: dead link …  FAILED                    exit=1
 ```
 
 The collection regex `\[[^]]*\]\([^)]*\)` matches the inner **image** first, so the outer destination is never collected.
-[`README.md`](../../README.md) line 7 points at `LICENSE` through exactly this shape, a relative path the gate cannot see.
+[`README.md`](../../../README.md) line 7 points at `LICENSE` through exactly this shape, a relative path the gate cannot see.
 
 Measured against the verbatim collection block:
 
 | Input | Collected | Effect |
 |---|---|---|
-| `[![badge](img)](target)` | the *image* target | dead outer link invisible; **live, 3 in README** |
-| `[see [inner]](target)` | *nothing* | link silently skipped entirely |
-| `[wiki](docs/a(x).md)` | `docs/a(x` | truncated → false positive |
+| `[![badge](../img)](../target)` | the *image* target | dead outer link invisible; **live, 3 in README** |
+| `[see [inner]](../target)` | *nothing* | link silently skipped entirely |
+| `[wiki](../docs/a(x).md)` | `docs/a(x` | truncated → false positive |
 | setext heading (`===`) | never registered as an anchor | false positive; latent, none in tracked docs |
 
-Blast radius is the highest of the four: it runs in `make check`, in `STATUS_GATES`, and in its own [`doc-links.yml`](../../.github/workflows/doc-links.yml) workflow.
+Blast radius is the highest of the four: it runs in `make check`, in `STATUS_GATES`, and in its own [`doc-links.yml`](../../../.github/workflows/doc-links.yml) workflow.
 
 ### `lint-backlog.sh` splits table rows positionally
 
@@ -66,7 +66,7 @@ Filed as latent: "zero occurrences in `STATUS.md` today", which the build dispro
 
 Second defect, latent: `awk`'s `length()` counts **bytes** on this host (BWK awk 20200816) and **runes** under `gawk` in a UTF-8 locale.
 `STATUS.md` carries 52 em dashes, 51 🔲, 26 ✅.
-Measuring every cell exactly as the script extracts it, the longest is [Q555](../queue/Q555.md) at **249 bytes / 249 characters** — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
+Measuring every cell exactly as the script extracts it, the longest is [Q555](../../queue/Q555.md) at **249 bytes / 249 characters** — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
 Nothing diverges today, but rows are routinely authored to fill the budget, and one at 251/249 would pass in one environment and fail in the other.
 
 ### Runtime is not the argument
@@ -83,9 +83,9 @@ A probe against [`github.com/yuin/goldmark`](https://github.com/yuin/goldmark) w
 
 | Case | `awk` today | goldmark |
 |---|---|---|
-| `[![badge](img)](target-a.md)` | image target only | `LINK target-a.md` **and** `IMAGE img.png` |
-| `[wiki](target-b(x).md)` | truncated | `target-b(x).md` |
-| `[see [inner]](target-c.md)` | dropped | `target-c.md`, text `see [inner]` |
+| `[![badge](../img)](../target-a.md)` | image target only | `LINK target-a.md` **and** `IMAGE img.png` |
+| `[wiki](../target-b(x).md)` | truncated | `target-b(x).md` |
+| `[see [inner]](../target-c.md)` | dropped | `target-c.md`, text `see [inner]` |
 | setext heading | no anchor | parsed, `setext-heading-style` |
 | table row with `\|` in a cell | 9 fields, cells shift | **6 cells, correct** |
 
@@ -96,18 +96,18 @@ Thirteen cases is not a proof of equivalence, so the differential validation bel
 
 - **Zero external dependencies.** `go.mod` at v1.7.8, v1.7.16, and v1.8.5 has no `require` block at all, the smallest possible supply-chain delta for a parser.
 - **265 KB** module zip including tests; `go mod vendor` strips tests, so the `devtools/vendor` delta (364 KB today) is smaller than that.
-- **Wiring already exists.** [`vendor-sync.sh`](../../scripts/go/vendor-sync.sh), [`vendor-check.sh`](../../scripts/go/vendor-check.sh), and the `devtools/vendor/**` path filter in [`unit-test.yml`](../../.github/workflows/unit-test.yml) all already cover the module.
+- **Wiring already exists.** [`vendor-sync.sh`](../../../scripts/go/vendor-sync.sh), [`vendor-check.sh`](../../../scripts/go/vendor-check.sh), and the `devtools/vendor/**` path filter in [`unit-test.yml`](../../../.github/workflows/unit-test.yml) all already cover the module.
   No new gate plumbing.
 - **Line numbers need an offset→line index.** goldmark nodes carry byte offsets, not line numbers, and the gates report `file:line:`.
   Roughly three lines of Go; called out because it is friction the `awk` does not have.
 
 ### `THIRD-PARTY-NOTICES` owes nothing — settled
 
-`THIRD-PARTY-NOTICES` is generated from the **root** `vendor/modules.txt` only ([`gen-third-party-notices.sh`](../../scripts/release/gen-third-party-notices.sh)), so `devtools/` dependencies are not covered, and should not be.
+`THIRD-PARTY-NOTICES` is generated from the **root** `vendor/modules.txt` only ([`gen-third-party-notices.sh`](../../../scripts/release/gen-third-party-notices.sh)), so `devtools/` dependencies are not covered, and should not be.
 Attribution is triggered by *distributing* a binary, and these gate binaries are never shipped or signed, which is the same reason `tools/vendor/` is already excluded.
 Vendoring goldmark is therefore not a notices change.
 
-Recorded durably in [building.md](../development/building.md#what-it-covers--and-why-build-time-tooling-does-not) (with the source-tree and SBOM distinctions) and cross-referenced from [go-workspaces.md](../development/go-workspaces.md#wiring-a-new-first-party-module), so the rule outlives this plan's archival.
+Recorded durably in [building.md](../../development/building.md#what-it-covers--and-why-build-time-tooling-does-not) (with the source-tree and SBOM distinctions) and cross-referenced from [go-workspaces.md](../../development/go-workspaces.md#wiring-a-new-first-party-module), so the rule outlives this plan's archival.
 No decision left for Q612.
 
 ## Scope
@@ -120,11 +120,11 @@ In scope, one phase each:
 3. **Q614 — `check-roadmap.sh` + `backlog-metrics.sh`.** ✅ The remaining two consumers, onto the same layer.
    Result: [Phase 3 result](#phase-3-result-q614).
 
-Each keeps its `scripts/` entry point, per [`scripts/README.md`](../../scripts/README.md): the gate map stays in one place.
+Each keeps its `scripts/` entry point, per [`scripts/README.md`](../../../scripts/README.md): the gate map stays in one place.
 
 ### Out of scope, deliberately
 
-`git-merge-status.sh` (retired with the table, Q889) and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) sibling.
+`git-merge-status.sh` (retired with the table, Q889) and [`merge-keyed-records.awk`](../../../scripts/lib/merge-keyed-records.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../../scripts/docs/git-merge-plan-index.sh) sibling.
 A merge driver must reconstruct the file **line for line**, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.
 
@@ -136,14 +136,14 @@ Shell is the right language; Go would be `exec.Command` soup.
 ## Validation
 
 A rewrite that merely passes on the current tree proves nothing: the `awk` gate also passes, and that is the bug.
-Per [testing.md](../development/testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query), each phase reconciles rather than greps:
+Per [testing.md](../../development/testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query), each phase reconciles rather than greps:
 
 1. **Differential run.** Go gate and `awk` gate over the same tree; every difference explained as a fixed defect, not waved through.
    The corpus is real: 242 files, 5134 links/anchors.
 2. **Red-first on each proven defect.** The four rows in the first table become test cases that fail against the old behaviour and pass against the new, including the badge-wrapped link, which is the one with live instances.
 3. **Slug equivalence.** Every heading in every tracked `.md` slugged both ways and reconciled.
    This is what upgrades "13 probed cases agreed" into a real assertion.
-4. **Delete the mechanism.** For each new gate, remove the check and require red on the assertion that names it ([testing.md](../development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)).
+4. **Delete the mechanism.** For each new gate, remove the check and require red on the assertion that names it ([testing.md](../../development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)).
 
 ## Phase 1 result (Q612)
 
@@ -175,7 +175,7 @@ Slug reconciliation over the corpus is above: 3333 headings, the only two differ
 Runtime 0.67 s → 0.96 s, both sub-second, which is still not the argument.
 The checker is built to `.build/` and exec'd rather than `go run`, because its exit status is the verdict and `go run` prints an `exit status 1` line of its own on top of the findings.
 
-**The blind spot was measured, not predicted** ([Q622's method](../development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)): repointing README line 7's badge link at a nonexistent target left the `awk` gate green (exit 0, no finding) and failed the new one at `README.md:7`.
+**The blind spot was measured, not predicted** ([Q622's method](../../development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)): repointing README line 7's badge link at a nonexistent target left the `awk` gate green (exit 0, no finding) and failed the new one at `README.md:7`.
 The control — the same dead target as a plain link — failed both, so the difference is the shape and not the target.
 
 ## Phase 2 result (Q613)
@@ -212,7 +212,7 @@ The control — the same overflow on Q631, which has no escaped pipe — failed 
 CI runs the byte one: `ubuntu-latest` inherits Ubuntu 24.04's `/usr/bin/awk` → mawk 1.3.4, and the runner image's apt manifest adds no awk of its own.
 So the gate counted bytes in both places it actually ran, and the divergence was one `brew install gawk` away from arriving on a laptop.
 
-**No row was reclassified.** All 109 Queue and Deferred cells re-measured: the longest is [Q555](../queue/Q555.md) at 249 bytes / 249 characters, confirming the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B / 206 chars).
+**No row was reclassified.** All 109 Queue and Deferred cells re-measured: the longest is [Q555](../../queue/Q555.md) at 249 bytes / 249 characters, confirming the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B / 206 chars).
 Nothing is over cap on either scale, and runes ≤ bytes always, so moving to characters can only relax, never break, an existing row.
 
 **One workflow gap closed.** `status-lint.yml` gated on `scripts/docs/lint-backlog.sh` alone, which no longer holds the rules; it now also triggers on `devtools/**`, pins the toolchain with `setup-go`, and takes 5 minutes instead of 2 for the build.
@@ -259,7 +259,7 @@ The line-break case is a positive **control**: it passes both, and pins that exc
 **A boundary the port does not cross, now pinned:** the replay reads diff lines, which carry no document around them, so a row inside a fence still registers as an arrival there even though the same fence is respected when the file itself is parsed for Deferred IDs.
 Asserted so a change to it is a deliberate one, since every metric moves with it.
 
-`backlog-metrics.sh` started as the [`session-backlog`](../development/skills.md#session-backlog) skill's script.
+`backlog-metrics.sh` started as the [`session-backlog`](../../development/skills.md#session-backlog) skill's script.
 It has now diverged; `scripts/README.md` says so rather than implying a sync obligation.
 
 ## Sequencing

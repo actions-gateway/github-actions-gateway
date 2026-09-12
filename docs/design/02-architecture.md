@@ -157,7 +157,7 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   **Agent pool.** GitHub enforces one active session per registered runner agent (HTTP 409 on duplicate).
   The AGC therefore maintains a pool of pre-registered runner agents per RunnerGroup — one agent registered per `maxListeners` slot — at RunnerGroup provisioning time.
   Each listener goroutine is assigned an agent from the pool for the duration of its session; no two goroutines share an agent concurrently.
-  Agent registrations persist across idle periods and AGC restarts, but **not across jobs**: JIT-registered runners are single-use — GitHub deletes the runner record once it acquires a job (live-confirmed 2026-06-12, [M4 §12](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)) — so the pool re-registers each agent under its stable `<group>-<index>` name after every job (Q114, see the self-heal paragraph below).
+  Agent registrations persist across idle periods and AGC restarts, but **not across jobs**: JIT-registered runners are single-use — GitHub deletes the runner record once it acquires a job (live-confirmed 2026-06-12, [M4 §12](../plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)) — so the pool re-registers each agent under its stable `<group>-<index>` name after every job (Q114, see the self-heal paragraph below).
 
   **Registration scope.** Agents may be registered at either organization scope (`https://github.com/{org}`) or repository scope (`https://github.com/{owner}/{repo}`); the registrar selects the appropriate REST API endpoints — `/orgs/{org}/actions/runners/...` or `/repos/{owner}/{repo}/actions/runners/...` — from the shape of the configured GitHub URL.
   Runner groups are an organization-level concept on GitHub's side, so the `group_id` field is included on the register payload only for org-scoped registration and is omitted for repo-scoped registration.
@@ -204,10 +204,10 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   Under burst load the session count climbs toward `maxListeners`, then drains back to one as the queue empties.
   See [Appendix E](appendix-e-capacity-planning.md) for rate-limit implications and sizing guidance.
 
-  > **Milestone 1 protocol findings** (see [docs/plan/milestone-1.md §8](../plan/milestone-1.md#8-investigation-findings)):
+  > **Milestone 1 protocol findings** (see [docs/plan/archive/milestone-1.md §8](../plan/archive/milestone-1.md#8-investigation-findings)):
   >
   > *Session reuse confirmed* (Investigation C) — **since invalidated for JIT-registered agents.** The M1 probe (a `config.sh`-registered runner) could call `GET /message` on the same `sessionId` immediately after `acquirejob` returned.
-  > The M4 live run showed this does **not** hold for the JIT-registered agents the AGC actually uses: GitHub deletes a JIT runner record at job acquisition, killing the session ([M4 §12](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112), Q114).
+  > The M4 live run showed this does **not** hold for the JIT-registered agents the AGC actually uses: GitHub deletes a JIT runner record at job acquisition, killing the session ([M4 §12](../plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112), Q114).
   > The listener re-registers and opens a fresh session after every job — see the self-heal paragraph above.
   >
   > *One active session per registered runner agent enforced* (Investigation D).
@@ -510,7 +510,7 @@ A highly secure, short-lived pod optimized to do exactly one thing: execute a si
 Runs inside the tenant namespace alongside the AGC.
 
 * **Entrypoint Wrapper:** A lightweight utility acting as a dummy parent process.
-  It reads the job payload from a mounted Kubernetes Secret, writes it into local anonymous pipes (inherited file descriptors, not named FIFOs — see [§11.A](../plan/milestone-3.md#11a--named-pipe-protocol) for the protocol details), and initializes the execution engine.
+  It reads the job payload from a mounted Kubernetes Secret, writes it into local anonymous pipes (inherited file descriptors, not named FIFOs — see [§11.A](../plan/archive/milestone-3.md#11a--named-pipe-protocol) for the protocol details), and initializes the execution engine.
   Before exec'ing `Runner.Worker`, the wrapper also installs the per-tenant egress-proxy CA cert into a combined trust bundle and exports `SSL_CERT_FILE` so the runner's .NET HttpClient accepts the proxy's TLS handshake — without this, every outbound HTTPS call through `HTTPS_PROXY` fails the outer handshake with `UntrustedRoot` and the runner exits before the workflow can complete.
   The CA path is signalled to the wrapper via `PROXY_CA_CERT_PATH` set by the AGC's pod provisioner; the wrapper tolerates the env being empty (no per-tenant proxy configured) as a no-op.
   The wrapper is also PID 1 of the worker container, so it owns the pod's shutdown signal: Kubernetes delivers SIGTERM to PID 1 only, and the wrapper forwards it (and SIGINT) to its child — `Runner.Worker` in the classic mode, `run.sh` in the ScaleSet mode — then waits for the child to exit.
