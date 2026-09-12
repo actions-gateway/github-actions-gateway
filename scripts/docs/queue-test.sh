@@ -464,6 +464,151 @@ else
     bad "metrics: events row wrong"; sed 's/^/       /' "$TMP/ev" | head -4
 fi
 
+# The squash merge, which is what the store meets on main. A pull request's
+# commits fold into one, so the subject becomes the PR title and the row
+# commit's own subject moves into the body. Reading the subject classified 1 of
+# 214 removals here; these fixtures are the shapes that produced that.
+
+SQ="$TMP/squash"
+mkdir -p "$SQ/docs/queue"
+git -C "$SQ" init -q
+git -C "$SQ" config maintenance.auto false
+git -C "$SQ" config user.email t@example.com
+git -C "$SQ" config user.name Test
+for q in Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8; do item "$SQ/docs/queue" "$q" "a$q" ready; done
+git -C "$SQ" add -A
+git -C "$SQ" commit -qm "docs(queue): file eight"
+
+# One PR, two rows, one squash commit: the title names no single verb-and-row
+# pair, and the two folded row commits disagree about the outcome.
+rm "$SQ/docs/queue/Q1.md" "$SQ/docs/queue/Q2.md"; git -C "$SQ" add -A
+git -C "$SQ" commit -q -F - <<'MSG'
+feat(thing): do the thing and clear two rows (Q1, Q2) (#1234)
+
+* feat(thing): do the thing
+
+* docs(queue): close Q1
+
+* docs(queue): drop Q2 as a duplicate of Q9
+MSG
+
+# A work commit naming the row and carrying a closure word, ahead of the row
+# commit that settles it. This is what makes the docs(queue): scope
+# load-bearing: the earlier line is about the change, the later about the row.
+rm "$SQ/docs/queue/Q3.md"; git -C "$SQ" add -A
+git -C "$SQ" commit -q -F - <<'MSG'
+fix(ci): route the store past the union driver (Q3) (#1235)
+
+* fix(ci): the union driver would drop Q3's frontmatter on a concurrent
+  edit, so .gitattributes routes the store past it.
+
+* docs(queue): complete Q3
+MSG
+
+# A groom naming one row in its subject and deleting two others. The verb is
+# about a row this commit is not closing, so the walk declines rather than
+# spending it on whichever rows the diff happens to carry.
+rm "$SQ/docs/queue/Q4.md" "$SQ/docs/queue/Q5.md"; git -C "$SQ" add -A
+git -C "$SQ" commit -qm "docs(status): groom the backlog, retire Q99 to the ledger"
+
+# `merge QN into QM`, the documented dedup form, beside the bare word as
+# ordinary English. The phrase classes; the word must not.
+rm "$SQ/docs/queue/Q7.md" "$SQ/docs/queue/Q8.md"; git -C "$SQ" add -A
+git -C "$SQ" commit -q -F - <<'MSG'
+docs: settle two rows (Q7, Q8) (#1237)
+
+* docs(queue): merge Q7 into Q99, they measure one thing
+
+* docs(queue): the merge driver test now reports failures, so close Q8
+MSG
+
+# The flake lifecycle's own word, which is neither of the other two: a soaked
+# watch leaving for the ledger neither shipped work nor was discarded.
+rm "$SQ/docs/queue/Q6.md"; git -C "$SQ" add -A
+git -C "$SQ" commit -q -F - <<'MSG'
+docs: sweep the flake ledger (Q6) (#1236)
+
+* docs(queue): retire Q6 to the flake ledger
+MSG
+
+rc=0
+python3 "$Q" --store "$SQ/docs/queue" metrics >"$TMP/ms" 2>"$TMP/mse" || rc=$?
+die_if_killed "metrics: squash fixture" "$rc"
+python3 "$Q" --store "$SQ/docs/queue" metrics --events >"$TMP/es" 2>/dev/null
+
+verb() { awk -F'\t' -v q="$1" '$1==q{print $5}' "$TMP/es"; }
+
+for probe in "Q1 close" "Q2 drop" "Q3 complete" "Q6 retire" "Q7 merge" "Q8 close"; do
+    q="${probe%% *}"; want="${probe##* }"
+    if [[ "$(verb "$q")" == "$want" ]]; then
+        ok "metrics: $q reads its verb '$want' out of the squashed body"
+    else
+        bad "metrics: $q read '$(verb "$q")', wanted '$want'"
+        sed 's/^/       /' "$TMP/es"
+    fi
+done
+
+# Q3's work bullet says `drop Q3` and its row line says `complete Q3`. The
+# prose comes first, so an unscoped read takes it.
+if [[ "$(verb Q3)" == "complete" ]]; then
+    ok "metrics: prose naming a row does not outrank the row commit that closed it"
+else
+    bad "metrics: Q3 read '$(verb Q3)' off prose rather than off its row commit"
+fi
+
+for q in Q4 Q5; do
+    if [[ "$(verb "$q")" == "removed" ]]; then
+        ok "metrics: $q declines a verb aimed at a row this commit did not close"
+    else
+        bad "metrics: $q took '$(verb "$q")' from a line naming another row"
+    fi
+done
+
+expect_in "^completed    3" "$TMP/ms" \
+    "metrics: the squashed store's completions are the row lines that say so"
+expect_in "^pruned       2" "$TMP/ms" \
+    "metrics: a drop and a merge-into-QM are both prunes"
+expect_in "^retired      1" "$TMP/ms" \
+    "metrics: and a retirement is neither, so it gets its own class"
+expect_in "^removed      2" "$TMP/ms" \
+    "metrics: with the two undecidable rows left in the residual"
+
+# The ratio divides by what the walk could read an outcome for, never by every
+# closed row: counting the unreadable ones below the line asserts they were not
+# prunes, which is what let this ratio read 3% over a store of 205 unreadables.
+expect_in "of 6 classified (2 unclassified)" "$TMP/ms" \
+    "metrics: the ratio divides by the classified base and names both halves"
+
+# Asserted as arithmetic rather than as five counts: a class that stops being
+# printed breaks this and nothing else would notice.
+if awk '/^filed /{f=$2} /^completed /{c=$2} /^pruned /{p=$2} /^retired /{t=$2} \
+        /^removed /{r=$2} /^open /{o=$2} END{exit !(f == c+p+t+r+o)}' "$TMP/ms"; then
+    ok "metrics: completed + pruned + retired + removed + open sums to filed"
+else
+    bad "metrics: the printed classes do not sum to filed"
+    sed 's/^/       /' "$TMP/ms"
+fi
+
+# The false-positive guard on the scope: a verb in a work commit is about the
+# change rather than the row, so a store whose every deletion rides one must
+# classify nothing rather than everything.
+W="$TMP/workverb"
+mkdir -p "$W/docs/queue"
+git -C "$W" init -q
+git -C "$W" config maintenance.auto false
+git -C "$W" config user.email t@example.com
+git -C "$W" config user.name Test
+item "$W/docs/queue" Q1 a0 ready
+git -C "$W" add -A
+git -C "$W" commit -qm "docs(queue): file Q1"
+rm "$W/docs/queue/Q1.md"; git -C "$W" add -A
+git -C "$W" commit -qm "feat(api): complete the retry path and drop the old one (Q1) (#7)"
+python3 "$Q" --store "$W/docs/queue" metrics >"$TMP/mw" 2>/dev/null
+expect_in "^removed      1" "$TMP/mw" \
+    "metrics: a verb in a work commit's subject does not classify the row"
+expect_in "no outcome readable" "$TMP/mw" \
+    "metrics: and a wholly unclassified store says so instead of printing a ratio"
+
 # --- claims ---------------------------------------------------------------
 # Needs a branch and a remote, since it checks the ids a branch adds against
 # the claims on the remote rather than anything in the files themselves.
