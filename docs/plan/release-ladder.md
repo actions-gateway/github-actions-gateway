@@ -14,9 +14,9 @@ That is a page telling adopters nine things are in progress when they are waitin
 
 | Release | Carries | Gate |
 |---|---|---|
-| **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](release-1.4.md) |
-| **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
-| **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](release-1.6.md) |
+| **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](archive/release-1.4.md) |
+| **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](archive/release-1.5.md) |
+| **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](archive/release-1.6.md) |
 | **1.7** | Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
 | **1.8** | The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060), which ride, and the Phase 2 alias decision (Q452), taken 2026-09-07: the release that gathers the evidence 2.0 is parked on | [release-1.8.md](release-1.8.md) |
 | **1.9** | The Rule 4b overlap: `v2` served beside `v2beta1`, storage still `v2beta1`. [v2-ga.md](v2-ga.md) Phase 2, and the admission reject plus pre-upgrade check from [Q1085](../queue/Q1085.md) | [release-1.9.md](release-1.9.md) |
@@ -40,7 +40,7 @@ Q719 has landed, so the rung now has contents.
 **Settled 2026-08-25, when 1.5 had tagged and the call came due.** The question this section framed, whether a rung resting on one item is worth cutting, turned out not to be the question.
 `semver-floor.sh v1.5.0` reports the floor at MINOR off nine merged changes that alter the shipped artifact, so 1.6 is forced whatever Q727 does, and the ladder's worry about a thin minor was about a release that no longer exists.
 What Q727 decided was the release's *theme*, not whether there was one — and it decided it as a decline, so 1.6's parity content is a docs change riding on those nine merged features.
-[release-1.6.md](release-1.6.md) carries the measurement and the scope.
+[release-1.6.md](archive/release-1.6.md) carries the measurement and the scope.
 
 ## Why 1.8 exists rather than cutting 2.0 next
 
@@ -89,7 +89,7 @@ That is the trigger list working twice rather than a rule being bent, and it is 
 The five left in the table have never been revived.
 
 The proxy cluster is the clearest case and the one most likely to be re-litigated.
-[release-1.4.md](release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none had demand recorded against it**.
+[release-1.4.md](archive/release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none had demand recorded against it**.
 That still holds of the three left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
 A theme with no demand is a theme, not a release.
 
@@ -114,7 +114,7 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 
 That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
-[release-1.6.md](release-1.6.md) was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.
+[release-1.6.md](archive/release-1.6.md) was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.
 
 **1.7 was added on the same day, and it is a re-theme rather than a new rung.** Untrusted-PR CI on Kata (Q408, [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
 Q408 takes the `1.7-gate` label, which publishes that commitment the same way the 1.6 labels did.

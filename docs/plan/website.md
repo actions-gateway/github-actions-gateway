@@ -162,4 +162,4 @@ Durable maintenance conventions — the brand-asset generator, the progressive-e
 
 ## Out of scope (defer)
 
-Interactive cost calculator, versioned docs via `mike` (revisit when 1.0 is cut — see [release-1.0.md](release-1.0.md)), and an architecture explainer animation are stretch ideas, parked in [Appendix G](../design/appendix-g-future-enhancements.md) territory rather than this first build.
+Interactive cost calculator, versioned docs via `mike` (revisit when 1.0 is cut — see [release-1.0.md](archive/release-1.0.md)), and an architecture explainer animation are stretch ideas, parked in [Appendix G](../design/appendix-g-future-enhancements.md) territory rather than this first build.

@@ -16,7 +16,7 @@ Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were def
 That is what makes them release-gating: shipping another minor while either is open means shipping a claim the product does not honour.
 
 Q726 is the same shape read from the other side.
-It is the one [ARC parity](arc-parity.md) gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a `runs-on` array.
+It is the one [ARC parity](../arc-parity.md) gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a `runs-on` array.
 
 ### Q712 — the runner-group binding is declared and never wired ✅ shipped
 
@@ -40,10 +40,10 @@ An **undeclared** group still leaves an existing scale set where it is, so widen
 
 **The gateway-assertion question, settled.** The gateway carries the group as an inherited default, not as an enforced ceiling.
 GAG does not create runner groups and does not manage their repository access, so there is nothing for it to assert *against*: a tenant naming a group only volunteers its own runners to that group's repositories, which costs the tenant and escalates nothing across tenants.
-What the platform admin still owns at GitHub is documented in [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group) and [appendix H](../design/appendix-h-v2-api-decomposition.md).
+What the platform admin still owns at GitHub is documented in [tenant onboarding](../../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group) and [appendix H](../../design/appendix-h-v2-api-decomposition.md).
 
 Adjacent hole found while measuring, filed rather than fixed at the time, and since closed (Q791): the `RunnerSet` webhook's scale-set label-uniqueness guard was **namespace-scoped**, so two tenants under one GitHub org could claim one scale-set name across namespaces.
-It is now keyed on the gateway's GitHub binding and enforced cluster-wide from both admission paths ([appendix H](../design/appendix-h-v2-api-decomposition.md), [security](../design/05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-name)).
+It is now keyed on the gateway's GitHub binding and enforced cluster-wide from both admission paths ([appendix H](../../design/appendix-h-v2-api-decomposition.md), [security](../../design/05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-name)).
 
 ### Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11
 
@@ -51,14 +51,14 @@ It is now keyed on the gateway's GitHub binding and enforced cluster-wide from b
 `ProvisionScaleSetWorker` registered neither, and `v2beta1` is ScaleSet-only, so the tier every new tenant runs emitted both series empty.
 
 The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
-The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped `PrometheusRule` sees a product that looks broken, and [go-to-market § 8](go-to-market.md#8-launch-sequence-phased) records that first impressions from cold traffic are one-shot.
+The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped `PrometheusRule` sees a product that looks broken, and [go-to-market § 8](../go-to-market.md#8-launch-sequence-phased) records that first impressions from cold traffic are one-shot.
 
 **How it was fixed.** Both observations moved onto the shared pod informer, which sees a scale-set worker pod and a classic one identically.
 The latency observation had been gated behind a registered waiter, the thing a fire-and-forget provision never creates, so the tier seam was the gate itself rather than a missing call site.
 
 That made the span a decision rather than a detail, since the two tiers had no common "acquisition" moment to measure from.
 `job_duration_seconds` is now **worker pod lifetime** on both tiers: creation to the last container finishing, or to the deletion request for a worker removed mid-run.
-Every documented consumer of the series is cost attribution ([appendix-f](../design/appendix-f-cost-model.md) multiplies it by an hourly node rate), and a pod is billed from creation, so the classic tier's old span was measuring the wrong thing: it charged the staging and `spec.scaleUp` throttle window during which no pod existed.
+Every documented consumer of the series is cost attribution ([appendix-f](../../design/appendix-f-cost-model.md) multiplies it by an hourly node rate), and a pod is billed from creation, so the classic tier's old span was measuring the wrong thing: it charged the staging and `spec.scaleUp` throttle window during which no pod existed.
 Correcting it was therefore part of the fix rather than a follow-up.
 
 Two consequences worth keeping: observations fire once per pod when its lifetime ends, so a long job's latency observation arrives at completion rather than at start; and a pod already terminal when an AGC restarts and re-lists it is claimed without being re-observed, so a restart cannot spike either histogram with one duplicate per pod still inside `completedPodTTL`.
@@ -72,7 +72,7 @@ It is the same value whatever `spec.workerImage` holds, so a tenant running an o
 The pod's `app.kubernetes.io/version` label *is* derived from the image ref (`provisioner/pod.go:47`), which makes the two disagree without either being consulted for admission.
 
 The signal that would otherwise catch it, `RunnerVersionTooOld`, is produced in the classic listener goroutine only.
-That is structural rather than an oversight: the scale-set protocol carries no runner version at session creation, so the condition cannot occur on the tier `v2beta1` exposes ([gap analysis](v2-api-gap-analysis.md#agc)).
+That is structural rather than an oversight: the scale-set protocol carries no runner version at session creation, so the condition cannot occur on the tier `v2beta1` exposes ([gap analysis](../v2-api-gap-analysis.md#agc)).
 The consequence is still that no tier both knows the real version and can warn about it.
 
 **What makes it gate rather than wait:** GitHub raises the enforced minimum runner version on GHEC on 2026-09-25.
@@ -101,8 +101,8 @@ Recorded here because the release notes need the through-line, and because a fut
 
 **Two axes, measured 2026-08-13.**
 
-Classic to ScaleSet acquisition tier: **closed on the tracked inventory, and the inventory turned out to be incomplete.** [features.md](../features.md) marks any capability that does not reach the ScaleSet tier with a `partly classic-only` badge, and no capability carries one; the last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
-[v2-ga.md § Capability parity](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which exists because removing classic at `v2.0.0` must not delete a capability along with it, reads Both tiers on all five rows.
+Classic to ScaleSet acquisition tier: **closed on the tracked inventory, and the inventory turned out to be incomplete.** [features.md](../../features.md) marks any capability that does not reach the ScaleSet tier with a `partly classic-only` badge, and no capability carries one; the last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
+[v2-ga.md § Capability parity](../v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which exists because removing classic at `v2.0.0` must not delete a capability along with it, reads Both tiers on all five rows.
 
 Neither surface caught Q844, found 2026-08-14 by asking whether the axis was really shut.
 Restart-safe disruption recovery was classic-only: the classic provisioning goroutine reads the disruption markers off the resolving event it is already watching, while a scale-set worker is readable only while it terminates, so an AGC down for that window never issued the re-run.
@@ -111,7 +111,7 @@ It was admitted as a `1.5-gate` row on the same test Q712 and Q713 met — the c
 
 That the badge set and the parity table both read clean while this was open is the sharpest available argument for Q776 below, and it is why the tier result is stated here as *measured against the inventory* rather than as parity full stop.
 
-`v1alpha1` to `v2beta1` API: **closed, but mostly before the 1.4 tag.** All eight gaps in the [gap analysis](v2-api-gap-analysis.md) are closed and it declared its own scope closed 2026-08-09; the last v2 API milestone, Q166 cross-namespace sharing, is an ancestor of `v1.4.0`.
+`v1alpha1` to `v2beta1` API: **closed, but mostly before the 1.4 tag.** All eight gaps in the [gap analysis](../v2-api-gap-analysis.md) are closed and it declared its own scope closed 2026-08-09; the last v2 API milestone, Q166 cross-namespace sharing, is an ancestor of `v1.4.0`.
 1.5 contributed the one surviving capability drop, Q726: `v1alpha1` set `MinItems=1` with no ceiling while `v2beta1` CEL-enforced `size(self) == 1`, and that field's godoc offered staying on a `v2alpha1` Classic set as the migration path, which `v2.0.0` removes.
 
 ### What parity does not yet have: a backstop
@@ -124,12 +124,12 @@ It fails a badge whose Queue row already shipped, a badge with no `<!-- tier:QN 
 It cannot see the case that actually recurs: a capability that is classic-only and was never badged at all.
 
 **Q776 was admitted as a `1.5-gate` row on 2026-08-13** for that reason.
-It reconciles the `actions_gateway_*` names across both sides against the absent-by-design list in [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which both re-establishes the measurement as current and leaves behind the gate that keeps it so.
+It reconciles the `actions_gateway_*` names across both sides against the absent-by-design list in [v2-ga.md](../v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which both re-establishes the measurement as current and leaves behind the gate that keeps it so.
 
 Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
 It has since closed the gap it found; Q776 is what makes the next one visible without someone thinking to ask, and landing it is what lets the release notes say parity rather than name four ports.
 
-**✅ Q776 shipped.** The re-walk covered all 53 `actions_gateway_*` series the AGC defines, and the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach) is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral.
+**✅ Q776 shipped.** The re-walk covered all 53 `actions_gateway_*` series the AGC defines, and the [acquisition-tier ledger](../../operations/observability-metrics.md#acquisition-tier-reach) is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral.
 `make metric-tiers-check` holds the ledger to the source in both directions, so a series added on one tier fails until someone answers the tier question, and a row the source refutes fails too.
 
 It found two things the one-time walk had not, which is the argument for the gate rather than a fifth walk:
@@ -140,10 +140,10 @@ It found two things the one-time walk had not, which is the argument for the gat
   It was described in the design docs and the troubleshooting runbook, and the metrics reference an operator actually reads never gained a row.
 
 Neither is a capability gap, so the parity result above stands: **the tier axis is closed on the full metric inventory, not only on the tracked one.** The gate covers metrics rather than capabilities, so a capability with no series behind it still joins the parity table by hand.
-That residual is recorded in [v2-ga.md](v2-ga.md#what-this-audit-checked-and-found-already-covered) and belongs to [Q774](../queue/Q774.md).
+That residual is recorded in [v2-ga.md](../v2-ga.md#what-this-audit-checked-and-found-already-covered) and belongs to [Q774](../../queue/Q774.md).
 
 The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission.
-`cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../queue/Q264.md)).
+`cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../../queue/Q264.md)).
 
 ### Differences that survive parity, and should
 
@@ -154,7 +154,7 @@ Preemption and drain recovery were listed here until 2026-08-14, on the grounds 
   Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the GitHub-side rejection.
 - The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.
 - Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models `ScaleSet` removes.
-  [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) holds the list, and Q776 reconciles against it.
+  [v2-ga.md](../v2-ga.md#capability-parity-is-a-precondition-of-the-removal) holds the list, and Q776 reconciles against it.
 
 ### What the notes may claim
 
@@ -166,7 +166,7 @@ The ledger is the evidence and the gate is what keeps it true; a capability with
 
 ## Pre-flight: the API surface this tag publishes
 
-Recorded 2026-08-14 from `scripts/release/api-surface-since.sh` over `v1.4.0..feabacdc4`, per [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+Recorded 2026-08-14 from `scripts/release/api-surface-since.sh` over `v1.4.0..feabacdc4`, per [release.md § Pre-flight](../../operations/release.md#1-pre-flight).
 **Verdict: ship as-is.** Two wire fields, one condition type and five condition reasons are published for the first time; no enum constraint, no default and no label or annotation key changed, and nothing is wire-breaking.
 
 The surface stopped moving before the review: Q844 landed controller code on 2026-08-14 and added none of it.
@@ -183,7 +183,7 @@ The surface stopped moving before the review: Q844 landed controller code on 202
 ### Two that were decisions rather than ticks
 
 **The `runnerGroup` name collides, and keeps the name.** It shares a word with the deprecated `v1alpha1` `RunnerGroup` CR, which is a different concept, and the field's godoc says so in its first sentence.
-Two things settle it: GitHub's own term is "runner group" and ARC's `gha-runner-scale-set` chart already exposes `runnerGroup` for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the `v2.0.0` bundle ([Q264](../queue/Q264.md)), so the ambiguity is time-boxed.
+Two things settle it: GitHub's own term is "runner group" and ARC's `gha-runner-scale-set` chart already exposes `runnerGroup` for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the `v2.0.0` bundle ([Q264](../../queue/Q264.md)), so the ambiguity is time-boxed.
 `githubRunnerGroup` would trade ecosystem familiarity for a collision that resolves itself.
 
 **The default is the wide group, and that is accepted rather than clean.** Unset inherits the gateway's default and then GitHub's own default group, which typically admits the whole organization, so the default is the less isolated value.
@@ -213,7 +213,7 @@ Following 1.4's practice, the two identity checks were re-run against deliberate
 The provenance pass was read out of `--format json` rather than off the exit status, since that command prints nothing when its output is redirected.
 
 `Throughput` actuating was not expected on this run.
-The [runbook](../operations/release.md#validate-the-release-candidate-on-dogfood) treats it as reported-never-fatal because it needs ~20 samples per template container and the gate's matrix is about seven jobs.
+The [runbook](../../operations/release.md#validate-the-release-candidate-on-dogfood) treats it as reported-never-fatal because it needs ~20 samples per template container and the gate's matrix is about seven jobs.
 It reported `Active` on 188 samples, because the sampler tracks every worker pod whatever `spec.sizing` holds and the aggregate re-seeds from the persisted `status.sizingRecommendation`, so the CI tenant's ordinary traffic had already earned them.
 
 ### The gate could not start, and the defect was its own
@@ -225,7 +225,7 @@ Fixed in [#1498](https://github.com/actions-gateway/github-actions-gateway/pull/
 
 Two things about *when* it was found are worth keeping.
 The reservation preflight merged 2026-08-12 and the previous dogfood run was 2026-08-09, so this code had never executed against a real cluster; both test doubles modelled a literal `0` the API never sends, which is why nine assertions over the arithmetic downstream of that read stayed green.
-That is recorded as the null-vs-absent case in [testing.md](../development/testing.md#generate-a-fixture-with-the-producers-own-code-never-by-hand).
+That is recorded as the null-vs-absent case in [testing.md](../../development/testing.md#generate-a-fixture-with-the-producers-own-code-never-by-hand).
 The class of defect only surfaces when a release is actually being cut, which is the least convenient moment for it.
 
 ### `release-sentinel.sh` reported a PASS that was not this run's
@@ -245,7 +245,7 @@ The quiet itself was the documented case where GitHub will not serve the job log
 ## The stable-tag pre-flight, 2026-08-14
 
 The four items that bind at the stable tag rather than at the candidate, plus the curated notes they feed.
-Recorded here because [release.md § Pre-flight](../operations/release.md#1-pre-flight) asks for a verdict, not a checkmark.
+Recorded here because [release.md § Pre-flight](../../operations/release.md#1-pre-flight) asks for a verdict, not a checkmark.
 
 **The marketing reconciliation found one under-claim and one stale claim, and the stale one was found by a question rather than by the pass.**
 
@@ -280,7 +280,7 @@ The **new sections** were the signal: four of them, mapping exactly onto Q844, Q
 **The announce-bar highlight is updated and verified rendered**, not just edited: `GAG_DOCS_RELEASE=v1.5.0 make docs-build` renders `v1.5.0 is here` followed by the new highlight.
 `publish.yml`'s `announce-bar` job fails the release if the rendered banner does not name the tag, so this is a gate rather than a nicety.
 
-**The notes are authored in [`docs/releases/v1.5.0.md`](../releases/v1.5.0.md)**, in-repo so each fix is a diff.
+**The notes are authored in [`docs/releases/v1.5.0.md`](../../releases/v1.5.0.md)**, in-repo so each fix is a diff.
 Every surface an operator can see was diffed mechanically rather than read off the changelog: two CRD fields, seven condition reasons, one metric, three Event reasons, and no chart values change, with nothing removed or renamed anywhere.
 
 Two extraction traps bit and were caught.
@@ -288,7 +288,7 @@ A CRD property scan reported a field called `identity` that does not exist, havi
 An Event-reason scan keyed on `recordEvent(` missed two of the three additions, because `provisioner/` records through `RecordEvent(` instead; keying on the argument after the event type finds all three and cannot mistake the adjacent action string for a reason.
 
 **Still outstanding at the tag:** the notes carry no `Container images` section, because the index digests do not exist until `publish.yml` has run.
-[Step 4](../operations/release.md#4-record-the-published-digests) is where they are read, and the section is appended before `gh release edit --notes-file` publishes the body.
+[Step 4](../../operations/release.md#4-record-the-published-digests) is where they are read, and the section is appended before `gh release edit --notes-file` publishes the body.
 
 ## Scope reopened 2026-08-14: what a question cost
 
@@ -296,14 +296,14 @@ The pre-flight above closed and the tag was the next step.
 Then a question — *did we finally reach v1→v2 and classic→ScaleSet parity, and should that go in the notes, docs, or marketing?* — reopened the release on eight rows.
 Recorded because the sequence, not the rows, is the lesson: each answer was measured, and each measurement found something the pass before it had not.
 
-**Both axes are closed, and only one of them is a 1.5 story.** The [capability parity table](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) reads Both tiers on all six rows, `features.md` carries no `partly classic-only` badge, and the [tier ledger](../operations/observability-metrics.md#acquisition-tier-reach) reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
+**Both axes are closed, and only one of them is a 1.5 story.** The [capability parity table](../v2-ga.md#capability-parity-is-a-precondition-of-the-removal) reads Both tiers on all six rows, `features.md` carries no `partly classic-only` badge, and the [tier ledger](../../operations/observability-metrics.md#acquisition-tier-reach) reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
 The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.
 
 **Asking the question found the stale claim the pass had missed**, recorded in the pre-flight section above, and then the same reasoning applied one level up.
-A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and [testing.md](../development/testing.md) states the rule outright.
+A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and [testing.md](../../development/testing.md) states the rule outright.
 Q776 made metric *series* derived and gated.
 Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them.
-**Q850 has since shipped**: 45 condition reasons and 26 Event reasons carry a tier under `make reason-tiers-check`, and its walk found two Events an operator could meet in `kubectl describe` with no runbook entry, but no condition reason single-tier by accident ([plan](archive/q850-reason-tier-ledger.md)).
+**Q850 has since shipped**: 45 condition reasons and 26 Event reasons carry a tier under `make reason-tiers-check`, and its walk found two Events an operator could meet in `kubectl describe` with no runbook entry, but no condition reason single-tier by accident ([plan](q850-reason-tier-ledger.md)).
 Q851 has since shipped too, so all three signal surfaces are now derived and gated and nothing is left blocking the claim.
 What the label-value pass found is why the claim should still be worded off the gates rather than off a summary of them.
 Measured while scoping Q851: `eviction_retries_total` reads Both while `cause="vanished"` is scale-set-only, and `abandoned_run_force_cancels_total` reads Both while `outcome="identity_unknown"` is unreachable there.
@@ -332,7 +332,7 @@ Q855 is the 22-minute blind spot on the leg that passed.
 Q773 was filed on 2026-08-09 and says the runbook calls a normal `Throughput: Active` result a surprise; it happened again on rc.1, and this document called it unexpected before the row was found.
 
 **One gate changed on the way.** Labelling release-process work `1.5-gate` made `roadmapcheck` demand a public roadmap bullet for a `gh` retry and a runbook line.
-Rule 7 now obliges a bullet only for a gated row carrying `feature` or `security`, so a release can wait on process work without advertising it to adopters ([maintaining-backlog.md](../development/maintaining-backlog.md#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)).
+Rule 7 now obliges a bullet only for a gated row carrying `feature` or `security`, so a release can wait on process work without advertising it to adopters ([maintaining-backlog.md](../../development/maintaining-backlog.md#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)).
 
 ## The rc.2 pre-flight, 2026-08-15
 
@@ -369,9 +369,9 @@ The runner group, multi-label registration and the runner-version warning now ca
 **Two claims were checked against ARC and *not* written, which is the point of the pass.** `gha_job_startup_duration_seconds` and `gha_job_execution_duration_seconds` both exist in [`cmd/ghalistener/metrics/metrics.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go) at 0.14.2 (`9bb16ae`), so a "job duration metrics are unique to GAG" claim would have been false on publication, the same failure the 2026-08-06 review found eleven times.
 What GAG has that ARC does not is the pod-creation latency series and a pod-lifetime span chosen for cost attribution, which is a different claim and a narrower one.
 The `RunnerVersionTooOld` claim stays off the comparison table for a different reason: the ARC-side fact is about the `actions/runner` binary and GitHub's brownout schedule rather than about ARC, so an ARC version stamp would attest to the wrong thing.
-The [NOTE in the release notes](../releases/v1.5.0.md) already carries the claim without naming a competitor, and cannot go false when ARC moves.
+The [NOTE in the release notes](../../releases/v1.5.0.md) already carries the claim without naming a competitor, and cannot go false when ARC moves.
 
-**The notes were interrogated again, and the pass found a claim that had gone false.** [`docs/releases/v1.5.0.md`](../releases/v1.5.0.md) still told an operator that a colliding scale-set name is never re-validated at upgrade time and lands at some later unrelated apply.
+**The notes were interrogated again, and the pass found a claim that had gone false.** [`docs/releases/v1.5.0.md`](../../releases/v1.5.0.md) still told an operator that a colliding scale-set name is never re-validated at upgrade time and lands at some later unrelated apply.
 Q849 had made that untrue four commits earlier, on the same day the notes were last touched.
 The upgrade note in `docs/operations/upgrade.md` was correct throughout; only the release notes were stale, which is the direction that reaches an adopter first and is checked last.
 
@@ -409,7 +409,7 @@ Held here so the reasoning is not lost, not committed to the release:
   **Accepted and shipped in 1.6** (Q717): the rung landed in both tiers, and the classic tier drops its post-claim wait entirely because it takes the token in `Admit` instead.
   The advertisement rung converts free tokens to a total with the set's own in-flight pods, without which a `burst`-deep bucket would have pinned the set at `burst` assigned jobs and turned a rate limit into a lower concurrency ceiling.
 
-*(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled `1.5-gate`, and the gap inventory it belongs to is [arc-parity.md](arc-parity.md).)*
+*(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled `1.5-gate`, and the gap inventory it belongs to is [arc-parity.md](../arc-parity.md).)*
 
 ## In scope: reconcile the marketing surfaces
 
@@ -421,14 +421,14 @@ Three bodies of work, in dependency order:
 1. **Corrections.** Claims that are wrong or stale today.
    The largest are the ARC-side cells of the `why-gag.md` comparison table: 11 of them assert a gap with no ARC version and no measurement date, and two went false at datable upstream releases (0.13.1 fixed quota-blocked pod creation; 0.14.0 added multi-label scale sets, which GAG does not have).
    Also the listener-footprint wording, which is substantively right but uses "cluster IP" to mean a pod IP, inviting a reader to check `Service` objects and conclude the table is wrong.
-2. **Under-claims** ✅ **reconciled 2026-08-12 (Q821).** The count below is wrong and the [inventory](competitive-analysis-2026-08.md#under-claims-not-yet-fixed) now records why: three of the five outstanding items reached *no* surface at all rather than only `features.md`, and one had already shipped to all three.
+2. **Under-claims** ✅ **reconciled 2026-08-12 (Q821).** The count below is wrong and the [inventory](../competitive-analysis-2026-08.md#under-claims-not-yet-fixed) now records why: three of the five outstanding items reached *no* surface at all rather than only `features.md`, and one had already shipped to all three.
    The message-queue conclusion-durability body, the durability programme with its 16-hour/82-spot-node-hour incident, and the GitHub protocol dependency register are now on `features.md` and `README.md`; the worker-quota footprint arithmetic is the one still outstanding.
    The original framing, kept because it is what the release was scoped against: Nine capabilities shipped and appear only in `features.md`.
    The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.
 3. **Structure.** Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
    Q712 blocked publishing tenant-isolation marketing and landed the same day, so that claim is available too: state it as the runner-group *binding*, not as GAG controlling repository access, which stays the platform admin's at GitHub.
 
-The recurring form of this is now [release.md § Pre-flight](../operations/release.md#1-pre-flight), which asks the same three questions before every tag.
+The recurring form of this is now [release.md § Pre-flight](../../operations/release.md#1-pre-flight), which asks the same three questions before every tag.
 1.5 is the first release to run it, and the backlog it produced is the reason the step exists.
 
 ## The scoping question, settled
@@ -439,7 +439,7 @@ The format had nowhere to put "we believe this but have not checked it", so unve
 
 **Settled 2026-08-11: the table keeps its shape and gains a third state.** A competitor-side cell carries a verdict only when it also carries an ARC version and a measurement date; without both it renders as unverified.
 Tracked as Q801, and **shipped 2026-08-12**: `make comparison-stamps-check` enforces the rule, `.gag-unverified` is the state, and all 17 ARC cells were re-read at 0.14.2 / `9bb16ae` and stamped.
-The rule is [documentation-standards.md § A competitor-side verdict carries its own stamp](../development/documentation-standards.md#a-competitor-side-verdict-carries-its-own-stamp); the per-cell evidence is [in the competitive analysis](competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12).
+The rule is [documentation-standards.md § A competitor-side verdict carries its own stamp](../../development/documentation-standards.md#a-competitor-side-verdict-carries-its-own-stamp); the per-cell evidence is [in the competitive analysis](../competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12).
 
 Measured the same day, which is what makes this a format decision rather than a cleanup: **15 of the 17 comparison rows carry neither an ARC version nor a date.** Only two do.
 Dating them is the work either way, so the question is only what the page asserts while that is outstanding.
@@ -456,7 +456,7 @@ An unverified cell costs nothing by comparison, and next to cells that do carry 
 
 It also makes the debt visible instead of hidden.
 Today an unmeasured claim and a measured one are indistinguishable on the page, so staleness accumulates silently; under the third state an expiring cell degrades to unverified rather than to wrong.
-That turns [release.md § Pre-flight](../operations/release.md#1-pre-flight) from "re-verify everything" into "re-check what went stale", and the rule is mechanical enough to gate: no version and date, no verdict.
+That turns [release.md § Pre-flight](../../operations/release.md#1-pre-flight) from "re-verify everything" into "re-check what went stale", and the rule is mechanical enough to gate: no version and date, no verdict.
 
 Not chosen, and why.
 Dating all 15 first keeps the strongest-looking page but blocks every correction behind one large measurement pass, and leaves the format unable to express doubt the next time ARC moves.

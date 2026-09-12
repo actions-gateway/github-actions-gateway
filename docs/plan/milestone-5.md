@@ -1,6 +1,6 @@
 # Milestone 5 Implementation Plan — Hardening & Load Testing
 
-← [Milestone 4](milestone-4.md) | [Back to implementation phases](../design/06-implementation-phases.md)
+← [Milestone 4](archive/milestone-4.md) | [Back to implementation phases](../design/06-implementation-phases.md)
 
 ---
 
@@ -126,7 +126,7 @@ The kustomize bases under `cmd/*/config/` stay in place as the dev/CI source of 
 ### 1.5 Live validation (Q219) — 2026-06-28
 
 The DoD's "produces a working tenant from a single `helm install`" gate was proven on a 3-node kind cluster (kindnet, cert-manager) against the real GitHub App `actions-gateway-test` (App ID 3752347, installation 135739122) and repo `actions-gateway/gateway-test`.
-This run is distinct from the two prior partial proofs: the [M4 §12 run](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112) needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the [GKE rc.4 dogfood](gke-dogfood.md) ran in **dev posture** (floating tags + self-signed cert) and **direct egress**.
+This run is distinct from the two prior partial proofs: the [M4 §12 run](archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112) needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the [GKE rc.4 dogfood](gke-dogfood.md) ran in **dev posture** (floating tags + self-signed cert) and **direct egress**.
 Q219 closes the remaining gap: the **production posture** on the **proxied** primary API.
 
 **Install (secure default, no dev opt-outs).** `helm install` of the current chart with `gmc`/`agc`/`proxy`/`wrapper` all pinned by **digest** (published `v1.1.0-rc.4` images) — no `allowFloatingImageTags` — and `certManager.enabled=true`. cert-manager issued `webhook-server-cert`; the GMC rolled out 2/2.

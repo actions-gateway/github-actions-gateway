@@ -34,9 +34,9 @@ Building these as isolated tasks would have produced three incompatible progress
 
 | Phase | Scope | State |
 |---|---|---|
-| 0 | The e2e suite reports itself: heartbeat + JUnit summary + annotations | ✅ Shipped — [#1152](https://github.com/actions-gateway/github-actions-gateway/pull/1152), detail in [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md) |
+| 0 | The e2e suite reports itself: heartbeat + JUnit summary + annotations | ✅ Shipped — [#1152](https://github.com/actions-gateway/github-actions-gateway/pull/1152), detail in [archive/e2e-progress-visibility.md](e2e-progress-visibility.md) |
 | 1 | `validate-release.sh` reports phase and spec progress in the terminal | ✅ Shipped — Q615 |
-| 2 | Background-task mode + status file + sentinel; documented as the default | ✅ Shipped — status file + sentinel (Q616), documented as the default path in [release.md](../operations/release.md#run-it-detached-the-sentinel-reports-it-back) (Q617) |
+| 2 | Background-task mode + status file + sentinel; documented as the default | ✅ Shipped — status file + sentinel (Q616), documented as the default path in [release.md](../../operations/release.md#run-it-detached-the-sentinel-reports-it-back) (Q617) |
 | 3 | Unit `-race` progress via `go test -json` | ✅ Shipped — Q618 |
 | — | Migrating other suites to Ginkgo | ⛔ Rejected on measurement — [see below](#evaluated-and-rejected-migrating-other-suites-to-ginkgo) |
 | — | Integration-tier progress | ⛔ Not needed on measurement — 30–64 % output density, already self-narrating |
@@ -44,14 +44,14 @@ Building these as isolated tasks would have produced three incompatible progress
 ## Phase 0 — the e2e run reports itself
 
 Shipped.
-The suite appends spec start/end events to `E2E_PROGRESS_FILE`; [`progress-watch.sh`](../../scripts/e2e/progress-watch.sh) renders one heartbeat line per 30 s; [`e2e-report-summary.sh`](../../scripts/e2e/e2e-report-summary.sh) renders the JUnit report into the job summary plus per-failure annotations.
+The suite appends spec start/end events to `E2E_PROGRESS_FILE`; [`progress-watch.sh`](../../../scripts/e2e/progress-watch.sh) renders one heartbeat line per 30 s; [`e2e-report-summary.sh`](../../../scripts/e2e/e2e-report-summary.sh) renders the JUnit report into the job summary plus per-failure annotations.
 Covers the `e2e` and `e2e-calico` lanes and both the hosted and GKE dogfood runners, because all four resolve to the same `e2e-reusable.yml` job.
 
-Full rationale, measurements, and the three things the build changed from its plan: [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md).
+Full rationale, measurements, and the three things the build changed from its plan: [archive/e2e-progress-visibility.md](e2e-progress-visibility.md).
 
 ## Phase 1 — release validation reports itself
 
-[`validate-release.sh`](../../scripts/dogfood/validate-release.sh) is an ~hour-long, billable, prod-touching gate that runs eight phases and then watches a dispatched e2e run.
+[`validate-release.sh`](../../../scripts/dogfood/validate-release.sh) is an ~hour-long, billable, prod-touching gate that runs eight phases and then watches a dispatched e2e run.
 Today it prints a line per phase and then goes quiet behind `gh run watch`, which renders job-level status only — the spec-level heartbeat Phase 0 produces is in the dispatched run's log, which the operator has to leave the terminal to see.
 
 Three pieces:
@@ -84,11 +84,11 @@ Three deliverables:
 
 - ✅ **A status file** (`tmp/release-validation-status.json`) holding current phase, elapsed, the latest e2e heartbeat, and any failure — a single read that answers "where is it" without replaying the whole stream.
   This is the agent-facing renderer; the human-facing one is the terminal stream from Phase 1.
-  Shipped in Q616 as `progress_status_json` in [`lib/progress.sh`](../../scripts/dogfood/lib/progress.sh), rewritten atomically after every event and also available as [`release-status.sh`](../../scripts/dogfood/release-status.sh).
+  Shipped in Q616 as `progress_status_json` in [`lib/progress.sh`](../../../scripts/dogfood/lib/progress.sh), rewritten atomically after every event and also available as [`release-status.sh`](../../../scripts/dogfood/release-status.sh).
 - ✅ **`release-sentinel`**, modeled on pr-sentinel: sleeps, wakes the session on phase transition, failure, or completion, and prints a status block on wake.
-  Shipped in Q616 as [`release-sentinel.sh`](../../scripts/dogfood/release-sentinel.sh).
-- ✅ **[`docs/operations/release.md` § Validate the release candidate on dogfood](../operations/release.md#validate-the-release-candidate-on-dogfood)** rewritten so the background-task flow is the documented default path, with the terminal invocation kept as the alternative.
-  Per the [doc-update matrix](../development/doc-update-matrix.md) this is an operator-facing change and the docs move with it, not after — Q616 documented the two new commands where the gate's other knobs already live; Q617 is the restructure that makes the flow the default.
+  Shipped in Q616 as [`release-sentinel.sh`](../../../scripts/dogfood/release-sentinel.sh).
+- ✅ **[`docs/operations/release.md` § Validate the release candidate on dogfood](../../operations/release.md#validate-the-release-candidate-on-dogfood)** rewritten so the background-task flow is the documented default path, with the terminal invocation kept as the alternative.
+  Per the [doc-update matrix](../../development/doc-update-matrix.md) this is an operator-facing change and the docs move with it, not after — Q616 documented the two new commands where the gate's other knobs already live; Q617 is the restructure that makes the flow the default.
   It also surfaced a requirement the mechanism half had not: **a detached run must carry `ASSUME_YES=1`**, because the gate's target-confirmation reads stdin and a detached run has none — measured, it exits 1 before spending anything.
   The default path is unusable without it.
 
@@ -123,9 +123,9 @@ Its value is the deadlock: today a hung `-race` run emits nothing until the time
 
 The mechanism is different and *simpler* than Phase 0's — plain Go tests are already visible to `go test -json`, so this is a wrapper over the existing event stream with **no test-code changes at all**.
 
-Shipped as [`devtools/gotest/progress`](../../devtools/gotest/progress/main.go), which [`go-test.sh`](../../scripts/go/go-test.sh) pipes `go test -json` through.
+Shipped as [`devtools/gotest/progress`](../../../devtools/gotest/progress/main.go), which [`go-test.sh`](../../../scripts/go/go-test.sh) pipes `go test -json` through.
 It reconstructs the plain test log and interleaves the heartbeat.
-Full behaviour, the three measured properties of the `-json` stream it stands on, and the two deliberate differences from plain `go test` output: [testing.md § Watching a unit run in progress](../development/testing.md#watching-a-unit-run-in-progress).
+Full behaviour, the three measured properties of the `-json` stream it stands on, and the two deliberate differences from plain `go test` output: [testing.md § Watching a unit run in progress](../../development/testing.md#watching-a-unit-run-in-progress).
 
 Two things the build changed from this plan:
 

@@ -2,11 +2,11 @@
 
 Second full security audit, performed 2026-06-12.
 Four parallel review tracks — GMC tenant isolation & provisioning, proxy/broker/probe network trust boundaries, CI/CD supply chain, and AGC credential/crypto handling — plus `make vulncheck` (govulncheck: clean across all 8 modules).
-The first audit (2026-05) and its W/C/H/M/L workstreams live in [security.md](security.md); this doc records only the second audit's findings and their disposition.
+The first audit (2026-05) and its W/C/H/M/L workstreams live in [security.md](../security.md); this doc records only the second audit's findings and their disposition.
 
 > **Status: Complete.** Every High/Medium finding is resolved (Q121–Q130).
 > The proxy destination-allowlist / SSRF revisit that this audit deferred shipped as Q242 (Appendix G §G.1), though as an *opt-in, platform-gated* control — the default posture is unchanged, so the finding's disposition below still reads "accepted by design" for a stock install.
-> The remaining deferral is the worker trivy-leg flip ([Q70](../queue/Q70.md)); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows (Q564, [Q565](../queue/Q565.md)).
+> The remaining deferral is the worker trivy-leg flip ([Q70](../../queue/Q70.md)); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows (Q564, [Q565](../../queue/Q565.md)).
 > Info-level / accepted-by-design items are documented in place.
 > No active work remains on this audit.
 
@@ -34,10 +34,10 @@ The recurring theme in the new findings is *claim-vs-code mismatch*: documented 
 | Vendored deps never integrity-checked against go.sum in CI | Medium | **New → Q126** |
 | 8 smaller hardening items (see below) | Low | **Resolved (Q127):** all eight addressed (item 5's cosign leg landed earlier via Q126); the single optional sub-item of #8 (non-HTTPS `GITHUB_API_BASE_URL` guard) is carved out to its own Queue item. See [Q127 batch detail](#q127-hardening-batch-items). |
 | DNS egress allows port 53 to any destination | Medium | **Fixed (Q105)** — port-53 egress confined to cluster DNS (`k8s-app: kube-dns` in `kube-system`) across all three per-tenant NetworkPolicies |
-| Proxy has no app-layer destination allowlist / connection cap | Medium | Still accepted by design **in the default posture** — security.md M-2. Q242 shipped Appendix G §G.1 as an *opt-in, platform-gated* allowlist (`actions_gateway_proxy_connect_denied_total` makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as [Q565](../queue/Q565.md) |
-| ResourceQuota is optional and tenant-controlled | Medium | **Resolved (Q130, 2026-06-14):** the tenant-authored `spec.namespaceQuota` was removed; the `ResourceQuota` is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. The remaining per-cluster proxy HPA-max concern was resolved (Q82) by a non-blocking `ProxyQuotaPressure` status condition that correlates the proxy pool's configured `maxReplicas` footprint against the platform-owned quota — see [05-security.md](../design/05-security.md). |
+| Proxy has no app-layer destination allowlist / connection cap | Medium | Still accepted by design **in the default posture** — security.md M-2. Q242 shipped Appendix G §G.1 as an *opt-in, platform-gated* allowlist (`actions_gateway_proxy_connect_denied_total` makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as [Q565](../../queue/Q565.md) |
+| ResourceQuota is optional and tenant-controlled | Medium | **Resolved (Q130, 2026-06-14):** the tenant-authored `spec.namespaceQuota` was removed; the `ResourceQuota` is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. The remaining per-cluster proxy HPA-max concern was resolved (Q82) by a non-blocking `ProxyQuotaPressure` status condition that correlates the proxy pool's configured `maxReplicas` footprint against the platform-owned quota — see [05-security.md](../../design/05-security.md). |
 | No SLSA provenance attestation | Info | Known — Q103 |
-| Worker trivy leg report-only | Info | Known — [Q70](../queue/Q70.md) |
+| Worker trivy leg report-only | Info | Known — [Q70](../../queue/Q70.md) |
 | ServiceMonitor `insecureSkipVerify` | Low | Known — Q104 |
 | Library agent-key-type default Ed25519 | Low | Known — Q109 |
 | Docs claim CRD CEL rejects reserved podTemplate fields; no such rules (runtime overwrite layer does exist and holds) | Info | Docs-honesty — fold into Q99 |
@@ -55,7 +55,7 @@ Contradicted the "fully isolated within the tenant's namespace" claim (`02-archi
 
 **Resolution:** the workload NP now declares `policyTypes: [Ingress, Egress]` with an empty ingress rule set (default-deny — workers accept no inbound by design; they are outbound-only, dialing the proxy and AGC).
 The AGC pod is also selected by the workload NP but its own `buildAGCNetworkPolicy` additively re-admits the monitoring metrics scrape, so default-deny costs it nothing. kubelet liveness/readiness probes originate from the node and are not subject to NetworkPolicy, so health checks are unaffected.
-Guarded by the spec-level authoring test `TestBuildWorkloadNetworkPolicy_DefaultDenyIngress` (the reliable CI gate — kindnet does not enforce ingress policy) and the e2e `WorkloadNPSpec` assertion; the [network-architecture.md validation section](../design/network-architecture.md#how-to-validate-network-isolation) adds a manual runtime probe for policy-enforcing CNIs.
+Guarded by the spec-level authoring test `TestBuildWorkloadNetworkPolicy_DefaultDenyIngress` (the reliable CI gate — kindnet does not enforce ingress policy) and the e2e `WorkloadNPSpec` assertion; the [network-architecture.md validation section](../../design/network-architecture.md#how-to-validate-network-isolation) adds a manual runtime probe for policy-enforcing CNIs.
 
 ### Q121 — GMC Secret RBAC is cluster-wide; docs claim name-scoped (High) — RESOLVED
 
@@ -104,7 +104,7 @@ The publish job holds `packages: write` + `id-token: write`: a hijacked action t
 Runtime tool downloads in the publish path are version-pinned too: `cosign` already via `cosign-installer` `cosign-release`, and `syft` now via an explicit `syft-version` input on `download-syft` (the action is SHA-pinned, but syft is a runtime download).
 Dependabot already declared the `github-actions` ecosystem (`.github/dependabot.yml`); Dependabot natively bumps SHA pins and their `# vX.Y.Z` comments, so the pins don't rot.
 Policy
-+ bump procedure documented in [release.md § Supply-chain integrity of the pipeline](../operations/release.md#supply-chain-integrity-of-the-pipeline-itself); This writeup credited `actionlint` (CI `lint`) with keeping SHA-pinned `uses:` lint-clean; no job ran it until Q579 added the `actionlint` job, which checks that every `uses:` carries a well-formed ref but not that the ref is a SHA.
++ bump procedure documented in [release.md § Supply-chain integrity of the pipeline](../../operations/release.md#supply-chain-integrity-of-the-pipeline-itself); This writeup credited `actionlint` (CI `lint`) with keeping SHA-pinned `uses:` lint-clean; no job ran it until Q579 added the `actionlint` job, which checks that every `uses:` carries a well-formed ref but not that the ref is a SHA.
 
 ### Q124 — `make verify-release` accepts branch identities (Medium) — RESOLVED
 

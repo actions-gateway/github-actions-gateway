@@ -1649,7 +1649,7 @@ Each is a claim about state, and each has a cheap way of being wrong:
 - **A state observed once is not a steady state.** Pods wedged now may clear in ten minutes, and a set that looks static may be churning underneath a stable count, so compare *identities* across two readings rather than counts.
 - **A count grouped by symptom is not a measurement of cause.** workspace-guard's friction report folds `f=$(ls -t …)`, `for f in <glob>`, and a literal `f=/path` into a single `$f` row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days.
   Exercising the system beat counting its records: nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.
-- **A count or a superlative is a claim, not a recollection.** The [markdown-gates plan](../plan/markdown-gates-parser.md) first called `check-doc-links.sh` the only script here with no `-test.sh` companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in `scripts/docs/` untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true.
+- **A count or a superlative is a claim, not a recollection.** The [markdown-gates plan](../plan/archive/markdown-gates-parser.md) first called `check-doc-links.sh` the only script here with no `-test.sh` companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in `scripts/docs/` untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true.
   Re-derived while writing this line: seven of fourteen, because `gen-api-reference.sh` has landed since.
   The number moved in a day.
 - **An instrument's total is bounded by what it can observe, and an event it never saw leaves no gap.** The guard friction reports rank PreToolUse decisions, so foreground-guard's 200 prompts — quoted upstream as the largest single source of friction here — is a **floor**: the hook returns ahead of all analysis when the payload carries `run_in_background: true` (`karlkfi/claude-foreground-guard#15`), so every backgrounded poll is absent by construction. pr-sentinel scored near zero for a sharper reason: its defect lives in a watcher script that no PreToolUse analyzer observes at all.
@@ -1773,7 +1773,7 @@ Two shapes produced that here on 2026-08-16, both cheap to check and neither che
 **Provenance, read off resemblance.** A cut of the agent process playbooks rested on the sentence "the tooling is vendored", meaning copied in from the globally-installed skills, and shipped it to three doc sites and a PR body as the justification for keeping prose thin: the gates hold the rules even where the docs no longer do.
 The direction was backwards.
 `lint-backlog.sh` over `backloglint` (Go, 13 rules, a GFM AST) had no counterpart in the skill, which ships bash over a smaller set; the ID allocator is the one the skill cites as *its* proof point at 460+ live claims here; the merge drivers and `check-status-isolation.sh` existed only here.
-`lint-backlog.sh`, `backloglint` and `check-status-isolation.sh` all retired with the table ([Q889](../plan/q889-backlog-item-store.md)), and the store's rules are now `lint-queue.sh` and `check-queue-rules.sh`; the reading stands as taken, and it is the direction it establishes that matters.
+`lint-backlog.sh`, `backloglint` and `check-status-isolation.sh` all retired with the table ([Q889](../plan/archive/q889-backlog-item-store.md)), and the store's rules are now `lint-queue.sh` and `check-queue-rules.sh`; the reading stands as taken, and it is the direction it establishes that matters.
 One `git log` per side answers it, and none was run, because nothing in the sentence looked like a measurement.
 The claim survived into a merged PR and was corrected only after the maintainer asked whether it was true.
 
@@ -3129,7 +3129,7 @@ The package var is safe because each process has its own copy and each suite wri
 A resource that is genuinely shared *outside* the process — a cluster object, a fixed host port, a GitHub session — gets no protection from `Ordered` and needs `Serial`, an owner-scoped filter, or a per-process derivation such as `GinkgoParallelProcess()`.
 
 Dropping `Serial` from a suite is therefore a claim about *external* isolation, never about package state.
-Worked example, including the owner-prefix filter that made one such drop safe: [e2e-ci-speed-round-2.md](../plan/e2e-ci-speed-round-2.md#5-de-serialize-e2e_agc_workerpodlifecycle-).
+Worked example, including the owner-prefix filter that made one such drop safe: [e2e-ci-speed-round-2.md](../plan/archive/e2e-ci-speed-round-2.md#5-de-serialize-e2e_agc_workerpodlifecycle-).
 
 ### Every e2e suite dumps cluster state before it tears down
 
@@ -3590,10 +3590,10 @@ Triggering on every PR and gating internally means the `gate` context always rep
 Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-tiers.yml`, `reason-tiers.yml` and `endpoint-parity.yml` — bringing the count to 14 of 29, and `gate-lists-check` now fails a new gate that lands outside that set.
 Those four carry no `changes` job: `merge_group` takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 Those four do not **block** it: the queue arbitrates on the ruleset's required checks alone and none of them sits behind one, so their verdict on a candidate merge is visible and not binding.
-`doc-links-gate` was the same shape until 2026-09-09, when it was registered under the ordering constraint [merge-queue.md](../plan/merge-queue.md) gives: the workflow onto `main` first, the required check second.
+`doc-links-gate` was the same shape until 2026-09-09, when it was registered under the ordering constraint [merge-queue.md](../plan/archive/merge-queue.md) gives: the workflow onto `main` first, the required check second.
 That is the queue analogue of the Pending-wedge above: a required check that never reports on the merge-group ref stalls the entry until `check_response_timeout_minutes` expires it.
 The `changes` job needs no per-event configuration: on `merge_group`, paths-filter's `base`/`ref` default to the event's commit hashes and detection runs via git against the checkout, so a docs-only queue entry skips the heavy legs exactly as a docs-only PR does.
-The queue is active on `main` (2026-08-03, `merge_queue` rule in the `default-protect` ruleset); [merge-queue.md](../plan/merge-queue.md) records the parameters, the rollback, and the activation-ordering constraint it satisfied.
+The queue is active on `main` (2026-08-03, `merge_queue` rule in the `default-protect` ruleset); [merge-queue.md](../plan/archive/merge-queue.md) records the parameters, the rollback, and the activation-ordering constraint it satisfied.
 
 **The historical gotcha this closes — a PR going green/`CLEAN` without ever testing its code.** Under the old top-level `paths-ignore`, a PR **opened while docs-only** with code **added in a later push** could leave the path-gated workflows **skipped** (the `synchronize` did not reliably re-trigger them; see [actions/runner#2324](https://github.com/actions/runner/issues/2324)), so the PR showed all-green with the code never built or tested.
 Because the workflows above now trigger on every PR and re-evaluate the diff via the `changes` job on each push, this specific skip-through no longer applies to them.

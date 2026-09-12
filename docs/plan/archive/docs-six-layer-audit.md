@@ -1,7 +1,7 @@
 # Six-Layer Documentation Audit
 
 Bring the `docs/` set into line with the six-layer model of technical documentation (terminology, cross-references, version/conditional logic, metadata/taxonomy, navigation/hierarchy, reusable blocks).
-This is a **consistency audit plus small fixes**, not a content-gap roadmap (that is [`archive/docs.md`](archive/docs.md), Phases 1–3, done) and not a restructure.
+This is a **consistency audit plus small fixes**, not a content-gap roadmap (that is [`archive/docs.md`](docs.md), Phases 1–3, done) and not a restructure.
 
 ## Status at a glance
 
@@ -14,7 +14,7 @@ This is a **consistency audit plus small fixes**, not a content-gap roadmap (tha
 | 5 | Navigation / hierarchy | ✅ done | Added `docs/README.md` landing page + root link; no orphans; heading hierarchy clean |
 | 6 | Reusable content blocks | ✅ done | `go test` list canonical in testing.md; human docs no longer link to CLAUDE.md; no partials mechanism (by decision) |
 
-**All findings resolved.** The Layer 3 metrics gap was closed by Q51 (see [q51-metrics-reconcile.md](archive/q51-metrics-reconcile.md)).
+**All findings resolved.** The Layer 3 metrics gap was closed by Q51 (see [q51-metrics-reconcile.md](q51-metrics-reconcile.md)).
 The optional Layer 2 link-check CI gate was subsequently delivered by Q52 (`scripts/docs/check-doc-links.sh`, slug-aware, wired into `make check`).
 
 ---
@@ -39,13 +39,13 @@ It matters here because three of the six layers assume framework machinery this 
 
 If any of these later becomes warranted (e.g. the docs move to a real site generator), that is its own decision to raise explicitly — not part of this audit.
 
-These decisions now live as standing rules in [documentation-standards.md](../development/documentation-standards.md), the canonical home for doc conventions; this section keeps the original rationale.
+These decisions now live as standing rules in [documentation-standards.md](../../development/documentation-standards.md), the canonical home for doc conventions; this section keeps the original rationale.
 
 ---
 
 ## Layer 1 — Terminology consistency · ⚠️
 
-Source of truth: [`docs/design/08-glossary.md`](../design/08-glossary.md) — solid, 20+ terms, `GMC`/`AGC` used consistently across the set.
+Source of truth: [`docs/design/08-glossary.md`](../../design/08-glossary.md) — solid, 20+ terms, `GMC`/`AGC` used consistently across the set.
 
 Tasks:
 
@@ -53,13 +53,13 @@ Tasks:
    The audit found `GMC`/`AGC` used without an in-file expansion in the low-traffic appendices (A, B, D, E, G) and in the core design docs (03–07, network-architecture, appendices C/F), plus standard Kubernetes acronyms (`HPA`, `CRD`, `RBAC`, `PDB`, `PSA`, `CNI`, `SLO`) across ~20 files.
    - **Applied:** expanded `GMC`/`AGC` at first use in appendices A, B, D, E, G.
    - **Decision (do not pursue further):** leave the core design docs and the standard Kubernetes acronyms as-is.
-     The design suite is read sequentially with `GMC`/`AGC` expanded in 01/02, every term is defined in [`08-glossary.md`](../design/08-glossary.md), and the glossary is now linked from every section README (task 2).
+     The design suite is read sequentially with `GMC`/`AGC` expanded in 01/02, every term is defined in [`08-glossary.md`](../../design/08-glossary.md), and the glossary is now linked from every section README (task 2).
      Mass-expanding the flagship docs is high churn for low marginal value to a Kubernetes-operator audience.
      Revisit only if the docs move to a publishing system where pages are indexed/served individually.
 2. **Glossary discoverability** — ✅ done.
-   Linked from [`docs/development/README.md`](../development/README.md) and [`docs/operations/README.md`](../operations/README.md).
+   Linked from [`docs/development/README.md`](../../development/README.md) and [`docs/operations/README.md`](../../operations/README.md).
 3. **`AGC`-rename fallout** — ✅ checked.
-   The archived [`archive/rename-agc-to-controller.md`](archive/rename-agc-to-controller.md) was an on-cluster *resource-name* rename (`actions-gateway-agc` → `actions-gateway-controller`), not a rename of the `AGC` acronym; the glossary definition still stands and docs use `AGC` consistently.
+   The archived [`archive/rename-agc-to-controller.md`](rename-agc-to-controller.md) was an on-cluster *resource-name* rename (`actions-gateway-agc` → `actions-gateway-controller`), not a rename of the `AGC` acronym; the glossary definition still stands and docs use `AGC` consistently.
 4. **Casing consistency** for protocol terms (`Broker` vs `broker`, `Run Service`, `sessionId`, `planId`) against the glossary's chosen forms — spot-checked, no systematic drift found.
 
 ---
@@ -105,7 +105,7 @@ Task:
 
    (`_bucket`/`_sum` suffixes on histograms are Prometheus-derived, not separate metrics — not counted as gaps.)
 
-   **Resolved by Q51** — see [q51-metrics-reconcile.md](archive/q51-metrics-reconcile.md) for the per-metric rationale.
+   **Resolved by Q51** — see [q51-metrics-reconcile.md](q51-metrics-reconcile.md) for the per-metric rationale.
    Docs and code now agree: every documented non-`(planned)` metric is registered, and the re-pointed name matches what controller-runtime actually emits.
 
    No other class of "described as shipped but not implemented" prose was found: design docs describe intended behavior in present tense (conventional for a design suite), and the milestone status lives in `docs/STATUS.md`.
@@ -149,7 +149,7 @@ So a shared block lives canonically in the `docs/` tree, and `CLAUDE.md` may hol
 
 Outcome:
 
-1. The per-module `go test` command list appeared in both `CLAUDE.md` and [`docs/development/testing.md`](../development/testing.md).
+1. The per-module `go test` command list appeared in both `CLAUDE.md` and [`docs/development/testing.md`](../../development/testing.md).
    Resolved by moving the command block into a new **Running tests** section in `testing.md` (the canonical human home) and replacing the `CLAUDE.md` copy with a link *to* `testing.md` — single source of truth, in the correct direction (`CLAUDE.md` → docs).
    (An earlier pass had `testing.md` link *to* `CLAUDE.md`; reverted, as it inverted the direction.)
 2. Other human docs that linked to `CLAUDE.md` were redirected to human docs: `docs/operations/README.md` (dropped the doc-update-checklist link) and `CONTRIBUTING.md` (now points at `docs/design/05-security.md`).

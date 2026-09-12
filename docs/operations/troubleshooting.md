@@ -2724,7 +2724,7 @@ When a lock is *definitively* lost, current versions self-cancel the worker and 
 - `RunnerGroup` `status.activeSessions` decays over time; after roughly `maxListeners` completed jobs, queued workflow jobs wait forever even though the AGC pod is healthy.
 
 **Cause.** GitHub deletes a JIT-registered runner record once it acquires a job (single-use runners).
-Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot ([M4 §12, bug 2](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)).
+Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot ([M4 §12, bug 2](../plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)).
 
 **Diagnostics.**
 

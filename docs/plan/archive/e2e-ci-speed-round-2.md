@@ -85,7 +85,7 @@ Round 1 (§3, §7, §9) already took that ground.
 
 ### Approach (shipped)
 
-All six images collapse into named stages of a single root [`Dockerfile`](../../Dockerfile), selected with `--target`:
+All six images collapse into named stages of a single root [`Dockerfile`](../../../Dockerfile), selected with `--target`:
 
 ```
 deps    golang + workspace manifests + vendor/ → warm Go build cache
@@ -142,11 +142,11 @@ Cache size is ~1.1 GB, which is why `docker-bake.hcl` exports **one** cache scop
 
 ### Files
 
-- [Dockerfile](../../Dockerfile) (new) — replaces `cmd/{gmc,agc,proxy,worker}/Dockerfile`, `cmd/worker/Dockerfile.wrapper`, `test/fakegithub/Dockerfile` (all deleted)
-- [docker-bake.hcl](../../docker-bake.hcl) — `target` per image, one cache scope
-- [.github/workflows/publish.yml](../../.github/workflows/publish.yml), [security-scan.yml](../../.github/workflows/security-scan.yml), [dockerfile-lint.yml](../../.github/workflows/dockerfile-lint.yml) — matrices select a stage instead of a file
-- [scripts/security/trivy-scan.sh](../../scripts/security/trivy-scan.sh) — `--target`; also gained the `wrapper` leg it was missing relative to the CI matrix
-- [cmd/agc/names/runner_version_test.go](../../cmd/agc/names/runner_version_test.go) — the runner-version lockstep guard reads the root Dockerfile
+- [Dockerfile](../../../Dockerfile) (new) — replaces `cmd/{gmc,agc,proxy,worker}/Dockerfile`, `cmd/worker/Dockerfile.wrapper`, `test/fakegithub/Dockerfile` (all deleted)
+- [docker-bake.hcl](../../../docker-bake.hcl) — `target` per image, one cache scope
+- [.github/workflows/publish.yml](../../../.github/workflows/publish.yml), [security-scan.yml](../../../.github/workflows/security-scan.yml), [dockerfile-lint.yml](../../../.github/workflows/dockerfile-lint.yml) — matrices select a stage instead of a file
+- [scripts/security/trivy-scan.sh](../../../scripts/security/trivy-scan.sh) — `--target`; also gained the `wrapper` leg it was missing relative to the CI matrix
+- [cmd/agc/names/runner_version_test.go](../../../cmd/agc/names/runner_version_test.go) — the runner-version lockstep guard reads the root Dockerfile
 - Path filters in `e2e-test.yml`, `e2e-calico.yml`, `security-scan.yml`, `unit-test.yml` — the Dockerfiles used to sit under `cmd/**` and `test/**` and were covered incidentally; at the repo root the file needs its own entry or an image-only change silently skips those gates
 
 ---
@@ -160,7 +160,7 @@ Nothing until the bake needs that headroom.
 
 ### Approach (shipped)
 
-The deletions moved into [scripts/e2e/free-runner-disk.sh](../../scripts/e2e/free-runner-disk.sh) and now run in two workflow steps:
+The deletions moved into [scripts/e2e/free-runner-disk.sh](../../../scripts/e2e/free-runner-disk.sh) and now run in two workflow steps:
 
 - **Start freeing runner disk space**, at the top of the job, launches the script under `setsid` so tearing the step down cannot take the cleanup with it.
   The deletions then overlap with setup-go, setup-helm, the kind install, the buildx boot, and the four cache-restore/mirror steps.
@@ -190,7 +190,7 @@ Dropping `Serial` does not disturb the shared `fakegithubLocalPort` package var.
 Six sibling suites (`job_lifecycle`, `acquire_admission`, `singleuse_selfheal`, `vault_workload_identity`, `v2_multigateway`, `worker_securitycontext`) already assign it from their own base port in their own `BeforeAll` without being `Serial`: Ginkgo runs an `Ordered` container's specs contiguously within one process, so no other container can reassign it mid-suite.
 This suite keeps its own base port (19300).
 
-The general rule behind that — the two guarantees, and the mutual exclusion it does *not* grant — is in [testing.md](../development/testing.md#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state).
+The general rule behind that — the two guarantees, and the mutual exclusion it does *not* grant — is in [testing.md](../../development/testing.md#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state).
 
 ## 6. Trim the HPA spec's fixed waits ✓
 

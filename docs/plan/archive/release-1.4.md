@@ -1,7 +1,7 @@
 # Release 1.4 Milestone Definition
 
 > **Status: scope decided 2026-08-05.
-> No gating Queue rows remain.** All three `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its [plan](archive/runner-template-library.md) archived), and Q166.
+> No gating Queue rows remain.** All three `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its [plan](runner-template-library.md) archived), and Q166.
 > Everything else the release contains is already merged.
 > `v1.4.0-rc.1` was cut from `162d97a7` on 2026-08-09 and its dogfood validation **PASSED on the first attempt**.
 > Work landed after that commit (the Q766 ScaleSet port and the docs sweep), so rc.1 is no longer the candidate: **an rc.2 follows once those merge**, and it is the one that has to validate before the stable tag.
@@ -36,14 +36,14 @@ That is a shipped defect wearing a feature label, and every release that shipped
 Demand fired 2026-08-01.
 
 Delivered whole: the consent check, CA distribution, and dual-side NetworkPolicy.
-Two things the plan had not accounted for turned up in the code and are recorded in [§H.9](../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing) — a cross-namespace reference was not expressible at all (so M4 had to build the path, not just guard it), and the AGC cannot read a remote `EgressProxy` without an RBAC widening nobody wanted, so the GMC mediates.
+Two things the plan had not accounted for turned up in the code and are recorded in [§H.9](../../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing) — a cross-namespace reference was not expressible at all (so M4 had to build the path, not just guard it), and the AGC cannot read a remote `EgressProxy` without an RBAC widening nobody wanted, so the GMC mediates.
 Absent or empty `sharing` denies, which keeps the pre-M4 posture as the default and the unset case.
 
 **Q554: a curated runner template library.
 Shipped 2026-08-08.** The cheapest real capability on the list: no new CRD, and it promotes templates CI already validates (dogfood kata-dind and privileged-dind) into a shipped kustomize base the e2e overlays patch, plus a plain baseline entry.
 Packaging rather than new behaviour, and the constraint that only CI-exercised templates ship is what keeps it that way.
 That constraint is now a gate rather than a convention: `make template-library-check` reconciles the shipped and exercised sets both ways, and every entry is admitted by a real apiserver on each integration run.
-The operator surface is [runner-template-library.md](../operations/runner-template-library.md); the implementation findings are in the [archived plan](archive/runner-template-library.md).
+The operator surface is [runner-template-library.md](../../operations/runner-template-library.md); the implementation findings are in the [archived plan](runner-template-library.md).
 
 **Q691: auto re-run a force-cancelled abandoned run.** Closes a gap this cycle opened.
 Q683's cancelled ending accepts `rerun-failed-jobs`, measured, so operators re-ran by hand.
@@ -53,14 +53,14 @@ Q683's cancelled ending accepts `rerun-failed-jobs`, measured, so operators re-r
 
 > **Corrected 2026-08-09.** This section was headed "Deferred to 1.5.0", which promised a release none of these rows was ever labelled for.
 > The proxy cluster in particular is demand-gated, as the paragraph below says in its own words, so it is parked rather than scheduled.
-> The ladder is [release-ladder.md](release-ladder.md), and the reshape it called for landed on 2026-08-09: all four rows are in Deferred, each with the demand that revives it.
+> The ladder is [release-ladder.md](../release-ladder.md), and the reshape it called for landed on 2026-08-09: all four rows are in Deferred, each with the demand that revives it.
 
-**The proxy hardening cluster stays together**: Q564 audit logging, [Q565](../queue/Q565.md) per-tenant rate limiting, [Q566](../queue/Q566.md) TLS on the in-cluster hop, and [Q567](../queue/Q567.md) per-group dedicated pools.
-Four related items from [appendix G](../design/appendix-g-future-enhancements.md), the deliberately non-committal shelf, and **none has demand recorded against it**.
+**The proxy hardening cluster stays together**: Q564 audit logging, [Q565](../../queue/Q565.md) per-tenant rate limiting, [Q566](../../queue/Q566.md) TLS on the in-cluster hop, and [Q567](../../queue/Q567.md) per-group dedicated pools.
+Four related items from [appendix G](../../design/appendix-g-future-enhancements.md), the deliberately non-committal shelf, and **none has demand recorded against it**.
 Q566 is a real gap (the CONNECT target host:port is cleartext on the in-cluster hop) and Q567 is L and wants a plan doc before code.
 Splitting them across two releases spends their coherence for nothing; together they are a release theme.
 
-**[Q555](../queue/Q555.md), opt-in flaky-job retry,** has an unbuilt prerequisite.
+**[Q555](../../queue/Q555.md), opt-in flaky-job retry,** has an unbuilt prerequisite.
 Detection needs a real job outcome, which only the unread exit code carries.
 
 ## Why the scope stops here
@@ -103,7 +103,7 @@ So the defensible line is that under `workloadIdentity` no App key exists in the
 Measured 2026-08-09 against the 0.14.2 chart (`values.yaml`, `templates/autoscalingrunnerset.yaml`, the `AutoscalingRunnerSet` types) and `master` (`vault/vault.go`, `vault/azurekeyvault/`, `appconfig.FromSecret`, `ResourceBuilder.newScaleSetListenerConfig`).
 
 The rest of the reconciliation, including whether the comparison table keeps its verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
-The recurring form is [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+The recurring form is [release.md § Pre-flight](../../operations/release.md#1-pre-flight).
 
 ## Sweep verdict: the docs and marketing surfaces, 2026-08-09
 
@@ -129,7 +129,7 @@ The abandoned-run re-run was considered and rejected for the bar: it is classic-
 
 ### The tier caveat that no longer applies, and why it is recorded anyway
 
-The sweep found Q683 and Q691 wired into the classic path only, with the scope recorded in [04-operational-flows.md](../design/04-operational-flows.md) and on no operator surface, so a `v2beta1` tenant reading this release would have expected a one-second cancel and an automatic re-run their tier did not perform.
+The sweep found Q683 and Q691 wired into the classic path only, with the scope recorded in [04-operational-flows.md](../../design/04-operational-flows.md) and on no operator surface, so a `v2beta1` tenant reading this release would have expected a one-second cancel and an automatic re-run their tier did not perform.
 That was drafted as a caveat for the curated notes.
 
 **It is moot: Q766 ported both to the ScaleSet tier inside this release**, so 1.4 ships them on both tiers and there is no caveat to carry.
@@ -141,7 +141,7 @@ The `upgrade.md` placement also turned out to be the load-bearing part: `operato
 
 ## Pre-flight: the API surface this tag publishes
 
-Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over `v1.3.0..162d97a7`, the commit `v1.4.0-rc.1` was cut from, per [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over `v1.3.0..162d97a7`, the commit `v1.4.0-rc.1` was cut from, per [release.md § Pre-flight](../../operations/release.md#1-pre-flight).
 **Verdict: ship as-is.** Four wire fields and one condition reason are published for the first time; no enum constraint and no default changed.
 
 | Addition | Carried on | Why the shape is right |
@@ -176,7 +176,7 @@ Each green check was re-run against a deliberately wrong identity (a `refs/heads
 ### No candidate had cleared this gate on the first attempt before
 
 Worth stating in the notes because it is checkable and because it is the return on this cycle's release-tooling work, not a lucky run.
-The 1.3 line needed four candidates to produce any verdict at all: rc.1 aborted when the gate's then repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and Q551 instead of a result, rc.3 aborted at `start.sh`'s AGC wait, and rc.4 was "the first verdict any RC in this line has produced" ([release-1.3.md](release-1.3.md)).
+The 1.3 line needed four candidates to produce any verdict at all: rc.1 aborted when the gate's then repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and Q551 instead of a result, rc.3 aborted at `start.sh`'s AGC wait, and rc.4 was "the first verdict any RC in this line has produced" ([release-1.3.md](../release-1.3.md)).
 
 **Scope the claim to what the record supports.** `validate-release.sh` landed 2026-07-12 (Q294, #619), the day `v1.1.0` was tagged, so `v1.0.0` and `v1.1.0` predate it entirely.
 `v1.2.0` had a single RC and the gate did exist by then, but no plan doc records a validation run for it, and no record is not the same as no run.
@@ -187,7 +187,7 @@ Q630 earned itself on this run: the one stall event it raised came only after th
 
 ### `Throughput` actuated, which the runbook does not expect
 
-[release.md](../operations/release.md#validate-the-release-candidate-on-dogfood) records `Throughput` as reported-but-never-fatal because it needs at least 20 samples per template container and the gate's own ~7-job matrix cannot supply them, making `NOT VALIDATED THIS RUN` the documented normal outcome.
+[release.md](../../operations/release.md#validate-the-release-candidate-on-dogfood) records `Throughput` as reported-but-never-fatal because it needs at least 20 samples per template container and the gate's own ~7-job matrix cannot supply them, making `NOT VALIDATED THIS RUN` the documented normal outcome.
 It came back `Active` with 166 samples.
 Nothing anomalous happened: the sampler tracks every worker pod regardless of `spec.sizing` and the aggregate re-seeds from the persisted `status.sizingRecommendation`, so the dogfood cluster's ordinary CI traffic since 1.3.0 had already earned the history.
 The consequence for the notes is a stronger claim than a passing gate alone, that this RC ran its own CI on derived sizing.

@@ -15,7 +15,7 @@ Automatically right-size worker pod CPU/memory `requests`/`limits` per runner sh
 ## Why
 
 **This is a differentiator versus Actions Runner Controller (ARC).** ARC has no sizing feedback loop: operators guess runner resource specs, and the guess is rarely revisited.
-Our own dogfood proved both the value and the toil of doing it manually — [dogfood-runner-rightsizing.md](dogfood-runner-rightsizing.md) started from "every worker pod's original `requests`/`limits` were an unmeasured guess" and spent multiple sessions measuring peaks and deriving values by hand.
+Our own dogfood proved both the value and the toil of doing it manually — [dogfood-runner-rightsizing.md](archive/dogfood-runner-rightsizing.md) started from "every worker pod's original `requests`/`limits` were an unmeasured guess" and spent multiple sessions measuring peaks and deriving values by hand.
 This plan automates that loop for every tenant.
 
 The payoff concentrates where nodes are expensive:
@@ -177,7 +177,7 @@ All seven metric families are exported with live data, labelled by namespace, ru
 
 Two independent things worth recording:
 
-- **The measured peak matches the earlier hand-derivation.** The [dogfood right-sizing exercise](dogfood-runner-rightsizing.md) put heavy CI jobs at roughly 3.8 vCPU / 2.1 GiB by scraping `kubectl top` by hand; the sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
+- **The measured peak matches the earlier hand-derivation.** The [dogfood right-sizing exercise](archive/dogfood-runner-rightsizing.md) put heavy CI jobs at roughly 3.8 vCPU / 2.1 GiB by scraping `kubectl top` by hand; the sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
   That is the feature reproducing, automatically, the number it was built to stop people deriving manually.
 - **`jobs_unsampled_total` earns its place.** Some CI jobs finish inside one 15s sample interval, and the counter makes that visible instead of silently biasing the histogram toward long jobs.
 
@@ -430,7 +430,7 @@ Worth knowing before assuming a committed CR edit is live.
 
 - **AGC / GMC / proxy-pool autoscaling** — separate concerns, both shipped: the managed VPA opt-in for the control planes (Q360: [`ActionsGateway.spec.agcAutoscaling`](../design/appendix-e-capacity-planning.md#e11-managed-vertical-right-sizing-of-the-control-planes) and the chart's `vpa.enabled`) and the bring-your-own proxy autoscaler (Q173: [`EgressProxy.spec.managedAutoscaling`](v2-api.md#bring-your-own-proxy-autoscaler-q173--shipped)).
 - **GPU-count autoscaling** — shapes are selected by jobs, never resized.
-- **Making CI faster than GitHub-hosted** — same scope note as the [dogfood plan](dogfood-runner-rightsizing.md#scope-note--this-is-costcorrectness-not-speed): this is cost/correctness, not speed.
+- **Making CI faster than GitHub-hosted** — same scope note as the [dogfood plan](archive/dogfood-runner-rightsizing.md#scope-note--this-is-costcorrectness-not-speed): this is cost/correctness, not speed.
 - **In-place resize of running job pods** (K8s ≥1.33 in-place pod resize) — plausible future extension once profiles exist; out of scope here.
 
 ## Open questions (settle at phase pickup)

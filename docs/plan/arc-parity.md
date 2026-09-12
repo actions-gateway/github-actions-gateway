@@ -1,7 +1,7 @@
 # ARC Feature Parity
 
 > **Status: goal stated 2026-08-09; all four criteria are now closed — two by build in 1.5, two by decision.** This is a map and a definition of done, not a design.
-> Q727, the [1.6 gate](release-1.6.md), closed on 2026-08-25 as a permanent decline of ARC's `containerMode: kubernetes` mechanism ([q727-container-steps.md](q727-container-steps.md)).
+> Q727, the [1.6 gate](archive/release-1.6.md), closed on 2026-08-25 as a permanent decline of ARC's `containerMode: kubernetes` mechanism ([q727-container-steps.md](q727-container-steps.md)).
 > No row remains that a scheduled release can close: the residual capability is [Q998](../queue/Q998.md) behind a demand trigger, and [Q765](../queue/Q765.md) waits on hardware.
 > The inventory below is only as good as its last measurement against a real ARC release, which is why every row carries a version and a date.
 

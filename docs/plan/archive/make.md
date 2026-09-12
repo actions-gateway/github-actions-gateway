@@ -8,19 +8,19 @@ Phase 2 (consistency cleanup) is fully done.
 
 | # | Item | File | Status |
 |---|---|---|---|
-| 1.1 | `make help` + `.DEFAULT_GOAL := help`, `##@` sections | [Makefile](../../Makefile) | ✅ Done |
-| 1.2 | `.PHONY` includes all targets | [Makefile](../../Makefile) | ✅ Done — `e2e-load-images` consolidated into `e2e-images`; `.PHONY` block updated |
-| 1.3 | Stop swallowing `kind` errors | [Makefile](../../Makefile) | ✅ Done — no `\|\| true` remains in cluster targets |
-| 1.4 | `e2e-up` umbrella target | [Makefile](../../Makefile) | ✅ Done — `e2e-up: e2e-cluster e2e-images e2e` |
-| 1.5 | `KIND_CONFIG` default | [Makefile](../../Makefile) | ✅ Done — now `test/kind-config-2worker.yaml` |
-| 2.1 | Unify image variable names across Makefiles | [Makefile](../../Makefile), [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ✅ Done — GMC now uses `GMC_IMG`/`AGC_IMG`/`PROXY_IMG` matching root |
-| 2.2 | Consistent SHA-based image tagging | [Makefile](../../Makefile) | ✅ Done — all four images use `:e2e-$(GIT_SHA)` |
-| 2.3 | Single source of truth for `setup-envtest` | [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ✅ Done — GMC delegates to root's `setup-envtest` target via `$(MAKE) -C $(REPO_ROOT) setup-envtest` |
-| 2.4 | DRY ginkgo invocations | [Makefile](../../Makefile) | ✅ Done — single `e2e` target with `SUITE=` selector replaces the three-target duplication |
+| 1.1 | `make help` + `.DEFAULT_GOAL := help`, `##@` sections | [Makefile](../../../Makefile) | ✅ Done |
+| 1.2 | `.PHONY` includes all targets | [Makefile](../../../Makefile) | ✅ Done — `e2e-load-images` consolidated into `e2e-images`; `.PHONY` block updated |
+| 1.3 | Stop swallowing `kind` errors | [Makefile](../../../Makefile) | ✅ Done — no `\|\| true` remains in cluster targets |
+| 1.4 | `e2e-up` umbrella target | [Makefile](../../../Makefile) | ✅ Done — `e2e-up: e2e-cluster e2e-images e2e` |
+| 1.5 | `KIND_CONFIG` default | [Makefile](../../../Makefile) | ✅ Done — now `test/kind-config-2worker.yaml` |
+| 2.1 | Unify image variable names across Makefiles | [Makefile](../../../Makefile), [cmd/gmc/Makefile](../../../cmd/gmc/Makefile) | ✅ Done — GMC now uses `GMC_IMG`/`AGC_IMG`/`PROXY_IMG` matching root |
+| 2.2 | Consistent SHA-based image tagging | [Makefile](../../../Makefile) | ✅ Done — all four images use `:e2e-$(GIT_SHA)` |
+| 2.3 | Single source of truth for `setup-envtest` | [cmd/gmc/Makefile](../../../cmd/gmc/Makefile) | ✅ Done — GMC delegates to root's `setup-envtest` target via `$(MAKE) -C $(REPO_ROOT) setup-envtest` |
+| 2.4 | DRY ginkgo invocations | [Makefile](../../../Makefile) | ✅ Done — single `e2e` target with `SUITE=` selector replaces the three-target duplication |
 | 2.5 | Consistent build invocation style (`go -C` vs `cd &&`) | various | ⓘ Minor — no follow-up needed unless someone touches the file again |
-| 2.6 | Align `all` semantics across Makefiles | [Makefile](../../Makefile), [cmd/agc/Makefile](../../cmd/agc/Makefile), [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ✅ Done — root now has `all: generate build test` with delegating `generate` and `test` targets |
-| 2.7a | `e2e-clean` actually cleans (images + `.build/`) | [Makefile](../../Makefile) | ✅ Done — deletes cluster, registry, and `.build/` |
-| 2.7b | `make tools` prints progress | [Makefile](../../Makefile) | ⓘ Cosmetic — defer unless someone reports it |
+| 2.6 | Align `all` semantics across Makefiles | [Makefile](../../../Makefile), [cmd/agc/Makefile](../../../cmd/agc/Makefile), [cmd/gmc/Makefile](../../../cmd/gmc/Makefile) | ✅ Done — root now has `all: generate build test` with delegating `generate` and `test` targets |
+| 2.7a | `e2e-clean` actually cleans (images + `.build/`) | [Makefile](../../../Makefile) | ✅ Done — deletes cluster, registry, and `.build/` |
+| 2.7b | `make tools` prints progress | [Makefile](../../../Makefile) | ⓘ Cosmetic — defer unless someone reports it |
 
 ### Open work
 
@@ -31,7 +31,7 @@ None — all Phase 2 items are done.
 
 ## Current state
 
-The repo has three Makefiles — the root [Makefile](../../Makefile) plus per-binary Makefiles at [cmd/gmc/Makefile](../../cmd/gmc/Makefile) and [cmd/agc/Makefile](../../cmd/agc/Makefile).
+The repo has three Makefiles — the root [Makefile](../../../Makefile) plus per-binary Makefiles at [cmd/gmc/Makefile](../../../cmd/gmc/Makefile) and [cmd/agc/Makefile](../../../cmd/agc/Makefile).
 They work, but discoverability is poor (no `help` target, ~14 root targets that don't appear in the README), the local e2e workflow is a four-step ordered sequence with no umbrella target, and several details have drifted between the three files (image variable names, envtest install path, `all` semantics).
 This plan describes the changes worth making in two phases: a "day-one contributor" pass that lands the user-visible UX wins, followed by a cleanup pass that removes inconsistencies between Makefiles.
 
@@ -46,7 +46,7 @@ None of them are architectural; they are visible quality-of-life improvements.
 
 ### 1.1 Add `make help` and make it the default goal
 
-Add a self-documenting `help` target to the root [Makefile](../../Makefile) (and to [cmd/gmc/Makefile](../../cmd/gmc/Makefile) and [cmd/agc/Makefile](../../cmd/agc/Makefile)) that parses `## ` comments after the target name and prints them as a grouped table.
+Add a self-documenting `help` target to the root [Makefile](../../../Makefile) (and to [cmd/gmc/Makefile](../../../cmd/gmc/Makefile) and [cmd/agc/Makefile](../../../cmd/agc/Makefile)) that parses `## ` comments after the target name and prints them as a grouped table.
 Set `.DEFAULT_GOAL := help` so a bare `make` prints the menu instead of starting a build.
 
 Annotate every public target with a one-line `##` description.
@@ -55,13 +55,13 @@ The README's Development section should be updated to direct users to `make help
 
 ### 1.2 Fix the `.PHONY` declaration
 
-The root [Makefile](../../Makefile)'s `help` target lists most targets but omits `e2e-load-images`.
+The root [Makefile](../../../Makefile)'s `help` target lists most targets but omits `e2e-load-images`.
 Add it.
-While there, consider switching to one `.PHONY:` line per target (the style used in [cmd/agc/Makefile](../../cmd/agc/Makefile)) — it makes future additions less error-prone than maintaining a single multi-line block.
+While there, consider switching to one `.PHONY:` line per target (the style used in [cmd/agc/Makefile](../../../cmd/agc/Makefile)) — it makes future additions less error-prone than maintaining a single multi-line block.
 
 ### 1.3 Stop swallowing `kind` errors
 
-The `e2e-cluster` and `e2e-cluster-delete` recipes in the root [Makefile](../../Makefile) use `|| true` to make themselves idempotent, but they also hide "kind not installed", "Docker daemon not running", and every other real error.
+The `e2e-cluster` and `e2e-cluster-delete` recipes in the root [Makefile](../../../Makefile) use `|| true` to make themselves idempotent, but they also hide "kind not installed", "Docker daemon not running", and every other real error.
 Replace with a conditional:
 
 ```
@@ -97,7 +97,7 @@ The README and `docs/development/testing.md` should reference `make e2e-up` as t
 
 ### 1.5 Default `KIND_CONFIG` to the 2-node CI config
 
-`KIND_CONFIG` in the root [Makefile](../../Makefile) defaults to `test/kind-config.yaml` (3 nodes), but the default `make e2e` target excludes multi-node tests with `--label-filter '!multi-node'`.
+`KIND_CONFIG` in the root [Makefile](../../../Makefile) defaults to `test/kind-config.yaml` (3 nodes), but the default `make e2e` target excludes multi-node tests with `--label-filter '!multi-node'`.
 Local developers pay for an extra worker node they don't use unless they remember the override.
 
 Change the default to `test/kind-config-ci.yaml`.
@@ -112,8 +112,8 @@ These are not user-facing but they reduce drift and make the Makefiles easier to
 
 ### 2.1 Unify image variable names
 
-Root [Makefile](../../Makefile) uses `GMC_IMG`, `AGC_IMG`, `PROXY_IMG`, `FAKEGITHUB_IMG`.
-[cmd/gmc/Makefile](../../cmd/gmc/Makefile) uses `IMG`, `AGC_IMAGE`, `PROXY_IMAGE`.
+Root [Makefile](../../../Makefile) uses `GMC_IMG`, `AGC_IMG`, `PROXY_IMG`, `FAKEGITHUB_IMG`.
+[cmd/gmc/Makefile](../../../cmd/gmc/Makefile) uses `IMG`, `AGC_IMAGE`, `PROXY_IMAGE`.
 A user running `make e2e-images` followed by `make -C cmd/gmc deploy` has to re-pass the same value with different names.
 
 Pick one set of names (the `*_IMG` short form is shorter and already in the root file) and use them consistently across all three Makefiles.
@@ -121,21 +121,21 @@ Have the GMC Makefile read defaults from the root names with `?=`.
 
 ### 2.2 Consistent SHA-based image tagging
 
-The root [Makefile](../../Makefile) tags `GMC_IMG` with `:e2e-$(GIT_SHA)` but the other three images use static `:e2e`.
+The root [Makefile](../../../Makefile) tags `GMC_IMG` with `:e2e-$(GIT_SHA)` but the other three images use static `:e2e`.
 The intent of the SHA tag is to invalidate kind's image cache when code changes — but it only works for GMC.
 Either tag all four images with the SHA (the right answer; mixed builds are an obscure source of stale-image bugs) or tag none of them.
 Recommend the former.
 
 ### 2.3 Single source of truth for envtest
 
-The root [Makefile](../../Makefile) builds `setup-envtest` from the vendored `tools/` module.
-[cmd/gmc/Makefile](../../cmd/gmc/Makefile) installed it separately with `go install ...@release-0.23`.
+The root [Makefile](../../../Makefile) builds `setup-envtest` from the vendored `tools/` module.
+[cmd/gmc/Makefile](../../../cmd/gmc/Makefile) installed it separately with `go install ...@release-0.23`.
 These are two version pins that can drift.
 Delete the `go install` path in the GMC Makefile and depend on `$(SETUP_ENVTEST)` from the root, the same way the GMC Makefile already depends on `$(CONTROLLER_GEN)`.
 
 ### 2.4 DRY the ginkgo invocations
 
-The `e2e`, `e2e-multi-node`, and `e2e-all` targets in the root [Makefile](../../Makefile) repeat the same env block (`KIND_CLUSTER`, four image vars) and most of the same flags.
+The `e2e`, `e2e-multi-node`, and `e2e-all` targets in the root [Makefile](../../../Makefile) repeat the same env block (`KIND_CLUSTER`, four image vars) and most of the same flags.
 Factor:
 
 ```
@@ -147,7 +147,7 @@ Each target then sets only its label filter, `--procs`, and `--junit-report` pat
 
 ### 2.5 Consistent build invocation style
 
-The root [Makefile](../../Makefile) uses Go's `-C cmd/agc` flag.
+The root [Makefile](../../../Makefile) uses Go's `-C cmd/agc` flag.
 Elsewhere it uses shell `cd cmd/gmc &&`.
 Pick one.
 `go build -C` is cleaner for Go invocations; for ginkgo (not a Go subcommand) `cd && ...` is fine — but the inconsistency is worth a comment if both stay.
@@ -155,8 +155,8 @@ Pick one.
 ### 2.6 Align `all` semantics across Makefiles
 
 Root: `all: build`.
-[cmd/agc/Makefile](../../cmd/agc/Makefile): its `all` target was `generate build test`.
-[cmd/gmc/Makefile](../../cmd/gmc/Makefile): its `all` target was `generate build test`.
+[cmd/agc/Makefile](../../../cmd/agc/Makefile): its `all` target was `generate build test`.
+[cmd/gmc/Makefile](../../../cmd/gmc/Makefile): its `all` target was `generate build test`.
 A user who runs `make` in different directories gets surprisingly different behavior.
 Once `help` is the default goal (Phase 1.1), `all` becomes opt-in and can be defined consistently — recommend `all: generate build test` everywhere, or remove `all` entirely and use named targets.
 
@@ -165,7 +165,7 @@ Once `help` is the default goal (Phase 1.1), `all` becomes opt-in and can be def
 - `e2e-clean` is a one-line alias for `e2e-cluster-delete`.
   Either drop it or make it actually clean — delete the kind cluster *and* remove the built images and `.build/` artifacts (which is what `clean` usually means in a Makefile).
 - `make tools` is silent.
-  Borrow the `==> building controller-gen` style from [scripts/dev/setup.sh](../../scripts/dev/setup.sh) so users can see which tool is being built when it takes 30 seconds.
+  Borrow the `==> building controller-gen` style from [scripts/dev/setup.sh](../../../scripts/dev/setup.sh) so users can see which tool is being built when it takes 30 seconds.
 
 ---
 

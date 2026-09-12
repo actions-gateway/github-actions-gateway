@@ -7,7 +7,7 @@ A code-level security review of the GitHub Actions Gateway as of 2026-05-23.
 > Accepted residuals (e.g.
 > H-2's RBAC `list`) are documented in place.
 
-> **Successor audit:** a second full audit (2026-06-12) lives in [security-audit-2026-06.md](security-audit-2026-06.md); its new findings are queued as Q121–Q128.
+> **Successor audit:** a second full audit (2026-06-12) lives in [security-audit-2026-06.md](archive/security-audit-2026-06.md); its new findings are queued as Q121–Q128.
 > This doc remains the record of the first audit's findings and workstreams.
 
 Scope: `broker/`, `githubapp/`, `cmd/agc/`, `cmd/gmc/`, `cmd/proxy/`, `cmd/worker/`, `cmd/probe/`.
@@ -260,7 +260,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   3. `setCredentialUnavailable` also returns `RequeueAfter: 30s` as a fallback for cases where a watch event is missed (e.g. controller restart during Secret deletion window).
 - **Residual risk** *(corrected 2026-06-12 — the original wording understated this)*: the metadata-only informer and cache bypass are client-side hygiene, not authorization.
   The GMC ClusterRole grants `get`/`list`/`create`/`update`/`watch` on Secrets cluster-wide with no `resourceNames` scoping, so a *compromised* GMC can read full `.data` of any Secret in the cluster and create/overwrite Secrets anywhere — not just enumerate metadata.
-  Tracked as Q121 (preventive confinement) in [security-audit-2026-06.md](security-audit-2026-06.md); Q29's audit policy is the detective complement — shipped as a sample at [docs/operations/examples/apiserver-audit-policy.yaml](../operations/examples/apiserver-audit-policy.yaml) with operator wiring in [security-operations.md § API server audit policy (sample)](../operations/security-operations.md#api-server-audit-policy-sample).
+  Tracked as Q121 (preventive confinement) in [security-audit-2026-06.md](archive/security-audit-2026-06.md); Q29's audit policy is the detective complement — shipped as a sample at [docs/operations/examples/apiserver-audit-policy.yaml](../operations/examples/apiserver-audit-policy.yaml) with operator wiring in [security-operations.md § API server audit policy (sample)](../operations/security-operations.md#api-server-audit-policy-sample).
 
 ---
 

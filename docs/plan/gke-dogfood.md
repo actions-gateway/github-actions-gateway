@@ -481,7 +481,7 @@ spec:
           # limit only throttles bursty Go jobs); request=2 packs one heavy pod
           # per e2-standard-4 (~3.4 vCPU allocatable) so it bursts to the whole
           # node. Memory: request≈peak (2Gi), limit=peak×~1.4 (3Gi) for OOM
-          # headroom. See docs/plan/dogfood-runner-rightsizing.md.
+          # headroom. See docs/plan/archive/dogfood-runner-rightsizing.md.
           resources:
             requests:
               cpu: "2"

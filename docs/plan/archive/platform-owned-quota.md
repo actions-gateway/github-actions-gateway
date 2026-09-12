@@ -65,7 +65,7 @@ Captured here; may split into its own item after the quota change lands.
   `maxQuotaRetries` / `quotaRetryDelay` (AGC reacting to a *full* quota) are kept — those are operating *within* a quota, not owning it.
 - **RBAC:** dropped the `resourcequotas` verbs from [role.yaml](../../../cmd/gmc/config/rbac/role.yaml) and the chart [rbac.yaml](../../../charts/actions-gateway/templates/rbac.yaml).
   No `limitranges` grant existed.
-  Partially subsumes [Q122](../security-audit-2026-06.md#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved).
+  Partially subsumes [Q122](security-audit-2026-06.md#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved).
 - **Tests:** `TestGMC_TenantProvisioning_NoResourceQuotaCreated` (envtest) asserts the GMC creates no quota and leaves a pre-existing platform quota untouched; the `TestBuildResourceQuota_PassesThrough` unit test was removed.
 - **Docs:** getting-started, tenant-onboarding, runbook, troubleshooting, security-operations, 01/02/03/04/05/07 design docs, appendix-a/e, why-gag, README, and the breaking-change migration note in [upgrade.md](../../operations/upgrade.md).
 

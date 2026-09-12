@@ -1,6 +1,6 @@
 # Milestone 1 Implementation Plan — Wire Protocol Probe
 
-← [Back to implementation phases](../design/06-implementation-phases.md)
+← [Back to implementation phases](../../design/06-implementation-phases.md)
 
 ---
 
@@ -413,7 +413,7 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 
 ### 3.C Investigation — Session Reuse After `acquirejob`
 
-**Context:** The adaptive listener model in [§2.2](../design/02-architecture.md#22-tier-2--actions-gateway-controller-agc) requires that a goroutine can call `GET /message` again on the same `sessionId` immediately after a successful `POST /acquirejob`, without tearing down and re-creating the session.
+**Context:** The adaptive listener model in [§2.2](../../design/02-architecture.md#22-tier-2--actions-gateway-controller-agc) requires that a goroutine can call `GET /message` again on the same `sessionId` immediately after a successful `POST /acquirejob`, without tearing down and re-creating the session.
 If GitHub does not permit this, the AGC must call `DELETE /sessions` followed by `POST /sessions` between each job, adding a full registration round-trip of latency to every acquisition cycle and complicating the goroutine lifecycle.
 
 **How to investigate:**
@@ -428,7 +428,7 @@ If GitHub does not permit this, the AGC must call `DELETE /sessions` followed by
 **Expected outcomes:**
 - If session reuse is permitted: document as confirmed.
   The Milestone 2 Session Multiplexer design proceeds as specified — one goroutine holds one session and loops indefinitely.
-  Update [§3.3](../design/03-api-contracts.md) to record this as a confirmed behavior.
+  Update [§3.3](../../design/03-api-contracts.md) to record this as a confirmed behavior.
 - If session reuse is not permitted: the AGC goroutine must tear down and re-create the session after each `AcquireJob`.
   Add a `TODO(session-reuse)` note to the Milestone 2 plan flagging the extra latency and the need for a delete→create cycle between jobs.
 
@@ -457,7 +457,7 @@ This would cause silent job drops during bursts.
   No standby pool is needed.
 - If throttling is confirmed: document the gap.
   Evaluate pre-spawning 2–3 warm standby sessions per `RunnerGroup` as a mitigation.
-  Update [Appendix E](../design/appendix-e-capacity-planning.md) with the revised warm-pool sizing guidance before beginning Milestone 2.
+  Update [Appendix E](../../design/appendix-e-capacity-planning.md) with the revised warm-pool sizing guidance before beginning Milestone 2.
 
 **Document findings:** Add §8.D to the Investigation Findings section at the bottom of this file before closing the milestone.
 
@@ -745,7 +745,7 @@ The 409 constraint is at the *session-creation* level, not the delivery level.
 
 **Conclusion for Milestone 2:** Each AGC goroutine must correspond to a distinct registered runner (distinct `agentId`).
 The adaptive listener model is valid as long as the runner pool is pre-registered with at least as many agents as the target concurrency.
-The opportunistic delivery assumption is supported by the Investigation C timing evidence; confirm with a two-runner test if stronger proof is needed before finalising the warm-pool sizing in [Appendix E](../design/appendix-e-capacity-planning.md).
+The opportunistic delivery assumption is supported by the Investigation C timing evidence; confirm with a two-runner test if stronger proof is needed before finalising the warm-pool sizing in [Appendix E](../../design/appendix-e-capacity-planning.md).
 
 **Impact on Milestone 2:** If delivery is opportunistic, no standby pool is needed.
-If throttling is confirmed, update [Appendix E](../design/appendix-e-capacity-planning.md) with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.
+If throttling is confirmed, update [Appendix E](../../design/appendix-e-capacity-planning.md) with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.

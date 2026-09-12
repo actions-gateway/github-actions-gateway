@@ -161,10 +161,22 @@ unback
 index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q10](../queue/Q10.md) |'
 expect 'an open-marked row linking a live item is accepted' 0
 
+# A done row needs no *backing* item for invariant 1 — it claims nothing open —
+# but from Q894 it is invariant 6's subject instead: done and referenced by
+# nothing is the definition of archive-ready.
 new_repo 'Q10' ''
 unback
 index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done — nothing left |'
-expect 'a done row needs no backing item' 0
+expect 'a done row no item references is rejected as archive-ready' 1 'referenced by no live item'
+
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done — nothing left |'
+expect 'a done row an item still targets stays put' 0
+
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ⓘ Done, retained as the validation record |'
+expect 'a done row marked ⓘ is retained deliberately and exempt' 0
 
 new_repo 'Q10' ''
 unback
@@ -174,8 +186,9 @@ expect 'an ⓘ row is exempt even carrying an open marker' 0
 # The marker is read from the Status cell alone. A Scope cell describing what a
 # plan is about can carry one in prose, and charging the row for it would gate
 # the description rather than the claim.
+# Referenced rather than unbacked, so invariant 6 is not the thing under test:
+# this case is about invariant 1 reading column 3 and not the whole line.
 new_repo 'Q10' ''
-unback
 index '| [alpha.md](alpha.md) | Alpha scope: why ❌ was the wrong default | ✅ Done |'
 expect 'an open marker in the Scope cell does not charge the row' 0
 
@@ -322,9 +335,11 @@ expect 'a Status paragraph linking the live row is accepted' 0
 
 # 5b fires on the store backing the plan, not on the prose. With nothing naming
 # the plan there is no work in flight for the paragraph to go stale about.
+# ⓘ rather than ✅ so invariant 6 (Q894) is not what this case measures: a done
+# row referenced by nothing is archive-ready, which is a different finding.
 new_repo 'Q10' ''
 unback
-index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |'
+index '| [alpha.md](alpha.md) | Alpha scope | ⓘ Done |'
 plan_body '**Status:** complete, shipped as Q99.'
 expect 'a Status paragraph on a plan no item names is accepted' 0
 

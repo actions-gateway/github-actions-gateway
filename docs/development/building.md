@@ -20,7 +20,7 @@ Individual module Makefiles (e.g.
 
 The four production images (the `agc`, `gmc`, `proxy` and `worker` stages) are built together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`).
 Every image is a named stage of the single root [`Dockerfile`](../../Dockerfile), selected with `--target`; they share one `deps` stage that compiles the vendored dependency tree once.
-The e2e/CI image pipeline is described in [e2e-ci-speed-round-2.md](../plan/e2e-ci-speed-round-2.md), with the earlier round in [docker-image-speed.md](../plan/docker-image-speed.md).
+The e2e/CI image pipeline is described in [e2e-ci-speed-round-2.md](../plan/archive/e2e-ci-speed-round-2.md), with the earlier round in [docker-image-speed.md](../plan/archive/docker-image-speed.md).
 
 ### Go version bumps (the `GOTOOLCHAIN=local` coupling)
 

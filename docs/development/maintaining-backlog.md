@@ -361,7 +361,7 @@ That makes every gate PR the same edit in the same two sections.
 Measured on `docs/roadmap.md` at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
 [Q715](https://github.com/actions-gateway/github-actions-gateway/pull/1392)'s PR met that shape three times in one session, each time as a merge-queue eviction followed by a hand-resolved rebase.
 
-**What the driver buys is the rebase, not the eviction.** A merge driver is per-clone `git config`, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before ([merge-queue.md](../plan/merge-queue.md) measured the same thing for the backlog table, which had a driver from Q611 until Q889 retired both).
+**What the driver buys is the rebase, not the eviction.** A merge driver is per-clone `git config`, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before ([merge-queue.md](../plan/archive/merge-queue.md) measured the same thing for the backlog table, which had a driver from Q611 until Q889 retired both).
 What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
 Fewer evictions is a different problem, and the lever is spacing before serializing: the same two deletions ten bullets apart merged clean, so a batch whose bullets sit apart on the page never meets the conflict.
 
@@ -732,7 +732,7 @@ That counts *references*.
 What a change breaks is whatever *reads* the thing, and the two sets differ by every reader that never names it.
 No better query closes the gap, because the gap is the absence of the string being searched for.
 
-[Q889](../plan/q889-backlog-item-store.md) moved the backlog from one table to the per-item store in six phases, and understated its scope in all five that preceded the cutover, every time in the same direction.
+[Q889](../plan/archive/q889-backlog-item-store.md) moved the backlog from one table to the per-item store in six phases, and understated its scope in all five that preceded the cutover, every time in the same direction.
 Its phase 6 section records three readers a reference count could not have reached, one of each kind:
 
 | The reader | Q889's case | Why no query reaches it |
@@ -891,8 +891,12 @@ The rationale is usually more valuable than the diff, but a fully-closed plan in
 **Archive on close, not on audit.** Do this in the same body of work that removes the plan's last backlog reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open.
 Two gates (both in `make check`) enforce it so the omission can't ship silently:
 
-- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` claims open work backed by no live item — i.e. a plan that should have been archived.
+- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` claims open work backed by no live item, i.e. a plan that should have been archived.
   To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row `ⓘ`.
+  It also fails the same row **in the other direction** (invariant 6, Q894): an active non-ⓘ row marked ✅ that no live item references is archive-ready and must be archived in the change that made it so.
+  That direction is the one that goes stale silently, because the first rule fires on a row *claiming* open work and a plan already saying it is done is invisible to it.
+  Measured 2026-09-12: 39 of 68 active rows carried ✅, 24 of them referenced by nothing, and the gate passed over all 24 and always would have.
+  A plan retained deliberately, such as a validation record or standing rationale with no progress to track, marks its row `ⓘ`, the same escape the other invariants respect.
 - **`make doc-links`** fails on any broken link the move introduces.
 
 The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.

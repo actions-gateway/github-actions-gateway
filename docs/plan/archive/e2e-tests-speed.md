@@ -570,7 +570,7 @@ Ginkgo v2's `-ginkgo.junit-report=e2e-report.xml` writes a JUnit XML file.
 > **Correction (Q608, 2026-08-02).** This section originally claimed Actions would render the upload as a test summary table via a "built-in test reporter (no third-party action required as of runner v2.308+)".
 > There is no such reporter.
 > The upload shipped and the rendering never did, so for four months reading a failed run's results meant downloading 300 KB of XML by hand.
-> [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-report-summary.sh) now does the rendering explicitly — see [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md).
+> [`scripts/e2e/e2e-report-summary.sh`](../../../scripts/e2e/e2e-report-summary.sh) now does the rendering explicitly — see [archive/e2e-progress-visibility.md](e2e-progress-visibility.md).
 
 ### Implementation steps
 

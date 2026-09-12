@@ -56,7 +56,7 @@ A cold-cache run of `make e2e-images` builds four images sequentially:
 | **Total (cold)** | **~4–6 min** |
 | **Total (warm, current GHA cache hit)** | **~1–2 min** |
 
-CI already enables `cache-from: type=gha` per image in [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml), so warm runs do reuse layer blobs.
+CI already enables `cache-from: type=gha` per image in [.github/workflows/e2e-test.yml](../../../.github/workflows/e2e-test.yml), so warm runs do reuse layer blobs.
 The catch: BuildKit invalidates the `go build` layer the moment any file inside `COPY . .` changes — which is every PR.
 With no `--mount=type=cache` for `/go/pkg/mod` or `/root/.cache/go-build`, every non-cached `go build` recompiles the world.
 
@@ -161,7 +161,7 @@ The module-cache half (`/go/pkg/mod`) from the original plan was dropped because
 
 1. Pinned `# syntax=docker/dockerfile:1.7` at the top of each Dockerfile.
 2. Added `--mount=type=cache,target=/root/.cache/go-build` to the `go build` step in `cmd/gmc/Dockerfile`, `cmd/agc/Dockerfile`, `cmd/proxy/Dockerfile`, and `test/fakegithub/Dockerfile`.
-   (Those six per-image Dockerfiles were later consolidated into the root [Dockerfile](../../Dockerfile), and this cache mount replaced by a cacheable `deps` layer — see [e2e-ci-speed-round-2.md § 1–3](e2e-ci-speed-round-2.md#13-one-dockerfile-one-shared-dependency-compile-).)
+   (Those six per-image Dockerfiles were later consolidated into the root [Dockerfile](../../../Dockerfile), and this cache mount replaced by a cacheable `deps` layer — see [e2e-ci-speed-round-2.md § 1–3](e2e-ci-speed-round-2.md#13-one-dockerfile-one-shared-dependency-compile-).)
 
 ### Notes
 
@@ -181,7 +181,7 @@ The module-cache half (`/go/pkg/mod`) from the original plan was dropped because
 
 ### Problem
 
-`cmd/gmc/Dockerfile:11`, `cmd/agc/Dockerfile:10`, and `test/fakegithub/Dockerfile:11` (since consolidated into the root [Dockerfile](../../Dockerfile)) all ran `RUN go work sync 2>/dev/null || true` immediately before `COPY . .`.
+`cmd/gmc/Dockerfile:11`, `cmd/agc/Dockerfile:10`, and `test/fakegithub/Dockerfile:11` (since consolidated into the root [Dockerfile](../../../Dockerfile)) all ran `RUN go work sync 2>/dev/null || true` immediately before `COPY . .`.
 The next layer overwrites the working directory, so any side-effect of `go work sync` was thrown away.
 It was a no-op step that produced its own layer and added ~1 s.
 
@@ -212,13 +212,13 @@ They have independent GHA cache scopes (`scope=gmc`, `scope=agc`, etc.) and no i
 `docker buildx bake` with one HCL file describing all four targets.
 Bake runs them in parallel using a single BuildKit instance, so the compile-cache mount from §2 is shared across siblings.
 
-The implementation added a `GHA_CACHE` variable that toggles the `type=gha` cache-from/cache-to flags so local invocations don't fail with "ActionsRuntimeToken required" — see [docker-bake.hcl](../../docker-bake.hcl).
+The implementation added a `GHA_CACHE` variable that toggles the `type=gha` cache-from/cache-to flags so local invocations don't fail with "ActionsRuntimeToken required" — see [docker-bake.hcl](../../../docker-bake.hcl).
 
 ### Files
 
-- [docker-bake.hcl](../../docker-bake.hcl) (new)
-- [Makefile](../../Makefile) — `e2e-images` and `docker-build-*` targets call bake
-- [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) and `.github/workflows/e2e-multi-node.yml` — four build-push-action steps collapsed into one bake step
+- [docker-bake.hcl](../../../docker-bake.hcl) (new)
+- [Makefile](../../../Makefile) — `e2e-images` and `docker-build-*` targets call bake
+- [.github/workflows/e2e-test.yml](../../../.github/workflows/e2e-test.yml) and `.github/workflows/e2e-multi-node.yml` — four build-push-action steps collapsed into one bake step
 
 ---
 
@@ -285,7 +285,7 @@ The GHA layer cache (`type=gha,mode=max`) already makes cache-hit builds fast (~
 
 ### Files
 
-- [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) — `changes` job + `if:` on `e2e` job
+- [.github/workflows/e2e-test.yml](../../../.github/workflows/e2e-test.yml) — `changes` job + `if:` on `e2e` job
 
 ---
 
@@ -335,16 +335,16 @@ Every CI run re-paid the full ~166 MB transfer cost.
 Adopted the "kind-with-registry" pattern documented at <https://kind.sigs.k8s.io/docs/user/local-registry/>: a `registry:2` container runs alongside the kind cluster on the kind docker network; each node's containerd is configured to mirror `127.0.0.1:5000` → `kind-registry:5000`; buildx pushes directly to the registry; pods pull on demand.
 (The host ref is the literal IPv4 loopback, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently.)
 
-[scripts/e2e/kind-with-registry.sh](../../scripts/e2e/kind-with-registry.sh) handles the whole setup idempotently.
+[scripts/e2e/kind-with-registry.sh](../../../scripts/e2e/kind-with-registry.sh) handles the whole setup idempotently.
 `make e2e-cluster` invokes it; the legacy `kind load` flow was removed entirely (replaced rather than gated).
 Image tags now include `127.0.0.1:5000/<name>:e2e-<sha>` so kubelet's `IfNotPresent` cache can't serve a stale image across cluster reuse.
 
 ### Files
 
-- [scripts/e2e/kind-with-registry.sh](../../scripts/e2e/kind-with-registry.sh) (new)
-- [Makefile](../../Makefile) — `e2e-cluster` invokes the script; `e2e-load-images` removed; image tags include the registry prefix
-- [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) and `.github/workflows/e2e-multi-node.yml` — drop the `kind load` step; setup-buildx-action uses `network=host` so buildx can push to the host registry
-- [cmd/gmc/test/e2e/e2e_suite_test.go](../../cmd/gmc/test/e2e/e2e_suite_test.go) — dropped the redundant `LoadImageToKindClusterWithName` loop; flipped the fakegithub manifest's `imagePullPolicy: Never` → `IfNotPresent`
+- [scripts/e2e/kind-with-registry.sh](../../../scripts/e2e/kind-with-registry.sh) (new)
+- [Makefile](../../../Makefile) — `e2e-cluster` invokes the script; `e2e-load-images` removed; image tags include the registry prefix
+- [.github/workflows/e2e-test.yml](../../../.github/workflows/e2e-test.yml) and `.github/workflows/e2e-multi-node.yml` — drop the `kind load` step; setup-buildx-action uses `network=host` so buildx can push to the host registry
+- [cmd/gmc/test/e2e/e2e_suite_test.go](../../../cmd/gmc/test/e2e/e2e_suite_test.go) — dropped the redundant `LoadImageToKindClusterWithName` loop; flipped the fakegithub manifest's `imagePullPolicy: Never` → `IfNotPresent`
 
 ---
 

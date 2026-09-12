@@ -57,10 +57,10 @@ That makes the failure mode that produced the wall of text mechanically impossib
 The roadmap needed the same treatment, and rule 6 applies it there under a looser 60-word cap — a roadmap bullet also has to name the gate it waits on, which the feature index never does.
 Its five worst bullets ran 74–123 words by explaining the whole approach inline while the plan doc holding that detail went unlinked; all fifteen now fit, and every one links out.
 
-What made that possible is recent: `plan/` is excluded from every release's publication scope, so until [Q561](../development/website.md#publication-scope) shipped `source_links.py`'s per-build absolutization, a roadmap link to a plan doc resolved on `dev` and 404'd on every numbered version.
+What made that possible is recent: `plan/` is excluded from every release's publication scope, so until [Q561](../../development/website.md#publication-scope) shipped `source_links.py`'s per-build absolutization, a roadmap link to a plan doc resolved on `dev` and 404'd on every numbered version.
 Appendix G was always safe (`design/` publishes everywhere); plan docs became safe on 2026-08-01.
 
-This is the repo's own [canonical-home-and-link rule](../development/documentation-standards.md#conventions) applied to a page that had drifted from it: state a fact once, in its natural home, and link to it.
+This is the repo's own [canonical-home-and-link rule](../../development/documentation-standards.md#conventions) applied to a page that had drifted from it: state a fact once, in its natural home, and link to it.
 
 ## What the roadmap keeps
 
@@ -76,7 +76,7 @@ Every remaining bullet carries a `<!-- q: -->` annotation, so the gate now cover
 ## Phase 2: splitting the parked register (Q569)
 
 Deferred and Flake watch move to their own page, leaving `STATUS.md` as the Queue.
-The [retired-flake ledger](../development/flake-watch-retired.md) set the precedent on 2026-08-01, moving 18 soaked rows to a cold, greppable page at no live-table cost; this applies the same move to the rest of the parked register.
+The [retired-flake ledger](../../development/flake-watch-retired.md) set the precedent on 2026-08-01, moving 18 soaked rows to a cold, greppable page at no live-table cost; this applies the same move to the rest of the parked register.
 
 Deliberately a separate change — it is lint and anchor work, not prose:
 

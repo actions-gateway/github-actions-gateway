@@ -36,7 +36,7 @@ What the log contains during those silences:
   Naming is therefore inconsistent across specs.
 - **`--poll-progress-after 30s` is the only live per-spec signal.** It names the spec, the current `By` step, and both runtimes — genuinely the right data — but it fired 8 times in the hosted run and each report trails a goroutine and GinkgoWriter dump.
 - **`Will run 73 of 73 specs` prints once at suite start.** The denominator is already available; only the numerator is missing.
-- **`tmp/e2e-report.xml` is uploaded as an artifact and never rendered.** [e2e-tests-speed.md §13](../e2e-tests-speed.md#13-junit-report-for-pr-test-summary) planned the upload on the premise that "GitHub Actions can render this as a test summary table in the PR sidebar using the built-in test reporter".
+- **`tmp/e2e-report.xml` is uploaded as an artifact and never rendered.** [e2e-tests-speed.md §13](e2e-tests-speed.md#13-junit-report-for-pr-test-summary) planned the upload on the premise that "GitHub Actions can render this as a test summary table in the PR sidebar using the built-in test reporter".
   There is no such built-in reporter.
   The upload shipped, the rendering never did, and reading the report still means downloading an artifact.
 

@@ -83,7 +83,7 @@ where `tmp/ruleset.json` is the current ruleset body (GET it first) plus:
 After activation, a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.
 This section predicted `gh pr merge --squash` would enqueue; it does not.
 That form routes through `enablePullRequestAutoMerge`, which `allow_auto_merge: false` forbids, so it fails outright (measured 2026-09-04, gh 2.100.0).
-Enqueueing from a terminal takes the `enqueuePullRequest` mutation instead; see [CONTRIBUTING.md](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open).
+Enqueueing from a terminal takes the `enqueuePullRequest` mutation instead; see [CONTRIBUTING.md](../../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open).
 
 Rollback: delete the `merge_queue` rule from the ruleset; behavior reverts to direct merges and the process rules in CONTRIBUTING.md.
 
@@ -104,7 +104,7 @@ The e2e volume split explains why: of those 200 runs, 116 (58%) were `pull_reque
 Every one of the 116 was a second verdict on a commit the queue would validate again, and the branches that pushed repeatedly paid for it repeatedly.
 
 Two supporting numbers, from the same window: e2e failed on 1% of runs (2 of 200), and CI execution accounts for only ~5% of PR open→merge latency.
-Full workings in [ci-wait-time-analysis.md](ci-wait-time-analysis.md).
+Full workings in [ci-wait-time-analysis.md](../ci-wait-time-analysis.md).
 
 ### The decision
 
@@ -119,7 +119,7 @@ The candidate list as recorded on 2026-08-03:
 
 - Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).
   **Adopted 2026-08-12.**
-- `docs/STATUS.md` contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the [`session-backlog`](../development/skills.md#session-backlog) skill and lint, and only worth it if post-queue measurement shows it binding.
+- `docs/STATUS.md` contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the [`session-backlog`](../../development/skills.md#session-backlog) skill and lint, and only worth it if post-queue measurement shows it binding.
 - GitHub Issues + a Projects board would also zero the conflicts, but trades them for a sync problem: today a Queue row is deleted in the same PR that ships the work (atomic with the code, reviewable in the diff, greppable in one file, and the bare-Q-ID anchor fabric across docs and code depends on it), while an issue close is a separate mutation that can drift from code state.
   Priority ordering is also weaker through `gh` (Projects v2 positions are drag-first, not CLI-first).
   Considered 2026-08-03; behind the same re-measurement, and per-item files in-repo rank ahead of it because they keep every property above.
