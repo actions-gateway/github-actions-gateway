@@ -2780,7 +2780,7 @@ The bump is measured rather than assumed, and it has moved since this scope open
 Fifteen more carry a <code>feat</code> or <code>fix</code> subject and ship in no image and no chart, which is the gap between counting subjects and reading what a release contains, and Q408's own commits are all in that group: the deliverable is manifests, wiring and docs.</p>
 </blockquote>
 <h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
-<p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md § Why untrusted-PR CI on Kata is 1.7</a> recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
+<p><a href="../archive/release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md § Why untrusted-PR CI on Kata is 1.7</a> recorded the split at the moment it was made, and it holds: Q727 was a migration blocker for a team leaving ARC, Q408 is a threat-model deliverable for a team running untrusted code.
 Neither advances the other, because Kata already makes Docker-in-Docker unprivileged.</p>
 <p>What makes the axis a release is Phase 5, not Phase 4.
 The enforcement swap is a NetworkPolicy change in one overlay; the release is the sentence it retires.
@@ -2836,7 +2836,7 @@ Phase 5 needed no cluster, so the release never waited on one after 2026-08-28.<
 A warm run would have reported hit counts that prove nothing about the paths a fresh tenant takes.
 Nothing had to be arranged for it: Phase 1 removed every <code>actions/cache</code> step from the self-hosted lane, so that lane has been cold since, which is why Phase 4's run reported the same five instances serving too.</p>
 <h2 id="the-three-questions-16-left-for-this-scope">The three questions 1.6 left for this scope<a class="headerlink" href="#the-three-questions-16-left-for-this-scope" title="Permanent link">&para;</a></h2>
-<p><a href="../release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md</a> named these rather than deciding them, on the ground that they were not that release's to settle.
+<p><a href="../archive/release-1.6/#why-untrusted-pr-ci-on-kata-is-17">release-1.6.md</a> named these rather than deciding them, on the ground that they were not that release's to settle.
 Two are settled here; the third is a real conflict and is scoped as work.</p>
 <h3 id="q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes">Q215's trigger has not fired, and the row now says which reading it takes<a class="headerlink" href="#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes" title="Permanent link">&para;</a></h3>
 <p><strong>Settled 2026-08-26.</strong> <a href="../../queue/Q215/">Q215</a>'s revive trigger is an in-cluster cache ask <strong>or</strong> Q408 Phase 1 landing and removing the working one, and 1.6 could not tell whether "the working one" meant GAG's own self-hosted lane or a tenant's.</p>
@@ -2856,7 +2856,7 @@ Q564 shipped the egress audit record in 1.6 and attributes per pool, so the tena
 A worker pod is deleted when its job ends, so a source address resolves to nothing after the fact and the binding has to be recorded live.
 The answer is two opted-in records rather than one wider one: <code>EgressProxy.spec.auditLogging: ConnectionsWithSource</code> puts the client address on the egress record, and <code>ActionsGateway.spec.auditLogging: WorkerAddresses</code> has the AGC say which job holds each address while its pod lives.
 Both default <code>Off</code>, because neither is a movement log alone and the join of the two is.
-Scope and the rejected alternatives are in <a href="../q986-egress-attribution/">q986-egress-attribution.md</a>.</p>
+Scope and the rejected alternatives are in <a href="../archive/q986-egress-attribution/">q986-egress-attribution.md</a>.</p>
 <h3 id="the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve">The default-versus-opt-in conflict is real and is this release's to resolve<a class="headerlink" href="#the-default-versus-opt-in-conflict-is-real-and-is-this-releases-to-resolve" title="Permanent link">&para;</a></h3>
 <p><a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #1 requires the isolated posture to be the default rather than an opt-in.
 <a href="../../operations/runner-template-library/#nothing-ships-as-a-cluster-default">runner-template-library.md § Nothing ships as a cluster default</a> declines exactly that, because a shipped default template would silently hand a privileged pod shape to sets that never asked for one.</p>
@@ -2870,7 +2870,7 @@ The criterion now also records the decline, so a later reading cannot revive the
 <li><strong><a href="../../queue/Q215/">Q215</a> as a build.</strong> Deferred with an unfired trigger, per the section above.</li>
 <li><strong>Controller or API changes.</strong> Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.
   A 1.7 that grows an API field has lost the plot of what the release is.</li>
-<li><strong>The remaining proxy-hardening cluster.</strong> <a href="../../queue/Q565/">Q565</a>, <a href="../../queue/Q566/">Q566</a> and <a href="../../queue/Q567/">Q567</a> keep their demand triggers, unchanged since <a href="../release-1.4/#deferred-out-of-14-and-why">release-1.4.md</a> shelved them.</li>
+<li><strong>The remaining proxy-hardening cluster.</strong> <a href="../../queue/Q565/">Q565</a>, <a href="../../queue/Q566/">Q566</a> and <a href="../../queue/Q567/">Q567</a> keep their demand triggers, unchanged since <a href="../archive/release-1.4/#deferred-out-of-14-and-why">release-1.4.md</a> shelved them.</li>
 </ul>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ol>
@@ -2922,7 +2922,7 @@ Re-run any whose window has moved before the stable tag.</p>
 </tr>
 </tbody>
 </table>
-<p>Both <code>auditLogging</code> fields default <code>Off</code> and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is (<a href="../q986-egress-attribution/">q986-egress-attribution.md</a>).</p>
+<p>Both <code>auditLogging</code> fields default <code>Off</code> and are additive, so the shape is chosen rather than frozen by default: neither is a movement log alone, and only the join of the two is (<a href="../archive/q986-egress-attribution/">q986-egress-attribution.md</a>).</p>
 <p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the operator-caveat pass, the roadmap and <code>features.md</code> reconciliation, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
 <h3 id="v170-rc3-passed-2026-08-29"><code>v1.7.0-rc.3</code>: PASSED, 2026-08-29<a class="headerlink" href="#v170-rc3-passed-2026-08-29" title="Permanent link">&para;</a></h3>

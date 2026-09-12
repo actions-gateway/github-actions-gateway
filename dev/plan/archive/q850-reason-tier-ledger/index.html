@@ -2681,14 +2681,14 @@ Condition reasons and Event reasons are the other two signals an operator sees, 
 A capability that reaches only the classic tier is therefore still invisible if it surfaces as a condition or an Event rather than as a counter.
 That is the failure mode Q683, Q691, Q713 and Q844 each demonstrated after parity had been declared.</p>
 <p><strong>The goal:</strong> a completeness claim about tier reach that covers all three signal surfaces, not one of them.
-That is the precondition <a href="../../release-1.5/#scope-reopened-2026-08-14-what-a-question-cost">release-1.5.md</a> records for saying <em>parity</em> in the marketing surfaces rather than <em>parity on the metric surface</em>.</p>
+That is the precondition <a href="../release-1.5/#scope-reopened-2026-08-14-what-a-question-cost">release-1.5.md</a> records for saying <em>parity</em> in the marketing surfaces rather than <em>parity on the metric surface</em>.</p>
 <hr />
 <h2 id="1-scope">1. Scope<a class="headerlink" href="#1-scope" title="Permanent link">&para;</a></h2>
 <p><strong>In.</strong> Condition reasons the AGC writes into <code>.status.conditions[].reason</code>, and Event reasons the AGC records on a <code>RunnerGroup</code>/<code>RunnerSet</code>.
 Both get a ledger row naming the tier, and a gate that fails a missing row, a bad tier value, and a single-tier row the source refutes.</p>
 <p><strong>Out.</strong> The GMC and proxy binaries: neither acquires jobs, so neither has a tier.
 That is the exclusion the metric ledger already states.
-Label values were Q851, a separate row, since shipped as <a href="../../../operations/observability-metrics/#label-value-reach">Label-value reach</a>; prose surfaces are <a href="../../../queue/Q848/">Q848</a>.</p>
+Label values were Q851, a separate row, since shipped as <a href="../../../operations/observability-metrics/#label-value-reach">Label-value reach</a>; prose surfaces were Q848, shipped as the <a href="../../../development/testing/#the-prose-tier-claim-gate">prose tier-claim gate</a>.</p>
 <h2 id="2-decisions">2. Decisions<a class="headerlink" href="#2-decisions" title="Permanent link">&para;</a></h2>
 <p><strong>A second tool, not a rename.</strong> The metric gate ships as <code>make metric-tiers-check</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md"><code>docs/releases/v1.5.0.md</code></a> records it under that name.
 A shipped release note is a historical record, so renaming <code>metrictiers</code> would either falsify it or leave the two out of step.
@@ -2702,7 +2702,7 @@ Over-approximating adds a row; it never drops one, which is the safe direction f
 <h2 id="3-how-the-reason-arguments-resolve">3. How the reason arguments resolve<a class="headerlink" href="#3-how-the-reason-arguments-resolve" title="Permanent link">&para;</a></h2>
 <p>An Event's reason reaches the recorder as a literal at some call sites and through a variable at others, and the recorder wrappers themselves pass it through as a parameter.
 A scan that keys on the call name alone therefore counts plumbing as emission and misses the computed cases.
-The <a href="../../release-1.5/#scope-reopened-2026-08-14-what-a-question-cost">1.5 pre-flight</a> already hit that trap once, where keying on <code>recordEvent(</code> missed the two additions that record through <code>RecordEvent(</code>.</p>
+The <a href="../release-1.5/#scope-reopened-2026-08-14-what-a-question-cost">1.5 pre-flight</a> already hit that trap once, where keying on <code>recordEvent(</code> missed the two additions that record through <code>RecordEvent(</code>.</p>
 <p>The scanner classifies each recorder call's reason argument into one of five forms, and fails anything it cannot place:</p>
 <table>
 <thead>
@@ -2761,7 +2761,7 @@ It is the condition/Event analogue of the Q809 metric that reached the ledger an
 <p><strong>The first scanner was wrong in the way this repo keeps being wrong about extraction.</strong> Keying the reason's argument index on the function name read the scale-set listener's action string <code>"ProvisionWorker"</code> as a reason, and missed <code>AssignmentAbandoned</code>, <code>JobProvisionStalled</code>, <code>WorkerCeilingReached</code> and <code>SessionUnauthorized</code>, because two methods here are called <code>recordEvent</code> and two are called <code>Event</code>, with the reason at a different index in each.
 It was caught by checking the output against reasons the runbook already documented, not by the scan reporting anything.
 The fix reads the index off the callee's own declaration, and <code>TestReasonIndexComesFromTheCalleesDeclaration</code> pins both directions.
-This is the third instance of the same class in the 1.5 cycle: a CRD property scan that matched a wrapped godoc line, and an Event scan keyed on <code>recordEvent(</code> that missed the <code>RecordEvent(</code> sites (<a href="../../release-1.5/#scope-reopened-2026-08-14-what-a-question-cost">release-1.5.md</a>).</p>
+This is the third instance of the same class in the 1.5 cycle: a CRD property scan that matched a wrapped godoc line, and an Event scan keyed on <code>recordEvent(</code> that missed the <code>RecordEvent(</code> sites (<a href="../release-1.5/#scope-reopened-2026-08-14-what-a-question-cost">release-1.5.md</a>).</p>
 <p><strong>No condition reason was found reaching one tier by accident.</strong> Every single-tier row is single-tier by design, and the two prose claims most at risk, <code>VersionTooOld</code> and <code>RunnerVersionTooOld</code>, were already correct: the condition <em>type</em> reaches both tiers, and only the classic tier's GitHub-rejection reason does not.
 That is a narrower result than the metric walk's, which found two classic-only series on no list.
 The metric surface had drifted because series are added one at a time; the reason vocabulary is declared in one shared file that <code>check-v2-api-sync.sh</code> already holds to both API versions, which is the likeliest explanation and is not a measurement.</p>

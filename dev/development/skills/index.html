@@ -2912,7 +2912,7 @@ It is also the first of the four prose passes over a release note, where the cla
 </tr>
 </tbody>
 </table>
-<p><a href="../../plan/q889-backlog-item-store/">Q889</a> phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
+<p><a href="../../plan/archive/q889-backlog-item-store/">Q889</a> phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
 Nothing held them there, and nothing in the tree said they were vendored at all.</p>
 <p><strong>Measured 2026-08-21, and it was not the drift the backlog row assumed.</strong> Each file as of its vendoring commit hashed to an upstream commit exactly, so phase 1 did what it claimed.
 The drift was entirely upstream's: 8 commits on <code>queue.py</code> and 1 to 2 on each of the others, against none here until Q935 forked <code>queue.py</code> to fix its stale-citation pattern.

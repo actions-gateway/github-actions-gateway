@@ -3525,7 +3525,7 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-48" name="__codelineno-20-48" href="#__codelineno-20-48"></a><span class="s">          # limit only throttles bursty Go jobs); request=2 packs one heavy pod</span>
 <a id="__codelineno-20-49" name="__codelineno-20-49" href="#__codelineno-20-49"></a><span class="s">          # per e2-standard-4 (~3.4 vCPU allocatable) so it bursts to the whole</span>
 <a id="__codelineno-20-50" name="__codelineno-20-50" href="#__codelineno-20-50"></a><span class="s">          # node. Memory: request≈peak (2Gi), limit=peak×~1.4 (3Gi) for OOM</span>
-<a id="__codelineno-20-51" name="__codelineno-20-51" href="#__codelineno-20-51"></a><span class="s">          # headroom. See docs/plan/dogfood-runner-rightsizing.md.</span>
+<a id="__codelineno-20-51" name="__codelineno-20-51" href="#__codelineno-20-51"></a><span class="s">          # headroom. See docs/plan/archive/dogfood-runner-rightsizing.md.</span>
 <a id="__codelineno-20-52" name="__codelineno-20-52" href="#__codelineno-20-52"></a><span class="s">          resources:</span>
 <a id="__codelineno-20-53" name="__codelineno-20-53" href="#__codelineno-20-53"></a><span class="s">            requests:</span>
 <a id="__codelineno-20-54" name="__codelineno-20-54" href="#__codelineno-20-54"></a><span class="s">              cpu: "2"</span>

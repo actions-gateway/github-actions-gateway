@@ -2703,7 +2703,7 @@ Queue Notes stay short; the evidence and fixes live here.</p>
 The controllers configure <code>zap</code> (JSON) via <code>ctrl.SetLogger</code>, but the <code>slog</code> and <code>zap</code> worlds are never bridged, so a single process emits <strong>mixed zap-JSON + stdlib-text on one stream</strong>.
 A JSON log pipeline cannot parse the majority of an AGC pod's lines.
 This is why F5's "structured JSON" promise (PR #151) is only half-effective — it is true only for the minority of lines that go through the manager's <code>ctrl.Log</code>.</p>
-<p><strong>Why it gates 1.0.</strong> <a href="../../release-1.0/#d-production-operability--gating--recommended">release-1.0.md § D</a> says the slog+zap mismatch is "recommended to resolve, gating only if it breaks log ingestion."
+<p><strong>Why it gates 1.0.</strong> <a href="../release-1.0/#d-production-operability--gating--recommended">release-1.0.md § D</a> says the slog+zap mismatch is "recommended to resolve, gating only if it breaks log ingestion."
 It <em>does</em> break ingestion: the busiest AGC code paths emit unparseable text.</p>
 <p><strong>Evidence (verified):</strong></p>
 <ul>

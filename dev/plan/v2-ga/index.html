@@ -2946,7 +2946,7 @@ Dropping a served API version is a contract change operators can plan for; silen
 <tr>
 <td>Abandoned-run force-cancel and automatic re-run (a worker removed before it ran)</td>
 <td>✅ <strong>Both tiers.</strong> Q683 and Q691 shipped classic-only inside 1.4 and Q766 ported both in the same release, before any tag published the asymmetry. The scale-set detection reads the run identity from the worker pod's annotations where classic reads it from the payload it holds, which is what the <code>tier</code> label on <code>abandoned_run_force_cancels_total</code> splits.</td>
-<td>Cleared. Design: <a href="../../design/04-operational-flows/#on-the-scale-set-tier-q766">04-operational-flows.md § On the scale-set tier</a>. Plan: <a href="../release-1.4/">release-1.4.md</a>.</td>
+<td>Cleared. Design: <a href="../../design/04-operational-flows/#on-the-scale-set-tier-q766">04-operational-flows.md § On the scale-set tier</a>. Plan: <a href="../archive/release-1.4/">release-1.4.md</a>.</td>
 </tr>
 <tr>
 <td>Job duration and pod-creation latency (<code>job_duration_seconds</code>, <code>pod_creation_latency_seconds</code>)</td>
@@ -2995,7 +2995,7 @@ Q683, Q691 and Q713 all arrived that way, and Q844 made four on 2026-08-14, foun
 Q851 took the same obligation inside the series, to the label values a <code>Both</code> row hides: the checker resolves the values each series emits out of the AGC source, and the <a href="../../operations/observability-metrics/#label-value-reach">Label-value reach</a> table records the seven that reach one tier only.
 The re-walk it required found two: <code>renew_job_errors_total</code> and <code>renew_job_teardowns_total</code> were classic-only by construction and on no list, and <code>eviction_recovery_evidence_lost_total</code> reached no operator doc at all.</p>
 <p>That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.
-Until <a href="../../queue/Q774/">Q774</a> gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where that obligation is written down.</p>
+Q774 now gates scope statements mechanically as <code>make design-scope-check</code>, which fires on an admission rejection or a changed default added under <code>docs/design/</code> with no operator doc touched; adding a row to the table above is still a manual step in the change that creates the asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where that obligation is written down.</p>
 <h2 id="phase-4--docs-and-the-cut">Phase 4 — docs and the cut<a class="headerlink" href="#phase-4--docs-and-the-cut" title="Permanent link">&para;</a></h2>
 <p>Operator-facing surface that must be current before the tag:</p>
 <ul>

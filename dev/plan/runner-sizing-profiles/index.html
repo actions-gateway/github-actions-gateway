@@ -2940,7 +2940,7 @@ This doc is the design sketch, the phase record, and the validation record.</p>
 <p>Automatically right-size worker pod CPU/memory <code>requests</code>/<code>limits</code> per runner shape from usage observed across the jobs that actually ran on that shape — recommendations first, opt-in actuation later.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
 <p><strong>This is a differentiator versus Actions Runner Controller (ARC).</strong> ARC has no sizing feedback loop: operators guess runner resource specs, and the guess is rarely revisited.
-Our own dogfood proved both the value and the toil of doing it manually — <a href="../dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a> started from "every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess" and spent multiple sessions measuring peaks and deriving values by hand.
+Our own dogfood proved both the value and the toil of doing it manually — <a href="../archive/dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a> started from "every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess" and spent multiple sessions measuring peaks and deriving values by hand.
 This plan automates that loop for every tenant.</p>
 <p>The payoff concentrates where nodes are expensive:</p>
 <ul>
@@ -3158,7 +3158,7 @@ All seven metric families are exported with live data, labelled by namespace, ru
 </table>
 <p>Two independent things worth recording:</p>
 <ul>
-<li><strong>The measured peak matches the earlier hand-derivation.</strong> The <a href="../dogfood-runner-rightsizing/">dogfood right-sizing exercise</a> put heavy CI jobs at roughly 3.8 vCPU / 2.1 GiB by scraping <code>kubectl top</code> by hand; the sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
+<li><strong>The measured peak matches the earlier hand-derivation.</strong> The <a href="../archive/dogfood-runner-rightsizing/">dogfood right-sizing exercise</a> put heavy CI jobs at roughly 3.8 vCPU / 2.1 GiB by scraping <code>kubectl top</code> by hand; the sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
   That is the feature reproducing, automatically, the number it was built to stop people deriving manually.</li>
 <li><strong><code>jobs_unsampled_total</code> earns its place.</strong> Some CI jobs finish inside one 15s sample interval, and the counter makes that visible instead of silently biasing the histogram toward long jobs.</li>
 </ul>
@@ -3443,7 +3443,7 @@ Worth knowing before assuming a committed CR edit is live.</p>
 <ul>
 <li><strong>AGC / GMC / proxy-pool autoscaling</strong> — separate concerns, both shipped: the managed VPA opt-in for the control planes (Q360: <a href="../../design/appendix-e-capacity-planning/#e11-managed-vertical-right-sizing-of-the-control-planes"><code>ActionsGateway.spec.agcAutoscaling</code></a> and the chart's <code>vpa.enabled</code>) and the bring-your-own proxy autoscaler (Q173: <a href="../v2-api/#bring-your-own-proxy-autoscaler-q173--shipped"><code>EgressProxy.spec.managedAutoscaling</code></a>).</li>
 <li><strong>GPU-count autoscaling</strong> — shapes are selected by jobs, never resized.</li>
-<li><strong>Making CI faster than GitHub-hosted</strong> — same scope note as the <a href="../dogfood-runner-rightsizing/#scope-note--this-is-costcorrectness-not-speed">dogfood plan</a>: this is cost/correctness, not speed.</li>
+<li><strong>Making CI faster than GitHub-hosted</strong> — same scope note as the <a href="../archive/dogfood-runner-rightsizing/#scope-note--this-is-costcorrectness-not-speed">dogfood plan</a>: this is cost/correctness, not speed.</li>
 <li><strong>In-place resize of running job pods</strong> (K8s ≥1.33 in-place pod resize) — plausible future extension once profiles exist; out of scope here.</li>
 </ul>
 <h2 id="open-questions-settle-at-phase-pickup">Open questions (settle at phase pickup)<a class="headerlink" href="#open-questions-settle-at-phase-pickup" title="Permanent link">&para;</a></h2>

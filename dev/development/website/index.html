@@ -3137,7 +3137,7 @@ Rules 9-11 of <a href="https://github.com/actions-gateway/github-actions-gateway
 <h3 id="the-release-chip">The release chip<a class="headerlink" href="#the-release-chip" title="Permanent link">&para;</a></h3>
 <p>A roadmap bullet's release commitment is <strong>derived, never typed</strong>.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_gates.py"><code>hooks/release_gates.py</code></a> reads the <code>X.Y-gate</code> labels out of each item's frontmatter in <code>docs/queue/</code>, follows each bullet's existing <code>&lt;!-- q:QN --&gt;</code> annotation, and injects the pill:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">-</span><span class="w"> </span><span class="gs">**[Bind each runner set to a GitHub runner group](plan/release-1.5.md)**</span> &lt;!-- q:Q712 --&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">-</span><span class="w"> </span><span class="gs">**[Bind each runner set to a GitHub runner group](plan/archive/release-1.5.md)**</span> &lt;!-- q:Q712 --&gt;
 </code></pre></div>
 <p>renders with a <code>1.5</code> pill beside the title, and loses it the day the label comes off.
 The page states no version anywhere, so no version on it can be stale.
@@ -3906,13 +3906,13 @@ Publishing the repo-internal docs made it load-bearing — 724 links across the 
 <h3 id="unpublished-is-per-build-not-per-path-q561">Unpublished is per build, not per path (Q561)<a class="headerlink" href="#unpublished-is-per-build-not-per-path-q561" title="Permanent link">&para;</a></h3>
 <p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code> records the src_uris whose <code>inclusion.is_included()</code>, the same derivation <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> uses for the banner link.
 Escaping <code>docs/</code> is only one way to qualify.
-The other is <a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>queue/</code> are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing <code>../plan/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com from a release</strong>.
+The other is <a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>queue/</code> are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing <code>../plan/archive/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com from a release</strong>.
 One markdown source, both renderings, no per-version editing:</p>
 <table>
 <thead>
 <tr>
 <th>Scope</th>
-<th><code>../plan/milestone-4.md</code> becomes</th>
+<th><code>../plan/archive/milestone-4.md</code> becomes</th>
 </tr>
 </thead>
 <tbody>
@@ -3922,7 +3922,7 @@ One markdown source, both renderings, no per-version editing:</p>
 </tr>
 <tr>
 <td><code>stable</code>, every release</td>
-<td><code>{repo_url}/blob/{ref}/docs/plan/milestone-4.md</code></td>
+<td><code>{repo_url}/blob/{ref}/docs/plan/archive/milestone-4.md</code></td>
 </tr>
 </tbody>
 </table>

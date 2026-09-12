@@ -2680,7 +2680,7 @@
 The script is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh"><code>scripts/docs/alloc-queue-id.sh</code></a>, which takes one title argument per ID — several titles claim several IDs, each searched on its own.</p>
 <p>Claim an ID when you file the row, use it, and move on.
 There is nothing to release and nothing to clean up.</p>
-<p><strong>Every path through the target claims, and an ID you did not claim is one <code>queue.py claims</code> rejects.</strong> Those are the two halves of the same rule: the only way to learn an ID is to hold it, and an item carrying an ID nobody holds fails that check, which is rule 12 of the retired table-era linter, moved into <code>queue.py</code> by <a href="../../plan/q889-backlog-item-store/">Q889</a>.
+<p><strong>Every path through the target claims, and an ID you did not claim is one <code>queue.py claims</code> rejects.</strong> Those are the two halves of the same rule: the only way to learn an ID is to hold it, and an item carrying an ID nobody holds fails that check, which is rule 12 of the retired table-era linter, moved into <code>queue.py</code> by <a href="../../plan/archive/q889-backlog-item-store/">Q889</a>.
 <code>make queue-claims-check</code> runs it over this store, and the <code>status-lint</code> workflow runs it with <code>--strict</code> (Q1042).
 Both are below, under <a href="#reserving-not-reporting">Reserving, not reporting</a>.</p>
 <p><strong>The title is mandatory, and there is no untitled batch form.</strong> This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through.
@@ -2783,7 +2783,7 @@ A four-worker dispatch batch took rows 1 through 4 and every pair was adjacent.<
 Row conflicts remained, were two lines, and resolved obviously.
 Their real danger was a botched resolution — a done row silently restored — not the conflict itself; one file per item ends it, because a relocated item and a deleted one become a modify and a delete of one path, which git refuses rather than resolves (<a href="../maintaining-backlog/#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it">why</a>).</p>
 <p>Every verdict in that table is a <em>line-position</em> one, which is an artifact of storing the backlog as lines in one file.
-A merge driver re-decided the same cases by row ID and made all of them clean, but it was opt-in per clone, never reached GitHub's server-side squash-merge, and retired with the table it served (<a href="../../plan/q889-backlog-item-store/">Q889</a>).
+A merge driver re-decided the same cases by row ID and made all of them clean, but it was opt-in per clone, never reached GitHub's server-side squash-merge, and retired with the table it served (<a href="../../plan/archive/q889-backlog-item-store/">Q889</a>).
 <code>.gitattributes</code> routes no backlog path today, and adding one would rebuild the contention the store exists to remove.
 One file per item deletes the line positions rather than resolving them, so none of these cases arises in the backlog now.
 They arise in the registry files, which is where the drivers went.</p>
@@ -2793,13 +2793,13 @@ Issues would give free IDs, no backlog conflicts, and a native in-flight signal,
 Projects v2 has a position field, but it lives outside the repo and cannot be diffed.
 Issues would also cost the atomicity of deleting the item in the same diff as the work, and the lintable write path that <code>queue.py lint</code> reads off the tree: frontmatter shape, the 72-character title cap, unresolvable targets.
 Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.</p>
-<p><strong>A custom merge driver for the backlog table.</strong> Shipped, then retired with the table it served (<a href="../../plan/q889-backlog-item-store/">Q889</a>).
+<p><strong>A custom merge driver for the backlog table.</strong> Shipped, then retired with the table it served (<a href="../../plan/archive/q889-backlog-item-store/">Q889</a>).
 It resolved the table by ID set-semantics during merge and rebase, which was where the pain was, and it kept the whole tooling stack of the day.
 It needed a one-time <code>git config</code> per clone (<code>make merge-driver</code>; git will not let <code>.gitattributes</code> configure a driver, since that would be remote code execution on clone) and degraded to ordinary conflict markers both when unconfigured and whenever the resolution was not certain.
 It never helped GitHub's server-side squash-merge.
 The mechanism outlived the backlog: the same <code>make merge-driver</code> installs <a href="../maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">the four drivers the registry files still use</a>, keyed on a plan path (Q611), a bullet's backlog annotation (Q799), a script path, and a gate-list entry.</p>
 <p><strong>One file per item</strong> (<code>docs/queue/Q423.md</code>).
-Shipped (<a href="../../plan/q889-backlog-item-store/">Q889</a>), and the layout this doc now describes.
+Shipped (<a href="../../plan/archive/q889-backlog-item-store/">Q889</a>), and the layout this doc now describes.
 It was the permanent answer to row conflicts, since adds and removes became file creates and deletes, which cannot conflict.
 It cost what this entry predicted: <code>lint-backlog.sh</code> retired in favour of <code>lint-queue.sh</code> and <code>check-queue-rules.sh</code>, this process and the shared <code>session-backlog</code> skill followed, and the single-file read of the prioritized queue became <code>queue.py render</code>.</p>
 <p><strong>Dispatcher-owned row removal.</strong> Rejected, and moot since Q889.

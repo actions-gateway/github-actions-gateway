@@ -3012,7 +3012,7 @@ That key is not a new convention: <a href="https://github.com/actions-gateway/gi
 That makes every gate PR the same edit in the same two sections.
 Measured on <code>docs/roadmap.md</code> at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
 <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1392">Q715</a>'s PR met that shape three times in one session, each time as a merge-queue eviction followed by a hand-resolved rebase.</p>
-<p><strong>What the driver buys is the rebase, not the eviction.</strong> A merge driver is per-clone <code>git config</code>, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before (<a href="../../plan/merge-queue/">merge-queue.md</a> measured the same thing for the backlog table, which had a driver from Q611 until Q889 retired both).
+<p><strong>What the driver buys is the rebase, not the eviction.</strong> A merge driver is per-clone <code>git config</code>, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before (<a href="../../plan/archive/merge-queue/">merge-queue.md</a> measured the same thing for the backlog table, which had a driver from Q611 until Q889 retired both).
 What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
 Fewer evictions is a different problem, and the lever is spacing before serializing: the same two deletions ten bullets apart merged clean, so a batch whose bullets sit apart on the page never meets the conflict.</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap.sh"><code>scripts/docs/git-merge-roadmap.sh</code></a> decides the bullets by that <strong>annotation</strong>, normalized to a comma-joined ID list.
@@ -3380,7 +3380,7 @@ Deleting outright throws that memory away and makes the next occurrence look nov
 That counts <em>references</em>.
 What a change breaks is whatever <em>reads</em> the thing, and the two sets differ by every reader that never names it.
 No better query closes the gap, because the gap is the absence of the string being searched for.</p>
-<p><a href="../../plan/q889-backlog-item-store/">Q889</a> moved the backlog from one table to the per-item store in six phases, and understated its scope in all five that preceded the cutover, every time in the same direction.
+<p><a href="../../plan/archive/q889-backlog-item-store/">Q889</a> moved the backlog from one table to the per-item store in six phases, and understated its scope in all five that preceded the cutover, every time in the same direction.
 Its phase 6 section records three readers a reference count could not have reached, one of each kind:</p>
 <table>
 <thead>
@@ -3582,8 +3582,12 @@ The rationale is usually more valuable than the diff, but a fully-closed plan in
 <p><strong>Archive on close, not on audit.</strong> Do this in the same body of work that removes the plan's last backlog reference — the moment you delete its final Queue row, or flip its Progress row to <code>✅</code> with nothing left open.
 Two gates (both in <code>make check</code>) enforce it so the omission can't ship silently:</p>
 <ul>
-<li><strong><code>make plan-index-check</code></strong> fails when an active, non-ⓘ plan listed in <code>docs/plan/README.md</code> claims open work backed by no live item — i.e. a plan that should have been archived.
-  To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row <code>ⓘ</code>.</li>
+<li><strong><code>make plan-index-check</code></strong> fails when an active, non-ⓘ plan listed in <code>docs/plan/README.md</code> claims open work backed by no live item, i.e. a plan that should have been archived.
+  To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row <code>ⓘ</code>.
+  It also fails the same row <strong>in the other direction</strong> (invariant 6, Q894): an active non-ⓘ row marked ✅ that no live item references is archive-ready and must be archived in the change that made it so.
+  That direction is the one that goes stale silently, because the first rule fires on a row <em>claiming</em> open work and a plan already saying it is done is invisible to it.
+  Measured 2026-09-12: 39 of 68 active rows carried ✅, 24 of them referenced by nothing, and the gate passed over all 24 and always would have.
+  A plan retained deliberately, such as a validation record or standing rationale with no progress to track, marks its row <code>ⓘ</code>, the same escape the other invariants respect.</li>
 <li><strong><code>make doc-links</code></strong> fails on any broken link the move introduces.</li>
 </ul>
 <p>The same change should also keep the plan's <code>docs/plan/README.md</code> <strong>status text</strong> current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.

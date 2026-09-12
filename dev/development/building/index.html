@@ -2709,7 +2709,7 @@ Use the root <code>Makefile</code>:</p>
 <h2 id="container-images">Container images<a class="headerlink" href="#container-images" title="Permanent link">&para;</a></h2>
 <p>The four production images (the <code>agc</code>, <code>gmc</code>, <code>proxy</code> and <code>worker</code> stages) are built together via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl"><code>docker-bake.hcl</code></a> (<code>docker buildx bake</code>).
 Every image is a named stage of the single root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>, selected with <code>--target</code>; they share one <code>deps</code> stage that compiles the vendored dependency tree once.
-The e2e/CI image pipeline is described in <a href="../../plan/e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a>, with the earlier round in <a href="../../plan/docker-image-speed/">docker-image-speed.md</a>.</p>
+The e2e/CI image pipeline is described in <a href="../../plan/archive/e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a>, with the earlier round in <a href="../../plan/archive/docker-image-speed/">docker-image-speed.md</a>.</p>
 <h3 id="go-version-bumps-the-gotoolchainlocal-coupling">Go version bumps (the <code>GOTOOLCHAIN=local</code> coupling)<a class="headerlink" href="#go-version-bumps-the-gotoolchainlocal-coupling" title="Permanent link">&para;</a></h3>
 <p>The official <code>golang</code> base image sets <code>GOTOOLCHAIN=local</code>, so <code>go build</code> inside an image build will <strong>not</strong> auto-download a newer toolchain.
 Bumping the <code>go</code> directive (e.g. for a stdlib CVE) is therefore a <strong>three-part coupled change</strong>:</p>

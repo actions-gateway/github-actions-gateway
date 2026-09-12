@@ -2749,7 +2749,7 @@ Only the PEM goes via the temp file.</p>
 <li>Verify it round-trips with the <code>openssl rsa -check</code> command from that same section.
    Do this <strong>before</strong> step 6: a silently truncated entry and a revoked old key together leave no working credential.</li>
 <li>Delete the downloaded <code>.pem</code> file from <code>~/Downloads</code>.</li>
-<li>Recreate the Kubernetes Secret using the <code>mktemp</code> + <code>--from-file</code> flow from the previous section (the <code>trap</code> ensures the temp file is removed even if <code>kubectl</code> fails), then restart the consumers so they re-read it — for the dogfood tenant, <code>kubectl rollout restart deployment/actions-gateway-controller</code>.
+<li>Recreate the Kubernetes Secret using the <code>mktemp</code> + <code>--from-file</code> flow from the previous section (the <code>trap</code> ensures the temp file is removed even if <code>kubectl</code> fails), then restart the consumers so they re-read it — for the dogfood tenant, <code>kubectl rollout restart deployment/&lt;gateway&gt;-agc</code> on v2, or <code>deployment/actions-gateway-controller</code> on v1, where the AGC is one per namespace rather than one per gateway.
    Worker pods are single-job and interrupting one costs a job, so check <code>kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller</code> first and roll during a quiet window.</li>
 <li>Delete the old key from the GitHub App settings page.
    <strong>This is the step that actually ends the exposure</strong> — everything before it only migrates you onto the new key.

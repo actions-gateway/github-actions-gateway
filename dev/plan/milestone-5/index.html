@@ -2972,7 +2972,7 @@
 
 
 <h1 id="milestone-5-implementation-plan--hardening--load-testing">Milestone 5 Implementation Plan — Hardening &amp; Load Testing<a class="headerlink" href="#milestone-5-implementation-plan--hardening--load-testing" title="Permanent link">&para;</a></h1>
-<p>← <a href="../milestone-4/">Milestone 4</a> | <a href="../../design/06-implementation-phases/">Back to implementation phases</a></p>
+<p>← <a href="../archive/milestone-4/">Milestone 4</a> | <a href="../../design/06-implementation-phases/">Back to implementation phases</a></p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><strong>Goal:</strong> Make the system production-deployable.
@@ -3126,7 +3126,7 @@ Each gets a documented default and a comment in <code>values.yaml</code>; the RE
 <p>The kustomize bases under <code>cmd/*/config/</code> stay in place as the dev/CI source of truth and the scaffolding input for the chart (§1.1); they are not published.</p>
 <h3 id="15-live-validation-q219--2026-06-28">1.5 Live validation (Q219) — 2026-06-28<a class="headerlink" href="#15-live-validation-q219--2026-06-28" title="Permanent link">&para;</a></h3>
 <p>The DoD's "produces a working tenant from a single <code>helm install</code>" gate was proven on a 3-node kind cluster (kindnet, cert-manager) against the real GitHub App <code>actions-gateway-test</code> (App ID 3752347, installation 135739122) and repo <code>actions-gateway/gateway-test</code>.
-This run is distinct from the two prior partial proofs: the <a href="../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12 run</a> needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the <a href="../gke-dogfood/">GKE rc.4 dogfood</a> ran in <strong>dev posture</strong> (floating tags + self-signed cert) and <strong>direct egress</strong>.
+This run is distinct from the two prior partial proofs: the <a href="../archive/milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12 run</a> needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the <a href="../gke-dogfood/">GKE rc.4 dogfood</a> ran in <strong>dev posture</strong> (floating tags + self-signed cert) and <strong>direct egress</strong>.
 Q219 closes the remaining gap: the <strong>production posture</strong> on the <strong>proxied</strong> primary API.</p>
 <p><strong>Install (secure default, no dev opt-outs).</strong> <code>helm install</code> of the current chart with <code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code> all pinned by <strong>digest</strong> (published <code>v1.1.0-rc.4</code> images) — no <code>allowFloatingImageTags</code> — and <code>certManager.enabled=true</code>. cert-manager issued <code>webhook-server-cert</code>; the GMC rolled out 2/2.
 The <code>actions-gateway-crds-v2</code> chart was installed at the matching tag so the GMC's v2 controllers had their kinds.</p>

@@ -2734,7 +2734,7 @@
 
 <h1 id="q114--agc-self-healing-for-single-use-jit-agents">Q114 — AGC self-healing for single-use JIT agents<a class="headerlink" href="#q114--agc-self-healing-for-single-use-jit-agents" title="Permanent link">&para;</a></h1>
 <p><strong>Status: in progress.</strong></p>
-<p>Primary source: <a href="../../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">milestone-4.md §12</a>, bug 2 — live-found 2026-06-12 during the M4 validation run.</p>
+<p>Primary source: <a href="../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">milestone-4.md §12</a>, bug 2 — live-found 2026-06-12 during the M4 validation run.</p>
 <h2 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h2>
 <p>GitHub deletes a JIT (just-in-time) runner record after it completes (or has acquired a then-cancelled) job.
 The AGC assumes agents are long-lived: after a job, the listener goroutine keeps long-polling <code>GetMessage</code> on the same session with the same agent.
@@ -2891,7 +2891,7 @@ A dedicated fake-GitHub test toggles enforcement on, runs a job to completion, a
 <li><code>docs/design/07-test-plan.md</code> — single-use simulation in the fake-GitHub criteria.</li>
 <li><code>docs/operations/troubleshooting.md</code> — runbook: symptom on pre-fix versions (sessions stuck in <code>decode response: EOF</code> / 401 GetMessage loops, runner list emptying, tenant throughput decaying to zero after ~maxListeners jobs), cause, remediation (upgrade; interim: delete agentpool Secrets + restart AGC pod, expect 409s for surviving names).</li>
 <li><code>docs/operations/observability.md</code> — new metrics.</li>
-<li><code>docs/plan/milestone-4.md</code> §12 — note the fix.</li>
+<li><code>docs/plan/archive/milestone-4.md</code> §12 — note the fix.</li>
 <li><code>docs/STATUS.md</code> — drop Q114 row (isolated commit).</li>
 </ul>
 <h2 id="progress">Progress<a class="headerlink" href="#progress" title="Permanent link">&para;</a></h2>

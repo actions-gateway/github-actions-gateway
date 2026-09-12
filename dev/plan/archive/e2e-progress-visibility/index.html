@@ -2769,7 +2769,7 @@ One mechanism serves both, which is expected: <code>runs-on</code> resolves from
   Naming is therefore inconsistent across specs.</li>
 <li><strong><code>--poll-progress-after 30s</code> is the only live per-spec signal.</strong> It names the spec, the current <code>By</code> step, and both runtimes — genuinely the right data — but it fired 8 times in the hosted run and each report trails a goroutine and GinkgoWriter dump.</li>
 <li><strong><code>Will run 73 of 73 specs</code> prints once at suite start.</strong> The denominator is already available; only the numerator is missing.</li>
-<li><strong><code>tmp/e2e-report.xml</code> is uploaded as an artifact and never rendered.</strong> <a href="../../e2e-tests-speed/#13-junit-report-for-pr-test-summary">e2e-tests-speed.md §13</a> planned the upload on the premise that "GitHub Actions can render this as a test summary table in the PR sidebar using the built-in test reporter".
+<li><strong><code>tmp/e2e-report.xml</code> is uploaded as an artifact and never rendered.</strong> <a href="../e2e-tests-speed/#13-junit-report-for-pr-test-summary">e2e-tests-speed.md §13</a> planned the upload on the premise that "GitHub Actions can render this as a test summary table in the PR sidebar using the built-in test reporter".
   There is no such built-in reporter.
   The upload shipped, the rendering never did, and reading the report still means downloading an artifact.</li>
 </ul>

@@ -2656,7 +2656,7 @@ Phase 2 (<a href="../../queue/Q1046/">Q1046</a>) and Phase 3 (<a href="../../que
 <p>Four git merge drivers resolve this repo's contended registry files, and all four are shell over <code>awk</code>: 1,603 lines across six files, of which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> is the 320-line three-way set merge that three of them share.
 This plan moves the stack to Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point.</p>
 <h2 id="why-and-why-the-existing-answer-does-not-cover-it">Why, and why the existing answer does not cover it<a class="headerlink" href="#why-and-why-the-existing-answer-does-not-cover-it" title="Permanent link">&para;</a></h2>
-<p><a href="../markdown-gates-parser/">markdown-gates-parser.md</a> moved four <code>awk</code> Markdown <em>gates</em> onto goldmark and excluded the drivers, on this reasoning:</p>
+<p><a href="../archive/markdown-gates-parser/">markdown-gates-parser.md</a> moved four <code>awk</code> Markdown <em>gates</em> onto goldmark and excluded the drivers, on this reasoning:</p>
 <blockquote>
 <p>A merge driver must reconstruct the file line for line, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.</p>
 </blockquote>

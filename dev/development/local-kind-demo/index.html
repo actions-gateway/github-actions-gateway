@@ -2750,6 +2750,7 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>app.pem
 </code></pre></div>
 <p>Apply one <code>ActionsGateway</code> CR.
+This walkthrough stays on the <strong>v1</strong> API, where one AGC Deployment per namespace is named <code>actions-gateway-controller</code>; under v2 it is named per gateway, as <code>&lt;gateway&gt;-agc</code>.
 <code>completedPodTTL: 0s</code> deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># actionsgateway.yaml</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
@@ -2772,7 +2773,8 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 <a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1:5000/worker:e2e-&lt;tag&gt;</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Available<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>--timeout<span class="o">=</span>5m
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># v1: one AGC per namespace. On v2 this is deploy/&lt;gateway&gt;-agc.</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Available<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>--timeout<span class="o">=</span>5m
 </code></pre></div>
 <p>The AGC registers runners with GitHub.
 Confirm they are online and idle:</p>

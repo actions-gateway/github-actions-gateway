@@ -2713,54 +2713,14 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 </thead>
 <tbody>
 <tr>
-<td><a href="milestone-1/">milestone-1.md</a></td>
-<td>Wire-protocol probe; broker + githubapp packages</td>
-<td>✅ Done</td>
-</tr>
-<tr>
-<td><a href="milestone-2/">milestone-2.md</a></td>
-<td>AGC controller, reconciler, agent pool, token manager</td>
-<td>✅ Done — full session lifecycle exercised end-to-end by M3's real-GitHub dispatch e2e; goleak coverage landed</td>
-</tr>
-<tr>
-<td><a href="milestone-3/">milestone-3.md</a></td>
-<td>Worker pod, Named Pipe handoff, pod provisioner, eviction retry</td>
-<td>✅ Done — Investigation A (Named Pipe) complete; Q6 live-GitHub dispatch validated 2026-05-30</td>
-</tr>
-<tr>
-<td><a href="milestone-4/">milestone-4.md</a></td>
-<td>GMC, ActionsGateway CRD, proxy binary, webhook, TLS pinning</td>
-<td>✅ Done — all success criteria live-validated on a real <code>kind</code> cluster 2026-06-11/12 (§12)</td>
-</tr>
-<tr>
 <td><a href="milestone-5/">milestone-5.md</a></td>
 <td>Hardening + 1,000-session load testing + posture audit + packaging</td>
 <td>⚠️ Packaging (Q12) now live-validated end-to-end (Q219, §1.5 — found+fixed an egress-proxy registration bug); load harness (Q13), polaris + kube-bench (Q14) shipped. Only staging-cluster residuals remain: 1,000-session proxy-HPA-under-burst + gVisor isolation (<a href="../queue/Q15/">Q15</a>, deferred)</td>
 </tr>
 <tr>
-<td><a href="release-1.0/">release-1.0.md</a></td>
-<td>The 1.0 release gate: multi-arch images + cosign-signed Helm chart, GA install docs, public website launch, pinned-digest GitHub Release</td>
-<td>✅ Done — 1.0 SHIPPED 2026-06-16 (<code>v1.0.0</code> live on GHCR, verified end-to-end against the published artifacts)</td>
-</tr>
-<tr>
 <td><a href="release-1.3/">release-1.3.md</a></td>
 <td>The 1.3 release gate: worker right-sizing as the headline capability, plus the one-release-ahead deprecation notice that lets <code>v2.0.0</code> remove <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition machinery together</td>
 <td>✅ Done — 1.3 SHIPPED 2026-08-03. Every gating ledger item closed, and <code>validate-release.sh v1.3.0-rc.5</code> passed the dogfood validation on the day the tag was cut. <code>v1.3.0</code> is published off <code>main</code> as a final release with the signed v2 CRD bundle, the <code>gag-migrate</code> binaries, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.3.0.md">curated notes</a></td>
-</tr>
-<tr>
-<td><a href="release-1.4/">release-1.4.md</a></td>
-<td>The 1.4 release gate: why the minor was forced by merged work before anyone chose it, the three admitted items (Q166, Q554, Q691), and why the proxy-hardening cluster stays whole for 1.5</td>
-<td>✅ Scope complete. All three gate items shipped (Q166 in #1347, Q554 in #1344, Q691 in #1336), and the three blockers a 2026-08-09 audit found are all closed: the no-PEM credential row (#1362), <a href="../queue/Q747/">Q747</a>'s probe, whose enforcer was dead rather than its policy wrong (#1363), and the unreplaced <code>workerImage</code> failure mode that Q714 contradicted (#1361). Awaiting the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
-</tr>
-<tr>
-<td><a href="release-1.5/">release-1.5.md</a></td>
-<td>The 1.5 release gate: two defects in already-claimed capabilities (Q712 unwired runner-group binding, Q713 missing scale-set-tier latency series), plus the candidates held but not yet accepted</td>
-<td>✅ Shipped as <code>v1.5.0</code> on 2026-08-15, validated on <code>rc.3</code>. All four gate items landed 2026-08-11 (Q713 in #1390, Q712 in #1391, Q715 in #1392, Q726 in #1393), taking the floor to MINOR, and the <a href="release-1.5/#in-scope-reconcile-the-marketing-surfaces">marketing reconciliation</a> closed 2026-08-12 (Q801, Q821). Q776 closed the last one: the <a href="../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> carries all 53 <code>actions_gateway_*</code> series with the tier that emits each, <code>make metric-tiers-check</code> holds it to the source in both directions, and the re-walk it required found two classic-only series on no list plus one that reached no operator doc. Only the release-candidate dogfood validation in <a href="../operations/release/">release.md</a> remains, which needs the actual RC image and so is deliberately not a Queue row</td>
-</tr>
-<tr>
-<td><a href="release-1.6/">release-1.6.md</a></td>
-<td>The 1.6 release gate: the last <a href="arc-parity/">ARC parity</a> row a scheduled release can close (Q727, the non-privileged <code>container:</code> path), the nine merged changes the release already carries, and why untrusted-PR CI moved to 1.7</td>
-<td>✅ Shipped as <code>v1.6.0</code> on 2026-08-26, validated on <code>rc.2</code>. Q727 closed 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism, costed in <a href="q727-container-steps/">q727-container-steps.md</a>, so 1.6's parity content is a docs change on top of nine merged features; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needed no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact. <code>rc.1</code> was superseded before it was ever validated, when three dependency bumps moved 11 files of the released surface and <code>check-artifact-unchanged.sh</code> caught it; <code>rc.2</code> passed the dogfood gate at 75 passed, 0 failed and 13 skipped, with both sizing profiles Active and the signed v2 CRD artifact verifying</td>
 </tr>
 <tr>
 <td><a href="release-1.7/">release-1.7.md</a></td>
@@ -2805,24 +2765,9 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Done — every workstream shipped; sole residual is the deferred live Ed25519 probe (M-11b, <a href="../queue/Q11/">Q11</a>). Phase 1 live <code>kind</code> validation covered by the M3/M4 live runs</td>
 </tr>
 <tr>
-<td><a href="security-audit-2026-06/">security-audit-2026-06.md</a></td>
-<td>Second full security audit (2026-06-12): GMC tenant isolation &amp; provisioning, proxy/broker/probe network trust boundaries, CI/CD supply chain, AGC credential/crypto — four parallel tracks + <code>make vulncheck</code></td>
-<td>✅ Done — every High/Medium finding resolved (Q121–Q130); remainders intentionally deferred</td>
-</tr>
-<tr>
 <td><a href="worker-egress-proxy/">worker-egress-proxy.md</a></td>
 <td>Worker traffic must route through per-tenant proxy pool</td>
 <td>✅ Done — NetworkPolicy split shipped (commit <code>4932ce7</code>); proxied worker→GitHub egress live-validated via M4 §12</td>
-</tr>
-<tr>
-<td><a href="q988-registry-runner-version/">q988-registry-runner-version.md</a></td>
-<td>Make <code>RunnerVersionTooOld</code> verdict-bearing for a custom or digest-only worker image by reading the runner version out of the image in its registry before any pod runs it: the measurements that ruled out the config label, the stdlib registry client, the async resolver, and the verdict merge</td>
-<td>✅ Done 2026-09-07. Residuals filed as Q1065 (whether a scoped AGC egress policy should admit a registry, decided as no allowance) and <a href="../queue/Q1066/">Q1066</a> (node-identity pull credentials)</td>
-</tr>
-<tr>
-<td><a href="q986-egress-attribution/">q986-egress-attribution.md</a></td>
-<td>Attributing the proxy's per-connection egress audit record to a consuming tenant and a job: the two opted-in records, why a source address alone resolves to nothing once the worker pod is deleted, and the alternatives rejected on proxy privilege and on cross-object coupling</td>
-<td>✅ Done. Both halves shipped and the Definition of Done #5 row in <a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> is claimed</td>
 </tr>
 <tr>
 <td><a href="q243-egress-ip-reference-arch/">q243-egress-ip-reference-arch.md</a></td>
@@ -2862,7 +2807,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="release-1.6/">release-1.6.md</a>), then extended 2026-09-07 to 1.7 → 1.8 → 2.0 because the GA soak had no evidence to gate on (<a href="release-1.8/">release-1.8.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="archive/release-1.6/">release-1.6.md</a>), then extended 2026-09-07 to 1.7 → 1.8 → 2.0 because the GA soak had no evidence to gate on (<a href="release-1.8/">release-1.8.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>
@@ -2893,21 +2838,6 @@ The durable design rationale for what the unit/integration/e2e layers cover live
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><a href="test-progress-visibility/">test-progress-visibility.md</a></td>
-<td>Make a long test run legible while it is still running, for every audience that waits on one — a human at a terminal, a reviewer reading a CI log, and an agent running it in a background task. End state: release validation runs as a background task by default, reporting progress as it goes</td>
-<td>✅ Done — Phase 0 shipped (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1152">#1152</a>, Q608): the e2e suite now emits a spec heartbeat and renders its JUnit report into the job summary, covering both CNI lanes and both runner types. Phase 1 shipped (Q615): <code>validate-release.sh</code> announces each phase, relays the dispatched run's spec heartbeat into the operator's terminal, and renders its JUnit report there on the way out — which meant replacing <code>gh run watch</code>, since it blocks and a heartbeat cannot be interleaved from inside it (it does <em>not</em> garble non-TTY output; that was measured and the tempting stronger claim dropped). Phase 2 shipped its mechanism half (Q616): the same stream renders to <code>tmp/release-validation-status.json</code> — one object holding phase, both clocks, the newest relayed e2e heartbeat, and the phase that failed <em>first</em> rather than the teardown that followed it — and <code>release-sentinel.sh</code> sleeps against it, exiting on a transition, a verdict, or a gate that has gone quiet, so an agent reports what the gate did rather than what a clock said. Phase 2 completed with Q617, which made that flow release.md's documented default and the terminal run the alternative — and surfaced the requirement the mechanism half had not: a detached run must carry <code>ASSUME_YES=1</code>, since the gate's target-confirmation reads stdin and a detached run has none (measured: it exits 1 before spending anything). Phase 3 shipped (Q618): <code>go test -json</code> streams through a renderer that rebuilds the plain test log and interleaves a heartbeat naming what is still running, with no test-code change — the package denominator comes from <code>go list</code> (~0.3 s), because the <code>-list</code> pre-pass a test-level one needs measured 22 s wall / 131 s CPU and serializes the compile the single invocation exists to overlap. Two things ruled out on measurement, not intuition: the integration tier needs nothing (30–64 % output density — it already narrates itself), and migrating other suites to Ginkgo would make progress reporting <strong>worse</strong>, since <code>go test -json</code> sees 73 Ginkgo specs as 1 test but 68 plain tests as 68</td>
-</tr>
-<tr>
-<td><a href="milestone-1-tests/">milestone-1-tests.md</a></td>
-<td>M1 unit-test coverage gaps</td>
-<td>✅ Done — all five gaps closed</td>
-</tr>
-<tr>
-<td><a href="coverage-to-75-per-module/">coverage-to-75-per-module.md</a></td>
-<td>Every Go module's hand-written unit-test coverage to ≥75% (Q255)</td>
-<td>✅ Done — all 8 code modules ≥75% (probe/gmc reached via a <code>runProbe</code>/fake-client refactor + tests)</td>
-</tr>
 <tr>
 <td><a href="eviction-oversubscription-validation/">eviction-oversubscription-validation.md</a></td>
 <td>Five experiments that turn the eviction-recovery and oversubscription claims into measurements: unconfounded eviction latency, the node-drain path, the oversubscription/preemption demo, the quota gate under contention, and the tiers-off/tiers-on utilization delta</td>
@@ -2943,26 +2873,6 @@ Each has inline ✓ markers per item.</p>
 </thead>
 <tbody>
 <tr>
-<td><a href="merge-queue/">merge-queue.md</a></td>
-<td>Adopt GitHub's merge queue on <code>main</code> to kill the freshness-invalidation loop: every merge (~every 25–30 min) invalidates every in-flight green PR, and re-validation costs a full e2e cycle (a third+ of e2e compute measured as redo). Queue runs the gates once per batch on the candidate merge result</td>
-<td>✅ Done, all three phases. Phase 1 (#1256) and Phase 2 (ruleset <code>merge_queue</code> rule, verified live) landed 2026-08-03 with the queue-era process-doc rewrite; Phase 3 re-measured 2026-08-12 and demoted both e2e lanes to merge-group-only, declining the three STATUS-contention candidates</td>
-</tr>
-<tr>
-<td><a href="docker-image-speed/">docker-image-speed.md</a></td>
-<td>Image build + load-into-kind time</td>
-<td>✅ Done — every item shipped (§1/2/4/5/8/9/13) or explicitly 🚫 not pursued (§7/12); §3/6/10/11 obsoleted by vendoring + in-cluster registry</td>
-</tr>
-<tr>
-<td><a href="e2e-tests-speed/">e2e-tests-speed.md</a></td>
-<td>E2E suite + CI-pipeline speed improvements</td>
-<td>✅ Done — Round 1 (§1–§14) and Round 2 (§15–§18) all shipped (the top-of-file TOC ✓ markers lag the authoritative status tables)</td>
-</tr>
-<tr>
-<td><a href="e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a></td>
-<td><code>e2e / e2e</code> job wall time after the first two speed plans: the image bake and the suite's serial tail</td>
-<td>✅ Done — all six items shipped: image-build consolidation (§1–3, one root Dockerfile + shared cacheable <code>deps</code> stage), the disk-cleanup overlap (§4), and the serial-tail work (§5–6). §6's metrics-server drop was measured and reverted; the kcm sync period is declined on flake risk</td>
-</tr>
-<tr>
 <td><a href="ci-wait-time-analysis/">ci-wait-time-analysis.md</a></td>
 <td><strong>Start here before scoping CI or test-tier speed work.</strong> Dated current-state table, an index of the rounds already run, the four traps that cost an attempt each, and what is left</td>
 <td>ⓘ Standing reference, not a work item. Records that CI execution is 5% of PR latency, that the tiers below <code>integration-test</code> are a flat profile rather than a queue, and that the suite's parallel phase was measured healthy at 4.5× in round 2. Keep the current-state table dated when a round lands</td>
@@ -2983,11 +2893,6 @@ Each has inline ✓ markers per item.</p>
 <td><a href="gke-dogfood/">gke-dogfood.md</a></td>
 <td>On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook</td>
 <td>✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../queue/Q264/">Q264</a> P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook; chronological turn-up history split to <a href="archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a> (Q336)</td>
-</tr>
-<tr>
-<td><a href="dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a></td>
-<td>Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e)</td>
-<td>✅ Complete (2026-07-07) — disk-class ceiling resolved; general-worker (2Gi/3Gi) + e2e-worker (runner req 3vCPU/1Gi/3Gi, dind 3Gi/4Gi) pods right-sized from measured peak; "small" tier measured and declined. Kata end-state landed with Q286 (see <a href="archive/kata-on-gke/">archive/kata-on-gke.md</a> — Kata guest sizing is NOT a straight port of these measurements)</td>
 </tr>
 </tbody>
 </table>
@@ -3020,16 +2925,6 @@ Each has inline ✓ markers per item.</p>
 <td><a href="q501-cancel-relay/">q501-cancel-relay.md</a></td>
 <td>Relaying a run cancelled at GitHub to the worker pod, which the Q459 measurement found nothing does — split into the trigger (how the AGC learns) and the actuator (what it then does)</td>
 <td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../queue/Q501/">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
-</tr>
-<tr>
-<td><a href="docs-six-layer-audit/">docs-six-layer-audit.md</a></td>
-<td>Six-layer consistency audit of <code>docs/</code> (terminology, cross-refs, nav, reuse)</td>
-<td>✅ Done — all six layers resolved; Layer 3 metrics gap closed by Q51; the optional link-check CI gate is a separate non-blocking decision</td>
-</tr>
-<tr>
-<td><a href="make/">make.md</a></td>
-<td>Makefile UX (help target, e2e workflow, image var consistency)</td>
-<td>✅ Done — Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only</td>
 </tr>
 <tr>
 <td><a href="go-to-market/">go-to-market.md</a></td>
@@ -3082,19 +2977,9 @@ Each has inline ✓ markers per item.</p>
 <td>✅ Done — filed 2026-07-20; the F1 Secret leak shipped same-day (Q373, #727), F2's probe rewrite as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (ownerRef-policy question spun out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gate (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (condition-collector residual spun out to Q403, since shipped as <code>metrics_v1.go</code>); re-run trigger deferred as <a href="../queue/Q372/">Q372</a></td>
 </tr>
 <tr>
-<td><a href="markdown-gates-parser/">markdown-gates-parser.md</a></td>
-<td>Move the four <code>awk</code>-based Markdown gates (link/anchor check, backlog lint, roadmap coherence, metrics replay) onto a real parser in <code>devtools/</code>, keeping each <code>scripts/</code> entry point — regular expressions cannot count brackets, and every defect traces to that</td>
-<td>✅ Done, all three phases shipped 2026-08-02..04. Measured: <code>check-doc-links.sh</code> never checked a badge-wrapped link's outer target (3 live in README, one relative), <code>lint-backlog.sh</code> shifted every table field on one escaped pipe (Q625 carried a live instance), and its character cap meant bytes or runes depending on the <code>awk</code>; the roadmap gate charged a bullet with the paragraph after it, and the metrics replay had mis-booked a removal since June. Q612, Q613 and Q614 all done, with Q654's em-dash gate on the same layer. The merge driver is deliberately excluded</td>
-</tr>
-<tr>
 <td><a href="merge-drivers-go/">merge-drivers-go.md</a></td>
 <td>Move the four git merge drivers off shell and <code>awk</code> onto Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point, so the three-way set merge and its order reconstruction can be unit-tested. markdown-gates-parser.md excluded them, but for an argument against goldmark rather than against Go</td>
 <td>🚧 In progress. Phase 1 (the shared runtime, the keyed-record set merge, and the two table drivers) shipped 2026-08-31, with an awk-versus-Go differential over 400 generated three-way cases agreeing on stdout and exit status in all 400 across seven refusal classes. Phases 2 (<a href="../queue/Q1046/">Q1046</a>) and 3 (<a href="../queue/Q1047/">Q1047</a>) carry the roadmap driver and the gate-lists driver's second set merge</td>
-</tr>
-<tr>
-<td><a href="q889-backlog-item-store/">q889-backlog-item-store.md</a></td>
-<td>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and port the lint rules the store has no equivalent for</td>
-<td>✅ Done, all six phases, 2026-08-16..17, superseding the stale <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> attempt and its unlanded Go <code>queuestore</code>. Tooling, the store, the machine consumers, the anchor references, the <code>/dev/queue/</code> render, then the cutover: the table deleted, its five gates retired, Progress resolved into this index's own Status cells, and the metrics bridged across the seam. Q889. The scope the plan stated was wrong five times and measuring first corrected each one, which is the finding worth keeping. Archival of the plans Progress was holding active is <a href="../queue/Q894/">Q894</a></td>
 </tr>
 <tr>
 <td><a href="website/">website.md</a></td>
@@ -3105,11 +2990,6 @@ Each has inline ✓ markers per item.</p>
 <td><a href="q645-abandoned-completion/">q645-abandoned-completion.md</a></td>
 <td>Investigation H (Q645/Q676): what the run service does with a completion for an acquired-but-never-run assignment, which decides the Q628 release path's shape</td>
 <td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedies shipped: the listener reports nothing for its own unrun delivery, and the provisioner force-cancels the run (measured 2026-08-05, run+job <code>cancelled</code> in ~1 s, Q683). Follow-up: <a href="../queue/Q682/">Q682</a></td>
-</tr>
-<tr>
-<td><a href="docs-page-boundaries/">docs-page-boundaries.md</a></td>
-<td>Redraw the boundary between <code>index.md</code>, <code>why-gag.md</code>, <code>roadmap.md</code>, and <code>STATUS.md</code> on reader job rather than on time or audience tier — the roadmap was holding a third, unlinked copy of the feature list</td>
-<td>✅ Done — Phase 1 (2026-08-01) extracted <code>features.md</code> as a link-disciplined capability index (9 of 16 old roadmap bullets had zero links; the longest was 126 words), the roadmap shrank to forward-looking only, and <code>check-roadmap.sh</code> rule 5 now gates the link discipline. Phase 2, splitting the parked register off <code>STATUS.md</code>, was superseded by Q889: the file it would have split no longer exists, and one file per item bounds every read by construction</td>
 </tr>
 <tr>
 <td><a href="q710-overlong-paragraphs/">q710-overlong-paragraphs.md</a></td>
@@ -3131,6 +3011,126 @@ The doc remains available — the rationale is often more valuable than the diff
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="archive/milestone-1/">archive/milestone-1.md</a></td>
+<td>Wire-protocol probe; broker + githubapp packages</td>
+<td>Archived 2026-09-12, Q894. Work fully landed; no live backlog item references it.</td>
+</tr>
+<tr>
+<td><a href="archive/milestone-2/">archive/milestone-2.md</a></td>
+<td>AGC controller, reconciler, agent pool, token manager</td>
+<td>Archived 2026-09-12, Q894. full session lifecycle exercised end-to-end by M3's real-GitHub dispatch e2e; goleak coverage landed</td>
+</tr>
+<tr>
+<td><a href="archive/milestone-3/">archive/milestone-3.md</a></td>
+<td>Worker pod, Named Pipe handoff, pod provisioner, eviction retry</td>
+<td>Archived 2026-09-12, Q894. Investigation A (Named Pipe) complete; Q6 live-GitHub dispatch validated 2026-05-30</td>
+</tr>
+<tr>
+<td><a href="archive/milestone-4/">archive/milestone-4.md</a></td>
+<td>GMC, ActionsGateway CRD, proxy binary, webhook, TLS pinning</td>
+<td>Archived 2026-09-12, Q894. all success criteria live-validated on a real <code>kind</code> cluster 2026-06-11/12 (§12)</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.0/">archive/release-1.0.md</a></td>
+<td>The 1.0 release gate: multi-arch images + cosign-signed Helm chart, GA install docs, public website launch, pinned-digest GitHub Release</td>
+<td>Archived 2026-09-12, Q894. 1.0 SHIPPED 2026-06-16 (<code>v1.0.0</code> live on GHCR, verified end-to-end against the published artifacts)</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.4/">archive/release-1.4.md</a></td>
+<td>The 1.4 release gate: why the minor was forced by merged work before anyone chose it, the three admitted items (Q166, Q554, Q691), and why the proxy-hardening cluster stays whole for 1.5</td>
+<td>Archived 2026-09-12, Q894. Scope complete. All three gate items shipped (Q166 in #1347, Q554 in #1344, Q691 in #1336), and the three blockers a 2026-08-09 audit found are all closed: the no-PEM credential row (#1362), <a href="../queue/Q747/">Q747</a>'s probe, whose enforcer was dead rather than its policy wrong (#1363), and the unreplaced <code>workerImage</code> failure mode that Q714 contradicted (#1361). Awaiting the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.5/">archive/release-1.5.md</a></td>
+<td>The 1.5 release gate: two defects in already-claimed capabilities (Q712 unwired runner-group binding, Q713 missing scale-set-tier latency series), plus the candidates held but not yet accepted</td>
+<td>Archived 2026-09-12, Q894. Shipped as <code>v1.5.0</code> on 2026-08-15, validated on <code>rc.3</code>. All four gate items landed 2026-08-11 (Q713 in #1390, Q712 in #1391, Q715 in #1392, Q726 in #1393), taking the floor to MINOR, and the <a href="archive/release-1.5/#in-scope-reconcile-the-marketing-surfaces">marketing reconciliation</a> closed 2026-08-12 (Q801, Q821). Q776 closed the last one: the <a href="../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> carries all 53 <code>actions_gateway_*</code> series with the tier that emits each, <code>make metric-tiers-check</code> holds it to the source in both directions, and the re-walk it required found two classic-only series on no list plus one that reached no operator doc. Only the release-candidate dogfood validation in <a href="../operations/release/">release.md</a> remains, which needs the actual RC image and so is deliberately not a Queue row</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.6/">archive/release-1.6.md</a></td>
+<td>The 1.6 release gate: the last <a href="arc-parity/">ARC parity</a> row a scheduled release can close (Q727, the non-privileged <code>container:</code> path), the nine merged changes the release already carries, and why untrusted-PR CI moved to 1.7</td>
+<td>Archived 2026-09-12, Q894. Shipped as <code>v1.6.0</code> on 2026-08-26, validated on <code>rc.2</code>. Q727 closed 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism, costed in <a href="q727-container-steps/">q727-container-steps.md</a>, so 1.6's parity content is a docs change on top of nine merged features; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needed no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact. <code>rc.1</code> was superseded before it was ever validated, when three dependency bumps moved 11 files of the released surface and <code>check-artifact-unchanged.sh</code> caught it; <code>rc.2</code> passed the dogfood gate at 75 passed, 0 failed and 13 skipped, with both sizing profiles Active and the signed v2 CRD artifact verifying</td>
+</tr>
+<tr>
+<td><a href="archive/security-audit-2026-06/">archive/security-audit-2026-06.md</a></td>
+<td>Second full security audit (2026-06-12): GMC tenant isolation &amp; provisioning, proxy/broker/probe network trust boundaries, CI/CD supply chain, AGC credential/crypto — four parallel tracks + <code>make vulncheck</code></td>
+<td>Archived 2026-09-12, Q894. every High/Medium finding resolved (Q121–Q130); remainders intentionally deferred</td>
+</tr>
+<tr>
+<td><a href="archive/q988-registry-runner-version/">archive/q988-registry-runner-version.md</a></td>
+<td>Make <code>RunnerVersionTooOld</code> verdict-bearing for a custom or digest-only worker image by reading the runner version out of the image in its registry before any pod runs it: the measurements that ruled out the config label, the stdlib registry client, the async resolver, and the verdict merge</td>
+<td>Archived 2026-09-12, Q894. Done 2026-09-07. Residuals filed as Q1065 (whether a scoped AGC egress policy should admit a registry, decided as no allowance) and <a href="../queue/Q1066/">Q1066</a> (node-identity pull credentials)</td>
+</tr>
+<tr>
+<td><a href="archive/q986-egress-attribution/">archive/q986-egress-attribution.md</a></td>
+<td>Attributing the proxy's per-connection egress audit record to a consuming tenant and a job: the two opted-in records, why a source address alone resolves to nothing once the worker pod is deleted, and the alternatives rejected on proxy privilege and on cross-object coupling</td>
+<td>Archived 2026-09-12, Q894. Done. Both halves shipped and the Definition of Done #5 row in <a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> is claimed</td>
+</tr>
+<tr>
+<td><a href="archive/test-progress-visibility/">archive/test-progress-visibility.md</a></td>
+<td>Make a long test run legible while it is still running, for every audience that waits on one — a human at a terminal, a reviewer reading a CI log, and an agent running it in a background task. End state: release validation runs as a background task by default, reporting progress as it goes</td>
+<td>Archived 2026-09-12, Q894. Phase 0 shipped (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1152">#1152</a>, Q608): the e2e suite now emits a spec heartbeat and renders its JUnit report into the job summary, covering both CNI lanes and both runner types. Phase 1 shipped (Q615): <code>validate-release.sh</code> announces each phase, relays the dispatched run's spec heartbeat into the operator's terminal, and renders its JUnit report there on the way out — which meant replacing <code>gh run watch</code>, since it blocks and a heartbeat cannot be interleaved from inside it (it does <em>not</em> garble non-TTY output; that was measured and the tempting stronger claim dropped). Phase 2 shipped its mechanism half (Q616): the same stream renders to <code>tmp/release-validation-status.json</code> — one object holding phase, both clocks, the newest relayed e2e heartbeat, and the phase that failed <em>first</em> rather than the teardown that followed it — and <code>release-sentinel.sh</code> sleeps against it, exiting on a transition, a verdict, or a gate that has gone quiet, so an agent reports what the gate did rather than what a clock said. Phase 2 completed with Q617, which made that flow release.md's documented default and the terminal run the alternative — and surfaced the requirement the mechanism half had not: a detached run must carry <code>ASSUME_YES=1</code>, since the gate's target-confirmation reads stdin and a detached run has none (measured: it exits 1 before spending anything). Phase 3 shipped (Q618): <code>go test -json</code> streams through a renderer that rebuilds the plain test log and interleaves a heartbeat naming what is still running, with no test-code change — the package denominator comes from <code>go list</code> (~0.3 s), because the <code>-list</code> pre-pass a test-level one needs measured 22 s wall / 131 s CPU and serializes the compile the single invocation exists to overlap. Two things ruled out on measurement, not intuition: the integration tier needs nothing (30–64 % output density — it already narrates itself), and migrating other suites to Ginkgo would make progress reporting <strong>worse</strong>, since <code>go test -json</code> sees 73 Ginkgo specs as 1 test but 68 plain tests as 68</td>
+</tr>
+<tr>
+<td><a href="archive/milestone-1-tests/">archive/milestone-1-tests.md</a></td>
+<td>M1 unit-test coverage gaps</td>
+<td>Archived 2026-09-12, Q894. all five gaps closed</td>
+</tr>
+<tr>
+<td><a href="archive/coverage-to-75-per-module/">archive/coverage-to-75-per-module.md</a></td>
+<td>Every Go module's hand-written unit-test coverage to ≥75% (Q255)</td>
+<td>Archived 2026-09-12, Q894. all 8 code modules ≥75% (probe/gmc reached via a <code>runProbe</code>/fake-client refactor + tests)</td>
+</tr>
+<tr>
+<td><a href="archive/merge-queue/">archive/merge-queue.md</a></td>
+<td>Adopt GitHub's merge queue on <code>main</code> to kill the freshness-invalidation loop: every merge (~every 25–30 min) invalidates every in-flight green PR, and re-validation costs a full e2e cycle (a third+ of e2e compute measured as redo). Queue runs the gates once per batch on the candidate merge result</td>
+<td>Archived 2026-09-12, Q894. Done, all three phases. Phase 1 (#1256) and Phase 2 (ruleset <code>merge_queue</code> rule, verified live) landed 2026-08-03 with the queue-era process-doc rewrite; Phase 3 re-measured 2026-08-12 and demoted both e2e lanes to merge-group-only, declining the three STATUS-contention candidates</td>
+</tr>
+<tr>
+<td><a href="archive/docker-image-speed/">archive/docker-image-speed.md</a></td>
+<td>Image build + load-into-kind time</td>
+<td>Archived 2026-09-12, Q894. every item shipped (§1/2/4/5/8/9/13) or explicitly 🚫 not pursued (§7/12); §3/6/10/11 obsoleted by vendoring + in-cluster registry</td>
+</tr>
+<tr>
+<td><a href="archive/e2e-tests-speed/">archive/e2e-tests-speed.md</a></td>
+<td>E2E suite + CI-pipeline speed improvements</td>
+<td>Archived 2026-09-12, Q894. Round 1 (§1–§14) and Round 2 (§15–§18) all shipped (the top-of-file TOC ✓ markers lag the authoritative status tables)</td>
+</tr>
+<tr>
+<td><a href="archive/e2e-ci-speed-round-2/">archive/e2e-ci-speed-round-2.md</a></td>
+<td><code>e2e / e2e</code> job wall time after the first two speed plans: the image bake and the suite's serial tail</td>
+<td>Archived 2026-09-12, Q894. all six items shipped: image-build consolidation (§1–3, one root Dockerfile + shared cacheable <code>deps</code> stage), the disk-cleanup overlap (§4), and the serial-tail work (§5–6). §6's metrics-server drop was measured and reverted; the kcm sync period is declined on flake risk</td>
+</tr>
+<tr>
+<td><a href="archive/dogfood-runner-rightsizing/">archive/dogfood-runner-rightsizing.md</a></td>
+<td>Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e)</td>
+<td>Archived 2026-09-12, Q894. Complete (2026-07-07) — disk-class ceiling resolved; general-worker (2Gi/3Gi) + e2e-worker (runner req 3vCPU/1Gi/3Gi, dind 3Gi/4Gi) pods right-sized from measured peak; "small" tier measured and declined. Kata end-state landed with Q286 (see <a href="archive/kata-on-gke/">archive/kata-on-gke.md</a> — Kata guest sizing is NOT a straight port of these measurements)</td>
+</tr>
+<tr>
+<td><a href="archive/docs-six-layer-audit/">archive/docs-six-layer-audit.md</a></td>
+<td>Six-layer consistency audit of <code>docs/</code> (terminology, cross-refs, nav, reuse)</td>
+<td>Archived 2026-09-12, Q894. all six layers resolved; Layer 3 metrics gap closed by Q51; the optional link-check CI gate is a separate non-blocking decision</td>
+</tr>
+<tr>
+<td><a href="archive/make/">archive/make.md</a></td>
+<td>Makefile UX (help target, e2e workflow, image var consistency)</td>
+<td>Archived 2026-09-12, Q894. Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only</td>
+</tr>
+<tr>
+<td><a href="archive/markdown-gates-parser/">archive/markdown-gates-parser.md</a></td>
+<td>Move the four <code>awk</code>-based Markdown gates (link/anchor check, backlog lint, roadmap coherence, metrics replay) onto a real parser in <code>devtools/</code>, keeping each <code>scripts/</code> entry point — regular expressions cannot count brackets, and every defect traces to that</td>
+<td>Archived 2026-09-12, Q894. Done, all three phases shipped 2026-08-02..04. Measured: <code>check-doc-links.sh</code> never checked a badge-wrapped link's outer target (3 live in README, one relative), <code>lint-backlog.sh</code> shifted every table field on one escaped pipe (Q625 carried a live instance), and its character cap meant bytes or runes depending on the <code>awk</code>; the roadmap gate charged a bullet with the paragraph after it, and the metrics replay had mis-booked a removal since June. Q612, Q613 and Q614 all done, with Q654's em-dash gate on the same layer. The merge driver is deliberately excluded</td>
+</tr>
+<tr>
+<td><a href="archive/q889-backlog-item-store/">archive/q889-backlog-item-store.md</a></td>
+<td>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and port the lint rules the store has no equivalent for</td>
+<td>Archived 2026-09-12, Q894. Done, all six phases, 2026-08-16..17, superseding the stale <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> attempt and its unlanded Go <code>queuestore</code>. Tooling, the store, the machine consumers, the anchor references, the <code>/dev/queue/</code> render, then the cutover: the table deleted, its five gates retired, Progress resolved into this index's own Status cells, and the metrics bridged across the seam. Q889. The scope the plan stated was wrong five times and measuring first corrected each one, which is the finding worth keeping. Archival of the plans Progress was holding active is Q894</td>
+</tr>
+<tr>
+<td><a href="archive/docs-page-boundaries/">archive/docs-page-boundaries.md</a></td>
+<td>Redraw the boundary between <code>index.md</code>, <code>why-gag.md</code>, <code>roadmap.md</code>, and <code>STATUS.md</code> on reader job rather than on time or audience tier — the roadmap was holding a third, unlinked copy of the feature list</td>
+<td>Archived 2026-09-12, Q894. Phase 1 (2026-08-01) extracted <code>features.md</code> as a link-disciplined capability index (9 of 16 old roadmap bullets had zero links; the longest was 126 words), the roadmap shrank to forward-looking only, and <code>check-roadmap.sh</code> rule 5 now gates the link discipline. Phase 2, splitting the parked register off <code>STATUS.md</code>, was superseded by Q889: the file it would have split no longer exists, and one file per item bounds every read by construction</td>
+</tr>
 <tr>
 <td><a href="archive/docs/">archive/docs.md</a></td>
 <td>Documentation roadmap across phases: the three operational docs that did not exist, the design-doc corrections, and the Phase 3 reference material</td>

@@ -1,0 +1,3395 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/archive/release-1.5/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Release 1.5 Milestone Definition - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#release-15-milestone-definition" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.7.0 is here.</strong>
+      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
+    <a href="../../../queue/">See the working backlog.</a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Release 1.5 Milestone Definition
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-these-gate-a-release-rather-than-riding-along" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why these gate a release rather than riding along
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why these gate a release rather than riding along">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#q712--the-runner-group-binding-is-declared-and-never-wired--shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q712 — the runner-group binding is declared and never wired ✅ shipped
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-parity-axis-what-closed-and-what-backs-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The parity axis: what closed, and what backs it
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The parity axis: what closed, and what backs it">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-parity-does-not-yet-have-a-backstop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What parity does not yet have: a backstop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#differences-that-survive-parity-and-should" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differences that survive parity, and should
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-notes-may-claim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the notes may claim
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pre-flight-the-api-surface-this-tag-publishes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-flight: the API surface this tag publishes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pre-flight: the API surface this tag publishes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-that-were-decisions-rather-than-ticks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two that were decisions rather than ticks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rc1-validation-verdict-2026-08-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.1 validation verdict, 2026-08-14
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The rc.1 validation verdict, 2026-08-14">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-gate-could-not-start-and-the-defect-was-its-own" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gate could not start, and the defect was its own
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#release-sentinelsh-reported-a-pass-that-was-not-this-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        release-sentinel.sh reported a PASS that was not this run's
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-stable-tag-pre-flight-2026-08-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The stable-tag pre-flight, 2026-08-14
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-reopened-2026-08-14-what-a-question-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope reopened 2026-08-14: what a question cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rc2-pre-flight-2026-08-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.2 pre-flight, 2026-08-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#re-deriving-the-highlight-claims-2026-08-15-q876" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-deriving the highlight claims, 2026-08-15 (Q876)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#candidates-not-yet-accepted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidates not yet accepted
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-scope-reconcile-the-marketing-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In scope: reconcile the marketing surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-scoping-question-settled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The scoping question, settled
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="release-15-milestone-definition">Release 1.5 Milestone Definition<a class="headerlink" href="#release-15-milestone-definition" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
+Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
+All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
+Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
+Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
+<strong>All eight rows from the reopened scope shipped on 2026-08-15</strong>, so the Queue again carries no <code>1.5-gate</code> row and <a href="#the-rc2-pre-flight-2026-08-15">the rc.2 pre-flight</a> is recorded below.
+The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which cleared the last item binding at the release candidate.
+<code>v1.5.0-rc.1</code> was cut from <code>ff3b3ef1</code> on 2026-08-14 and <a href="#the-rc1-validation-verdict-2026-08-14">its dogfood validation PASSED</a>, and the <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pre-flight</a> then ran and closed.
+<strong>Scope reopened the same day</strong>, on <a href="#scope-reopened-2026-08-14-what-a-question-cost">eight further gating rows</a>, two of which change shipped code, so <code>v1.5.0-rc.1</code> is superseded and the line will tag from an rc.2.</p>
+</blockquote>
+<h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
+<p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
+That is what makes them release-gating: shipping another minor while either is open means shipping a claim the product does not honour.</p>
+<p>Q726 is the same shape read from the other side.
+It is the one <a href="../../arc-parity/">ARC parity</a> gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a <code>runs-on</code> array.</p>
+<h3 id="q712--the-runner-group-binding-is-declared-and-never-wired--shipped">Q712 — the runner-group binding is declared and never wired ✅ shipped<a class="headerlink" href="#q712--the-runner-group-binding-is-declared-and-never-wired--shipped" title="Permanent link">&para;</a></h3>
+<p><code>RunnerGroupName</code> exists on the scale-set listener config (<code>cmd/agc/internal/scalesetlistener/listener.go</code>) and is resolved when non-empty, but the sole production construction site in <code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never set it.
+Every scale set therefore registered into the installation's default runner group.</p>
+<p>The GitHub runner group is the <strong>GitHub-side authorization point</strong> for which repositories may target which runners.
+With every tenant's scale set in one group, a repository outside a tenant could name that scale set in <code>runs-on</code> and route work into the tenant's namespace, quota, and egress IP.
+GAG's pod-level isolation was unaffected; what was unbounded was <em>who could cause a job to run there</em>.</p>
+<p>This is also the one place ARC was ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
+<p><strong>Two defects the row did not name, found by measuring before coding.</strong> Wiring the field alone would have shipped a boundary that looks declared and is not:</p>
+<ul>
+<li>The resolver <strong>fell back to the default group</strong> when the name did not resolve (<code>ok == false</code> kept <code>groupID = 1</code>), so a typo widened the boundary to the whole installation at exactly the moment the operator was narrowing it.</li>
+<li><code>ensureScaleSet</code> <strong>adopts an existing scale set by name without reading its group</strong>, so declaring <code>runnerGroup</code> on a set registered by an earlier run would have left the original group in force with nothing reporting it.</li>
+</ul>
+<p><strong>What shipped.</strong> <code>RunnerSet.spec.runnerGroup</code>, inheriting <code>ActionsGateway.spec.defaultRunnerGroup</code> when unset (the <code>templateRef</code>/<code>proxyRef</code> shape, so a tenant declares its boundary once on the gateway), both <code>v2alpha1</code> and <code>v2beta1</code>.
+An unresolvable name fails the set closed at <code>Ready=False</code>/<code>RunnerGroupNotFound</code> rather than falling back; an adopted scale set is moved into its declared group; and changing the declared group restarts the set's listener rather than waiting for an AGC rollout.
+An <strong>undeclared</strong> group still leaves an existing scale set where it is, so widening is always explicit.</p>
+<p><strong>The gateway-assertion question, settled.</strong> The gateway carries the group as an inherited default, not as an enforced ceiling.
+GAG does not create runner groups and does not manage their repository access, so there is nothing for it to assert <em>against</em>: a tenant naming a group only volunteers its own runners to that group's repositories, which costs the tenant and escalates nothing across tenants.
+What the platform admin still owns at GitHub is documented in <a href="../../../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a> and <a href="../../../design/appendix-h-v2-api-decomposition/">appendix H</a>.</p>
+<p>Adjacent hole found while measuring, filed rather than fixed at the time, and since closed (Q791): the <code>RunnerSet</code> webhook's scale-set label-uniqueness guard was <strong>namespace-scoped</strong>, so two tenants under one GitHub org could claim one scale-set name across namespaces.
+It is now keyed on the gateway's GitHub binding and enforced cluster-wide from both admission paths (<a href="../../../design/appendix-h-v2-api-decomposition/">appendix H</a>, <a href="../../../design/05-security/#cross-tenant-job-acquisition-via-a-shared-scale-set-name">security</a>).</p>
+<h3 id="q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11">Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11<a class="headerlink" href="#q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11" title="Permanent link">&para;</a></h3>
+<p><code>waitForCompletion</code> and the pod waiter ran only inside <code>provision()</code> (<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>).
+<code>ProvisionScaleSetWorker</code> registered neither, and <code>v2beta1</code> is ScaleSet-only, so the tier every new tenant runs emitted both series empty.</p>
+<p>The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
+The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken, and <a href="../../go-to-market/#8-launch-sequence-phased">go-to-market § 8</a> records that first impressions from cold traffic are one-shot.</p>
+<p><strong>How it was fixed.</strong> Both observations moved onto the shared pod informer, which sees a scale-set worker pod and a classic one identically.
+The latency observation had been gated behind a registered waiter, the thing a fire-and-forget provision never creates, so the tier seam was the gate itself rather than a missing call site.</p>
+<p>That made the span a decision rather than a detail, since the two tiers had no common "acquisition" moment to measure from.
+<code>job_duration_seconds</code> is now <strong>worker pod lifetime</strong> on both tiers: creation to the last container finishing, or to the deletion request for a worker removed mid-run.
+Every documented consumer of the series is cost attribution (<a href="../../../design/appendix-f-cost-model/">appendix-f</a> multiplies it by an hourly node rate), and a pod is billed from creation, so the classic tier's old span was measuring the wrong thing: it charged the staging and <code>spec.scaleUp</code> throttle window during which no pod existed.
+Correcting it was therefore part of the fix rather than a follow-up.</p>
+<p>Two consequences worth keeping: observations fire once per pod when its lifetime ends, so a long job's latency observation arrives at completion rather than at start; and a pod already terminal when an AGC restarts and re-lists it is claimed without being re-observed, so a restart cannot spike either histogram with one duplicate per pod still inside <code>completedPodTTL</code>.</p>
+<h3 id="q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only">Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only<a class="headerlink" href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only" title="Permanent link">&para;</a></h3>
+<p>Two halves, and only together do they leave the shipped tier blind.</p>
+<p>The version sent at session creation is <code>BrokerConfig.RunnerVersion</code>, the pinned default the project ships (<code>cmd/agc/internal/agentpool/pool.go:467</code>, reached from <code>runner_shared.go:555</code>).
+It is the same value whatever <code>spec.workerImage</code> holds, so a tenant running an older runner image reports the newer number GAG was built against.
+The pod's <code>app.kubernetes.io/version</code> label <em>is</em> derived from the image ref (<code>provisioner/pod.go:47</code>), which makes the two disagree without either being consulted for admission.</p>
+<p>The signal that would otherwise catch it, <code>RunnerVersionTooOld</code>, is produced in the classic listener goroutine only.
+That is structural rather than an oversight: the scale-set protocol carries no runner version at session creation, so the condition cannot occur on the tier <code>v2beta1</code> exposes (<a href="../../v2-api-gap-analysis/#agc">gap analysis</a>).
+The consequence is still that no tier both knows the real version and can warn about it.</p>
+<p><strong>What makes it gate rather than wait:</strong> GitHub raises the enforced minimum runner version on GHEC on 2026-09-25.
+On that date a tenant whose worker image is behind starts failing at GitHub, and GAG has told nobody, on the tier every new tenant runs.
+This is the only gating row here with a date it does not control, which is why it was admitted without going through the candidate list.</p>
+<p><strong>Shipped 2026-08-11.</strong> Two corrections to the framing above came out of measuring it.</p>
+<p>The runway is shorter than the row's date: GHEC runs brownouts from 2026-08-24 through 2026-09-18 before full enforcement on 2026-09-25 (<a href="https://github.blog/changelog/2026-06-12-github-actions-minimum-version-enforcement-timeline-for-self-hosted-runners/">changelog, 2026-06-12</a>).
+A brownout is a four-hour window, so the first symptom is intermittent — a job that fails at midday and works by evening reads as a flake, not a version problem, which is exactly what a named condition is for.
+The floor is <code>2.329.0</code> for registration, plus a rolling requirement that each release be installed within 30 days of publication to keep executing jobs; a compiled-in constant can hold the first and not the second, so <code>names.MinRunnerVersion</code> is documented as the registration floor only.</p>
+<p><code>agent.version</code> was left alone, against the row's own wording.
+There are two versions with different jobs: on the classic path the AGC <em>is</em> the registered agent, so <code>agent.version</code> describes the listener protocol the AGC implements and not whatever image a worker runs.
+Reporting the tenant's image version there would have GitHub refuse sessions for a listener that is current, converting a silent risk into an immediate outage.
+The fix adds the second number instead of changing the first: both reconcilers read the runner version off the effective worker image each reconcile and publish <code>RunnerVersionTooOld</code> from it (<code>WorkerImageBelowMinimum</code> / <code>WorkerImageCurrent</code> / <code>WorkerImageVersionUnknown</code>), which needs no session and so reaches the ScaleSet tier.</p>
+<p>What the image reference cannot answer, the worker now does: the upstream runner image carries no <code>RUNNER_VERSION</code> env var and no version label — its <code>org.opencontainers.image.version</code> is the Ubuntu base's <code>24.04</code> — but <code>bin/Runner.Listener.deps.json</code> names the real version, so the injected wrapper reads it and logs it once per pod.
+Reporting that reading back to the AGC, rather than only to <code>kubectl logs</code>, is deferred: it needs a channel out of the worker and a status field, and it reports nothing until a set's first job finishes.</p>
+<h2 id="the-parity-axis-what-closed-and-what-backs-it">The parity axis: what closed, and what backs it<a class="headerlink" href="#the-parity-axis-what-closed-and-what-backs-it" title="Permanent link">&para;</a></h2>
+<p>The four gating rows above were each argued on their own terms, but they land on one axis.
+Every one is a capability the classic tier had and the ScaleSet tier did not, or a shape <code>v1alpha1</code> allowed and <code>v2beta1</code> refused.
+Recorded here because the release notes need the through-line, and because a future audit should not re-derive it.</p>
+<p><strong>Two axes, measured 2026-08-13.</strong></p>
+<p>Classic to ScaleSet acquisition tier: <strong>closed on the tracked inventory, and the inventory turned out to be incomplete.</strong> <a href="../../../features/">features.md</a> marks any capability that does not reach the ScaleSet tier with a <code>partly classic-only</code> badge, and no capability carries one; the last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
+<a href="../../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md § Capability parity</a>, which exists because removing classic at <code>v2.0.0</code> must not delete a capability along with it, reads Both tiers on all five rows.</p>
+<p>Neither surface caught Q844, found 2026-08-14 by asking whether the axis was really shut.
+Restart-safe disruption recovery was classic-only: the classic provisioning goroutine reads the disruption markers off the resolving event it is already watching, while a scale-set worker is readable only while it terminates, so an AGC down for that window never issued the re-run.
+<code>features.md</code> claimed automatic re-run for eviction, preemption, drain and a bare <code>kubectl delete pod</code> with <strong>no tier badge</strong>, and the troubleshooting matrix said outright that every firing case "works on <strong>both acquisition tiers</strong>".
+It was admitted as a <code>1.5-gate</code> row on the same test Q712 and Q713 met — the claim is published and the shipped tier does not honour it — and shipped the same day: the ScaleSet tier now persists the run behind every worker it builds, and re-runs any whose pod is gone when it comes back.</p>
+<p>That the badge set and the parity table both read clean while this was open is the sharpest available argument for Q776 below, and it is why the tier result is stated here as <em>measured against the inventory</em> rather than as parity full stop.</p>
+<p><code>v1alpha1</code> to <code>v2beta1</code> API: <strong>closed, but mostly before the 1.4 tag.</strong> All eight gaps in the <a href="../../v2-api-gap-analysis/">gap analysis</a> are closed and it declared its own scope closed 2026-08-09; the last v2 API milestone, Q166 cross-namespace sharing, is an ancestor of <code>v1.4.0</code>.
+1.5 contributed the one surviving capability drop, Q726: <code>v1alpha1</code> set <code>MinItems=1</code> with no ceiling while <code>v2beta1</code> CEL-enforced <code>size(self) == 1</code>, and that field's godoc offered staying on a <code>v2alpha1</code> Classic set as the migration path, which <code>v2.0.0</code> removes.</p>
+<h3 id="what-parity-does-not-yet-have-a-backstop">What parity does not yet have: a backstop<a class="headerlink" href="#what-parity-does-not-yet-have-a-backstop" title="Permanent link">&para;</a></h3>
+<p>Both results rested on a one-time manual walk, and on the tier axis that walk had already gone stale three times when this section was written.
+Q683, Q691 and Q713 each arrived classic-only from birth <em>after</em> the 2026-07-26 tier-seam walk declared parity, and nothing re-walks it.</p>
+<p>The tier badge gate is one-directional by construction.
+It fails a badge whose Queue row already shipped, a badge with no <code>&lt;!-- tier:QN --&gt;</code> annotation, and a badge linking no <code>operations/</code> page, so a badge cannot outlive its gap.
+It cannot see the case that actually recurs: a capability that is classic-only and was never badged at all.</p>
+<p><strong>Q776 was admitted as a <code>1.5-gate</code> row on 2026-08-13</strong> for that reason.
+It reconciles the <code>actions_gateway_*</code> names across both sides against the absent-by-design list in <a href="../../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a>, which both re-establishes the measurement as current and leaves behind the gate that keeps it so.</p>
+<p>Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
+It has since closed the gap it found; Q776 is what makes the next one visible without someone thinking to ask, and landing it is what lets the release notes say parity rather than name four ports.</p>
+<p><strong>✅ Q776 shipped.</strong> The re-walk covered all 53 <code>actions_gateway_*</code> series the AGC defines, and the <a href="../../../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral.
+<code>make metric-tiers-check</code> holds the ledger to the source in both directions, so a series added on one tier fails until someone answers the tier question, and a row the source refutes fails too.</p>
+<p>It found two things the one-time walk had not, which is the argument for the gate rather than a fifth walk:</p>
+<ul>
+<li><code>renew_job_errors_total</code> and <code>renew_job_teardowns_total</code> are classic-only by construction, since a scale-set runner renews and completes its own job and the AGC never calls <code>renewjob</code>.
+  Neither was on the absent-by-design list, and neither row said which tier emits it, so both read as system-wide.</li>
+<li><code>eviction_recovery_evidence_lost_total</code> (Q809) reached no operator doc at all.
+  It was described in the design docs and the troubleshooting runbook, and the metrics reference an operator actually reads never gained a row.</li>
+</ul>
+<p>Neither is a capability gap, so the parity result above stands: <strong>the tier axis is closed on the full metric inventory, not only on the tracked one.</strong> The gate covers metrics rather than capabilities, so a capability with no series behind it still joins the parity table by hand.
+That residual is recorded in <a href="../../v2-ga/#what-this-audit-checked-and-found-already-covered">v2-ga.md</a> and belonged to Q774, which shipped as <code>make design-scope-check</code>.</p>
+<p>The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission.
+<code>cmd/agc/api/v1alpha1/conditions_parity_test.go</code> already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to <code>v1alpha1</code>, which is frozen and comes out in the <code>v2.0.0</code> bundle (<a href="../../../queue/Q264/">Q264</a>).</p>
+<h3 id="differences-that-survive-parity-and-should">Differences that survive parity, and should<a class="headerlink" href="#differences-that-survive-parity-and-should" title="Permanent link">&para;</a></h3>
+<p>Not gaps, and not for the next audit to re-litigate.
+Preemption and drain recovery were listed here until 2026-08-14, on the grounds that only restart-safety differed; Q844 moved them out, because the difference was one the published claim does not make and the classic tier does not have, and then closed it:</p>
+<ul>
+<li>GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
+  Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the GitHub-side rejection.</li>
+<li>The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.</li>
+<li>Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models <code>ScaleSet</code> removes.
+  <a href="../../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> holds the list, and Q776 reconciles against it.</li>
+</ul>
+<h3 id="what-the-notes-may-claim">What the notes may claim<a class="headerlink" href="#what-the-notes-may-claim" title="Permanent link">&para;</a></h3>
+<p>The bar was that the notes name the ports rather than asserting parity until Q776 landed, because a published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
+Q844 is the case in point: the claim was already published, on <code>features.md</code> and in the troubleshooting matrix, before anyone checked whether the shipped tier honoured it.</p>
+<p>Q776 has landed, so the notes may now say parity <strong>on the metric surface</strong>, and should say it in those words.
+The ledger is the evidence and the gate is what keeps it true; a capability with no series behind it is still covered by a manual walk, so an unqualified "full parity" would overstate what is actually enforced.</p>
+<h2 id="pre-flight-the-api-surface-this-tag-publishes">Pre-flight: the API surface this tag publishes<a class="headerlink" href="#pre-flight-the-api-surface-this-tag-publishes" title="Permanent link">&para;</a></h2>
+<p>Recorded 2026-08-14 from <code>scripts/release/api-surface-since.sh</code> over <code>v1.4.0..feabacdc4</code>, per <a href="../../../operations/release/#1-pre-flight">release.md § Pre-flight</a>.
+<strong>Verdict: ship as-is.</strong> Two wire fields, one condition type and five condition reasons are published for the first time; no enum constraint, no default and no label or annotation key changed, and nothing is wire-breaking.</p>
+<p>The surface stopped moving before the review: Q844 landed controller code on 2026-08-14 and added none of it.</p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Carried on</th>
+<th>Why the shape is right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runnerGroup</code> (Q712)</td>
+<td><code>RunnerSet</code></td>
+<td><code>+optional</code> with <code>omitempty</code> and <code>MinLength=1</code>, so an explicit <code>""</code> is rejected and unset cannot diverge from empty; no pointer and no CRD default needed. Length bounds sit on the field rather than in a spec-level rule.</td>
+</tr>
+<tr>
+<td><code>defaultRunnerGroup</code> (Q712)</td>
+<td><code>ActionsGateway</code></td>
+<td>Inherited only by RunnerSets that set no <code>runnerGroup</code>, so the narrower field always wins, matching <code>templateRef</code>/<code>proxyRef</code>.</td>
+</tr>
+<tr>
+<td><code>RunnerLabelsIncomplete</code> (Q726)</td>
+<td><code>RunnerSet</code> condition</td>
+<td>Abnormal-true, like the existing <code>RunnerVersionTooOld</code>, and deliberately outside the gateway's <code>RunnerSetsDegraded</code> rollup: a declared label missing at GitHub is a configuration mismatch, not an outage.</td>
+</tr>
+<tr>
+<td><code>LabelsNotRegistered</code> / <code>LabelsRegistered</code> (Q726)</td>
+<td><code>RunnerLabelsIncomplete</code></td>
+<td>The True and False reasons of one condition, named for the state each reports.</td>
+</tr>
+<tr>
+<td><code>RunnerGroupNotFound</code> (Q712)</td>
+<td><code>Ready</code></td>
+<td>Fail-closed is the design, not an error path: falling back to the default group would widen the GitHub-side boundary at the moment an operator narrows it.</td>
+</tr>
+<tr>
+<td><code>WorkerImageBelowMinimum</code> / <code>WorkerImageCurrent</code> / <code>WorkerImageVersionUnknown</code> (Q715)</td>
+<td><code>RunnerVersionTooOld</code></td>
+<td>Three states rather than two. A digest-only or tenant-tagged image declares no version, and that reports <code>Unknown</code> rather than <code>False</code> because a custom image is where a stale runner hides.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="two-that-were-decisions-rather-than-ticks">Two that were decisions rather than ticks<a class="headerlink" href="#two-that-were-decisions-rather-than-ticks" title="Permanent link">&para;</a></h3>
+<p><strong>The <code>runnerGroup</code> name collides, and keeps the name.</strong> It shares a word with the deprecated <code>v1alpha1</code> <code>RunnerGroup</code> CR, which is a different concept, and the field's godoc says so in its first sentence.
+Two things settle it: GitHub's own term is "runner group" and ARC's <code>gha-runner-scale-set</code> chart already exposes <code>runnerGroup</code> for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the <code>v2.0.0</code> bundle (<a href="../../../queue/Q264/">Q264</a>), so the ambiguity is time-boxed.
+<code>githubRunnerGroup</code> would trade ecosystem familiarity for a collision that resolves itself.</p>
+<p><strong>The default is the wide group, and that is accepted rather than clean.</strong> Unset inherits the gateway's default and then GitHub's own default group, which typically admits the whole organization, so the default is the less isolated value.
+No narrower default exists to choose: GAG does not create runner groups.
+The safety therefore sits where GAG does decide the outcome — an unresolvable name fails closed rather than falling back, and an undeclared group leaves an existing scale set where it is, so widening is always explicit.</p>
+<p>One bound was not verified and does not need to be: <code>MaxLength=255</code> was not checked against GitHub's real limit for a runner group name.
+Loosening a length bound later is non-breaking and tightening one is, so a generous bound is the safe error.</p>
+<p>Nothing was deferred, so this review adds no gate row.</p>
+<h2 id="the-rc1-validation-verdict-2026-08-14">The rc.1 validation verdict, 2026-08-14<a class="headerlink" href="#the-rc1-validation-verdict-2026-08-14" title="Permanent link">&para;</a></h2>
+<p><code>validate-release.sh v1.5.0-rc.1</code> <strong>PASSED</strong>, exit 0, and the cluster was confirmed back at 0 nodes by asking <code>ops.sh at-rest</code> rather than by reading the gate's own teardown line.
+These are the receipts the notes' Validation section draws on.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>deploy</td>
+<td>RC deployed and CI routed to GAG in ~3m</td>
+</tr>
+<tr>
+<td>e2e matrix</td>
+<td><strong>75 passed, 0 failed, 12 skipped</strong> in 7m28s (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31805454168">run 31805454168</a>)</td>
+</tr>
+<tr>
+<td>sizing, <code>NodeShare</code></td>
+<td><code>sizingProfileState=Active</code>; worker CPU request derived to <strong>1500m</strong> where the templates ask 2 and 3</td>
+</tr>
+<tr>
+<td>sizing, <code>Throughput</code></td>
+<td><code>Active</code>, <code>sampleCounts=[188]</code></td>
+</tr>
+<tr>
+<td>CRD smoke</td>
+<td>blob signature <code>Verified OK</code>; all five v2 CRDs server-side applied and registered</td>
+</tr>
+</tbody>
+</table>
+<p>Artifact verification cleared separately and before the gate: 7/7 OCI signatures (five images, both charts), the <code>verify-blob</code> signature on the v2 CRD manifest, an SBOM attestation on the amd64 manifest, and a build-provenance attestation whose <code>buildSignerURI</code> ends <code>publish.yml@refs/tags/v1.5.0-rc.1</code> with a <code>sourceRepositoryDigest</code> equal to <code>ff3b3ef1</code>, the tagged commit.
+Following 1.4's practice, the two identity checks were re-run against deliberately wrong identities and both failed: a <code>refs/heads/</code> regexp took cosign to exit 12 naming the real subject, and <code>unit-test.yml</code> as <code>--signer-workflow</code> took <code>gh attestation verify</code> to exit 1.
+The provenance pass was read out of <code>--format json</code> rather than off the exit status, since that command prints nothing when its output is redirected.</p>
+<p><code>Throughput</code> actuating was not expected on this run.
+The <a href="../../../operations/release/#validate-the-release-candidate-on-dogfood">runbook</a> treats it as reported-never-fatal because it needs ~20 samples per template container and the gate's matrix is about seven jobs.
+It reported <code>Active</code> on 188 samples, because the sampler tracks every worker pod whatever <code>spec.sizing</code> holds and the aggregate re-seeds from the persisted <code>status.sizingRecommendation</code>, so the CI tenant's ordinary traffic had already earned them.</p>
+<h3 id="the-gate-could-not-start-and-the-defect-was-its-own">The gate could not start, and the defect was its own<a class="headerlink" href="#the-gate-could-not-start-and-the-defect-was-its-own" title="Permanent link">&para;</a></h3>
+<p>The first launch failed in preflight, before anything was spent, reporting the <code>e2e</code> pool as having no autoscale ceiling.
+The cluster was configured correctly: GKE omits <code>minNodeCount</code> when it holds its 0 default, so the projected row led with an empty field and a default-IFS <code>read</code> slid the ceiling into the floor.
+No IFS could have recovered it, because tab is IFS whitespace and <code>read</code> drops a leading run of it unconditionally, so the projection now asks for a comma.
+Fixed in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1498">#1498</a> and confirmed against the live cluster before the gate was re-run.</p>
+<p>Two things about <em>when</em> it was found are worth keeping.
+The reservation preflight merged 2026-08-12 and the previous dogfood run was 2026-08-09, so this code had never executed against a real cluster; both test doubles modelled a literal <code>0</code> the API never sends, which is why nine assertions over the arithmetic downstream of that read stayed green.
+That is recorded as the null-vs-absent case in <a href="../../../development/testing/#generate-a-fixture-with-the-producers-own-code-never-by-hand">testing.md</a>.
+The class of defect only surfaces when a release is actually being cut, which is the least convenient moment for it.</p>
+<h3 id="release-sentinelsh-reported-a-pass-that-was-not-this-runs"><code>release-sentinel.sh</code> reported a PASS that was not this run's<a class="headerlink" href="#release-sentinelsh-reported-a-pass-that-was-not-this-runs" title="Permanent link">&para;</a></h3>
+<p>Recorded because it nearly ended the session with a false verdict on the gate that decides whether an RC may be promoted.</p>
+<p>Launched while the gate was still in preflight, the sentinel read the <code>v1.4.0-rc.2</code> stream left in <code>tmp/</code> from 2026-08-09, found its terminal <code>passed</code> event, and reported <code>Gate: passed</code> with a next action of "report the result to the operator".
+The stale RC tag, a 101-hour elapsed time and the placeholder <code>owner/repo/actions/runs/42</code> were all in its own report, and none of them stopped it.
+A run that has not yet written its first event is indistinguishable, to the sentinel, from one that finished.
+Worked around at the time by archiving the three stale files under <code>v1.4.0-rc.2</code> names, then fixed at the writer rather than at the sentinel, because the same stale stream had already misreported the gate's phase through <code>release-status.sh</code> when it was asked directly.
+The gate now empties its stream before preflight instead of after it, so no reader can meet a spent run's terminal event.</p>
+<p>The <code>stalled</code> event later in the run was <strong>not</strong> a defect.
+It fired once the dispatched run was no longer live while the stream was quiet, which is exactly Q630's reconciliation behaving as designed; the gate was mid-transition into <code>e2e-stop.sh</code> when it was checked.
+The quiet itself was the documented case where GitHub will not serve the job log: <code>heartbeat</code> stayed <code>null</code> for the whole 22-minute leg on a run that passed, and the run record was the signal that worked.</p>
+<h2 id="the-stable-tag-pre-flight-2026-08-14">The stable-tag pre-flight, 2026-08-14<a class="headerlink" href="#the-stable-tag-pre-flight-2026-08-14" title="Permanent link">&para;</a></h2>
+<p>The four items that bind at the stable tag rather than at the candidate, plus the curated notes they feed.
+Recorded here because <a href="../../../operations/release/#1-pre-flight">release.md § Pre-flight</a> asks for a verdict, not a checkmark.</p>
+<p><strong>The marketing reconciliation found one under-claim and one stale claim, and the stale one was found by a question rather than by the pass.</strong></p>
+<p>Question 3 settles itself this cycle: the newest <code>gha-runner-scale-set</code> release is <strong>0.14.2, from 2026-05-22</strong>, which is exactly what all 17 competitor cells were stamped at on 2026-08-12.
+Upstream has not moved since the stamps, so no cell has aged out and none needed re-reading.
+That is the third state Q801 built the format for, doing its job on the first release to use it.</p>
+<p>Question 1 found <strong>Q726 on no marketing surface at all</strong>.
+Multi-label runner sets had no <code>features.md</code> line, and their only mention anywhere was a provenance footnote in <code>why-gag.md</code> explaining a stale ARC cell.
+The capability is the one that backs the zero-edit migration claim the front door makes, which is what makes the omission worth recording rather than just fixing: the inventory missed the feature that a published claim rests on.
+Everything else shipped this cycle already had a line, or was covered by a claim that Q844 made true rather than new.</p>
+<p>Question 2 was run too thinly, and the miss is worth more than the correction.
+Asked afterwards whether the two parity axes were actually closed, <code>why-gag.md</code> turned out to say a worker reaped while still <code>Pending</code> is re-run "on the classic tier", which Q766 had made both tiers in <code>v1.4.0</code>.
+The page <strong>understated the product by a full release</strong>, and it did so directly above a link to the canonical matrix that says both.</p>
+<p>The maintenance comment on that paragraph is why it survived: it asks for an update when a case is <em>added or removed</em> from the matrix, and this case was neither.
+Its acquisition tier changed, which is the same drift and is not what the instruction names.
+Both the claim and the instruction are corrected, and the under-claim half of this pass is the same shape one level up: a capability that moves tier changes what every surface may say about it, and nothing watches for that.
+<code>make metric-tiers-check</code> now covers the metric half; prose keeps needing the eye.</p>
+<p><strong>The operator-caveat pass found a missing migration note.</strong> Q791 tightened scale-set name uniqueness from namespace-scoped to the whole GitHub scope, which rejects a configuration <code>v1.4.0</code> accepted, and it had reached <code>troubleshooting.md</code> and <code>tenant-onboarding.md</code> but not <code>upgrade.md</code>.
+The gap matters because of <em>when</em> the rejection lands: admission runs on create and update, so nothing is re-validated at upgrade time and a colliding pair keeps running until someone re-applies either set, possibly a tenant who changed nothing.
+<code>upgrade.md</code> now carries the note and the one-command check that finds a collision in advance.</p>
+<p>Reading the report itself needed care worth recording.
+<code>operator-caveats-since.sh</code> extracts new sections and new bullets by line, and the sentence-per-line adoption (#1357) landed inside this window, so its bullet half reported over a hundred items citing Q-numbers as old as Q114.
+The <strong>new sections</strong> were the signal: four of them, mapping exactly onto Q844, Q715, Q726 and Q712.</p>
+<p><strong>The roadmap needed nothing.</strong> <code>make roadmap-check</code> is green and its near-term section holds only Q719, Q727, Q408 and Q564, all pointing at later releases; the 1.5 rows are correctly absent because they are closed and the gate fails a bullet naming a dead row.</p>
+<p><strong>The announce-bar highlight is updated and verified rendered</strong>, not just edited: <code>GAG_DOCS_RELEASE=v1.5.0 make docs-build</code> renders <code>v1.5.0 is here</code> followed by the new highlight.
+<code>publish.yml</code>'s <code>announce-bar</code> job fails the release if the rendered banner does not name the tag, so this is a gate rather than a nicety.</p>
+<p><strong>The notes are authored in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md"><code>docs/releases/v1.5.0.md</code></a></strong>, in-repo so each fix is a diff.
+Every surface an operator can see was diffed mechanically rather than read off the changelog: two CRD fields, seven condition reasons, one metric, three Event reasons, and no chart values change, with nothing removed or renamed anywhere.</p>
+<p>Two extraction traps bit and were caught.
+A CRD property scan reported a field called <code>identity</code> that does not exist, having matched a wrapped godoc line.
+An Event-reason scan keyed on <code>recordEvent(</code> missed two of the three additions, because <code>provisioner/</code> records through <code>RecordEvent(</code> instead; keying on the argument after the event type finds all three and cannot mistake the adjacent action string for a reason.</p>
+<p><strong>Still outstanding at the tag:</strong> the notes carry no <code>Container images</code> section, because the index digests do not exist until <code>publish.yml</code> has run.
+<a href="../../../operations/release/#4-record-the-published-digests">Step 4</a> is where they are read, and the section is appended before <code>gh release edit --notes-file</code> publishes the body.</p>
+<h2 id="scope-reopened-2026-08-14-what-a-question-cost">Scope reopened 2026-08-14: what a question cost<a class="headerlink" href="#scope-reopened-2026-08-14-what-a-question-cost" title="Permanent link">&para;</a></h2>
+<p>The pre-flight above closed and the tag was the next step.
+Then a question — <em>did we finally reach v1→v2 and classic→ScaleSet parity, and should that go in the notes, docs, or marketing?</em> — reopened the release on eight rows.
+Recorded because the sequence, not the rows, is the lesson: each answer was measured, and each measurement found something the pass before it had not.</p>
+<p><strong>Both axes are closed, and only one of them is a 1.5 story.</strong> The <a href="../../v2-ga/#capability-parity-is-a-precondition-of-the-removal">capability parity table</a> reads Both tiers on all six rows, <code>features.md</code> carries no <code>partly classic-only</code> badge, and the <a href="../../../operations/observability-metrics/#acquisition-tier-reach">tier ledger</a> reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
+The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.</p>
+<p><strong>Asking the question found the stale claim the pass had missed</strong>, recorded in the pre-flight section above, and then the same reasoning applied one level up.
+A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and <a href="../../../development/testing/">testing.md</a> states the rule outright.
+Q776 made metric <em>series</em> derived and gated.
+Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them.
+<strong>Q850 has since shipped</strong>: 45 condition reasons and 26 Event reasons carry a tier under <code>make reason-tiers-check</code>, and its walk found two Events an operator could meet in <code>kubectl describe</code> with no runbook entry, but no condition reason single-tier by accident (<a href="../q850-reason-tier-ledger/">plan</a>).
+Q851 has since shipped too, so all three signal surfaces are now derived and gated and nothing is left blocking the claim.
+What the label-value pass found is why the claim should still be worded off the gates rather than off a summary of them.
+Measured while scoping Q851: <code>eviction_retries_total</code> reads Both while <code>cause="vanished"</code> is scale-set-only, and <code>abandoned_run_force_cancels_total</code> reads Both while <code>outcome="identity_unknown"</code> is unreachable there.
+The gate sees series, not values, so two live tier differences sit inside rows marked Both.</p>
+<p><strong>Q851 shipped, and the count was wrong in both directions.</strong> Deriving the label values out of the source found seven single-tier rows, not two: <code>cause="vanished"</code> on all three eviction series rather than one, and three of <code>worker_pods_reaped_total</code>'s seven reap reasons — <code>completed_pending</code> and <code>orphaned_running</code> read a completion annotation the classic tier never stamps, and <code>job_abandoned</code> rides the classic renew loop the scale-set tier does not have.
+The operator-facing half was worse than the row said and in a different place: seven <code>Help</code> strings named a vocabulary the code had outgrown, or named none at all, and that is what an operator reads off <code>/metrics</code> with no docs open.
+And a claim in three places was simply wrong — <code>worker_pods_reaped_total</code>'s <code>runner_set</code> label was documented as scale-set-only, in the <code>Help</code>, the reference table and a Grafana panel, while the code keys it on the owning kind, so a Classic-protocol <code>RunnerSet</code> carries it and <code>{runner_set!=""}</code> is not the scale-set filter the dashboard calls it.</p>
+<p>The lesson repeats the section's: the hand-written claim was not merely incomplete, it was confidently wrong in the direction nobody re-reads.
+Only three of the seven rows were derivable from file layout alone; the other four are held by a guard in a file both tiers run, so those rows cite the guard and the gate holds the citation to a real source file.
+That is the honest floor for a completeness claim at this granularity — derived where the source can prove it, anchored to named code where it cannot, and never a bare list.</p>
+<p><strong>Then a second question — operators do not read release notes, so what are this release's landmines?</strong> Q849 was already admitted for it: Q791's guard runs at admission, which never re-validates a pair that already exists.
+Two more came out of asking the same thing of every caveat.
+Q852 is the sharpest and was not on anyone's list: <code>helm upgrade</code> never applies CRDs, and a structural schema prunes unknown fields with no error, so a skipped step 1 leaves <code>spec.runnerGroup</code> declared and inert — a security control that silently does nothing.
+It generalises past this release, since every future field has the same exposure.
+Q853 covers the other silent one, Q713's classic-tier span change, which renamed nothing and shifts every dashboard and cost figure at upgrade.</p>
+<p>Worth keeping: the two caveats that are <em>not</em> landmines, Q844's budget spend and Q726's inert appended label, each ship a condition or Event that fires exactly when an operator would otherwise be confused.
+That is the pattern Q849, Q852 and Q853 copy.</p>
+<p><strong>Finally, the bar for rc.2: pass without anything needing interpretation.</strong> Q854, Q855 and a promoted Q773 come from that.
+Q854 is the one that already cost a run — a single <code>HTTP 401</code> at 645s of the settle wait killed the first <code>v1.5.0-rc.1</code> attempt after 43 good polls, and the gate has no retry anywhere, while <code>download-verified.sh</code> has had jittered backoff since Q829.
+Q855 is the 22-minute blind spot on the leg that passed.
+Q773 was filed on 2026-08-09 and says the runbook calls a normal <code>Throughput: Active</code> result a surprise; it happened again on rc.1, and this document called it unexpected before the row was found.</p>
+<p><strong>One gate changed on the way.</strong> Labelling release-process work <code>1.5-gate</code> made <code>roadmapcheck</code> demand a public roadmap bullet for a <code>gh</code> retry and a runbook line.
+Rule 7 now obliges a bullet only for a gated row carrying <code>feature</code> or <code>security</code>, so a release can wait on process work without advertising it to adopters (<a href="../../../development/maintaining-backlog/#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">maintaining-backlog.md</a>).</p>
+<h2 id="the-rc2-pre-flight-2026-08-15">The rc.2 pre-flight, 2026-08-15<a class="headerlink" href="#the-rc2-pre-flight-2026-08-15" title="Permanent link">&para;</a></h2>
+<p>All eight rows admitted when scope reopened have shipped, so the Queue carries no <code>1.5-gate</code> row.
+Four of the commits behind them change the shipped binaries, which is what makes a second candidate necessary rather than optional: Q849 and Q852 (<code>gmc</code>), Q851's metric <code>Help</code> strings (<code>agc</code>), and Q811, a fix admitted outside the gate set.</p>
+<p><strong><code>main</code> was green on the tag target.</strong> Unit, integration and <code>security-scan</code> passed on <code>53283cd9f</code>, and e2e passed on that same SHA through the merge-queue run for #1541 rather than through the <code>push</code> lane, whose run for it sat behind the previous push's per-ref concurrency group.
+<code>make check</code> was green locally.
+Reading the <code>push</code> run's pending state as "e2e has not run" would have been wrong, and is the reason the SHA rather than the lane is what to check (Q675).</p>
+<p><strong>The API surface review was re-run, because the recorded <a href="#pre-flight-the-api-surface-this-tag-publishes">1.4→rc.1 verdict</a> no longer covers the tag.</strong> Q849 published surface <code>v1.5.0-rc.1</code> does not carry.
+<strong>Verdict: ship as-is.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Carried on</th>
+<th>Why the shape is right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ScaleSetNameCollision</code> (Q849)</td>
+<td><code>ActionsGateway</code> condition</td>
+<td>Abnormal-true and outside the <code>Ready</code> rollup, like <code>RunnerVersionTooOld</code> and <code>RunnerLabelsIncomplete</code>: a name shared with another tenant is a configuration mismatch the platform admin resolves, not an outage of this gateway. Advisory is the design, not a weaker enforcement — GAG cannot pick which tenant loses the name, and failing closed would take down the tenant that was there first.</td>
+</tr>
+<tr>
+<td><code>ScaleSetNameShared</code> / <code>ScaleSetNamesUnique</code> (Q849)</td>
+<td><code>ScaleSetNameCollision</code></td>
+<td>The True and False reasons of one condition, each named for the state it reports, following <code>LabelsRegistered</code>/<code>LabelsNotRegistered</code> from Q726.</td>
+</tr>
+<tr>
+<td><code>scale_set_name_collision</code> (Q849)</td>
+<td>GMC gauge</td>
+<td>A gauge rather than a counter because the condition describes a standing state, and one an operator must be able to alert on rather than only meet in <code>kubectl describe</code>.</td>
+</tr>
+<tr>
+<td><code>eviction_rerun_withheld_total</code> (Q811)</td>
+<td>AGC counter</td>
+<td>Keyed by <code>reason</code>, so a re-run the AGC declined is distinguishable from one it never reached — the withheld and failed paths stay separate series.</td>
+</tr>
+</tbody>
+</table>
+<p>No wire field, enum constraint, default, or label/annotation key changed, and nothing is wire-breaking: the additions are status vocabulary and telemetry.
+Nothing was deferred, so this review adds no gate row.</p>
+<p><strong>The marketing reconciliation was re-run too, and it had the same staleness the API review did.</strong> The <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pass</a> ran 2026-08-14, before the reopened rows shipped, so Question 1 had never been asked of them.</p>
+<p>It found the cross-tenant scale-set name guard on <strong>no marketing surface at all</strong>: zero hits across <code>features.md</code>, <code>README.md</code>, <code>index.md</code> and <code>why-gag.md</code>, checked on five phrasings and both anchor targets.
+Q791 shipped 2026-08-13, so the 2026-08-14 pass missed it rather than predating it; Q849 shipped after.
+<code>features.md</code> now carries it under Tenant isolation, stating both halves — admission refuses the pair GitHub-scope-wide, and a pair carried in from an older release is reported as a condition, an Event, and an alertable gauge.</p>
+<p>Two adjacent findings came out of writing that entry.
+The <code>new in 1.5</code> badge convention arrived with Q852 and marked exactly one capability, while <code>v1.4.0</code>'s <code>features.md</code> carried no such badge at all, so a reader scanning the page concluded the release's one addition was a startup check.
+The runner group, multi-label registration and the runner-version warning now carry it too, and the page's own legend said <strong>three</strong> badges while four were in use, having never been updated when the fourth was introduced.</p>
+<p><strong>Two claims were checked against ARC and <em>not</em> written, which is the point of the pass.</strong> <code>gha_job_startup_duration_seconds</code> and <code>gha_job_execution_duration_seconds</code> both exist in <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go"><code>cmd/ghalistener/metrics/metrics.go</code></a> at 0.14.2 (<code>9bb16ae</code>), so a "job duration metrics are unique to GAG" claim would have been false on publication, the same failure the 2026-08-06 review found eleven times.
+What GAG has that ARC does not is the pod-creation latency series and a pod-lifetime span chosen for cost attribution, which is a different claim and a narrower one.
+The <code>RunnerVersionTooOld</code> claim stays off the comparison table for a different reason: the ARC-side fact is about the <code>actions/runner</code> binary and GitHub's brownout schedule rather than about ARC, so an ARC version stamp would attest to the wrong thing.
+The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md">NOTE in the release notes</a> already carries the claim without naming a competitor, and cannot go false when ARC moves.</p>
+<p><strong>The notes were interrogated again, and the pass found a claim that had gone false.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md"><code>docs/releases/v1.5.0.md</code></a> still told an operator that a colliding scale-set name is never re-validated at upgrade time and lands at some later unrelated apply.
+Q849 had made that untrue four commits earlier, on the same day the notes were last touched.
+The upgrade note in <code>docs/operations/upgrade.md</code> was correct throughout; only the release notes were stale, which is the direction that reaches an adopter first and is checked last.</p>
+<p>That is the same shape as the <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pre-flight's</a> under-claim, one release surface over, and it is the argument for re-running the notes interrogation at <strong>every</strong> candidate rather than only the first: the notes go stale against the product between candidates, and nothing gates prose.</p>
+<h2 id="re-deriving-the-highlight-claims-2026-08-15-q876">Re-deriving the highlight claims, 2026-08-15 (Q876)<a class="headerlink" href="#re-deriving-the-highlight-claims-2026-08-15-q876" title="Permanent link">&para;</a></h2>
+<p>Every claim in the six <code>v1.5.0</code> highlights, checked against the code it describes rather than against a neighbouring doc.
+Q876 was admitted because one of the six had been inverted on both halves and survived a full pre-flight and <code>rc.1</code>; the other five had never been checked, and #1542 rewrote the section again afterwards.</p>
+<p><strong>One defect, and it was a number rather than a direction.</strong> The acquisition-tier ledger claim read <em>53 series, 26 both tiers</em>.
+The gated ledger holds <strong>54 and 27</strong>: Q811 added <code>eviction_rerun_withheld_total</code>, tiered Both, after the figure was written.
+It appeared twice, in the highlight and in the API-surface section, and the arithmetic stayed self-consistent in both places (26+16+10+1 = 53), which is why nothing caught it — a stale total and a stale addend move together.</p>
+<p>The other five hold, and the mechanisms behind them are where the checking went:</p>
+<table>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Re-derived from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>An unresolvable runner group fails closed rather than falling back</td>
+<td><code>scalesetlistener/listener.go:765</code> returns <code>ErrRunnerGroupNotFound</code> on <code>!ok</code>; the default-ID return above it is reached only by an <em>undeclared</em> group, which is the documented widening-is-explicit case</td>
+</tr>
+<tr>
+<td>An adopted scale set is moved into its declared group</td>
+<td><code>listener.go:798-810</code>, which reads the adopted set's group and moves it</td>
+</tr>
+<tr>
+<td><code>job_duration_seconds</code> blast radius: two SLOs, one severity-critical alert, four recording rules, both dashboards</td>
+<td>Four recording rules across the two series, and two alerts referencing them of which exactly one is <code>severity: critical</code> (<code>ActionsGatewayPodCreationLatencyP99</code>; the P95 is <code>warning</code>), so the singular is right. Two dashboard files.</td>
+</tr>
+<tr>
+<td>A run whose pod is gone at startup is re-run</td>
+<td><code>recoverOrphanedScaleSetWorkers</code> runs "once per process" over pods "already gone when this process started"</td>
+</tr>
+<tr>
+<td><code>ScaleSet</code> is the only tier <code>v2beta1</code> exposes</td>
+<td><code>api/v2beta1/runnerset_types.go</code> carries no <code>AcquisitionProtocol</code> at all, against seven references in <code>v2alpha1</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What this says about the counts, and the reason the row was worth its cost.</strong> Every wrong number in this release has been a <em>derived</em> one going stale, not a mistyped one: the ledger figure here, the 120-commits and 9-shipped figures #1542 re-derived, and the <code>features.md</code> entry that outgrew its word cap.
+The gates hold the ledger to the source and the notes to nothing, so a figure copied out of a gated artifact is correct exactly until that artifact moves.
+Re-deriving at the tag is what closes that window, and it is cheap enough to repeat.</p>
+<h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
+<p>Held here so the reasoning is not lost, not committed to the release:</p>
+<ul>
+<li><strong>Fold the scale-up token bucket into the advertised capacity.</strong> The bucket is waited on at <code>provisioner.go:532</code> and <code>:793</code>, after the claim, with the job holding its GitHub lock, which the CRD godoc states outright (<code>api/v2beta1/runnerset_types.go:394-400</code>).
+  Expressing free tokens as a fourth <code>min()</code> rung in <code>AdvertiseCapacity</code> would make the anti-stampede claim structurally honest.
+  <strong>Accepted and shipped in 1.6</strong> (Q717): the rung landed in both tiers, and the classic tier drops its post-claim wait entirely because it takes the token in <code>Admit</code> instead.
+  The advertisement rung converts free tokens to a total with the set's own in-flight pods, without which a <code>burst</code>-deep bucket would have pinned the set at <code>burst</code> assigned jobs and turned a rate limit into a lower concurrency ceiling.</li>
+</ul>
+<p><em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled <code>1.5-gate</code>, and the gap inventory it belongs to is <a href="../../arc-parity/">arc-parity.md</a>.)</em></p>
+<h2 id="in-scope-reconcile-the-marketing-surfaces">In scope: reconcile the marketing surfaces<a class="headerlink" href="#in-scope-reconcile-the-marketing-surfaces" title="Permanent link">&para;</a></h2>
+<p>1.5 carries the marketing-claim work identified by the 2026-08-06 competitive review.
+It touches no shipped artifact, so individual corrections can land continuously as docs PRs, but the release does not tag until the reconciliation has been done and its verdict recorded here.</p>
+<p>Three bodies of work, in dependency order:</p>
+<ol>
+<li><strong>Corrections.</strong> Claims that are wrong or stale today.
+   The largest are the ARC-side cells of the <code>why-gag.md</code> comparison table: 11 of them assert a gap with no ARC version and no measurement date, and two went false at datable upstream releases (0.13.1 fixed quota-blocked pod creation; 0.14.0 added multi-label scale sets, which GAG does not have).
+   Also the listener-footprint wording, which is substantively right but uses "cluster IP" to mean a pod IP, inviting a reader to check <code>Service</code> objects and conclude the table is wrong.</li>
+<li><strong>Under-claims</strong> ✅ <strong>reconciled 2026-08-12 (Q821).</strong> The count below is wrong and the <a href="../../competitive-analysis-2026-08/#under-claims-not-yet-fixed">inventory</a> now records why: three of the five outstanding items reached <em>no</em> surface at all rather than only <code>features.md</code>, and one had already shipped to all three.
+   The message-queue conclusion-durability body, the durability programme with its 16-hour/82-spot-node-hour incident, and the GitHub protocol dependency register are now on <code>features.md</code> and <code>README.md</code>; the worker-quota footprint arithmetic is the one still outstanding.
+   The original framing, kept because it is what the release was scoped against: Nine capabilities shipped and appear only in <code>features.md</code>.
+   The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.</li>
+<li><strong>Structure.</strong> Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
+   Q712 blocked publishing tenant-isolation marketing and landed the same day, so that claim is available too: state it as the runner-group <em>binding</em>, not as GAG controlling repository access, which stays the platform admin's at GitHub.</li>
+</ol>
+<p>The recurring form of this is now <a href="../../../operations/release/#1-pre-flight">release.md § Pre-flight</a>, which asks the same three questions before every tag.
+1.5 is the first release to run it, and the backlog it produced is the reason the step exists.</p>
+<h2 id="the-scoping-question-settled">The scoping question, settled<a class="headerlink" href="#the-scoping-question-settled" title="Permanent link">&para;</a></h2>
+<p>Whether the comparison table keeps its verdict-table shape at all.
+The 2026-08-06 review traced the undated cells to the format: a green-check/red-X table needs a definite cell in every row, and the working notes it was built from had marked most competitor-side facts as unverified.
+The format had nowhere to put "we believe this but have not checked it", so unverified became a red X. Patching cells does not fix that; either every competitor-side cell carries a version and a date, or the page stops rendering competitor claims as verdicts.</p>
+<p><strong>Settled 2026-08-11: the table keeps its shape and gains a third state.</strong> A competitor-side cell carries a verdict only when it also carries an ARC version and a measurement date; without both it renders as unverified.
+Tracked as Q801, and <strong>shipped 2026-08-12</strong>: <code>make comparison-stamps-check</code> enforces the rule, <code>.gag-unverified</code> is the state, and all 17 ARC cells were re-read at 0.14.2 / <code>9bb16ae</code> and stamped.
+The rule is <a href="../../../development/documentation-standards/#a-competitor-side-verdict-carries-its-own-stamp">documentation-standards.md § A competitor-side verdict carries its own stamp</a>; the per-cell evidence is <a href="../../competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">in the competitive analysis</a>.</p>
+<p>Measured the same day, which is what makes this a format decision rather than a cleanup: <strong>15 of the 17 comparison rows carry neither an ARC version nor a date.</strong> Only two do.
+Dating them is the work either way, so the question is only what the page asserts while that is outstanding.</p>
+<p><strong>How the dating actually went, 2026-08-12.</strong> All 17 came back with a verdict rather than some falling to unverified, because re-reading them at one pinned commit was cheaper than the row assumed: eleven of the twelve gap-asserting cells were settled from two chart <code>values.yaml</code> files, four controller source files and one recursive file listing.
+Two corrections fell out of it.
+The quota row now names the 30 s retry beside the 10 min registration burn, both read at <code>9bb16ae</code>, and the "three rules, all <code>patch</code>" reading behind the pre-claim-seat argument is two rules at that commit.
+The unverified state therefore ships with no cell using it, which is the right way round: the format can express doubt before it needs to, and the gate is what stops the next unmeasured cell rendering as a verdict.
+The one claim that stayed weaker than the rest is the auto-re-run negative, which is a keyword-and-surface reading rather than an exhaustive one and says so in the evidence table.</p>
+<p>The argument is the asymmetry between the two ways of being wrong.
+Two cells have already gone false at datable upstream releases, and a reader who checks one and finds it wrong has no reason to trust the other sixteen; the page's whole value is that a sceptical evaluator can spot-check it.
+An unverified cell costs nothing by comparison, and next to cells that do carry a version and a date it reads as rigour rather than as a gap.</p>
+<p>It also makes the debt visible instead of hidden.
+Today an unmeasured claim and a measured one are indistinguishable on the page, so staleness accumulates silently; under the third state an expiring cell degrades to unverified rather than to wrong.
+That turns <a href="../../../operations/release/#1-pre-flight">release.md § Pre-flight</a> from "re-verify everything" into "re-check what went stale", and the rule is mechanical enough to gate: no version and date, no verdict.</p>
+<p>Not chosen, and why.
+Dating all 15 first keeps the strongest-looking page but blocks every correction behind one large measurement pass, and leaves the format unable to express doubt the next time ARC moves.
+Dropping the verdicts entirely cannot go false, but it gives up the at-a-glance comparison on the page most likely to be read by somebody evaluating alternatives.</p>
+<p>One caveat on the record: this was decided from the markup and the row counts, not from the rendered page at a real viewport.
+If the unverified state reads badly in practice, that is a design finding worth acting on rather than a decision to relitigate.</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

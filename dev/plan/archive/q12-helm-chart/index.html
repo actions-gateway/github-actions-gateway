@@ -2694,7 +2694,7 @@
 
 
 <h1 id="q12--production-helm-chart-chartsactions-gateway">Q12 — Production Helm chart (<code>charts/actions-gateway/</code>)<a class="headerlink" href="#q12--production-helm-chart-chartsactions-gateway" title="Permanent link">&para;</a></h1>
-<p>← <a href="../../milestone-5/#1-packaging-helm-chart">Milestone 5 §1</a> | <a href="../../release-1.0/#c-packaging--supply-chain--gating--recommended">Release 1.0 §C</a> | <a href="../../../queue/">STATUS</a></p>
+<p>← <a href="../../milestone-5/#1-packaging-helm-chart">Milestone 5 §1</a> | <a href="../release-1.0/#c-packaging--supply-chain--gating--recommended">Release 1.0 §C</a> | <a href="../../../queue/">STATUS</a></p>
 <p><strong>Goal.</strong> Ship a Helm chart that an operator can <code>helm install</code> to deploy the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook, and admission policy — with every default at the secure posture already encoded in the <code>cmd/gmc/config/</code> kustomize bases.
 Helm was decided over Kustomize (<a href="../../milestone-5/#11-install-vehicle--decided-helm-chart">D-M5-1</a>).</p>
 <p><strong>Scope of this PR (slice 1 — the whole GMC core install).</strong> A lint-clean, offline-validated chart that renders the complete GMC control plane.
@@ -2808,7 +2808,7 @@ Reconciling the two bases (so <code>make manifests</code> keeps them in sync) is
 <li>Pipe rendered output through <code>kubeconform</code> (skip the two CRDs + the cert-manager / monitoring.coreos.com CRs whose schemas are not in the default store; <code>-skip</code> them with a note).</li>
 </ol>
 <h2 id="live-validation-track-a--2026-06-12">Live validation (track A) — 2026-06-12<a class="headerlink" href="#live-validation-track-a--2026-06-12" title="Permanent link">&para;</a></h2>
-<p>The chart's "working tenant from a single <code>helm install</code>" gate was proven live on a 3-node kind cluster with real GitHub App credentials, as part of the <a href="../../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">Milestone 4 live validation session</a> (full evidence there).
+<p>The chart's "working tenant from a single <code>helm install</code>" gate was proven live on a 3-node kind cluster with real GitHub App credentials, as part of the <a href="../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">Milestone 4 live validation session</a> (full evidence there).
 Chart-specific observations:</p>
 <ul>
 <li><code>helm install actions-gateway charts/actions-gateway -n gmc-system --create-namespace</code> with <code>gmc.image.digest</code>, <code>agc.image.digest</code>, and <code>proxy.image.digest</code> all set (local-registry digests) — i.e. the <strong>secure digest-pinned default path</strong>, no <code>allowFloatingImageTags</code> — rendered, installed, and rolled out 2/2 replicas in ~10 s.

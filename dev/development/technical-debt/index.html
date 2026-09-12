@@ -2878,7 +2878,7 @@ The mechanics live in adjacent docs and are linked rather than repeated:</p>
 <ul>
 <li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — how to record and prioritize a debt item in <a href="../../queue/">the backlog</a>.</li>
 <li><a href="../backpressure/">backpressure.md</a>: the automated feedback loops that stop debt at authoring time.</li>
-<li><a href="../../plan/release-1.0/">release-1.0.md</a> — the quality gates that block the 1.0 release (bucket F).</li>
+<li><a href="../../plan/archive/release-1.0/">release-1.0.md</a> — the quality gates that block the 1.0 release (bucket F).</li>
 <li><a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a> — long-horizon non-commitments.</li>
 </ul>
 <h2 id="what-we-mean-by-technical-debt">What we mean by technical debt<a class="headerlink" href="#what-we-mean-by-technical-debt" title="Permanent link">&para;</a></h2>
@@ -3117,7 +3117,7 @@ A script that must reproduce its input <strong>byte for byte</strong> is worse o
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> parse Markdown tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.</p>
 <h4 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h4>
 <p>Line counts measured 2026-08-03 with <code>wc -l</code>.
-The <a href="../../plan/markdown-gates-parser/">Q612 survey</a> and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.</p>
+The <a href="../../plan/archive/markdown-gates-parser/">Q612 survey</a> and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.</p>
 <table>
 <thead>
 <tr>
@@ -3246,7 +3246,7 @@ We track the ones that are cheap, automatable, and catch real regressions — an
 <p>The principle: <strong>a metric earns a place only when it changes a decision.</strong> A number nobody acts on is itself a small piece of debt.</p>
 <h2 id="quality-gates-as-debt-brakes">Quality gates as debt brakes<a class="headerlink" href="#quality-gates-as-debt-brakes" title="Permanent link">&para;</a></h2>
 <p>A quality gate turns "do not let this class of debt accumulate" into machine enforcement.
-The release-1.0 plan groups them as <a href="../../plan/release-1.0/">bucket F — engineering quality gates</a>: coverage, duplication, <code>-race</code>, <code>gosec</code>, <code>errcheck</code>, and install-artifact validation, on top of the formatting, lint, <code>govulncheck</code>, and <code>trivy</code> gates that already run (<a href="../backpressure/">backpressure.md</a>).
+The release-1.0 plan groups them as <a href="../../plan/archive/release-1.0/">bucket F — engineering quality gates</a>: coverage, duplication, <code>-race</code>, <code>gosec</code>, <code>errcheck</code>, and install-artifact validation, on top of the formatting, lint, <code>govulncheck</code>, and <code>trivy</code> gates that already run (<a href="../backpressure/">backpressure.md</a>).
 Each gate is the durable form of a detect-and-pay-down cycle: once paid, it does not regress.</p>
 <p>Where a gate is threshold-shaped (coverage, <code>dupl</code>, <code>funlen</code>), it gates by <strong>not getting worse</strong> — a ratchet or tuned threshold — rather than an arbitrary absolute bar, so it raises quality without manufacturing low-value work.</p>
 <h2 id="where-it-all-lives">Where it all lives<a class="headerlink" href="#where-it-all-lives" title="Permanent link">&para;</a></h2>
@@ -3280,7 +3280,7 @@ Each gate is the durable form of a detect-and-pay-down cycle: once paid, it does
 </tr>
 <tr>
 <td>Release-blocking gates</td>
-<td><a href="../../plan/release-1.0/">release-1.0.md</a> (bucket F)</td>
+<td><a href="../../plan/archive/release-1.0/">release-1.0.md</a> (bucket F)</td>
 </tr>
 <tr>
 <td>Long-horizon non-commitments</td>

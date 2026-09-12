@@ -2875,6 +2875,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-agc-deployment-name-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The AGC Deployment-name gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-design-doc-scope-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The design-doc scope gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-prose-tier-claim-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The prose tier-claim gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-release-pin-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5069,6 +5102,52 @@ What is left for a kubelet to settle is narrower still: <code>credential_rotatio
 <p>Its own failure mode is the one it exists to catch, so <code>scripts/docs/doc-blocks-test.sh</code> asserts a known-bad document goes <strong>red</strong> for each rule, paired with the good document that must stay green: a parser that stopped matching the annotation would report every page clean.</p>
 <p>It earned its keep on the first run.
 Both Step 4 examples were rejected with <code>priorityClassName "runner-critical" is not in the platform allowlist</code>: the chart ships <code>allowedPriorityClasses</code> empty, and the quickstart named tier classes it never told the operator to allowlist, so the page could not be followed to the end.</p>
+<h3 id="the-agc-deployment-name-gate">The AGC Deployment-name gate<a class="headerlink" href="#the-agc-deployment-name-gate" title="Permanent link">&para;</a></h3>
+<p><code>make agc-names-check</code> (<code>scripts/docs/check-agc-names.sh</code>) fails when an operator doc addresses the AGC Deployment by its v1 name with nothing nearby to say which API version the command is for.
+The AGC is one Deployment per namespace under v1, named <code>actions-gateway-controller</code>, and one per gateway under v2, named <code>&lt;gateway&gt;-agc</code>.
+A command carrying the v1 name therefore names nothing at all on a v2 tenant, and 30 such references were live across eight pages when this gate was written, so a reader on the recommended path had no signal that the command did not apply (Q1098).
+Four of the 30 were bare-name forms (<code>kubectl get deploy … actions-gateway-controller</code>) that the row's own <code>deploy/</code> pattern could not see, and one was already correct, on a page that applies a <code>v1alpha1</code> CR.
+The gate is written against the class rather than against that count, which is why it matches both syntaxes and accepts a label carried by prose.</p>
+<p>Two rules, both functions of the tree alone.
+A v1 reference must carry <code>v1</code> on its own line or on one of the <strong>two</strong> preceding non-blank lines: the <code># v1 (legacy)</code> comment the split blocks use, or prose scoping the page to v1.
+The window is short deliberately: a label further back than that is not what a reader skimming to a command sees, which is the failure the gate exists to catch rather than a stricter version of it.
+And any <code>&lt;gateway&gt;-agc</code> the docs spell is reconciled against <code>AGCResourceSuffix</code> in the GMC builder, so renaming the suffix in code cannot leave the docs quietly wrong.
+That constant is the gate's second input, which is why the one file holding it is named in <code>doc-links.yml</code>'s path filter: a Go-only diff would otherwise route here not at all.</p>
+<p>Scope is <code>docs/operations/</code>, <code>docs/development/</code> and <code>docs/getting-started.md</code>, the pages someone runs commands from.
+The design docs describe v1's NetworkPolicy and label set <em>as design</em> and the archived plans are history; neither is a command anyone runs, so widening to <code>docs/</code> at large would only buy exemptions.
+What the gate does <strong>not</strong> cover is the adjacent identifier class: the pod <code>app=</code> selector, and the ServiceAccount, Service and NetworkPolicy names, which are per-gateway under v2 for the same reason and were measured at 20 further sites (Q1099).</p>
+<p>Behaviour is asserted by <code>scripts/docs/check-agc-names-test.sh</code> under <code>make scripts-test</code>, against throwaway repos holding only the builder constant and one page: the unlabelled command that must go red beside its labelled control, a label pushed just past the window, and the two shapes that must refuse with exit 2 rather than pass by checking nothing, an unreadable suffix constant and a scope that resolved to no files.</p>
+<h3 id="the-design-doc-scope-gate">The design-doc scope gate<a class="headerlink" href="#the-design-doc-scope-gate" title="Permanent link">&para;</a></h3>
+<p><code>make design-scope-check</code> (<code>scripts/docs/check-design-scope.sh</code>) fails a branch that states an operator-visible scope under <code>docs/design/</code> and changes nothing under <code>docs/operations/</code>.</p>
+<p><a href="../doc-update-matrix/">doc-update-matrix.md</a> already called this out in so many words: "A design-doc-only update is the classic miss: the operator who hits the rejection never reads <code>docs/design/</code>."
+Nothing enforced it, and the 1.4 cycle missed it three times (Q774).</p>
+<p><strong>The trigger is a scope sentence the branch added, never the file pair.</strong> Keying on "a design file changed, so an operations file must too" would fire on every typo fix and be waived into meaninglessness within a week.
+Keying on the sentence that states something an operator can trip fires only where there is an operator surface to propagate.</p>
+<p>The vocabulary is calibrated rather than guessed.
+Measured 2026-09-12 over the whole <code>docs/design/</code> tree, 65 lines match across 10 of its files, and both categories carrying them are things an operator meets directly: an <strong>admission rejection</strong> (29), which they see as an error on <code>kubectl apply</code>, and a <strong>changed default</strong> (36), which reaches every existing tenant without anyone editing a manifest.
+Three further categories were drafted and cut because each matched zero lines in the corpus: a pattern never validated against real prose is a guess about how this project writes, and a gate is a bad place to keep one.
+Add one when a real sentence needs it, with the count that justified it.</p>
+<p>The escape is inline and reviewable, following <code>no-plan-refs</code>: a line carrying <code>operator-surface: &lt;reason&gt;</code> is silenced, and only that line.
+A design doc restating a rejection an operations page already documents is the legitimate case, and it belongs in the diff rather than under a whole-file allowlist.</p>
+<p>Base resolution and the fail-open posture follow the em-dash ratchet's, with <code>DESIGN_SCOPE_REQUIRE_BASE=1</code> turning the skip into a hard error where CI has arranged a base.
+<code>scripts/docs/check-design-scope-test.sh</code> asserts the red case and <strong>two</strong> controls: the same statement alongside an operations edit, and an edit to the same design file stating no scope.
+The second control is what stops a gate that had degenerated into "design changed, operations did not" from passing the suite.</p>
+<h3 id="the-prose-tier-claim-gate">The prose tier-claim gate<a class="headerlink" href="#the-prose-tier-claim-gate" title="Permanent link">&para;</a></h3>
+<p><code>make tier-claims-check</code> (<code>scripts/docs/check-tier-claims.sh</code>) fails when a prose acquisition-tier claim drifts from the canonical section it paraphrases.</p>
+<p>The failure it exists to catch is measured (Q848).
+<code>docs/why-gag.md</code> called the Pending-reap re-run classic-only for the whole <code>v1.4.0</code> cycle after Q766 had made it reach both tiers.
+The paragraph carried an upkeep comment, and that comment asked for a re-read when a case was <em>added or removed</em>, which Q766 did neither of, so nothing fired.
+The metric half of the same drift has a gate (<code>make metric-tiers-check</code>, Q776) and the <code>gag-tier-badge</code> has the roadmap checker's rule 10, but that rule is one-directional by construction: it fails a badge that outlived its gap, never a gap nobody badged.
+Prose had nothing at all.</p>
+<p><strong>The rule is a stamp, not a semantic judgement.</strong> A paragraph making a tier claim carries <code>&lt;!-- tier-source: &lt;path&gt;#&lt;anchor&gt; sha=&lt;8 hex&gt; --&gt;</code>, and the gate recomputes that digest over the <strong>tier-bearing lines</strong> of the section the annotation names.
+A tier move upstream changes those lines, the digest changes, and the gate says to re-read the paraphrase.</p>
+<p>That narrow trigger is the design rather than a limitation.
+Digesting the whole section would fire on every edit to a long troubleshooting page, and a stamp that goes red weekly is re-stamped without anyone reading the paragraph, which is the same nothing the upkeep comment already was.
+Verified in both directions before shipping: replaying Q766's exact tier move goes red, and an edit to a non-tier row of the same table stays green.</p>
+<p>It is checked in both directions for the reason the badge rule is worth contrasting with: an unstamped tier claim on a watched page is a finding too, so deleting a stamp cannot quietly turn the gate off.
+<code>make tier-claims-check-write</code> re-stamps, once the paraphrase has actually been re-read.</p>
+<p>Watched pages are named in the script rather than discovered, like <code>check-card-bullets.sh</code>'s two: a third page adopting the pattern should be a deliberate edit.
+Behaviour is asserted by <code>scripts/docs/check-tier-claims-test.sh</code> under <code>make scripts-test</code>, including the block shape that made this gate pass its own first run by checking nothing: an upkeep comment and the paragraph under it are one block whenever no blank line separates them, and a "skip any block opening with a comment" exemption swallowed exactly the paragraph being watched.</p>
 <h3 id="the-release-pin-gate">The release-pin gate<a class="headerlink" href="#the-release-pin-gate" title="Permanent link">&para;</a></h3>
 <p><code>make release-pins-check</code> (<code>scripts/docs/check-release-pins.sh</code>) fails when an install/upgrade page still pins a release older than the newest stable <code>vX.Y.Z</code> tag.
 It exists because nothing in <code>publish.yml</code> rewrites the docs: the chart version, the image tag, and the release-notes URL are transcribed by hand, and <code>v1.3.0</code> shipped with <code>README.md</code>, <code>docs/index.md</code>, and <code>install.md</code> fixed by hand while <code>upgrade.md</code> and <code>gitops.md</code> still told operators to install <code>1.2.0</code> — plus a patch-line hint in <code>install.md</code> reading <code>1.2.z</code> that no grep for <code>1.2.0</code> would have found (Q638).
@@ -5742,7 +5821,7 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
 <li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes, and a set that looks static may be churning underneath a stable count, so compare <em>identities</em> across two readings rather than counts.</li>
 <li><strong>A count grouped by symptom is not a measurement of cause.</strong> workspace-guard's friction report folds <code>f=$(ls -t …)</code>, <code>for f in &lt;glob&gt;</code>, and a literal <code>f=/path</code> into a single <code>$f</code> row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days.
   Exercising the system beat counting its records: nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.</li>
-<li><strong>A count or a superlative is a claim, not a recollection.</strong> The <a href="../../plan/markdown-gates-parser/">markdown-gates plan</a> first called <code>check-doc-links.sh</code> the only script here with no <code>-test.sh</code> companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in <code>scripts/docs/</code> untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true.
+<li><strong>A count or a superlative is a claim, not a recollection.</strong> The <a href="../../plan/archive/markdown-gates-parser/">markdown-gates plan</a> first called <code>check-doc-links.sh</code> the only script here with no <code>-test.sh</code> companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in <code>scripts/docs/</code> untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true.
   Re-derived while writing this line: seven of fourteen, because <code>gen-api-reference.sh</code> has landed since.
   The number moved in a day.</li>
 <li><strong>An instrument's total is bounded by what it can observe, and an event it never saw leaves no gap.</strong> The guard friction reports rank PreToolUse decisions, so foreground-guard's 200 prompts — quoted upstream as the largest single source of friction here — is a <strong>floor</strong>: the hook returns ahead of all analysis when the payload carries <code>run_in_background: true</code> (<code>karlkfi/claude-foreground-guard#15</code>), so every backgrounded poll is absent by construction. pr-sentinel scored near zero for a sharper reason: its defect lives in a watcher script that no PreToolUse analyzer observes at all.</li>
@@ -5867,7 +5946,7 @@ Two shapes produced that here on 2026-08-16, both cheap to check and neither che
 <p><strong>Provenance, read off resemblance.</strong> A cut of the agent process playbooks rested on the sentence "the tooling is vendored", meaning copied in from the globally-installed skills, and shipped it to three doc sites and a PR body as the justification for keeping prose thin: the gates hold the rules even where the docs no longer do.
 The direction was backwards.
 <code>lint-backlog.sh</code> over <code>backloglint</code> (Go, 13 rules, a GFM AST) had no counterpart in the skill, which ships bash over a smaller set; the ID allocator is the one the skill cites as <em>its</em> proof point at 460+ live claims here; the merge drivers and <code>check-status-isolation.sh</code> existed only here.
-<code>lint-backlog.sh</code>, <code>backloglint</code> and <code>check-status-isolation.sh</code> all retired with the table (<a href="../../plan/q889-backlog-item-store/">Q889</a>), and the store's rules are now <code>lint-queue.sh</code> and <code>check-queue-rules.sh</code>; the reading stands as taken, and it is the direction it establishes that matters.
+<code>lint-backlog.sh</code>, <code>backloglint</code> and <code>check-status-isolation.sh</code> all retired with the table (<a href="../../plan/archive/q889-backlog-item-store/">Q889</a>), and the store's rules are now <code>lint-queue.sh</code> and <code>check-queue-rules.sh</code>; the reading stands as taken, and it is the direction it establishes that matters.
 One <code>git log</code> per side answers it, and none was run, because nothing in the sentence looked like a measurement.
 The claim survived into a merged PR and was corrected only after the maintainer asked whether it was true.</p>
 <p><strong>A reading that aged.</strong> The same session audited two repo docs against three installed skills and reported the divergences.
@@ -6973,7 +7052,7 @@ The package var is safe because each process has its own copy and each suite wri
 <code>Ordered</code> orders specs within a container; it does not order containers against each other.
 A resource that is genuinely shared <em>outside</em> the process — a cluster object, a fixed host port, a GitHub session — gets no protection from <code>Ordered</code> and needs <code>Serial</code>, an owner-scoped filter, or a per-process derivation such as <code>GinkgoParallelProcess()</code>.</p>
 <p>Dropping <code>Serial</code> from a suite is therefore a claim about <em>external</em> isolation, never about package state.
-Worked example, including the owner-prefix filter that made one such drop safe: <a href="../../plan/e2e-ci-speed-round-2/#5-de-serialize-e2e_agc_workerpodlifecycle-">e2e-ci-speed-round-2.md</a>.</p>
+Worked example, including the owner-prefix filter that made one such drop safe: <a href="../../plan/archive/e2e-ci-speed-round-2/#5-de-serialize-e2e_agc_workerpodlifecycle-">e2e-ci-speed-round-2.md</a>.</p>
 <h3 id="every-e2e-suite-dumps-cluster-state-before-it-tears-down">Every e2e suite dumps cluster state before it tears down<a class="headerlink" href="#every-e2e-suite-dumps-cluster-state-before-it-tears-down" title="Permanent link">&para;</a></h3>
 <p>An e2e suite that deletes its namespace in teardown destroys the only evidence of why it failed.
 The specs here wait minutes for a Deployment, a condition, or a NetworkPolicy to settle, so a timeout's failure message is a bare "never became ready" — and by the time anyone reads it in CI the namespace is gone.
@@ -7414,10 +7493,10 @@ Triggering on every PR and gating internally means the <code>gate</code> context
 Q942 added the trigger to the four remaining workflows behind a <code>make check</code> gate — <code>conflict-markers.yml</code>, <code>metric-tiers.yml</code>, <code>reason-tiers.yml</code> and <code>endpoint-parity.yml</code> — bringing the count to 14 of 29, and <code>gate-lists-check</code> now fails a new gate that lands outside that set.
 Those four carry no <code>changes</code> job: <code>merge_group</code> takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 Those four do not <strong>block</strong> it: the queue arbitrates on the ruleset's required checks alone and none of them sits behind one, so their verdict on a candidate merge is visible and not binding.
-<code>doc-links-gate</code> was the same shape until 2026-09-09, when it was registered under the ordering constraint <a href="../../plan/merge-queue/">merge-queue.md</a> gives: the workflow onto <code>main</code> first, the required check second.
+<code>doc-links-gate</code> was the same shape until 2026-09-09, when it was registered under the ordering constraint <a href="../../plan/archive/merge-queue/">merge-queue.md</a> gives: the workflow onto <code>main</code> first, the required check second.
 That is the queue analogue of the Pending-wedge above: a required check that never reports on the merge-group ref stalls the entry until <code>check_response_timeout_minutes</code> expires it.
 The <code>changes</code> job needs no per-event configuration: on <code>merge_group</code>, paths-filter's <code>base</code>/<code>ref</code> default to the event's commit hashes and detection runs via git against the checkout, so a docs-only queue entry skips the heavy legs exactly as a docs-only PR does.
-The queue is active on <code>main</code> (2026-08-03, <code>merge_queue</code> rule in the <code>default-protect</code> ruleset); <a href="../../plan/merge-queue/">merge-queue.md</a> records the parameters, the rollback, and the activation-ordering constraint it satisfied.</p>
+The queue is active on <code>main</code> (2026-08-03, <code>merge_queue</code> rule in the <code>default-protect</code> ruleset); <a href="../../plan/archive/merge-queue/">merge-queue.md</a> records the parameters, the rollback, and the activation-ordering constraint it satisfied.</p>
 <p><strong>The historical gotcha this closes — a PR going green/<code>CLEAN</code> without ever testing its code.</strong> Under the old top-level <code>paths-ignore</code>, a PR <strong>opened while docs-only</strong> with code <strong>added in a later push</strong> could leave the path-gated workflows <strong>skipped</strong> (the <code>synchronize</code> did not reliably re-trigger them; see <a href="https://github.com/actions/runner/issues/2324">actions/runner#2324</a>), so the PR showed all-green with the code never built or tested.
 Because the workflows above now trigger on every PR and re-evaluate the diff via the <code>changes</code> job on each push, this specific skip-through no longer applies to them.
 The <code>gate</code> contexts are now marked required in the ruleset, so a red or Pending gate blocks the merge.</p>

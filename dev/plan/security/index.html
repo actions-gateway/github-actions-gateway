@@ -3370,7 +3370,7 @@
 The lone open residual is the live Ed25519 compatibility probe (M-11b) — an intentionally-deferred opt-in gate tracked as <a href="../../queue/Q11/">Q11</a> in the <a href="../../queue/">deferred</a> section; it does not affect the RSA-3072 default and is not active work on this audit.
 Accepted residuals (e.g.
 H-2's RBAC <code>list</code>) are documented in place.</p>
-<p><strong>Successor audit:</strong> a second full audit (2026-06-12) lives in <a href="../security-audit-2026-06/">security-audit-2026-06.md</a>; its new findings are queued as Q121–Q128.
+<p><strong>Successor audit:</strong> a second full audit (2026-06-12) lives in <a href="../archive/security-audit-2026-06/">security-audit-2026-06.md</a>; its new findings are queued as Q121–Q128.
 This doc remains the record of the first audit's findings and workstreams.</p>
 </blockquote>
 <p>Scope: <code>broker/</code>, <code>githubapp/</code>, <code>cmd/agc/</code>, <code>cmd/gmc/</code>, <code>cmd/proxy/</code>, <code>cmd/worker/</code>, <code>cmd/probe/</code>.
@@ -3854,7 +3854,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><code>setCredentialUnavailable</code> also returns <code>RequeueAfter: 30s</code> as a fallback for cases where a watch event is missed (e.g. controller restart during Secret deletion window).</li>
 <li><strong>Residual risk</strong> <em>(corrected 2026-06-12 — the original wording understated this)</em>: the metadata-only informer and cache bypass are client-side hygiene, not authorization.
   The GMC ClusterRole grants <code>get</code>/<code>list</code>/<code>create</code>/<code>update</code>/<code>watch</code> on Secrets cluster-wide with no <code>resourceNames</code> scoping, so a <em>compromised</em> GMC can read full <code>.data</code> of any Secret in the cluster and create/overwrite Secrets anywhere — not just enumerate metadata.
-  Tracked as Q121 (preventive confinement) in <a href="../security-audit-2026-06/">security-audit-2026-06.md</a>; Q29's audit policy is the detective complement — shipped as a sample at <a href="../../operations/examples/apiserver-audit-policy.yaml">docs/operations/examples/apiserver-audit-policy.yaml</a> with operator wiring in <a href="../../operations/security-operations/#api-server-audit-policy-sample">security-operations.md § API server audit policy (sample)</a>.</li>
+  Tracked as Q121 (preventive confinement) in <a href="../archive/security-audit-2026-06/">security-audit-2026-06.md</a>; Q29's audit policy is the detective complement — shipped as a sample at <a href="../../operations/examples/apiserver-audit-policy.yaml">docs/operations/examples/apiserver-audit-policy.yaml</a> with operator wiring in <a href="../../operations/security-operations/#api-server-audit-policy-sample">security-operations.md § API server audit policy (sample)</a>.</li>
 </ul>
 <hr />
 <h2 id="medium">Medium<a class="headerlink" href="#medium" title="Permanent link">&para;</a></h2>
