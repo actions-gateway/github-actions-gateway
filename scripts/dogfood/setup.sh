@@ -371,11 +371,12 @@ QUOTA
 # ---------------------------------------------------------------------------
 # Part B3b — wire the GMC's self-signed webhook CA into each v2 CRD's
 # spec.conversion.webhook.clientConfig.caBundle (Q279). Since Q74 the v2 kinds
-# are stored at v2beta1 and served at v2alpha1 via the GMC-hosted conversion
-# webhook; the apiserver calls that webhook over TLS and must trust its serving
-# cert via each CRD's caBundle. Dogfood is self-signed (no cert-manager), so the
-# CRD chart renders an EMPTY caBundle — without this step every CR apply (and
-# conversion read-back) fails the webhook TLS handshake ("x509: certificate
+# are served at BOTH v2beta1 and v2alpha1 and stored at v2beta1, so a request
+# naming v2alpha1 crosses the GMC-hosted conversion webhook and one naming
+# v2beta1 does not; the apiserver calls that webhook over TLS and must trust its
+# serving cert via each CRD's caBundle. Dogfood is self-signed (no cert-manager),
+# so the CRD chart renders an EMPTY caBundle — without this step every CR apply
+# (and conversion read-back) fails the webhook TLS handshake ("x509: certificate
 # signed by unknown authority").
 #
 # Ordering: install_crds applies the CRDs earlier with an empty caBundle (CRD
@@ -384,7 +385,11 @@ QUOTA
 # v2 CRDs at startup to enable its v2 controllers + conversion webhook (Q228
 # detection), so the CRDs-before-GMC order must NOT be reversed. We therefore
 # patch the caBundle in here, after the GMC is up and before apply_cr, so the
-# first CR already round-trips through a TLS-verified conversion webhook.
+# first CR already round-trips through a TLS-verified conversion webhook. That
+# round-trip holds only while apply_cr authors at v2alpha1, which it does because
+# the heredoc predates the Q74 graduation, not because the exercise was chosen —
+# Q1104 owns moving this tenant to the recommended version once Q1060 has a
+# deliberate round-trip to replace the incidental one.
 #
 # Secure by default: this RESTORES webhook TLS verification. Never fall back to a
 # caBundle-less clientConfig or insecureSkipTLSVerify shortcut.
@@ -711,7 +716,7 @@ spec:
   #                          allocatable; 3 still schedules, 4 would not.
   #   minRequests.memory   — 1Gi floor under the measured ~2.1Gi peak.
   # Reverting is a one-line delete here plus a re-apply, or an immediate
-  # kubectl patch of runnersets.v2alpha1.actions-gateway.com/ci in gag-dogfood
+  # kubectl patch of runnersets.actions-gateway.com/ci in gag-dogfood
   # removing /spec/sizing (--type=json, op remove).
   sizing:
     profile: Throughput
