@@ -56,6 +56,14 @@ ledger_add() {
 		>>docs/development/flake-watch-retired.md
 }
 
+# ledger_refuted ID — a REFUTED ledger row: first cell `none`, the id named only
+# in the narrative. The shape that separates a first-cell anchor from a bare-id
+# one, taken from 3e1770a327 on main.
+ledger_refuted() {
+	printf '| none | flaky thing | none | 2026-01-01 | Refuted: filed as %s, never observed |\n' \
+		"$1" >>docs/development/flake-watch-retired.md
+}
+
 # commit SUBJECT [BODY] — commit whatever is staged plus the STATUS.md state.
 commit() {
 	local subject="$1" body="${2:-}"
@@ -87,6 +95,7 @@ build_repo() {
 		row Q4
 		row Q5
 		row Q6
+		row Q7
 		# Not an item: the store holds prose beside its rows, and a path whose
 		# stem is not an id must never be read as a closure.
 		printf 'the store\n' >docs/queue/README.md
@@ -125,9 +134,14 @@ build_repo() {
 
 		# A soaked flake leaves for the ledger. Its delivery was the earlier fix
 		# PR, which only parked it, so this window must not be credited with it.
-		git rm -q docs/queue/Q6.md
+		# Q7 is delivered in the SAME commit, and a refuted ledger row names it in
+		# its narrative while retiring nothing. A bare-id line filter would read
+		# that mention as Q7 being retired and silently drop a delivered row;
+		# only the first cell says what a ledger line retires.
+		git rm -q docs/queue/Q6.md docs/queue/Q7.md
 		ledger_add Q6
-		commit "docs(queue): retire Q6, soaked"
+		ledger_refuted Q7
+		commit "docs(queue): retire Q6, soaked" "docs(queue): close Q7"
 
 		git rm -q docs/queue/README.md
 		commit "chore: drop the store's own README"
@@ -230,6 +244,8 @@ want_no 'resurrected row is not listed twice' "$closed_section" 'chore: drop Q3 
 # Suppressed as a closure, but still a commit in the window: the `docs` count of
 # 2 above is the retiring commit plus the narrating one.
 want_no 'flake retired to the ledger is not closed here' "$closed_section" '^ +Q6 '
+want 'an id named only in a ledger narrative is not retired by it' "$closed_section" \
+	'^ +Q7 +close +'
 want_no 'a non-item path in the store is not a closure' "$closed_section" 'README'
 want_no 'every verb was read, so nothing prints as unknown' "$closed_section" '^ +Q[0-9]+ +- '
 
@@ -278,6 +294,24 @@ want 'unread verbs are counted, not silently dropped' "$closed_section" \
 	'row\(s\) above show - for the verb: closed beyond HEAD'
 want 'a verb readable at HEAD is still read' "$closed_section" \
 	'^ +Q1 +complete +'
+
+# A verb replay that could not run AT ALL must not be reported as "closed beyond
+# HEAD": that is a missing input rendered as a plausible answer, which is the
+# defect class this whole section exists to fix. The report is not a gate, so it
+# still exits 0 and still prints every other section.
+cp "$SCRIPT" "$WORKDIR/orphan-release-delta.sh"
+out="$(cd "$repo" && bash "$WORKDIR/orphan-release-delta.sh" 2>&1)"; rc=$?
+closed_section="$(section_of "$out" 'Queue rows closed')"
+want 'an unrunnable verb replay still reports its rows' "$closed_section" '^ +Q1 +- +'
+want 'an unrunnable verb replay says so, not "beyond HEAD"' "$closed_section" \
+	'every verb above reads -: queue.py metrics could not be run'
+want_no 'an unrunnable replay is not blamed on HEAD' "$closed_section" 'closed beyond HEAD'
+if ((rc == 0)); then
+	printf 'ok   %s\n' 'a missing verb replay does not turn the report into a gate'
+else
+	printf 'FAIL %s: exited %d\n%s\n' 'a missing verb replay does not turn the report into a gate' "$rc" "$out" >&2
+	fails=$((fails + 1))
+fi
 
 if ((fails)); then
 	printf '\n%d assertion(s) failed\n' "$fails" >&2

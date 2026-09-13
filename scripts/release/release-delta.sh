@@ -158,9 +158,17 @@ breaking="$(
 # a parked row is a `status:` edit, so its file survives and it never shows up as
 # a deletion at all.
 
-# Matched as a ledger table row with the id in its first cell, not as a bare id
-# anywhere on the line: a prose edit to the ledger names ids it is not retiring
-# (the commit rewording Q982's entry closed an unrelated row in the same diff).
+# Matched as a ledger table row with the id in its FIRST CELL, because the id
+# extracted is the first one on the line: a row's first cell is what it retires,
+# and anything else naming an id is prose about a row rather than its retirement.
+# Measured over every ledger commit on main, a bare-id line filter yields 52
+# (commit, id) pairs against this anchor's 51. The one extra is 3e1770a327's
+# refuted row, whose first cell is `| none |` and whose narrative reads "Filed
+# as Q809 ... then repurposed in place" -- a bare-id filter retires Q809 off a
+# sentence saying it was never a flake. That commit deletes no rows, so the
+# anchor is insurance rather than a bug fix today; the fixture below pins it,
+# since a line of that shape naming a row the same commit delivers would drop
+# a delivered row silently.
 retired_ids="$(git log --format='' --unified=0 -p "$range" -- "$FLAKE_LEDGER" |
 	awk '/^\+\|[[:space:]]*Q[0-9]+[[:space:]]*\|/ {
 		match($0, /Q[0-9]+/); print substr($0, RSTART, RLENGTH)
@@ -189,14 +197,26 @@ alive_ids="$(git ls-tree -r --name-only "$to" -- "$STORE_DIR" |
 # `queue.py metrics --events` replays from HEAD rather than from TO, so a row
 # closed between the two has no verb to read. It prints as `-` and is counted,
 # rather than being dropped or silently shown as an unclassified removal.
+# A replay that could not run at all is a different thing from a row closed
+# past HEAD, and reporting the first as the second is the same defect this
+# section exists to fix: a missing input rendered as a plausible answer. The
+# flag keeps them apart. A queue.py that fails degrades the verb column rather
+# than taking the report down, which is not a gate (see the header).
 closure_verbs=""
+verbs_read=0
 if [[ -n "$deletions" && -d "$STORE_DIR" && -f "$QUEUE_PY" ]]; then
-	closure_verbs="$(python3 "$QUEUE_PY" metrics --events |
-		awk -F'\t' 'NR > 1 && $5 != "open" { print $1 ":" $5 }' | tr '\n' ' ')"
+	if closure_verbs="$(python3 "$QUEUE_PY" metrics --events |
+		awk -F'\t' 'NR > 1 && $5 != "open" { print $1 ":" $5 }' | tr '\n' ' ')" &&
+		[[ -n "$closure_verbs" ]]; then
+		verbs_read=1
+	else
+		closure_verbs=""
+	fi
 fi
 
 closed_rows="$(printf '%s\n' "$deletions" | awk -F'\t' \
-	-v alive="$alive_ids" -v retired="$retired_ids" -v verbs="$closure_verbs" '
+	-v alive="$alive_ids" -v retired="$retired_ids" -v verbs="$closure_verbs" \
+	-v verbs_read="$verbs_read" '
 	BEGIN {
 		n = split(alive, a, " "); for (i = 1; i <= n; i++) still[a[i]] = 1
 		n = split(retired, r, " "); for (i = 1; i <= n; i++) parked[r[i]] = 1
@@ -208,9 +228,13 @@ closed_rows="$(printf '%s\n' "$deletions" | awk -F'\t' \
 		else { printf "%-7s %-9s %s\n", $1, "-", $2; unread++ }
 	}
 	END {
-		if (unread) {
+		if (!unread) { }
+		else if (verbs_read) {
 			printf "\n(%d row(s) above show - for the verb: closed beyond "\
 			       "HEAD, so the verb replay could not reach them.)\n", unread
+		} else {
+			printf "\n(every verb above reads -: queue.py metrics could not "\
+			       "be run, so no verb was read for any row.)\n"
 		}
 	}')"
 
