@@ -349,7 +349,14 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # 10, not the 5 this carried from Q84 (#182), when the job ran shellcheck
+    # alone. It now also runs scripts-test, which is 121-201s of it. Measured
+    # 2026-09-13 over 18 runs: successes reached 279s against the 300s cap and
+    # two runs were killed by it, one of them evicting a PR from the merge
+    # queue — unit-test-gate reads `cancelled` as a gating failure (Q1105).
+    # Still a cap rather than headroom for growth: it is here to kill a hang,
+    # and ~2x the slowest run observed is what keeps it able to fire.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # `make scripts-test` below shells out to go (go-vet-tags-test.sh runs a
