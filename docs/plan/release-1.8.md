@@ -3,9 +3,10 @@
 > **Status: scoped 2026-09-07; the gating row is closed, no candidate cut.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
 > Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and [Q1085](../queue/Q1085.md)'s release-notes line.
 > The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
-> The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 64 commits and **FLOOR: MINOR** on 2026-09-09, so the tag is `v1.8.0`.
-> Three `feat`s on the released surface set it: Q1062, Q1011 and Q988, with Q1064's and Q1029's fixes as the patches beside them.
-> Eleven `feat`/`fix` subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.
+> The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 99 commits and **FLOOR: MINOR** on 2026-09-12, so the tag is `v1.8.0`.
+> Four `feat`s on the released surface set it: Q1062, Q1011, Q988 and Q994, the last of which landed after this was scoped and rides unlabelled.
+> Four patches sit beside them: Q1064's and Q1029's fixes, the gRPC bump for CVE-2026-84445, and a provisioner test.
+> Fifteen `feat`/`fix` subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.
 
 ## Why this is a release rather than a row that lands whenever
 
@@ -76,7 +77,11 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
    The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.
 4. **The two dogfood-window rows** get their window from the candidate: [Q1038](../queue/Q1038.md)'s `mirror-timing` probe and [Q1048](../queue/Q1048.md)'s mirror client census.
    Q1039's shared-tenants topology was the third until its 2026-09-03 scoping found a dogfood leg to be the worse venue rather than the dearer one, since that cluster has one tenant and so cannot produce either negative; it shipped on the Calico kind lane instead and needs no window.
-5. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, expecting exactly the `egressPolicyMode` description change item 3 names: the enum members are unchanged, so a reported member add or removal is a finding.
+5. ✅ **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, run 2026-09-12 and recorded [below](#pre-flight-verdicts).
+   When the release was scoped, this item expected *exactly* the `egressPolicyMode` description change item 3 names.
+   That was written before Q1062 and Q1011 landed, and no longer describes the window.
+   What binds is the narrower claim underneath it: the enum members are unchanged, so a reported member add or removal is a finding.
+   Q1062's five condition reasons and its one metric are additive publications expected here; Q1011's new `api/apinames` package is exported Go surface the checker has no category for, so it is reviewed by hand.
 6. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
 
 ## Critical path
@@ -87,7 +92,23 @@ The window is the schedule risk, as it was in 1.7: a reading whose venue is a bo
 
 ## Pre-flight verdicts
 
-None yet.
+Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../operations/release.md#1-pre-flight)).
+Re-run any whose window has moved before the stable tag.
+
+| Check | Measured at | Verdict |
+|---|---|---|
+| Gating rows | `c99137ea6` | **PASS.** No `1.8-gate` row remains in the store; Q1029 took the label with it when it closed. The empty result was trusted only after the same pattern, widened to any `X.Y-gate`, returned six live rows (Q1085 and Q413 on `1.9-gate`; Q1068, Q1086, Q273, Q264 and Q413 on `2.0-gate`), so it can still match a label that exists. |
+| `main` green | `c99137ea6` | **PASS with one path-skipped lane.** Nine of the ten required gates ran and passed on the SHA. `e2e-calico` path-skipped, and `check-artifact-unchanged.sh` against the last commit that ran it in full (`96ca227f1`) exits 1 on `cmd/agc/internal/provisioner/admission.go`. That change is comment-only, and `cmd/agc/**` is not in that lane's path list at all, so the lane could not have covered it either way. Dispatched manually on the target rather than reasoning around the check; verdict [below](#candidate-validation). |
+| Semver floor | `c99137ea6` | **MINOR**, over 99 commits, set by eight touching the released surface: four `feat`s and four patches. `v1.8.0` is forced by merged work rather than chosen. |
+| API surface | `c99137ea6` | **PASS, ship as-is.** Additive only: no added wire fields, no enum constraint changes, no default changes. Five new condition reasons (`EgressAuditDisabled`, `EgressAuditJoined`, `EgressAuditUnattributed`, `ProxySourceAuditDisabled`, `WorkerAuditDisabled`) and one new metric (`actions_gateway_egress_audit_unattributed`), all Q1062's. No new Event reasons, labels, annotations, CLI flags or chart values. |
+
+**The `egressPolicyMode` enum members are unchanged**, which is the claim [Definition of done #5](#definition-of-done) rests on: `CiliumFQDN` and `CalicoFQDN` are still defined in both `v2alpha1` and `v2beta1`, and what moved is their godoc, from *removable no earlier than v3.0.0* to *removed at v2.0.0*, the correction Q452's decision forced.
+That is a published-documentation change to a served API, not a surface change.
+
+**Reviewed by hand, because the checker has no category for it:** Q1011 adds `api/apinames`, a new exported package in the `api` module (`agentidentity.go`, 69 lines).
+It publishes helper functions rather than API types, so it widens the module's Go surface without touching the CRD surface the checker reads.
+
+**Deferred to the stable tag, deliberately.** The marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
 Each verdict names the commit it is measured at ([release.md](../operations/release.md#1-pre-flight)).
 
 ## Candidate validation
