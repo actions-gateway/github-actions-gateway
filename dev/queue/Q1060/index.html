@@ -2601,8 +2601,13 @@
 <p><a href="../../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 3 requires the conversion webhook to have round-tripped every served version under real objects, including ones created before the <code>v2beta1</code> graduation, and no such reading exists.</p>
 <p>The envtest fixtures cover the hop mechanically; what the criterion asks for is objects that lived on the dogfood cluster across the graduation, read back through each served version and compared field for field.
 Q1104's <code>verify_conversion</code> step in <code>scripts/dogfood/setup.sh</code> is not that reading and does not close this: it reads the three tenant objects back at the deprecated served version on every bootstrap, which proves the webhook answers over TLS but compares no field and touches no pre-graduation object.
-<code>deploy/dogfood-migrate</code> still carries a <code>v1alpha1</code> <code>ActionsGateway</code>, which is the pre-graduation object the criterion names, so the reading is available without manufacturing one.</p>
-<p>The deliverable is the comparison recorded against the criterion in the plan's Phase 1 table, and the script that took it, so a later candidate can repeat it.
+<strong>The <code>v1alpha1</code> object this row nominated cannot serve, and the reason is mechanical.</strong> An earlier reading here named <code>deploy/dogfood-migrate</code>'s <code>v1alpha1</code> <code>ActionsGateway</code> as "the pre-graduation object the criterion names, so the reading is available without manufacturing one".
+Measured 2026-09-12: that object is <code>actions-gateway.github.com/v1alpha1</code>, and the v2 kinds are <code>actions-gateway.com</code> — two CRDs in two API groups (<code>actionsgateways.actions-gateway.github.com</code> serving <code>v1alpha1</code>, <code>actionsgateways.actions-gateway.com</code> serving <code>v2alpha1</code> and <code>v2beta1</code>).
+A conversion webhook converts versions <em>within</em> one CRD and cannot cross groups, so no round-trip of that object through this webhook exists to take; reaching v2 from v1 is <code>gag-migrate</code>, a migration.
+What criterion 3 can mean is the two <strong>served</strong> versions of the v2 CRD compared field for field, and an object predating the graduation is a <code>v2alpha1</code> object in that same group, not a v1 one.</p>
+<p><strong>Wired 2026-09-12</strong> as the <code>soak</code> phase of <code>scripts/dogfood/validate-release.sh</code>, which reads the standing tenant's <code>ActionsGateway</code> at both served versions and compares the specs, reporting a difference as the reading rather than failing the candidate.
+Storage is <code>v2beta1</code>, so the <code>v2alpha1</code> read forces a conversion over TLS.
+What remains for this row is a window that actually runs it, and a verdict recorded in the plan's Phase 1 table.
 Rides in <a href="../../plan/release-1.8/">release-1.8.md</a> rather than gating it, for the reason <a href="../Q1059/">Q1059</a> gives.
 Sibling: Q1059 owns criterion 2; <a href="../Q413/">Q413</a> stays parked on both.</p>
 

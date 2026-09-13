@@ -2604,7 +2604,12 @@ That apply was authored at <code>v2alpha1</code> until Q1104, so it also crossed
 The same script says in its own comments that it creates no <code>EgressProxy</code>, so workers egress directly; the only <code>EgressProxy</code> objects the repo exercises are in envtest and in <code>cmd/gmc/test/e2e</code>, whose venue is a kind cluster in CI rather than the GKE dogfood cluster.
 A first reading of this row named <code>PriorityClassAllowlist</code> as the uncovered kind; it is not one of the five, and it ships in the main chart rather than the v2 CRD chart.
 Whether the release candidate's e2e leg counts as dogfood traffic for those kinds is the first thing to settle, because <a href="../../operations/release/#validate-the-release-candidate-on-dogfood">release.md</a>'s validation dispatches that matrix against the candidate's runners rather than applying the kinds to the dogfood cluster itself.</p>
-<p>The deliverable is evidence, not a build: each kind applied and reconciled to a terminal condition on the dogfood cluster during a release-candidate window, recorded against the criterion in the plan's Phase 1 table, plus whichever overlay or window step makes the next candidate repeat it without being asked.
+<p>The deliverable is evidence, not a build: each kind applied and reconciled to a terminal condition on the dogfood cluster during a release-candidate window, recorded against the criterion in the plan's Phase 1 table, plus whichever overlay or window step makes the next candidate repeat it without being asked.</p>
+<p><strong>The window step is wired as of 2026-09-12</strong>, which is the half this row could specify in advance.
+The <code>soak</code> phase of <code>scripts/dogfood/validate-release.sh</code> manufactures a <code>v2beta1</code> <code>EgressProxy</code> in the standing tenant, waits for it to reconcile, checks all five kinds are present at <code>v2beta1</code>, and deletes it again — a reading rather than a change to what dogfood runs, since setup.sh's decision to create no <code>EgressProxy</code> stands.
+A proxy that never reaches Ready is reported with its conditions and does not fail the candidate, because that is criterion 2's negative reading rather than a broken release.
+What remains is a window that runs it and a verdict recorded in the plan's Phase 1 table.
+The <code>v1.8.0-rc.1</code> window predates the step and took no reading.
 Rides in <a href="../../plan/release-1.8/">release-1.8.md</a> rather than gating it, since a soak reading closes when the evidence exists and cannot be scheduled against a tag.
 Sibling: <a href="../Q1060/">Q1060</a> owns criterion 3; <a href="../Q413/">Q413</a> stays parked on both.</p>
 

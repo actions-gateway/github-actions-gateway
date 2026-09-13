@@ -3990,8 +3990,14 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
 <p>It should read <code>6</code> (<code>deploy/dogfood-e2e/base/resources.yaml</code>).
    The next run's <code>e2e-start.sh</code> reapplies the overlay and repairs it anyway, so this is a backstop rather than the plan.
 5. <strong>Smoke the signed v2 CRD asset.</strong> Download the RC release's <code>actions-gateway-crds-v2.yaml</code> + <code>.cosign.bundle</code>, <code>cosign verify-blob</code> against the publish identity (step 3 below), <code>kubectl apply --server-side</code> it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
-6. <strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code> (dogfood scales to 0 at rest).
-7. <strong>Record the verdict.</strong> <code>REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N</code>.
+6. <strong>Take the v2 GA soak readings.</strong> Manufacture a <code>v2beta1</code> <code>EgressProxy</code> in the standing tenant, assert it reconciles, confirm all five <code>v2beta1</code> kinds are present, delete it again; then read the tenant's <code>ActionsGateway</code> back at both served versions and compare the specs.
+   <strong>These are readings, not gates, and a bad one does not stop the ship.</strong> A proxy that never reaches Ready, or a spec that loses a field crossing the webhook, is the negative evidence the soak exists to find: record it against the criteria and let the candidate stand.
+   Only a reading that could not be <em>taken</em> is worth re-running the window for, and the gate says which happened.
+   The <code>EgressProxy</code> is manufactured and deleted because dogfood deliberately runs without one; this does not change what the cluster runs.
+7. <strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code> (dogfood scales to 0 at rest).
+   <strong>Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero</strong>, so the gate can report success with a node still billing for several more minutes.
+   Confirm at rest by asking the cluster (<code>scripts/dogfood/ops.sh at-rest</code>), never by reading the gate's own teardown line.
+8. <strong>Record the verdict.</strong> <code>REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N</code>.
    <code>validate-release.sh</code> does this itself; by hand it is a step, and skipping it leaves <code>publish.yml</code> refusing the stable tag with nothing under <code>refs/validated/</code> to read (<a href="#the-gate-records-its-verdict-and-publish-reads-it">why</a>).</p>
 <p>A red matrix, a failed CRD smoke, a dead <code>NodeShare</code> profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a <strong>stop-ship for the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.</p>
 <h3 id="2-tag-and-push">2. Tag and push<a class="headerlink" href="#2-tag-and-push" title="Permanent link">&para;</a></h3>
