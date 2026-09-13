@@ -23,7 +23,7 @@
     
     
       
-        <title>The shellcheck job's 5-minute cap evicts the merge queue - GitHub Actions Gateway</title>
+        <title>Cap the scripts-test fan-out on CI, which is 128-wide - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-shellcheck-jobs-5-minute-cap-evicts-the-merge-queue" class="md-skip">
+        <a href="#cap-the-scripts-test-fan-out-on-ci-which-is-128-wide" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The shellcheck job's 5-minute cap evicts the merge queue
+              Cap the scripts-test fan-out on CI, which is 128-wide
             
           </span>
         </div>
@@ -2597,7 +2597,7 @@
   
 
 
-<h1 id="the-shellcheck-jobs-5-minute-cap-evicts-the-merge-queue">The shellcheck job's 5-minute cap evicts the merge queue<a class="headerlink" href="#the-shellcheck-jobs-5-minute-cap-evicts-the-merge-queue" title="Permanent link">&para;</a></h1>
+<h1 id="cap-the-scripts-test-fan-out-on-ci-which-is-128-wide">Cap the scripts-test fan-out on CI, which is 128-wide<a class="headerlink" href="#cap-the-scripts-test-fan-out-on-ci-which-is-128-wide" title="Permanent link">&para;</a></h1>
 <p><code>unit-test.yml</code>'s <code>shellcheck</code> job carries <code>timeout-minutes: 5</code>, set by Q84 (#182, 2026-06-08) when the job ran shellcheck and nothing else.
 It has since gained <code>errexit-prologue-check</code>, <code>script-modes-check</code>, <code>scripts-test</code>, <code>template-library-check</code>, <code>tool-pin-check</code> and <code>vendored-skills-check</code>, and the budget never moved.</p>
 <p><strong>Measured 2026-09-13</strong> over the last 18 <code>unit-test.yml</code> runs: the job's wall time on runs that <em>succeeded</em> is 183-279s against the 300s cap, and <code>make scripts-test</code> alone is 121-201s of it.
@@ -2611,9 +2611,21 @@ The eviction is visible only in the issue timeline and the <code>merge_group</co
 <p><strong>Not caused by whatever is being merged.</strong> The #1919 branch's own <code>pull_request</code> run of the same job was 274s and green, and the change under it added ~470ms to <code>setup-test.sh</code> locally (2.44s vs 1.97s, two runs each).
 The 03:03:23 cancellation predates that branch entirely.
 Any PR that touches <code>scripts/**</code> can draw this.</p>
-<p>The cap is raised to 10 minutes with this row, which is the half that stops the eviction.
-What is left is to decide whether <code>scripts-test</code> still belongs in a job named for shellcheck — at 121-201s it is the bulk of the runtime and has nothing to do with the linter.
-Sibling: <a href="../Q967/">Q967</a> is the same shape one job over, a tool timeout that cannot fire under the job budget above it.</p>
+<p><strong>The 201s is contention, not slow tests, and that is the half still open.</strong> <code>run-parallel.sh</code> caps its fan-out at <code>RUN_PARALLEL_JOBS</code>, which the Makefile sets from <code>scripts/agent/local-throttle.sh jobs</code>, which prints <em>nothing</em> when <code>CI</code> is set, deliberately, so those runs "stay fully parallel".
+So all 128 suites start at once on a GitHub-hosted runner.
+Measured 2026-09-13: the same 128 suites sum to 892 suite-seconds locally under a cap of 16 (65s wall, 18 cores) and 7,484 on CI (201s wall), an 8.4x inflation of per-suite wall time for identical work.
+On CI nearly every suite reports 170-201s, so each one spans most of the step rather than running in it; the three slowest are 8% of the total, so there is no pathological suite to fix.
+The runner's core count was not measured, and the reading does not rest on it: 128 exceeds any GitHub-hosted runner's cores.</p>
+<p>Capping the CI fan-out is the fix.
+<a href="../Q822/">Q822</a> already records the design choice and one eviction it caused ("the 119-wide burst the cap removes locally is the burst CI still runs"), and <a href="../Q966/">Q966</a> owns whether the throttle's number is right; this row is what connects them to a wall-clock budget.
+The count grows one suite per new gate (119 at Q822, 128 a week later), so a budget sized to today is a budget that expires.</p>
+<p><strong>Shipped so far.</strong> The cap went to 10 minutes (#1921), the stopgap.
+Then <code>scripts-test</code> was split into its own job, which is what actually clears the eviction: 86s of work left in <code>shellcheck</code> against its 5-minute cap and ~253s in the new job against 10.
+What remains is the fan-out.</p>
+<p><strong>This row was derived twice.</strong> The same constraint was found hours earlier in the <code>v1.8.0-rc.1</code> session, from the dogfood-dispatched run rather than a merge queue (the job ran 5m45s, 03:06:23-03:12:08), and <code>constraint-first</code> there reached the same answer: split first, raise the timeout only as a stopgap.
+Nothing was filed, so it was re-derived from scratch.
+That is the cost this row exists to stop paying a third time.</p>
+<p>Sibling: <a href="../Q967/">Q967</a> is the same shape one job over, a tool timeout that cannot fire under the job budget above it.</p>
 
 
 
