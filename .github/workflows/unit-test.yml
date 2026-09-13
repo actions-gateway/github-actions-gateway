@@ -349,14 +349,12 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
-    # 10, not the 5 this carried from Q84 (#182), when the job ran shellcheck
-    # alone. It now also runs scripts-test, which is 121-201s of it. Measured
-    # 2026-09-13 over 18 runs: successes reached 279s against the 300s cap and
-    # two runs were killed by it, one of them evicting a PR from the merge
-    # queue — unit-test-gate reads `cancelled` as a gating failure (Q1105).
-    # Still a cap rather than headroom for growth: it is here to kill a hang,
-    # and ~2x the slowest run observed is what keeps it able to fire.
-    timeout-minutes: 10
+    # Back to the 5 this carried from Q84 (#182) now that scripts-test has its
+    # own job below: what is left is 86s of work (16s setup, 64s shellcheck, 6s
+    # across the four named checks), so 5 is ~3.5x the measurement and still a
+    # cap that can fire. The 10 was Q1105's stopgap for the two of them sharing
+    # one box; it moves to the job that needed it.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # `make scripts-test` below shells out to go (go-vet-tags-test.sh runs a
@@ -393,11 +391,6 @@ jobs:
         # (Q1013). Same job as shellcheck, since both gate the scripts/ tree on
         # a scripts-only change.
         run: make script-modes-check
-      - name: scripts behavioural tests (make scripts-test)
-        # Pure-bash assertions shellcheck can't express — currently the tags-only
-        # release signing-identity regexp (Q124). Same job as shellcheck since
-        # both gate the scripts/ tree on a scripts-only change.
-        run: make scripts-test
       - name: shipped template library matches what CI exercises (make template-library-check)
         # Named separately from `make scripts-test` even though that suite also
         # runs the gate against the tracked tree, so a library-only change gets a
@@ -559,6 +552,47 @@ jobs:
       - name: gate jobs wait on every job (make gate-needs-check)
         run: make gate-needs-check
 
+  # The scripts/ behavioural suites, split out of `shellcheck` (Q1105). They
+  # shared one job and one 5-minute cap until the cap evicted a PR from the
+  # merge queue: the job's steps totalled 287s against 300s, and a 36s tail
+  # after `Complete job` crossed it, so every step read green and
+  # `unit-test-gate` still saw `cancelled`.
+  #
+  # They are two different things and only one of them is a linter. Measured
+  # 2026-09-13 on the evicting run: `make shellcheck` 64s, `make scripts-test`
+  # 201s across 128 suites. Splitting also runs them concurrently, so the
+  # workflow's critical path through this pair drops from 287s to ~253s.
+  #
+  # Why 10 and not 5: ~253s of work here (16s setup + 201s + the tail), which
+  # leaves a 5-minute box 16% of headroom against a suite count that grows by
+  # one per new gate — 119 at Q822, 128 today. Still a cap rather than room to
+  # grow into: it is here to kill a hang.
+  #
+  # The 201s is contention, not slow tests. `run-parallel.sh` starts all 128 at
+  # once here because `local-throttle.sh jobs` prints nothing when CI is set, by
+  # design; the same suites sum to 892 suite-seconds locally under a cap of 16
+  # and 7,484 on CI. Capping the CI fan-out is the real fix and is Q1105's
+  # remaining half, keyed to Q966, which owns the number.
+  #
+  # Same `needs`/`if` as shellcheck: both gate the scripts/ tree, and the
+  # `workflows` half is there because scripts-test asserts workflow-facing
+  # behaviour. setup-go because the suites shell out to go (go-vet-tags-test.sh
+  # runs a real `go vet`) and the GAG dogfood runner image omits go (Q482).
+  scripts-test:
+    needs: [changes]
+    if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: scripts behavioural tests (make scripts-test)
+        # Pure-bash assertions shellcheck can't express — currently the tags-only
+        # release signing-identity regexp (Q124).
+        run: make scripts-test
+
   # Lint the workflows themselves (Q579). Three docs credited actionlint with
   # keeping SHA-pinned `uses:` clean and with linting inline `run:` blocks while
   # nothing in CI ran it, so a workflow-only PR shipped unlinted. Its own job
@@ -716,7 +750,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, gate-needs, semver-floor-sources, claude-usage-test]
+    needs: [changes, lint, shellcheck, scripts-test, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, gate-needs, semver-floor-sources, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
