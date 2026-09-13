@@ -113,6 +113,14 @@ kubectl() {
 	config\ current-context) echo "${CONTEXT}" ;;
 	get\ crd*) echo "${CRD_STRATEGY}" ;;
 	get\ secret\ webhook-server-cert*) echo "${CA_BUNDLE}" ;;
+	# The conversion probe names a version in the resource, which is what tells
+	# it apart from apply_cr's existing-image read below — that pattern would
+	# otherwise swallow the runnertemplate one. CONVERSION_GET_RC is how a test
+	# makes the webhook fail.
+	*get\ *s.v2*.actions-gateway.com/*)
+		printf 'conversion-probe %s\n' "$*" >>"${CALL_LOG}"
+		return "${CONVERSION_GET_RC}"
+		;;
 	*get\ runnertemplate*) echo "${EXISTING_RUNNER_IMAGE}" ;;
 	# The applies read a manifest on stdin; drain it so the writer never sees a
 	# closed pipe, and keep it so the rendered objects can be asserted on. Every
@@ -182,6 +190,8 @@ reset_stubs() {
 	DOGFOOD_RUNNER_IMAGE=""
 	ATHENS_PERSISTENT=0
 	ASSUME_YES=1
+	CONVERSION_GET_RC=0
+	CONVERSION_PROBE_VERSION=v2alpha1
 }
 
 # run_main — run main() in a subshell and record its status in MAIN_RC and its
@@ -574,6 +584,59 @@ ATHENS_PERSISTENT=1
 run_main
 check_contains "renders the persistent Athens overlay on request" \
 	"deploy/athens/overlays/persistent" "$(call_line 'apply -k')"
+
+# --- the tenant is authored at the storage version, and the webhook is probed --
+#
+# The three tenant CRs used to be authored at v2alpha1, which reached the
+# conversion webhook on every apply and so proved the caBundle by accident.
+# Q452 removes that version at v2.0.0, so the CRs moved to v2beta1 and the proof
+# became verify_conversion. Both halves are asserted: nothing applies at a
+# deprecated version, and the probe still names one.
+
+reset_stubs
+run_main
+check_contains "authors the tenant CRs at v2beta1" \
+	"apiVersion: actions-gateway.com/v2beta1" "$(cat "${MANIFESTS}")"
+check_not_contains "applies nothing at the doomed v2alpha1" \
+	"actions-gateway.com/v2alpha1" "$(cat "${MANIFESTS}")"
+for kind in actionsgateways runnertemplates runnersets; do
+	check_contains "probes conversion for ${kind}" \
+		"${kind}.v2alpha1.actions-gateway.com" "$(cat "${CALL_LOG}")"
+done
+check_contains "probes the tenant namespace" \
+	"--namespace gag-dogfood" "$(call_line 'conversion-probe')"
+
+# The probe is only worth having if it can go red: a caBundle that never took
+# fails the read, and that must fail the bootstrap rather than be announced and
+# stepped over.
+reset_stubs
+CONVERSION_GET_RC=1
+run_main
+check "a failed conversion read fails the bootstrap" 1 "${MAIN_RC}"
+# The banner one step earlier also says caBundle, so assert the failure text
+# itself — otherwise this passes with no probe at all.
+check_contains "a failed conversion read names the fix" \
+	"re-run patch_crd_cabundle" "${MAIN_OUT}"
+check_not_contains "a failed conversion read does not claim the bootstrap finished" \
+	"Bootstrap complete" "${MAIN_OUT}"
+
+# The probe has to follow the apply, or it reads an object that is not there
+# yet; and it has to follow the caBundle patch, or it is the patch it is meant
+# to be checking that makes it fail.
+reset_stubs
+run_main
+check_contains "probes after the tenant CRs are applied" \
+	"apply-tenant-cr" "$(grep -B99 -m1 'conversion-probe' "${CALL_LOG}")"
+check_contains "probes after the caBundle is patched" \
+	"patch crd" "$(grep -B99 -m1 'conversion-probe' "${CALL_LOG}")"
+
+# v2.0.0 takes v2alpha1 and v2beta1 together (Q1082), so the version the probe
+# names is a knob rather than a constant — 1.9 points it at v2.
+reset_stubs
+CONVERSION_PROBE_VERSION=v2
+run_main
+check_contains "probes at the version it is pointed at" \
+	"actionsgateways.v2.actions-gateway.com" "$(cat "${CALL_LOG}")"
 
 # --- nothing is written to a cluster that is not the target ------------------
 

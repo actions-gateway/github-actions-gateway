@@ -269,7 +269,7 @@ kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout
 
 #### Wire the webhook CA into the CRD conversion `caBundle` (Q279)
 
-Since Q74 the v2 kinds are stored at `v2beta1` and served at `v2alpha1` through the GMC-hosted conversion webhook.
+Since Q74 the v2 kinds are served at **both** `v2beta1` and `v2alpha1` and stored at `v2beta1`, so a request naming `v2alpha1` crosses the GMC-hosted conversion webhook and one naming `v2beta1` does not.
 The apiserver calls that webhook over TLS and only trusts it if each CRD's `spec.conversion.webhook.clientConfig.caBundle` carries the CA that signed the GMC's serving cert.
 Dogfood is **self-signed** (no cert-manager), and the CRD chart renders an empty `caBundle` when `conversion.certManager.enabled=false` and `conversion.caBundle` is unset — so **without this step every CR `apply` (and its conversion read-back) fails the TLS handshake** with `x509: certificate signed by unknown authority`.
 
@@ -297,6 +297,7 @@ So on a pre-Q74 build the caBundle wiring is a no-op; on a **post-Q74** build wh
 
 **Live-validated post-Q74 (Q281, 2026-07-07).** `GAG_IMAGE_TAG` is now pinned to a post-Q74 `main` SHA (`4567097…`) whose control-plane image was built + pushed by hand (see [Tracking post-Q74 pre-release builds](#tracking-post-q74-pre-release-builds)), so the full **apply → convert → read-back round-trip is live on dogfood**.
 Confirmed end-to-end on `gag-dogfood`: with the post-Q74 GMC serving `/convert`, `ActionsGateway`, `RunnerTemplate`, and `RunnerSet` all apply at `v2alpha1` and read back at **both** `v2beta1` (storage) and `v2alpha1` (served through the TLS-verified conversion webhook) with **no `/convert` 404 and no `x509` error** — exercising Q279's `caBundle` wiring for real.
+That reading was taken while the tenant was authored at `v2alpha1`; Q1104 moved it to `v2beta1` and `setup.sh`'s `verify_conversion` step now takes the same reading on every bootstrap rather than as a one-off.
 (Before the bump the cluster was in the exact dormant state Q279 anticipated: post-Q74 CRDs at `strategy: Webhook` but a pre-Q74 rc.6 GMC with no `/convert` handler, so `kubectl get actionsgateways` failed `conversion webhook … the server could not find the requested resource`.)
 
 > **Security — keep the webhook TLS-verified.** An empty `caBundle` can tempt a `caBundle`-less or `insecureSkipTLSVerify: true` shortcut to "just make CRs apply."
@@ -432,7 +433,7 @@ Attach an `EgressProxy` and set `spec.defaultProxyRef` on the gateway to add per
 
 ```bash
 kubectl apply -f - <<'EOF'
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata:
   name: dogfood
@@ -444,7 +445,7 @@ spec:
       name: github-app-v1
   githubURL: https://github.com/actions-gateway/github-actions-gateway
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerTemplate
 metadata:
   name: default
@@ -489,7 +490,7 @@ spec:
             limits:
               memory: "3Gi"
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: ci
@@ -877,7 +878,7 @@ This script owns the **cluster infra** the kustomize overlays can't express:
 4. Creates the `gag-dogfood-e2e` namespace (v2 marker `actions-gateway.com/tenant=managed`) and the GitHub App Secret
 
 The **tenant objects** (ResourceQuota, `ActionsGateway`, `ClusterRunnerTemplate`, `RunnerSet`, egress policy, and the namespace's security-profile gates) are owned by the worker-isolation overlays under [`deploy/dogfood-e2e/`](../../deploy/dogfood-e2e/README.md) and applied on demand by `e2e-start.sh` (`E2E_VARIANT=kata|dind`, default `kata` since the Q286 flip; `dind` is the explicit opt-in fallback).
-They are authored **directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage front-door shape (Q273), deliberately unlike `scripts/dogfood/setup.sh` (main dogfood), which authors at v2alpha1 to exercise the conversion webhook.
+They are authored **directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage front-door shape (Q273), the same version `scripts/dogfood/setup.sh` (main dogfood) authors at since Q1104 moved it off `v2alpha1`.
 
 In both variants the DinD native sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-internal only) and the `runner` container sets `DOCKER_HOST=tcp://localhost:2375`.
 Because all containers in a pod share a network namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the runner.
