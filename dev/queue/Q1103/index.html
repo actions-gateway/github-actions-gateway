@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1038/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1103/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>mirror-timing's first live run lands on a release candidate's gate - GitHub Actions Gateway</title>
+        <title>check-artifact-unchanged.sh has no lane scope, so a skip never clears - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#mirror-timings-first-live-run-lands-on-a-release-candidates-gate" class="md-skip">
+        <a href="#check-artifact-unchangedsh-has-no-lane-scope-so-a-skip-never-clears" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              mirror-timing's first live run lands on a release candidate's gate
+              check-artifact-unchanged.sh has no lane scope, so a skip never clears
             
           </span>
         </div>
@@ -2597,22 +2597,27 @@
   
 
 
-<h1 id="mirror-timings-first-live-run-lands-on-a-release-candidates-gate"><code>mirror-timing</code>'s first live run lands on a release candidate's gate<a class="headerlink" href="#mirror-timings-first-live-run-lands-on-a-release-candidates-gate" title="Permanent link">&para;</a></h1>
-<p>The probe ships unexercised against a real mirror, and the step that runs it can fail an e2e job.</p>
-<p><strong>Why it shipped that way.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1796">Q1020</a> was held in draft to wait for a dogfood window, on the premise that the 1.7.0 candidate run would take the reading.
-It cannot: a candidate runs the tree at its tag target, and the probe is not in that tree until it merges.
-Measured 2026-08-29 at the rc.2 target <code>49b35a41a</code>: <code>e2e-mirror-hits.sh</code> and <code>e2e-mirror-validate.sh</code> are present, <code>scripts/e2e/mirror-timing.sh</code> and <code>scripts/dogfood/e2e-mirror-clients.sh</code> are not, and <code>e2e-reusable.yml</code> carries no line invoking either.
-Both rc.1 and rc.2 passed their Kata e2e leg without exercising them.
-Maintainer's call, 2026-08-29: merge anyway and take the reading on the next candidate.</p>
-<p><strong>What the next watcher needs to know.</strong> The step's comment says it reports and never fails on what the numbers said, and that is true of the verdict, and <code>SEPARATED</code> and <code>OVERLAPPING</code> both exit 0.
-Two other paths do not.
-<code>main()</code> returns 1 when no layer digest resolves, which is the mirror being unreachable or serving something else.
-<code>separation_verdict()</code> returns 1 when either arm is empty, deliberately, so a reading that was not taken can never read as a refuted channel.
-The step carries no <code>continue-on-error</code>, so either one reddens the e2e job.</p>
-<p>On the next candidate, <strong>a <code>mirror-timing</code> failure is a fault in the probe or in the mirror wiring, not in the released surface</strong>.
-Read the step's output before treating it as a release blocker.</p>
-<p><strong>Done when</strong> one live run has produced a verdict line, and this row records which one it was.
-If that first run refuses rather than reading, fix the refusal's cause; if the step proves noisy against a healthy mirror, <code>continue-on-error: true</code> is the fallback, at the cost of the signal the empty-arm return exists to give.</p>
+<h1 id="check-artifact-unchangedsh-has-no-lane-scope-so-a-skip-never-clears">check-artifact-unchanged.sh has no lane scope, so a skip never clears<a class="headerlink" href="#check-artifact-unchangedsh-has-no-lane-scope-so-a-skip-never-clears" title="Permanent link">&para;</a></h1>
+<p><a href="../../operations/release/#when-to-cut">release.md § When to cut</a> discharges a path-skipped required gate by proving the released surface has not moved since a commit that ran that gate in full.
+The proof is <code>check-artifact-unchanged.sh</code>, which diffs the whole released surface and knows nothing about which lane covers which paths, so <em>any</em> released-surface change fails it even when the skipped lane could never have covered the changed file.
+The step therefore cannot be discharged on a release whose tip carries an unrelated code change, which is most of them.</p>
+<p><strong>Measured 2026-09-12</strong> cutting <code>v1.8.0-rc.1</code> at <code>c99137ea6</code>.
+<code>check-gates-green.sh origin/main</code> reported 0 gates not green and <code>e2e-calico</code> path-skipped.
+<code>check-artifact-unchanged.sh 96ca227f1 origin/main</code> (that lane's last full run) exited 1 naming one file, <code>cmd/agc/internal/provisioner/admission.go</code>, whose diff in that window is <strong>comment-only</strong>: eight lines of prose inside an existing block comment, no statement changed.
+Two independent reasons the skip was safe, neither of which the script can see:</p>
+<ul>
+<li><code>cmd/agc/**</code> appears nowhere in <code>e2e-calico.yml</code>'s <code>push</code> path filter, which lists <code>cmd/gmc/**</code>, <code>cmd/proxy/**</code>, <code>Dockerfile</code>, <code>charts/actions-gateway/templates/**</code>, <code>deploy/registry-mirror/**</code>, <code>scripts/e2e/**</code>, <code>scripts/fetch/**</code>, <code>scripts/lib/**</code>, <code>Makefile</code> and the two workflow files.
+  The lane is scoped to what can regress NetworkPolicy enforcement, and AGC capacity admission is not that, so no <code>cmd/agc</code> change has ever triggered it.</li>
+<li>The change cannot alter behaviour at all.</li>
+</ul>
+<p>Worked around by dispatching the lane manually (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34733367705">run 34733367705</a>, <code>e2e-calico / e2e</code> green on the tag target), which is the honest move but costs a full e2e matrix to re-prove something the path filter already asserts.</p>
+<p>The fix is to make the comparison lane-aware: intersect the released-surface diff with the skipped lane's own path filter, and report unchanged when the intersection is empty.
+The filter is already machine-readable and already asserted against the <code>push</code> list by <code>scripts/ci/check-path-filters.sh</code>, so the lane's path set can be read rather than restated.
+That keeps the check conservative where it matters and stops it failing on files the lane would never run for.</p>
+<p><strong>Do not fix this by ignoring comment-only diffs.</strong> That is the narrower reading of this measurement and it is the wrong generalisation: a comment-only change happened to be what tripped it here, but a <em>behavioural</em> change to <code>cmd/agc</code> would trip it identically and would be equally outside the Calico lane's scope.
+Lane scope is the defect; the comment is a coincidence of this instance.</p>
+<p>Sibling of Q1058, found in the same pre-flight and fixed in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1917">#1917</a> while this row was being written: both are release scripts whose answer silently stopped matching the repo they read.
+This one fails loudly rather than returning a false zero, which is why it costs a workaround rather than a wrong release, and why it outlived its sibling.</p>
 
 
 

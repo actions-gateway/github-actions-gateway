@@ -2609,8 +2609,12 @@ It is also the reading that reaches a Kata worker's real source address on GKE D
 That is precisely why it is worth taking rather than assuming: the script's own header says a source read has checked the clients somebody thought of.
 The cost of never taking it is borne by an adopter running the shared topology, once per adoption, against a failure that is total for the client it misses.</p>
 <p><strong>What it needs.</strong> A line in <code>kata-dind-workloads.md</code>'s window checklist beside its three siblings, and a step in the Kata leg's sequence that runs it while the workers are still up: the script exits 2 rather than passing when an address no longer resolves, so it cannot be run after <code>e2e-stop.sh</code>.
-Whether it belongs in <code>e2e-reusable.yml</code> beside <code>mirror-timing.sh</code> or stays a hand-run window step is the same question <a href="../Q1038/">Q1038</a> is holding open for <code>mirror-timing</code>; settle both together, and take the reading on whichever window answers Q1038.</p>
-<p><strong>Done when</strong> one window has produced a verdict from the script and this row records which one, with the same caution Q1038 carries: an exit 2 is a reading that was not taken, not a finding.</p>
+<strong>Q1038 answered its half on 2026-09-12 and the answer is <code>e2e-reusable.yml</code>.</strong> <code>mirror-timing.sh</code> runs there as a step (<code>e2e-reusable.yml:718</code>), and the <code>v1.8.0-rc.1</code> validation window gave it its first live run against a real mirror: <code>4 references through mirror-docker-io…, one cold fetch and one warm fetch each</code>, verdict <code>SEPARATED  every hit (&lt;=46ms) was faster than every miss (&gt;=147ms)</code>, without failing the e2e job.
+So the placement question this row was holding open is settled by demonstration rather than by argument, and the census should take the same route.
+Q1038 is closed; this row inherits the caution it carried, that an exit 2 is a reading that was not taken and not a finding.</p>
+<p><strong>The same window did not take this reading</strong>, which is the row's own point restated by events: nothing invokes <code>scripts/dogfood/e2e-mirror-clients.sh</code>, so the candidate's window came and went without it, and teardown scaled the mirror deployments to zero, taking the access logs the census reads with the pods.
+A reading now is impossible until another window opens.</p>
+<p><strong>Done when</strong> one window has produced a verdict from the script and this row records which one.</p>
 
 
 

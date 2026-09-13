@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1104/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1105/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Move the main dogfood tenant off the doomed v2alpha1 apply version - GitHub Actions Gateway</title>
+        <title>The shellcheck job's 5-minute cap evicts the merge queue - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#move-the-main-dogfood-tenant-off-the-doomed-v2alpha1-apply-version" class="md-skip">
+        <a href="#the-shellcheck-jobs-5-minute-cap-evicts-the-merge-queue" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Move the main dogfood tenant off the doomed v2alpha1 apply version
+              The shellcheck job's 5-minute cap evicts the merge queue
             
           </span>
         </div>
@@ -2597,18 +2597,23 @@
   
 
 
-<h1 id="move-the-main-dogfood-tenant-off-the-doomed-v2alpha1-apply-version">Move the main dogfood tenant off the doomed v2alpha1 apply version<a class="headerlink" href="#move-the-main-dogfood-tenant-off-the-doomed-v2alpha1-apply-version" title="Permanent link">&para;</a></h1>
-<p><code>scripts/dogfood/setup.sh</code> applies its three main-tenant CRs at <code>actions-gateway.com/v2alpha1</code> (<code>ActionsGateway</code>, <code>RunnerTemplate</code>, <code>RunnerSet</code>), a version <a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a> removes at <code>v2.0.0</code> along with <code>v2beta1</code>.
-Until then the release-validation gate exercises a version operators are being told to migrate off, and the apiserver says so on every run: the <code>v1.8.0-rc.1</code> validation drew three admission warnings, one per kind, reading <code>actions-gateway.com/v2alpha1 &lt;Kind&gt; is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.</code> That is the <a href="../Q1085/">Q1085</a> notice firing against this repo's own gate.</p>
-<p><strong>The version is residue that later became load-bearing, which is why this is not a one-line bump.</strong> The heredoc was authored 2026-06-28/29 (#435, #457); Q74 created <code>v2beta1</code> on 2026-07-06 (#557) and did not revisit it.
-Both versions are <code>served: true</code> with <code>v2beta1</code> as storage (measured 2026-09-12 in <code>charts/actions-gateway-crds-v2/templates/crds/</code>), so applying at <code>v2alpha1</code> is a choice rather than a requirement, and it is the only thing in the dogfood path that crosses the conversion webhook, since the e2e tenant, <code>deploy/templates</code>, and setup.sh's own read-backs all resolve to the storage version.
-It is therefore also the only live check that <a href="../../plan/v2-ga/">Q279</a>'s <code>caBundle</code> wiring works: flipping the heredoc to <code>v2beta1</code> on its own deletes that coverage rather than improving it.</p>
-<p><strong>Blocked on <a href="../Q1060/">Q1060</a></strong>, whose deliverable is a deliberate, repeatable conversion round-trip on real dogfood objects.
-Once that exists, the incidental exercise is free to go and this row is the flip plus its comment updates.
-<code>deploy/dogfood-migrate</code>'s <code>v1alpha1</code> <code>ActionsGateway</code> is the better home Q1060 already names.</p>
-<p>Sibling, not duplicate: <a href="../Q1059/">Q1059</a> owns whether each kind has <em>carried traffic</em> and records the <code>v2alpha1</code> <code>RunnerTemplate</code> as acceptable coverage; its text needs the same edit when this lands.</p>
-<p><code>v2beta1</code> is the destination today and not the end of it: Phase 3 removes <code>v2beta1</code> at <code>v2.0.0</code> too, so whatever lands here moves again to <code>v2</code> with <a href="../Q273/">Q273</a>.
-Prefer a form that does not name a version where one will do (setup.sh's existing <code>runnertemplate.actions-gateway.com</code> read-back is the shape); two operator-facing <code>kubectl patch runnersets.v2alpha1.…</code> instructions were already unpinned that way when this row was filed.</p>
+<h1 id="the-shellcheck-jobs-5-minute-cap-evicts-the-merge-queue">The shellcheck job's 5-minute cap evicts the merge queue<a class="headerlink" href="#the-shellcheck-jobs-5-minute-cap-evicts-the-merge-queue" title="Permanent link">&para;</a></h1>
+<p><code>unit-test.yml</code>'s <code>shellcheck</code> job carries <code>timeout-minutes: 5</code>, set by Q84 (#182, 2026-06-08) when the job ran shellcheck and nothing else.
+It has since gained <code>errexit-prologue-check</code>, <code>script-modes-check</code>, <code>scripts-test</code>, <code>template-library-check</code>, <code>tool-pin-check</code> and <code>vendored-skills-check</code>, and the budget never moved.</p>
+<p><strong>Measured 2026-09-13</strong> over the last 18 <code>unit-test.yml</code> runs: the job's wall time on runs that <em>succeeded</em> is 183-279s against the 300s cap, and <code>make scripts-test</code> alone is 121-201s of it.
+A successful run at 93% of its budget is not a margin.
+Two runs in that same window were cancelled by the cap: <code>workflow_dispatch</code> run 34734535917 at 03:03:23, killed mid-<code>scripts-test</code> at 5m45s, and <code>merge_group</code> run 34738180796 at 04:33:47 for PR #1919, at 323s.</p>
+<p><strong>What the cap costs is a merge-queue eviction, not a red job.</strong> In the #1919 run every step succeeded, including <code>Complete job</code> at 04:38:57; the job was marked <code>cancelled</code> 35 seconds later, during finalisation.
+<code>unit-test-gate</code> requires every gating job to have concluded <code>success</code> or <code>skipped</code>, read <code>cancelled</code>, and failed with <code>a gating job concluded 'cancelled'</code>; <code>github-merge-queue[bot]</code> removed the PR from the queue at 04:40:03.</p>
+<p>That is also what makes it expensive to diagnose.
+The PR reads <code>OPEN</code>, <code>CLEAN</code>, every check green afterwards, because those are the <code>pull_request</code> run's checks and the merge-group run is not shown on the PR.
+The eviction is visible only in the issue timeline and the <code>merge_group</code> run list.</p>
+<p><strong>Not caused by whatever is being merged.</strong> The #1919 branch's own <code>pull_request</code> run of the same job was 274s and green, and the change under it added ~470ms to <code>setup-test.sh</code> locally (2.44s vs 1.97s, two runs each).
+The 03:03:23 cancellation predates that branch entirely.
+Any PR that touches <code>scripts/**</code> can draw this.</p>
+<p>The cap is raised to 10 minutes with this row, which is the half that stops the eviction.
+What is left is to decide whether <code>scripts-test</code> still belongs in a job named for shellcheck — at 121-201s it is the bulk of the runtime and has nothing to do with the linter.
+Sibling: <a href="../Q967/">Q967</a> is the same shape one job over, a tool timeout that cannot fire under the job budget above it.</p>
 
 
 

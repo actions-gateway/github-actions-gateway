@@ -3347,7 +3347,7 @@ The chart ships that permit-only quota (<code>gmc-critical-pods</code>) by defau
 See <a href="../../operations/install/#gke-and-other-restricted-priorityclass-clusters">install.md</a>.</p>
 </blockquote>
 <h4 id="wire-the-webhook-ca-into-the-crd-conversion-cabundle-q279">Wire the webhook CA into the CRD conversion <code>caBundle</code> (Q279)<a class="headerlink" href="#wire-the-webhook-ca-into-the-crd-conversion-cabundle-q279" title="Permanent link">&para;</a></h4>
-<p>Since Q74 the v2 kinds are stored at <code>v2beta1</code> and served at <code>v2alpha1</code> through the GMC-hosted conversion webhook.
+<p>Since Q74 the v2 kinds are served at <strong>both</strong> <code>v2beta1</code> and <code>v2alpha1</code> and stored at <code>v2beta1</code>, so a request naming <code>v2alpha1</code> crosses the GMC-hosted conversion webhook and one naming <code>v2beta1</code> does not.
 The apiserver calls that webhook over TLS and only trusts it if each CRD's <code>spec.conversion.webhook.clientConfig.caBundle</code> carries the CA that signed the GMC's serving cert.
 Dogfood is <strong>self-signed</strong> (no cert-manager), and the CRD chart renders an empty <code>caBundle</code> when <code>conversion.certManager.enabled=false</code> and <code>conversion.caBundle</code> is unset — so <strong>without this step every CR <code>apply</code> (and its conversion read-back) fails the TLS handshake</strong> with <code>x509: certificate signed by unknown authority</code>.</p>
 <p>The chart mints that CA once and stores it in the <code>webhook-server-cert</code> Secret in <code>gmc-system</code> (reused across renders via Helm <code>lookup</code>, so it is stable on re-runs).
@@ -3369,6 +3369,7 @@ The conversion webhook itself landed in Q74 (PR #557), so a <strong>pre-Q74</str
 So on a pre-Q74 build the caBundle wiring is a no-op; on a <strong>post-Q74</strong> build whose multi-version CRDs route CR conversion through <code>/convert</code>, the same step activates automatically with no further change.</p>
 <p><strong>Live-validated post-Q74 (Q281, 2026-07-07).</strong> <code>GAG_IMAGE_TAG</code> is now pinned to a post-Q74 <code>main</code> SHA (<code>4567097…</code>) whose control-plane image was built + pushed by hand (see <a href="#tracking-post-q74-pre-release-builds">Tracking post-Q74 pre-release builds</a>), so the full <strong>apply → convert → read-back round-trip is live on dogfood</strong>.
 Confirmed end-to-end on <code>gag-dogfood</code>: with the post-Q74 GMC serving <code>/convert</code>, <code>ActionsGateway</code>, <code>RunnerTemplate</code>, and <code>RunnerSet</code> all apply at <code>v2alpha1</code> and read back at <strong>both</strong> <code>v2beta1</code> (storage) and <code>v2alpha1</code> (served through the TLS-verified conversion webhook) with <strong>no <code>/convert</code> 404 and no <code>x509</code> error</strong> — exercising Q279's <code>caBundle</code> wiring for real.
+That reading was taken while the tenant was authored at <code>v2alpha1</code>; Q1104 moved it to <code>v2beta1</code> and <code>setup.sh</code>'s <code>verify_conversion</code> step now takes the same reading on every bootstrap rather than as a one-off.
 (Before the bump the cluster was in the exact dormant state Q279 anticipated: post-Q74 CRDs at <code>strategy: Webhook</code> but a pre-Q74 rc.6 GMC with no <code>/convert</code> handler, so <code>kubectl get actionsgateways</code> failed <code>conversion webhook … the server could not find the requested resource</code>.)</p>
 <blockquote>
 <p><strong>Security — keep the webhook TLS-verified.</strong> An empty <code>caBundle</code> can tempt a <code>caBundle</code>-less or <code>insecureSkipTLSVerify: true</code> shortcut to "just make CRs apply."
@@ -3476,7 +3477,7 @@ Revisit if Athens is extended to a shared multi-tenant cluster or used to serve 
 This is the minimal <strong>direct-egress</strong> form — no <code>EgressProxy</code>, so workers egress directly to GitHub, still behind the default-deny egress NetworkPolicy (DNS + GitHub CIDR), just without a per-tenant egress IP.
 Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on the gateway to add per-tenant egress IP attribution.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s">apiVersion: actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s">apiVersion: actions-gateway.com/v2beta1</span>
 <a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="s">kind: ActionsGateway</span>
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="s">metadata:</span>
 <a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="s">  name: dogfood</span>
@@ -3488,7 +3489,7 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="s">      name: github-app-v1</span>
 <a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="s">  githubURL: https://github.com/actions-gateway/github-actions-gateway</span>
 <a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="s">---</span>
-<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="s">apiVersion: actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="s">apiVersion: actions-gateway.com/v2beta1</span>
 <a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="s">kind: RunnerTemplate</span>
 <a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="s">metadata:</span>
 <a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="s">  name: default</span>
@@ -3533,7 +3534,7 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-56" name="__codelineno-20-56" href="#__codelineno-20-56"></a><span class="s">            limits:</span>
 <a id="__codelineno-20-57" name="__codelineno-20-57" href="#__codelineno-20-57"></a><span class="s">              memory: "3Gi"</span>
 <a id="__codelineno-20-58" name="__codelineno-20-58" href="#__codelineno-20-58"></a><span class="s">---</span>
-<a id="__codelineno-20-59" name="__codelineno-20-59" href="#__codelineno-20-59"></a><span class="s">apiVersion: actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-20-59" name="__codelineno-20-59" href="#__codelineno-20-59"></a><span class="s">apiVersion: actions-gateway.com/v2beta1</span>
 <a id="__codelineno-20-60" name="__codelineno-20-60" href="#__codelineno-20-60"></a><span class="s">kind: RunnerSet</span>
 <a id="__codelineno-20-61" name="__codelineno-20-61" href="#__codelineno-20-61"></a><span class="s">metadata:</span>
 <a id="__codelineno-20-62" name="__codelineno-20-62" href="#__codelineno-20-62"></a><span class="s">  name: ci</span>
@@ -3935,7 +3936,7 @@ Note this alone would not have fixed anything; the global limit was the real blo
 3. Creates the <code>kata</code> RuntimeClass alias (over the chart-owned <code>kata-qemu</code> handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
 4. Creates the <code>gag-dogfood-e2e</code> namespace (v2 marker <code>actions-gateway.com/tenant=managed</code>) and the GitHub App Secret</p>
 <p>The <strong>tenant objects</strong> (ResourceQuota, <code>ActionsGateway</code>, <code>ClusterRunnerTemplate</code>, <code>RunnerSet</code>, egress policy, and the namespace's security-profile gates) are owned by the worker-isolation overlays under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/</code></a> and applied on demand by <code>e2e-start.sh</code> (<code>E2E_VARIANT=kata|dind</code>, default <code>kata</code> since the Q286 flip; <code>dind</code> is the explicit opt-in fallback).
-They are authored <strong>directly at <code>actions-gateway.com/v2beta1</code></strong> (Q231) — the graduated served+storage front-door shape (Q273), deliberately unlike <code>scripts/dogfood/setup.sh</code> (main dogfood), which authors at v2alpha1 to exercise the conversion webhook.</p>
+They are authored <strong>directly at <code>actions-gateway.com/v2beta1</code></strong> (Q231) — the graduated served+storage front-door shape (Q273), the same version <code>scripts/dogfood/setup.sh</code> (main dogfood) authors at since Q1104 moved it off <code>v2alpha1</code>.</p>
 <p>In both variants the DinD native sidecar runs <code>dockerd</code> on <code>tcp://localhost:2375</code> (no TLS — pod-internal only) and the <code>runner</code> container sets <code>DOCKER_HOST=tcp://localhost:2375</code>.
 Because all containers in a pod share a network namespace, kind's API server is reachable at <code>localhost:&lt;apiserver-port&gt;</code> from the runner.</p>
 <blockquote>

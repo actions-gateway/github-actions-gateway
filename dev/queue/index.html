@@ -2689,6 +2689,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1105/">Q1105</a></td>
+<td>The shellcheck job's 5-minute cap evicts the merge queue</td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>unit-test.yml</code>'s <code>shellcheck</code> job carries <code>timeout-minutes: 5</code>, set by Q84 (#182, 2026-06-08) when the job ran shellcheck and nothing else.</td>
+</tr>
+<tr>
 <td><a href="Q1031/">Q1031</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh">go-throttle's probe is killed under host load, denying a -race rewrite</a></td>
 <td><code>flake</code> <code>debt</code></td>
@@ -2703,14 +2711,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> any of <code>verify-pages-live-test.sh</code>'s three retry assertions fails on <code>main</code>: *a site that goes correct on a later attempt …</td>
-</tr>
-<tr>
-<td><a href="Q1038/">Q1038</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>mirror-timing</code>'s first live run lands on a release candidate's gate</a></td>
-<td><code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The probe ships unexercised against a real mirror, and the step that runs it can fail an e2e job.</td>
 </tr>
 <tr>
 <td><a href="Q1064/">Q1064</a></td>
@@ -2839,14 +2839,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><a href="../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 3 requires the conversion webhook to have round-tripped every served version under real …</td>
-</tr>
-<tr>
-<td><a href="Q1104/">Q1104</a></td>
-<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Move the main dogfood tenant off the doomed v2alpha1 apply version</a></td>
-<td><code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>scripts/dogfood/setup.sh</code> applies its three main-tenant CRs at <code>actions-gateway.com/v2alpha1</code> (<code>ActionsGateway</code>, <code>RunnerTemplate</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1066/">Q1066</a></td>
@@ -3759,6 +3751,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The test sets <code>EvictionRerunWindow: 50ms</code> and <code>EvictionRerunRetryInterval: 5ms</code>, drives <code>handleEviction</code> against a real <code>httptest.Server</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1103/">Q1103</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">check-artifact-unchanged.sh has no lane scope, so a skip never clears</a></td>
+<td><code>debt</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><a href="../operations/release/#when-to-cut">release.md § When to cut</a> discharges a path-skipped required gate by proving the released surface …</td>
 </tr>
 <tr>
 <td><a href="Q1016/">Q1016</a></td>
