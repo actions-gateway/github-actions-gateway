@@ -3581,6 +3581,9 @@ The delete-on-done backlog erases delivered work by design, so nothing in the ba
 </code></pre></div>
 <p>It reports, for <code>&lt;last stable tag&gt;..origin/main</code>, the commits by Conventional Commit type (breaking ones called out), the Queue rows closed in that window, the API diffstat, and the operator-facing pages touched.
 Pass an explicit <code>FROM</code> (and optionally <code>TO</code>) to look at a different window.</p>
+<p>Each closed row is listed with the verb its deleting commit recorded (<code>close</code>, <code>complete</code>, <code>prune</code>, <code>drop</code>), so a pruned row is visible as one rather than counted as delivery.
+A verb reading <code>-</code> means that row was closed beyond your <code>HEAD</code>, which the verb replay cannot reach; the report says how many, and fetching clears it.
+A flake-watch row that graduated to <a href="../../development/flake-watch-retired/">the retired-flake ledger</a> in this window is <strong>not</strong> listed: its delivery was the earlier fix PR that parked it, so crediting it here would bill this release for an earlier one's work.</p>
 <p>Its type counts answer "how much landed", not "what may this be called".
 For that:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/release/semver-floor.sh
