@@ -1172,6 +1172,112 @@ restore_e2e_quota
 check "an untightened ceiling is left alone" "6" "$(cap_hard)"
 check "a no-op restore issues no patch" "0" "$(cap_patches)"
 
+
+# --- the soak readings and the mirror census (Q1048, Q1059, Q1060) ----------
+#
+# Both legs are READINGS: they must report what they found and must never fail
+# the gate, because a negative reading is evidence the release exists to gather.
+# So every case below asserts the report text AND that the leg returned 0.
+
+PROJECT=p ZONE=z CLUSTER=c
+SOAK_TMP="$(mktemp -d)"
+SCRIPT_DIR="${SOAK_TMP}/soak-bin"
+mkdir -p "${SCRIPT_DIR}"
+gke_get_credentials_and_verify() { :; }
+
+# The census script stands in for the real one, returning the exit class a case
+# is about. Its contract is the thing under test here, not its internals:
+# 0 all clients labelled, 1 a finding, 2 a reading that could not be taken.
+export FAKE_CENSUS_RC=0
+cat >"${SCRIPT_DIR}/e2e-mirror-clients.sh" <<'CENSUS'
+exit "${FAKE_CENSUS_RC:-0}"
+CENSUS
+
+export FAKE_CENSUS_RC=0
+out="$(census_mirror_clients 2>&1)"; rc=$?
+check "census: a clean reading returns 0" "0" "${rc}"
+check_contains "census: a clean reading says so" "workload-labelled pod" "${out}"
+
+export FAKE_CENSUS_RC=1
+out="$(census_mirror_clients 2>&1)"; rc=$?
+check "census: a FINDING does not fail the gate" "0" "${rc}"
+check_contains "census: a finding is called a finding" "FINDING" "${out}"
+check_contains "census: a finding says why it is not this cluster's problem" "isolated topology" "${out}"
+
+export FAKE_CENSUS_RC=2
+out="$(census_mirror_clients 2>&1)"; rc=$?
+check "census: an untaken reading does not fail the gate" "0" "${rc}"
+check_contains "census: an untaken reading is NOT graded as a pass" "NOT TAKEN" "${out}"
+
+# --- soak_leg --------------------------------------------------------------
+#
+# kubectl is scripted per verb. The apply is fed from stdin, so it is drained:
+# leaving it unread makes the heredoc land in the next command's input.
+KLOG="${SOAK_TMP}/soak-kubectl.log"
+FAKE_WAIT_RC=0
+FAKE_BETA_SPEC=''
+FAKE_ALPHA_SPEC=''
+FAKE_KINDS_PRESENT=1
+kubectl() {
+	echo "$*" >>"${KLOG}"
+	case "$1" in
+	apply) cat >"${SOAK_TMP}/soak-applied.yaml"; return 0 ;;
+	wait) return "${FAKE_WAIT_RC}" ;;
+	delete) return 0 ;;
+	get)
+		case "$*" in
+		*actionsgateways.v2beta1.*\ dogfood*) printf '%s' "${FAKE_BETA_SPEC}" ;;
+		*actionsgateways.v2alpha1.*\ dogfood*) printf '%s' "${FAKE_ALPHA_SPEC}" ;;
+		*egressproxy\ soak-reading*) echo "    Ready=False reason=NoPool stalled" ;;
+		*v2beta1.actions-gateway.com*)
+			((FAKE_KINDS_PRESENT)) && echo "someresource/x"
+			;;
+		esac
+		return 0
+		;;
+	esac
+	return 0
+}
+
+: >"${KLOG}"
+FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a clean run returns 0" "0" "${rc}"
+check_contains "soak: the manufactured EgressProxy is v2beta1" \
+	"apiVersion: actions-gateway.com/v2beta1" "$(cat "${SOAK_TMP}/soak-applied.yaml")"
+check "soak: it is created in the standing tenant, not the e2e one" "gag-dogfood" \
+	"$(awk '/^  namespace:/{print $2; exit}' "${SOAK_TMP}/soak-applied.yaml")"
+check_contains "soak: the manufactured object is deleted again" \
+	"delete egressproxy soak-reading" "$(cat "${KLOG}")"
+check_contains "soak: an identical spec is reported lossless" "round-trip lossless" "${out}"
+
+# A proxy that never reconciles IS criterion 2's negative reading, so it prints
+# the conditions and still returns 0 rather than rejecting the candidate.
+FAKE_WAIT_RC=1
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: an unready EgressProxy does not fail the gate" "0" "${rc}"
+check_contains "soak: an unready EgressProxy is recorded as the reading" "did NOT reach Ready" "${out}"
+FAKE_WAIT_RC=0
+
+# An empty read is the webhook or the caBundle, never two equal objects: the
+# leg must not let '' == '' read as a lossless round-trip.
+FAKE_BETA_SPEC=''; FAKE_ALPHA_SPEC=''
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: an unreadable object does not fail the gate" "0" "${rc}"
+check_contains "soak: an empty read is NOT TAKEN, not lossless" "Q1060: NOT TAKEN" "${out}"
+
+FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":2}'
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a lossy round-trip does not fail the gate" "0" "${rc}"
+check_contains "soak: a differing spec is reported as the reading" "spec DIFFERS" "${out}"
+
+FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
+FAKE_KINDS_PRESENT=0
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a missing kind does not fail the gate" "0" "${rc}"
+check_contains "soak: a missing kind is named as unmet" "criterion 2 is not met" "${out}"
+FAKE_KINDS_PRESENT=1
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1
