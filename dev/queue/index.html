@@ -2841,6 +2841,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 3 requires the conversion webhook to have round-tripped every served version under real …</td>
 </tr>
 <tr>
+<td><a href="Q1104/">Q1104</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Move the main dogfood tenant off the doomed v2alpha1 apply version</a></td>
+<td><code>tests</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>scripts/dogfood/setup.sh</code> applies its three main-tenant CRs at <code>actions-gateway.com/v2alpha1</code> (<code>ActionsGateway</code>, <code>RunnerTemplate</code> …</td>
+</tr>
+<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
