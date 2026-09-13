@@ -132,6 +132,12 @@ WORKDIR=""
 E2E_NAMESPACE="gag-dogfood-e2e"
 RUNNER_SET_LABEL="actions-gateway.com/runner-set"
 
+# The standing tenant's namespace, the one setup.sh bootstraps. The soak leg
+# reads and writes here rather than in E2E_NAMESPACE: the e2e tenant is torn
+# down with its ActionsGateway at the end of the e2e leg, and criterion 2 asks
+# about the cluster's own long-lived tenant.
+TENANT_NAMESPACE="gag-dogfood"
+
 # The runner cpu request NodeShare must derive on an e2e worker: the nodeShare
 # envelope declared in deploy/dogfood-e2e/base/resources.yaml divided by its
 # workersPerNode (1500m / 1). Kept here rather than recomputed so a drift
@@ -538,6 +544,47 @@ dispatch_e2e_run() {
 # running size, Q357) — a fixed pre-resize here could briefly shrink a larger
 # pool and evict a tenant AGC. The AGC comes up before the dispatch: a job
 # queued against a scale set that never registers waits forever.
+# census_mirror_clients — Q1048's reading: every address that reached a registry
+# mirror, resolved to a pod or node, and whether each carries the
+# `actions-gateway/component: workload` label the shared topology's ingress peer
+# ANDs into its `from` element. A prediction of who that narrowing cuts off.
+#
+# It runs HERE rather than as a step in e2e-reusable.yml beside mirror-timing,
+# and the difference is a capability rather than a preference: mirror-timing
+# fetches over HTTP from inside the guest, while the census reads the mirror
+# pods' proxy logs and resolves addresses against THIS cluster's pods and nodes.
+# The e2e job's kubectl addresses the kind cluster `make e2e` stands up, not the
+# dogfood cluster, so the census can only be taken by something holding these
+# credentials.
+#
+# Never gates, and the exit-1 case is the interesting one. 1 means a client
+# reached a mirror without the label, which predicts breakage for an adopter
+# running the SHARED topology — not for this cluster, which runs the isolated
+# one and applies no such narrowing. Failing a release on a finding about a
+# topology the candidate does not run would be wrong; losing the finding would
+# also be wrong, so it is reported loudly and the gate continues.
+census_mirror_clients() {
+	echo "Mirror client census (Q1048)..."
+	local rc=0
+	PROJECT="${PROJECT}" CLUSTER="${CLUSTER}" ZONE="${ZONE}" \
+		bash "${SCRIPT_DIR}/e2e-mirror-clients.sh" || rc=$?
+	case "${rc}" in
+	0) echo "  census: every client that connected is a workload-labelled pod (or the kubelet)" ;;
+	1)
+		echo "  census: FINDING — at least one client carries no workload label."
+		echo "          The shared topology's narrowing would cut it off. This cluster runs"
+		echo "          the isolated topology and is unaffected, so the gate continues."
+		;;
+	2)
+		echo "  census: NOT TAKEN — an address resolves to nothing, or nothing connected."
+		echo "          Workers are reaped on a TTL after their job, so a slow run can lose"
+		echo "          them before this point. Not a pass: the reading simply did not happen."
+		;;
+	*) echo "  census: script failed (exit ${rc}) — the reading did not happen" ;;
+	esac
+	return 0
+}
+
 e2e_leg() {
 	echo "Spinning up the on-demand e2e tenant (e2e-start.sh)..."
 	bash "${SCRIPT_DIR}/e2e-start.sh"
@@ -563,6 +610,14 @@ e2e_leg() {
 	# when the failing spec names are worth having, and this is the last moment
 	# they are cheap to get.
 	report_e2e_run "${run_id}"
+
+	# Q1048's census, here and nowhere later. The AGC reaps a worker pod within
+	# a TTL of its job ending, and the script resolves every address that
+	# reached a mirror to a pod, so each minute after the run converts a
+	# resolvable client into an exit 2. Before the watch_rc check for
+	# mirror-timing's reason: a red matrix leaves a client set as informative as
+	# a green one's, and the booked window is the scarce resource.
+	census_mirror_clients
 
 	if ((watch_rc != 0)); then
 		progress_event e2e fail "run ${run_id} did not conclude success"
@@ -1039,6 +1094,123 @@ preflight_cosign() {
 # against the publish identity, apply it server-side, and assert all five v2 CRDs
 # register — the helm-free install path operators actually use. Consumes the
 # COSIGN_BIN that preflight_cosign resolved before anything billable ran.
+# soak_leg — the two v2 GA soak readings (Q1059 criterion 2, Q1060 criterion 3).
+#
+# These are READINGS, not gates. A criterion closes when evidence exists, and a
+# negative reading is the release working: it names the shape fix v2beta1 still
+# needs. So a reading that comes back bad is reported and recorded, and only a
+# reading that could not be TAKEN is worth failing over — and not even then,
+# because the candidate is sound either way. The verdict is transcribed by hand
+# into the v2 GA plan's Phase 1 criteria table from what this prints; Q1059 and
+# Q1060 name that table and survive the plan being archived.
+#
+# Placed after crd-smoke and before teardown: both readings need the control
+# plane and a live GMC (which serves the conversion webhook) and neither needs
+# workers, so this is the cheapest point in the window at which both are
+# available. Q1048's census cannot live here for the opposite reason — it needs
+# workers, which are reaped long before this line.
+soak_leg() {
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+
+	# --- Q1059: every v2beta1 kind applied and reconciled here ---------------
+	#
+	# Four of the five already carry real traffic: setup.sh applies
+	# ActionsGateway, RunnerTemplate and RunnerSet, and deploy/templates applies
+	# ClusterRunnerTemplates. EgressProxy is the gap, and deliberately so —
+	# setup.sh creates none, workers egress directly. So the reading manufactures
+	# one, asserts it reconciles, and deletes it again: the point is evidence that
+	# the kind works on this cluster, not a change to what dogfood runs.
+	echo "Q1059: exercising every v2beta1 kind on this cluster..."
+	local kinds=(actionsgateways runnersets runnertemplates clusterrunnertemplates egressproxies)
+	local kind missing=0
+
+	echo "  applying a v2beta1 EgressProxy (the one kind setup.sh never creates)..."
+	if ! kubectl apply -f - <<EOF
+apiVersion: actions-gateway.com/v2beta1
+kind: EgressProxy
+metadata:
+  name: soak-reading
+  namespace: ${TENANT_NAMESPACE}
+spec:
+  minReplicas: 1
+  maxReplicas: 1
+EOF
+	then
+		echo "  Q1059: NOT TAKEN — the EgressProxy apply failed; criterion 2 stays unmet" >&2
+		return 0
+	fi
+
+	# Terminal condition rather than a fixed sleep: what the criterion asks is
+	# that the kind RECONCILED, and an object that merely exists proves only that
+	# the schema accepted it.
+	echo "  waiting for it to reconcile..."
+	if kubectl wait --for=condition=Ready --timeout=180s \
+		-n "${TENANT_NAMESPACE}" egressproxy/soak-reading 2>/dev/null; then
+		echo "  EgressProxy: reconciled to Ready"
+	else
+		# Not a failure of the gate. A proxy pool that cannot come up on this
+		# cluster IS the negative reading criterion 2 exists to find, and its
+		# conditions are the evidence.
+		echo "  EgressProxy: did NOT reach Ready inside 180s — this is the reading, record it:"
+		kubectl get egressproxy soak-reading -n "${TENANT_NAMESPACE}" \
+			-o jsonpath='{range .status.conditions[*]}    {.type}={.status} reason={.reason} {.message}{"\n"}{end}' 2>/dev/null || true
+	fi
+
+	for kind in "${kinds[@]}"; do
+		if kubectl get "${kind}.v2beta1.actions-gateway.com" --all-namespaces \
+			-o name >/dev/null 2>&1 &&
+			[[ -n "$(kubectl get "${kind}.v2beta1.actions-gateway.com" --all-namespaces -o name 2>/dev/null)" ]]; then
+			echo "  v2beta1 ${kind}: present"
+		else
+			echo "  v2beta1 ${kind}: ABSENT — criterion 2 is not met by this window"
+			missing=1
+		fi
+	done
+	((missing == 0)) && echo "  Q1059: all five v2beta1 kinds carried traffic on this cluster"
+
+	echo "  removing the manufactured EgressProxy..."
+	kubectl delete egressproxy soak-reading -n "${TENANT_NAMESPACE}" --ignore-not-found --wait=false || true
+
+	# --- Q1060: the conversion webhook round-trip ----------------------------
+	#
+	# What this covers: the two SERVED versions of the v2 CRD, v2alpha1 and
+	# v2beta1, compared field for field over a real object on this cluster.
+	# Storage is v2beta1, so reading at v2alpha1 forces a conversion over TLS and
+	# reading back at v2beta1 closes the loop.
+	#
+	# What it does NOT cover, deliberately: `actions-gateway.github.com/v1alpha1`.
+	# That is a DIFFERENT CRD in a different API group, and a conversion webhook
+	# converts versions within one CRD — it cannot cross groups. Reaching v2 from
+	# v1 is gag-migrate, a migration, not a conversion. Q1060's row asserted that
+	# deploy/dogfood-migrate's v1alpha1 ActionsGateway was "the pre-graduation
+	# object the criterion names"; it is not, and the row now says so.
+	echo "Q1060: round-tripping the conversion webhook, field for field..."
+	# Resource-qualified by version, `<plural>.<version>.<group>`, with the object
+	# NAME as a separate argument. Appending the suffix to a `kind/name` string
+	# instead puts it on the name, which addresses an object that does not exist
+	# and reads back empty — indistinguishable from a webhook failure.
+	local name="dogfood" beta alpha
+	beta="$(kubectl get actionsgateways.v2beta1.actions-gateway.com "${name}" \
+		-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
+	alpha="$(kubectl get actionsgateways.v2alpha1.actions-gateway.com "${name}" \
+		-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
+
+	if [[ -z "${beta}" || -z "${alpha}" ]]; then
+		echo "  Q1060: NOT TAKEN — could not read the object at both served versions."
+		echo "         An empty read here is the caBundle or the webhook, not an equal object."
+		return 0
+	fi
+
+	if [[ "${beta}" == "${alpha}" ]]; then
+		echo "  Q1060: spec identical across v2alpha1 and v2beta1 — round-trip lossless"
+	else
+		# The interesting outcome, and not a gate failure: a field that does not
+		# survive the hop is exactly the shape fix GA is gated on finding.
+		echo "  Q1060: spec DIFFERS across served versions — this is the reading, record it:"
+		diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${alpha}") || true
+	fi
+}
+
 crd_smoke() {
 	# Re-pin the cluster context (fail-closed) before the apply, independent of
 	# which child last fetched credentials.
@@ -1352,6 +1524,13 @@ main() {
 	progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
 	crd_smoke
 	progress_event crd-smoke "done"
+
+	# Readings, not gates: soak_leg returns 0 whatever it finds, because a
+	# negative reading is evidence the release exists to gather rather than a
+	# reason to reject the candidate. See its own comment for why it sits here.
+	progress_phase soak "Taking the v2 GA soak readings (Q1059, Q1060)"
+	soak_leg
+	progress_event soak "done"
 
 	# The verdict has to outlive this process. publish.yml refuses a stable tag
 	# whose release line has no recorded validation (Q879), and until this ran the
