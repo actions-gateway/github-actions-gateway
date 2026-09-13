@@ -1,11 +1,12 @@
 # Release 1.8 Milestone Definition
 
-> **Status: scoped 2026-09-07; the gating row is closed, no candidate cut.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
+> **Status: scoped 2026-09-07; the gating row is closed, `v1.8.0-rc.1` cut 2026-09-12 and awaiting dogfood validation.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
 > Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and [Q1085](../queue/Q1085.md)'s release-notes line.
 > The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
-> The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 64 commits and **FLOOR: MINOR** on 2026-09-09, so the tag is `v1.8.0`.
-> Three `feat`s on the released surface set it: Q1062, Q1011 and Q988, with Q1064's and Q1029's fixes as the patches beside them.
-> Eleven `feat`/`fix` subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.
+> The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 99 commits and **FLOOR: MINOR** on 2026-09-12, so the tag is `v1.8.0`.
+> Four `feat`s on the released surface set it: Q1062, Q1011, Q988 and Q994, the last of which landed after this was scoped and rides unlabelled.
+> Four patches sit beside them: Q1064's and Q1029's fixes, the gRPC bump for CVE-2026-84445, and a provisioner test.
+> Fifteen `feat`/`fix` subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.
 
 ## Why this is a release rather than a row that lands whenever
 
@@ -13,7 +14,7 @@ The [release ladder](release-ladder.md) reads 1.7 → 2.0, and 2.0 is [parked on
 Read on 2026-09-07: criterion 1 has elapsed on the record rather than by re-derivation here, since `v1.4.0` through `v1.7.0` all shipped on `v2beta1` and each release's pre-flight API review returned *ship as-is* over additive surface ([1.4](archive/release-1.4.md#pre-flight-the-api-surface-this-tag-publishes), [1.5](archive/release-1.5.md#pre-flight-the-api-surface-this-tag-publishes), [1.6](archive/release-1.6.md), [1.7](release-1.7.md#pre-flight-verdicts)); criterion 2 is unmet on one kind, since the dogfood overlays and `scripts/dogfood/setup.sh` between them apply `ActionsGateway`, `RunnerSet`, `ClusterRunnerTemplate` and `RunnerTemplate` while `setup.sh` deliberately creates no `EgressProxy` on that cluster, and the e2e lane that does exercise one runs on a kind cluster; criterion 3 has no recorded round-trip across the served versions, the nearest reading being [Q415](archive/q415-migrate-dogfood-validation.md)'s live migration, which drove the webhook on one kind in one direction.
 So the GA rung cannot be labelled without publishing a commitment on unmeasured criteria, and the roadmap's near-term section has been empty since 2026-08-29.
 
-1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one two rows have waited for since 1.7 ([Q1038](../queue/Q1038.md), [Q1048](../queue/Q1048.md)).
+1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one two rows have waited for since 1.7 (Q1038, whose row is closed, and [Q1048](../queue/Q1048.md)).
 The theme is v2 GA readiness; what makes it a release an operator upgrades for is the gating row.
 
 ## The gating row: Q1029
@@ -57,7 +58,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
-| — | RC validated on dogfood | gates | 🔲 no candidate cut |
+| — | RC validated on dogfood | gates | 🔲 `v1.8.0-rc.1` cut 2026-09-12, validation pending |
 
 ## Explicitly out of scope
 
@@ -74,9 +75,16 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 3. ✅ **Q452 decided** (2026-09-08): `v2` omits both aliases, because the premise the question rested on was itself revisited and `v2beta1` is no longer served past `v2.0.0`.
    The losing option's cost is recorded beside it in [v2-ga.md](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn), and the work the answer puts on the critical path is [Q1085](../queue/Q1085.md).
    The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.
-4. **The two dogfood-window rows** get their window from the candidate: [Q1038](../queue/Q1038.md)'s `mirror-timing` probe and [Q1048](../queue/Q1048.md)'s mirror client census.
+4. ◐ **The two dogfood-window rows** got their window from the `v1.8.0-rc.1` candidate, and it produced one of the two readings.
+   Q1038's `mirror-timing` probe took its first live run against a real mirror in the candidate's Kata e2e leg and returned `SEPARATED` (hits ≤46ms, misses ≥147ms, 4 references, one cold and one warm fetch each) without failing the job, which closes it and settles the placement question as `e2e-reusable.yml`.
+   [Q1048](../queue/Q1048.md)'s mirror client census was **not** taken: nothing invokes `scripts/dogfood/e2e-mirror-clients.sh`, so the window passed it by, and teardown scaled the mirror deployments to zero with the access logs it reads.
+   That is the row's own thesis confirmed by events rather than a new problem, and it needs another window.
    Q1039's shared-tenants topology was the third until its 2026-09-03 scoping found a dogfood leg to be the worse venue rather than the dearer one, since that cluster has one tenant and so cannot produce either negative; it shipped on the Calico kind lane instead and needs no window.
-5. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, expecting exactly the `egressPolicyMode` description change item 3 names: the enum members are unchanged, so a reported member add or removal is a finding.
+5. ✅ **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, run 2026-09-12 and recorded [below](#pre-flight-verdicts).
+   When the release was scoped, this item expected *exactly* the `egressPolicyMode` description change item 3 names.
+   That was written before Q1062 and Q1011 landed, and no longer describes the window.
+   What binds is the narrower claim underneath it: the enum members are unchanged, so a reported member add or removal is a finding.
+   Q1062's five condition reasons and its one metric are additive publications expected here; Q1011's new `api/apinames` package is exported Go surface the checker has no category for, so it is reviewed by hand.
 6. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
 
 ## Critical path
@@ -87,9 +95,35 @@ The window is the schedule risk, as it was in 1.7: a reading whose venue is a bo
 
 ## Pre-flight verdicts
 
-None yet.
+Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../operations/release.md#1-pre-flight)).
+Re-run any whose window has moved before the stable tag.
+
+| Check | Measured at | Verdict |
+|---|---|---|
+| Gating rows | `c99137ea6` | **PASS.** No `1.8-gate` row remains in the store; Q1029 took the label with it when it closed. The empty result was trusted only after the same pattern, widened to any `X.Y-gate`, returned six live rows (Q1085 and Q413 on `1.9-gate`; Q1068, Q1086, Q273, Q264 and Q413 on `2.0-gate`), so it can still match a label that exists. |
+| `main` green | `c99137ea6` | **PASS with one path-skipped lane.** Nine of the ten required gates ran and passed on the SHA. `e2e-calico` path-skipped, and `check-artifact-unchanged.sh` against the last commit that ran it in full (`96ca227f1`) exits 1 on `cmd/agc/internal/provisioner/admission.go`. That change is comment-only, and `cmd/agc/**` is not in that lane's path list at all, so the lane could not have covered it either way. Dispatched manually on the target rather than reasoning around the check, and [run 34733367705](https://github.com/actions-gateway/github-actions-gateway/actions/runs/34733367705) ran the `e2e-calico / e2e` job in full on `c99137ea6` and passed, so all ten gates are covered on the tag target. |
+| Semver floor | `c99137ea6` | **MINOR**, over 99 commits, set by eight touching the released surface: four `feat`s and four patches. `v1.8.0` is forced by merged work rather than chosen. |
+| API surface | `c99137ea6` | **PASS, ship as-is.** Additive only: no added wire fields, no enum constraint changes, no default changes. Five new condition reasons (`EgressAuditDisabled`, `EgressAuditJoined`, `EgressAuditUnattributed`, `ProxySourceAuditDisabled`, `WorkerAuditDisabled`) and one new metric (`actions_gateway_egress_audit_unattributed`), all Q1062's. No new Event reasons, labels, annotations, CLI flags or chart values. |
+
+**The `egressPolicyMode` enum members are unchanged**, which is the claim [Definition of done #5](#definition-of-done) rests on: `CiliumFQDN` and `CalicoFQDN` are still defined in both `v2alpha1` and `v2beta1`, and what moved is their godoc, from *removable no earlier than v3.0.0* to *removed at v2.0.0*, the correction Q452's decision forced.
+That is a published-documentation change to a served API, not a surface change.
+
+**Reviewed by hand, because the checker has no category for it:** Q1011 adds `api/apinames`, a new exported package in the `api` module (`agentidentity.go`, 69 lines).
+It publishes helper functions rather than API types, so it widens the module's Go surface without touching the CRD surface the checker reads.
+
+**Deferred to the stable tag, deliberately.** The marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
 Each verdict names the commit it is measured at ([release.md](../operations/release.md#1-pre-flight)).
 
 ## Candidate validation
 
-No candidate cut.
+### `v1.8.0-rc.1`
+
+Cut 2026-09-12 at `c99137ea6`, the same commit every pre-flight verdict above was measured at.
+The tag was compared against `origin/main` after creation and before the push, per the [rc.2 postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md).
+
+| Step | Verdict |
+|---|---|
+| Tag points at the target | **PASS.** `v1.8.0-rc.1^{commit}` and `origin/main` both `c99137ea62340be4e228b74291c488175faefc7f`. |
+| Publish pipeline | pending |
+| Artifacts and provenance | pending |
+| Dogfood validation | pending |
