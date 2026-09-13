@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1095/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1102/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Close the ownership consumer half by reference, not by spelling - GitHub Actions Gateway</title>
+        <title>A release note's commit count goes stale on every merge - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#close-the-ownership-consumer-half-by-reference-not-by-spelling" class="md-skip">
+        <a href="#a-release-notes-commit-count-goes-stale-on-every-merge" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Close the ownership consumer half by reference, not by spelling
+              A release note's commit count goes stale on every merge
             
           </span>
         </div>
@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#done-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done when
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,28 +2616,19 @@
   
 
 
-<h1 id="close-the-ownership-consumer-half-by-reference-not-by-spelling">Close the ownership consumer half by reference, not by spelling<a class="headerlink" href="#close-the-ownership-consumer-half-by-reference-not-by-spelling" title="Permanent link">&para;</a></h1>
-<p><code>checkConsumers</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go"><code>ownership.go</code></a> asks whether a package outside the enumeration's own compares a reason against one of its entries, and it answers by enumerating the <em>spellings</em> of that comparison: <code>==</code>/<code>!=</code> operands and <code>switch</code> case clauses, resolved through a <code>Reason*</code> selector or a bare string.
-That set is open and cannot be closed by adding to it.
-The scan builds no type information, so a reference one indirection away is invisible.</p>
-<p>Measured 2026-09-10 on <code>41dac001c</code>, each reinstating the exact defect Q994 closed with <code>make reason-tiers-check</code> green at <code>EXIT=0</code>:</p>
-<ul>
-<li><code>sessionTooOld := v2alpha1.ReasonVersionTooOld</code> then <code>prev.Reason == sessionTooOld</code></li>
-<li><code>const listenerTooOld = v2alpha1.ReasonVersionTooOld</code> then the same comparison</li>
-<li><code>slices.Contains([]string{v2alpha1.ReasonVersionTooOld}, prev.Reason)</code></li>
-</ul>
-<p>The first two are the strongest: a straight <code>==</code> against the same constant, one named indirection away, and a const alias is a plausible way somebody writes a local membership decision.
-Four such spellings surfaced in one review round after five had just been fixed, which is the signal that the enumeration has no fixed point rather than a coincidence.</p>
-<p><strong>The fix is a different shape, not more spellings.</strong> Any <em>reference</em> to a member <code>Reason*</code> constant, from a package that is neither the producer subtree nor the enumeration's own, is the finding, whatever is done with the value.
-That needs no new AST shapes: a <code>SelectorExpr</code> walk through <code>constValue</code>, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/main.go"><code>collectConditions</code></a> already does for the inventory.
-Its godoc argues this exact trade already, saying that references rather than writes are the inventory, and that over-approximating adds a ledger row but never drops one.
-Same direction, and it catches all three consumer rows above, because an alias and a local are both initialized from the constant.</p>
-<p>The producer half has the same class of hole and it belongs here rather than in a row of its own, since fixing it alone buys one spelling and restates the exhaustiveness claim: <code>var ct = v1alpha1.ConditionRunnerVersionTooOld</code> is a <code>ValueSpec</code>, not an <code>AssignStmt</code>, so <code>resolveConditionType</code> never sees it, measured green the same day.</p>
-<p><strong>The cost is unmeasured and is the whole question.</strong> Predicted green on today's tree: the only non-test references to <code>VersionTooOld</code>/<code>VersionAccepted</code> are <code>internal/listener</code>, <code>internal/runnercore</code>, and, since Q994, nothing in <code>internal/controller</code>.
-That prediction has not been run, so the false-positive surface is unknown, and a reference-level rule refuses a legitimate non-membership question far more often than the comparison-level one does (a reason re-emitted as an Event, a log line, a test helper outside <code>_test.go</code>).
-Whether the exemption list that buys back stays smaller than the spelling list it replaces is what this row has to establish before the change is worth making — run it first, count the findings, and drop the row if the answer is no.</p>
-<p>Filed out of the Q994 review, where the enumerating approach was shipped deliberately and its claim narrowed to match (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go"><code>ownership.go</code></a> says the set is not closed).
-Nothing is broken today: every spelling above is a defect somebody would have to write, and the gate catches the ones the tree actually uses.</p>
+<h1 id="a-release-notes-commit-count-goes-stale-on-every-merge">A release note's commit count goes stale on every merge<a class="headerlink" href="#a-release-notes-commit-count-goes-stale-on-every-merge" title="Permanent link">&para;</a></h1>
+<p>A release body's "Everything since vX.Y.Z" line asserts a commit count and a <code>feat</code>/<code>fix</code>/<code>perf</code> subject count, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-release-notes.sh"><code>check-release-notes.sh</code></a> is deliberately narrow enough not to read them.</p>
+<p>Measured across the 1.7.0 cycle, that line was wrong at three separate points: drafted as <code>61 commits, 27</code> when <code>3540b89f1</code> was the tip, corrected to <code>65 and 29</code> at the rc.3 target, and corrected again to <code>68 and 29</code> at the tag.
+Each correction was right when it was made.</p>
+<p>Q1037 closed the five operator-visible surfaces by giving metric names, CLI flags and chart values enumerators in <code>api-surface-since.sh</code>, each refusing rather than reporting a silent empty.
+This sixth claim was named in that row and deliberately left out, because it is the same defect class with a different fix shape and folding it in would have made neither clean.</p>
+<p><strong>Why an enumerator does not close it.</strong> The other five go stale when the <em>product</em> changes.
+This one goes stale when <strong>anything</strong> merges, including the pull request carrying the correction, so enumerating it once at draft time cannot be a fix.
+Whatever lands here has to run at tag time: either the renderer substitutes the count as it builds the body, or a check refuses a note whose count disagrees with <code>git rev-list</code> at the tag being published.</p>
+<p>The renderer arm is the more likely one, since it removes the hand-written number rather than policing it, but it changes what an author writes in <code>docs/releases/vX.Y.Z.md</code> and that is a convention decision rather than a mechanical one.</p>
+<h2 id="done-when">Done when<a class="headerlink" href="#done-when" title="Permanent link">&para;</a></h2>
+<p>A published release body cannot carry a commit count that <code>git rev-list</code> contradicts at its own tag.</p>
+<p>Filed out of Q1037, which measured the three wrong values above.</p>
 
 
 

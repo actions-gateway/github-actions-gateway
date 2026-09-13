@@ -2841,28 +2841,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 3 requires the conversion webhook to have round-tripped every served version under real …</td>
 </tr>
 <tr>
-<td><a href="Q977/">Q977</a></td>
-<td>Rate-limited refusal can transiently report <code>reason=ceiling</code></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>Admit</code> reserves before the scale-up rung refuses (Q717), so inside the reserve-to-release window a concurrent delivery reads an inflated …</td>
-</tr>
-<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's …</td>
-</tr>
-<tr>
-<td><a href="Q1095/">Q1095</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go">Close the ownership consumer half by reference, not by spelling</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>checkConsumers</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/ownership.go"><code>ownership.go</code></a> asks whether a package outside the enumeration's own …</td>
 </tr>
 <tr>
 <td><a href="Q989/">Q989</a></td>
@@ -2985,20 +2969,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a …</td>
 </tr>
 <tr>
-<td><a href="Q1036/">Q1036</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>record-launch.sh</code> sees a concurrent same-command run and says nothing</a></td>
+<td><a href="Q1102/">Q1102</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-release-notes.sh">A release note's commit count goes stale on every merge</a></td>
 <td><code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-29 (Q1035): two <code>make check</code> runs were live in one worktree at once, both redirected to the same <code>tmp/</code> log.</td>
-</tr>
-<tr>
-<td><a href="Q1037/">Q1037</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/api-surface-since.sh">Two of the five release-note surfaces have no enumerator</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><a href="../operations/release/#writing-the-curated-notes">release.md § Writing the curated notes</a> names five surfaces an operator can see and …</td>
+<td>A release body's "Everything since vX.Y.Z" line asserts a commit count and a <code>feat</code>/<code>fix</code>/<code>perf</code> subject count, and …</td>
 </tr>
 <tr>
 <td><a href="Q1041/">Q1041</a></td>
@@ -3015,14 +2991,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q554 shipped <code>privileged-dind</code> on <code>docker:27-dind</code>, <code>kata-dind</code> on <code>docker:28-dind</code>: what CI exercises.</td>
-</tr>
-<tr>
-<td><a href="Q698/">Q698</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion_inventory_test.go">The delete-path inventory misses a <code>Delete</code> with an odd context arg</a></td>
-<td><code>tests</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside …</td>
 </tr>
 <tr>
 <td><a href="Q1087/">Q1087</a></td>
