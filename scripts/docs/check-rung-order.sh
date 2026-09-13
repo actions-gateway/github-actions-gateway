@@ -4,9 +4,9 @@
 # the design doc against the order Provisioner.Admit evaluates it in.
 #
 # The order is load-bearing rather than presentational: the rate rung is last so
-# nothing refuses after the bucket has been charged, and Q977 documents a
-# transient that exists only because the ceiling rung reserves before the rate
-# rung refuses. A doc listing them the other way round describes a system with
+# nothing refuses after the bucket has been charged, and Provisioner.Admit's own
+# godoc records a transient that exists only because the ceiling rung reserves
+# before the rate rung refuses (Q977). A doc listing them the other way round describes a system with
 # different failure modes from the one that ships.
 #
 # It drifted for real. 04-operational-flows.md listed Rate before Ceiling from

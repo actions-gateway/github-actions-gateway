@@ -4,8 +4,8 @@
 //
 // The ladder's order is load-bearing, not presentational. The rate rung comes
 // last precisely so that nothing refuses after the bucket has been charged, and
-// Q977 is filed against a transient that exists only because the ceiling rung
-// reserves before the rate rung refuses. A doc that lists the two the other way
+// the admission ladder's own godoc records a transient that exists only because
+// the ceiling rung reserves before the rate rung refuses (Q977). A doc that lists the two the other way
 // round describes a system with different failure modes from the one that ships.
 //
 // It drifted undetected: 04-operational-flows.md listed Rate before Ceiling from

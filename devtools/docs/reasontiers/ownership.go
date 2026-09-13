@@ -21,25 +21,25 @@ package main
 //	            at its own width — the defect the marker exists to close
 //
 // The check's silence is its verdict, so what each half reads is worth stating,
-// and so is what it does not. The consumer half reads `==`/`!=` and a `switch`
-// case alike, against a Reason* constant or the bare string — the switch matters
-// most, being the spelling the enumeration itself uses and the one a second
-// reason makes somebody reach for. The producer half reads a setter call and a
-// metav1.Condition literal, the latter with its type elided as a slice element,
-// and follows the condition type through a single-assignment local. What it
-// cannot read it reports: a reason it cannot resolve, a wrapper pinning the type
-// while forwarding the reason (only a registered setter earns the forwarding
-// exemption), and two setters whose shape collides.
+// and so is what it does not. The consumer half reads any *reference* to a
+// member reason from a package that is neither the producer subtree nor the
+// enumeration's own, whatever is done with the value, plus a comparison written
+// against the bare string, which no reference scan can see. The producer half
+// reads a setter call and a metav1.Condition literal, the latter with its type
+// elided as a slice element, and follows the condition type through a
+// single-assignment local. What it cannot read it reports: a reason it cannot
+// resolve, a wrapper pinning the type while forwarding the reason (only a
+// registered setter earns the forwarding exemption), and two setters whose shape
+// collides.
 //
-// That set is NOT closed, and enumerating spellings has no fixed point. This
-// scan builds no type information, so a reference one indirection away is
-// invisible to it: a local or a const initialised from a member constant, a
-// `slices.Contains` over a slice holding one, a condition type declared in a
-// ValueSpec rather than assigned. Each is measured green today. Closing the
-// consumer half needs a different shape rather than more spellings — any
-// reference to a member reason from a package that is neither the producer nor
-// the enumeration's own, on the same over-approximation argument
-// collectConditions already makes — and that is Q1095, not this.
+// The consumer half was a list of comparison spellings until Q1095, and that set
+// had no fixed point: this scan builds no type information, so a local or a
+// const initialised from a member constant, and a `slices.Contains` over a slice
+// holding one, were each measured green while reinstating the exact defect Q994
+// closed. It is a reference rule now, on the same over-approximation argument
+// collectConditions makes. The producer half's remaining hole is the same class:
+// a condition type declared in a ValueSpec rather than assigned is still
+// invisible to resolveConditionType.
 //
 // The polarity is the enumerated side's, deliberately, and the check does not
 // widen it: the OTHER producer's reasons are never enumerated anywhere, so a
@@ -503,19 +503,75 @@ func literalOrConst(e ast.Expr, imports, values map[string]string) (string, bool
 	return "", false
 }
 
-// checkConsumers reports a package other than the enumeration's own comparing a
-// reason against one of its entries. That comparison is a second membership site
-// held at its own width, which is how the two came apart: the enumeration grew a
-// reason and the open-coded comparison did not, so one consumer deferred to the
-// producer and the other overwrote it.
+// checkConsumers reports a package outside the enumeration's own holding a
+// member reason. Two shapes reach the same finding, and the wider one is the
+// point (Q1095).
+//
+// The narrow shape is a comparison — `==`/`!=` or a `switch` case — including
+// one written against the bare string, which reads as an unrelated literal to
+// anything that only follows selectors.
+//
+// The wide shape is any *reference* to a member Reason* constant from a package
+// that is neither the producer subtree nor the enumeration's own, whatever is
+// done with the value. Enumerating comparison spellings has no fixed point: this
+// scan builds no type information, so `r := v2alpha1.ReasonVersionTooOld`
+// followed by `prev.Reason == r` is one indirection away and was invisible, as
+// were a const alias and a `slices.Contains` over a slice holding one — each
+// measured green while reinstating the exact defect Q994 closed. Four such
+// spellings surfaced in one review round after five had just been fixed, which
+// is the signal that the set is open rather than a coincidence.
+//
+// This is the argument collectConditions already makes for the inventory:
+// over-approximating adds a row somebody has to read; under-approximating drops
+// a membership site and the check says nothing. Measured on this tree, the wide
+// rule reports two references and both are inside the producer, so the
+// exemption it needs is the producer subtree and nothing else — an empty
+// exemption list, where the spelling list it replaces was open-ended.
+//
+// The producer exemption applies to the reference shape alone. A producer must
+// name the constants it emits, so every one of its references is legitimate;
+// a comparison there is still a comparison, and keeping it in scope leaves the
+// narrow half exactly as strong as it was.
 func checkConsumers(srcDir string, o ownership, reasons map[string]string) ([]string, error) {
 	var findings []string
+	seen := map[string]bool{}
+	producerDir := filepath.ToSlash(filepath.Join(srcDir, filepath.FromSlash(o.producer)))
 	err := parseGo(srcDir, func(file *ast.File, fset *token.FileSet, rel string) error {
-		if filepath.ToSlash(filepath.Dir(rel)) == o.pkgDir {
+		dir := filepath.ToSlash(filepath.Dir(rel))
+		if dir == o.pkgDir {
 			return nil
 		}
+		inProducer := dir == producerDir || strings.HasPrefix(dir, producerDir+"/")
 		imports := importedPkgs(file)
+		report := func(pos token.Pos, v string) {
+			line := fset.Position(pos).Line
+			key := fmt.Sprintf("%s:%d:%s", rel, line, v)
+			if seen[key] {
+				return
+			}
+			seen[key] = true
+			findings = append(findings, fmt.Sprintf(
+				"%s:%d: %s is held here, and it is one of the reasons %s enumerates — call that instead, or move the question in beside the enumeration; open-coded, this is a second membership site at its own width",
+				rel, line, v, o.site))
+		}
 		ast.Inspect(file, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok {
+				if inProducer {
+					return true
+				}
+				pkg, ok := sel.X.(*ast.Ident)
+				if !ok || !reasonPkgs[imports[pkg.Name]] {
+					return true
+				}
+				v, ok := reasons[sel.Sel.Name]
+				if !ok {
+					return true
+				}
+				if _, member := o.members[v]; member {
+					report(sel.Pos(), v)
+				}
+				return true
+			}
 			var operands []ast.Expr
 			switch x := n.(type) {
 			case *ast.BinaryExpr:
@@ -524,18 +580,14 @@ func checkConsumers(srcDir string, o ownership, reasons map[string]string) ([]st
 				}
 				operands = []ast.Expr{x.X, x.Y}
 			case *ast.CaseClause:
-				// `switch reason { case pkg.ReasonX: }` asks the same question an
-				// `==` does, and it is the spelling the enumeration itself uses —
-				// so it is what a second reason makes somebody reach for, which is
-				// exactly the change this check exists to catch.
 				operands = x.List
 			default:
 				return true
 			}
 			for _, operand := range operands {
-				// literalOrConst rather than constValue: a bare "VersionTooOld"
-				// asks the question just as well as the constant does, and reads
-				// as an unrelated string to a scan that only follows selectors.
+				// literalOrConst rather than the selector walk above: a bare
+				// "VersionTooOld" asks the question just as well as the constant
+				// does, and no reference scan can see it.
 				v, ok := literalOrConst(operand, imports, reasons)
 				if !ok {
 					continue
@@ -543,9 +595,7 @@ func checkConsumers(srcDir string, o ownership, reasons map[string]string) ([]st
 				if _, member := o.members[v]; !member {
 					continue
 				}
-				findings = append(findings, fmt.Sprintf(
-					"%s:%d: %s is compared against here, and it is one of the reasons %s enumerates — call that instead, or move the question in beside the enumeration; open-coded, this is a second membership site at its own width",
-					rel, fset.Position(operand.Pos()).Line, v, o.site))
+				report(operand.Pos(), v)
 			}
 			return true
 		})

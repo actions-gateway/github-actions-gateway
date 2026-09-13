@@ -187,6 +187,34 @@ func TestDeletePathInventory_MatchesDeclaredSites(t *testing.T) {
 // TestDeletePathInventory_BoundarySpecsExist keeps the roster honest: a spec renamed
 // or moved out from under it would otherwise leave the failure above naming tests that
 // no longer exist.
+// TestDeletePathInventory_MatcherSeesAnyDeleteArgName pins the widening of Q698 from
+// both sides. The odd-context case is the one that shipped: the scanner's answer moved
+// with the argument's name, so an undeclared worker-pod delete passed the gate. The
+// negative cases are what stops the widening from turning into "match everything",
+// which would make the inventory noise a reviewer learns to ignore.
+func TestDeletePathInventory_MatcherSeesAnyDeleteArgName(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		expr string
+		want bool
+	}{
+		{"context-named arg", "k.Delete(ctx, pod)", true},
+		{"odd-named arg (Q698)", "k.Delete(c, pod)", true},
+		{"no name a human would read as a context", "k.Delete(zz, pod)", true},
+		{"context constructor", "k.Delete(context.Background(), pod)", true},
+		{"delete with options", "k.Delete(c, pod, opts)", true},
+		{"single argument is not a client delete", "m.Delete(key)", false},
+		{"another method entirely", "k.Update(c, pod)", false},
+		{"bare call, no selector", "Delete(c, pod)", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.expr)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, isClientDelete(expr), "isClientDelete(%s)", tc.expr)
+		})
+	}
+}
+
 func TestDeletePathInventory_BoundarySpecsExist(t *testing.T) {
 	for _, s := range boundarySpecs {
 		src, err := os.ReadFile(s.path)
@@ -352,32 +380,19 @@ func scanDeleteSites(t *testing.T, root string) map[deleteSite]struct{} {
 	return sites
 }
 
+// isClientDelete matches any two-or-more argument .Delete( call. It deliberately does
+// not test whether the first argument looks like a context: that made the arg's *name*
+// decide whether a real delete was inventoried, so Client.Delete(c, pod) was skipped
+// silently — fail-open inside a fail-closed gate (Q698). Over-matching costs a row in
+// declaredDeleteSites, which a reviewer has to classify anyway; under-matching drops a
+// delete path and the gate says nothing.
 func isClientDelete(n ast.Node) bool {
 	call, ok := n.(*ast.CallExpr)
 	if !ok || len(call.Args) < 2 {
 		return false
 	}
 	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != "Delete" {
-		return false
-	}
-	return isContextArg(call.Args[0])
-}
-
-func isContextArg(arg ast.Expr) bool {
-	switch a := arg.(type) {
-	case *ast.Ident:
-		return strings.Contains(strings.ToLower(a.Name), "ctx") ||
-			strings.Contains(strings.ToLower(a.Name), "context")
-	case *ast.CallExpr:
-		// context.Background(), context.WithoutCancel(ctx), …
-		if sel, ok := a.Fun.(*ast.SelectorExpr); ok {
-			if pkg, ok := sel.X.(*ast.Ident); ok {
-				return pkg.Name == "context"
-			}
-		}
-	}
-	return false
+	return ok && sel.Sel.Name == "Delete"
 }
 
 func funcLabel(fd *ast.FuncDecl) string {

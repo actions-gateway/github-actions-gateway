@@ -129,7 +129,10 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 // throughput, and cannot over-admit: admit refuses at reserved >= limit, so the churn
 // inflates the count only WITHIN the ceiling. It needs ceiling-many Admit calls inside
 // one sub-microsecond window, so it concentrates on a small maxWorkers with many
-// listeners. The obvious repair — a non-binding tokens() peek ahead of the ceiling —
+// listeners — a direction, not a threshold. Deliberately no incidence figure: the same
+// configuration measured anywhere from 0/20 to 20/20 reps across runs on one machine,
+// so a number here would send the next reader to re-measure, get the other end of the
+// range, and conclude the note is stale. The obvious repair — a non-binding tokens() peek ahead of the ceiling —
 // was measured and rejected: it removes the transient and makes the both-bound case
 // report "scaleup" persistently, for every delivery while a small set sits at its
 // ceiling with an empty bucket, trading a rare transient for a common systematic one.

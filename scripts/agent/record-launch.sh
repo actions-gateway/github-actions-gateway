@@ -114,6 +114,35 @@ prune_records() {
 	echo "record-launch: pruned ${pruned} stale record(s)"
 }
 
+# warn_concurrent COMMAND — warn when a live record already names this exact
+# command in this worktree. Measured 2026-08-29 (Q1035): two `make check` runs
+# went live in one worktree, both redirected to the same log by habit, and the
+# second launch's truncation left an interleaved file that still read as one
+# coherent gate run — a green status beside a log describing a different tree.
+# Q690 is the same shape one step further on, where two contaminated results
+# were recorded as genuine red.
+#
+# The log path is the caller's redirect and this script is never told it, so the
+# warning names the other run instead: the caller then knows to pick a different
+# log or stop it. A warning rather than a refusal, because a deliberate second
+# run of the same command is legitimate and this cannot tell the two apart.
+warn_concurrent() {
+	local wanted="$1" file
+	for file in "${LAUNCH_RECORD_DIR}"/*.launch; do
+		[[ -e "${file}" ]] || continue
+		[[ "$(record_field "${file}" command)" == "${wanted}" ]] || continue
+		[[ "$(record_field "${file}" worktree)" == "${REPO_ROOT}" ]] || continue
+		[[ "$(record_state "${file}")" == live ]] || continue
+		printf 'record-launch: WARNING: this command is already running in this worktree\n' >&2
+		printf 'record-launch: WARNING:   command  %s\n' "${wanted}" >&2
+		printf 'record-launch: WARNING:   pid      %s\n' "$(record_field "${file}" pid)" >&2
+		printf 'record-launch: WARNING:   stop     %s\n' "$(record_field "${file}" stop)" >&2
+		printf 'record-launch: WARNING: two runs sharing one log interleave into a file that still reads as one run\n' >&2
+		return 0
+	done
+	return 0
+}
+
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT INT TERM`.
 cleanup() {
 	if [[ -n "${RUN_PID}" ]] && kill -0 "${RUN_PID}" 2>/dev/null; then
@@ -130,6 +159,7 @@ cleanup() {
 
 launch() {
 	mkdir -p "${LAUNCH_RECORD_DIR}"
+	warn_concurrent "$*"
 
 	# Job control, so the run is its own process group. Turned back off straight
 	# away to keep bash's job-status chatter out of the run's own output.

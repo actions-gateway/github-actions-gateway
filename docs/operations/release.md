@@ -820,8 +820,11 @@ That asymmetry is exactly what a reader cannot discover for themselves.
 `v1.3.0` shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
 Diff each between the two tags mechanically rather than reading the changelog for them — the Event reasons and the metrics had no enumeration at all until they were diffed, and the notes had already been through several reviews.
 
-**The Event reasons are now enumerated for you** by `api-surface-since.sh`, in its `New Event reasons` section — the AGC's since Q780, the GMC's since Q925.
-An empty section there means none are new, because the scanner behind it refuses rather than shortening its list; a section reading `COULD NOT ENUMERATE` is the other answer and blocks the claim until it is fixed.
+**All five are now enumerated for you** by `api-surface-since.sh`: CRD fields and condition reasons from the start, Event reasons since Q780 (the AGC) and Q925 (the GMC), and metric names, CLI flags and chart values since Q1037.
+An empty section means none are new, because each reader refuses rather than shortening its list; a section reading `COULD NOT ENUMERATE` is the other answer and blocks the claim until it is fixed.
+That refusal is what the metric and configuration sections were added to get.
+Drafting the `v1.7.0` notes, a hand-rolled CLI-flag query matched the wrong declaration shape and returned zero on both sides of the window — and two empty sets diff to an empty set, which is indistinguishable from a real "nothing changed", so the reading survives into the notes as a published claim.
+A released tag has metrics, flags and chart values, so an empty set at the older tag is the query matching nothing and the section says so.
 The traps below are what a hand extraction costs, and are why neither binary is read by eye any more.
 
 Two traps.

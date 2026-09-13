@@ -623,8 +623,109 @@ func (r *R) defer_(prev metav1.Condition) bool {
 	// The operator-visible value, not the constant name: it is what the
 	// membership finding prints, and one vocabulary across both is what lets a
 	// reader grep the two against each other.
-	requireFinding(t, findings, "VersionTooOld is compared against here")
+	requireFinding(t, findings, "VersionTooOld is held here")
 	requireFinding(t, findings, "second membership site at its own width")
+}
+
+// The three spellings Q1095 measured green against the comparison-level rule,
+// each reinstating the exact defect Q994 closed. They are one indirection away
+// from an `==`, which is why enumerating comparison shapes could not reach them:
+// the scan builds no type information, so the local, the const and the slice
+// element all read as ordinary identifiers. The reference-level rule sees the
+// constant itself and so does not care what is done with the value.
+func TestOwnershipMemberHeldThroughAnIndirectionFails(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{
+			name: "a local initialised from the constant",
+			body: `	sessionTooOld := v2alpha1.ReasonVersionTooOld
+	return prev.Reason == sessionTooOld`,
+		},
+		{
+			name: "a const alias",
+			body: `	const listenerTooOld = v2alpha1.ReasonVersionTooOld
+	return prev.Reason == listenerTooOld`,
+		},
+		{
+			name: "membership through a slice",
+			body: `	return slices.Contains([]string{v2alpha1.ReasonVersionTooOld}, prev.Reason)`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			consumer := `package controller
+
+import (
+	"slices"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+)
+
+var _ = slices.Contains[[]string]
+
+func (r *R) defer_(prev metav1.Condition) bool {
+` + tc.body + `
+}
+`
+			src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
+			findings := runCase(t, src, goodLedger, goodRunbook)
+			requireFinding(t, findings, "VersionTooOld is held here")
+			requireFinding(t, findings, "second membership site at its own width")
+		})
+	}
+}
+
+// The producer must name the reasons it emits, so its own references are not
+// findings — this is the whole exemption the reference rule needs, and measuring
+// it is what settled that the rule was worth shipping: on the real tree it
+// reports two references and both are here.
+func TestOwnershipProducerMayHoldItsOwnReasons(t *testing.T) {
+	producer := `package listener
+
+import (
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
+)
+
+func reasonFor(tooOld bool) string {
+	if tooOld {
+		return apiconditions.ReasonVersionTooOld
+	}
+	return apiconditions.ReasonVersionAccepted
+}
+`
+	src := srcTree(t, map[string]string{"internal/listener/reason.go": producer})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	for _, f := range findings {
+		if strings.Contains(f, "second membership site") {
+			t.Fatalf("the producer's own reference was read as a consumer: %s", f)
+		}
+	}
+}
+
+// A reason that is not a member stays out however it is held, or the rule has
+// widened into "any Reason* reference anywhere" and every finding is noise.
+func TestOwnershipNonMemberReferenceDoesNotFire(t *testing.T) {
+	consumer := `package controller
+
+import (
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
+)
+
+func ceiling() string {
+	r := apiconditions.ReasonWorkerCeilingReached
+	return r
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/ceiling.go": consumer})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	for _, f := range findings {
+		if strings.Contains(f, "second membership site") {
+			t.Fatalf("a non-member reason was read as a membership site: %s", f)
+		}
+	}
 }
 
 // The complement, and the reason the exemption is by package rather than by
@@ -760,7 +861,7 @@ func (r *R) defer_(prev metav1.Condition) bool {
 }
 `
 	src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
-	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "VersionTooOld is compared against here")
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "VersionTooOld is held here")
 }
 
 // The same question asked with the string rather than the constant. It reads as
@@ -775,7 +876,7 @@ func (r *R) defer_(prev metav1.Condition) bool {
 }
 `
 	src := srcTree(t, map[string]string{"internal/controller/version.go": consumer})
-	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "VersionTooOld is compared against here")
+	requireFinding(t, runCase(t, src, goodLedger, goodRunbook), "VersionTooOld is held here")
 }
 
 // An element of a []metav1.Condition literal has its type elided, so the node

@@ -222,6 +222,44 @@ check "--prune keeps a record whose process is live" \
 	"${LAUNCH_RECORD_DIR}/100-live.launch" \
 	"$(find "${LAUNCH_RECORD_DIR}" -name '100-live.launch')"
 
+# --- Concurrent same-command launch (Q1036) ----------------------------------
+
+# The record's own fields are what makes the second launch detectable, so these
+# run against the stubbed `ps` again: a pid is live exactly when the test says.
+LIVE_PIDS=([777]="make check")
+rm -rf "${LAUNCH_RECORD_DIR}"
+write_record 200-live pid=777 marker=make group=yes \
+	'command=make check' "worktree=${REPO_ROOT}" 'stop=kill -TERM -- -777' >/dev/null
+
+warn="$(warn_concurrent "make check" 2>&1)"
+check "a live same-command run in this worktree warns" "yes" \
+	"$([[ "${warn}" == *"already running in this worktree"* ]] && echo yes || echo no)"
+check "the warning names the live run's pid" "yes" \
+	"$([[ "${warn}" == *"777"* ]] && echo yes || echo no)"
+check "the warning names the stop command, which is the actionable half" "yes" \
+	"$([[ "${warn}" == *"kill -TERM -- -777"* ]] && echo yes || echo no)"
+
+# Controls. Each one must stay silent, or the warning fires on every launch and
+# is read as noise within a day — which is the same defect as never firing.
+check "a different command does not warn" "" "$(warn_concurrent "make lint" 2>&1)"
+rm -rf "${LAUNCH_RECORD_DIR}"
+write_record 201-elsewhere pid=777 marker=make group=yes \
+	'command=make check' 'worktree=/somewhere/else' 'stop=kill -TERM -- -777' >/dev/null
+check "the same command in another worktree does not warn" "" \
+	"$(warn_concurrent "make check" 2>&1)"
+
+# A stale record is the common case: a killed run leaves one behind, and warning
+# on it would point at a pid that is gone or, worse, recycled.
+LIVE_PIDS=()
+rm -rf "${LAUNCH_RECORD_DIR}"
+write_record 202-stale pid=777 marker=make group=yes \
+	'command=make check' "worktree=${REPO_ROOT}" 'stop=kill -TERM -- -777' >/dev/null
+check "a stale record of the same command does not warn" "" \
+	"$(warn_concurrent "make check" 2>&1)"
+
+check "no records at all does not warn" "" \
+	"$(rm -rf "${LAUNCH_RECORD_DIR}" && warn_concurrent "make check" 2>&1)"
+
 if ((fails > 0)); then
 	echo "record-launch-test: ${fails} assertion(s) failed" >&2
 	exit 1
