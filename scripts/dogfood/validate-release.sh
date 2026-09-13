@@ -704,7 +704,7 @@ sizing_leg() {
 			echo "             apply_cr or a direct patch: start.sh resizes the pool and routes"
 			echo "             CI but never applies CRs, so no start can deploy it."
 			echo "             Fix: re-run scripts/dogfood/setup.sh, or patch the CR directly:"
-			echo "               kubectl patch runnersets.v2alpha1.actions-gateway.com/ci \\"
+			echo "               kubectl patch runnersets.actions-gateway.com/ci \\"
 			echo "                 -n gag-dogfood --type=merge -p '{\"spec\":{\"sizing\":{...}}}'"
 		else
 			echo "             sizingProfileState=${ci_state} — spec.sizing IS deployed, but a"
