@@ -66,6 +66,10 @@ scripts/release/release-delta.sh
 It reports, for `<last stable tag>..origin/main`, the commits by Conventional Commit type (breaking ones called out), the Queue rows closed in that window, the API diffstat, and the operator-facing pages touched.
 Pass an explicit `FROM` (and optionally `TO`) to look at a different window.
 
+Each closed row is listed with the verb its deleting commit recorded (`close`, `complete`, `prune`, `drop`), so a pruned row is visible as one rather than counted as delivery.
+A verb reading `-` means that row was closed beyond your `HEAD`, which the verb replay cannot reach; the report says how many, and fetching clears it.
+A flake-watch row that graduated to [the retired-flake ledger](../development/flake-watch-retired.md) in this window is **not** listed: its delivery was the earlier fix PR that parked it, so crediting it here would bill this release for an earlier one's work.
+
 Its type counts answer "how much landed", not "what may this be called".
 For that:
 
