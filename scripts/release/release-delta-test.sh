@@ -3,12 +3,14 @@
 # Unit tests for scripts/release/release-delta.sh — the unreleased-delta report.
 #
 # The report's load-bearing claim is that it needs no bookkeeping: everything it
-# prints is derived from commit subjects and from STATUS.md's history. These
-# fixtures pin the derivations that are not obvious — a Queue row PARKED in
-# Deferred is not delivered work, a row resurrected by a bad merge resolution is
-# counted once, and an empty API path list must print "(none)" rather than
-# widening the diff to the whole repo. Runs under `make check` (via
-# `make scripts-test`).
+# prints is derived from commit subjects and from the item store's history.
+# These fixtures pin the derivations that are not obvious — a PARKED row is a
+# `status:` edit and so is never a deletion at all, a flake-watch retirement is
+# delivered work from an EARLIER release and must not be credited here, a row
+# resurrected by a bad merge resolution is counted once, a closure beyond HEAD
+# prints its verb as `-` rather than guessing, and an empty API path list must
+# print "(none)" rather than widening the diff to the whole repo. Runs under
+# `make check` (via `make scripts-test`).
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -20,26 +22,46 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 fails=0
 
-# status QUEUE_IDS DEFERRED_IDS — write docs/STATUS.md with the given
-# space-separated IDs in each table, in the section shape the script parses.
-status() {
-	local queue="$1" deferred="$2" id
-	mkdir -p docs
-	{
-		printf '# Project Status\n\n## Progress\n\n'
-		printf '| Item | Labels | Status |\n|---|---|---|\n'
-		printf '| <a id="Q999"></a>[A plan](plan/x.md) | infra | ✅ |\n'
-		printf '\n## Queue\n\n'
-		printf '| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
-		for id in $queue; do
-			printf '| <a id="%s"></a>%s | Thing | infra | 🔲 | S | note |\n' "$id" "$id"
-		done
-		printf '\n## Deferred\n\n'
-		printf '| ID | Item | Labels | Sz | Trigger to revive |\n|---|---|---|---|---|\n'
-		for id in $deferred; do
-			printf '| <a id="%s"></a>%s | Thing | infra | S | **Demand:** someone asks. |\n' "$id" "$id"
-		done
-	} >docs/STATUS.md
+# row ID [STATUS] — write one item file in the store's shape. Only the filename
+# is load-bearing for this report (the walk reads paths, and queue.py reads the
+# deleting commit's message), but a realistic body keeps the fixture honest.
+row() {
+	local id="$1" status="${2:-ready}"
+	mkdir -p docs/queue
+	cat >"docs/queue/$id.md" <<EOF
+---
+id: $id
+rank: b${id#Q}
+labels:
+    - debt
+status: $status
+---
+
+# $id — a thing that needs doing
+
+Notes.
+EOF
+}
+
+# ledger_seed — the flake-watch ledger a retirement writes into.
+ledger_seed() {
+	mkdir -p docs/development
+	printf '# Retired flakes\n\n| ID | Symptom | Fix | Retired | Bar |\n|---|---|---|---|---|\n' \
+		>docs/development/flake-watch-retired.md
+}
+
+# ledger_add ID — record ID as retired, the line a retiring commit appends.
+ledger_add() {
+	printf '| %s | flaky thing | #1 | 2026-01-01 | Soaked |\n' "$1" \
+		>>docs/development/flake-watch-retired.md
+}
+
+# ledger_refuted ID — a REFUTED ledger row: first cell `none`, the id named only
+# in the narrative. The shape that separates a first-cell anchor from a bare-id
+# one, taken from 3e1770a327 on main.
+ledger_refuted() {
+	printf '| none | flaky thing | none | 2026-01-01 | Refuted: filed as %s, never observed |\n' \
+		"$1" >>docs/development/flake-watch-retired.md
 }
 
 # commit SUBJECT [BODY] — commit whatever is staged plus the STATUS.md state.
@@ -67,7 +89,17 @@ build_repo() {
 		git config user.email t@t.t
 		git config user.name t
 
-		status "Q1 Q2 Q3 Q4 Q5" ""
+		row Q1
+		row Q2
+		row Q3
+		row Q4
+		row Q5
+		row Q6
+		row Q7
+		# Not an item: the store holds prose beside its rows, and a path whose
+		# stem is not an id must never be read as a closure.
+		printf 'the store\n' >docs/queue/README.md
+		ledger_seed
 		printf 'seed\n' >README.md
 		commit "chore: seed"
 		git tag v1.0.0
@@ -76,37 +108,52 @@ build_repo() {
 		commit "docs: narrate something"
 		git rev-parse HEAD >"$WORKDIR/c_docs"
 
-		# Delivered: the row leaves the Queue and goes nowhere else.
-		status "Q2 Q3 Q4 Q5" ""
-		commit "fix(agc): fix a thing (Q1)"
+		# Delivered: the row's file is deleted, and the row commit says how.
+		git rm -q docs/queue/Q1.md
+		commit "fix(agc): fix a thing (Q1)" "docs(queue): complete Q1"
 		git rev-parse HEAD >"$WORKDIR/c_fix"
 
-		# Parked, not delivered: Queue -> Deferred in one commit.
-		status "Q3 Q4 Q5" "Q2"
+		# Parked, not delivered: a `status:` edit, so the file survives and the
+		# walk never sees a deletion. No Deferred subtraction is needed for it.
+		row Q2 deferred
 		commit "feat(gmc): add a thing, park Q2"
 
 		mkdir -p cmd/agc/api/v1alpha1
 		printf 'package v1alpha1\n' >cmd/agc/api/v1alpha1/types.go
 		commit "refactor(api)!: rename a published field"
 
-		status "Q4 Q5" "Q2"
-		commit "chore: drop Q3"
+		git rm -q docs/queue/Q3.md
+		commit "chore: drop Q3" "docs(queue): prune Q3"
 
 		# A row main deleted comes back through a bad merge resolution, then is
 		# dropped again: one delivery, not two.
-		status "Q3 Q4 Q5" "Q2"
+		row Q3
 		commit "chore: resurrect Q3"
-		status "Q4 Q5" "Q2"
-		commit "chore: drop Q3 again"
+		git rm -q docs/queue/Q3.md
+		commit "chore: drop Q3 again" "docs(queue): prune Q3 again"
 
-		# Q5 leaves and is re-filed, and is open at TO: not delivered work.
+		# A soaked flake leaves for the ledger. Its delivery was the earlier fix
+		# PR, which only parked it, so this window must not be credited with it.
+		# Q7 is delivered in the SAME commit, and a refuted ledger row names it in
+		# its narrative while retiring nothing. A bare-id line filter would read
+		# that mention as Q7 being retired and silently drop a delivered row;
+		# only the first cell says what a ledger line retires.
+		git rm -q docs/queue/Q6.md docs/queue/Q7.md
+		ledger_add Q6
+		ledger_refuted Q7
+		commit "docs(queue): retire Q6, soaked" "docs(queue): close Q7"
+
+		git rm -q docs/queue/README.md
+		commit "chore: drop the store's own README"
+
+		# Q5 leaves and is re-filed, and is present at TO: not delivered work.
 		mkdir -p docs/operations
 		printf 'upgrade\n' >docs/operations/upgrade.md
-		status "Q4" "Q2"
+		git rm -q docs/queue/Q5.md
 		commit "perf(proxy): speed up the tunnel" "BREAKING CHANGE: a values key was renamed."
 
 		printf 'x\n' >>README.md
-		status "Q4 Q5" "Q2"
+		row Q5
 		commit "WIP nonsense"
 
 		# Newer than v1.0.0 but not a release: the default FROM must skip it.
@@ -127,7 +174,7 @@ build_pathless_repo() {
 		git config maintenance.auto false
 		git config user.email t@t.t
 		git config user.name t
-		status "Q1" ""
+		row Q1
 		printf 'seed\n' >README.md
 		commit "chore: seed"
 		git tag v1.0.0
@@ -172,23 +219,35 @@ c_fix="$(cat "$WORKDIR/c_fix")"
 out="$(cd "$repo" && "$SCRIPT")"
 
 want 'default FROM skips RC tags' "$out" '^Release delta v1\.0\.0\.\.HEAD$'
-want 'commit count excludes FROM' "$out" '^9 commits'
+want 'commit count excludes FROM' "$out" '^11 commits'
 
 want 'type histogram: feat' "$out" '^ +1 +feat$'
 want 'type histogram: fix' "$out" '^ +1 +fix$'
-want 'type histogram: chore' "$out" '^ +3 +chore$'
+want 'type histogram: docs' "$out" '^ +2 +docs$'
+want 'type histogram: chore' "$out" '^ +4 +chore$'
 want 'type histogram: non-conventional' "$out" '^ +1 +\(non-conventional\)$'
 
 want 'breaking: ! subject' "$out" 'refactor\(api\)!: rename a published field'
 want 'breaking: BREAKING CHANGE body' "$out" 'perf\(proxy\): speed up the tunnel'
 
-want 'closed row names its commit' "$out" '^ +Q1 +fix\(agc\): fix a thing \(Q1\)$'
-want_no 'parked row is not closed' "$out" '^ +Q2 '
-want_no 'row still in the Queue is not closed' "$out" '^ +Q4 '
-want_no 'row re-filed and open at TO is not closed' "$out" '^ +Q5 '
-want 'resurrected row keeps its first removal' "$out" '^ +Q3 +chore: drop Q3$'
-want_no 'resurrected row is not listed twice' "$out" 'chore: drop Q3 again'
-want_no 'Progress-table anchor is not an item' "$out" 'Q999'
+closed_section="$(section_of "$out" 'Queue rows closed')"
+want 'closed row names its commit' "$closed_section" \
+	'^ +Q1 +complete +fix\(agc\): fix a thing \(Q1\)$'
+want_no 'parked row is not a deletion at all' "$closed_section" '^ +Q2 '
+want_no 'row still in the store is not closed' "$closed_section" '^ +Q4 '
+want_no 'row re-filed and present at TO is not closed' "$closed_section" '^ +Q5 '
+want 'resurrected row keeps its first removal' "$closed_section" \
+	'^ +Q3 +prune +chore: drop Q3$'
+want_no 'resurrected row is not listed twice' "$closed_section" 'chore: drop Q3 again'
+# The delivery moment for a flake was the fix PR that parked it, an earlier
+# release. Crediting the retirement here bills this release for that work.
+# Suppressed as a closure, but still a commit in the window: the `docs` count of
+# 2 above is the retiring commit plus the narrating one.
+want_no 'flake retired to the ledger is not closed here' "$closed_section" '^ +Q6 '
+want 'an id named only in a ledger narrative is not retired by it' "$closed_section" \
+	'^ +Q7 +close +'
+want_no 'a non-item path in the store is not a closure' "$closed_section" 'README'
+want_no 'every verb was read, so nothing prints as unknown' "$closed_section" '^ +Q[0-9]+ +- '
 
 api_section="$(section_of "$out" 'API surface')"
 want 'API diffstat lists the API tree' "$api_section" 'cmd/agc/api/v1alpha1/types\.go'
@@ -221,6 +280,38 @@ out="$(cd "$pathless" && "$SCRIPT")"
 want 'no API tree present prints none' "$(section_of "$out" 'API surface')" '^ +\(none\)$'
 want 'no operator docs tree prints none' "$(section_of "$out" 'Operator-facing docs')" '^ +\(none\)$'
 want_no 'absent trees do not widen the diff' "$out" 'README\.md'
+
+# `queue.py metrics --events` replays from HEAD, so a row closed between HEAD
+# and TO has no verb to read. It must print `-` and say so, rather than being
+# dropped or shown as an unclassified removal — the silent zero this report
+# carried for a release cycle is exactly the failure mode being guarded here.
+out="$(cd "$repo" && git -c advice.detachedHead=false checkout -q "$c_fix" &&
+	"$SCRIPT" v1.0.0 main; rc=$?; git -C "$repo" checkout -q main; exit $rc)"
+closed_section="$(section_of "$out" 'Queue rows closed')"
+want 'a closure beyond HEAD still lists its row' "$closed_section" '^ +Q3 +'
+want 'a closure beyond HEAD prints its verb as unknown' "$closed_section" '^ +Q3 +- +chore: drop Q3$'
+want 'unread verbs are counted, not silently dropped' "$closed_section" \
+	'row\(s\) above show - for the verb: closed beyond HEAD'
+want 'a verb readable at HEAD is still read' "$closed_section" \
+	'^ +Q1 +complete +'
+
+# A verb replay that could not run AT ALL must not be reported as "closed beyond
+# HEAD": that is a missing input rendered as a plausible answer, which is the
+# defect class this whole section exists to fix. The report is not a gate, so it
+# still exits 0 and still prints every other section.
+cp "$SCRIPT" "$WORKDIR/orphan-release-delta.sh"
+out="$(cd "$repo" && bash "$WORKDIR/orphan-release-delta.sh" 2>&1)"; rc=$?
+closed_section="$(section_of "$out" 'Queue rows closed')"
+want 'an unrunnable verb replay still reports its rows' "$closed_section" '^ +Q1 +- +'
+want 'an unrunnable verb replay says so, not "beyond HEAD"' "$closed_section" \
+	'every verb above reads -: queue.py metrics could not be run'
+want_no 'an unrunnable replay is not blamed on HEAD' "$closed_section" 'closed beyond HEAD'
+if ((rc == 0)); then
+	printf 'ok   %s\n' 'a missing verb replay does not turn the report into a gate'
+else
+	printf 'FAIL %s: exited %d\n%s\n' 'a missing verb replay does not turn the report into a gate' "$rc" "$out" >&2
+	fails=$((fails + 1))
+fi
 
 if ((fails)); then
 	printf '\n%d assertion(s) failed\n' "$fails" >&2

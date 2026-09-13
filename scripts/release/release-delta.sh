@@ -11,12 +11,14 @@
 # `origin/main`, falling back to HEAD when no such ref exists locally.
 #
 # Everything it prints is derived from disciplines the repo already enforces —
-# Conventional Commit subjects, and a delete-on-done Queue whose every mutation
-# is a commit to docs/STATUS.md — so there is no recording step to keep current:
+# Conventional Commit subjects, and a delete-on-done item store whose every
+# mutation is a commit under docs/queue/ — so there is no recording step to
+# keep current:
 #
 #   - commits by Conventional Commit type, with breaking changes called out;
-#   - Queue rows closed in the window (the delete-on-done Queue erases delivered
-#     work from STATUS.md by design, so this is the only view of it);
+#   - Queue rows closed in the window, read as the deletion of each row's file
+#     (the store erases delivered work by design, so this is the only view of
+#     it), with the verb the deleting commit recorded beside each id;
 #   - the API-surface diffstat, which is the semver signal;
 #   - the operator-visible docs/operations/ pages touched.
 #
@@ -45,7 +47,17 @@ API_PATHS=(
 	"cmd/gmc/config/crd"
 )
 
-STATUS_FILE="docs/STATUS.md"
+# The item store, and the ledger a retiring commit writes beside a deleted
+# flake-watch row. Both are paths in the repo under analysis.
+STORE_DIR="docs/queue"
+FLAKE_LEDGER="docs/development/flake-watch-retired.md"
+
+# The closure verb comes from queue.py, which already classifies it, rather than
+# from a second copy of its verb table here. Resolved from this script's own
+# location and not from the analysed repo's root, which a test suite scopes to a
+# throwaway repo (backlog-metrics.sh resolves its reporter the same way).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+QUEUE_PY="$SCRIPT_DIR/../docs/queue.py"
 
 for arg in "$@"; do
 	case "$arg" in
@@ -131,39 +143,100 @@ breaking="$(
 
 # --- Queue rows closed -------------------------------------------------------
 
-# ids_at REV SECTION — the Q-IDs listed in one `## ` section of STATUS.md at REV.
-# Reading each revision's file beats replaying the diff: a diff line carries no
-# section context, so a row MOVED from Queue to Deferred is indistinguishable
-# from one deleted outright, and only the first of those is delivered work.
-ids_at() {
-	local rev="$1" want="$2"
-	{ git show "$rev:$STATUS_FILE" 2>/dev/null || true; } |
-		awk -v want="$want" '
-			/^## / { sec = substr($0, 4); next }
-			sec == want && /^\| *<a id="Q[0-9]+"><\/a>Q/ {
-				match($0, /id="Q[0-9]+"/)
-				print substr($0, RSTART + 4, RLENGTH - 5)
-			}' | sort -u
-}
+# A delete-on-done store records a delivered row as the deletion of its file, so
+# one --diff-filter=D walk over the store IS the closure list. Two removals are
+# not deliveries and come off:
+#
+#   - a flake-watch retirement. Retiring a soaked row deletes it and writes a
+#     ledger line naming it in the same commit; the delivery was the earlier fix
+#     PR, which only parked the row, and crediting it here would bill this
+#     release for work an earlier one shipped.
+#   - a row resurrected by a bad merge resolution and re-dropped. That is one
+#     delivery and not two, which under the store is just "absent at TO".
+#
+# Parking needs no subtraction of its own, which the STATUS.md table did require:
+# a parked row is a `status:` edit, so its file survives and it never shows up as
+# a deletion at all.
 
-closed=""
-for commit in $(git rev-list --reverse "$range" -- "$STATUS_FILE"); do
-	gone="$(comm -23 <(ids_at "$commit^" Queue) <(ids_at "$commit" Queue))"
-	[[ -n "$gone" ]] || continue
-	# A row parked rather than finished lands in Deferred in the same commit.
-	parked="$(ids_at "$commit" Deferred)"
-	gone="$(comm -23 <(printf '%s\n' "$gone") <(printf '%s\n' "$parked"))"
-	[[ -n "$gone" ]] || continue
-	subject="$(git log -1 --format='%s' "$commit")"
-	closed+="$(awk -v s="$subject" 'NF { print $0 "\t" s }' <<<"$gone")"$'\n'
-done
+# Matched as a ledger table row with the id in its FIRST CELL, because the id
+# extracted is the first one on the line: a row's first cell is what it retires,
+# and anything else naming an id is prose about a row rather than its retirement.
+# Measured over every ledger commit on main, a bare-id line filter yields 52
+# (commit, id) pairs against this anchor's 51. The one extra is 3e1770a327's
+# refuted row, whose first cell is `| none |` and whose narrative reads "Filed
+# as Q809 ... then repurposed in place" -- a bare-id filter retires Q809 off a
+# sentence saying it was never a flake. That commit deletes no rows, so the
+# anchor is insurance rather than a bug fix today; the fixture below pins it,
+# since a line of that shape naming a row the same commit delivers would drop
+# a delivered row silently.
+retired_ids="$(git log --format='' --unified=0 -p "$range" -- "$FLAKE_LEDGER" |
+	awk '/^\+\|[[:space:]]*Q[0-9]+[[:space:]]*\|/ {
+		match($0, /Q[0-9]+/); print substr($0, RSTART, RLENGTH)
+	}' | sort -u | tr '\n' ' ')"
 
-# Drop IDs back in the Queue at TO (a row resurrected by a bad merge resolution
-# and re-dropped appears twice), and keep each ID's earliest removal — the
-# commit that delivered it.
-closed_rows="$(printf '%s' "$closed" | awk -F'\t' -v open_ids="$(ids_at "$to" Queue | tr '\n' ' ')" '
-	BEGIN { n = split(open_ids, a, " "); for (i = 1; i <= n; i++) still[a[i]] = 1 }
-	NF && !($1 in still) && !seen[$1]++ { printf "%-6s %s\n", $1, $2 }')"
+# Oldest first, so the first sighting of an id is its earliest removal — the
+# commit that delivered it — and a later re-drop is discarded by `seen`.
+deletions="$(git log --reverse --no-renames --diff-filter=D --name-only \
+	--format=$'\x01%s' "$range" -- "$STORE_DIR" |
+	awk '
+		# \001 as an octal escape, not \x01: hex escapes in a regex are a GNU
+		# extension and this runs under whatever awk the host ships.
+		substr($0, 1, 1) == "\001" { subject = substr($0, 2); next }
+		{
+			n = split($0, part, "/")
+			id = part[n]
+			sub(/\.md$/, "", id)
+			if (id ~ /^Q[0-9]+$/) print id "\t" subject
+		}')"
+
+# Every id still in the store at TO, whatever its history in the window.
+alive_ids="$(git ls-tree -r --name-only "$to" -- "$STORE_DIR" |
+	awk '{ n = split($0, part, "/"); id = part[n]; sub(/\.md$/, "", id)
+	       if (id ~ /^Q[0-9]+$/) print id }' | sort -u | tr '\n' ' ')"
+
+# `queue.py metrics --events` replays from HEAD rather than from TO, so a row
+# closed between the two has no verb to read. It prints as `-` and is counted,
+# rather than being dropped or silently shown as an unclassified removal.
+# A replay that could not run at all is a different thing from a row closed
+# past HEAD, and reporting the first as the second is the same defect this
+# section exists to fix: a missing input rendered as a plausible answer. The
+# flag keeps them apart. A queue.py that fails degrades the verb column rather
+# than taking the report down, which is not a gate (see the header).
+closure_verbs=""
+verbs_read=0
+if [[ -n "$deletions" && -d "$STORE_DIR" && -f "$QUEUE_PY" ]]; then
+	if closure_verbs="$(python3 "$QUEUE_PY" metrics --events |
+		awk -F'\t' 'NR > 1 && $5 != "open" { print $1 ":" $5 }' | tr '\n' ' ')" &&
+		[[ -n "$closure_verbs" ]]; then
+		verbs_read=1
+	else
+		closure_verbs=""
+	fi
+fi
+
+closed_rows="$(printf '%s\n' "$deletions" | awk -F'\t' \
+	-v alive="$alive_ids" -v retired="$retired_ids" -v verbs="$closure_verbs" \
+	-v verbs_read="$verbs_read" '
+	BEGIN {
+		n = split(alive, a, " "); for (i = 1; i <= n; i++) still[a[i]] = 1
+		n = split(retired, r, " "); for (i = 1; i <= n; i++) parked[r[i]] = 1
+		n = split(verbs, v, " ")
+		for (i = 1; i <= n; i++) { split(v[i], kv, ":"); verb[kv[1]] = kv[2] }
+	}
+	NF && !($1 in still) && !($1 in parked) && !seen[$1]++ {
+		if ($1 in verb) { printf "%-7s %-9s %s\n", $1, verb[$1], $2 }
+		else { printf "%-7s %-9s %s\n", $1, "-", $2; unread++ }
+	}
+	END {
+		if (!unread) { }
+		else if (verbs_read) {
+			printf "\n(%d row(s) above show - for the verb: closed beyond "\
+			       "HEAD, so the verb replay could not reach them.)\n", unread
+		} else {
+			printf "\n(every verb above reads -: queue.py metrics could not "\
+			       "be run, so no verb was read for any row.)\n"
+		}
+	}')"
 
 # --- surface diffstats -------------------------------------------------------
 
