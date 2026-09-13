@@ -40,9 +40,8 @@ spec:
     name: dogfood-e2e
   # templateRef is supplied by the overlay — the isolation-specific worker shape.
   # Authored directly at v2beta1 — the graduated, served+storage front-door shape
-  # (Q273) — unlike scripts/dogfood/setup.sh (main dogfood), whose v2alpha1
-  # heredoc predates the Q74 graduation and so exercises the conversion webhook
-  # incidentally rather than by design (Q1104). v2beta1 is ScaleSet-only
+  # (Q273), the same version scripts/dogfood/setup.sh (main dogfood) now authors
+  # at since Q1104 moved it off v2alpha1. v2beta1 is ScaleSet-only
   # and strips acquisitionProtocol + maxListeners (Q74 graduation / Q264 §5a). One
   # runnerLabel here, deliberately: it is both this tenant's runs-on target and the
   # scale-set name registered at GitHub, and e2e-{start,stop}.sh set GAG_E2E_RUNNER

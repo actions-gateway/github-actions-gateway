@@ -384,12 +384,10 @@ QUOTA
 # install_gag creates the webhook-server-cert Secret — and the GMC must see the
 # v2 CRDs at startup to enable its v2 controllers + conversion webhook (Q228
 # detection), so the CRDs-before-GMC order must NOT be reversed. We therefore
-# patch the caBundle in here, after the GMC is up and before apply_cr, so the
-# first CR already round-trips through a TLS-verified conversion webhook. That
-# round-trip holds only while apply_cr authors at v2alpha1, which it does because
-# the heredoc predates the Q74 graduation, not because the exercise was chosen —
-# Q1104 owns moving this tenant to the recommended version once Q1060 has a
-# deliberate round-trip to replace the incidental one.
+# patch the caBundle in here, after the GMC is up and before apply_cr, so a CR
+# is never applied against a caBundle-less clientConfig. verify_conversion is
+# what proves the wiring took; apply_cr no longer does, because it authors at
+# the storage version and so never reaches the webhook (Q1104).
 #
 # Secure by default: this RESTORES webhook TLS verification. Never fall back to a
 # caBundle-less clientConfig or insecureSkipTLSVerify shortcut.
@@ -551,7 +549,7 @@ apply_athens() {
 # ---------------------------------------------------------------------------
 
 apply_cr() {
-	echo "Applying v2 ActionsGateway + RunnerTemplate + RunnerSet..."
+	echo "Applying v2beta1 ActionsGateway + RunnerTemplate + RunnerSet..."
 	# Resolve the runner container image (Q239/Q295). Precedence:
 	#   1. DOGFOOD_RUNNER_IMAGE set          -> pin it (build-capable image).
 	#   2. env unset + existing runner image -> PRESERVE the cluster's current
@@ -588,7 +586,7 @@ apply_cr() {
 		runner_image_field="          image: ${runner_image}"
 	fi
 	kubectl apply -f - <<EOF
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata:
   name: dogfood
@@ -600,7 +598,7 @@ spec:
       name: github-app-v1
   githubURL: https://github.com/${REPO}
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerTemplate
 metadata:
   name: default
@@ -653,7 +651,7 @@ ${runner_image_field}
             limits:
               memory: "3Gi"
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: ci
@@ -728,6 +726,54 @@ spec:
 EOF
 }
 
+# ---------------------------------------------------------------------------
+# Part B7 — prove the conversion webhook and its caBundle actually work, on the
+# tenant's own objects (Q1104). Until this existed the proof was a side effect:
+# apply_cr authored at v2alpha1, a non-storage served version, so every apply
+# crossed the webhook. That version was residue from before the Q74 graduation
+# rather than a chosen exercise, and Q452 removes it at v2.0.0, so the tenant now
+# authors at v2beta1 (the storage version, which never reaches the webhook) and
+# the check is made explicit here instead.
+#
+# Reading at CONVERSION_PROBE_VERSION forces the apiserver to call the GMC over
+# TLS to convert out of storage, so an empty or wrong caBundle fails here with
+# "x509: certificate signed by unknown authority" rather than at the next apply.
+# The deprecation warning the read draws is expected: naming a deprecated version
+# is the point.
+#
+# Scope, so the next reader does not over-read it: this covers the read
+# direction and the TLS wiring, NOT conversion correctness — no field is
+# compared. Q1060 owns the field-for-field round-trip on pre-graduation objects.
+#
+# v2.0.0 removes v2alpha1 AND v2beta1 (Q1082), leaving v2 as the only served
+# version and storage both, at which point there is no conversion left to probe
+# and this step retires with the variable. 1.9 serves v2 alongside v2beta1
+# storage, so CONVERSION_PROBE_VERSION becomes v2 there.
+# ---------------------------------------------------------------------------
+
+CONVERSION_PROBE_VERSION="${CONVERSION_PROBE_VERSION:-v2alpha1}"
+
+verify_conversion() {
+	echo "Probing the conversion webhook at ${CONVERSION_PROBE_VERSION} (caBundle check)..."
+	local kube_context resource
+	kube_context="gke_${PROJECT}_${ZONE}_${CLUSTER}"
+	for resource in actionsgateway/dogfood runnertemplate/default runnerset/ci; do
+		local kind name versioned
+		kind="${resource%%/*}"
+		name="${resource#*/}"
+		versioned="${kind}s.${CONVERSION_PROBE_VERSION}.actions-gateway.com/${name}"
+		if ! kubectl --context "${kube_context}" get "${versioned}" \
+			--namespace gag-dogfood -o name >/dev/null; then
+			echo "ERROR: reading ${versioned} failed." >&2
+			echo "  The apiserver could not convert out of storage. An empty or stale" >&2
+			echo "  caBundle on the CRD is the usual cause — re-run patch_crd_cabundle," >&2
+			echo "  or check the GMC is serving its conversion webhook." >&2
+			return 1
+		fi
+	done
+	echo "  conversion webhook OK for all three kinds"
+}
+
 # Show the resolved target and require explicit confirmation before any billable
 # create or cluster write (shared helper; ASSUME_YES=1 bypasses it).
 confirm_target() {
@@ -773,6 +819,7 @@ main() {
 	apply_quota
 	apply_athens
 	apply_cr
+	verify_conversion
 
 	echo ""
 	echo "Bootstrap complete. GAG is installed and the gag-dogfood tenant is up."
