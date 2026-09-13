@@ -1,6 +1,6 @@
 # Release 1.8 Milestone Definition
 
-> **Status: scoped 2026-09-07; the gating row is closed, no candidate cut.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
+> **Status: scoped 2026-09-07; the gating row is closed, `v1.8.0-rc.1` cut 2026-09-12 and awaiting dogfood validation.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
 > Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and [Q1085](../queue/Q1085.md)'s release-notes line.
 > The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
 > The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 99 commits and **FLOOR: MINOR** on 2026-09-12, so the tag is `v1.8.0`.
@@ -58,7 +58,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
-| — | RC validated on dogfood | gates | 🔲 no candidate cut |
+| — | RC validated on dogfood | gates | 🔲 `v1.8.0-rc.1` cut 2026-09-12, validation pending |
 
 ## Explicitly out of scope
 
@@ -98,7 +98,7 @@ Re-run any whose window has moved before the stable tag.
 | Check | Measured at | Verdict |
 |---|---|---|
 | Gating rows | `c99137ea6` | **PASS.** No `1.8-gate` row remains in the store; Q1029 took the label with it when it closed. The empty result was trusted only after the same pattern, widened to any `X.Y-gate`, returned six live rows (Q1085 and Q413 on `1.9-gate`; Q1068, Q1086, Q273, Q264 and Q413 on `2.0-gate`), so it can still match a label that exists. |
-| `main` green | `c99137ea6` | **PASS with one path-skipped lane.** Nine of the ten required gates ran and passed on the SHA. `e2e-calico` path-skipped, and `check-artifact-unchanged.sh` against the last commit that ran it in full (`96ca227f1`) exits 1 on `cmd/agc/internal/provisioner/admission.go`. That change is comment-only, and `cmd/agc/**` is not in that lane's path list at all, so the lane could not have covered it either way. Dispatched manually on the target rather than reasoning around the check; verdict [below](#candidate-validation). |
+| `main` green | `c99137ea6` | **PASS with one path-skipped lane.** Nine of the ten required gates ran and passed on the SHA. `e2e-calico` path-skipped, and `check-artifact-unchanged.sh` against the last commit that ran it in full (`96ca227f1`) exits 1 on `cmd/agc/internal/provisioner/admission.go`. That change is comment-only, and `cmd/agc/**` is not in that lane's path list at all, so the lane could not have covered it either way. Dispatched manually on the target rather than reasoning around the check, and [run 34733367705](https://github.com/actions-gateway/github-actions-gateway/actions/runs/34733367705) ran the `e2e-calico / e2e` job in full on `c99137ea6` and passed, so all ten gates are covered on the tag target. |
 | Semver floor | `c99137ea6` | **MINOR**, over 99 commits, set by eight touching the released surface: four `feat`s and four patches. `v1.8.0` is forced by merged work rather than chosen. |
 | API surface | `c99137ea6` | **PASS, ship as-is.** Additive only: no added wire fields, no enum constraint changes, no default changes. Five new condition reasons (`EgressAuditDisabled`, `EgressAuditJoined`, `EgressAuditUnattributed`, `ProxySourceAuditDisabled`, `WorkerAuditDisabled`) and one new metric (`actions_gateway_egress_audit_unattributed`), all Q1062's. No new Event reasons, labels, annotations, CLI flags or chart values. |
 
@@ -113,4 +113,14 @@ Each verdict names the commit it is measured at ([release.md](../operations/rele
 
 ## Candidate validation
 
-No candidate cut.
+### `v1.8.0-rc.1`
+
+Cut 2026-09-12 at `c99137ea6`, the same commit every pre-flight verdict above was measured at.
+The tag was compared against `origin/main` after creation and before the push, per the [rc.2 postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md).
+
+| Step | Verdict |
+|---|---|
+| Tag points at the target | **PASS.** `v1.8.0-rc.1^{commit}` and `origin/main` both `c99137ea62340be4e228b74291c488175faefc7f`. |
+| Publish pipeline | pending |
+| Artifacts and provenance | pending |
+| Dogfood validation | pending |
