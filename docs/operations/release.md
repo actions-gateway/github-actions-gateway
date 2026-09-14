@@ -548,6 +548,8 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    **These are readings, not gates, and a bad one does not stop the ship.** A proxy that never reaches Ready, or a spec that loses a field crossing the webhook, is the negative evidence the soak exists to find: record it against the criteria and let the candidate stand.
    Only a reading that could not be *taken* is worth re-running the window for, and the gate says which happened.
    The `EgressProxy` is manufactured and deleted because dogfood deliberately runs without one; this does not change what the cluster runs.
+   **The readings outlive the run.** The gate appends one record per reading to `tmp/soak-readings.jsonl`, and `scripts/dogfood/soak-readings.sh` renders them as the rows the v2 GA plan's soak table takes, so transcribing them is a paste rather than a re-read of the terminal.
+   Do it before the window's scrollback is gone: the window is billable and cannot be replayed, so a reading nobody can find afterwards cost the same as one never taken.
 7. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
    **Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero**, so the gate can report success with a node still billing for several more minutes.
    Confirm at rest by asking the cluster (`scripts/dogfood/ops.sh at-rest`), never by reading the gate's own teardown line.

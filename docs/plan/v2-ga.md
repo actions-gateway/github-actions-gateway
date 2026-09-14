@@ -47,6 +47,20 @@ These are the evidence bar, and none of them is a calendar check.
 3. **The conversion webhook has round-tripped every served version under real objects**, not only envtest fixtures, including objects created before the `v2beta1` graduation.
 4. **The v2 GA Definition of Done in [v2-api.md](v2-api.md#definition-of-done-v2-ga) audits clean.** That list predates this plan and is authoritative; Phase 0 records the audit below rather than restating the criteria.
 
+### Soak readings
+
+Criteria 2 and 3 are settled by measurement, so this table holds the measurements rather than an opinion about them.
+Q1048's mirror-client census rides along in the same window because it needs the same dogfood kubectl.
+
+The dogfood gate writes one record per reading to `tmp/soak-readings.jsonl` and `scripts/dogfood/soak-readings.sh` renders them as the rows below, so nothing here is transcribed by hand.
+A window is billable and cannot be replayed; a reading that lives only in a terminal is a reading lost.
+
+**A reading that was not taken is not a pass.** 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.
+
+| Reading | Criterion | Verdict | What it found | Window |
+|---|---|---|---|---|
+| _none yet_ | | | | |
+
 ### Definition of Done audit (as of this change)
 
 | DoD item | State |
