@@ -661,21 +661,23 @@ spec:
     name: dogfood
   templateRef:
     name: default
-  # ScaleSet (the Q264 P5 default), set explicitly rather than by omission so the
-  # protocol this tenant runs is readable here. The single runnerLabel is BOTH the
-  # scale set's name at GitHub and the workflows' runs-on target, so it must match
-  # start.sh's GAG_RUNNER exactly.
+  # No acquisitionProtocol here: v2beta1 is ScaleSet-only and has no such field
+  # (api/v2alpha1/conversion.go stashes the v2alpha1 value in a conversion
+  # annotation precisely because the hub cannot hold it). Authoring one makes the
+  # apply fail strict decoding, which is what a v2beta1 tenant gets for carrying a
+  # v2alpha1 knob rather than dropping it.
   #
-  # Migrated off Classic by Q399. Classic acquires a job (AcquireJob flips it to
-  # in_progress at GitHub and stamps the runner name) and only then decides whether
-  # to provision a worker; every job it declines to provision is orphaned at GitHub
-  # with zero steps until the 10-minute lock-lapse / 15-minute unstarted-job timeout
-  # kills it. Measured on this tenant 2026-07-25: 85 jobs acquired, 16 worker pods,
-  # 69 orphaned (81%). ScaleSet's single-acquirer listener cannot produce that shape
-  # (Q264 P4 measured 7/7 vs Classic's 2/7). acquisitionProtocol is IMMUTABLE, so an
-  # existing Classic set must be deleted and recreated; see the migration note
-  # in the GKE dogfood plan, B7.
-  acquisitionProtocol: ScaleSet
+  # This tenant migrated off Classic in Q399 and the protocol is now the API's by
+  # construction. Classic acquired a job (AcquireJob flips it to in_progress at
+  # GitHub and stamps the runner name) and only then decided whether to provision a
+  # worker; every job it declined was orphaned at GitHub with zero steps until the
+  # 10-minute lock-lapse / 15-minute unstarted-job timeout killed it. Measured on
+  # this tenant 2026-07-25: 85 jobs acquired, 16 worker pods, 69 orphaned (81%).
+  # ScaleSet's single-acquirer listener cannot produce that shape (Q264 P4 measured
+  # 7/7 vs Classic's 2/7).
+  #
+  # The single runnerLabel is BOTH the scale set's name at GitHub and the workflows'
+  # runs-on target, so it must match start.sh's GAG_RUNNER exactly.
   runnerLabels: ["gag-ci-scaleset"]
   # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node
   # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. On the ScaleSet

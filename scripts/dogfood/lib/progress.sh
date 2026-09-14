@@ -37,6 +37,35 @@ RELEASE_PROGRESS_FILE="${RELEASE_PROGRESS_FILE-${PROGRESS_REPO_ROOT}/tmp/release
 # disable this file alone; the stream is unaffected.
 RELEASE_STATUS_FILE="${RELEASE_STATUS_FILE-${RELEASE_PROGRESS_FILE:+$(dirname "${RELEASE_PROGRESS_FILE}")/release-validation-status.json}}"
 
+# RELEASE_READINGS_FILE — where a window's soak readings land, one JSON record
+# per reading, appended. Separate from the phase stream on purpose: the stream
+# answers "where is the gate now" and is reset at the start of every run, while
+# a reading is the durable product of a booked window and must outlive both the
+# run and the terminal it scrolled past. Derived beside the stream for the
+# reason RELEASE_STATUS_FILE is, so a suite pointing the stream at its own
+# scratch dir scopes this too. Set empty to disable.
+RELEASE_READINGS_FILE="${RELEASE_READINGS_FILE-${RELEASE_PROGRESS_FILE:+$(dirname "${RELEASE_PROGRESS_FILE}")/soak-readings.jsonl}}"
+
+# progress_reading ID CRITERION VERDICT DETAIL — append one soak reading.
+#
+# The verdict vocabulary is closed and small, because these records are read
+# back by a renderer rather than by eye: `pass` the reading was taken and is
+# positive, `finding` taken and negative (which is evidence, not a failure),
+# `not-taken` the window could not produce it. A reading that was not taken is
+# never a pass; that distinction is the whole reason the census exits 2 rather
+# than 0 on an unresolved address.
+progress_reading() {
+	[[ -n "${RELEASE_READINGS_FILE}" ]] || return 0
+	local id="$1" criterion="$2" verdict="$3" detail="${4:-}"
+	mkdir -p "$(dirname "${RELEASE_READINGS_FILE}")" 2>/dev/null || true
+	jq -cn --arg id "$id" --arg criterion "$criterion" --arg verdict "$verdict" \
+		--arg detail "$detail" --arg rc "${GAG_IMAGE_TAG:-}" \
+		--arg cluster "${CLUSTER:-}" --argjson t "$(date +%s)" \
+		'{kind:"reading", t:$t, id:$id, criterion:$criterion, verdict:$verdict,
+		  detail:$detail, rc:$rc, cluster:$cluster}' \
+		>>"${RELEASE_READINGS_FILE}" 2>/dev/null || true
+}
+
 # Heartbeat text relayed into the status object is capped here. It originates in
 # a GitHub Actions job log, so it is data an agent reads, not a line this repo
 # controls end to end — a cap keeps one pathological line from dominating a
