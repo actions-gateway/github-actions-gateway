@@ -2940,7 +2940,7 @@ A fourth deprecation, <a href="#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200
 </tbody>
 </table>
 <p><strong><code>v2beta1</code>'s removal was decided later than the other three</strong> and is not in the <code>release-1.3.md</code> announcement.
-Decided 2026-09-08 (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/plan/v2beta1-retirement.md">reasoning</a>): <code>v2.0.0</code> is a major release, and dropping a served version is a breaking change a major release may make.
+Decided 2026-09-08 (<a href="../../plan/v2beta1-retirement/">reasoning</a>): <code>v2.0.0</code> is a major release, and dropping a served version is a breaking change a major release may make.
 Beta's contract is a migration path, not permanence, and the path here is the overlap release: the tag before <code>v2.0.0</code> serves <code>v2beta1</code> and <code>v2</code> together, so no object is ever unreachable.</p>
 <h3 id="why-the-removals-are-coupled">Why the removals are coupled<a class="headerlink" href="#why-the-removals-are-coupled" title="Permanent link">&para;</a></h3>
 <p><code>v2beta1</code> is already ScaleSet-only, so classic acquisition exists <em>only</em> to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects.
@@ -2954,7 +2954,7 @@ Splitting the removals across separate releases would buy nothing and would cost
 Nothing about the API contract changed; one premise under that reasoning did.
 The old chain ran: the values are enum members of <code>v2alpha1</code> <em>and</em> <code>v2beta1</code>; an API element is removed by incrementing the version, never by deleting it from a served one; so the values live exactly as long as <code>v2beta1</code> does.
 Every step of that still holds.
-What changed is the last input — <code>v2beta1</code> was expected to outlive <code>v2.0.0</code>, and as of 2026-09-08 it does not (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/plan/v2beta1-retirement.md">why</a>).
+What changed is the last input — <code>v2beta1</code> was expected to outlive <code>v2.0.0</code>, and as of 2026-09-08 it does not (<a href="../../plan/v2beta1-retirement/">why</a>).
 Both versions carrying the aliases are removed at <code>v2.0.0</code>, and the GA <code>v2</code> version does not define them, so <code>v2.0.0</code> is where they go.</p>
 <p><strong>What to do before upgrading to <code>v2.0.0</code>:</strong> if any <code>EgressProxy</code> still names <code>CiliumFQDN</code> or <code>CalicoFQDN</code>, migrate it.
 Set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code> (<code>cilium</code> or <code>calico</code>).
@@ -2962,7 +2962,7 @@ The enforced policy is identical either way — each alias pins its namesake bac
 <p>This is no longer optional, and the reason is mechanical rather than procedural.
 <code>v2</code> cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
 One unmigrated <code>EgressProxy</code> therefore breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the entire cluster, not just for itself.
-A pre-upgrade check that finds them is tracked as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/queue/Q1085.md">Q1085</a>; until it ships, <code>kubectl get egressproxies -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.spec.egressPolicyMode}{"\n"}{end}'</code> lists what to look at.</p>
+A pre-upgrade check that finds them is tracked as <a href="../../queue/Q1085/">Q1085</a>; until it ships, <code>kubectl get egressproxies -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.spec.egressPolicyMode}{"\n"}{end}'</code> lists what to look at.</p>
 <p>The admission webhook warns on every write that still names a deprecated value, and the warning names the removal release.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3012,7 +3012,7 @@ Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
 <p>Neither field is carried into v2.
 <code>v2beta1</code> replaces <code>SecretReference</code> with the name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and <code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>.
 So migrating with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing to carry across.</p>
-<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/development/api-review.md#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
+<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
 The removal is the version's own, at <code>v2.0.0</code>.</p>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>
