@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1059/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1107/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2) - GitHub Actions Gateway</title>
+        <title>Operator docs, migration guide, and the v2.0.0 cut - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#exercise-every-v2beta1-kind-on-the-dogfood-cluster-ga-soak-criterion-2" class="md-skip">
+        <a href="#operator-docs-migration-guide-and-the-v200-cut" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2)
+              Operator docs, migration guide, and the v2.0.0 cut
             
           </span>
         </div>
@@ -2597,21 +2597,18 @@
   
 
 
-<h1 id="exercise-every-v2beta1-kind-on-the-dogfood-cluster-ga-soak-criterion-2">Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2)<a class="headerlink" href="#exercise-every-v2beta1-kind-on-the-dogfood-cluster-ga-soak-criterion-2" title="Permanent link">&para;</a></h1>
-<p><a href="../../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 2 requires all five <code>v2beta1</code> kinds to have carried real traffic on the dogfood cluster, and today four of them have.</p>
-<p><strong>Measured 2026-09-07</strong> over <code>deploy/</code> and <code>scripts/dogfood/</code>, against the five kinds <a href="../../plan/v2-api/">v2-api.md</a> names (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>, <code>EgressProxy</code>): the dogfood overlays apply <code>ActionsGateway</code> and <code>RunnerSet</code> (<code>deploy/dogfood-e2e</code>) plus three <code>ClusterRunnerTemplate</code>s (<code>deploy/templates</code>), and <code>scripts/dogfood/setup.sh</code> applies a namespaced <code>RunnerTemplate</code>.
-That apply was authored at <code>v2alpha1</code> until Q1104, so it also crossed the conversion webhook on the way to storage; it is now at <code>v2beta1</code> and the webhook is probed explicitly by <code>verify_conversion</code> instead.
-The same script says in its own comments that it creates no <code>EgressProxy</code>, so workers egress directly; the only <code>EgressProxy</code> objects the repo exercises are in envtest and in <code>cmd/gmc/test/e2e</code>, whose venue is a kind cluster in CI rather than the GKE dogfood cluster.
-A first reading of this row named <code>PriorityClassAllowlist</code> as the uncovered kind; it is not one of the five, and it ships in the main chart rather than the v2 CRD chart.
-Whether the release candidate's e2e leg counts as dogfood traffic for those kinds is the first thing to settle, because <a href="../../operations/release/#validate-the-release-candidate-on-dogfood">release.md</a>'s validation dispatches that matrix against the candidate's runners rather than applying the kinds to the dogfood cluster itself.</p>
-<p>The deliverable is evidence, not a build: each kind applied and reconciled to a terminal condition on the dogfood cluster during a release-candidate window, recorded against the criterion in the plan's Phase 1 table, plus whichever overlay or window step makes the next candidate repeat it without being asked.</p>
-<p><strong>The window step is wired as of 2026-09-12</strong>, which is the half this row could specify in advance.
-The <code>soak</code> phase of <code>scripts/dogfood/validate-release.sh</code> manufactures a <code>v2beta1</code> <code>EgressProxy</code> in the standing tenant, waits for it to reconcile, checks all five kinds are present at <code>v2beta1</code>, and deletes it again — a reading rather than a change to what dogfood runs, since setup.sh's decision to create no <code>EgressProxy</code> stands.
-A proxy that never reaches Ready is reported with its conditions and does not fail the candidate, because that is criterion 2's negative reading rather than a broken release.
-What remains is a window that runs it and a verdict recorded in the plan's Phase 1 table.
-The <code>v1.8.0-rc.1</code> window predates the step and took no reading.
-Rides in <a href="../../plan/release-1.8/">release-1.8.md</a> rather than gating it, since a soak reading closes when the evidence exists and cannot be scheduled against a tag.
-Sibling: <a href="../Q1060/">Q1060</a> owns criterion 3; <a href="../Q413/">Q413</a> stays parked on both.</p>
+<h1 id="operator-docs-migration-guide-and-the-v200-cut">Operator docs, migration guide, and the <code>v2.0.0</code> cut<a class="headerlink" href="#operator-docs-migration-guide-and-the-v200-cut" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> <a href="../Q1086/">Q1086</a>'s storage migration has completed and the coupled removals have landed, so the surface the docs describe is the one <code>v2.0.0</code> ships.</p>
+<p>Split out of <a href="../Q413/">Q413</a> on 2026-09-14, which held <a href="../../plan/v2-ga/">v2-ga.md</a>'s Phases 2 and 4 in one <code>1.9-gate</code> row.
+Phase 2 ships in 1.9 and Phase 4 in <code>v2.0.0</code>, so a single row could only carry one of the two labels and misreported what blocks 1.9 for whichever release it named.
+Q413 keeps Phase 2; this is the rest.</p>
+<p><a href="../../plan/v2-api/">v2-api.md</a>'s Definition of Done for v2 GA carries "Operator docs updated" as an open item, and it is the last one that is not the graduation itself.</p>
+<p><strong>What this is not.</strong> The <code>v2.0.0</code> release executes four coupled removals and a storage advance, and every one of them is already its own row: <a href="../Q1086/">Q1086</a> rewrites stored objects and prunes <code>storedVersions</code>, <a href="../Q273/">Q273</a> removes <code>v1alpha1</code>, <a href="../Q264/">Q264</a> removes classic acquisition and the transitional <code>acquisitionProtocol</code> / <code>maxListeners</code> fields, and <a href="../Q1068/">Q1068</a> owns the validating-webhook un-match that <code>v2alpha1</code>'s removal causes.
+This row is the documentation and the tag on top of them, which is why it is <code>S</code> where they are <code>L</code>.</p>
+<p><strong>What it covers.</strong> The operator-facing pages under <code>docs/operations/</code> that still describe a world where <code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code> are served, the migration guide for the <code>v1</code>→<code>v2</code> hop now that migrating off the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> aliases stops being optional (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>), and the release itself.</p>
+<p><strong>Why it is deferred rather than ready.</strong> Writing it before the removals land means describing a surface that does not exist yet, and the removals are where the surface is actually decided.
+The sequencing constraint is Phase 3's, not this row's: storage-migrate first, drop served versions second, then strip the dual-read arms.</p>
+<p><strong>Done when</strong> the operator docs and the migration guide describe the <code>v2.0.0</code> surface with no served version that <code>v2.0.0</code> removes, and the tag is cut.</p>
 
 
 

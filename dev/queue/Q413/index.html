@@ -23,7 +23,7 @@
     
     
       
-        <title>v2 GA graduation (v2beta1 → v2) - GitHub Actions Gateway</title>
+        <title>Serve v2 beside v2beta1 (v2 GA graduation, Phase 2) - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v2-ga-graduation-v2beta1--v2" class="md-skip">
+        <a href="#serve-v2-beside-v2beta1-v2-ga-graduation-phase-2" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v2 GA graduation (v2beta1 → v2)
+              Serve v2 beside v2beta1 (v2 GA graduation, Phase 2)
             
           </span>
         </div>
@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-ships-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What ships here
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,12 +2616,31 @@
   
 
 
-<h1 id="v2-ga-graduation-v2beta1--v2">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#v2-ga-graduation-v2beta1--v2" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <a href="../../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes. v1.3.0 shipped 2026-08-03 and two minors followed, so criterion 1 elapsed.
-Outstanding: every kind on real traffic (<a href="../Q1059/">Q1059</a>) and round-trips on real objects (<a href="../Q1060/">Q1060</a>), both taken up as ready rows in <a href="../../plan/release-1.8/">release-1.8.md</a>.</p>
-<p><strong>This spans two releases now, which is why it carries <code>1.9-gate</code> rather than <code>2.0-gate</code>.</strong> Phase 2 — adding <code>v2</code> to the five kinds and serving it beside <code>v2beta1</code> — is 1.9's entire content and blocks that tag.
-The storage marker and Phase 4's cut stay at <code>v2.0.0</code>: Rule #4b will not let storage advance in the same release that introduces <code>v2</code> (<a href="../../plan/release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">why</a>).
-Splitting the row is deliberately deferred until the soak closes and Phase 2 is actually startable, since the split is only useful once someone is picking the work up.</p>
+<h1 id="serve-v2-beside-v2beta1-v2-ga-graduation-phase-2">Serve <code>v2</code> beside <code>v2beta1</code> (v2 GA graduation, Phase 2)<a class="headerlink" href="#serve-v2-beside-v2beta1-v2-ga-graduation-phase-2" title="Permanent link">&para;</a></h1>
+<p>Add the <code>v2</code> version to all five kinds and serve it alongside <code>v2beta1</code>, with the storage version deliberately unmoved.
+This is 1.9's entire content and blocks that tag.</p>
+<p><strong>Scoped down to Phase 2 on 2026-09-14.</strong> This row previously carried Phases 1, 2 and 4 together, which meant one <code>1.9-gate</code> row holding work that ships at <code>v2.0.0</code>, so neither release could read its own blockers off the label.
+Phase 4 is now <a href="../Q1107/">Q1107</a>.
+Phase 1 was the soak, and it has produced its evidence.</p>
+<p><strong>The soak's measurable criteria are met.</strong> Criterion 1 elapsed: <code>v1.3.0</code> shipped 2026-08-03 and two minors followed with no incompatible <code>v2beta1</code> shape change.
+Criteria 2 and 3 were read in the <code>v1.8.0-rc.1</code> dogfood window on 2026-09-14 and both came back positive: all five <code>v2beta1</code> kinds reconciled on the dogfood cluster, and the standing tenant's <code>ActionsGateway</code> round-tripped both served versions with identical specs (<a href="../../plan/v2-ga/#soak-readings">the readings</a>).</p>
+<p><strong>Criterion 4 is why this is <code>ready</code> rather than still deferred, and the reasoning is worth keeping.</strong> It asks for the <a href="../../plan/v2-api/">v2-api.md</a> Definition of Done to audit clean, and two items in it are still ❌: the <code>v2beta1</code> → <code>v2</code> graduation, which is this row, and the operator docs, which are Q1107.
+Both are outputs of the graduation rather than preconditions for it, so waiting on criterion 4 would be waiting on this row to finish before it may start.
+What the soak was actually there to establish -- evidence that <code>v2beta1</code>'s shape is right before GA freezes it -- is established.</p>
+<h2 id="what-ships-here">What ships here<a class="headerlink" href="#what-ships-here" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add <code>v2</code> to each of the five kinds.
+   <strong>Do not carry <code>+kubebuilder:storageversion</code></strong>: that marker belongs to Phase 3 and <code>v2.0.0</code>, and withholding it is this row's job rather than a follow-up.
+   Rule #4b will not let storage advance in the same release that introduces <code>v2</code>, and what the overlap buys is a rollback destination for the largest upgrade this project asks anyone to make (<a href="../../plan/release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">why 1.9 exists</a>).</li>
+<li>Extend the existing <code>Hub</code>/<code>Convertible</code> conversion webhook to round-trip the new served set.
+   The hub moves to <code>v2</code>, which is free to happen here: <code>convertViaHub</code> routes spoke to hub to spoke and nothing ties the hub to the storage version.
+   The GA enum is <code>CIDR;FQDN</code> -- <code>v2</code> never defines <code>CiliumFQDN</code> or <code>CalicoFQDN</code> (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>).</li>
+</ol>
+<p><strong>Two project-specific constraints to read before starting</strong>, both carried over from the <code>v2alpha1</code> → <code>v2beta1</code> hop and named in the plan as the most likely way to break this one: shared version-neutral code lives in <code>api/apiconditions</code> with one-line re-exports per version, and <code>check-v2-api-sync.sh</code> gates every shared v2 file.
+The hop is otherwise mechanically identical to the last one, which is the useful part.</p>
+<p><strong><a href="../Q1085/">Q1085</a> is better landed first.</strong> Its alias reject and pre-upgrade check are what stop a stored <code>EgressProxy</code> naming an alias from reaching a <code>v2</code> conversion, and 1.9 is the first release where such a conversion can be asked for at all.
+Landing them in 1.8 means the population is already clean when <code>v2</code> appears; landing them in 1.9 means the guard and the hazard arrive together, which works and has no margin.</p>
+<p><strong>Done when</strong> <code>v2</code> is served on all five kinds with <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers, and the conversion webhook round-trips the new served set.</p>
 
 
 

@@ -2617,8 +2617,23 @@ The census reads the mirror pods' proxy logs and resolves each address against t
 So the census can only be taken by something already holding the dogfood cluster's credentials, which the e2e job never does.</p>
 <p><strong>Wired 2026-09-12</strong> at the end of <code>validate-release.sh</code>'s e2e leg instead, before the run's exit status is acted on so a red matrix still yields the reading.
 That is the earliest point after the run at which the gate holds both the credentials and any still-live workers: the AGC reaps a worker pod on a TTL after its job, so each later minute turns a resolvable client into an exit 2.</p>
-<p><strong>The <code>v1.8.0-rc.1</code> window predates the step and took no reading</strong>, which is this row's own point restated by events: nothing invoked the script, so the window came and went without it, and teardown scaled the mirror deployments to zero with the access logs it reads.</p>
-<p><strong>Done when</strong> one window has produced a verdict from the script and this row records which one.</p>
+<p><strong>The first <code>v1.8.0-rc.1</code> window predated the step and took no reading</strong>, which was this row's own point restated by events: nothing invoked the script, so the window came and went without it, and teardown scaled the mirror deployments to zero with the access logs it reads.</p>
+<p><strong>The second window ran it on 2026-09-14 and it still did not report.</strong> Two client addresses reached the mirrors.
+One graded: <code>10.36.10.5</code>, a <code>gag-dogfood-e2e</code> runner pod carrying <code>actions-gateway/component=workload</code>, which is the answer the source read predicts.
+The other, <code>169.254.4.6</code>, resolved to no pod and no node, so the script refused the whole census, exit 2.</p>
+<p><strong>The refusal's stated cause does not fit the address, and that is the new finding.</strong> The script offers "most likely a worker that has already been deleted", which is the TTL race this row and Q1038 both warn about.
+But <code>169.254.0.0/16</code> is link-local: pods on this cluster are <code>10.36.x.x</code> and nodes <code>10.142.x.x</code>, so a reaped worker's address would have been unresolvable <em>and</em> in the pod CIDR.
+A link-local source was never a pod at all, so the reaped-worker explanation cannot be the right one here.
+What it actually is has not been measured.
+<code>169.254.169.254</code> is GKE's metadata server and node-local DNS binds <code>169.254.20.10</code>, so a Dataplane V2 host-side address is the obvious family to check first, but <code>.4.6</code> matches neither and nothing here has confirmed a mechanism.</p>
+<p><strong>The class is one this repo already reasons about explicitly, and that is the useful part.</strong> <code>169.254.0.0/16</code> sits in the emitted DNS egress NetworkPolicy as an <code>ipBlock</code> for exactly this reason (Q136): on NodeLocal DNSCache clusters, pods send DNS to a per-node <code>hostNetwork</code> cache at a link-local address <strong>no pod or namespace selector can match</strong> (<a href="../../design/network-architecture/">network-architecture.md</a>, <a href="../../design/05-security/">05-security.md</a>).
+A selector cannot match such an address, and neither can this census, which resolves every client against the pod list and the node list and has nothing else to try.
+So the blind spot is not novel: the policy layer met this class, named it, and handles it with an <code>ipBlock</code> because no selector can.
+The census met the same class and reports it as a timing accident.</p>
+<p>So the work has moved rather than shrunk: the step exists and fires, and what is now missing is a census that can either grade a non-pod client or say why it is out of scope.
+Grading every address as pod-or-node is the assumption that broke, and a refusal is the right default for an address the script cannot explain -- but a refusal that is permanent for a structural reason is not a reading waiting on better timing, it is a census that cannot complete on this cluster.</p>
+<p><strong>Done when</strong> one window has produced a graded verdict from the script, pass or finding, and this row records which one.
+An exit 2 is a reading that was not taken, so it does not close this.</p>
 
 
 

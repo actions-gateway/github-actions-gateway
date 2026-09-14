@@ -2760,7 +2760,8 @@
 <p>This plan starts <strong>after <code>v1.3.0</code> ships</strong>.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.</p>
 <blockquote>
-<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong> Phases 1, 2 and 4 wait on <a href="../../queue/Q413/">Q413</a> (<strong>Event:</strong> the Phase 1 soak closes; <code>v1.3.0</code> shipped 2026-08-03 and criterion 1 has since elapsed); Phase 3's coupled removals wait on <a href="../../queue/Q273/">Q273</a> and <a href="../../queue/Q264/">Q264</a>; the Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
+<p><strong>Status: Phase 1 is done and Phase 2 is startable.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), which makes <a href="../../queue/Q413/">Q413</a> ready: Phase 2 adds <code>v2</code> beside <code>v2beta1</code> and ships in 1.9.
+Phase 3's storage advance and coupled removals wait on <a href="../../queue/Q1086/">Q1086</a>, <a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a> and <a href="../../queue/Q1068/">Q1068</a>; Phase 4's docs and the tag are <a href="../../queue/Q1107/">Q1107</a>; the Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The <code>✅</code> on this plan's <a href="../">index row</a> means <em>no open item remains</em>, not that the graduation has happened — deferred residuals <a href="../../development/maintaining-backlog/#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count">don't count</a>.
 The phase table below is the real state.</p>
 </blockquote>
@@ -2785,13 +2786,13 @@ The phase table below is the real state.</p>
 <td>1</td>
 <td>Beta soak: accumulate the evidence that <code>v2beta1</code>'s shape is right</td>
 <td>M</td>
-<td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
+<td>✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive (<a href="#soak-readings">the readings</a>); criterion 4's two open items are Phases 2 and 4 themselves</td>
 </tr>
 <tr>
 <td>2</td>
 <td>Add <code>v2</code> to each kind and serve it beside <code>v2beta1</code>; extend conversion coverage. <strong>Ships in 1.9, not 2.0</strong></td>
 <td>M</td>
-<td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
+<td>❌ Open, ready (<a href="../../queue/Q413/">Q413</a>)</td>
 </tr>
 <tr>
 <td>3</td>
@@ -2803,7 +2804,7 @@ The phase table below is the real state.</p>
 <td>4</td>
 <td>Operator docs, migration guide, and the <code>v2.0.0</code> cut</td>
 <td>S</td>
-<td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
+<td>❌ Open (<a href="../../queue/Q1107/">Q1107</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -2853,6 +2854,8 @@ Q1048's mirror-client census rides along in the same window because it needs the
 <p>The dogfood gate writes one record per reading to <code>tmp/soak-readings.jsonl</code> and <code>scripts/dogfood/soak-readings.sh</code> renders them as the rows below, so nothing here is transcribed by hand.
 A window is billable and cannot be replayed; a reading that lives only in a terminal is a reading lost.</p>
 <p><strong>A reading that was not taken is not a pass.</strong> 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.</p>
+<p><strong>Nothing in this table gates a release.</strong> These are soak readings for the <code>v2</code> graduation, so a 🔲 is a measurement this project still wants, never a task standing between a candidate and its tag.
+What gates 1.8 is its own <a href="../release-1.8/#definition-of-done">definition of done</a>, and Q1048 does not appear in that release's scope ledger at all.</p>
 <table>
 <thead>
 <tr>
@@ -2865,14 +2868,36 @@ A window is billable and cannot be replayed; a reading that lives only in a term
 </thead>
 <tbody>
 <tr>
-<td><em>none yet</em></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>Q1048</td>
+<td>mirror-client-census</td>
+<td>🔲 Not taken</td>
+<td>the census refused: an address resolved to no pod and no node, or nothing connected</td>
+<td><code>v1.8.0-rc.1</code> on <code>gag-dogfood</code>, 2026-09-14</td>
+</tr>
+<tr>
+<td>Q1059</td>
+<td>criterion-2-every-kind</td>
+<td>✅ Taken, positive</td>
+<td>all five v2beta1 kinds present; EgressProxy reconciled to Ready</td>
+<td><code>v1.8.0-rc.1</code> on <code>gag-dogfood</code>, 2026-09-14</td>
+</tr>
+<tr>
+<td>Q1060</td>
+<td>criterion-3-conversion-round-trip</td>
+<td>✅ Taken, positive</td>
+<td>the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1</td>
+<td><code>v1.8.0-rc.1</code> on <code>gag-dogfood</code>, 2026-09-14</td>
 </tr>
 </tbody>
 </table>
+<p>Those rows are <code>scripts/dogfood/soak-readings.sh</code>'s output pasted unedited, which is the point of it existing.</p>
+<p><strong>What criterion 2's reading covers.</strong> The window manufactured a <code>v2beta1</code> <code>EgressProxy</code> in the standing tenant, which is the one kind <code>setup.sh</code> deliberately never creates, and it reconciled to Ready; the other four were already carrying this cluster's real CI traffic.
+So all five kinds have now reconciled on the dogfood cluster rather than only in envtest.</p>
+<p><strong>What criterion 3's reading covers, and what it does not.</strong> One real object, the standing tenant's <code>ActionsGateway</code>, read back at both served versions of the v2 CRD with identical specs, so the hop is lossless over an object that has lived on this cluster since 2026-07-25.
+It is one kind, not five, and this window did not establish whether that object predates the <code>v2beta1</code> graduation.
+The criterion's own wording asks for every served <em>version</em> rather than every kind, which this meets; whether it should also ask for every kind is a question for whoever closes Phase 1, not something the reading settles.</p>
+<p><strong>Q1048's census is not a criterion, and it did not report.</strong> It rides along because it needs the same dogfood kubectl.
+Its refusal is recorded as taken-nothing rather than as a pass, which is the distinction the whole verdict vocabulary exists for.</p>
 <h3 id="definition-of-done-audit-as-of-this-change">Definition of Done audit (as of this change)<a class="headerlink" href="#definition-of-done-audit-as-of-this-change" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

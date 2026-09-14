@@ -2833,22 +2833,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q1082 decided that <code>v2beta1</code> is not served past <code>v2.0.0</code>, which puts three pieces of work on the critical path that were optional while the …</td>
 </tr>
 <tr>
-<td><a href="Q1059/">Q1059</a></td>
-<td><a href="../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Exercise every v2beta1 kind on the dogfood cluster (GA soak criterion 2)</a></td>
-<td><code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><a href="../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 2 requires all five <code>v2beta1</code> kinds to have carried real traffic on the dogfood cluster, and …</td>
-</tr>
-<tr>
-<td><a href="Q1060/">Q1060</a></td>
-<td><a href="../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Round-trip the conversion webhook on real objects (GA soak criterion 3)</a></td>
-<td><code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><a href="../plan/v2-ga/">v2-ga.md</a> Phase 1 criterion 3 requires the conversion webhook to have round-tripped every served version under real …</td>
-</tr>
-<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
@@ -3378,11 +3362,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q413/">Q413</a></td>
-<td><a href="../plan/v2-ga/">v2 GA graduation (<code>v2beta1</code> → <code>v2</code>)</a></td>
+<td><a href="../plan/v2-ga/#phase-2--the-graduation-hop">Serve <code>v2</code> beside <code>v2beta1</code> (v2 GA graduation, Phase 2)</a></td>
 <td><code>milestone</code> <code>1.9-gate</code></td>
-<td>💤</td>
-<td>L</td>
-<td><strong>Event:</strong> the <a href="../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes.</td>
+<td>🔲</td>
+<td>M</td>
+<td>Add the <code>v2</code> version to all five kinds and serve it alongside <code>v2beta1</code>, with the storage version deliberately unmoved.</td>
 </tr>
 <tr>
 <td><a href="Q273/">Q273</a></td>
@@ -3399,6 +3383,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> <a href="../plan/v2-ga/">v2-ga.md</a> Phase 3 begins.</td>
+</tr>
+<tr>
+<td><a href="Q1107/">Q1107</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
+<td><code>milestone</code> <code>2.0-gate</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> <a href="Q1086/">Q1086</a>'s storage migration has completed and the coupled removals have landed, so the surface the docs describe is …</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>
