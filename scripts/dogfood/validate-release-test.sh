@@ -1193,21 +1193,49 @@ cat >"${SCRIPT_DIR}/e2e-mirror-clients.sh" <<'CENSUS'
 exit "${FAKE_CENSUS_RC:-0}"
 CENSUS
 
+# Every branch below must leave a record behind. The reports these legs print
+# are read once, by whoever is watching the window; the record is what the plan
+# is written from weeks later, so a branch that reports and does not record is a
+# reading lost to scrollback -- the exact failure this wiring exists to close.
+# progress_reading reads the path at call time, so pointing it here is enough.
+RELEASE_READINGS_FILE="${SOAK_TMP}/readings.jsonl"
+reading() { tail -1 "${RELEASE_READINGS_FILE}" | jq -r ".$1"; }
+# soak_leg takes two readings per run, so they are read by id rather than by
+# position: an assertion keyed on "the last line" would silently start grading
+# Q1060 if the Q1059 branch ever stopped recording.
+reading_for() { jq -r --arg id "$1" --arg f "$2" 'select(.id==$id)|.[$f]' "${RELEASE_READINGS_FILE}" | tail -1; }
+
 export FAKE_CENSUS_RC=0
+: >"${RELEASE_READINGS_FILE}"
 out="$(census_mirror_clients 2>&1)"; rc=$?
 check "census: a clean reading returns 0" "0" "${rc}"
 check_contains "census: a clean reading says so" "workload-labelled pod" "${out}"
+check "census: a clean reading is recorded against Q1048" "Q1048" "$(reading id)"
+check "census: a clean reading is recorded as a pass" "pass" "$(reading verdict)"
 
 export FAKE_CENSUS_RC=1
+: >"${RELEASE_READINGS_FILE}"
 out="$(census_mirror_clients 2>&1)"; rc=$?
 check "census: a FINDING does not fail the gate" "0" "${rc}"
+check "census: a finding is recorded as a finding" "finding" "$(reading verdict)"
 check_contains "census: a finding is called a finding" "FINDING" "${out}"
 check_contains "census: a finding says why it is not this cluster's problem" "isolated topology" "${out}"
 
 export FAKE_CENSUS_RC=2
+: >"${RELEASE_READINGS_FILE}"
 out="$(census_mirror_clients 2>&1)"; rc=$?
 check "census: an untaken reading does not fail the gate" "0" "${rc}"
 check_contains "census: an untaken reading is NOT graded as a pass" "NOT TAKEN" "${out}"
+check "census: an untaken reading is recorded as not-taken" "not-taken" "$(reading verdict)"
+
+# An unclassified exit is the one an author forgets. It is still a window that
+# produced no reading, so it must record that rather than recording nothing.
+export FAKE_CENSUS_RC=9
+: >"${RELEASE_READINGS_FILE}"
+out="$(census_mirror_clients 2>&1)"; rc=$?
+check "census: an unclassified exit does not fail the gate" "0" "${rc}"
+check "census: an unclassified exit is recorded as not-taken" "not-taken" "$(reading verdict)"
+check_contains "census: an unclassified exit names the status" "exit 9" "$(reading detail)"
 
 # --- soak_leg --------------------------------------------------------------
 #
@@ -1240,9 +1268,13 @@ kubectl() {
 }
 
 : >"${KLOG}"
+: >"${RELEASE_READINGS_FILE}"
 FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
 out="$(soak_leg 2>&1)"; rc=$?
 check "soak: a clean run returns 0" "0" "${rc}"
+check "soak: a clean run records Q1059 as a pass" "pass" "$(reading_for Q1059 verdict)"
+check "soak: a clean run records Q1060 as a pass" "pass" "$(reading_for Q1060 verdict)"
+check "soak: one run takes both readings and no more" "2" "$(wc -l <"${RELEASE_READINGS_FILE}" | tr -d ' ')"
 check_contains "soak: the manufactured EgressProxy is v2beta1" \
 	"apiVersion: actions-gateway.com/v2beta1" "$(cat "${SOAK_TMP}/soak-applied.yaml")"
 check "soak: it is created in the standing tenant, not the e2e one" "gag-dogfood" \
@@ -1254,29 +1286,51 @@ check_contains "soak: an identical spec is reported lossless" "round-trip lossle
 # A proxy that never reconciles IS criterion 2's negative reading, so it prints
 # the conditions and still returns 0 rather than rejecting the candidate.
 FAKE_WAIT_RC=1
+: >"${RELEASE_READINGS_FILE}"
 out="$(soak_leg 2>&1)"; rc=$?
 check "soak: an unready EgressProxy does not fail the gate" "0" "${rc}"
 check_contains "soak: an unready EgressProxy is recorded as the reading" "did NOT reach Ready" "${out}"
+# The five kinds are all present in this case, so a verdict derived from their
+# count alone would read pass. It must follow the proxy instead.
+check "soak: an unready EgressProxy makes Q1059 a finding, not a pass" "finding" \
+	"$(reading_for Q1059 verdict)"
+check_contains "soak: the Q1059 detail says the proxy is why" "did not reach Ready" \
+	"$(reading_for Q1059 detail)"
 FAKE_WAIT_RC=0
 
 # An empty read is the webhook or the caBundle, never two equal objects: the
 # leg must not let '' == '' read as a lossless round-trip.
 FAKE_BETA_SPEC=''; FAKE_ALPHA_SPEC=''
+: >"${RELEASE_READINGS_FILE}"
 out="$(soak_leg 2>&1)"; rc=$?
 check "soak: an unreadable object does not fail the gate" "0" "${rc}"
 check_contains "soak: an empty read is NOT TAKEN, not lossless" "Q1060: NOT TAKEN" "${out}"
+check "soak: an empty read records Q1060 as not-taken" "not-taken" "$(reading_for Q1060 verdict)"
 
 FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":2}'
+: >"${RELEASE_READINGS_FILE}"
 out="$(soak_leg 2>&1)"; rc=$?
 check "soak: a lossy round-trip does not fail the gate" "0" "${rc}"
 check_contains "soak: a differing spec is reported as the reading" "spec DIFFERS" "${out}"
+check "soak: a lossy round-trip records Q1060 as a finding" "finding" "$(reading_for Q1060 verdict)"
 
 FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
 FAKE_KINDS_PRESENT=0
+: >"${RELEASE_READINGS_FILE}"
 out="$(soak_leg 2>&1)"; rc=$?
 check "soak: a missing kind does not fail the gate" "0" "${rc}"
 check_contains "soak: a missing kind is named as unmet" "criterion 2 is not met" "${out}"
+check "soak: a missing kind records Q1059 as a finding" "finding" "$(reading_for Q1059 verdict)"
 FAKE_KINDS_PRESENT=1
+
+# The apply is the one path that returns early, so it is the one most likely to
+# leave the window silent about criterion 2 entirely.
+: >"${RELEASE_READINGS_FILE}"
+kubectl() { case "$1" in apply) cat >/dev/null; return 1 ;; esac; return 0; }
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a failed apply does not fail the gate" "0" "${rc}"
+check "soak: a failed apply still records Q1059" "Q1059" "$(reading_for Q1059 id)"
+check "soak: a failed apply records Q1059 as not-taken" "not-taken" "$(reading_for Q1059 verdict)"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

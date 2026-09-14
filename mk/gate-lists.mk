@@ -283,6 +283,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  dogfood/e2e-mirror-validate-test \
                  dogfood/delete-test dogfood/e2e-run-watch-test \
                  dogfood/release-status-test dogfood/release-sentinel-test \
+                 dogfood/soak-readings-test \
                  dogfood/lease-test \
                  dogfood/record-validated-candidate-test \
                  e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \

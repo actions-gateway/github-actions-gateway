@@ -569,18 +569,30 @@ census_mirror_clients() {
 	PROJECT="${PROJECT}" CLUSTER="${CLUSTER}" ZONE="${ZONE}" \
 		bash "${SCRIPT_DIR}/e2e-mirror-clients.sh" || rc=$?
 	case "${rc}" in
-	0) echo "  census: every client that connected is a workload-labelled pod (or the kubelet)" ;;
+	0)
+		echo "  census: every client that connected is a workload-labelled pod (or the kubelet)"
+		progress_reading Q1048 "mirror-client-census" pass \
+			"every client that reached a mirror is a workload-labelled pod or the kubelet"
+		;;
 	1)
 		echo "  census: FINDING — at least one client carries no workload label."
 		echo "          The shared topology's narrowing would cut it off. This cluster runs"
 		echo "          the isolated topology and is unaffected, so the gate continues."
+		progress_reading Q1048 "mirror-client-census" finding \
+			"at least one client carries no workload label; the shared topology's narrowing would cut it off"
 		;;
 	2)
 		echo "  census: NOT TAKEN — an address resolves to nothing, or nothing connected."
 		echo "          Workers are reaped on a TTL after their job, so a slow run can lose"
 		echo "          them before this point. Not a pass: the reading simply did not happen."
+		progress_reading Q1048 "mirror-client-census" not-taken \
+			"an address resolved to nothing, or no client connected; workers are reaped on a TTL"
 		;;
-	*) echo "  census: script failed (exit ${rc}) — the reading did not happen" ;;
+	*)
+		echo "  census: script failed (exit ${rc}) — the reading did not happen"
+		progress_reading Q1048 "mirror-client-census" not-taken \
+			"e2e-mirror-clients.sh failed with exit ${rc}"
+		;;
 	esac
 	return 0
 }
@@ -1123,6 +1135,11 @@ soak_leg() {
 	echo "Q1059: exercising every v2beta1 kind on this cluster..."
 	local kinds=(actionsgateways runnersets runnertemplates clusterrunnertemplates egressproxies)
 	local kind missing=0
+	# Carried out of the reconcile branch so the recorded verdict says whether the
+	# proxy actually came up, not merely that five kinds exist. Initialized to
+	# not-taken so a path that skips the wait records the absence of a reading
+	# rather than inheriting a pass nothing measured.
+	local proxy_verdict=not-taken proxy_detail="the Ready wait did not run"
 
 	echo "  applying a v2beta1 EgressProxy (the one kind setup.sh never creates)..."
 	if ! kubectl apply -f - <<EOF
@@ -1137,6 +1154,8 @@ spec:
 EOF
 	then
 		echo "  Q1059: NOT TAKEN — the EgressProxy apply failed; criterion 2 stays unmet" >&2
+		progress_reading Q1059 "criterion-2-every-kind" not-taken \
+			"the v2beta1 EgressProxy apply failed, so the one uncovered kind stayed uncovered"
 		return 0
 	fi
 
@@ -1147,6 +1166,7 @@ EOF
 	if kubectl wait --for=condition=Ready --timeout=180s \
 		-n "${TENANT_NAMESPACE}" egressproxy/soak-reading 2>/dev/null; then
 		echo "  EgressProxy: reconciled to Ready"
+		proxy_verdict=pass proxy_detail="reconciled to Ready"
 	else
 		# Not a failure of the gate. A proxy pool that cannot come up on this
 		# cluster IS the negative reading criterion 2 exists to find, and its
@@ -1154,6 +1174,7 @@ EOF
 		echo "  EgressProxy: did NOT reach Ready inside 180s — this is the reading, record it:"
 		kubectl get egressproxy soak-reading -n "${TENANT_NAMESPACE}" \
 			-o jsonpath='{range .status.conditions[*]}    {.type}={.status} reason={.reason} {.message}{"\n"}{end}' 2>/dev/null || true
+		proxy_verdict=finding proxy_detail="did not reach Ready inside 180s"
 	fi
 
 	for kind in "${kinds[@]}"; do
@@ -1166,7 +1187,14 @@ EOF
 			missing=1
 		fi
 	done
-	((missing == 0)) && echo "  Q1059: all five v2beta1 kinds carried traffic on this cluster"
+	if ((missing == 0)); then
+		echo "  Q1059: all five v2beta1 kinds carried traffic on this cluster"
+		progress_reading Q1059 "criterion-2-every-kind" "${proxy_verdict}" \
+			"all five v2beta1 kinds present; EgressProxy ${proxy_detail}"
+	else
+		progress_reading Q1059 "criterion-2-every-kind" finding \
+			"a v2beta1 kind is absent, so criterion 2 is not met by this window"
+	fi
 
 	echo "  removing the manufactured EgressProxy..."
 	kubectl delete egressproxy soak-reading -n "${TENANT_NAMESPACE}" --ignore-not-found --wait=false || true
@@ -1198,15 +1226,21 @@ EOF
 	if [[ -z "${beta}" || -z "${alpha}" ]]; then
 		echo "  Q1060: NOT TAKEN — could not read the object at both served versions."
 		echo "         An empty read here is the caBundle or the webhook, not an equal object."
+		progress_reading Q1060 "criterion-3-conversion-round-trip" not-taken \
+			"the ActionsGateway could not be read at both served versions; suspect the webhook or its caBundle"
 		return 0
 	fi
 
 	if [[ "${beta}" == "${alpha}" ]]; then
 		echo "  Q1060: spec identical across v2alpha1 and v2beta1 — round-trip lossless"
+		progress_reading Q1060 "criterion-3-conversion-round-trip" pass \
+			"the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1"
 	else
 		# The interesting outcome, and not a gate failure: a field that does not
 		# survive the hop is exactly the shape fix GA is gated on finding.
 		echo "  Q1060: spec DIFFERS across served versions — this is the reading, record it:"
+		progress_reading Q1060 "criterion-3-conversion-round-trip" finding \
+			"the ActionsGateway spec differs across served versions; a field does not survive the hop"
 		diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${alpha}") || true
 	fi
 }
@@ -1531,6 +1565,14 @@ main() {
 	progress_phase soak "Taking the v2 GA soak readings (Q1059, Q1060)"
 	soak_leg
 	progress_event soak "done"
+	# Say where the evidence went while the operator is still here. The window is
+	# billable and cannot be replayed, so a reading nobody can find afterwards
+	# cost the same as one never taken.
+	if [[ -n "${RELEASE_READINGS_FILE}" && -s "${RELEASE_READINGS_FILE}" ]]; then
+		echo "Soak readings recorded to ${RELEASE_READINGS_FILE}."
+		echo "  Render them as plan table rows with:"
+		echo "    ${SCRIPT_DIR}/soak-readings.sh"
+	fi
 
 	# The verdict has to outlive this process. publish.yml refuses a stable tag
 	# whose release line has no recorded validation (Q879), and until this ran the
