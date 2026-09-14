@@ -646,6 +646,21 @@ A session re-reading a merged sibling eleven days later is what recognised one, 
 **Nothing gates this, and the obvious proxy does not transfer.** The linter can see a `(#QN)` link that resolves to no row (rule 5); it cannot see a relationship nobody stated.
 The nearest rule that does exist is [`check-plan-index`](../../scripts/docs/check-plan-index.sh)'s linked-iff-live check on `plan/README.md` Status cells (Q800), and extending it to Queue Notes cells would still miss this omission while breaking rows that are correct: seven of them on 2026-08-12, one more than the same scan returned that morning, all incidental mentions of the "distinct from Q695's alert gap" shape, and each would then spend link characters against the 250-character cap.
 
+### A title naming a mechanism asserts it, and hides the row from the search
+
+A row's title is the one line a groom reads, and it is also what [`find-duplicate-rows.sh`](../../scripts/docs/find-duplicate-rows.sh) scores.
+Titling it for the cause you suspect rather than the behaviour you saw costs both at once: the store gains an unverified claim in its most-read position, and the search that would have found the existing row scores below its floor, because the rows already in the store are titled for symptoms.
+
+**Title the row for what was observed.** The cause goes in the body, with what it rests on.
+
+Measured 2026-09-14.
+Q1110 was filed as *Tag and main pages deploys collide on one pages_build_version*, against Q1041's *A pages deploy can succeed while the site never serves the version*, which had been open for two weeks.
+`make queue-id` ran its search and printed nothing, which means it scored Q1041 below the floor.
+A symptom-phrased title for the same defect, *A tag pages deploy reports success and the site never serves it*, scores 0.62 against Q1041 where the floor is 0.40.
+The mechanism in the filed title was also wrong, and the recovery refuted it within the hour, so the duplicate row and the unverified cause had one source.
+
+See [A field a renderer reads back takes the observation, never the cause](documentation-standards.md#a-field-a-renderer-reads-back-takes-the-observation-never-the-cause) for the general form.
+
 ## Flake fixes go first
 
 When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work.
