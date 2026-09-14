@@ -42,7 +42,7 @@ The fix does not depend on which step inside it was slow.
 | Row | What it delivers | Why it rides rather than gates |
 |---|---|---|
 | [Q1059](../queue/Q1059.md) | Every `v2beta1` kind applied and reconciled on the dogfood cluster, recorded against criterion 2 | A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative |
-| [Q1060](../queue/Q1060.md) | The conversion webhook round-tripped over real objects, including a `v1alpha1` object such as the gateway `deploy/dogfood-migrate` applies, recorded against criterion 3 | Same |
+| [Q1060](../queue/Q1060.md) | The conversion webhook round-tripped over real objects across the v2 CRD's two served versions, recorded against criterion 3 | Same |
 | Q452 | Whether GA `v2` defines `CiliumFQDN`/`CalicoFQDN`, written into [v2-ga.md § Phase 2](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn) | A design decision, not a shipped change; deciding it here lets the hop start without one pending |
 
 A reading that comes back negative is the release working: it names the shape fix `v2beta1` still needs, which resets the soak clock and is exactly what GA is gated on finding first.
