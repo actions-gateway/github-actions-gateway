@@ -60,7 +60,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | Q1060 | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | ✅ closed 2026-09-14, reading positive |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
-| — | RC validated on dogfood | gates | ◐ `v1.8.0-rc.1` validated 2026-09-12 and again 2026-09-14, and Q1108 then moved four provisioner files on the released surface, so it no longer covers `main`: `check-artifact-unchanged.sh v1.8.0-rc.1 origin/main` exits 1 and `publish.yml` would refuse the stable tag. Needs `rc.2` and a fresh validation, which retakes the soak readings as its own phase |
+| — | RC validated on dogfood | gates | ✅ `v1.8.0-rc.2` validated 2026-09-14 at `86fbb6061` and recorded at `refs/validated/v1.8.0-rc.2`. It supersedes `v1.8.0-rc.1`, which Q1108 took off the released surface |
 
 ## Explicitly out of scope
 
@@ -109,6 +109,8 @@ The window is the schedule risk, as it was in 1.7: a reading whose venue is a bo
 
 Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../operations/release.md#1-pre-flight)).
 Re-run any whose window has moved before the stable tag.
+**Every verdict here was re-measured at `86fbb6061`, the `v1.8.0-rc.2` target**, because Q1108 reopened scope after the `c99137ea6` readings.
+The `c99137ea6` column is kept so the two windows can be compared.
 
 | Check | Measured at | Verdict |
 |---|---|---|
@@ -116,6 +118,19 @@ Re-run any whose window has moved before the stable tag.
 | `main` green | `c99137ea6` | **PASS with one path-skipped lane.** Nine of the ten required gates ran and passed on the SHA. `e2e-calico` path-skipped, and `check-artifact-unchanged.sh` against the last commit that ran it in full (`96ca227f1`) exits 1 on `cmd/agc/internal/provisioner/admission.go`. That change is comment-only, and `cmd/agc/**` is not in that lane's path list at all, so the lane could not have covered it either way. Dispatched manually on the target rather than reasoning around the check, and [run 34733367705](https://github.com/actions-gateway/github-actions-gateway/actions/runs/34733367705) ran the `e2e-calico / e2e` job in full on `c99137ea6` and passed, so all ten gates are covered on the tag target. |
 | Semver floor | `c99137ea6` | **MINOR**, over 99 commits, set by eight touching the released surface: four `feat`s and four patches. `v1.8.0` is forced by merged work rather than chosen. |
 | API surface | `c99137ea6` | **PASS, ship as-is.** Additive only: no added wire fields, no enum constraint changes, no default changes. Five new condition reasons (`EgressAuditDisabled`, `EgressAuditJoined`, `EgressAuditUnattributed`, `ProxySourceAuditDisabled`, `WorkerAuditDisabled`) and one new metric (`actions_gateway_egress_audit_unattributed`), all Q1062's. No new Event reasons, labels, annotations, CLI flags or chart values. |
+
+### Re-measured at `86fbb6061` for `v1.8.0-rc.2`
+
+| Check | Verdict |
+|---|---|
+| Gating rows | **PASS.** No `1.8-gate` row in the store. The empty result was trusted only after the same pattern found `1.9-gate` on Q1085 and Q413, so it can still match a label that exists. |
+| `main` green | **PASS.** Ten required gates, none not-green, nine path-skipped as `merge_group`. That is the ordinary shape of docs commits stacked on a code one: `0afdad119` ran all ten in full, and `check-artifact-unchanged.sh 0afdad119 origin/main` exits 0 over two files, so that run still covers the target. |
+| Semver floor | **MINOR**, over 114 commits, set by nine touching the released surface: four `feat`s and five patches. Q1108 is one of the five. |
+| API surface | **PASS, ship as-is.** Identical to the `c99137ea6` reading: additive only, five new condition reasons and one new metric, all Q1062's, and no added wire fields, enum constraints or defaults. Q1108 publishes no new Event reason, annotation, label or metric; it reuses `EvictionRecoveryEvidenceLost` and `AnnotationEvictionHandledAt`. |
+| `make check` | **PASS**, exit 0, on a branch cut at the target. It noted `./cmd/probe` at 81.6% against an 81.8% floor, passing on tolerance and wanting `make cover-update`. |
+
+**Reviewed by hand, because the checker has no category for it:** Q1108 publishes a second per-`RunnerSet` ConfigMap, `scaleset-recovery-claims-<set>`.
+It is a cluster object an operator will see rather than an API surface change, it is owner-ref'd to the set and reaped with it, and it is carried in [upgrade.md](../operations/upgrade.md) and the release notes.
 
 **The `egressPolicyMode` enum members are unchanged**, which is the claim [Definition of done #5](#definition-of-done) rests on: `CiliumFQDN` and `CalicoFQDN` are still defined in both `v2alpha1` and `v2beta1`, and what moved is their godoc, from *removable no earlier than v3.0.0* to *removed at v2.0.0*, the correction Q452's decision forced.
 That is a published-documentation change to a served API, not a surface change.
@@ -164,3 +179,23 @@ The readings are in [v2-ga.md](v2-ga.md#soak-readings); criterion 2 and criterio
 Three assertions covered that manifest and all three passed throughout, because none of them read the schema.
 Fixed in [#1926](https://github.com/actions-gateway/github-actions-gateway/pull/1926) along with a reconciliation that checks every authored spec field against the matching `v2beta1` Go type, which catches the class rather than the instance.
 The candidate itself was never in question: the failure was in the tooling that deploys it.
+
+### `v1.8.0-rc.2`
+
+Cut 2026-09-14 at `86fbb6061`, which is where every verdict above was re-measured.
+The tag was compared against `origin/main` after creation and before the push, per the [rc.2 postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md).
+It exists because Q1108 moved four provisioner files on the released surface, so `v1.8.0-rc.1` stopped covering `main` and `publish.yml` would have refused the stable tag.
+
+| Step | Verdict |
+|---|---|
+| Tag points at the target | **PASS.** `v1.8.0-rc.2^{commit}` and `origin/main` both `86fbb6061adea20b889bf3ea10a05d7e8a4e5e9a`. |
+| Publish pipeline | **PASS.** Run 34826145005, all six images, the chart and the CRD chart published. |
+| Artifacts and provenance | **PASS.** 9/9 assets, `draft: false`, `immutable: true`, `prerelease: true`; all eight cosign signatures verified. Provenance `buildSignerURI` ends `publish.yml@refs/tags/v1.8.0-rc.2` and `sourceRepositoryDigest` equals `86fbb6061`. The digest check was confirmed able to fail by re-running it against `unit-test.yml` as the signer, which exits 1. |
+| Dogfood validation | **PASS**, 2026-09-14. e2e matrix 3/3; both sizing profiles actuating, `Throughput` on 297 real samples and `NodeShare` deriving 1500m where the templates ask 2 and 3; the quota rung bound at zero headroom (`withheldCapacity[quota]=2`, `advertisedCapacity=0`) and released on restore; the signed CRD manifest verified, applied and all five CRDs registered. Recorded at `refs/validated/v1.8.0-rc.2`. |
+| Soak readings | **BOTH POSITIVE.** Q1059: all five `v2beta1` kinds carried traffic on this cluster. Q1060: spec identical across `v2alpha1` and `v2beta1`, so the round trip is lossless. Taken by the `soak` phase inside the gate, so this candidate needed no second window. |
+
+**Q1048's mirror client census did not report, for the second window running.** One client graded `OK`; the other, `169.254.4.6`, resolved to no pod and no node, which is a worker already reaped on its TTL.
+The gate records that as *not taken* rather than as a pass, which is the behaviour [#1926](https://github.com/actions-gateway/github-actions-gateway/pull/1926) gave it.
+A second attempt reproducing the same failure makes the TTL race the likely cause rather than a slow run, which is a finding about the census rather than about this candidate.
+
+**What this run does not cover**, both stated by the gate rather than inferred: the placeability rung's negative verdict stays undriven, because it needs a pod this autoscaling pool cannot place ([Q1025](../queue/Q1025.md)), and the gate runs against github.com, so it says nothing about GitHub Enterprise Server.
