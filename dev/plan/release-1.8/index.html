@@ -2839,7 +2839,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td>✅ <code>v1.8.0-rc.1</code> validated 2026-09-12 and again 2026-09-14; still covers <code>main</code></td>
+<td>◐ <code>v1.8.0-rc.1</code> validated 2026-09-12 and again 2026-09-14, and Q1108 then moved four provisioner files on the released surface, so it no longer covers <code>main</code>: <code>check-artifact-unchanged.sh v1.8.0-rc.1 origin/main</code> exits 1 and <code>publish.yml</code> would refuse the stable tag. Needs <code>rc.2</code> and a fresh validation, which retakes the soak readings as its own phase</td>
 </tr>
 </tbody>
 </table>
