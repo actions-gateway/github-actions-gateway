@@ -18,8 +18,9 @@ Every open item, in priority order, is in the [working backlog](https://actions-
 
 ## In progress / near-term
 
-- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q1059,Q1060 --> The `v2` graduation is gated on a soak, and two of its three criteria have never been measured.
-  The next release candidate's dogfood window takes both readings: every kind under real traffic, and the conversion webhook over real objects.
+
+- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q413 --> The soak closed on 2026-09-14: every kind reconciled under real traffic, and the conversion webhook was lossless over a real object at both served versions.
+  Next is serving `v2` beside `v2beta1` with the storage version unmoved, which is 1.9's whole content.
 
 What lands here is scoped work, none of it waiting on an outside signal.
 Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the event that revives it.

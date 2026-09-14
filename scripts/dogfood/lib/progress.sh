@@ -48,6 +48,14 @@ RELEASE_READINGS_FILE="${RELEASE_READINGS_FILE-${RELEASE_PROGRESS_FILE:+$(dirnam
 
 # progress_reading ID CRITERION VERDICT DETAIL — append one soak reading.
 #
+# DETAIL RECORDS WHAT WAS OBSERVED, NEVER WHY. These strings are pasted into
+# the v2 GA plan by soak-readings.sh, so a guess baked in here becomes a claim
+# in a plan document that nobody re-examines -- the reading looks like evidence
+# because it came out of a gate. Measured 2026-09-14: this arm's detail read
+# "workers are reaped on a TTL", the window's unresolved address was link-local
+# and so had never been a pod, and the wrong cause reached the plan table
+# unchallenged. Put the hypothesis in the echo a human reads during the run.
+#
 # The verdict vocabulary is closed and small, because these records are read
 # back by a renderer rather than by eye: `pass` the reading was taken and is
 # positive, `finding` taken and negative (which is evidence, not a failure),
