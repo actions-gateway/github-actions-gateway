@@ -90,11 +90,13 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
    That was written before Q1062 and Q1011 landed, and no longer describes the window.
    What binds is the narrower claim underneath it: the enum members are unchanged, so a reported member add or removal is a finding.
    Q1062's five condition reasons and its one metric are additive publications expected here; Q1011's new `api/apinames` package is exported Go surface the checker has no category for, so it is reviewed by hand.
-6. ❌ **[Q1108](../queue/Q1108.md) closed**: a drained scale-set worker whose pod is gone before the recovery claim lands is recovered rather than reported.
-   Added as a gating row on 2026-09-13, after the release notes' drain highlight was found to read as though drains are recovered now.
-   They are not: the class that reports `EvictionRecoveryEvidenceLost` and needs a manual re-run survives this release.
-   It is not a 1.8 regression -- it has shipped reported since `v1.5.0` (#1441), and item 1's Q1029 closes its invisible sibling -- so this gates by decision rather than by defect, to make the release's claim the strong one.
-   The row carries an open design question (the guard ConfigMap's single-writer invariant) that is settled before the fix is written.
+6. ✅ **Q1108 closed**, 2026-09-13: a drained scale-set worker whose pod is gone before the recovery claim lands is recovered rather than reported.
+   Added as a gating row that day, after the release notes' drain highlight was found to read as though drains are recovered now.
+   It is not a 1.8 regression -- it had shipped reported since `v1.5.0` (#1441), and item 1's Q1029 closed its invisible sibling -- so it gated by decision rather than by defect, to make the release's claim the strong one.
+   The open design question was the guard ConfigMap's single-writer invariant.
+   It is answered by leaving that invariant alone: the at-most-once claim moved to a second, reconciler-owned `scaleset-recovery-claims-<set>` ConfigMap rather than into `guards.json`, whose `Save` re-serialises the whole document from the listener's memory and would overwrite anything written inside it.
+   Reasoning in [04-operational-flows.md](../design/04-operational-flows.md#detecting-a-disruption-is-not-the-same-as-claiming-it).
+   **This lands on the released surface after `v1.8.0-rc.1`**, so item 7 needs a fresh candidate, and the release notes' Validation section and its `Everything since v1.7.0` counts are re-derived at that cut.
 7. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
 
 ## Critical path
