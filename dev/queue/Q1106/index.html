@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.8/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1106/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Release 1.8 Milestone Definition - GitHub Actions Gateway</title>
+        <title>A test probe lands in the live workflows dir and races concurrent gates - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-18-milestone-definition" class="md-skip">
+        <a href="#a-test-probe-lands-in-the-live-workflows-dir-and-races-concurrent-gates" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release 1.8 Milestone Definition
+              A test probe lands in the live workflows dir and races concurrent gates
             
           </span>
         </div>
@@ -2579,130 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this is a release rather than a row that lands whenever
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-gating-row-q1029" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The gating row: Q1029
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-rides-the-soak-readings-and-the-alias-decision" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What rides: the soak readings and the alias decision
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#scope-ledger" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scope ledger
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explicitly out of scope
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Definition of done
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#critical-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Critical path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-flight-verdicts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-flight verdicts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#candidate-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Candidate validation
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Candidate validation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#v180-rc1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v1.8.0-rc.1
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2721,230 +2597,34 @@
   
 
 
-<h1 id="release-18-milestone-definition">Release 1.8 Milestone Definition<a class="headerlink" href="#release-18-milestone-definition" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status: scoped 2026-09-07; every gating item is met.
-<code>v1.8.0-rc.1</code> was cut and validated on dogfood 2026-09-12 and still covers <code>main</code>, so the tag is a decision rather than a blocked one.</strong> What remains is the riding evidence: criteria 2 and 3 have no reading, and taking them needs another window against this same candidate, not a new one.
-The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event (<a href="#the-gating-row-q1029">below</a>).
-Three rows ride without gating: the two v2 GA soak readings, <a href="../../queue/Q1059/">Q1059</a> and <a href="../../queue/Q1060/">Q1060</a>, and <a href="../../queue/Q1085/">Q1085</a>'s release-notes line.
-The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger (<a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">the decision</a>).
-The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 99 commits and <strong>FLOOR: MINOR</strong> on 2026-09-12, so the tag is <code>v1.8.0</code>.
-Four <code>feat</code>s on the released surface set it: Q1062, Q1011, Q988 and Q994, the last of which landed after this was scoped and rides unlabelled.
-Four patches sit beside them: Q1064's and Q1029's fixes, the gRPC bump for CVE-2026-84445, and a provisioner test.
-Fifteen <code>feat</code>/<code>fix</code> subjects are withheld because they ship in no image and no chart, which is the gap between counting subjects and reading what a release contains.</p>
-</blockquote>
-<h2 id="why-this-is-a-release-rather-than-a-row-that-lands-whenever">Why this is a release rather than a row that lands whenever<a class="headerlink" href="#why-this-is-a-release-rather-than-a-row-that-lands-whenever" title="Permanent link">&para;</a></h2>
-<p>The <a href="../release-ladder/">release ladder</a> reads 1.7 → 2.0, and 2.0 is <a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">parked on a soak</a> whose evidence nobody has gathered.
-Read on 2026-09-07: criterion 1 has elapsed on the record rather than by re-derivation here, since <code>v1.4.0</code> through <code>v1.7.0</code> all shipped on <code>v2beta1</code> and each release's pre-flight API review returned <em>ship as-is</em> over additive surface (<a href="../archive/release-1.4/#pre-flight-the-api-surface-this-tag-publishes">1.4</a>, <a href="../archive/release-1.5/#pre-flight-the-api-surface-this-tag-publishes">1.5</a>, <a href="../archive/release-1.6/">1.6</a>, <a href="../release-1.7/#pre-flight-verdicts">1.7</a>); criterion 2 is unmet on one kind, since the dogfood overlays and <code>scripts/dogfood/setup.sh</code> between them apply <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>ClusterRunnerTemplate</code> and <code>RunnerTemplate</code> while <code>setup.sh</code> deliberately creates no <code>EgressProxy</code> on that cluster, and the e2e lane that does exercise one runs on a kind cluster; criterion 3 has no recorded round-trip across the served versions, the nearest reading being <a href="../archive/q415-migrate-dogfood-validation/">Q415</a>'s live migration, which drove the webhook on one kind in one direction.
-So the GA rung cannot be labelled without publishing a commitment on unmeasured criteria, and the roadmap's near-term section has been empty since 2026-08-29.</p>
-<p>1.8 is the release that gathers the evidence, on the venue that produces it: a release candidate books the dogfood window criterion 2 needs, criterion 3 can be read on the same cluster at any time, and the same window is the one two rows have waited for since 1.7 (Q1038, whose row is closed, and <a href="../../queue/Q1048/">Q1048</a>).
-The theme is v2 GA readiness; what makes it a release an operator upgrades for is the gating row.</p>
-<h2 id="the-gating-row-q1029">The gating row: Q1029<a class="headerlink" href="#the-gating-row-q1029" title="Permanent link">&para;</a></h2>
-<p>Q1029 was a measured product defect on the scale-set tier.
-<code>RecoverEvictedScaleSetWorkers</code> lists from the informer cache at the top of a <code>RunnerSet</code> reconcile, so a gracefully deleted worker was judged only if a reconcile began in the seconds between the kubelet publishing the terminal phase and removing the object.
-When none did, the job was silently never re-run.
-The row carried three CI sightings with the AGC log each captured, one of them the control that recovered because its reconcile loop happened to turn over inside the window.</p>
-<p><strong>Closed 2026-09-07.</strong> The reconciler's worker-pod watch now hands each phase-changing or newly preempted scale-set worker straight to the same judge and the same optimistic-lock claim the scan uses, so the claim no longer waits on the reconcile queue; the scan stays for what no event reaches (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>).
-The deletion-proof is at the envtest tier: <code>TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld</code> parks the controller's only reconcile worker in a second set's listener bootstrap for the whole drain and asserts the claim lands while the reconcile count does not move, and it went red on a build where the watch path was inert.
-The e2e drain spec is unchanged: it already re-stages rather than fails on a missed window (<a href="../q549-scaleset-rerun-flake/#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch">q549-scaleset-rerun-flake.md</a>), so a stricter e2e assertion is a call this plan still owes an answer on.</p>
-<p>It gates because the exposure is an operator's, not the e2e venue's: a node drain terminates many workers at once, so one missed window there is many lost jobs.
-The design already records that this arm cannot be made restart-safe (<a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md</a>), and the row argues that Q844's orphan recovery does not cover a worker the scan simply missed.</p>
-<p><strong>Why the gap opened was unverified</strong>, and the row said so: the reconciler runs at <code>MaxConcurrentReconciles: 1</code> and the listener bootstrap does DNS and an HTTP POST inside <code>Reconcile</code>, which was a hypothesis read off timestamps.
-What the fix established is narrower than a duration: on the vendored controller-runtime the pod's own phase-change event moves a waiting key to ready at once, so the 8-second gap held a reconcile in flight rather than a backoff, and its duration is still not measured directly (<a href="../q549-scaleset-rerun-flake/#mode-c-closed-2026-09-07-recovery-runs-off-the-worker-pod-watch">the reading</a>).
-The fix does not depend on which step inside it was slow.</p>
-<h2 id="what-rides-the-soak-readings-and-the-alias-decision">What rides: the soak readings and the alias decision<a class="headerlink" href="#what-rides-the-soak-readings-and-the-alias-decision" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Row</th>
-<th>What it delivers</th>
-<th>Why it rides rather than gates</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="../../queue/Q1059/">Q1059</a></td>
-<td>Every <code>v2beta1</code> kind applied and reconciled on the dogfood cluster, recorded against criterion 2</td>
-<td>A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1060/">Q1060</a></td>
-<td>The conversion webhook round-tripped over real objects across the v2 CRD's two served versions, recorded against criterion 3</td>
-<td>Same</td>
-</tr>
-<tr>
-<td>Q452</td>
-<td>Whether GA <code>v2</code> defines <code>CiliumFQDN</code>/<code>CalicoFQDN</code>, written into <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md § Phase 2</a></td>
-<td>A design decision, not a shipped change; deciding it here lets the hop start without one pending</td>
-</tr>
-</tbody>
-</table>
-<p>A reading that comes back negative is the release working: it names the shape fix <code>v2beta1</code> still needs, which resets the soak clock and is exactly what GA is gated on finding first.</p>
-<p><strong><a href="../../queue/Q1085/">Q1085</a>'s notice rides here too, and only part of it is done.</strong> Deciding Q452 shipped the notice's docs half — the operator pages, both enum godocs and the admission warning now name <code>v2.0.0</code> as the removal release — which is what makes this tag the one-release-ahead announcement for <code>v2beta1</code> and the aliases.
-What 1.8 still owes is the release-notes line naming that removal, since a notice nobody reads in the release body is a notice by technicality.
-Q1085's other two halves, the admission reject and the pre-upgrade alias check, are deadlined at 1.9 and land here if there is room (<a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">why the deadline is 1.9</a>).</p>
-<h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Q-ID</th>
-<th>Item</th>
-<th>Gates?</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Q1029</td>
-<td>Drain recovery lost when no reconcile starts inside the window</td>
-<td><code>1.8-gate</code></td>
-<td>✅ closed 2026-09-07</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1059/">Q1059</a></td>
-<td>Every <code>v2beta1</code> kind on the dogfood cluster (soak criterion 2)</td>
-<td>rides</td>
-<td>🔲 open</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1060/">Q1060</a></td>
-<td>Conversion round-trips on real dogfood objects (soak criterion 3)</td>
-<td>rides</td>
-<td>🔲 open</td>
-</tr>
-<tr>
-<td>Q452</td>
-<td>GA <code>v2</code> and the deprecated FQDN aliases</td>
-<td>rides</td>
-<td>✅ closed 2026-09-08</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1085/">Q1085</a></td>
-<td>The <code>v2beta1</code> removal notice: operator docs, enum godoc and admission warning name <code>v2.0.0</code></td>
-<td>rides</td>
-<td>✅ docs half shipped with Q452; release-notes line open</td>
-</tr>
-<tr>
-<td>—</td>
-<td>RC validated on dogfood</td>
-<td>gates</td>
-<td>✅ <code>v1.8.0-rc.1</code> cut and validated 2026-09-12; still covers <code>main</code></td>
-</tr>
-</tbody>
-</table>
-<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong><a href="../../queue/Q413/">Q413</a> itself, and 2.0's coupled removals</strong> (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>).
-  Q413 stays parked until both soak readings exist and read clean; this release supplies the readings and does not pre-empt the verdict.</li>
-<li><strong>The <code>feature</code> rows in the ready queue.</strong> Q988 (the registry read behind <code>RunnerVersionTooOld</code>; its row is closed, so it is no longer linked) landed after this was scoped and rides, and Q725 and Q1011 are unrelated to the theme (both rows are closed, so neither is linked).
-  Any of them landing before the tag rides in the floor's reading of the window, with no label.</li>
-<li><strong>The proxy-hardening cluster</strong> and everything else the ladder punts past 2.0, unchanged.</li>
-</ul>
-<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<ol>
-<li>✅ <strong>Q1029 closed</strong> (2026-09-07), with the queue mechanism established before the fix, the reconcile's duration left unmeasured and said so, and an envtest assertion that fails when the watch-path recovery is inert; the e2e assertion the criterion asked for is still open, per <a href="#the-gating-row-q1029">the gating row</a>.</li>
-<li><strong>Criterion 2 and criterion 3 have a recorded reading</strong> in <a href="../v2-ga/">v2-ga.md</a>'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.</li>
-<li>✅ <strong>Q452 decided</strong> (2026-09-08): <code>v2</code> omits both aliases, because the premise the question rested on was itself revisited and <code>v2beta1</code> is no longer served past <code>v2.0.0</code>.
-   The losing option's cost is recorded beside it in <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md</a>, and the work the answer puts on the critical path is <a href="../../queue/Q1085/">Q1085</a>.
-   The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.</li>
-<li>◐ <strong>The two dogfood-window rows</strong> got their window from the <code>v1.8.0-rc.1</code> candidate, and it produced one of the two readings.
-   Q1038's <code>mirror-timing</code> probe took its first live run against a real mirror in the candidate's Kata e2e leg and returned <code>SEPARATED</code> (hits ≤46ms, misses ≥147ms, 4 references, one cold and one warm fetch each) without failing the job, which closes it and settles the placement question as <code>e2e-reusable.yml</code>.
-   <a href="../../queue/Q1048/">Q1048</a>'s mirror client census was <strong>not</strong> taken: nothing invokes <code>scripts/dogfood/e2e-mirror-clients.sh</code>, so the window passed it by, and teardown scaled the mirror deployments to zero with the access logs it reads.
-   That is the row's own thesis confirmed by events rather than a new problem, and it needs another window.
-   Q1039's shared-tenants topology was the third until its 2026-09-03 scoping found a dogfood leg to be the worse venue rather than the dearer one, since that cluster has one tenant and so cannot produce either negative; it shipped on the Calico kind lane instead and needs no window.</li>
-<li>✅ <strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.7.0..&lt;rc commit&gt;</code>, run 2026-09-12 and recorded <a href="#pre-flight-verdicts">below</a>.
-   When the release was scoped, this item expected <em>exactly</em> the <code>egressPolicyMode</code> description change item 3 names.
-   That was written before Q1062 and Q1011 landed, and no longer describes the window.
-   What binds is the narrower claim underneath it: the enum members are unchanged, so a reported member add or removal is a finding.
-   Q1062's five condition reasons and its one metric are additive publications expected here; Q1011's new <code>api/apinames</code> package is exported Go surface the checker has no category for, so it is reviewed by hand.</li>
-<li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
-</ol>
-<h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
-<p>Q1029's measurement → its fix (done) → a candidate.
-The soak readings and the alias decision run beside it and need the candidate's window, not each other.
-The window is the schedule risk, as it was in 1.7: a reading whose venue is a booked cluster run cannot be compressed the way a code change can.</p>
-<h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>
-<p>Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later (<a href="../../operations/release/#1-pre-flight">release.md</a>).
-Re-run any whose window has moved before the stable tag.</p>
-<table>
-<thead>
-<tr>
-<th>Check</th>
-<th>Measured at</th>
-<th>Verdict</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Gating rows</td>
-<td><code>c99137ea6</code></td>
-<td><strong>PASS.</strong> No <code>1.8-gate</code> row remains in the store; Q1029 took the label with it when it closed. The empty result was trusted only after the same pattern, widened to any <code>X.Y-gate</code>, returned six live rows (Q1085 and Q413 on <code>1.9-gate</code>; Q1068, Q1086, Q273, Q264 and Q413 on <code>2.0-gate</code>), so it can still match a label that exists.</td>
-</tr>
-<tr>
-<td><code>main</code> green</td>
-<td><code>c99137ea6</code></td>
-<td><strong>PASS with one path-skipped lane.</strong> Nine of the ten required gates ran and passed on the SHA. <code>e2e-calico</code> path-skipped, and <code>check-artifact-unchanged.sh</code> against the last commit that ran it in full (<code>96ca227f1</code>) exits 1 on <code>cmd/agc/internal/provisioner/admission.go</code>. That change is comment-only, and <code>cmd/agc/**</code> is not in that lane's path list at all, so the lane could not have covered it either way. Dispatched manually on the target rather than reasoning around the check, and <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34733367705">run 34733367705</a> ran the <code>e2e-calico / e2e</code> job in full on <code>c99137ea6</code> and passed, so all ten gates are covered on the tag target.</td>
-</tr>
-<tr>
-<td>Semver floor</td>
-<td><code>c99137ea6</code></td>
-<td><strong>MINOR</strong>, over 99 commits, set by eight touching the released surface: four <code>feat</code>s and four patches. <code>v1.8.0</code> is forced by merged work rather than chosen.</td>
-</tr>
-<tr>
-<td>API surface</td>
-<td><code>c99137ea6</code></td>
-<td><strong>PASS, ship as-is.</strong> Additive only: no added wire fields, no enum constraint changes, no default changes. Five new condition reasons (<code>EgressAuditDisabled</code>, <code>EgressAuditJoined</code>, <code>EgressAuditUnattributed</code>, <code>ProxySourceAuditDisabled</code>, <code>WorkerAuditDisabled</code>) and one new metric (<code>actions_gateway_egress_audit_unattributed</code>), all Q1062's. No new Event reasons, labels, annotations, CLI flags or chart values.</td>
-</tr>
-</tbody>
-</table>
-<p><strong>The <code>egressPolicyMode</code> enum members are unchanged</strong>, which is the claim <a href="#definition-of-done">Definition of done #5</a> rests on: <code>CiliumFQDN</code> and <code>CalicoFQDN</code> are still defined in both <code>v2alpha1</code> and <code>v2beta1</code>, and what moved is their godoc, from <em>removable no earlier than v3.0.0</em> to <em>removed at v2.0.0</em>, the correction Q452's decision forced.
-That is a published-documentation change to a served API, not a surface change.</p>
-<p><strong>Reviewed by hand, because the checker has no category for it:</strong> Q1011 adds <code>api/apinames</code>, a new exported package in the <code>api</code> module (<code>agentidentity.go</code>, 69 lines).
-It publishes helper functions rather than API types, so it widens the module's Go surface without touching the CRD surface the checker reads.</p>
-<p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the operator-caveat pass, the roadmap and <code>features.md</code> reconciliation, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
-Each verdict names the commit it is measured at (<a href="../../operations/release/#1-pre-flight">release.md</a>).</p>
-<h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
-<h3 id="v180-rc1"><code>v1.8.0-rc.1</code><a class="headerlink" href="#v180-rc1" title="Permanent link">&para;</a></h3>
-<p>Cut 2026-09-12 at <code>c99137ea6</code>, the same commit every pre-flight verdict above was measured at.
-The tag was compared against <code>origin/main</code> after creation and before the push, per the <a href="../../postmortems/2026-08-15-rc2-tagged-a-stale-commit/">rc.2 postmortem</a>.</p>
-<table>
-<thead>
-<tr>
-<th>Step</th>
-<th>Verdict</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Tag points at the target</td>
-<td><strong>PASS.</strong> <code>v1.8.0-rc.1^{commit}</code> and <code>origin/main</code> both <code>c99137ea62340be4e228b74291c488175faefc7f</code>.</td>
-</tr>
-<tr>
-<td>Publish pipeline</td>
-<td><strong>PASS.</strong> All six images, the chart and the CRD chart published.</td>
-</tr>
-<tr>
-<td>Artifacts and provenance</td>
-<td><strong>PASS.</strong> 9/9 assets, <code>draft: false</code>, <code>immutable: true</code>; all eight cosign signatures verified. Provenance <code>buildSignerURI</code> ends <code>publish.yml@refs/tags/v1.8.0-rc.1</code> and <code>sourceRepositoryDigest</code> equals the tag target. The digest check was confirmed able to fail by re-running it against <code>unit-test.yml</code> as the signer identity, which exits 1.</td>
-</tr>
-<tr>
-<td>Dogfood validation</td>
-<td><strong>PASS</strong>, 2026-09-12. e2e matrix GREEN; both sizing profiles actuating (Throughput on 270 real samples); the quota rung bound at zero headroom (<code>withheldCapacity[quota]=2</code>) and released on restore; the signed CRD manifest verified, applied and all five CRDs registered. Recorded at <code>refs/validated/v1.8.0-rc.1</code>.</td>
-</tr>
-</tbody>
-</table>
-<p><strong>The candidate still covers <code>main</code>.</strong> <code>check-artifact-unchanged.sh c99137ea6 origin/main</code> exits 0 at <code>f771594d1</code>: 20 files changed since the tag, none on the released surface.
-So the eight commits that merged after the candidate — the Q1058, Q1104, Q1105 and soak-wiring work — do not require a new one.</p>
-<p><strong>What that validation did <em>not</em> produce is the soak readings</strong>, and the reason is structural rather than an oversight in the run: nothing invoked them.
-The gate validates the candidate and had no step that takes a reading, <code>release.md</code> asked for none, and nothing outside their own rows referenced Q1059 or Q1060 at all.
-Q1038's reading was taken in the same window only because <code>mirror-timing.sh</code> already had a step in <code>e2e-reusable.yml</code>.
-<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1922">#1922</a> wired the other three; no window has run that wiring, so taking them means re-running the window against this same candidate rather than cutting a new one.</p>
+<h1 id="a-test-probe-lands-in-the-live-workflows-dir-and-races-concurrent-gates">A test probe lands in the live workflows dir and races concurrent gates<a class="headerlink" href="#a-test-probe-lands-in-the-live-workflows-dir-and-races-concurrent-gates" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> any gate that enumerates <code>.github/workflows/</code> fails on a file it cannot open, naming <code>zz-uses-pinned-test-probe.yml</code> or any other <code>zz-*</code> probe.</p>
+<p><code>make check</code> failed on <code>gate-needs-check</code> with no code change, and passed on a re-run of the same tree:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pathfilters: open .github/workflows/zz-uses-pinned-test-probe.yml: no such file or directory
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>check-gate-needs: could not read the jobs of zz-uses-pinned-test-probe.yml
+</code></pre></div>
+<p><strong>The mechanism, measured 2026-09-13.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned-test.sh">check-uses-pinned-test.sh</a> line 43 points <code>PROBE</code> at <code>$REPO_ROOT/.github/workflows/zz-uses-pinned-test-probe.yml</code>, inside the real workflow tree rather than a scratch dir, and creates and removes it during the run.
+<code>check</code> fans its gates out through <code>run-parallel.sh</code>, so <code>scripts-test</code> (which runs that suite) and <code>gate-needs-check</code> execute at the same time against the same directory.
+<code>check-gate-needs.sh</code> lists the directory, then opens each file it found; the probe can be deleted in the gap, and the open fails on a path the listing had just returned.</p>
+<p>The suite needs the probe there on purpose: it asserts the file is what <code>path-filters</code> selects, which is a claim about the real workflow tree.
+So the fix is not simply to move it.
+Either the probe's window has to be invisible to a concurrent reader, or a reader has to tolerate a workflow disappearing between the listing and the open, which is a property <code>check-gate-needs.sh</code> wants anyway: the directory is not locked and any gate reading it races every other writer.</p>
+<p><strong>Why it is worth fixing rather than re-running.</strong> It reddens a branch for a reason that has nothing to do with the branch, which is the failure mode that costs the most: the first read is "what did I break", and the answer is nothing.
+It is not local to one workstation either, since CI runs the same fan-out.</p>
+<p><strong>What has not been established.</strong> How often it fires.
+It was seen once, in one run, and the timing depends on how the two gates interleave.
+It has also not been reproduced deliberately; the mechanism is read off the two scripts and the failure text, and a reproduction would pin the window's width.</p>
+<p>Note the failure names <code>pathfilters</code>, not the probe's author, so the gate that reports it is not the gate that wrote the file.
+Anything else enumerating that directory concurrently can fail the same way.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 

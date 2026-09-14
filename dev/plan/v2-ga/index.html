@@ -2620,6 +2620,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#soak-readings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Soak readings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#definition-of-done-audit-as-of-this-change" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2836,6 +2847,32 @@ These are the evidence bar, and none of them is a calendar check.</p>
 <li><strong>The conversion webhook has round-tripped every served version under real objects</strong>, not only envtest fixtures, including objects created before the <code>v2beta1</code> graduation.</li>
 <li><strong>The v2 GA Definition of Done in <a href="../v2-api/#definition-of-done-v2-ga">v2-api.md</a> audits clean.</strong> That list predates this plan and is authoritative; Phase 0 records the audit below rather than restating the criteria.</li>
 </ol>
+<h3 id="soak-readings">Soak readings<a class="headerlink" href="#soak-readings" title="Permanent link">&para;</a></h3>
+<p>Criteria 2 and 3 are settled by measurement, so this table holds the measurements rather than an opinion about them.
+Q1048's mirror-client census rides along in the same window because it needs the same dogfood kubectl.</p>
+<p>The dogfood gate writes one record per reading to <code>tmp/soak-readings.jsonl</code> and <code>scripts/dogfood/soak-readings.sh</code> renders them as the rows below, so nothing here is transcribed by hand.
+A window is billable and cannot be replayed; a reading that lives only in a terminal is a reading lost.</p>
+<p><strong>A reading that was not taken is not a pass.</strong> 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.</p>
+<table>
+<thead>
+<tr>
+<th>Reading</th>
+<th>Criterion</th>
+<th>Verdict</th>
+<th>What it found</th>
+<th>Window</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>none yet</em></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <h3 id="definition-of-done-audit-as-of-this-change">Definition of Done audit (as of this change)<a class="headerlink" href="#definition-of-done-audit-as-of-this-change" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
