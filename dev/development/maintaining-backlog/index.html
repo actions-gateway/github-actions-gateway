@@ -3297,6 +3297,16 @@ Q549 was filed 2026-07-31 carrying an undiagnosed second failure mode, Q809 on 2
 A session re-reading a merged sibling eleven days later is what recognised one, which is both the moment the cross-link is owed and the moment nothing prompts for it.</p>
 <p><strong>Nothing gates this, and the obvious proxy does not transfer.</strong> The linter can see a <code>(#QN)</code> link that resolves to no row (rule 5); it cannot see a relationship nobody stated.
 The nearest rule that does exist is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh"><code>check-plan-index</code></a>'s linked-iff-live check on <code>plan/README.md</code> Status cells (Q800), and extending it to Queue Notes cells would still miss this omission while breaking rows that are correct: seven of them on 2026-08-12, one more than the same scan returned that morning, all incidental mentions of the "distinct from Q695's alert gap" shape, and each would then spend link characters against the 250-character cap.</p>
+<h3 id="a-title-naming-a-mechanism-asserts-it-and-hides-the-row-from-the-search">A title naming a mechanism asserts it, and hides the row from the search<a class="headerlink" href="#a-title-naming-a-mechanism-asserts-it-and-hides-the-row-from-the-search" title="Permanent link">&para;</a></h3>
+<p>A row's title is the one line a groom reads, and it is also what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/find-duplicate-rows.sh"><code>find-duplicate-rows.sh</code></a> scores.
+Titling it for the cause you suspect rather than the behaviour you saw costs both at once: the store gains an unverified claim in its most-read position, and the search that would have found the existing row scores below its floor, because the rows already in the store are titled for symptoms.</p>
+<p><strong>Title the row for what was observed.</strong> The cause goes in the body, with what it rests on.</p>
+<p>Measured 2026-09-14.
+Q1110 was filed as <em>Tag and main pages deploys collide on one pages_build_version</em>, against Q1041's <em>A pages deploy can succeed while the site never serves the version</em>, which had been open for two weeks.
+<code>make queue-id</code> ran its search and printed nothing, which means it scored Q1041 below the floor.
+A symptom-phrased title for the same defect, <em>A tag pages deploy reports success and the site never serves it</em>, scores 0.62 against Q1041 where the floor is 0.40.
+The mechanism in the filed title was also wrong, and the recovery refuted it within the hour, so the duplicate row and the unverified cause had one source.</p>
+<p>See <a href="../documentation-standards/#a-field-a-renderer-reads-back-takes-the-observation-never-the-cause">A field a renderer reads back takes the observation, never the cause</a> for the general form.</p>
 <h2 id="flake-fixes-go-first">Flake fixes go first<a class="headerlink" href="#flake-fixes-go-first" title="Permanent link">&para;</a></h2>
 <p>When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item <strong>and move it to the top of the Queue</strong> before continuing other work.
 Then pick it up next.

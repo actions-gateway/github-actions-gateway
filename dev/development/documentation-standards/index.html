@@ -2818,6 +2818,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-field-a-renderer-reads-back-takes-the-observation-never-the-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A field a renderer reads back takes the observation, never the cause
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prose-that-counts-a-set-goes-stale-on-an-insertion-nothing-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3293,6 +3304,19 @@ They then read a filename off that same advisory and reported it as a measured c
 The dispatcher wrote that trap into the playbook on the worker's evidence, then read a <code>MERGED</code> field as merged-to-<code>main</code> without checking <code>baseRefName</code> on the object it had already fetched, and reported a contradiction on <code>main</code> that did not exist.</p>
 <p>Neither was carelessness, which is the point: both had the mechanism in working memory, and that is what made the next check feel redundant.
 If the check does not fire on real cases, demote this to an observation rather than leaving it stated as a rule.</p>
+<h2 id="a-field-a-renderer-reads-back-takes-the-observation-never-the-cause">A field a renderer reads back takes the observation, never the cause<a class="headerlink" href="#a-field-a-renderer-reads-back-takes-the-observation-never-the-cause" title="Permanent link">&para;</a></h2>
+<p>A record written by a gate, a script, or a session gets read later by something that cannot tell a measurement from a guess.
+So a cause written into one arrives at its reader with the authority of the instrument that emitted it, and the reader is usually a document nobody re-examines.
+The hypothesis is worth having; it belongs in the line a human reads while the work is live, not in the record.</p>
+<p><strong>Write what was observed into the field, and put why you think it happened in the prose beside it.</strong> The test is whether the value would still be true if your explanation is wrong.
+<code>169.254.4.6 did not resolve</code> survives that; <code>the worker was reaped on its TTL</code> does not, and the address is link-local, so it had never been a pod.</p>
+<p>Three instances on 2026-09-14, in three different venues, all in one release cycle.
+A soak reading's <code>detail</code> field carried that TTL guess into the v2 GA plan table, where it was published twice before anyone checked the address.
+A backlog row was titled for a mechanism that the recovery later refuted, which also dropped it below <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/find-duplicate-rows.sh"><code>find-duplicate-rows.sh</code></a>'s floor against the row it duplicated, since that search is calibrated on symptoms.
+A release note's validation section named a cause for a census that failed, and the cause came from a gate's own echo.</p>
+<p>The rule already exists at one declaration, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>progress.sh</code></a>'s <code>progress_reading</code>, written up from the near-miss in the window before.
+It is stated here because the venue was the accident and the field is the rule: a row title, a plan cell, a status line and a reading's <code>detail</code> all fail the same way.
+Related but distinct from <a href="#naming-a-trap-and-applying-it-are-different-acts">Naming a trap and applying it are different acts</a>, which is about when to re-derive a claim rather than where to put one.</p>
 <h2 id="prose-that-counts-a-set-goes-stale-on-an-insertion-nothing-checks">Prose that counts a set goes stale on an insertion nothing checks<a class="headerlink" href="#prose-that-counts-a-set-goes-stale-on-an-insertion-nothing-checks" title="Permanent link">&para;</a></h2>
 <p>A sentence asserting a property of a set is falsified by an insertion that never touches that sentence.
 Nothing here reads prose adjacency: <code>metric-tiers</code> reads the ledger, <code>promql-check</code> reads expressions, <code>queue-gates</code> reads the store, and <code>observability-dashboards.md</code> is read by no semantic gate at all.</p>
