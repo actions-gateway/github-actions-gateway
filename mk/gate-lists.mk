@@ -264,6 +264,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-agc-names-test docs/check-tier-claims-test docs/check-design-scope-test \
                  docs/check-row-commits-test \
                  docs/check-release-links-test \
+                 docs/check-render-overflow-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
                  docs/check-plan-index-test docs/check-script-docs-test \

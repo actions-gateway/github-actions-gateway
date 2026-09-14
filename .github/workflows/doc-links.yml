@@ -36,7 +36,12 @@ on:
       - 'scripts/**'
       - 'devtools/docs/**'
       - 'mkdocs.yml'
+      - 'overrides/**'
+      - 'hooks/**'
+      - 'docs/stylesheets/**'
+      - 'docs/javascripts/**'
       - 'requirements-docs.txt'
+      - 'requirements-docs-check.txt'
       - '.mdreflow.yaml'
       - 'tools/go.mod'
       - 'cmd/gmc/internal/controller/actionsgateway_v2_builder.go'
@@ -90,7 +95,12 @@ jobs:
               - 'scripts/**'
               - 'devtools/docs/**'
               - 'mkdocs.yml'
+              - 'overrides/**'
+              - 'hooks/**'
+              - 'docs/stylesheets/**'
+              - 'docs/javascripts/**'
               - 'requirements-docs.txt'
+              - 'requirements-docs-check.txt'
               - '.mdreflow.yaml'
               - 'tools/go.mod'
               - 'cmd/gmc/internal/controller/actionsgateway_v2_builder.go'
@@ -464,6 +474,47 @@ jobs:
       - name: release-note site links resolve (make release-links-check)
         run: make release-links-check
 
+  # Hold every published page to the viewport it is read in: `scrollWidth >
+  # clientWidth` at 320px and 1440px, across both publication scopes. It belongs
+  # beside release-links for that gate's reason — it provisions a pinned venv,
+  # which the fast local gate has no business doing — and it is the first gate
+  # here that measures the RENDER instead of approximating it from the Markdown.
+  #
+  # A real browser is the only instrument that reaches the class. The persona
+  # pills that motivated the gate are built by docs/javascripts/extra.js at page
+  # load, so they are in no built HTML file and no Markdown-AST gate can see
+  # them: two published pages were over at 320px when this was written,
+  # operations/migration-from-arc.md by 324px.
+  #
+  # That is also why 'docs/stylesheets/**' and 'docs/javascripts/**' joined the
+  # filter above. They were in neither path list, so a CSS or JS change — the
+  # exact change that can only break a render — reached no gate in this workflow
+  # at all.
+  #
+  # fetch-depth: 0 for the reason release-links takes it: the announce bar's
+  # version comes from the tag list at build time, and it renders on every page
+  # this gate measures.
+  #
+  # No separate suite step. The gate runs its own render assertions against
+  # planted fixtures after provisioning and before it measures the site, so a
+  # browser that cannot see a deliberately over-wide element fails here rather
+  # than reporting a clean sweep. The browser-free half of that suite runs under
+  # `make scripts-test` like every other one.
+  render-overflow:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      - name: pages fit their viewport (make render-overflow-check)
+        run: make render-overflow-check
+
   # Aggregate gate. Mark THIS job's check context (`doc-links-gate`) required in
   # the branch ruleset — never the path-gated jobs above, because a path-skip
   # leaves them Pending and blocks the merge forever. Passes only when every
@@ -493,6 +544,7 @@ jobs:
       - release-pins
       - release-notes
       - release-links
+      - render-overflow
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

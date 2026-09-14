@@ -51,6 +51,8 @@ __pycache__/
 # MkDocs local preview: the isolated venv `make docs-serve` provisions from
 # requirements-docs.txt, and the static build output `make docs-build` writes.
 /.venv-docs/
+# The render gate's venv, which also holds its pinned browser (~350MB).
+/.venv-render/
 /site/
 # Go coverage profiles from a manual `go test -coverprofile`. scripts/go/coverage.sh
 # writes its profiles to TMPDIR, never in-tree; this only catches stray manual
