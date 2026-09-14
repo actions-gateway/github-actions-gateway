@@ -51,6 +51,13 @@ import (
 //     first non-empty reading dated the verdict to whenever the listener first wrote
 //     something, which is after this process started and so adjudicated its own entries.
 //
+// That last bound is about entries THIS process made. An entry a PREVIOUS process made
+// can also have been recovered already, because a disruption it claimed is re-run
+// immediately while the job's conclusion — the only thing that retires the entry —
+// arrives from GitHub seconds later and can miss the process entirely. So the scan also
+// consults the recovery-claim ledger, which is the record that survives both the pod
+// and the process (Q1108).
+//
 // # What it deliberately does not do
 //
 // It does not name the cause. Which of preemption, drain, node loss, or a hand-run
@@ -143,10 +150,26 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 		return closedChan(), fmt.Errorf("provisioner: resolve provisioning spec for orphaned-worker recovery: %w", err)
 	}
 
+	// One read for the whole set, rather than a claim lookup per entry. An unreadable
+	// ledger answers "unclaimed": leaving a lost worker un-re-run is the worse of the
+	// two failures here.
+	candidates := make(map[string]bool, len(inFlight))
+	for _, w := range inFlight {
+		if podName := scaleSetPodName(key.Name, w.JobID); !live[podName] {
+			candidates[podName] = true
+		}
+	}
+	claimed := p.recoveryAlreadyClaimed(ctx, target, candidates)
+
 	var recoveries []<-chan struct{}
 	for _, w := range inFlight {
 		podName := scaleSetPodName(key.Name, w.JobID)
 		if live[podName] {
+			continue
+		}
+		if claimed[podName] {
+			log.Debug("an unconcluded job's worker is gone but its disruption was already recovered; not re-running",
+				"podName", podName, "jobID", w.JobID, "runID", w.RunID)
 			continue
 		}
 		podLog := log.With("podName", podName, "jobID", w.JobID)

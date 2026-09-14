@@ -93,10 +93,12 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		probePodBase = "ssrec-drain-probe"
 
 		// An attempt that never exercised the chart role is re-staged rather than
-		// asserted on: the AGC was replaced inside the claim window, the pod was gone
-		// before the claim could land (Q809), or the recovery scan never saw the
-		// disruption at all (Q549). Bounded — the same miss in every one of three
-		// consecutive windows is not churn, it is a defect worth failing on.
+		// asserted on: the AGC was replaced inside the claim window, or the recovery
+		// scan never saw the disruption at all (Q549). Bounded — the same miss in every
+		// one of three consecutive windows is not churn, it is a defect worth failing
+		// on. A pod gone before the claim landed used to be a third of these and is
+		// not any more: since Q1108 the claim outlives the pod, so that attempt is one
+		// the AGC must recover from.
 		maxAttempts = 3
 
 		// The recovery-relevant shape ProvisionScaleSetWorker stamps, restated as
@@ -283,23 +285,10 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 			// No re-run. Whether that is the defect this spec exists to catch depends
 			// entirely on whether the attempt got a window in which the recovery could
 			// have run at all. Two ways it does not, both re-staged rather than failed.
-
-			// The kubelet removed the pod between the AGC's cached List and its claim
-			// patch, so the disruption's only record was gone before anything could be
-			// claimed (Q809). No AGC can recover that, under any role — the attempt says
-			// nothing about the RBAC question, exactly like a replaced control plane
-			// below. Read from the AGC rather than inferred: an unclaimed pod looks
-			// identical whether the claim was refused with a Forbidden (the defect) or
-			// lost to the deletion (not the defect), and only the AGC knows which.
-			if evictionRecoveryEvidenceLost(tenantNS, agcDeploy, probePod) {
-				AddReportEntry("Q809 re-staging", fmt.Sprintf(
-					"attempt %d: the worker pod was deleted before the AGC could claim its recovery, so no "+
-						"re-run was possible and the chart role was never exercised", attempt))
-				Expect(attempt).To(BeNumerically("<", maxAttempts),
-					"the disrupted pod was deleted before the claim could land on every one of %d attempts; "+
-						"the drain-recovery window is not reachable on this cluster at all", maxAttempts)
-				continue
-			}
+			//
+			// A third used to sit here and is gone with Q1108: the pod being deleted
+			// before the claim landed. The claim no longer lives on the pod, so that is
+			// now a case the AGC must recover from rather than one the spec excuses.
 
 			if nowAGC := agcPodIdentity(tenantNS, agcDeploy); nowAGC != pinnedAGC {
 				AddReportEntry("Q549 re-staging", fmt.Sprintf(
@@ -328,14 +317,17 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 
 			Fail("a deleted scale-set worker's run was never re-run under the chart role: the AGC that " +
 				"observed the disruption is still running AND reached a verdict on the pod, so either the " +
-				"role lost a verb the recovery path needs (the AGC log carries 'could not claim scale-set " +
-				"worker disruption') or the deletion-mark discriminator regressed (it carries 'did not " +
-				"qualify as a recoverable disruption')")
+				"role lost a verb the recovery path needs (the AGC log carries 'could not be claimed " +
+				"durably', which since Q1108 means the configmaps grant rather than the pods one), or the " +
+				"deletion-mark discriminator regressed (it carries 'did not qualify as a recoverable " +
+				"disruption')")
 		}
 
 		By("asserting the run was re-run exactly once")
-		// The claim annotation is what makes recovery at-most-once per disrupted pod,
-		// across however many reconciles observe the terminating pod.
+		// The recovery-claim ledger is what makes recovery at-most-once per disrupted
+		// pod, across however many reconciles observe the terminating pod — and, since
+		// Q1108, across the pod's own removal, which is what took the claim with it
+		// when the claim was an annotation on the pod.
 		Consistently(func(g Gomega) {
 			g.Expect(rerunCountForRun(runID)).To(Equal(1),
 				"one deletion produced more than one rerun; the at-most-once claim on the "+
@@ -344,40 +336,13 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 	})
 })
 
-// evictionRecoveryEvidenceLost reports whether the AGC found probePod's disruption and
-// then lost it because the pod was deleted before the claim patch could land — the Q809
-// race, measured on three e2e-calico runs on 2026-08-12. The kubelet removes a drained
-// worker's object seconds after its container exits, and the recovery scan lists from
-// the informer cache and patches through the live client, so the window is real and
-// narrow.
-//
-// The AGC is the only witness. The pod is gone either way, and an unclaimed pod looks
-// the same whether the claim was refused (the RBAC defect this spec exists to catch) or
-// never got to be made. The AGC logs the second case at Warn with the pod's name, which
-// is what makes the two separable at all.
-func evictionRecoveryEvidenceLost(ns, deploy, probePod string) bool {
-	GinkgoHelper()
-	out, err := utils.Run(exec.Command("kubectl", "logs",
-		"-n", ns, "-l", "app="+deploy, "--tail=-1", "--prefix"))
-	if err != nil {
-		return false // no logs to read is not evidence of a lost claim
-	}
-	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, "disruption was lost before it could be claimed") &&
-			strings.Contains(line, probePod) {
-			return true
-		}
-	}
-	return false
-}
-
 // agcReachedNoDisruptionVerdict reports whether the AGC never adjudicated probePod's
 // disruption at all — it neither claimed it, nor declined it, nor failed to claim it.
 // Every verdict the recovery scan emits names the pod and carries "disrupt"; nothing
 // else the AGC logs about a worker pod does.
 //
-// It is the third "this attempt proves nothing" discriminator, beside a replaced control
-// plane and a claim lost to the deletion (Q549). The scan lists from the informer cache
+// It is the second "this attempt proves nothing" discriminator, beside a replaced
+// control plane (Q549). The scan lists from the informer cache
 // at the top of a reconcile, so a drained worker is judged only if a reconcile begins
 // inside the seconds between the kubelet publishing the terminal phase and the kubelet
 // removing the object. Measured on the two sightings that reached Fail: runs

@@ -13,6 +13,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap](#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap)
   - [Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job](#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job)
   - [Non-breaking: `spec.scaleUp` now withholds intake instead of delaying jobs it has already claimed](#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed)
   - [Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)](#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)
@@ -94,6 +95,29 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap
+
+**Who is affected:** every `ScaleSet`-protocol `RunnerSet`.
+Nothing to do; one new object appears per set that has a worker disrupted.
+
+A drained or preempted worker's pod used to carry the `actions-gateway.com/eviction-handled-at` annotation that made its recovery at-most-once, and the kubelet removes that pod seconds after the container exits.
+A recovery whose write lost that race was reported and abandoned, and its run needed a manual re-run.
+The claim now lives in a per-`RunnerSet` ConfigMap that outlives the pod, so those runs are recovered normally.
+
+Operational consequences:
+
+- **A second ConfigMap per set.** `scaleset-recovery-claims-<set>` appears the first time one of that set's workers is disrupted, beside the existing `scaleset-guards-<set>`.
+  It carries the same `actions-gateway.com/runner-set` label, is owner-ref'd to the set so the garbage collector reaps it, and is bounded by a one-hour claim TTL and a 256-entry cap rather than by history.
+  A tooling script that lists ConfigMaps by that label and takes the first now gets two objects in no fixed order.
+- **`eviction_recovery_evidence_lost_total` narrows without changing meaning.** It still counts disruptions whose runs will not be re-run automatically, so an alert on it needs no edit, but the cause behind it is now a claim the AGC could not write rather than a pod that went away.
+  Expect the rate to fall; a rate that does not points at the `configmaps` grant rather than at AGC responsiveness.
+- **The pod annotation stays and still means what it said.** It is written after the claim, as the marker an operator reads and the filter that keeps the recovery scan off a pod it has already judged.
+- **RBAC:** unchanged.
+  The AGC already holds `get`, `create` and `update` on `configmaps` for the guard ConfigMap.
+
+**Rolling back** restores the old behaviour: a drain whose pod goes before the claim lands needs a manual re-run again.
+A leftover `scaleset-recovery-claims-<set>` is inert on older versions, which never read it, and is collected with its `RunnerSet`.
 
 ### Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job
 

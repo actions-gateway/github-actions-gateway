@@ -303,6 +303,7 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   It is added on a successful provision and dropped when the job concludes, on the same write-ahead save.
   It is not a replay guard and answers no redelivered assignment; it exists so the owning reconciler can tell, on the way up, that a worker went away while no AGC was watching, which is the one disruption shape the pod itself cannot record because the disruption deletes the pod.
   The reconciler only ever *reads* it, so the poll goroutine remains the single writer and `Save` can keep replacing the whole state rather than merging it.
+  That invariant is why the recovery claim of Q1108 went into a second, reconciler-owned `scaleset-recovery-claims-<set>` ConfigMap rather than a field in this one: a mark written inside `guards.json` by anyone else is overwritten by the next `Save`, which re-serialises the whole document from the listener's memory.
   A restarted listener does not adopt the entries it loads: the reconciler has already adjudicated them, and a still-running job rebuilds its own entry when its held assignment replays.
   Bounded like the guards are, by the work outstanding rather than by history: every ordinary exit drops its own entry, and a 24-hour age sweep reclaims one whose conclusion never arrives at all.
 
