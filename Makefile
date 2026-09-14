@@ -431,6 +431,16 @@ semver-floor: ## Report the minimum semver bump the merged work already requires
 release-links-check: ## Resolve release-note links into the versioned site against a local site/ build
 	scripts/docs/check-release-links.sh
 
+# Hold every published page to the viewport it is read in: `scrollWidth >
+# clientWidth` at 320px and 1440px, over both publication scopes. The first gate
+# here that measures the RENDER rather than approximating it from the Markdown,
+# which is what website.md § Measure the render has asked for since 2026-08 with
+# nothing enforcing it. Out of `make check` for release-links-check's reason and
+# then some: it provisions a venv AND a pinned browser (~350MB, once).
+.PHONY: render-overflow-check
+render-overflow-check: ## Fail when a published page renders wider than a 320px or 1440px viewport
+	scripts/docs/check-render-overflow.sh
+
 # The release-body rules a machine can settle: a duplicate h1, an in-page anchor
 # that renders dead, a helm command carrying an image-style chart version. Cheap
 # and offline, so it joins the docs gates. Collapsed height is reported rather

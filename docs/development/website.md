@@ -398,6 +398,9 @@ Measured 2026-09-14 across all 63 published pages: clean at 1440px, and two page
 `operations/gitops.md` ran over by 47px and `operations/migration-from-arc.md` by 324px, which rendered a 320px viewport 644px wide.
 Both owners were `.persona-pills-top`, the audience pills `docs/javascripts/extra.js` builds from a page's `> **Audience:**` line.
 
+`make render-overflow-check` holds this rule over every published page at 320px and 1440px, in both publication scopes ([testing.md](testing.md#the-render-overflow-gate)).
+It is the one gate here that measures the render rather than approximating it from the Markdown, and it asserts only that a page is not wider than its viewport, which needs no budget chosen.
+
 **Audience pills wrap; row pills do not.** `.persona-pill` sets `white-space: nowrap`.
 That is right for the row filter chips, whose short persona names read as labels, and wrong for the audience pills above a page title, whose text is whatever that page's `Audience:` line says.
 A flex item cannot shrink below its nowrap max-content width, so a long audience phrase widens the page instead of wrapping.

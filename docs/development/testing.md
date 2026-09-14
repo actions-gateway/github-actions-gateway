@@ -965,8 +965,46 @@ Three deliberate limits, all of them printed rather than assumed:
   An explicit `GAG_SITE_DIR` that does not exist is an error instead — the caller named a tree, so building a different one would be a lie about what was checked.
   Finding zero site links across every note is also a failure: these notes link the versioned site by convention, so none at all means the extractor stopped matching.
 
-It is the one docs-content gate **outside `make check`** — the fast local gate has no business provisioning a Python venv — and runs as a third job in [`doc-links.yml`](../../.github/workflows/doc-links.yml), whose checkout takes `fetch-depth: 0` for the announce bar's tag-derived version.
+It is one of two docs-content gates **outside `make check`**, for the reason the render gate below shares: the fast local gate has no business provisioning a Python venv.
+It runs as a job in [`doc-links.yml`](../../.github/workflows/doc-links.yml), whose checkout takes `fetch-depth: 0` for the announce bar's tag-derived version.
 Behaviour is asserted by `scripts/docs/check-release-links-test.sh` under `make scripts-test`, against a hand-built site tree that needs no mkdocs: planted dead pages and anchors, plus the controls that must stay green — a third-party URL carrying a bogus anchor, a code-fenced URL, and a link to a version this tree cannot stand in for.
+
+### The render-overflow gate
+
+`make render-overflow-check` (`scripts/docs/check-render-overflow.sh`) fails when a published page renders wider than the viewport it is read in, at 320px and 1440px, across both publication scopes.
+It is the first gate here that measures the **render**.
+[website.md](website.md#measure-the-render-the-source-cannot-answer-these-questions) has said since 2026-08 that the source cannot answer layout questions, and `make check` never builds the site, so every other docs gate is a proxy over the Markdown and nothing held a rendered page at all.
+
+**It asserts one thing on purpose.** `scrollWidth > clientWidth` on the document element is absolute: a page wider than the viewport gives the reader a horizontal scrollbar, which is a defect at any width, so the rule needs no threshold picked from the current site.
+The density rules next door stay character budgets over the Markdown ([card bullets](website.md#card-bullets-fit-on-one-line), stat-tile labels) because "too tall against its siblings" has no such zero point, and a number invented for one is what gets a gate deleted for crying wolf.
+
+**Only a real browser reaches this class.** The persona pills that motivated the gate are built by `docs/javascripts/extra.js` at page load from a `> **Audience:**` blockquote, so they exist in no built HTML file and no Markdown-AST gate can see them.
+Measured 2026-09-14 before the fix: two published pages were over at 320px, `operations/migration-from-arc.md` by 324px, which rendered a 320px viewport 644px wide.
+
+Three decisions worth knowing:
+
+- **The site is served over HTTP, never `file://`.** The two disagree: measured the same day, the landing page reported 279px of overflow under `file://` and none when served, so the cheaper oracle invents findings.
+  The checker starts its own server on an ephemeral port, so there is no port to collide on.
+- **The reported owner is the largest contributor, not the first.** Overflow is a maximum rather than a sum, so one owner can mask another; the checker hides each `article` child in turn and reports the one whose removal shrinks the document most.
+- **A tree with no pages exits 2.** A gate that measures nothing passes exactly like a clean one.
+
+The pinned browser lives in `requirements-docs-check.txt`, deliberately apart from `requirements-docs.txt`: that file is what `pages.yml` installs to build and publish the site, and the publish job has no business pulling 200MB of Chromium.
+Provisioning costs about 13 seconds and ~350MB once, on a workstation and on a GitHub runner alike, cached thereafter in the gitignored `.venv-render/`.
+The sweep is not portable, so both numbers are worth knowing: 14 seconds for the 63 public pages and 94 seconds for the 411 `dev` ones on an 18-core M5 Max, against 39 seconds and 3 minutes 30 for the same two on the 2-core `ubuntu-latest` runner.
+End to end that is a CI job of about 5 minutes, of which the `dev` sweep is 70 percent.
+If it ever needs to be cheaper, narrow that scope rather than drop a width: the 320px pass is where every finding so far has come from.
+
+Adding the gate also closed a gap in [`doc-links.yml`](../../.github/workflows/doc-links.yml)'s path filter.
+`docs/stylesheets/**` and `docs/javascripts/**` were in neither of its two path lists, so a CSS or JavaScript change, the one kind that can *only* break a render, reached no gate in that workflow at all.
+
+Behaviour is asserted by `scripts/docs/check-render-overflow-test.sh`, **split by what each half needs rather than by what the machine happens to have.** The default half drives the checker with the system `python3` and runs under `make scripts-test` like any other suite: the checker imports its browser inside `measure()`, so argument handling, page discovery and the refusal paths are all reachable without one.
+`--render-only` is the pair that needs the pinned browser, and the gate runs it itself after provisioning and before it measures the site.
+The injected defect is an element with `white-space: nowrap` too long to shrink, the exact shape the audience pills had, and it must go red and name the element that owns it.
+
+**Why the gate runs its own assertions instead of leaving them to the suite.** The first cut ran the render pair when `.venv-render/` happened to be provisioned and skipped it when it was not, so a green `make check` asserted more on a machine that had once run the gate than on a fresh checkout, and more in CI than either.
+Coverage that varies with the machine cannot be read at all: the reader has no way to tell which claim a given green is making.
+Running them from the gate fixes the asymmetry at its source, and it buys the thing a browser-backed gate most needs, since the browser is the one input here that differs between machines.
+A browser that cannot see a deliberately over-wide element reports a clean sweep exactly like a site that has none, so the gate refuses to report on the site at all until the fixtures have gone red and green in front of it.
 
 ### The roadmap coherence gate
 

@@ -1,0 +1,8 @@
+# Toolchain for the render gate (scripts/docs/check-render-overflow.sh), kept
+# apart from requirements-docs.txt because that file is what pages.yml installs
+# to BUILD and publish the site. A browser has no business in the publish job:
+# separating them keeps ~200MB of Chromium out of every deploy.
+#
+# Pinned for the same reason the site toolchain is: the gate's verdict is a
+# layout measurement, so the engine that produces it is an input to the answer.
+playwright==1.62.0
