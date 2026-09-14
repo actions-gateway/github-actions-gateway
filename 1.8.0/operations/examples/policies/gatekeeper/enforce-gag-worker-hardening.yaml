@@ -1,0 +1,124 @@
+# OPA Gatekeeper — enforce github-actions-gateway (GAG) pod hardening.
+#
+# A ConstraintTemplate + Constraint pair that mirrors the Kyverno
+# enforce-gag-worker-hardening.yaml policy: in GAG tenant namespaces, require
+# run-as-non-root, RuntimeDefault seccomp, no host namespaces, no privileged
+# container, and digest-pinned images.
+#
+# Scoped to GAG tenant namespaces by the marker label the GMC requires:
+#   actions-gateway.github.com/tenant: "true"
+#
+# Ships with enforcementAction: dryrun. Inspect violations, then remove that
+# line (default is deny) once clean:
+#   kubectl get k8sgaghardening gag-worker-hardening -o yaml | less   # status.violations
+#
+# NOTE: deliberately does NOT require drop-ALL-caps / no-priv-escalation /
+# readOnlyRootFilesystem — the default `baseline` worker profile does not set
+# those. See ../../../admission-policies.md for the compatibility matrix.
+#
+# Apply order matters: the ConstraintTemplate must be Established before its
+# Constraint. `kubectl apply -f` this whole file; if the Constraint errors with
+# "no matches for kind", re-apply once the template is ready.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sgaghardening
+  annotations:
+    description: >-
+      Enforces github-actions-gateway's baseline pod security posture
+      (non-root, RuntimeDefault seccomp, no host namespaces, no privileged
+      container, digest-pinned images) in tenant namespaces.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sGagHardening
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sgaghardening
+
+        # --- run as non-root (pod- or container-level) ---
+        violation[{"msg": msg}] {
+          not pod_runs_nonroot
+          msg := "GAG pods must set runAsNonRoot:true (pod- or container-level); exclude privileged-profile tenants from this Constraint"
+        }
+
+        pod_runs_nonroot {
+          input.review.object.spec.securityContext.runAsNonRoot == true
+        }
+        pod_runs_nonroot {
+          containers := all_containers
+          count(containers) > 0
+          every c in containers {
+            c.securityContext.runAsNonRoot == true
+          }
+        }
+
+        # --- RuntimeDefault seccomp (pod- or container-level) ---
+        violation[{"msg": msg}] {
+          c := all_containers[_]
+          not container_seccomp_ok(c)
+          msg := sprintf("container %q must use seccompProfile RuntimeDefault (pod- or container-level)", [c.name])
+        }
+
+        container_seccomp_ok(c) {
+          c.securityContext.seccompProfile.type == "RuntimeDefault"
+        }
+        container_seccomp_ok(_) {
+          input.review.object.spec.securityContext.seccompProfile.type == "RuntimeDefault"
+        }
+
+        # --- no host namespaces ---
+        violation[{"msg": msg}] {
+          input.review.object.spec.hostPID == true
+          msg := "hostPID is not allowed for GAG pods"
+        }
+        violation[{"msg": msg}] {
+          input.review.object.spec.hostIPC == true
+          msg := "hostIPC is not allowed for GAG pods"
+        }
+        violation[{"msg": msg}] {
+          input.review.object.spec.hostNetwork == true
+          msg := "hostNetwork is not allowed for GAG pods"
+        }
+
+        # --- no privileged container ---
+        violation[{"msg": msg}] {
+          c := all_containers[_]
+          c.securityContext.privileged == true
+          msg := sprintf("container %q must not be privileged (use securityProfile: privileged + a Constraint exclusion for DinD tenants)", [c.name])
+        }
+
+        # --- images digest-pinned ---
+        violation[{"msg": msg}] {
+          c := all_containers[_]
+          not digest_pinned(c.image)
+          msg := sprintf("container %q image %q must be pinned by @sha256: digest", [c.name, c.image])
+        }
+
+        digest_pinned(image) {
+          re_match(`^.+@sha256:[a-fA-F0-9]{64}$`, image)
+        }
+
+        all_containers[c] {
+          c := input.review.object.spec.containers[_]
+        }
+        all_containers[c] {
+          c := input.review.object.spec.initContainers[_]
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sGagHardening
+metadata:
+  name: gag-worker-hardening
+spec:
+  enforcementAction: dryrun   # remove this line (default deny) once violations are clean
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: [Pod]
+    # Restrict to GAG tenant namespaces by the marker label.
+    namespaceSelector:
+      matchLabels:
+        actions-gateway.github.com/tenant: "true"
