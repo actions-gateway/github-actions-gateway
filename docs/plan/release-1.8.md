@@ -194,8 +194,10 @@ It exists because Q1108 moved four provisioner files on the released surface, so
 | Dogfood validation | **PASS**, 2026-09-14. e2e matrix 3/3; both sizing profiles actuating, `Throughput` on 297 real samples and `NodeShare` deriving 1500m where the templates ask 2 and 3; the quota rung bound at zero headroom (`withheldCapacity[quota]=2`, `advertisedCapacity=0`) and released on restore; the signed CRD manifest verified, applied and all five CRDs registered. Recorded at `refs/validated/v1.8.0-rc.2`. |
 | Soak readings | **BOTH POSITIVE.** Q1059: all five `v2beta1` kinds carried traffic on this cluster. Q1060: spec identical across `v2alpha1` and `v2beta1`, so the round trip is lossless. Taken by the `soak` phase inside the gate, so this candidate needed no second window. |
 
-**Q1048's mirror client census did not report, for the second window running.** One client graded `OK`; the other, `169.254.4.6`, resolved to no pod and no node, which is a worker already reaped on its TTL.
+**Q1048's mirror client census did not report, for the second window running.** One client graded `OK`; the other address, `169.254.4.6`, resolved to no pod and no node.
 The gate records that as *not taken* rather than as a pass, which is the behaviour [#1926](https://github.com/actions-gateway/github-actions-gateway/pull/1926) gave it.
-A second attempt reproducing the same failure makes the TTL race the likely cause rather than a slow run, which is a finding about the census rather than about this candidate.
+The cause is not established, and the TTL race this doc first named is refuted for this window: `169.254.0.0/16` is link-local, so that address was never a pod IP and no reaping could explain it.
+That explanation came from the gate's own echo, which is where [progress.sh](../../scripts/dogfood/lib/progress.sh) deliberately puts a hypothesis; the recorded reading says only what was seen.
+Lifting the echo's guess into this table is the near-miss that comment documents, repeated one release later.
 
 **What this run does not cover**, both stated by the gate rather than inferred: the placeability rung's negative verdict stays undriven, because it needs a pod this autoscaling pool cannot place ([Q1025](../queue/Q1025.md)), and the gate runs against github.com, so it says nothing about GitHub Enterprise Server.
