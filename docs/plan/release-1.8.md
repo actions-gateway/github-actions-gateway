@@ -60,7 +60,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | Q1060 | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | ✅ closed 2026-09-14, reading positive |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
-| — | RC validated on dogfood | gates | ✅ `v1.8.0-rc.1` validated 2026-09-12 and again 2026-09-14; still covers `main` |
+| — | RC validated on dogfood | gates | ◐ `v1.8.0-rc.1` validated 2026-09-12 and again 2026-09-14, and Q1108 then moved four provisioner files on the released surface, so it no longer covers `main`: `check-artifact-unchanged.sh v1.8.0-rc.1 origin/main` exits 1 and `publish.yml` would refuse the stable tag. Needs `rc.2` and a fresh validation, which retakes the soak readings as its own phase |
 
 ## Explicitly out of scope
 
