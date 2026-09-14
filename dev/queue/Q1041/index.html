@@ -2598,21 +2598,70 @@
 
 
 <h1 id="a-pages-deploy-can-succeed-while-the-site-never-serves-the-version">A pages deploy can succeed while the site never serves the version<a class="headerlink" href="#a-pages-deploy-can-succeed-while-the-site-never-serves-the-version" title="Permanent link">&para;</a></h1>
-<p><code>verify-pages-live</code> failed on the <code>v1.7.0</code> tag after its 300s budget, and the artifact was not the problem.
-<code>mike</code> had written <code>1.7.0</code> into <code>gh-pages</code> twice from <code>837f3d230</code>, and <code>https://actions-gateway.com/versions.json</code> still listed only up to <code>1.6.0</code> forty minutes later, so this was not propagation lag inside a budget that was merely too short.
-The deploy step succeeded and the serving layer did not take it.</p>
-<p><strong>The gate did its job and there is nothing to fix in it.</strong> The gap is what happens next: recovery is a hand-run <code>workflow_dispatch</code> with <code>version</code>, <code>alias</code> and <code>set_default</code> retyped from the error text, so a release stalls until a human reads the failure.
-Re-dispatched unchanged as run 33293076832, the same content published and <code>verify-published-docs VERSION=v1.7.0</code> passed, which is what says the deploy was never the defect.</p>
-<p>Two candidate fixes, and the row does not pick between them:</p>
+<p>Three consecutive stable tags have published nothing to the site while every check the run could make of its own tree was correct.
+The deploy step succeeds, <code>verify-pages-live</code> exhausts its 300s budget, and a hand-run <code>workflow_dispatch</code> of the same content publishes.</p>
+<table>
+<thead>
+<tr>
+<th>tag</th>
+<th><code>main</code> deploy</th>
+<th>tag deploy</th>
+<th>gap</th>
+<th>site served it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v1.5.0</code></td>
+<td>2026-08-15T19:17:12Z</td>
+<td>19:19:12Z</td>
+<td>2m00s</td>
+<td>unmeasured, the live check did not exist yet</td>
+</tr>
+<tr>
+<td><code>v1.6.0</code></td>
+<td>2026-08-26T23:22:15Z</td>
+<td>23:24:13Z</td>
+<td>1m58s</td>
+<td>no; 1.5.0 for ~25 min (<a href="../../development/website/#what-the-publish-job-verifies-and-why-it-takes-two-checks">website.md</a>)</td>
+</tr>
+<tr>
+<td><code>v1.7.0</code></td>
+<td>2026-08-30T04:21:18Z</td>
+<td>04:22:28Z</td>
+<td>1m10s</td>
+<td>no; <code>versions.json</code> ≤ 1.6.0 40 min later</td>
+</tr>
+<tr>
+<td><code>v1.8.0</code></td>
+<td>2026-09-14T10:27:39Z</td>
+<td>10:29:10Z</td>
+<td>1m31s</td>
+<td>no; <code>/1.8.0/</code> 404 at origin 14 min later</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What the three have in common is the gap, not the content.</strong> A stable tag sits on <code>main</code>'s tip, so the merge push and the tag push are the same commit and both trigger <code>pages</code>.
+The <code>pages-deploy</code> concurrency group serialises them on <code>gh-pages</code> and lets the second deploy land one to two minutes behind the first.</p>
+<p><code>v1.8.0</code> is the clearest reading because the winner is identifiable.
+The live <code>/1.7.0/</code> page carried <code>last-modified: 10:28:39</code>, which is the <code>main</code> run's artifact, assembled at 10:28:28, before <code>mike</code> wrote 1.8.0 at 10:30:15.
+<code>x-proxy-cache: MISS</code> and <code>age: 0</code> on the 404 rule out an edge cache.
+The tag run's own checks were all correct: <code>mike</code> pushed 1.8.0 with the <code>stable</code> alias, and <code>verify-pages-artifact.sh</code> confirmed the upload carried both.</p>
+<p><strong>A same-commit collision is not the mechanism, and the recovery is what refutes it.</strong> Both runs create a Pages deployment whose id is <code>pages_build_version</code>, which <code>actions/deploy-pages</code> defaults to <code>github.sha</code>, so both get the same string.
+That is a real observation and it does not explain the failure: the <code>v1.8.0</code> republish (run 34834527848) deployed <strong>the same</strong> <code>09a57c0cc…</code> build version 13 minutes later and served fine.
+So a deployment at that id is not permanently deduped.
+What distinguishes the two is that the republish was alone.</p>
+<p><strong>This bears on the two candidate fixes, which had no evidence when they were written:</strong></p>
 <ul>
 <li>Retry the publish once from inside the job when <code>verify-pages-live</code> exhausts its budget, then re-verify.
-  Cheapest, and it matches what the manual recovery does.</li>
-<li>Give the budget an adaptive tail rather than a fixed 300s, so a slow-but-working publish is not reported as a failure at all.
-  Riskier: it trades a false red for a longer window in which a genuinely dead publish reads as pending.</li>
+  Now the better-supported one: it reproduces the recovery, which is a solo deploy at the same build version after the first has settled.</li>
+<li>Give the budget an adaptive tail rather than a fixed 300s.
+  Weaker than it looked.
+  <code>v1.7.0</code> was still unserved at 40 minutes and <code>v1.8.0</code> at 14, so the publish is not slow-but-working and a longer budget waits for something that is not coming.</li>
 </ul>
-<p><strong>One observed occurrence, and the population is small.</strong> The <code>pages.yml</code> run history reachable at 40 runs spans 2026-08-29 10:44Z to 2026-08-30 04:47Z, which is this release cycle and no earlier one, so whether <code>v1.6.0</code> hit this is unmeasured.
-The three prerelease tag deploys in that window succeeded, but they add no version entry to <code>versions.json</code>, so they are not a control for what a stable tag does.
-Confirm against a wider window before treating one retry as a proven fix.</p>
+<p>A third shape worth pricing: give the tag deploy its own <code>pages_build_version</code> so the two are distinguishable, which is cheap and tests the collision reading directly.
+Skipping the <code>main</code> deploy when a stable tag points at the same commit is worse, because <code>dev</code> would then miss the merge.</p>
+<p><strong>Until this is fixed the republish is the release path rather than an exception</strong>, which <a href="../../operations/release/#the-site-deploy-fails-on-a-stable-tag-and-the-republish-is-a-step">release.md</a> states as a step.</p>
 <p>Distinct from <a href="../Q1034/">Q1034</a>, which is <code>verify-pages-live-test</code>'s own clock flakiness rather than the publish path.</p>
 
 
