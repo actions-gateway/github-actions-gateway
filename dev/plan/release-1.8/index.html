@@ -2671,6 +2671,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Pre-flight verdicts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-measured-at-86fbb6061-for-v180-rc2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-measured at 86fbb6061 for v1.8.0-rc.2
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2701,6 +2718,17 @@
     <span class="md-ellipsis">
       
         v1.8.0-rc.1, second window (2026-09-14)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#v180-rc2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.8.0-rc.2
       
     </span>
   </a>
@@ -2833,13 +2861,13 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 <td><a href="../../queue/Q1085/">Q1085</a></td>
 <td>The <code>v2beta1</code> removal notice: operator docs, enum godoc and admission warning name <code>v2.0.0</code></td>
 <td>rides</td>
-<td>✅ docs half shipped with Q452; release-notes line open</td>
+<td>✅ both halves shipped: docs with Q452, the release-notes line in <code>v1.8.0.md</code>. Items 2 and 3 are 1.9</td>
 </tr>
 <tr>
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td>◐ <code>v1.8.0-rc.1</code> validated 2026-09-12 and again 2026-09-14, and Q1108 then moved four provisioner files on the released surface, so it no longer covers <code>main</code>: <code>check-artifact-unchanged.sh v1.8.0-rc.1 origin/main</code> exits 1 and <code>publish.yml</code> would refuse the stable tag. Needs <code>rc.2</code> and a fresh validation, which retakes the soak readings as its own phase</td>
+<td>✅ <code>v1.8.0-rc.2</code> validated 2026-09-14 at <code>86fbb6061</code> and recorded at <code>refs/validated/v1.8.0-rc.2</code>. It supersedes <code>v1.8.0-rc.1</code>, which Q1108 took off the released surface</td>
 </tr>
 </tbody>
 </table>
@@ -2886,7 +2914,9 @@ The soak readings and the alias decision run beside it and need the candidate's 
 The window is the schedule risk, as it was in 1.7: a reading whose venue is a booked cluster run cannot be compressed the way a code change can.</p>
 <h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>
 <p>Each verdict below names the commit it was measured at, because a verdict covers that commit and nothing later (<a href="../../operations/release/#1-pre-flight">release.md</a>).
-Re-run any whose window has moved before the stable tag.</p>
+Re-run any whose window has moved before the stable tag.
+<strong>Every verdict here was re-measured at <code>86fbb6061</code>, the <code>v1.8.0-rc.2</code> target</strong>, because Q1108 reopened scope after the <code>c99137ea6</code> readings.
+The <code>c99137ea6</code> column is kept so the two windows can be compared.</p>
 <table>
 <thead>
 <tr>
@@ -2918,6 +2948,39 @@ Re-run any whose window has moved before the stable tag.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="re-measured-at-86fbb6061-for-v180-rc2">Re-measured at <code>86fbb6061</code> for <code>v1.8.0-rc.2</code><a class="headerlink" href="#re-measured-at-86fbb6061-for-v180-rc2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gating rows</td>
+<td><strong>PASS.</strong> No <code>1.8-gate</code> row in the store. The empty result was trusted only after the same pattern found <code>1.9-gate</code> on Q1085 and Q413, so it can still match a label that exists.</td>
+</tr>
+<tr>
+<td><code>main</code> green</td>
+<td><strong>PASS.</strong> Ten required gates, none not-green, nine path-skipped as <code>merge_group</code>. That is the ordinary shape of docs commits stacked on a code one: <code>0afdad119</code> ran all ten in full, and <code>check-artifact-unchanged.sh 0afdad119 origin/main</code> exits 0 over two files, so that run still covers the target.</td>
+</tr>
+<tr>
+<td>Semver floor</td>
+<td><strong>MINOR</strong>, over 114 commits, set by nine touching the released surface: four <code>feat</code>s and five patches. Q1108 is one of the five.</td>
+</tr>
+<tr>
+<td>API surface</td>
+<td><strong>PASS, ship as-is.</strong> Identical to the <code>c99137ea6</code> reading: additive only, five new condition reasons and one new metric, all Q1062's, and no added wire fields, enum constraints or defaults. Q1108 publishes no new Event reason, annotation, label or metric; it reuses <code>EvictionRecoveryEvidenceLost</code> and <code>AnnotationEvictionHandledAt</code>.</td>
+</tr>
+<tr>
+<td><code>make check</code></td>
+<td><strong>PASS</strong>, exit 0, on a branch cut at the target. It noted <code>./cmd/probe</code> at 81.6% against an 81.8% floor, passing on tolerance and wanting <code>make cover-update</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reviewed by hand, because the checker has no category for it:</strong> Q1108 publishes a second per-<code>RunnerSet</code> ConfigMap, <code>scaleset-recovery-claims-&lt;set&gt;</code>.
+It is a cluster object an operator will see rather than an API surface change, it is owner-ref'd to the set and reaped with it, and it is carried in <a href="../../operations/upgrade/">upgrade.md</a> and the release notes.</p>
 <p><strong>The <code>egressPolicyMode</code> enum members are unchanged</strong>, which is the claim <a href="#definition-of-done">Definition of done #5</a> rests on: <code>CiliumFQDN</code> and <code>CalicoFQDN</code> are still defined in both <code>v2alpha1</code> and <code>v2beta1</code>, and what moved is their godoc, from <em>removable no earlier than v3.0.0</em> to <em>removed at v2.0.0</em>, the correction Q452's decision forced.
 That is a published-documentation change to a served API, not a surface change.</p>
 <p><strong>Reviewed by hand, because the checker has no category for it:</strong> Q1011 adds <code>api/apinames</code>, a new exported package in the <code>api</code> module (<code>agentidentity.go</code>, 69 lines).
@@ -2973,6 +3036,44 @@ The readings are in <a href="../v2-ga/#soak-readings">v2-ga.md</a>; criterion 2 
 Three assertions covered that manifest and all three passed throughout, because none of them read the schema.
 Fixed in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1926">#1926</a> along with a reconciliation that checks every authored spec field against the matching <code>v2beta1</code> Go type, which catches the class rather than the instance.
 The candidate itself was never in question: the failure was in the tooling that deploys it.</p>
+<h3 id="v180-rc2"><code>v1.8.0-rc.2</code><a class="headerlink" href="#v180-rc2" title="Permanent link">&para;</a></h3>
+<p>Cut 2026-09-14 at <code>86fbb6061</code>, which is where every verdict above was re-measured.
+The tag was compared against <code>origin/main</code> after creation and before the push, per the <a href="../../postmortems/2026-08-15-rc2-tagged-a-stale-commit/">rc.2 postmortem</a>.
+It exists because Q1108 moved four provisioner files on the released surface, so <code>v1.8.0-rc.1</code> stopped covering <code>main</code> and <code>publish.yml</code> would have refused the stable tag.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tag points at the target</td>
+<td><strong>PASS.</strong> <code>v1.8.0-rc.2^{commit}</code> and <code>origin/main</code> both <code>86fbb6061adea20b889bf3ea10a05d7e8a4e5e9a</code>.</td>
+</tr>
+<tr>
+<td>Publish pipeline</td>
+<td><strong>PASS.</strong> Run 34826145005, all six images, the chart and the CRD chart published.</td>
+</tr>
+<tr>
+<td>Artifacts and provenance</td>
+<td><strong>PASS.</strong> 9/9 assets, <code>draft: false</code>, <code>immutable: true</code>, <code>prerelease: true</code>; all eight cosign signatures verified. Provenance <code>buildSignerURI</code> ends <code>publish.yml@refs/tags/v1.8.0-rc.2</code> and <code>sourceRepositoryDigest</code> equals <code>86fbb6061</code>. The digest check was confirmed able to fail by re-running it against <code>unit-test.yml</code> as the signer, which exits 1.</td>
+</tr>
+<tr>
+<td>Dogfood validation</td>
+<td><strong>PASS</strong>, 2026-09-14. e2e matrix 3/3; both sizing profiles actuating, <code>Throughput</code> on 297 real samples and <code>NodeShare</code> deriving 1500m where the templates ask 2 and 3; the quota rung bound at zero headroom (<code>withheldCapacity[quota]=2</code>, <code>advertisedCapacity=0</code>) and released on restore; the signed CRD manifest verified, applied and all five CRDs registered. Recorded at <code>refs/validated/v1.8.0-rc.2</code>.</td>
+</tr>
+<tr>
+<td>Soak readings</td>
+<td><strong>BOTH POSITIVE.</strong> Q1059: all five <code>v2beta1</code> kinds carried traffic on this cluster. Q1060: spec identical across <code>v2alpha1</code> and <code>v2beta1</code>, so the round trip is lossless. Taken by the <code>soak</code> phase inside the gate, so this candidate needed no second window.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Q1048's mirror client census did not report, for the second window running.</strong> One client graded <code>OK</code>; the other, <code>169.254.4.6</code>, resolved to no pod and no node, which is a worker already reaped on its TTL.
+The gate records that as <em>not taken</em> rather than as a pass, which is the behaviour <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1926">#1926</a> gave it.
+A second attempt reproducing the same failure makes the TTL race the likely cause rather than a slow run, which is a finding about the census rather than about this candidate.</p>
+<p><strong>What this run does not cover</strong>, both stated by the gate rather than inferred: the placeability rung's negative verdict stays undriven, because it needs a pod this autoscaling pool cannot place (<a href="../../queue/Q1025/">Q1025</a>), and the gate runs against github.com, so it says nothing about GitHub Enterprise Server.</p>
 
 
 
