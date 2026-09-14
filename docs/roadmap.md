@@ -19,15 +19,15 @@ Every open item, in priority order, is in the [working backlog](https://actions-
 ## In progress / near-term
 
 
+- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q413 --> The soak closed on 2026-09-14: every kind reconciled under real traffic, and the conversion webhook was lossless over a real object at both served versions.
+  Next is serving `v2` beside `v2beta1` with the storage version unmoved, which is 1.9's whole content.
+
 What lands here is scoped work, none of it waiting on an outside signal.
 Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the event that revives it.
 Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
 No pill means no release is decided for that item yet.
 
 ## Exploring / longer-term
-
-- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q413 --> The soak's two measurable criteria were read on 2026-09-14 and both came back positive: every kind reconciled under real traffic, and the conversion webhook lossless over a real object at both served versions.
-  What is left is the graduation work itself, which cannot start before 1.9.
 
 Directions we expect to pursue as demand and validated evidence accumulate.
 These are intentionally unscheduled.

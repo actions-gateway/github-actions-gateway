@@ -5,7 +5,8 @@ The last rung of the graduation ladder defined in [v2-api.md § API maturity & g
 This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
 
-> **Status: parked — no active work, every phase carried by a Deferred trigger.** Phases 1, 2 and 4 wait on [Q413](../queue/Q413.md) (**Event:** the Phase 1 soak closes; `v1.3.0` shipped 2026-08-03 and criterion 1 has since elapsed); Phase 3's coupled removals wait on [Q273](../queue/Q273.md) and [Q264](../queue/Q264.md); the Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
+> **Status: Phase 1 is done and Phase 2 is startable.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), which makes [Q413](../queue/Q413.md) ready: Phase 2 adds `v2` beside `v2beta1` and ships in 1.9.
+> Phase 3's storage advance and coupled removals wait on [Q1086](../queue/Q1086.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md) and [Q1068](../queue/Q1068.md); Phase 4's docs and the tag are [Q1107](../queue/Q1107.md); the Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The `✅` on this plan's [index row](README.md) means *no open item remains*, not that the graduation has happened — deferred residuals [don't count](../development/maintaining-backlog.md#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count).
 > The phase table below is the real state.
 
@@ -14,10 +15,10 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | Phase | Scope | Sz | Status |
 |---|---|---|---|
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
-| 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../queue/Q413.md)) |
-| 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ❌ Open ([Q413](../queue/Q413.md)) |
+| 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
+| 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ❌ Open, ready ([Q413](../queue/Q413.md)) |
 | 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
-| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../queue/Q413.md)) |
+| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
 ## Why this is gated on a soak, not a date
 

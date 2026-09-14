@@ -29,7 +29,7 @@ The hub *may* move to `v2` here: `convertViaHub` routes spoke to hub to spoke, a
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q413](../queue/Q413.md) | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | 🔲 deferred on the soak |
+| [Q413](../queue/Q413.md) | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | 🔲 ready: the soak read clean 2026-09-14 |
 | [Q1085](../queue/Q1085.md) | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | 🔲 open, lands in 1.8 if there is room |
 
 ## Definition of Done
