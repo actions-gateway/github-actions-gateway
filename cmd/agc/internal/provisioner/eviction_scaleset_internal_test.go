@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -365,28 +366,113 @@ func TestProvisionScaleSetWorker_ProvisionsWithoutIdentity(t *testing.T) {
 	assert.NotContains(t, pod.Annotations, AnnotationRunID)
 }
 
-// TestClaimEvictionRecovery_OptimisticLockRejectsStaleWriter is the test the
-// at-most-once property actually rests on. Two AGC replicas reconciling the same
-// RunnerSet both read the pod before either writes, so both see an unhandled eviction;
-// only the optimistic lock stops both from claiming it and calling rerun-failed-jobs.
-// A plain merge patch would let the second write succeed against the newer object.
-func TestClaimEvictionRecovery_OptimisticLockRejectsStaleWriter(t *testing.T) {
+// TestClaimDisruptionRecovery_LedgerRejectsTheSecondClaimant is the test the
+// at-most-once property now rests on. Two AGC replicas reconciling the same RunnerSet
+// both read the pod before either writes, so both see an unadjudicated disruption; the
+// recovery-claim ledger is what stops both from calling rerun-failed-jobs. It replaced
+// the pod's own optimistic lock because the lock has to outlive a pod two of the
+// recovery arms delete (Q1108).
+func TestClaimDisruptionRecovery_LedgerRejectsTheSecondClaimant(t *testing.T) {
 	ctx := context.Background()
-	p, _, _, _, _ := recoveryFixture(t,
-		evicted(scaleSetWorkerPod("runner-gpu-race", identityAnnotations())))
-	key := client.ObjectKey{Namespace: "team-a", Name: "runner-gpu-race"}
+	p, target, _, _, _ := recoveryFixture(t)
 
-	// Two readers of the same pre-write generation — the replica race, deterministically.
-	var first, second corev1.Pod
-	require.NoError(t, p.Client.Get(ctx, key, &first))
-	require.NoError(t, p.Client.Get(ctx, key, &second))
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-race", recoveryCauseDeletion),
+		"the first claim must win")
 
-	require.NoError(t, p.claimEvictionRecovery(ctx, &first), "the first claim must win")
-
-	err := p.claimEvictionRecovery(ctx, &second)
+	err := p.claimDisruptionRecovery(ctx, target, "runner-gpu-race", recoveryCauseDeletion)
 	require.Error(t, err, "the second claim must be rejected, not silently applied")
-	assert.True(t, apierrors.IsConflict(err),
-		"a lost claim must be a Conflict so the caller recognises it and skips: got %v", err)
+	assert.ErrorIs(t, err, errRecoveryClaimHeld,
+		"a lost claim must be errRecoveryClaimHeld so the caller recognises it and skips: got %v", err)
+
+	// A different pod of the same owner is a different disruption and must still claim.
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-other", recoveryCauseDeletion))
+}
+
+// TestClaimDisruptionRecovery_SurvivesAConcurrentLedgerWrite pins the retry the ledger
+// needs for the case the pod claim used to face: the two detection paths are routinely
+// concurrent, so the optimistic lock raises a Conflict that is another CLAIM rather
+// than a rival for this pod. Re-reading and re-applying is what keeps the second pod's
+// disruption recoverable.
+func TestClaimDisruptionRecovery_SurvivesAConcurrentLedgerWrite(t *testing.T) {
+	ctx := context.Background()
+	var updates atomic.Int64
+	p, target, _, _, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if cm, ok := obj.(*corev1.ConfigMap); ok && updates.Add(1) == 1 {
+				return apierrors.NewConflict(
+					corev1.Resource("configmaps"), cm.Name, errors.New("the object has been modified"))
+			}
+			return c.Update(ctx, obj, opts...)
+		},
+	})
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-first", recoveryCauseDeletion))
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-second", recoveryCauseDeletion),
+		"a conflict from another claim must be retried, not read as this pod being claimed")
+	assert.Greater(t, updates.Load(), int64(1), "the conflicting update must actually have been retried")
+}
+
+// TestClaimDisruptionRecovery_ConcurrentClaimsAllLand is the shape a node drain takes:
+// every worker the node held is disrupted in one instant, both detection paths see each
+// of them, and they all read and write one per-RunnerSet ledger. Twenty concurrent
+// claimants provoke the compare-and-swap rather than injecting it, and every claim must
+// still be there at the end — a claim that could not be recorded is a run reported as
+// needing a manual re-run, which is the outcome this whole mechanism exists to remove.
+//
+// It is the test that found claimMu: with the retry budget alone, eight claimants was
+// already enough to exhaust it.
+func TestClaimDisruptionRecovery_ConcurrentClaimsAllLand(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, _, _ := recoveryFixture(t)
+
+	const claimants = 20
+	var wg sync.WaitGroup
+	errs := make([]error, claimants)
+	for i := range claimants {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = p.claimDisruptionRecovery(ctx, target, fmt.Sprintf("runner-gpu-%d", i), recoveryCauseDeletion)
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		require.NoError(t, err, "claimant %d must land its claim", i)
+	}
+
+	var cm corev1.ConfigMap
+	require.NoError(t, p.Client.Get(ctx, client.ObjectKey{
+		Namespace: "team-a", Name: scaleSetRecoveryClaimsConfigMapName("gpu"),
+	}, &cm))
+	ledger, err := decodeRecoveryClaims(cm.Data[recoveryClaimDataKey])
+	require.NoError(t, err)
+	assert.Len(t, ledger.Claims, claimants,
+		"every concurrent claim must survive; a missing one is a disruption two claimants can both recover")
+}
+
+// TestPruneRecoveryClaims_BoundsTheLedger pins both bounds the ledger carries, because
+// it is the one thing in this mechanism that grows with the number of disruptions
+// rather than with the number of RunnerSets: an entry past its TTL goes, and the oldest
+// go once the cap is reached whatever their age.
+func TestPruneRecoveryClaims_BoundsTheLedger(t *testing.T) {
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+	ledger := &recoveryClaimLedger{Claims: map[string]recoveryClaim{
+		"fresh": {ClaimedAt: now.Add(-time.Minute)},
+		"stale": {ClaimedAt: now.Add(-recoveryClaimTTL - time.Minute)},
+	}}
+	pruneRecoveryClaims(ledger, now)
+	assert.Contains(t, ledger.Claims, "fresh")
+	assert.NotContains(t, ledger.Claims, "stale", "a claim past the TTL must be reclaimed")
+
+	over := &recoveryClaimLedger{Claims: map[string]recoveryClaim{}}
+	for i := range maxRecoveryClaims + 10 {
+		over.Claims[fmt.Sprintf("runner-%04d", i)] = recoveryClaim{ClaimedAt: now.Add(-time.Duration(i) * time.Second)}
+	}
+	pruneRecoveryClaims(over, now)
+	require.Len(t, over.Claims, maxRecoveryClaims, "the cap must bound the ledger regardless of the TTL")
+	assert.Contains(t, over.Claims, "runner-0000", "the newest claim must survive the cap")
+	assert.NotContains(t, over.Claims, fmt.Sprintf("runner-%04d", maxRecoveryClaims+9),
+		"the oldest claim must be the one dropped")
 }
 
 // drainedWorker builds the disruption arm Q809's flake lives on: a scale-set worker
@@ -410,87 +496,13 @@ func drainedWorker(name string) *corev1.Pod {
 	return pod
 }
 
-// TestClaimEvictionRecovery_RetriesAConflictFromANonClaimant is the Q809 fix on the
-// conflict arm. The optimistic lock is there to arbitrate between claimants, but the
-// apiserver raises the same Conflict for any concurrent write — and the kubelet
-// publishing the terminal phase is guaranteed to be racing, because that transition is
-// the edge that triggers the reconcile. Before the fix that conflict was read as
-// "already claimed elsewhere" and the recovery was dropped, which is how run
-// 31556806760 lost a drained worker's re-run.
-func TestClaimEvictionRecovery_RetriesAConflictFromANonClaimant(t *testing.T) {
-	ctx := context.Background()
-	var patches atomic.Int64
-	p, target, _, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
-		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-			if patches.Add(1) == 1 {
-				// The kubelet's status write landing between our read and our patch.
-				return apierrors.NewConflict(
-					corev1.Resource("pods"), obj.GetName(), errors.New("the object has been modified"))
-			}
-			return c.Patch(ctx, obj, patch, opts...)
-		},
-	}, drainedWorker("runner-gpu-drained"))
-
-	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
-	require.NoError(t, err)
-	<-done
-
-	assert.Equal(t, int64(1), rerunCount.Load(),
-		"a conflict raised by a writer that is not a claimant must not cost the disruption its re-run")
-	var pod corev1.Pod
-	require.NoError(t, p.Client.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "runner-gpu-drained"}, &pod))
-	assert.Contains(t, pod.Annotations, AnnotationEvictionHandledAt)
-}
-
-// TestClaimEvictionRecovery_ConflictFromARealClaimantStillSkips is the other half, and
-// the one the retry must not break: when the fresh object shows someone else already
-// stamped the claim, this is the replica race the optimistic lock exists to lose, and
-// retrying would spend a second slot of the run's retry budget on one disruption.
-func TestClaimEvictionRecovery_ConflictFromARealClaimantStillSkips(t *testing.T) {
-	ctx := context.Background()
-	var patches atomic.Int64
-	p, target, _, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
-		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-			if patches.Add(1) > 1 {
-				return c.Patch(ctx, obj, patch, opts...)
-			}
-			// The other replica wins the claim, then our stale patch is rejected.
-			var winner corev1.Pod
-			if err := c.Get(ctx, client.ObjectKeyFromObject(obj), &winner); err != nil {
-				return err
-			}
-			winner.Annotations[AnnotationEvictionHandledAt] = "2026-08-12T00:00:00Z"
-			if err := c.Update(ctx, &winner); err != nil {
-				return err
-			}
-			return apierrors.NewConflict(
-				corev1.Resource("pods"), obj.GetName(), errors.New("the object has been modified"))
-		},
-	}, drainedWorker("runner-gpu-raced"))
-
-	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
-	require.NoError(t, err)
-	<-done
-
-	assert.Equal(t, int64(0), rerunCount.Load(),
-		"the replica that lost the claim must not also re-run the job")
-	assert.Equal(t, int64(1), patches.Load(), "a claim already held elsewhere must not be retried")
-	var pod corev1.Pod
-	require.NoError(t, p.Client.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "runner-gpu-raced"}, &pod))
-	assert.Equal(t, "2026-08-12T00:00:00Z", pod.Annotations[AnnotationEvictionHandledAt],
-		"the winner's stamp must survive")
-}
-
-// TestRecoverEvictedScaleSetWorkers_EvidenceLostIsSurfaced covers the arm that cost
-// Q809 two of its three CI failures: the kubelet finished tearing the drained pod down
-// between the cached List and the claim patch. The pod is the disruption's only record,
-// so nothing recovers it and no later reconcile can — which makes silence the whole
-// problem. It must be loud, exactly as an unknown identity is.
-//
-// Deliberately still not recovered: recovering from the in-memory copy would let two
-// replicas each spend a slot of one run's retry budget for one disruption, which is the
-// regression the claim exists to prevent.
-func TestRecoverEvictedScaleSetWorkers_EvidenceLostIsSurfaced(t *testing.T) {
+// TestRecoverEvictedScaleSetWorkers_PodGoneBeforeTheStampIsStillRecovered is the
+// headline of Q1108, and the arm that cost Q809 two of its three CI failures: the
+// kubelet finished tearing the drained pod down between the cached List and the write
+// back to it. That used to end the recovery, because the pod carried the claim. It no
+// longer does — the claim is in the ledger, taken before the pod is touched, and the
+// evidence was read off the informer before the pod went.
+func TestRecoverEvictedScaleSetWorkers_PodGoneBeforeTheStampIsStillRecovered(t *testing.T) {
 	ctx := context.Background()
 	p, target, m, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
 		Patch: func(_ context.Context, _ client.WithWatch, obj client.Object, _ client.Patch, _ ...client.PatchOption) error {
@@ -502,12 +514,106 @@ func TestRecoverEvictedScaleSetWorkers_EvidenceLostIsSurfaced(t *testing.T) {
 	require.NoError(t, err)
 	<-done
 
+	assert.Equal(t, int64(1), rerunCount.Load(),
+		"a drain whose pod went away before the marker could be stamped must still be re-run")
+	assert.Equal(t, float64(0),
+		testutil.ToFloat64(m.EvictionRecoveryEvidenceLost.WithLabelValues("team-a", "gpu", recoveryCauseDeletion)),
+		"a recovered disruption must not also be reported as unrecoverable")
+	assert.NotContains(t, target.events, "EvictionRecoveryEvidenceLost")
+}
+
+// TestRecoverEvictedScaleSetWorkers_ConcurrentPodWriteDoesNotCostTheRerun is Q809's
+// other flavour: the kubelet publishing the terminal phase is guaranteed to be racing,
+// because that transition is the edge that triggers the reconcile. It used to raise a
+// Conflict against the pod's optimistic lock and be read as "already claimed
+// elsewhere", which is how run 31556806760 lost a drained worker's re-run. The pod
+// write no longer arbitrates anything, so any failure of it is advisory.
+func TestRecoverEvictedScaleSetWorkers_ConcurrentPodWriteDoesNotCostTheRerun(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Patch: func(_ context.Context, _ client.WithWatch, obj client.Object, _ client.Patch, _ ...client.PatchOption) error {
+			return apierrors.NewConflict(
+				corev1.Resource("pods"), obj.GetName(), errors.New("the object has been modified"))
+		},
+	}, drainedWorker("runner-gpu-drained"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(1), rerunCount.Load(),
+		"a write to the pod raised by a writer that is not a claimant must not cost the disruption its re-run")
+}
+
+// TestRecoverEvictedScaleSetWorkers_ClaimHeldElsewhereStillSkips is the half the
+// recovery must not lose: a disruption another replica has already claimed is the race
+// the ledger exists to lose, and re-running would spend a second slot of the run's
+// retry budget on one disruption.
+func TestRecoverEvictedScaleSetWorkers_ClaimHeldElsewhereStillSkips(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, rerunCount, _ := recoveryFixture(t, drainedWorker("runner-gpu-raced"))
+
+	// The other replica's claim, landed before this scan reaches the pod.
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-raced", recoveryCauseDeletion))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"the replica that lost the claim must not also re-run the job")
+}
+
+// TestRecoverEvictedScaleSetWorkers_UnrecordableClaimIsSurfaced is what is left of the
+// evidence-lost report. A disruption whose claim cannot be written durably is the only
+// remaining way one goes unrecovered, and acting on it anyway would let a second
+// claimant spend another slot of the run's budget — so it must be loud, exactly as an
+// unknown identity is. The counter and the Event are unchanged, because what an
+// operator does about it is unchanged.
+func TestRecoverEvictedScaleSetWorkers_UnrecordableClaimIsSurfaced(t *testing.T) {
+	ctx := context.Background()
+	p, target, m, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
+			if cm, ok := obj.(*corev1.ConfigMap); ok {
+				return apierrors.NewInternalError(fmt.Errorf("etcd is unavailable for %s", cm.Name))
+			}
+			return nil
+		},
+	}, drainedWorker("runner-gpu-unrecordable"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
 	assert.Equal(t, int64(0), rerunCount.Load(), "an unclaimable disruption must not be re-run")
 	assert.Equal(t, float64(1),
 		testutil.ToFloat64(m.EvictionRecoveryEvidenceLost.WithLabelValues("team-a", "gpu", recoveryCauseDeletion)))
 	assert.Contains(t, target.events, "EvictionRecoveryEvidenceLost")
 	assert.NotContains(t, target.events, "EvictionRecoveryIdentityUnknown",
-		"the identity was fine; only the pod went away")
+		"the identity was fine; only the claim could not be recorded")
+}
+
+// TestRecoverEvictedScaleSetWorkers_UnparseableLedgerRefusesRatherThanDoubleRuns pins
+// the one reading that must not fail open. A ledger nobody can parse arbitrates
+// nothing, so treating it as empty would re-run every disruption once per claimant.
+func TestRecoverEvictedScaleSetWorkers_UnparseableLedgerRefusesRatherThanDoubleRuns(t *testing.T) {
+	ctx := context.Background()
+	p, target, m, rerunCount, _ := recoveryFixture(t, drainedWorker("runner-gpu-corrupt"))
+	require.NoError(t, p.Client.Create(ctx, &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "team-a",
+			Name:      scaleSetRecoveryClaimsConfigMapName("gpu"),
+		},
+		Data: map[string]string{recoveryClaimDataKey: "{not json"},
+	}))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(), "an unreadable ledger must not be read as unclaimed")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRecoveryEvidenceLost.WithLabelValues("team-a", "gpu", recoveryCauseDeletion)))
 }
 
 // TestRunIdentityFromPod rejects every partial identity. A run is addressed by all three

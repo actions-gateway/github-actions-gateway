@@ -420,6 +420,11 @@ type Provisioner struct {
 	// wait a no-op. Its zero value is ready to use. See scaleuplimiter.go.
 	scaleUp scaleUpLimiter
 
+	// claimMu serialises this process's writes to a recovery-claim ledger, so the
+	// ConfigMap's own optimistic lock arbitrates between replicas rather than between
+	// the goroutines of one AGC (Q1108, recovery_claims.go).
+	claimMu sync.Mutex
+
 	// orphanScans records which owners have already had their persisted in-flight set
 	// adjudicated by this process (Q844), which is what makes that scan a startup
 	// question rather than a per-reconcile one. Its zero value is ready to use. See

@@ -60,6 +60,29 @@ func TestRecoverOrphanedScaleSetWorkers_RerunsAWorkerThatIsGone(t *testing.T) {
 		"a lost worker must be visible in kubectl describe, not only in the log")
 }
 
+// TestRecoverOrphanedScaleSetWorkers_LeavesAnAlreadyRecoveredWorkerAlone pins the
+// second discriminator, added with the durable claim (Q1108). A worker pod that is gone
+// is not necessarily one nobody recovered: a disruption a previous process claimed is
+// re-run at once, while the job's conclusion — the only thing that retires the in-flight
+// entry — arrives from GitHub seconds later and can miss that process entirely. Without
+// the ledger read, that entry looks exactly like a worker lost unobserved, and the run
+// spends a second slot of its budget for one disruption.
+func TestRecoverOrphanedScaleSetWorkers_LeavesAnAlreadyRecoveredWorkerAlone(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, rerunCount, _ := recoveryFixture(t)
+
+	// The previous process's claim, which survives both the pod and the process.
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, scaleSetPodName("gpu", "job1"), recoveryCauseDeletion))
+
+	done, err := p.RecoverOrphanedScaleSetWorkers(ctx, target,
+		[]OrphanedWorker{orphan("job1"), orphan("job2")})
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(1), rerunCount.Load(),
+		"only the entry with no claim behind it may be re-run; the claimed one was already recovered")
+}
+
 // TestRecoverOrphanedScaleSetWorkers_LeavesALiveWorkerAlone is the discriminator itself.
 // A job still running, and a job that genuinely failed and is sitting in PodFailed until
 // the reaper takes it, both still HAVE their pod — and re-running either would be the

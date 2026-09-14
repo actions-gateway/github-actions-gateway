@@ -197,6 +197,17 @@ func holdWithFinalizer(t *testing.T, namespace, name string) {
 	})
 }
 
+// releaseFinalizer drops the test hold so a pod whose deletion is already requested is
+// really removed — the second half of holdWithFinalizer, for a test that needs the pod
+// to exist for the claim and then to be gone.
+func releaseFinalizer(t *testing.T, namespace, name string) {
+	t.Helper()
+	var pod corev1.Pod
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &pod))
+	pod.Finalizers = nil
+	require.NoError(t, k8sClient.Update(ctx, &pod))
+}
+
 // publishTerminalFailure writes the terminal status a real kubelet publishes as a
 // drained worker's container exits: PodFailed, an empty reason, and a container
 // termination record. Note the venue's timestamp shape: envtest pods are unscheduled,

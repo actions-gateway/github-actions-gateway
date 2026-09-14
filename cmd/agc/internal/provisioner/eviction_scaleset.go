@@ -2,13 +2,13 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -207,37 +207,38 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	pod, cause := d.pod, d.cause
 	podLog := log.With("podName", pod.Name)
 
-	// Claim before calling GitHub, under an optimistic lock: whoever wins the patch
-	// owns this pod's single recovery attempt.
-	if err := p.claimEvictionRecovery(ctx, pod); err != nil {
+	// Claim before calling GitHub, and off the pod: the claim outlives the pod the
+	// evidence was read from, so a drain that removes the object seconds after the
+	// container exits no longer costs the run its recovery (Q1108).
+	if err := p.claimDisruptionRecovery(ctx, target, pod.Name, cause); err != nil {
 		switch {
-		case apierrors.IsConflict(err):
-			// A conflict that survived the re-read retry: the fresh object already
-			// carries the claim, so the other detection path, another replica, or a
-			// concurrent reconcile of the same owner owns this recovery. The mechanism
-			// working, not an error.
-			podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause, "error", err)
-		case apierrors.IsNotFound(err):
-			// The pod went away before the claim landed. What is lost is the lock, not
-			// the record: an event caller still holds the run identity on its copy, but
-			// re-running without the annotation would let a replica or the other path
-			// re-run it again, so both callers decline. Surface it: this is a job that
-			// will silently never be re-run, and the window is real (Q809 measured it on
-			// the drain arm, where the kubelet removes the object seconds after the
-			// container exits). The two paths are routinely concurrent claimants, so a
-			// conflict whose re-read comes back NotFound lands here too and counts a run
-			// the winner recovered; the metric row says so.
-			podLog.Warn("scale-set worker disruption was lost before it could be claimed; its run will not be re-run automatically",
+		case errors.Is(err, errRecoveryClaimHeld):
+			// The other detection path, another reconcile, or another replica owns this
+			// recovery. The mechanism working, not an error.
+			podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause)
+		default:
+			// No durable claim could be recorded, so re-running would risk a second
+			// claimant spending another slot of the run's budget for one disruption.
+			// This is now the only way a detected disruption goes unrecovered, and it
+			// keeps the counter and the Event the lost pod used to produce: what an
+			// operator does about it — a manual re-run — is unchanged.
+			podLog.Warn("scale-set worker disruption could not be claimed durably; its run will not be re-run automatically",
 				"cause", cause, "error", err)
 			if p.Metrics != nil {
 				p.Metrics.EvictionRecoveryEvidenceLost.WithLabelValues(key.Namespace, key.Name, cause).Inc()
 			}
 			target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryEvidenceLost", "RecoverEvictedWorker",
-				fmt.Sprintf("worker pod %s was lost to %s, but its pod was deleted before the recovery could be claimed, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
-		default:
-			podLog.Warn("could not claim scale-set worker disruption for recovery; skipping", "cause", cause, "error", err)
+				fmt.Sprintf("worker pod %s was lost to %s, but its recovery could not be recorded durably, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
 		}
 		return closedChan()
+	}
+
+	// Stamp the pod so the scan's cache-level filter skips it next reconcile. It is no
+	// longer the lock, so failing here costs nothing: a pod already gone has no later
+	// pass to filter, and one still there costs a redundant ledger read on the next.
+	if err := p.stampEvictionHandled(ctx, pod); err != nil {
+		podLog.Debug("could not stamp the eviction-handled marker on a claimed scale-set worker",
+			"cause", cause, "error", err)
 	}
 
 	// A never-started worker has no failed job for rerun-failed-jobs to act on, so it
@@ -287,8 +288,10 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 // Three invariants live here rather than in the doc, because breaking each is a code
 // change away:
 //
-//   - A pod already carrying AnnotationEvictionHandledAt is skipped. That is what makes
-//     recovery at-most-once per disrupted pod across reconciles, restarts, and replicas.
+//   - A pod already carrying AnnotationEvictionHandledAt is skipped. That keeps the scan
+//     off a pod it has already adjudicated; what makes recovery at-most-once is the
+//     recovery-claim ledger the annotation was demoted in favour of (Q1108), because
+//     the annotation dies with a pod two of the arms below delete.
 //   - The preemption and deletion arms are on a deadline the eviction arm is not. An
 //     evicted pod sits in PodFailed until the reaper takes it, so a late scan still
 //     finds it; a preempted or drained pod is being deleted and is readable only until
@@ -349,51 +352,25 @@ func externallyDeletedTerminalWorker(pod *corev1.Pod) bool {
 // under node pressure — the single signal both tiers branch on.
 const podReasonEvicted = "Evicted"
 
-// claimConflictRetries bounds the re-read retries claimEvictionRecovery makes against a
-// conflict raised by a writer that is not a claimant. Small on purpose: the pod is being
-// torn down while this runs, so a long retry only converts a Conflict into a NotFound.
-const claimConflictRetries = 3
-
-// claimEvictionRecovery stamps AnnotationEvictionHandledAt on pod under an optimistic
-// lock, so exactly one caller ever proceeds to recover it. The optimistic lock (rather
-// than a plain merge patch) is the whole point: two AGC replicas reconciling the same
-// owner would otherwise both patch successfully and both call rerun-failed-jobs,
-// spending two slots of one run's retry budget for one eviction.
+// stampEvictionHandled marks pod as adjudicated, so the recovery scan's cache-level
+// filter skips it on every later reconcile until the reaper takes it. It is what an
+// operator reads to see that a disruption was acted on, and it is what the e2e samples.
 //
-// The lock arbitrates between claimants, but the apiserver raises the same Conflict for
-// any concurrent write — and on the deletion arm the kubelet publishing the terminal
-// phase is guaranteed to be racing, because that transition is the edge that triggers
-// the reconcile. So a conflict is retried against a re-read pod, and only
-// a fresh object that already carries the annotation ends the attempt: that is the one
-// case where someone else really did claim it (Q809 — a kubelet status write cost a
-// drained worker its recovery on run 31556806760).
+// It is deliberately NOT the lock. That was its job until Q1108, and it could not hold
+// it: the lock has to outlive a pod two of the recovery arms delete, so it moved to the
+// recovery-claim ledger, which is taken before this is written. With one writer left
+// there is nothing for an optimistic lock to arbitrate, so this is a plain merge patch.
+// A concurrent kubelet status write no longer conflicts with it (Q809's second
+// flavour), and a pod already gone (Q809's first) costs the recovery nothing.
 //
-// The returned error is the caller's verdict. A Conflict means the claim is genuinely
-// another owner's; a NotFound means the pod went away, taking the only record of the
-// disruption with it. pod is left holding whatever generation was last read, so a
-// successful claim leaves the caller the identity annotations it needs.
-func (p *Provisioner) claimEvictionRecovery(ctx context.Context, pod *corev1.Pod) error {
-	for attempt := 0; ; attempt++ {
-		patch := client.MergeFromWithOptions(pod.DeepCopy(), client.MergeFromWithOptimisticLock{})
-		if pod.Annotations == nil {
-			pod.Annotations = map[string]string{}
-		}
-		pod.Annotations[AnnotationEvictionHandledAt] = p.nowFn().UTC().Format(time.RFC3339)
-
-		err := p.Client.Patch(ctx, pod, patch)
-		if !apierrors.IsConflict(err) || attempt == claimConflictRetries {
-			return err
-		}
-
-		var fresh corev1.Pod
-		if getErr := p.Client.Get(ctx, client.ObjectKeyFromObject(pod), &fresh); getErr != nil {
-			return getErr
-		}
-		if _, claimed := fresh.Annotations[AnnotationEvictionHandledAt]; claimed {
-			return err
-		}
-		fresh.DeepCopyInto(pod)
+// The returned error is advisory: every caller logs it and proceeds.
+func (p *Provisioner) stampEvictionHandled(ctx context.Context, pod *corev1.Pod) error {
+	patch := client.MergeFrom(pod.DeepCopy())
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
 	}
+	pod.Annotations[AnnotationEvictionHandledAt] = p.nowFn().UTC().Format(time.RFC3339)
+	return p.Client.Patch(ctx, pod, patch)
 }
 
 // runIdentityFromPod reads back the workflow-run identity ProvisionScaleSetWorker

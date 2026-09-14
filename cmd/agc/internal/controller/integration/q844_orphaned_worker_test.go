@@ -18,7 +18,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -101,18 +103,41 @@ func (f *orphanFixture) startAGC(t *testing.T) func() {
 }
 
 // storedInFlight reads the in-flight records out of the RunnerSet's guard ConfigMap, the
-// way a restarted AGC does. It finds the ConfigMap by the same label an operator would.
+// way a restarted AGC does. It addresses the ConfigMap by name rather than by the
+// RunnerSet label: the set's recovery-claim ledger carries the same label (Q1108), so a
+// label list returns two objects in an order nothing pins.
 func (f *orphanFixture) storedInFlight(t *testing.T) []scalesetlistener.InFlightJob {
 	t.Helper()
-	var cms corev1.ConfigMapList
-	require.NoError(t, k8sClient.List(ctx, &cms, client.InNamespace(f.ns),
-		client.MatchingLabels{provisioner.LabelRunnerSet: f.setName}))
-	if len(cms.Items) == 0 {
+	var cm corev1.ConfigMap
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: f.ns, Name: "scaleset-guards-" + f.setName}, &cm)
+	if apierrors.IsNotFound(err) {
 		return nil
 	}
+	require.NoError(t, err)
 	var state scalesetlistener.GuardState
-	require.NoError(t, json.Unmarshal([]byte(cms.Items[0].Data["guards.json"]), &state))
+	require.NoError(t, json.Unmarshal([]byte(cm.Data["guards.json"]), &state))
 	return state.InFlight
+}
+
+// recoveryClaimed reports whether podName's recovery is recorded in the RunnerSet's
+// recovery-claim ledger — the durable at-most-once record that outlives both the pod
+// and the AGC process (Q1108).
+func (f *orphanFixture) recoveryClaimed(t *testing.T, podName string) bool {
+	t.Helper()
+	var cm corev1.ConfigMap
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: f.ns, Name: "scaleset-recovery-claims-" + f.setName,
+	}, &cm)
+	if apierrors.IsNotFound(err) {
+		return false
+	}
+	require.NoError(t, err)
+	var ledger struct {
+		Claims map[string]json.RawMessage `json:"claims"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(cm.Data["recovery-claims.json"]), &ledger))
+	_, held := ledger.Claims[podName]
+	return held
 }
 
 // worker blocks until the set has a worker pod and returns it.
@@ -168,6 +193,53 @@ func TestAGC_ScaleSet_WorkerLostWhileTheAGCWasDownIsRecovered(t *testing.T) {
 	assert.Eventually(t, func() bool { return f.reruns.Load() > before }, 30*time.Second,
 		200*time.Millisecond,
 		"a restarted AGC must re-run the run whose worker went away while it was down")
+}
+
+// TestAGC_ScaleSet_RecoveredDrainIsNotReRunAfterARestart is the property Q1108 adds to
+// the two above, and the one the pod could never carry: the at-most-once record has to
+// outlive the pod AND the process. A drain is recovered while the AGC is up, the pod
+// goes, and the in-flight record stays — because the only thing that retires it is the
+// job's conclusion, which arrives from GitHub seconds later and here never arrives at
+// all. To the restarted AGC's orphan scan that entry is indistinguishable from a worker
+// lost unobserved, so without the recovery-claim ledger it re-runs a run that was
+// already re-run, spending a second slot of one run's budget for one disruption.
+//
+// A real apiserver is what makes this meaningful: the claim is in a real ConfigMap,
+// written by one manager generation and read by another, and the pod is really absent.
+// The narrower race the ledger was built for — a claim landing after the kubelet has
+// removed the object — is pinned in the provisioner's own tests, because envtest cannot
+// schedule that window deterministically.
+func TestAGC_ScaleSet_RecoveredDrainIsNotReRunAfterARestart(t *testing.T) {
+	f := newOrphanFixture(t, "v2-rs-ss-claimed", "ss-claimed", "linux-claimed")
+
+	stopFirst := f.startAGC(t)
+	f.srv.Enqueue(f.ssID)
+	pod := f.worker(t)
+	require.Eventually(t, func() bool { return len(f.storedInFlight(t)) == 1 }, 20*time.Second,
+		100*time.Millisecond, "the run behind the live worker must reach the guard ConfigMap")
+
+	// The drain, with the AGC watching: the kubelet's sequence, mark then terminal phase.
+	holdWithFinalizer(t, f.ns, pod.Name)
+	evictPod(t, &pod)
+	publishTerminalFailure(t, f.ns, pod.Name)
+
+	require.Eventually(t, func() bool { return f.reruns.Load() == 1 }, 30*time.Second,
+		100*time.Millisecond, "the drained worker's run must be re-run once")
+	require.True(t, f.recoveryClaimed(t, pod.Name),
+		"the recovery must be recorded durably, or nothing later can tell it happened")
+
+	// The pod goes, taking its eviction-handled stamp with it — which is exactly why
+	// that stamp could not be the record.
+	releaseFinalizer(t, f.ns, pod.Name)
+	requirePodGone(t, f.ns, pod.Name)
+	require.Len(t, f.storedInFlight(t), 1,
+		"the in-flight record must still be there, or the restart below poses no question")
+
+	stopFirst()
+	f.startAGC(t)
+
+	assert.Never(t, func() bool { return f.reruns.Load() > 1 }, 15*time.Second, 200*time.Millisecond,
+		"a disruption already recovered must not be re-run again by the restarted AGC's orphan scan")
 }
 
 // TestAGC_ScaleSet_LiveWorkerSurvivesARestart is the control, and the one that makes the
