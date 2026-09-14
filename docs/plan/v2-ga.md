@@ -58,6 +58,9 @@ A window is billable and cannot be replayed; a reading that lives only in a term
 
 **A reading that was not taken is not a pass.** 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.
 
+**Nothing in this table gates a release.** These are soak readings for the `v2` graduation, so a 🔲 is a measurement this project still wants, never a task standing between a candidate and its tag.
+What gates 1.8 is its own [definition of done](release-1.8.md#definition-of-done), and Q1048 does not appear in that release's scope ledger at all.
+
 | Reading | Criterion | Verdict | What it found | Window |
 |---|---|---|---|---|
 | Q1048 | mirror-client-census | 🔲 Not taken | the census refused: an address resolved to no pod and no node, or nothing connected | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
