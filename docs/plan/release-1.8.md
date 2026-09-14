@@ -1,6 +1,8 @@
 # Release 1.8 Milestone Definition
 
-> **Status: scoped 2026-09-07; the gating row is closed, `v1.8.0-rc.1` cut 2026-09-12 and awaiting dogfood validation.** The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
+> **Status: scoped 2026-09-07; every gating item is met.
+> `v1.8.0-rc.1` was cut and validated on dogfood 2026-09-12 and still covers `main`, so the tag is a decision rather than a blocked one.** What remains is the riding evidence: criteria 2 and 3 have no reading, and taking them needs another window against this same candidate, not a new one.
+> The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
 > Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and [Q1085](../queue/Q1085.md)'s release-notes line.
 > The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
 > The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 99 commits and **FLOOR: MINOR** on 2026-09-12, so the tag is `v1.8.0`.
@@ -58,7 +60,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
-| — | RC validated on dogfood | gates | 🔲 `v1.8.0-rc.1` cut 2026-09-12, validation pending |
+| — | RC validated on dogfood | gates | ✅ `v1.8.0-rc.1` cut and validated 2026-09-12; still covers `main` |
 
 ## Explicitly out of scope
 
@@ -124,6 +126,14 @@ The tag was compared against `origin/main` after creation and before the push, p
 | Step | Verdict |
 |---|---|
 | Tag points at the target | **PASS.** `v1.8.0-rc.1^{commit}` and `origin/main` both `c99137ea62340be4e228b74291c488175faefc7f`. |
-| Publish pipeline | pending |
-| Artifacts and provenance | pending |
-| Dogfood validation | pending |
+| Publish pipeline | **PASS.** All six images, the chart and the CRD chart published. |
+| Artifacts and provenance | **PASS.** 9/9 assets, `draft: false`, `immutable: true`; all eight cosign signatures verified. Provenance `buildSignerURI` ends `publish.yml@refs/tags/v1.8.0-rc.1` and `sourceRepositoryDigest` equals the tag target. The digest check was confirmed able to fail by re-running it against `unit-test.yml` as the signer identity, which exits 1. |
+| Dogfood validation | **PASS**, 2026-09-12. e2e matrix GREEN; both sizing profiles actuating (Throughput on 270 real samples); the quota rung bound at zero headroom (`withheldCapacity[quota]=2`) and released on restore; the signed CRD manifest verified, applied and all five CRDs registered. Recorded at `refs/validated/v1.8.0-rc.1`. |
+
+**The candidate still covers `main`.** `check-artifact-unchanged.sh c99137ea6 origin/main` exits 0 at `f771594d1`: 20 files changed since the tag, none on the released surface.
+So the eight commits that merged after the candidate — the Q1058, Q1104, Q1105 and soak-wiring work — do not require a new one.
+
+**What that validation did *not* produce is the soak readings**, and the reason is structural rather than an oversight in the run: nothing invoked them.
+The gate validates the candidate and had no step that takes a reading, `release.md` asked for none, and nothing outside their own rows referenced Q1059 or Q1060 at all.
+Q1038's reading was taken in the same window only because `mirror-timing.sh` already had a step in `e2e-reusable.yml`.
+[#1922](https://github.com/actions-gateway/github-actions-gateway/pull/1922) wired the other three; no window has run that wiring, so taking them means re-running the window against this same candidate rather than cutting a new one.
