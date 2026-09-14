@@ -3452,6 +3452,16 @@ Each returns <code>[]</code> or <code>0</code> when the page is clean:</p>
 <p>Two cautions learned the hard way.
 Measuring a string's width by building a probe span from <code>getComputedStyle(...).font</code> under-reported by 40% against the real render; use a <code>Range</code> over the actual node instead.
 And resizing the <em>parent</em> proves nothing about an element sized in <code>vw</code> units, which only a real viewport resize will change.</p>
+<p><strong>Probe 2 is the one to run at 320px, not just at 1440px.</strong> A component that fits a laptop can still widen the page on a phone, and the page then scrolls sideways whatever the copy says.
+Measured 2026-09-14 across all 63 published pages: clean at 1440px, and two pages over at 320px.
+<code>operations/gitops.md</code> ran over by 47px and <code>operations/migration-from-arc.md</code> by 324px, which rendered a 320px viewport 644px wide.
+Both owners were <code>.persona-pills-top</code>, the audience pills <code>docs/javascripts/extra.js</code> builds from a page's <code>&gt; **Audience:**</code> line.</p>
+<p><code>make render-overflow-check</code> holds this rule over every published page at 320px and 1440px, in both publication scopes (<a href="../testing/#the-render-overflow-gate">testing.md</a>).
+It is the one gate here that measures the render rather than approximating it from the Markdown, and it asserts only that a page is not wider than its viewport, which needs no budget chosen.</p>
+<p><strong>Audience pills wrap; row pills do not.</strong> <code>.persona-pill</code> sets <code>white-space: nowrap</code>.
+That is right for the row filter chips, whose short persona names read as labels, and wrong for the audience pills above a page title, whose text is whatever that page's <code>Audience:</code> line says.
+A flex item cannot shrink below its nowrap max-content width, so a long audience phrase widens the page instead of wrapping.
+<code>.persona-pills-top .persona-pill { white-space: normal }</code> is the whole fix, and it changes nothing at 1440px, where the pills still render on one line.</p>
 <p><strong>A shared component must not carry near-identical content on two pages.</strong> The landing page and <code>why-gag.md</code> both ran a <code>.gag-stats</code> band whose first and third tiles matched verbatim, number and lead text alike, so the comparison page read as a repeat of the landing page.
 The band was removed from <code>why-gag.md</code> rather than reworded, because the diagram above it and the table below it already carried that argument.
 Only <code>docs/index.md</code> and <code>docs/why-gag.md</code> use these components, so the check is a diff of two files.</p>
@@ -3574,6 +3584,11 @@ Each rule below was measured against the render on 2026-08-08, and each has a pr
 <td>A transition names its properties, and only compositor ones</td>
 <td>every custom <code>transition</code></td>
 <td>the duration-gated audit below</td>
+</tr>
+<tr>
+<td>No component widens the page past the viewport</td>
+<td>every hand-built component, checked at 320px</td>
+<td><code>documentElement.scrollWidth - clientWidth</code>, then hide each <code>article</code> child to find the owner (probe 2 above)</td>
 </tr>
 </tbody>
 </table>
