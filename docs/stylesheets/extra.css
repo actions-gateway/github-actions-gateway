@@ -1438,6 +1438,16 @@ button.persona-pill:focus-visible {
   margin: -0.2rem 0 1.2rem;
 }
 
+/* These carry whatever the page's `> **Audience:**` line says, so unlike the
+   row pills — short persona names the nowrap above keeps on one line — one can
+   be wider than a phone. A flex item cannot shrink below its nowrap max-content
+   width, so the page scrolls sideways instead: 324px of it on
+   migration-from-arc.md at 320px, measured 2026-09-14. Wrapping is the whole
+   fix; min-width: 0 is redundant once the longest word sets the floor. */
+.persona-pills-top .persona-pill {
+  white-space: normal;
+}
+
 /* Audience pills are links to the filtered ops index — keep the pill look. */
 .md-typeset a.persona-pill {
   text-decoration: none;

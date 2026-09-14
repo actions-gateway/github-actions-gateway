@@ -393,6 +393,16 @@ Two cautions learned the hard way.
 Measuring a string's width by building a probe span from `getComputedStyle(...).font` under-reported by 40% against the real render; use a `Range` over the actual node instead.
 And resizing the *parent* proves nothing about an element sized in `vw` units, which only a real viewport resize will change.
 
+**Probe 2 is the one to run at 320px, not just at 1440px.** A component that fits a laptop can still widen the page on a phone, and the page then scrolls sideways whatever the copy says.
+Measured 2026-09-14 across all 63 published pages: clean at 1440px, and two pages over at 320px.
+`operations/gitops.md` ran over by 47px and `operations/migration-from-arc.md` by 324px, which rendered a 320px viewport 644px wide.
+Both owners were `.persona-pills-top`, the audience pills `docs/javascripts/extra.js` builds from a page's `> **Audience:**` line.
+
+**Audience pills wrap; row pills do not.** `.persona-pill` sets `white-space: nowrap`.
+That is right for the row filter chips, whose short persona names read as labels, and wrong for the audience pills above a page title, whose text is whatever that page's `Audience:` line says.
+A flex item cannot shrink below its nowrap max-content width, so a long audience phrase widens the page instead of wrapping.
+`.persona-pills-top .persona-pill { white-space: normal }` is the whole fix, and it changes nothing at 1440px, where the pills still render on one line.
+
 **A shared component must not carry near-identical content on two pages.** The landing page and `why-gag.md` both ran a `.gag-stats` band whose first and third tiles matched verbatim, number and lead text alike, so the comparison page read as a repeat of the landing page.
 The band was removed from `why-gag.md` rather than reworded, because the diagram above it and the table below it already carried that argument.
 Only `docs/index.md` and `docs/why-gag.md` use these components, so the check is a diff of two files.
@@ -473,6 +483,7 @@ Each rule below was measured against the render on 2026-08-08, and each has a pr
 | Text takes `--gag-muted` / `--gag-accent-ink`, never a raw Material token | any custom rule setting `color` | the sweep below, **run in both palettes** |
 | Figures carry tabular digits | numbers a reader compares in a row, or watches change | `font-variant-numeric`, plus a width check across differing digits |
 | A transition names its properties, and only compositor ones | every custom `transition` | the duration-gated audit below |
+| No component widens the page past the viewport | every hand-built component, checked at 320px | `documentElement.scrollWidth - clientWidth`, then hide each `article` child to find the owner (probe 2 above) |
 
 **Check the dark palette separately, and expect it to be the worse one.** Material's muted-text token is near-symmetric in alpha and not in perceived contrast: `--md-default-fg-color--light` is `rgba(0, 0, 0, 0.54)` over white, which composites to `#757575` for `Lc 72`, and `rgba(226, 228, 233, 0.56)` over slate's `#1e2129`, which composites to `#8c8e95` for `Lc 39.4`.
 A component inheriting it loses 32.6 points when the reader flips the palette, with nothing in the source to show it.
