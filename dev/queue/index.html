@@ -2793,6 +2793,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A withheld <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</td>
 </tr>
 <tr>
+<td><a href="Q1110/">Q1110</a></td>
+<td>Tag and main pages deploys collide on one pages_build_version</td>
+<td><code>ci</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A stable tag sits on <code>main</code>'s tip, so the merge push and the tag push are the <strong>same commit</strong> and both trigger <code>pages</code>.</td>
+</tr>
+<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
