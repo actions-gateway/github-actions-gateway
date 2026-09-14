@@ -116,7 +116,12 @@ That is a published-documentation change to a served API, not a surface change.
 **Reviewed by hand, because the checker has no category for it:** Q1011 adds `api/apinames`, a new exported package in the `api` module (`agentidentity.go`, 69 lines).
 It publishes helper functions rather than API types, so it widens the module's Go surface without touching the CRD surface the checker reads.
 
-**Deferred to the stable tag, deliberately.** The marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
+**The notes are drafted**, at `2de55f74f`, in [docs/releases/v1.8.0.md](../releases/v1.8.0.md).
+The operator-caveat pass ran into it: `operator-caveats-since.sh v1.7.0` reports one new `upgrade.md` section and one new `troubleshooting.md` section, both the agent-identity guard, and both are carried into the notes as a `WARNING` banner and an **Upgrading** entry with the two `kubectl` commands that find a collision in advance.
+The draft's `Everything since v1.7.0` count is 109, which `check-release-notes.sh` can only verify once `v1.8.0` is a tag; re-derive it at the cut if anything merges first.
+The **Container images** section is deliberately absent, because the digests do not exist until `publish.yml` builds them ([why](../releases/README.md#image-digests-are-a-deliberate-post-tag-amendment)).
+
+**Deferred to the stable tag, deliberately.** The marketing reconciliation, the roadmap and `features.md` reconciliation, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
 Each verdict names the commit it is measured at ([release.md](../operations/release.md#1-pre-flight)).
 
 ## Candidate validation
