@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/getting-started/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/getting-started/">
       
       
         <link rel="prev" href="../demo/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2834,7 +2834,7 @@ Already on v1?
 <li>Go 1.26+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="../charts/actions-gateway/README.md">reference</a>).
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/charts/actions-gateway/README.md">reference</a>).
 It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.</p>
@@ -2849,7 +2849,7 @@ They are not installed by the chart.</p>
 <p>All four images must be <strong>pinned by digest</strong>.
 The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too).
 Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only.
-See the <a href="../charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
 <blockquote>
 <p><strong>Dev/CI.</strong> The Helm chart is the single install path.
 There is no kustomize alternative.
@@ -2873,7 +2873,7 @@ For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosig
 The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code>).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>).
-See the <a href="../charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
 <p>Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
@@ -3108,40 +3108,60 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 <a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span><span class="no">-----END RSA PRIVATE KEY-----</span>
 </code></pre></div>
 <ol>
-<li><strong>Update the <code>ActionsGateway</code> CR</strong> to reference the new Secret name:</li>
+<li><strong>Update the <code>ActionsGateway</code> CR</strong> to reference the new Secret name.
+   The field differs between the two APIs, so take the one matching the gateway you created:</li>
 </ol>
-<!-- gag:verify id=rotate-patch-ref mode=run needs=v1-gateway,github-app-secret-rotated teardown=none -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'</span>
+<!-- gag:verify id=rotate-patch-ref mode=run needs=v2-gateway-set,github-app-secret-rotated teardown=none -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># v2 (the shape Step 4 creates): the credentials union names the Secret.</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway.actions-gateway.com<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"credentials":{"githubApp":{"name":"my-github-app-v2"}}}}'</span>
+</code></pre></div>
+<!-- gag:verify id=rotate-patch-ref-v1 mode=skip reason=needs-the-legacy-v1-gateway-applied -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># v1 (legacy): the Secret is named by a top-level ref.</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway.actions-gateway.github.com<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'</span>
 </code></pre></div>
 <p>The GMC detects the Secret reference change, updates the AGC pod template (including an <code>actions-gateway/github-app-secret</code> annotation that records the new Secret name), and triggers a rolling update.
    The new pod mounts the new Secret and immediately begins using the new credentials.</p>
 <ol>
-<li><strong>Confirm the rollout completed:</strong></li>
+<li><strong>Confirm the rollout completed</strong>, against the right Deployment: the AGC is named <strong>per gateway</strong> in v2, as <code>&lt;gateway-name&gt;-agc</code>, so a <code>team-a-gateway</code> tenant rolls <code>deploy/team-a-gateway-agc</code>.
+   Under v1 there is one AGC Deployment per namespace, named <code>actions-gateway-controller</code>.</li>
 </ol>
 <!-- gag:verify id=rotate-rollout-status mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Optionally inspect rotation history:</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/team-a-gateway-agc<span class="w"> </span>-n<span class="w"> </span>team-a
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Optionally inspect rotation history:</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/team-a-gateway-agc<span class="w"> </span>-n<span class="w"> </span>team-a
+</code></pre></div>
+<!-- gag:verify id=rotate-rollout-status-v1 mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
 </code></pre></div>
 <ol>
 <li><strong>Verify the new token is working:</strong></li>
 </ol>
 <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Look for: "token refresh successful" or no token refresh errors</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/team-a-gateway-agc<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Look for: "token ready", logged on every refresh. A failure reads</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># "token fetch failed; retrying after backoff".</span>
+</code></pre></div>
+<!-- gag:verify id=rotate-verify-logs-v1 mode=skip reason=needs-a-running-agc-pod -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
 </code></pre></div>
 <ol>
 <li><strong>Delete the old Secret</strong> once the rollout is confirmed healthy:</li>
 </ol>
 <!-- gag:verify id=rotate-delete-old-secret mode=run needs=rotate-patch-ref teardown=none -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>secret<span class="w"> </span>my-github-app<span class="w"> </span>-n<span class="w"> </span>team-a
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>secret<span class="w"> </span>my-github-app<span class="w"> </span>-n<span class="w"> </span>team-a
 </code></pre></div>
 <ol>
 <li><strong>Revoke the old key</strong> in the GitHub App settings.</li>
 </ol>
 <p><strong>Important:</strong> Do not update the Secret in-place.
-The GMC watches the <code>gitHubAppRef.name</code> reference, not the Secret's contents.
+The GMC watches the reference, not the Secret's contents: <code>spec.credentials.githubApp.name</code> in v2, <code>spec.gitHubAppRef.name</code> in v1.
 Changing the Secret data without changing the reference name does not trigger an AGC rollout.
 The AGC continues using the cached token derived from the old key until it restarts or the token expires.
 Creating a new Secret and updating the reference is the correct rotation path.</p>
@@ -3149,7 +3169,7 @@ Creating a new Secret and updating the reference is the correct rotation path.</
 Recreating the Secret (with the same name, or updating <code>gitHubAppRef.name</code>) clears the condition and resumes normal operation.
 To inspect the condition:</p>
 <!-- gag:verify id=credential-condition mode=run needs=v1-gateway teardown=none -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
 </code></pre></div>
 
 

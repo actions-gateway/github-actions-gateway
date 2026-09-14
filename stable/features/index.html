@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/features/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/features/">
       
       
         <link rel="prev" href="../alternatives/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2814,7 +2814,7 @@
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
 <p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see <a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
-<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the <code>actions-gateway.com/v2beta1</code> API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.5</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the <code>actions-gateway.com/v2beta1</code> API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.8</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.</p>
 <div class="admonition tip">
 <p class="admonition-title">Check the version you're running</p>
@@ -2826,18 +2826,18 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
   The default in v2.</li>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
-<li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
+<li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.</li>
-<li><strong><a href="../operations/troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">Gate for workers that bind and never start</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: opt-in.
+<li><strong><a href="../operations/troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">Gate for workers that bind and never start</a></strong> <span class="gag-v2-badge">v2</span>: opt-in.
   Stop claiming jobs while bound workers never reach running, so an image that will not pull cannot quietly absorb the set's capacity.
   Reported whether or not the gate is on.</li>
 <li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.</li>
 <li><strong><a href="../design/02-architecture/">Priority tiers per runner set</a></strong>: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong>: opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
-<li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong>: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.</li>
+<li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong>: worker pods exist only while a job runs; listeners are single-digit-KiB goroutines in one shared pod, not a listener pod per runner group.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Unmodified upstream runner images</a></strong>: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock <code>actions/runner</code> image, or any derivative, runs with no rebuild.</li>
 <li><strong><a href="../design/02-architecture/">A job conclusion survives losing the process</a></strong>: conclusions are persisted before any message delete is issued, so a hard kill leaves the message to be replayed rather than the conclusion lost.
   Measured over 60 graceful stops at maximum pressure.</li>
@@ -2856,10 +2856,12 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 </ul>
 <h2 id="tenant-isolation-and-egress">Tenant isolation and egress<a class="headerlink" href="#tenant-isolation-and-egress" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Bound GitHub runner group</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: <code>runnerGroup</code>, or <code>defaultRunnerGroup</code> once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
+<li><strong><a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Bound GitHub runner group</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: <code>runnerGroup</code>, or <code>defaultRunnerGroup</code> once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
   An unknown group fails the set closed.</li>
-<li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">Cross-tenant scale-set name guard</a></strong> <span class="gag-new-badge">new in 1.5</span>: a set's first <code>runnerLabel</code> names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
+<li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">Cross-tenant scale-set name guard</a></strong>: a set's first <code>runnerLabel</code> names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
   Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.</li>
+<li><strong><a href="../operations/upgrade/#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name">Agent-identity collision guard</a></strong> <span class="gag-new-badge">new in 1.8</span>: two pools reaching one agent identity both register the same GitHub runner name.
+  Admission now rejects the second, so the pair never forms; the holder is named only when the tenant owns both.</li>
 <li><strong><a href="../design/network-architecture/">Per-tenant egress IPs</a></strong>: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Standalone <code>EgressProxy</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays <code>NetworkPolicy</code>-restricted.</li>
 <li><strong><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Cross-namespace proxy sharing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in <code>sharing.allowedNamespaces</code>.
@@ -2875,7 +2877,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../design/05-security/">Secure-by-default hardening</a></strong>: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.</li>
 <li><strong><a href="../operations/runner-template-library/">Runner template library</a></strong>: three shipped worker pod shapes (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>), each applied with one <code>kubectl apply -k</code>, so a tenant starts from a validated template instead of transcribing a capability set by hand.
   Only templates CI exercises may ship, and a gate enforces it.</li>
-<li><strong><a href="../operations/worker-shared-storage/">Shared worker storage</a></strong> <span class="gag-new-badge">new in 1.6</span>: a validated reference architecture for a <code>ReadWriteMany</code> volume several jobs mount to pass files, with its <code>fsGroup</code> requirement measured.
+<li><strong><a href="../operations/worker-shared-storage/">Shared worker storage</a></strong>: a validated reference architecture for a <code>ReadWriteMany</code> volume several jobs mount to pass files, with its <code>fsGroup</code> requirement measured.
   The classes it was exercised against are named; a harness validates yours.</li>
 <li><strong><a href="../operations/kata-dind-workloads/">Kata micro-VM workers</a></strong>: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a <code>kind</code> cluster inside an unprivileged worker pod.</li>
 <li><strong><a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">Untrusted-PR egress posture</a></strong> <span class="gag-new-badge">new in 1.7</span>: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
@@ -2898,11 +2900,13 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/observability-metrics/#full-metrics-reference">Fleet rollups for platform admins</a></strong>: cross-tenant degraded, egress-stale, and quota gauges in a single pane.</li>
 <li><strong><a href="../operations/observability-metrics-access/">Scraping setup</a></strong>: wiring the mutual-TLS metrics endpoints into your Prometheus.</li>
 <li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong>: ready-to-apply alert rules as code.</li>
-<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: a tenant dashboard and a platform dashboard, both as code.</li>
-<li><strong><a href="../operations/troubleshooting/#why-is-my-runnerset-not-being-offered-jobs">Why a set is not being offered jobs</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: <code>RunnerSet</code> status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
+<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: tenant, platform, budget, and security dashboards, all as code.</li>
+<li><strong><a href="../operations/troubleshooting/#why-is-my-runnerset-not-being-offered-jobs">Why a set is not being offered jobs</a></strong> <span class="gag-v2-badge">v2</span>: <code>RunnerSet</code> status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
   Readable from <code>kubectl describe</code>, so answering it no longer needs metrics access.</li>
+<li><strong><a href="../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">Egress attribution readiness</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.8</span>: an <code>EgressAuditUnattributed</code> condition and gauge say whether both halves of that attribution are on, and name the half that is not.
+  Advisory: it never gates <code>Ready</code>.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
-<li><strong><a href="../operations/observability-logging/#proxy-egress-audit-record">Per-pool egress audit record</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.</li>
+<li><strong><a href="../operations/observability-logging/#proxy-egress-audit-record">Per-pool egress audit record</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.</li>
 <li><strong><a href="../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">Which host each job reached</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.7</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.</li>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>
@@ -2912,10 +2916,11 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/air-gapped-install/">Air-gapped install</a></strong>: relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.</li>
 <li><strong><a href="../operations/gitops/">GitOps install</a></strong>: declarative Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples, with the CustomResourceDefinition (CRD) pruning gotcha handled.</li>
 <li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong>: versioned upgrade procedures and the rollback path for each release.</li>
-<li><strong><a href="../operations/troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">Stale-CRD startup check</a></strong> <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave <code>runnerGroup</code> accepted and silently pruned.</li>
-<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong> <span class="gag-new-badge">new in 1.5</span>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
-<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Observed runner version</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
+<li><strong><a href="../operations/troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">Stale-CRD startup check</a></strong>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave <code>runnerGroup</code> accepted and silently pruned.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Observed runner version</a></strong> <span class="gag-v2-badge">v2</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
   A self-report from the tenant's own container, not an attestation.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Registry-read runner version</a></strong> <span class="gag-new-badge">new in 1.8</span>: the gateway reads the runner version out of the worker image in its registry before any pod runs it, so a digest-only or custom-tagged image gets a verdict rather than <code>Unknown</code>.</li>
 <li><strong><a href="../operations/backup-restore/">Backup and restore</a></strong>: backup posture and a recovery runbook, with a <a href="../operations/velero-backup-restore/">Velero-specific how-to</a>.</li>
 <li><strong><a href="../operations/troubleshooting/">Troubleshooting</a></strong>: symptom to diagnosis to remediation, organised by observable failure mode.</li>
 <li><strong><a href="../operations/runbook/">Production runbook</a></strong>: the operational procedures the platform team needs on call.</li>

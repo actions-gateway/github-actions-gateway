@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/runbook/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/runbook/">
       
       
         <link rel="prev" href="../node-shutdown-budgets/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3721,6 +3721,12 @@
 </blockquote>
 <p>For initial setup steps see <a href="../../getting-started/">Getting Started</a>.
 For detailed symptom → diagnosis steps see <a href="../troubleshooting/">Troubleshooting</a>.</p>
+<p><strong>Addressing the AGC.</strong> Under v2 every AGC control-plane object is named per gateway, as <code>&lt;gateway&gt;-agc</code>: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+A <code>team-a-gateway</code> tenant therefore addresses <code>deploy/team-a-gateway-agc</code>, <code>sa/team-a-gateway-agc</code>, and so on.
+Under v1 there is one AGC per namespace and all of them carry the fixed name <code>actions-gateway-controller</code>.
+Commands below give both forms; substitute your own gateway name for <code>&lt;gateway&gt;</code>.</p>
+<p><strong>Selecting AGC pods needs neither form.</strong> The bare <code>app</code> label carries the per-gateway name under v2 and the fixed name under v1, so <code>-l app=actions-gateway-controller</code> selects nothing on a v2 tenant.
+The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gateway-controller</code> under both, so <code>-l app.kubernetes.io/name=actions-gateway-controller</code> is the selector that works on either and is what the commands below use.</p>
 <hr />
 <h2 id="day-2-operations">Day-2 Operations<a class="headerlink" href="#day-2-operations" title="Permanent link">&para;</a></h2>
 <h3 id="adding-a-tenant">Adding a Tenant<a class="headerlink" href="#adding-a-tenant" title="Permanent link">&para;</a></h3>
@@ -3857,7 +3863,7 @@ For <strong>abuse and compromise</strong> detection (eviction-retry loops, proxy
 - HPA metric unknown — autoscaling broken; proxy may not handle burst load.</p>
 <hr />
 <h2 id="alert-rule-reference">Alert Rule Reference<a class="headerlink" href="#alert-rule-reference" title="Permanent link">&para;</a></h2>
-<p>Every alert shipped in the reference <a href="../../deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> (reproduced in <a href="../observability-alerting/#recommended-alert-rules">Recommended Alert Rules</a>) carries a <code>runbook_url</code> annotation that resolves to the matching entry below, so on-call lands on a response procedure rather than just the alert's <code>summary</code>/<code>description</code>.
+<p>Every alert shipped in the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> (reproduced in <a href="../observability-alerting/#recommended-alert-rules">Recommended Alert Rules</a>) carries a <code>runbook_url</code> annotation that resolves to the matching entry below, so on-call lands on a response procedure rather than just the alert's <code>summary</code>/<code>description</code>.
 Severity classes follow <a href="#page-worthy-vs-ticket-worthy">Page-Worthy vs. Ticket-Worthy</a>.</p>
 <h3 id="actionsgatewaynoactivesessions">ActionsGatewayNoActiveSessions<a class="headerlink" href="#actionsgatewaynoactivesessions" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The AGC has no open long-poll sessions, so no jobs are acquired and the queue backs up indefinitely.
@@ -3960,7 +3966,8 @@ The gate throttles rather than seals, so intake continues at roughly one claim p
    The gauge keys on <code>runner_set</code> while this alert's series keys on <code>runner_group</code>; both carry the same set's name, because the rejection counter is shared with v1 <code>RunnerGroup</code> owners.</li>
 <li>Work the reason with <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">RunnerSet Reports WorkerCapacityDeclined</a>, which maps each one to the node, taint, quota, or image fix that clears it.
    <code>PodsNotStarting</code> is the odd one out and the quickest: the cluster placed the pod, so read the pod's own backoff message for the image it cannot pull rather than looking at nodes at all.</li>
-<li>The one-line rollback, if the gate is wrong about the cluster, is <code>spec.capacityGate.mode: Off</code>; the same section covers when that is the right call.</li>
+<li>The one-line rollback, if the gate is wrong about the cluster, is <code>spec.capacityGate.mode: "Off"</code>; the same section covers when that is the right call.
+   <strong>Quote the <code>Off</code>.</strong> YAML reads a bare one as the boolean false, so an unquoted rollback is rejected naming a value you never typed, during an incident, which is the worst time to debug a manifest (Q985).</li>
 </ol>
 <h3 id="actionsgatewayscalesetcapacitywithheld">ActionsGatewayScaleSetCapacityWithheld<a class="headerlink" href="#actionsgatewayscalesetcapacitywithheld" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> The same gate on the <strong>scale-set</strong> (default) tier, where a declined job is never assigned at all, so there is no rejected delivery to count.
@@ -3969,7 +3976,8 @@ The gate shows up instead as slots removed from the ceiling the set advertises t
 An idle gated set whose worker shape stays unplaceable holds a latched <code>AwaitingProbe</code> decline indefinitely; that reading is truthful and costs nothing, so on its own it must not raise a ticket.
 Under a real withhold the per-window probe job is still assigned, so a set with work waiting keeps <code>actions_gateway_scaleset_jobs_assigned_total</code> moving while an idle one does not.</p>
 <ol>
-<li>Read <code>actions_gateway_scaleset_advertised_capacity</code> for what the set is still offering and <code>actions_gateway_scaleset_capacity_withheld</code> by <code>reason</code> for who took the rest; a <code>quota</code> share alongside the <code>capacity</code> one means the <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">ResourceQuota</a> is binding too.</li>
+<li>Read <code>actions_gateway_scaleset_advertised_capacity</code> for what the set is still offering and <code>actions_gateway_scaleset_capacity_withheld</code> by <code>reason</code> for who took the rest; a <code>quota</code> share alongside the <code>capacity</code> one means the <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">ResourceQuota</a> is binding too.
+   The budget dashboard's <a href="../observability-dashboards/#budget-dashboard">Throttled Intake row</a> plots both as one stack whose total is the declared ceiling, which is the fastest way to see the split.</li>
 <li>Then follow the same evidence and remediation path as <a href="#actionsgatewaycapacitygaterejectingjobs">ActionsGatewayCapacityGateRejectingJobs</a> above.</li>
 </ol>
 <hr />
@@ -3986,8 +3994,16 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 </ol>
 <h3 id="active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero<a class="headerlink" href="#active_sessions-flatlining-at-zero" title="Permanent link">&para;</a></h3>
 <ol>
-<li>Check AGC pod status: <code>kubectl get pod -n &lt;namespace&gt; -l app=actions-gateway-controller</code>.</li>
-<li>Check AGC logs: <code>kubectl logs -n &lt;namespace&gt; deploy/actions-gateway-controller --tail=100</code>.</li>
+<li>Check AGC pod status: <code>kubectl get pod -n &lt;namespace&gt; -l app.kubernetes.io/name=actions-gateway-controller</code>.</li>
+<li>Check AGC logs:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
+</code></pre></div>
+<ol>
 <li>Check RunnerGroup conditions: <code>kubectl get runnergroup -n &lt;namespace&gt; -o yaml</code>.</li>
 <li>If pod is <code>CrashLoopBackOff</code> or <code>Error</code>: see <a href="../troubleshooting/#agc-crashloopbackoff-or-not-acquiring-jobs">Troubleshooting — AGC CrashLoopBackOff</a>.</li>
 <li>If pod is running but sessions are zero: check for token errors (see <a href="../troubleshooting/#token-refresh-errors-spiking">Token Refresh Errors</a>) and network connectivity (see <a href="../troubleshooting/#network-connectivity-failures">Network Connectivity Failures</a>).</li>
@@ -4005,7 +4021,15 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 <ol>
 <li>Confirm the wedge: <code>scaleset_jobs_assigned_total</code> is rising but <code>scaleset_jobs_provisioned_total</code> is not, for the affected <code>namespace</code>/<code>runner_set</code>.</li>
 <li>Check the provision-error rate: <code>rate(actions_gateway_scaleset_provision_errors_total[5m])</code>.
-   A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs (<code>kubectl logs -n &lt;namespace&gt; deploy/actions-gateway-controller --tail=100</code>) for <code>generate-jitconfig</code> errors and worker-pod create rejections.</li>
+   A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs for <code>generate-jitconfig</code> errors and worker-pod create rejections.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
+</code></pre></div>
+<ol>
 <li>Check the worker-pod <code>ResourceQuota</code> (see <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>) and the <code>WorkerQuotaExceeded</code> / <code>WorkersUnschedulable</code> conditions — a full quota or an unschedulable pod stalls provisioning with no provision <em>error</em>.</li>
 <li>If provision errors are zero and quota is healthy, check the listener session itself: the RunnerSet's <code>Ready</code>/<code>RateLimited</code>/<code>Degraded</code> conditions (<code>kubectl get runnerset -n &lt;namespace&gt; -o yaml</code>) surface a rate-limited or unauthorized scale-set session (Q325).
    The conditions are a <em>state</em> signal that only trips once an episode persists (<code>RateLimited</code> after ten minutes), so pair them with the <em>rate</em> signal <code>rate(actions_gateway_message_poll_errors_total[5m])</code> for the same namespace — a stream of brief 429 or transport episodes throttles polling without ever setting a condition (Q446).</li>
@@ -4025,22 +4049,26 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
 <ol>
 <li>Generate a new private key from the GitHub App settings page and download the <code>.pem</code> file.</li>
 <li>Create a new Secret with the new key:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;new-secret-name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span>&lt;appId&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span>&lt;installationId&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>&lt;path-to-new-key.pem&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;new-secret-name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span>&lt;appId&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span>&lt;installationId&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>&lt;path-to-new-key.pem&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
 <li>Update the <code>ActionsGateway</code> CR to reference the new Secret:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"&lt;new-secret-name&gt;"}}}'</span>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"&lt;new-secret-name&gt;"}}}'</span>
 </code></pre></div></li>
 <li>Confirm the AGC Deployment has rolled and the new pod is healthy:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
-<li>Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.</li>
-<li>Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</li>
 </ol>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+7. Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.
+8. Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</p>
 <p><strong>Scope assessment.</strong> The compromised key could have been used to acquire installation tokens (scoped to <code>Actions: Read</code>, <code>Administration: Read</code>).
 Check GitHub's audit log for unusual API activity from the App installation: Settings → Organizations → <code>&lt;org&gt;</code> → Audit log → filter by the App name.</p>
 <hr />
@@ -4050,7 +4078,15 @@ Check GitHub's audit log for unusual API activity from the App installation: Set
 <li><strong>In-flight jobs</strong> whose <code>renewjob</code> loop has lapsed will be cancelled by GitHub.
    There is no automatic recovery for these — they require manual re-run.</li>
 <li><strong>Queued jobs</strong> (not yet acquired) will be redelivered by GitHub to the next healthy session within ~2 minutes of the AGC restarting.</li>
-<li><strong>To force restart:</strong> <code>kubectl rollout restart deploy/actions-gateway-controller -n &lt;namespace&gt;</code>.</li>
+<li><strong>To force restart:</strong></li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<ol>
 <li>Monitor <code>actions_gateway_active_sessions</code> — it should reach 1 per RunnerGroup within a few seconds of the pod starting.</li>
 </ol>
 <p><strong>State that persists:</strong> All RunnerGroup CRs, Secrets, and Kubernetes resources are durable.

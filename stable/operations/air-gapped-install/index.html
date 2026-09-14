@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/air-gapped-install/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/air-gapped-install/">
       
       
         <link rel="prev" href="../install/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3029,25 +3029,41 @@ All the relevant ServiceAccounts live in the <strong>tenant namespace</strong>.<
 <p>For each tenant namespace, first create the pull Secret there (repeat step 3 with <code>--namespace &lt;tenant-ns&gt;</code>), then patch the ServiceAccounts:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">TENANT_NS</span><span class="o">=</span>team-a
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># AGC pods run as the fixed AGC ServiceAccount "actions-gateway-controller"</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># (one per tenant namespace; the name is not derived from the gateway name).</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Worker pods run as "actions-gateway-worker" — this SA also pulls the injected</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># wrapper init container, so no separate wrapper Secret/SA is needed.</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-worker<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># AGC pods run as the AGC ServiceAccount. Under v2 it is named for the gateway,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># so a namespace holding two gateways has two of them and both need patching;</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># under v1 there is one per namespace, named "actions-gateway-controller".</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># v2</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
 <a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Proxy pods run as the namespace "default" ServiceAccount.</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>default<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Worker pods run as the worker ServiceAccount, named for the gateway under v2 and</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># fixed under v1. It also pulls the injected wrapper init container, so no separate</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># wrapper Secret/SA is needed.</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># v2</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>&lt;gateway&gt;-worker<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-worker<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="c1"># Proxy pods run as the namespace "default" ServiceAccount.</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>default<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
 </code></pre></div>
-<p>The GMC creates the <code>actions-gateway-controller</code> and <code>actions-gateway-worker</code> ServiceAccounts when it reconciles the <code>ActionsGateway</code> CR; create the gateway first, then patch.
+<p>The GMC creates both ServiceAccounts when it reconciles the <code>ActionsGateway</code> CR, so create the gateway first, then patch.
+Under v2 they are <code>&lt;gateway&gt;-agc</code> and <code>&lt;gateway&gt;-worker</code>, one pair per gateway, so a namespace holding two gateways has two pairs to patch; under v1 they are the fixed <code>actions-gateway-controller</code> and <code>actions-gateway-worker</code>, one pair per namespace.
 The patch <strong>survives GMC reconciliation</strong> — the GMC only manages those SAs' labels and owner reference, never their <code>imagePullSecrets</code> — and it never touches the <code>default</code> SA at all.</p>
 <blockquote>
 <p>Alternative: if your registry is reachable by the cluster but only needs auth, a cluster-wide approach (e.g. a <code>default</code>-SA mutating policy, or a registry pull-through cache that injects credentials) also works.
 The per-SA patch above is the no-extra-tooling baseline.</p>
+<p><strong>Name the pull Secret in the worker pod template too.</strong> The SA patch covers the <em>pull</em>, which kubelet performs, but the AGC reads the worker image out of the registry itself to report the runner version it ships, and it can only present a Secret the pod template's <code>imagePullSecrets</code> names (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/queue/Q1066.md">Q1066</a>).
+Against a mirror that requires authentication, an SA-only wiring means that read never succeeds, so the version the image actually ships is never verified and <code>RunnerVersionTooOld</code> carries the authentication failure in its message on every reconcile.
+The step 6 reference names a version in its tag, so the verdict still stands on the tag's claim rather than degrading to <code>Unknown</code>; a digest-only or custom-tagged <code>workerImage</code> has no such fallback and does report <code>Unknown</code>.
+See <a href="../troubleshooting/#worker-image-runner-version">Worker Image Runner Version</a>.
+Adding the same Secret name to <code>podTemplate.spec.imagePullSecrets</code> restores the reading and changes nothing about the pull.</p>
 </blockquote>
 <hr />
 <h2 id="6-point-the-worker-image-at-the-mirror">6. Point the worker image at the mirror<a class="headerlink" href="#6-point-the-worker-image-at-the-mirror" title="Permanent link">&para;</a></h2>

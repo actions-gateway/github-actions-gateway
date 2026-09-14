@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/observability-dashboards/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/observability-dashboards/">
       
       
         <link rel="prev" href="../observability-alerting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2191,6 +2191,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#security-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dashboard-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2725,6 +2736,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#security-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dashboard-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2757,12 +2779,12 @@
 
 <h1 id="grafana-dashboards">Grafana Dashboards<a class="headerlink" href="#grafana-dashboards" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer, Tenant operator, Budget owner</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator, Budget owner, Security</p>
 </blockquote>
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Three reference dashboards ship under <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+<p><strong>Import as code.</strong> Four reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
 The layouts below document what each contains.</p>
 </blockquote>
 <table>
@@ -2775,27 +2797,33 @@ The layouts below document what each contains.</p>
 </thead>
 <tbody>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
 <td>Platform engineer running the GMC / the fleet</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
 <td>a tenant's AGC (per-tenant mTLS)</td>
 <td>Budget owner paying for the fleet</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/grafana-dashboard-security.json"><code>grafana-dashboard-security.json</code></a></td>
+<td>the per-tenant proxy and AGC scrapes, the GMC scrape, and the apiserver scrape</td>
+<td>Security / compliance reviewer asking for evidence</td>
 </tr>
 </tbody>
 </table>
 <p>The first two split along the scrape boundary each reads from, which mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
 <p>The <strong>budget</strong> dashboard splits on a different axis: it reads the same tenant scrape as the tenant dashboard, and exists because the question is different rather than the data.
 A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.</p>
+<p>The <strong>security</strong> dashboard splits the same way and reads all three scrapes, because the evidence a reviewer asks for is spread across them: egress is on the proxy scrape, the condition gauges and webhook counters on the GMC's, and the admission-policy verdicts on the apiserver's.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="../../deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
@@ -2915,7 +2943,7 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 <p><strong>Row 4 — Scale-set Acquisition Tier (per runner_set)</strong></p>
 <p>The default acquisition protocol (Q264).
 These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here.
-Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
+Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these; the <code>$runner_set</code> variable does.</p>
 <table>
 <thead>
 <tr>
@@ -3068,7 +3096,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 </tbody>
 </table>
-<p><strong>Row 7 — Reliability Signals (Q315)</strong></p>
+<p><strong>Row 8 — Reliability Signals (Q315)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3105,7 +3133,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 </tbody>
 </table>
-<p><strong>Row 8 — Fan-out Safety (Q260 / Q266)</strong></p>
+<p><strong>Row 9 — Fan-out Safety (Q260 / Q266)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3211,7 +3239,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 </tbody>
 </table>
-<p><strong>Row 4 — Cross-tenant Throughput</strong> (requires the per-tenant AGC scrapes)</p>
+<p><strong>Row 4 — Cross-tenant Throughput (requires per-tenant scrape)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3230,6 +3258,11 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <td>Jobs acquired/min by namespace (classic)</td>
 <td><code>sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60</code></td>
 <td>Time series</td>
+</tr>
+<tr>
+<td>Pod creation p99 by namespace</td>
+<td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
+<td>Time series, both acquisition tiers</td>
 </tr>
 <tr>
 <td>Jobs assigned/min by namespace (scale-set)</td>
@@ -3257,15 +3290,16 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </table>
 <p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
 The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
-<code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
+<code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row.</p>
 <h2 id="budget-dashboard">Budget dashboard<a class="headerlink" href="#budget-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, and the zero-idle-compute row contrasting worker consumption with the always-on proxy floor." src="../../assets/grafana-dashboard-budget.png" /></p>
+<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity and refused classic jobs by the admission rung that took them." src="../../assets/grafana-dashboard-budget.png" /></p>
 <p>For the <a href="../personas/#budget-owner">budget owner</a>, who owns the spend and usually cannot read the cluster at all.
 Filtered by <code>$namespace</code> and <code>$runner_group</code>, and priced by a <code>$rate</code> textbox.
 It ships with auto-refresh <strong>off</strong>, where the other two use <code>30s</code>: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.</p>
-<p>Every panel reads one metric: <code>actions_gateway_job_duration_seconds</code>.
+<p>Every spend panel reads one metric: <code>actions_gateway_job_duration_seconds</code>.
 That series is worker pod wall time (creation to the last container finishing) on <strong>both</strong> acquisition tiers, which is the span <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">Appendix F §F.1</a> bills against.
-A pod that never started a container is not observed, because it occupied no node time.</p>
+A pod that never started a container is not observed, because it occupied no node time.
+Row 5 is the exception, and reads the admission ladder instead: spend a throttle is holding down leaves no duration to bill, so the metric that answers what was spent cannot answer what was suppressed.</p>
 <p><strong>The rate is the operator's, not ours.</strong> Appendix F's formula is <code>(job_duration_seconds / 3600) × hourly_node_rate × resource_fraction</code>, and <code>$rate</code> is that trailing pair collapsed into one number: the effective hourly cost of <strong>one worker slot</strong>. The shipped default, <code>0.096</code>, is §F.1's own CPU example: an <code>m6i.4xlarge</code> at $0.768/hr with the pod requesting an eighth of it.
 Its GPU example works out at $4.10/hr, so the two differ by more than 40×.</p>
 <p>That spread is why the shape-level panels stay in pod-hours: one currency figure spanning a tenant's GPU and CPU shapes is an average of two rates that are nothing like each other.
@@ -3393,6 +3427,178 @@ A shape here is therefore whatever provisioned the worker, on either protocol.</
 </tr>
 </tbody>
 </table>
+<p><strong>Row 5 — Throttled Intake (spend a rung is holding down)</strong></p>
+<p>Rows 1 to 4 answer what was spent.
+This one answers what was not: intake an admission rung refused, which shows up nowhere in <code>job_duration_seconds</code> because a job that never ran has no duration to bill.</p>
+<p><strong>It is two panels rather than one because the two acquisition tiers state the same ladder in different units.</strong> The scale-set tier declares a capacity integer per long poll, so its rungs are gauges of worker slots; the classic tier decides per delivered job, so its rungs are counters of jobs.
+Both panels are stacked, and in both the stack total is the demand that tier saw, which is the reading they share.
+Their magnitudes are not comparable and neither panel is a total of the other.
+A deploy running one tier sees the other panel empty; that is the panel saying "no sets on this protocol", not a gap.</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Withheld capacity by rung (scale-set sets)</td>
+<td><code>sum by (namespace) (actions_gateway_scaleset_advertised_capacity)</code> stacked under <code>sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)</code></td>
+<td>Time series, stacked. The stack total is the set's declared worker ceiling, because <a href="../observability-metrics/#scale-set-acquisition-tier-q264">every evaluated rung publishes a value each poll including an explicit <code>0</code></a> and the entries sum to <code>ceiling − advertised</code>. <code>quota</code> is namespace-<code>ResourceQuota</code> headroom, <code>capacity</code> the opt-in placeability gate, <code>scaleup</code> the opt-in creation-rate limit; grouping by <code>reason</code> rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on <code>runner_set</code>, so a <code>$runner_group</code> holding a <code>RunnerGroup</code> name empties it</td>
+</tr>
+<tr>
+<td>Intake refused by rung (classic sets)</td>
+<td><code>sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 3600</code> stacked under the <code>actions_gateway_jobs_admission_rejected_total</code> counterpart, <code>sum by (namespace, reason)</code></td>
+<td>Time series, stacked, jobs/hour. The stack is what GitHub delivered, less the deliveries lost to an acquire error (<code>actions_gateway_job_acquisition_errors_total</code>) or a duplicate-delivery dedup, which increment neither series. <code>ceiling</code> and <code>quota</code> are on by default; <code>capacity</code> and <code>scaleup</code> emit nothing until their owner opts in, so an absent band is a rung nobody enabled rather than a rung holding nothing back</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Withheld capacity is not the same thing as suppressed spend, which is why no panel here prices it with <code>$rate</code>.</strong> A slot a rung held back is money you did not spend only if GitHub had a job queued to fill it; on an idle set the same band is a ceiling nobody was reaching for.
+The demand signal that settles it is <a href="../observability-metrics/#scale-set-acquisition-tier-q264"><code>actions_gateway_scaleset_jobs_available</code></a>, which no dashboard plots today.
+A currency figure derived without it would overstate the suppression, on a dashboard whose whole contract is that its numbers reconcile against a cost tool's.</p>
+<p>Read against the ResourceQuota bars beside it, the <code>quota</code> band is the same conversation from the other side: the bar says a tenant is pinned at its cap, and this band says how many worker slots that cost it.</p>
+<h2 id="security-dashboard">Security dashboard<a class="headerlink" href="#security-dashboard" title="Permanent link">&para;</a></h2>
+<p><img alt="The security Grafana dashboard rendered against a live Prometheus: an egress-attribution row keyed on the pool with a text panel saying so, an admission-decisions row of policy verdicts and webhook traffic, an abuse-signals row mirroring the security alert group, and the running control-plane versions." src="../../assets/grafana-dashboard-security.png" /></p>
+<p>For the <a href="../personas/#security--compliance">security / compliance persona</a>, who reads rather than operates and needs evidence produced unprompted.
+Filtered by <code>$namespace</code>.
+It reads three scrapes, and each row says which: egress and the abuse counters come from the per-tenant proxy and AGC scrapes, the condition gauges and webhook counters from the GMC scrape, and the admission-policy verdicts from the apiserver scrape, which <code>kube-prometheus-stack</code> collects by default and a hand-built Prometheus may not.</p>
+<p><strong>It is keyed on the pool, not the consumer, and says so on the page.</strong> <code>namespace</code> on every proxy series is the namespace the pool runs in, stamped by the scrape target.
+On a pool no other namespace references that is the tenant; on a pool shared via <code>spec.sharing.allowedNamespaces</code> it is the pool, and no metric says which consumer opened a tunnel.
+Attributing a connection to a tenant and a job is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">audit-record join</a> of two log streams, and no panel here reads them, so the dashboard never presents a pool's traffic as a consumer's.
+Whether that join is missing for a gateway is now a gauge, <code>actions_gateway_egress_audit_unattributed</code>, <code>1</code> while either half of the pair is off (Q1062), and that is the series a consumer-keyed panel would have to gate on.
+No panel here reads it yet (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/queue/Q1070.md">Q1070</a>).
+It reads the gateway's <code>defaultProxyRef</code> only, so it is not a per-pool answer: a <code>RunnerSet</code> naming its own <code>spec.proxyRef</code> egresses through a pool the gauge never looked at, in both directions (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/queue/Q1069.md">Q1069</a>).
+A panel keyed on it is therefore gating on the gateway's declared pair, not on the pool whose traffic it would be drawing.</p>
+<p><strong>Row 1: Egress Attribution (per pool)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What this row attributes</td>
+<td>none</td>
+<td>Text. The pool-versus-consumer reading above, stated where the panels are read</td>
+</tr>
+<tr>
+<td>CONNECT tunnels opened/s by pool</td>
+<td><code>sum by (namespace) (rate(actions_gateway_proxy_connections_total[5m]))</code></td>
+<td>Time series, one line per pool namespace</td>
+</tr>
+<tr>
+<td>Active CONNECT tunnels by pool</td>
+<td><code>sum by (namespace) (actions_gateway_proxy_connections_active)</code></td>
+<td>Time series. A pool pinned near capacity is the slowloris signal (<code>ActionsGatewayProxyConnectionsSaturated</code>)</td>
+</tr>
+<tr>
+<td>Egress posture per gateway</td>
+<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code></td>
+<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape; <code>egress_rules_stale</code> is emitted for v1 and v2 gateways, the other two for v2 only</td>
+</tr>
+</tbody>
+</table>
+<p><code>actions_gateway_egress_audit_unattributed</code> belongs in that timeline as a fourth flag and is not in it yet (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/queue/Q1070.md">Q1070</a>).
+It shares the row's <code>1 = flagged</code> polarity, and it is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">job-attribution</a> half, whether an egress record resolves to a tenant and a job, where <code>egress_unattributed</code> is the IP-identity half, whether there is a per-tenant proxy at all.
+A gateway can be proxied and still unattributed by job, and that is the common state, since both halves of the pair default <code>Off</code>.
+Expect it near-solid <code>1</code> across a fleet that has not opted in, which is a true reading rather than an incident: unlike its three neighbours, a <code>1</code> here is a tenant nobody turned attribution on for, not something that broke.</p>
+<p><strong>Row 2: Admission Decisions</strong></p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Admission-policy verdicts/s by policy</td>
+<td><code>sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~".*-(namespace-psa-guard\|namespace-security-profile-guard\|priorityclass-allowlist-guard\|tenant-resource-guard)"}[5m]))</code></td>
+<td>Time series, split by the action the binding took: <code>deny</code> rejected the write, <code>audit</code> and <code>warn</code> let a failed validation through, and <code>allow</code> is an evaluation error (<code>error_type</code> of <code>compile_error</code>, <code>invalid_error</code>, or <code>out_of_budget</code>) admitted under <code>failurePolicy: Ignore</code>. The apiserver never increments the counter for a validation that simply passed, so the series is what the policies refused or could not evaluate, not a request count. Values read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07. The policy name is matched on its suffix because the chart prefixes it with the release's <code>namePrefix</code>. Apiserver scrape</td>
+</tr>
+<tr>
+<td>Validating-webhook requests and denials/s</td>
+<td><code>sum (rate(controller_runtime_webhook_requests_total{webhook=~"/validate-.*"}[5m]))</code> and <code>sum (rate(apiserver_admission_webhook_rejection_count{name=~"v(actionsgateway-v1alpha1\|actionsgateway-v2alpha1\|clusterrunnertemplate-v2alpha1\|egressproxy-v2alpha1\|runnerset-v2alpha1\|runnertemplate-v2alpha1)\\.kb\\.io", error_type="no_error", rejection_code="403"}[5m]))</code></td>
+<td>Time series, two series: total requests and total denied. Both are summed across the six validating webhooks the chart ships rather than broken down: a per-webhook split overflows the cell's legend, and the <code>ActionsGatewayWebhookRejections</code> alert carries the offending webhook in its <code>name</code> label, so the breakdown is available where an operator acts on it. The GMC scrape says only that the webhooks are being exercised: controller-runtime writes a denial as an HTTP 200 whose <code>AdmissionReview</code> body carries the 403, so its <code>code</code> label cannot separate a deny from an allow. The apiserver reads that body, so its rejection counter is the series that answers how often a webhook refused (<code>ActionsGatewayWebhookRejections</code>), scoped to <code>error_type="no_error"</code> (the webhook reached and refusing, not the GMC unreachable under <code>failurePolicy: Fail</code>) and to the 403 a validator's denial produces, as against the 400 of a malformed <code>AdmissionReview</code>. Apiserver scrape. Label semantics read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07; the metric is ALPHA-stability</td>
+</tr>
+<tr>
+<td>Name collisions</td>
+<td><code>sum(actions_gateway_scale_set_name_collision)</code></td>
+<td>Stat (≥1 = red), scale-set name collisions; the title drops the prefix because a 4-wide stat truncates it. Admission rejects every new pair, so a <code>1</code> predates the guard or was applied with the webhook uninstalled</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 3: Abuse Signals</strong></p>
+<p>One panel per rule in the <a href="../security-operations/#prometheus-abuse-alerts">security alert group</a> not already plotted above (the saturation rule is the active-tunnels panel in Row 1, the webhook rule is Row 2), so a reviewer sees the series an alert would fire on rather than only the alert.</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Denied CONNECTs/s by pool (SSRF signal)</td>
+<td><code>sum by (namespace) (rate(actions_gateway_proxy_connect_denied_total[5m]))</code></td>
+<td>Time series. Every increment is an explicit allowlist denial (<code>ActionsGatewayProxyConnectDenied</code>). It says a probe happened, not what it reached</td>
+</tr>
+<tr>
+<td>Proxy dial errors/s by pool</td>
+<td><code>sum by (namespace) (rate(actions_gateway_proxy_dial_errors_total[5m]))</code></td>
+<td>Time series (<code>ActionsGatewayProxyDialErrorSpike</code>)</td>
+</tr>
+<tr>
+<td>Tunnels lasting 30m–1h, per hour, by pool</td>
+<td><code>sum by (namespace) (increase(…_bucket{le="3600"}[1h])) - sum by (namespace) (increase(…_bucket{le="1800"}[1h]))</code></td>
+<td>Time series (<code>ActionsGatewayProxyLongLivedTunnels</code>). Each bucket is summed per namespace before the subtraction because the two selectors differ on <code>le</code> and a bare subtraction would match nothing</td>
+</tr>
+<tr>
+<td>Eviction retries/s (cause=eviction) by tenant</td>
+<td><code>sum by (namespace, runner_group) (rate(actions_gateway_eviction_retries_total{cause="eviction"}[15m]))</code></td>
+<td>Time series (<code>ActionsGatewayEvictionRetryAbuse</code>). Scoped to <code>cause="eviction"</code>: preemption recoveries are the expected steady state under a preempting <code>priorityTiers</code> floor</td>
+</tr>
+<tr>
+<td>Token refresh errors/s by tenant</td>
+<td><code>sum by (namespace) (rate(actions_gateway_token_refresh_errors_total[5m]))</code></td>
+<td>Time series (<code>ActionsGatewayTokenRefreshAbuse</code>). Flat zero is healthy</td>
+</tr>
+<tr>
+<td>Managed gateways</td>
+<td><code>actions_gateway_managed_gateways</code></td>
+<td>Stat with trend (<code>ActionsGatewayManagedGatewaysJump</code>). No <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
+</tr>
+<tr>
+<td>ResourceQuota saturation</td>
+<td><code>100 * kube_resourcequota{type="used"} / ignoring(type) kube_resourcequota{type="hard"}</code></td>
+<td>Bar gauge, <code>percent</code>, <strong>instant</strong> (<code>ActionsGatewayQuotaExhausted</code>). Needs kube-state-metrics</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 4: Running Versions</strong></p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Control-plane versions by component</td>
+<td><code>count by (component, version) (actions_gateway_build_info)</code></td>
+<td>Stat, one tile per component and version: which build is running when an advisory names an affected version. No <code>namespace</code> label</td>
+</tr>
+</tbody>
+</table>
 <h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>
@@ -3403,14 +3609,20 @@ A shape here is therefore whatever provisioned the worker, on either protocol.</
 <li><code>$runner_set</code> (<code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code>) filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
 </ul>
-<p>The budget dashboard declares its own set, because it reads a different metric from every panel and its dropdowns have to match that metric exactly:</p>
+<p>The budget dashboard declares its own set, because its spend panels all read one metric and its dropdowns have to match that metric exactly:</p>
 <ul>
 <li><code>$namespace</code> (<code>label_values(actions_gateway_job_duration_seconds_count, namespace)</code>) is keyed on the series the panels actually read, so the dropdown cannot offer a tenant with no cost data or hide one that has some.
   It needs no classic/scale-set union: the duration series is emitted from the pod informer and covers both tiers already.</li>
-<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) is the runner shape, listing <code>RunnerGroup</code> and <code>RunnerSet</code> names together for the reason the Row 3 note gives.</li>
+<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) is the runner shape, listing <code>RunnerGroup</code> and <code>RunnerSet</code> names together for the reason the Row 3 note gives.
+  Row 5's scale-set panel applies it to <code>runner_set</code>, which holds the same names on that tier, so selecting a <code>RunnerGroup</code> empties that panel and selecting a <code>RunnerSet</code> empties the classic one beside it.</li>
+<li><strong>Both dropdowns set <code>allValue</code> to <code>.*</code></strong>, which is what makes Row 5 legible on the tenant it exists for.
+  Grafana expands a bare <code>All</code> to the values the dropdown holds, and both are keyed on the duration series, so a tenant whose intake a rung is holding at zero has completed no job, is in neither list, and would be excluded by <code>All</code> itself.
+  The wildcard costs the spend panels nothing: a tenant with no duration data contributes no series to them either way.</li>
 <li><code>$rate</code> is a <strong>textbox</strong>, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
   Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.</li>
 </ul>
+<p>The security dashboard declares only <code>$namespace</code> (<code>label_values({__name__=~"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code>), unioned across the proxy and both acquisition tiers so a namespace holding only a pool, or only a scale-set deploy, still appears.
+On the proxy panels the value it filters is the pool's namespace, per the note at the top of that section.</p>
 <blockquote>
 <p><strong>A textbox variable in a panel query needs the PromQL gate to know about it.</strong> <code>make promql-check</code> parses every panel expression, and a Grafana variable in syntactic position (<code>[$__range]</code>, <code>* $rate</code>) is not valid PromQL.
 The checker substitutes from the dashboard's own <code>templating.list</code> before parsing, so a variable the dashboard never declares is reported by name rather than passing as a parse error nobody reads.</p>

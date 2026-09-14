@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/in-runner-image-builds/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/in-runner-image-builds/">
       
       
         <link rel="prev" href="../worker-shared-storage/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3022,7 +3022,8 @@ Like Sysbox it needs <strong>no</strong> <code>privileged: true</code> container
 <li><strong>Recommended profile:</strong> <code>privileged</code> namespace label, unprivileged pod.
   The pod sets <code>runtimeClassName: kata-qemu</code> and runs <code>dockerd</code> as a normal daemon inside the guest VM — no privileged flag, no host socket mount; a container escape lands in a throwaway guest kernel, not on the node.
   The daemon does still need capability adds (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_RESOURCE</code>, <code>SYS_PTRACE</code>, <code>NET_RAW</code>) that exceed the PSS <strong>baseline</strong> allowlist, and PSA cannot see the VM boundary — so the namespace needs the platform-granted <code>privileged</code> profile, with the pod shape pinned by a platform-owned <code>ClusterRunnerTemplate</code> (details in <a href="../kata-dind-workloads/#why-this-matters-for-gag">Kata DinD / image-build workloads</a>).</li>
-<li><strong>Node prerequisite:</strong> the runtime needs <code>/dev/kvm</code>, which on a managed cloud means a <strong>nested-virtualization</strong> node pool on a supporting machine family (on Google Cloud: N1/N2/N2D/C2/C2D, <strong>not</strong> E2 or the GPU families; <strong>not</strong> GKE Autopilot).
+<li><strong>Node prerequisite:</strong> the runtime needs <code>/dev/kvm</code>, which on a managed cloud means a <strong>nested-virtualization</strong> node pool on a supporting machine family, and never GKE Autopilot.
+  Which families qualify is <a href="../kata-dind-workloads/#prerequisite--nested-virtualization-nodes">taken from the API rather than transcribed</a>, because the list moves and this page had it wrong in both directions: E2, C2D and N2D are out, and the GPU families A2, A3 and G2 are in, which is load-bearing for the Kata GPU argument.
   Bare metal needs no nested virt.</li>
 <li><strong>Setup is cluster-admin:</strong> install the Kata runtime (DaemonSet) on the eligible nodes and create the <code>kata-qemu</code> <code>RuntimeClass</code>; GAG's controllers never install runtime handlers, they only honour a tenant-set <code>runtimeClassName</code>.</li>
 <li><strong>Full how-to:</strong> node prerequisites, the DaemonSet + <code>RuntimeClass</code> install, the worker <code>podTemplate</code> field, and the security rationale are in <a href="../kata-dind-workloads/">Kata DinD / image-build workloads</a>.

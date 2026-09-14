@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/observability-metrics-access/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/observability-metrics-access/">
       
       
         <link rel="prev" href="../observability-metrics/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2860,10 +2860,14 @@ Because verification follows <code>certManager.enabled</code> by default, an ins
 Unlike the GMC manager, the listener <strong>requires a client certificate</strong> signed by that tenant's metrics CA — there is no bearer-token or <code>insecureSkipVerify</code> fallback.
 Three things are wired per tenant so Prometheus can scrape them:</p>
 <ol>
-<li><strong>Metrics Services (always created).</strong> The GMC creates a <code>metrics</code>-named <code>:8443</code> port on the proxy <code>Service</code> (<code>actions-gateway-proxy</code>) and a dedicated AGC <code>Service</code> (<code>actions-gateway-controller</code>), both in the tenant namespace.
+<li><strong>Metrics Services (always created).</strong> The GMC creates a <code>metrics</code>-named <code>:8443</code> port on the proxy <code>Service</code> and a dedicated AGC <code>Service</code>, both in the tenant namespace.
+   Under v2 the AGC Service is named for the gateway, as <code>&lt;gateway&gt;-agc</code>; under v1 it is the fixed <code>actions-gateway-controller</code>, and the proxy Service is <code>actions-gateway-proxy</code>.
    These exist regardless of the scrape toggle.</li>
-<li><strong>Per-tenant <code>ServiceMonitor</code>s (opt-in).</strong> When <code>metrics.serviceMonitor.enabled=true</code>, the GMC also creates one <code>ServiceMonitor</code> per component in the tenant namespace (<code>actions-gateway-proxy-metrics</code>, <code>actions-gateway-controller-metrics</code>).
-   Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.</li>
+<li><strong>Per-tenant <code>ServiceMonitor</code>s (opt-in).</strong> When <code>metrics.serviceMonitor.enabled=true</code>, the GMC creates one <code>ServiceMonitor</code> per component in the tenant namespace (<code>actions-gateway-proxy-metrics</code>, <code>actions-gateway-controller-metrics</code>).
+   Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.
+   <strong>This is a v1 path.</strong> A v2 <code>ActionsGateway</code> gets no AGC <code>ServiceMonitor</code>: the reconciler that applies them runs only for v1, so a v2 tenant's AGC Service is created and never scraped unless you write the monitor yourself.
+   A v2 <code>EgressProxy</code> does get one, from its own reconciler.
+   Q1101 tracks whether that gap is intended.</li>
 <li><strong>The scraper client bundle (mTLS).</strong> Each <code>ServiceMonitor</code> presents the per-tenant scraper client bundle from the <code>actions-gateway-metrics-client</code> Secret in the tenant namespace — <code>tls.crt</code>/<code>tls.key</code> authenticate the scraper to the listener and <code>ca.crt</code> verifies the listener's server cert.
    <code>serverName</code> is the component's <code>&lt;service&gt;.&lt;namespace&gt;.svc</code> DNS name (a SAN on the server cert), so the scrape is verified end-to-end and <strong>not</strong> MITM-able:</li>
 </ol>

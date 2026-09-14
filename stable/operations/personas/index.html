@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/personas/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/personas/">
       
       
         <link rel="prev" href="../">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2922,7 +2922,8 @@ That is the test the <a href="../observability-dashboards/#tenant-dashboard">ten
 <p><strong>Owns:</strong> the threat model's operational half, admission policy compatibility, abuse response, and whatever an auditor asks for.</p>
 <p><strong>Needs, specifically:</strong> artifacts produced unprompted.
 A control that exists but leaves no record is hard to evidence, which is why per-tenant egress attribution and admission decisions matter as much as the controls themselves.
-<a href="../security-operations/">Security operations</a> and <a href="../admission-policies/">admission policies</a> are the entry points.</p>
+<a href="../security-operations/">Security operations</a> and <a href="../admission-policies/">admission policies</a> are the entry points, and the <a href="../observability-dashboards/#security-dashboard">security dashboard</a> is the evidence produced unprompted: per-pool egress, admission-policy verdicts, and the abuse signals the security alert group pages on.
+It reads the pool rather than the consumer, and says so on the page: attributing a connection to a tenant and a job is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">audit-record join</a>, which no metric carries.</p>
 <h3 id="budget-owner">Budget owner<a class="headerlink" href="#budget-owner" title="Permanent link">&para;</a></h3>
 <p>Owns the spend, and usually cannot read the cluster at all.</p>
 <p><strong>Needs, specifically:</strong> cost per tenant, in currency, from data they can defend in a planning conversation.
@@ -2938,7 +2939,7 @@ Listed because the docs index tags it, not because adopters need it.</p>
 For every other role above, this one is part of the <strong>threat model</strong> rather than an audience.</p>
 <p>That asymmetry is why isolation is a separate concern from access control: the question is not what this person is permitted to do, but what their code can reach if it tries.
 GAG's stance today is <a href="../kata-dind-workloads/">Kata micro-VM workers</a> for the kernel boundary, paired with <a href="../kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a> for the network one: an in-cluster registry mirror and a tenant carrying no allow-all rule, so this person's code reaches cluster DNS, GitHub, and the mirror, and nothing else.
-The threat model, the layer map, and what is explicitly out of scope are in the <a href="../../plan/secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI goal</a>.</p>
+The threat model, the layer map, and what is explicitly out of scope are in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/plan/secure-multi-tenant-oss-ci.md">secure multi-tenant OSS CI goal</a>.</p>
 <h2 id="how-personas-are-recorded">How personas are recorded<a class="headerlink" href="#how-personas-are-recorded" title="Permanent link">&para;</a></h2>
 <p>A doc's audience is recorded in two places, deliberately:</p>
 <ol>

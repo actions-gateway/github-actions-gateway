@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/operations/migration-v1-to-v2/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/migration-v1-to-v2/">
       
       
         <link rel="prev" href="../migration-from-arc/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3107,7 +3107,8 @@ Migrate a tenant when one of these is worth that trade-off.</p>
 <li><strong>Per-gateway managed right-sizing.</strong> <code>ActionsGateway.spec.agcAutoscaling</code> has the GMC stamp a <code>VerticalPodAutoscaler</code> next to the AGC <code>Deployment</code> so an autoscaler sizes its requests instead of you tuning <code>agcResources</code> by hand.
   Opt-in, recommendation-only by default, and it composes with <code>agcResources</code> rather than overriding it. v1 has no equivalent field (<a href="../tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">tenant-onboarding</a>).</li>
 <li><strong>DNS-aware egress policy.</strong> <code>EgressProxy.egressPolicyMode</code> adds an <code>FQDN</code> intent (default <code>CIDR</code>) to allowlist GitHub by hostname; the operator picks the enforcement mechanism with the GMC <code>--fqdn-policy-backend</code> flag (<code>none</code>|<code>cilium</code>|<code>calico</code>|<code>gke</code>).
-  The earlier per-CNI <code>CiliumFQDN</code> / <code>CalicoFQDN</code> values remain accepted-but-deprecated (Q245) and are <strong>not</strong> removed by <code>v2.0.0</code> — they are enum members of the beta version <code>v2beta1</code>, which <code>v2.0.0</code> keeps serving, so <code>v3.0.0</code> is the earliest release that may remove them (<a href="../v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">why</a>).</li>
+  The earlier per-CNI <code>CiliumFQDN</code> / <code>CalicoFQDN</code> values are accepted-but-deprecated (Q245) and <strong>are</strong> removed by <code>v2.0.0</code>, along with both versions that define them (<a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).
+  Migrate any <code>EgressProxy</code> naming one before upgrading: the GA <code>v2</code> version cannot represent it.</li>
 </ul>
 <p><strong>Quality-of-life and hardening — batched into the one schema break:</strong></p>
 <ul>
@@ -3293,7 +3294,8 @@ They are still two independent tenants, and each provisions its own pool of pre-
 <blockquote>
 <p><strong>Do not name a <code>RunnerGroup</code> with an <code>rs-</code> prefix.</strong> The prefix is what separates the two derivations, so a <code>RunnerGroup</code> named <code>rs-web</code> derives the same Secret and the same GitHub runner name as a <code>RunnerSet</code> named <code>web</code>.
 Whichever of the two reconciles second cannot create its agents at all, and reports <code>agent identity is owned by another pool</code> until one of them is renamed.
-See <a href="../troubleshooting/#agent-pool-blocked-another-tenant-owns-the-agent-secret">Agent Pool Blocked: Another Tenant Owns the Agent Secret</a>.</p>
+Admission now refuses the write that would create such a pair, on whichever object arrives second, so a pair reaching that state predates the guard: <a href="../troubleshooting/#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed">Rejected: Agent Identity Already Claimed</a>, and <a href="../troubleshooting/#agent-pool-blocked-another-tenant-owns-the-agent-secret">Agent Pool Blocked</a> for one already stored.
+The GitHub runner name is unique per <strong>org</strong>, not per namespace, so the same rule binds two <code>RunnerSet</code>s of one name in different namespaces under one gateway scope.</p>
 </blockquote>
 <p>So during coexistence you will see <strong>two sets of runners</strong> registered with GitHub for one tenant — expected, and the reason both can run at once.
 Each agent Secret also carries an <code>ownerReference</code> to the <code>RunnerGroup</code> or <code>RunnerSet</code> it belongs to, so <code>kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'</code> answers "which tenant owns this?" without guessing from the name.</p>

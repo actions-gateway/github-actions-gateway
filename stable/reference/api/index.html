@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/reference/api/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/reference/api/">
       
       
         <link rel="prev" href="../">
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -4215,12 +4215,12 @@ FQDN mechanisms proliferate (Q245).</p>
 <li>CiliumFQDN / CalicoFQDN are DEPRECATED aliases retained for backward
     compatibility. Each pins its namesake mechanism (a CiliumNetworkPolicy with
     toFQDNs, or a Calico NetworkPolicy with destination domains) regardless of the
-    operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work,
-    and the earliest release that may remove them is v3.0.0 — NOT the v2.0.0 that
-    removes v1alpha1, v2alpha1, and classic acquisition. They are enum members of
-    the served beta version v2beta1, which v2.0.0 keeps serving; an API element is
-    removable only by incrementing the version, so the aliases live exactly as long
-    as v2beta1 does, and v3.0.0 is the earliest major tag that can retire it. See
+    operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work
+    and are REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition.
+    They are enum members of v2alpha1 and v2beta1, both of which v2.0.0 removes,
+    and the GA v2 version does not define them. Migrate before upgrading: v2 cannot
+    represent an object naming an alias, and one such object fails the conversion
+    for every object batched into the same request. See
     docs/operations/v1alpha1-deprecation.md.</li>
 </ul>
 <p>All FQDN-family modes are fail-closed: the standard NetworkPolicy still
@@ -4250,11 +4250,11 @@ Selecting an FQDN mode therefore never silently weakens the default.</p>
 </tr>
 <tr>
 <td><code>CiliumFQDN</code></td>
-<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=cilium. Removable no earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.</td>
+<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=cilium. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
 </tr>
 <tr>
 <td><code>CalicoFQDN</code></td>
-<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removable no earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.</td>
+<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
 </tr>
 </tbody>
 </table>
@@ -4353,7 +4353,7 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 </tr>
 <tr>
 <td><code>logLevel</code> <em>string</em></td>
-<td>LogLevel controls the log verbosity of this proxy pool. Allowed values: info (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL environment variable; changing it is a rolling restart of the proxy pool (not a hot reload), so the new level takes effect once the pods roll. Use debug only for a bug repro — per-CONNECT debug lines dominate log volume under load. The default is info so a pool never silently runs at debug verbosity.</td>
+<td>LogLevel controls the log verbosity of this proxy pool. Allowed values: info (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL environment variable; changing it is a rolling restart of the proxy pool (not a hot reload), so the new level takes effect once the pods roll. Use debug only for a bug repro. The default is info so a pool never silently runs at debug verbosity.</td>
 <td>info</td>
 <td>Enum: [info debug]<br />Optional: {}</td>
 </tr>
@@ -4377,7 +4377,7 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 </tr>
 <tr>
 <td><code>egressPolicyMode</code> <em><a href="#egresspolicymode">EgressPolicyMode</a></em></td>
-<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
+<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at v2.0.0. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
 <td>CIDR</td>
 <td>Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]<br />Optional: {}</td>
 </tr>
@@ -5162,7 +5162,7 @@ missing object.</p>
 </tr>
 <tr>
 <td><code>observedRunnerVersion</code> <em>string</em></td>
-<td>ObservedRunnerVersion is the actions/runner version a worker pod of this set reported actually running, read from the runner's own dependency manifest by the injected wrapper and handed back on the pod's termination message (Q792). It answers what the image ships for a reference the AGC cannot read a version from at all: a digest-only or custom tag, which is the case RunnerVersionTooOld reports as WorkerImageVersionUnknown.<br />It is a SELF-REPORT, not an attestation, and must not be read as a security verdict. The runner container runs the tenant's image and the job's own steps run inside it, so anything in that container can rewrite the report before the container terminates. It is a diagnostic for an operator debugging their own image, and it deliberately does NOT move the RunnerVersionTooOld condition, which keeps saying Unknown rather than trusting a value the tenant controls. Q988 is the attestable form, read from the registry before the container runs.<br />Sticky and newest-wins: the latest report seen from a terminal worker pod survives that pod being reaped, because the answer is a property of the image the set runs rather than of which pods happen to be retained. Empty until a worker pod has terminated and reported, and on any image whose wrapper could not detect a version, where absence is the honest answer.</td>
+<td>ObservedRunnerVersion is the actions/runner version a worker pod of this set reported actually running, read from the runner's own dependency manifest by the injected wrapper and handed back on the pod's termination message (Q792). It answers what the image ships for a reference the AGC cannot read a version from at all: a digest-only or custom tag, which is the case RunnerVersionTooOld reports as WorkerImageVersionUnknown.<br />It is a SELF-REPORT, not an attestation, and must not be read as a security verdict. The runner container runs the tenant's image and the job's own steps run inside it, so anything in that container can rewrite the report before the container terminates. It is a diagnostic for an operator debugging their own image, and it deliberately does NOT move the RunnerVersionTooOld condition, which keeps saying Unknown rather than trusting a value the tenant controls. The attestable form is the AGC's own read of the image in its registry, taken before the container runs, which is what moves the condition.<br />Sticky and newest-wins: the latest report seen from a terminal worker pod survives that pod being reaped, because the answer is a property of the image the set runs rather than of which pods happen to be retained. Empty until a worker pod has terminated and reported, and on any image whose wrapper could not detect a version, where absence is the honest answer.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>

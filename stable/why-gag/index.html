@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.7.0/why-gag/">
+        <link rel="canonical" href="https://actions-gateway.com/1.8.0/why-gag/">
       
       
         <link rel="prev" href="..">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.7.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.7.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.7.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.7.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.7.0",
+    "url": "https://actions-gateway.com/1.8.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.7.0"
+      "url": "https://actions-gateway.com/1.8.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.7.0",
-    "logo": "https://actions-gateway.com/1.7.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.8.0",
+    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+            <strong>v1.8.0 is here.</strong>
+      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.7.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -670,10 +670,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#two-rows-with-fine-print" class="md-nav__link">
+  <a href="#rows-with-fine-print" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two rows with fine print
+        Rows with fine print
       
     </span>
   </a>
@@ -2787,10 +2787,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#two-rows-with-fine-print" class="md-nav__link">
+  <a href="#rows-with-fine-print" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two rows with fine print
+        Rows with fine print
       
     </span>
   </a>
@@ -3082,7 +3082,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <tr>
 <td>Listener footprint at rest</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> one always-on listener pod per scale set, each holding a pod IP<br><span class="gag-cont">they run in the controller's namespace, so the cost lands on platform pod density rather than the tenant's quota</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod, ~12 KiB per listener session</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod, ~7.7 KiB per listener session</td>
 </tr>
 <tr>
 <td>Control-plane availability out of the box</td>
@@ -3147,12 +3147,12 @@ two dates because there were two passes: the original column on
 still the newest published chart. The tag is what
 the stamp names; the commit is what makes it re-checkable, since a link to a
 branch drifts out from under the claim it was cited for. Per-cell evidence,
-file by file, is in the <a href="../plan/competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
+file by file, is in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.8.0/docs/plan/competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
 <p>If you are evaluating on a later ARC than a cell names, re-check that cell
 rather than trusting it, and
 <a href="https://github.com/actions-gateway/github-actions-gateway/issues">tell us what changed</a>.</p>
 </div>
-<h3 id="two-rows-with-fine-print">Two rows with fine print<a class="headerlink" href="#two-rows-with-fine-print" title="Permanent link">&para;</a></h3>
+<h3 id="rows-with-fine-print">Rows with fine print<a class="headerlink" href="#rows-with-fine-print" title="Permanent link">&para;</a></h3>
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too — and when
@@ -3160,7 +3160,10 @@ rather than trusting it, and
      and is what this paragraph missed for a whole release: the Pending-reap
      re-run read "classic tier" from Q691 until Q766 had made it both, in
      v1.4.0. Neither added nor removed a case, so the instruction above did not
-     fire. -->
+     fire. The stamp below is what makes that second case a gate rather than a
+     request: `make tier-claims-check` digests the tier-bearing lines of the
+     section named in it, so a tier move there goes red here. -->
+<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=c7781d75 -->
 <p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a drain and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers.
 A job that <em>failed</em> and a run you <em>cancelled</em> never do.
 Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run on both tiers once capacity returns.
@@ -3168,6 +3171,9 @@ Nor do workers the reaper took, with one exception: a worker reaped while still 
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
 The loop only closes inside the controller that builds the pods.
 <a href="../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D.7</a>.</p>
+<p><strong>The capacity gate is off by default because gating can destroy the rescue.</strong> Refusing intake on a signal is safe only where nothing else is waiting on that signal to make capacity appear.
+Quota headroom qualifies and the scheduler's <code>Unschedulable</code> verdict does not, because on a cluster that can grow a Pending pod <em>is</em> the request for a node, so elasticity is a property of your cluster rather than of the signal.
+<a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">Appendix D.8</a> works it through for four signals.</p>
 <h2 id="where-arc-is-ahead">Where ARC is ahead<a class="headerlink" href="#where-arc-is-ahead" title="Permanent link">&para;</a></h2>
 <p>Some of it is capability, not only maturity.
 Measured 2026-08-06.
@@ -3203,7 +3209,7 @@ The discipline is the "won't strand you" signal while the track record accumulat
 <li>App keys read-only; never in env, never cached</li>
 <li>Or opt in to <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">no App key in the cluster at all</a></li>
 <li>Controller writes confined to tenant namespaces</li>
-<li><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Sharing a proxy across namespaces needs the owner's consent</a></li>
+<li><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Sharing a proxy needs the owner's consent</a></li>
 </ul>
 </li>
 <li>
@@ -3224,7 +3230,7 @@ The discipline is the "won't strand you" signal while the track record accumulat
 <li>Default-deny ingress, cluster-only DNS</li>
 <li>Per-tenant egress IPs, mutual-TLS metrics</li>
 <li>Signed images, SBOM, and SLSA provenance</li>
-<li><a href="../operations/runner-template-library/">Three validated worker templates</a>, one <code>kubectl apply -k</code></li>
+<li><a href="../operations/runner-template-library/">Three worker templates</a>, one <code>kubectl apply -k</code></li>
 </ul>
 </li>
 </ul>
