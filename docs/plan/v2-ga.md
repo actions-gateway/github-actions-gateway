@@ -59,7 +59,21 @@ A window is billable and cannot be replayed; a reading that lives only in a term
 
 | Reading | Criterion | Verdict | What it found | Window |
 |---|---|---|---|---|
-| _none yet_ | | | | |
+| Q1048 | mirror-client-census | 🔲 Not taken | an address resolved to nothing, or no client connected; workers are reaped on a TTL | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
+| Q1059 | criterion-2-every-kind | ✅ Taken, positive | all five v2beta1 kinds present; EgressProxy reconciled to Ready | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
+| Q1060 | criterion-3-conversion-round-trip | ✅ Taken, positive | the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1 | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
+
+Those rows are `scripts/dogfood/soak-readings.sh`'s output pasted unedited, which is the point of it existing.
+
+**What criterion 2's reading covers.** The window manufactured a `v2beta1` `EgressProxy` in the standing tenant, which is the one kind `setup.sh` deliberately never creates, and it reconciled to Ready; the other four were already carrying this cluster's real CI traffic.
+So all five kinds have now reconciled on the dogfood cluster rather than only in envtest.
+
+**What criterion 3's reading covers, and what it does not.** One real object, the standing tenant's `ActionsGateway`, read back at both served versions of the v2 CRD with identical specs, so the hop is lossless over an object that has lived on this cluster since 2026-07-25.
+It is one kind, not five, and this window did not establish whether that object predates the `v2beta1` graduation.
+The criterion's own wording asks for every served *version* rather than every kind, which this meets; whether it should also ask for every kind is a question for whoever closes Phase 1, not something the reading settles.
+
+**Q1048's census is not a criterion, and it did not report.** It rides along because it needs the same dogfood kubectl.
+Its refusal is recorded as taken-nothing rather than as a pass, which is the distinction the whole verdict vocabulary exists for.
 
 ### Definition of Done audit (as of this change)
 

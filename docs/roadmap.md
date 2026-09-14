@@ -18,8 +18,6 @@ Every open item, in priority order, is in the [working backlog](https://actions-
 
 ## In progress / near-term
 
-- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q1059,Q1060 --> The `v2` graduation is gated on a soak, and two of its three criteria have never been measured.
-  The next release candidate's dogfood window takes both readings: every kind under real traffic, and the conversion webhook over real objects.
 
 What lands here is scoped work, none of it waiting on an outside signal.
 Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the event that revives it.
@@ -27,6 +25,9 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.
 
 ## Exploring / longer-term
+
+- **[v2 GA readiness](plan/v2-ga.md)** <!-- q:Q413 --> The soak's two measurable criteria were read on 2026-09-14 and both came back positive: every kind reconciled under real traffic, and the conversion webhook lossless over a real object at both served versions.
+  What is left is the graduation work itself, which cannot start before 1.9.
 
 Directions we expect to pursue as demand and validated evidence accumulate.
 These are intentionally unscheduled.

@@ -3,7 +3,7 @@
 > **Status: scoped 2026-09-07; every gating item is met.
 > `v1.8.0-rc.1` was cut and validated on dogfood 2026-09-12 and still covers `main`, so the tag is a decision rather than a blocked one.** What remains is the riding evidence: criteria 2 and 3 have no reading, and taking them needs another window against this same candidate, not a new one.
 > The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event ([below](#the-gating-row-q1029)).
-> Three rows ride without gating: the two v2 GA soak readings, [Q1059](../queue/Q1059.md) and [Q1060](../queue/Q1060.md), and [Q1085](../queue/Q1085.md)'s release-notes line.
+> Three rows rode without gating: the two v2 GA soak readings, Q1059 and Q1060, both now closed on positive readings, and [Q1085](../queue/Q1085.md)'s release-notes line.
 > The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger ([the decision](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn)).
 > The bump is measured rather than assumed: `semver-floor.sh v1.7.0` read 99 commits and **FLOOR: MINOR** on 2026-09-12, so the tag is `v1.8.0`.
 > Four `feat`s on the released surface set it: Q1062, Q1011, Q988 and Q994, the last of which landed after this was scoped and rides unlabelled.
@@ -41,8 +41,8 @@ The fix does not depend on which step inside it was slow.
 
 | Row | What it delivers | Why it rides rather than gates |
 |---|---|---|
-| [Q1059](../queue/Q1059.md) | Every `v2beta1` kind applied and reconciled on the dogfood cluster, recorded against criterion 2 | A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative |
-| [Q1060](../queue/Q1060.md) | The conversion webhook round-tripped over real objects across the v2 CRD's two served versions, recorded against criterion 3 | Same |
+| Q1059 | Every `v2beta1` kind applied and reconciled on the dogfood cluster, recorded against criterion 2 | A soak reading closes when the evidence exists; a tag cannot wait on a measurement that may come back negative |
+| Q1060 | The conversion webhook round-tripped over real objects across the v2 CRD's two served versions, recorded against criterion 3 | Same |
 | Q452 | Whether GA `v2` defines `CiliumFQDN`/`CalicoFQDN`, written into [v2-ga.md § Phase 2](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn) | A design decision, not a shipped change; deciding it here lets the hop start without one pending |
 
 A reading that comes back negative is the release working: it names the shape fix `v2beta1` still needs, which resets the soak clock and is exactly what GA is gated on finding first.
@@ -56,11 +56,11 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
 | Q1029 | Drain recovery lost when no reconcile starts inside the window | `1.8-gate` | ✅ closed 2026-09-07 |
-| [Q1059](../queue/Q1059.md) | Every `v2beta1` kind on the dogfood cluster (soak criterion 2) | rides | 🔲 open |
-| [Q1060](../queue/Q1060.md) | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | 🔲 open |
+| Q1059 | Every `v2beta1` kind on the dogfood cluster (soak criterion 2) | rides | ✅ closed 2026-09-14, reading positive |
+| Q1060 | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | ✅ closed 2026-09-14, reading positive |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
 | [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
-| — | RC validated on dogfood | gates | ✅ `v1.8.0-rc.1` cut and validated 2026-09-12; still covers `main` |
+| — | RC validated on dogfood | gates | ✅ `v1.8.0-rc.1` validated 2026-09-12 and again 2026-09-14; still covers `main` |
 
 ## Explicitly out of scope
 
@@ -73,14 +73,17 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 ## Definition of done
 
 1. ✅ **Q1029 closed** (2026-09-07), with the queue mechanism established before the fix, the reconcile's duration left unmeasured and said so, and an envtest assertion that fails when the watch-path recovery is inert; the e2e assertion the criterion asked for is still open, per [the gating row](#the-gating-row-q1029).
-2. **Criterion 2 and criterion 3 have a recorded reading** in [v2-ga.md](v2-ga.md)'s Phase 1 table, positive or negative, each naming the candidate window it was taken in.
+2. ✅ **Criterion 2 and criterion 3 have a recorded reading** in [v2-ga.md](v2-ga.md#soak-readings)'s Phase 1 table (2026-09-14), both positive, both naming the `v1.8.0-rc.1` window they were taken in.
+   All five `v2beta1` kinds reconciled on the dogfood cluster, the manufactured `EgressProxy` among them, and the standing tenant's `ActionsGateway` round-tripped both served versions with identical specs.
+   The table is the renderer's output pasted unedited rather than a retyping of the gate's terminal output, so what the plan claims and what the window measured cannot drift.
 3. ✅ **Q452 decided** (2026-09-08): `v2` omits both aliases, because the premise the question rested on was itself revisited and `v2beta1` is no longer served past `v2.0.0`.
    The losing option's cost is recorded beside it in [v2-ga.md](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn), and the work the answer puts on the critical path is [Q1085](../queue/Q1085.md).
    The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.
-4. ◐ **The two dogfood-window rows** got their window from the `v1.8.0-rc.1` candidate, and it produced one of the two readings.
+4. ◐ **The two dogfood-window rows** got their window from the `v1.8.0-rc.1` candidate, and it produced one of the two readings; the second window on 2026-09-14 did not change this item's verdict, because the row still outstanding is the one that needs live workers.
    Q1038's `mirror-timing` probe took its first live run against a real mirror in the candidate's Kata e2e leg and returned `SEPARATED` (hits ≤46ms, misses ≥147ms, 4 references, one cold and one warm fetch each) without failing the job, which closes it and settles the placement question as `e2e-reusable.yml`.
-   [Q1048](../queue/Q1048.md)'s mirror client census was **not** taken: nothing invokes `scripts/dogfood/e2e-mirror-clients.sh`, so the window passed it by, and teardown scaled the mirror deployments to zero with the access logs it reads.
-   That is the row's own thesis confirmed by events rather than a new problem, and it needs another window.
+   [Q1048](../queue/Q1048.md)'s mirror client census was **not** taken in the first window, because nothing invoked `scripts/dogfood/e2e-mirror-clients.sh` at all.
+   It ran in the second and still did not report: of the two client addresses it found, one was a labelled workload pod and the other resolved to no pod and no node, which the script grades as a refusal rather than a pass.
+   So the row stays open, and its reason has moved from "nothing calls it" to "it called and could not grade what it saw".
    Q1039's shared-tenants topology was the third until its 2026-09-03 scoping found a dogfood leg to be the worse venue rather than the dearer one, since that cluster has one tenant and so cannot produce either negative; it shipped on the Calico kind lane instead and needs no window.
 5. ✅ **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.7.0..<rc commit>`, run 2026-09-12 and recorded [below](#pre-flight-verdicts).
    When the release was scoped, this item expected *exactly* the `egressPolicyMode` description change item 3 names.
@@ -133,7 +136,19 @@ The tag was compared against `origin/main` after creation and before the push, p
 **The candidate still covers `main`.** `check-artifact-unchanged.sh c99137ea6 origin/main` exits 0 at `f771594d1`: 20 files changed since the tag, none on the released surface.
 So the eight commits that merged after the candidate — the Q1058, Q1104, Q1105 and soak-wiring work — do not require a new one.
 
-**What that validation did *not* produce is the soak readings**, and the reason is structural rather than an oversight in the run: nothing invoked them.
+**That validation did not produce the soak readings**, and the reason was structural rather than an oversight in the run: nothing invoked them.
 The gate validates the candidate and had no step that takes a reading, `release.md` asked for none, and nothing outside their own rows referenced Q1059 or Q1060 at all.
 Q1038's reading was taken in the same window only because `mirror-timing.sh` already had a step in `e2e-reusable.yml`.
-[#1922](https://github.com/actions-gateway/github-actions-gateway/pull/1922) wired the other three; no window has run that wiring, so taking them means re-running the window against this same candidate rather than cutting a new one.
+[#1922](https://github.com/actions-gateway/github-actions-gateway/pull/1922) wired the other three, which is why the readings took a second window against this same candidate rather than a new one.
+
+### `v1.8.0-rc.1`, second window (2026-09-14)
+
+Run against the same tag to take the readings the first window had no step for.
+PASS in 30m39s, e2e matrix 3/3.
+The readings are in [v2-ga.md](v2-ga.md#soak-readings); criterion 2 and criterion 3 both came back positive, and Q1048's census did not report.
+
+**The first attempt at this window died in the deploy leg**, which is worth recording because the defect was on `main` rather than in the candidate.
+`setup.sh` authored the dogfood `RunnerSet` at `v2beta1` while leaving `spec.acquisitionProtocol` in it; that field is `v2alpha1`-only, so the apply failed strict decoding with the nodes already up.
+Three assertions covered that manifest and all three passed throughout, because none of them read the schema.
+Fixed in [#1926](https://github.com/actions-gateway/github-actions-gateway/pull/1926) along with a reconciliation that checks every authored spec field against the matching `v2beta1` Go type, which catches the class rather than the instance.
+The candidate itself was never in question: the failure was in the tooling that deploys it.
