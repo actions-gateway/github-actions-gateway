@@ -586,7 +586,7 @@ census_mirror_clients() {
 		echo "          Workers are reaped on a TTL after their job, so a slow run can lose"
 		echo "          them before this point. Not a pass: the reading simply did not happen."
 		progress_reading Q1048 "mirror-client-census" not-taken \
-			"an address resolved to nothing, or no client connected; workers are reaped on a TTL"
+			"the census refused: an address resolved to no pod and no node, or nothing connected"
 		;;
 	*)
 		echo "  census: script failed (exit ${rc}) — the reading did not happen"
@@ -1227,7 +1227,7 @@ EOF
 		echo "  Q1060: NOT TAKEN — could not read the object at both served versions."
 		echo "         An empty read here is the caBundle or the webhook, not an equal object."
 		progress_reading Q1060 "criterion-3-conversion-round-trip" not-taken \
-			"the ActionsGateway could not be read at both served versions; suspect the webhook or its caBundle"
+			"the ActionsGateway could not be read at both served versions"
 		return 0
 	fi
 

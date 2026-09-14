@@ -60,7 +60,7 @@ A window is billable and cannot be replayed; a reading that lives only in a term
 
 | Reading | Criterion | Verdict | What it found | Window |
 |---|---|---|---|---|
-| Q1048 | mirror-client-census | 🔲 Not taken | an address resolved to nothing, or no client connected; workers are reaped on a TTL | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
+| Q1048 | mirror-client-census | 🔲 Not taken | the census refused: an address resolved to no pod and no node, or nothing connected | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
 | Q1059 | criterion-2-every-kind | ✅ Taken, positive | all five v2beta1 kinds present; EgressProxy reconciled to Ready | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
 | Q1060 | criterion-3-conversion-round-trip | ✅ Taken, positive | the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1 | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
 

@@ -128,6 +128,16 @@ check_contains() {
 	fi
 }
 
+check_not_contains() {
+	local name="$1" needle="$2" haystack="$3"
+	if [[ "${haystack}" != *"${needle}"* ]]; then
+		echo "ok   ${name}"
+	else
+		echo "FAIL ${name}: '${needle}' unexpectedly present" >&2
+		fails=$((fails + 1))
+	fi
+}
+
 # Pacing sleeps are stubbed out: every sleep in the tested paths is loop pacing,
 # and the dispatch-timeout test otherwise takes 24 real seconds.
 sleep() { :; }
@@ -1237,6 +1247,17 @@ check "census: an unclassified exit does not fail the gate" "0" "${rc}"
 check "census: an unclassified exit is recorded as not-taken" "not-taken" "$(reading verdict)"
 check_contains "census: an unclassified exit names the status" "exit 9" "$(reading detail)"
 
+# A reading's detail is pasted into the v2 GA plan verbatim, so a cause guessed
+# in advance becomes a plan claim nobody re-examines. The TTL hypothesis was
+# wrong for the one window that hit this arm: the unresolved address was
+# link-local and had never been a pod. It belongs in the echo, not the record.
+export FAKE_CENSUS_RC=2
+: >"${RELEASE_READINGS_FILE}"
+out="$(census_mirror_clients 2>&1)"; rc=$?
+check_not_contains "census: the untaken reading does not guess a cause" "reaped" "$(reading detail)"
+check_not_contains "census: nor names the TTL as the reason" "TTL" "$(reading detail)"
+check_contains "census: the operator still sees the hypothesis in the run output" "TTL" "${out}"
+
 # --- soak_leg --------------------------------------------------------------
 #
 # kubectl is scripted per verb. The apply is fed from stdin, so it is drained:
@@ -1306,6 +1327,10 @@ out="$(soak_leg 2>&1)"; rc=$?
 check "soak: an unreadable object does not fail the gate" "0" "${rc}"
 check_contains "soak: an empty read is NOT TAKEN, not lossless" "Q1060: NOT TAKEN" "${out}"
 check "soak: an empty read records Q1060 as not-taken" "not-taken" "$(reading_for Q1060 verdict)"
+check_not_contains "soak: the untaken Q1060 reading does not guess a cause" "suspect" \
+	"$(reading_for Q1060 detail)"
+check_contains "soak: the operator still sees the caBundle hypothesis in the run output" \
+	"caBundle" "${out}"
 
 FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":2}'
 : >"${RELEASE_READINGS_FILE}"
