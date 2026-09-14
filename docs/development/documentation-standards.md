@@ -372,6 +372,24 @@ The dispatcher wrote that trap into the playbook on the worker's evidence, then 
 Neither was carelessness, which is the point: both had the mechanism in working memory, and that is what made the next check feel redundant.
 If the check does not fire on real cases, demote this to an observation rather than leaving it stated as a rule.
 
+## A field a renderer reads back takes the observation, never the cause
+
+A record written by a gate, a script, or a session gets read later by something that cannot tell a measurement from a guess.
+So a cause written into one arrives at its reader with the authority of the instrument that emitted it, and the reader is usually a document nobody re-examines.
+The hypothesis is worth having; it belongs in the line a human reads while the work is live, not in the record.
+
+**Write what was observed into the field, and put why you think it happened in the prose beside it.** The test is whether the value would still be true if your explanation is wrong.
+`169.254.4.6 did not resolve` survives that; `the worker was reaped on its TTL` does not, and the address is link-local, so it had never been a pod.
+
+Three instances on 2026-09-14, in three different venues, all in one release cycle.
+A soak reading's `detail` field carried that TTL guess into the v2 GA plan table, where it was published twice before anyone checked the address.
+A backlog row was titled for a mechanism that the recovery later refuted, which also dropped it below [`find-duplicate-rows.sh`](../../scripts/docs/find-duplicate-rows.sh)'s floor against the row it duplicated, since that search is calibrated on symptoms.
+A release note's validation section named a cause for a census that failed, and the cause came from a gate's own echo.
+
+The rule already exists at one declaration, [`progress.sh`](../../scripts/dogfood/lib/progress.sh)'s `progress_reading`, written up from the near-miss in the window before.
+It is stated here because the venue was the accident and the field is the rule: a row title, a plan cell, a status line and a reading's `detail` all fail the same way.
+Related but distinct from [Naming a trap and applying it are different acts](#naming-a-trap-and-applying-it-are-different-acts), which is about when to re-derive a claim rather than where to put one.
+
 ## Prose that counts a set goes stale on an insertion nothing checks
 
 A sentence asserting a property of a set is falsified by an insertion that never touches that sentence.
