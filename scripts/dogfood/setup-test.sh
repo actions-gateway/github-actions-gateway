@@ -44,6 +44,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# The stub rig below repoints REPO_ROOT at a fake tree, so the real one is kept
+# here for the assertions that read the committed API types.
+API_ROOT="${REPO_ROOT}"
 SETUP_LIB_ONLY=1
 export SETUP_LIB_ONLY
 # shellcheck source=scripts/dogfood/setup.sh
@@ -544,12 +547,17 @@ check_not_contains "stays image-less on a first run" \
 reset_stubs
 run_main
 manifests="$(cat "${MANIFESTS}")"
-# Classic acquires a job at GitHub before deciding whether to provision a
-# worker, orphaning every job it declines: 85 acquired, 16 worker pods, 69
-# orphaned on this tenant (Q399). acquisitionProtocol is immutable, so this is
-# set explicitly rather than left to the default.
-check_contains "runs the tenant on the ScaleSet protocol" \
-	"acquisitionProtocol: ScaleSet" "${manifests}"
+# v2beta1 is ScaleSet-only and has no acquisitionProtocol field at all, so the
+# protocol this tenant runs is now the API's by construction rather than a line
+# in the manifest. Asserting the absence, because the field's presence is what
+# broke the 2026-09-13 window: #1919 moved these CRs to v2beta1 and left the
+# v2alpha1 knob behind, and the apply died on strict decoding after the nodes
+# were already up. See the reconciliation below for the general form.
+# Matched as a spec key rather than as a substring: the heredoc reaches kubectl
+# with its comments intact, and the comment explaining the absence names the
+# field, so a substring test fails on the explanation.
+check_not_contains "authors no v2alpha1-only acquisitionProtocol" \
+	"acquisitionProtocol" "$(grep -E '^  [a-zA-Z]' "${MANIFESTS}")"
 # maxWorkers is also the capacity advertised to GitHub on this path, so GitHub
 # never assigns more jobs than the tenant can place — and it matches the pool's
 # max-nodes.
@@ -602,6 +610,47 @@ check_not_contains "applies nothing at the doomed v2alpha1" \
 for kind in actionsgateways runnertemplates runnersets; do
 	check_contains "probes conversion for ${kind}" \
 		"${kind}.v2alpha1.actions-gateway.com" "$(cat "${CALL_LOG}")"
+done
+
+# Every spec field these CRs author must exist on the v2beta1 Go type.
+#
+# The two assertions above are each true and together prove nothing: one says
+# the CRs are v2beta1, the other says nothing is authored at v2alpha1, and both
+# passed for the whole life of the defect that took the 2026-09-13 window down.
+# A v2alpha1-only field sitting in a v2beta1 spec is invisible to both, because
+# neither reads the schema -- and the apiserver's strict decoding does, an hour
+# in, with billable nodes already up. So this reconciles the rendered manifests
+# against the committed types instead of against a remembered field list.
+#
+# The field set is grepped from the kind's own types file, which is a superset:
+# it holds the status struct's tags too. That is deliberate. The check this
+# needs to survive is "does v2beta1 have this name anywhere", which is what
+# separates a field belonging to another version from one merely misplaced, and
+# a superset cannot produce a false failure. It will not catch a real field at
+# the wrong nesting level; the apiserver is still the authority on that.
+spec_keys() {
+	awk -v want="$1" '
+		/^kind:/ { kind = $2; inspec = 0 }
+		/^spec:$/ { if (kind == want) inspec = 1; next }
+		/^[^ \t#-]/ { inspec = 0 }
+		inspec && /^  [a-zA-Z]/ { sub(/:.*/, "", $1); print $1 }
+	' "${MANIFESTS}"
+}
+
+for kind in ActionsGateway RunnerTemplate RunnerSet; do
+	types_file="${API_ROOT}/api/v2beta1/$(echo "${kind}" | tr '[:upper:]' '[:lower:]')_types.go"
+	tags="$(grep -o 'json:"[a-zA-Z][a-zA-Z0-9]*' "${types_file}" | cut -d'"' -f2 | sort -u)"
+	keys="$(spec_keys "${kind}")"
+	# An empty key list would pass every membership test below, so the render is
+	# asserted to have produced something first.
+	check_contains "${kind}: the render produced a spec to check" "true" \
+		"$([[ -n "${keys}" ]] && echo true || echo false)"
+	unknown=""
+	while IFS= read -r key; do
+		[[ -n "${key}" ]] || continue
+		grep -qx "${key}" <<<"${tags}" || unknown="${unknown} ${key}"
+	done <<<"${keys}"
+	check "${kind}: every authored spec field exists on the v2beta1 type" "" "${unknown}"
 done
 check_contains "probes the tenant namespace" \
 	"--namespace gag-dogfood" "$(call_line 'conversion-probe')"
