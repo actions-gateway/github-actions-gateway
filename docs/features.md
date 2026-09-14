@@ -3,7 +3,7 @@
 Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see [Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
 
-Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the `actions-gateway.com/v2beta1` API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.7</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the `actions-gateway.com/v2beta1` API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.8</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.
 
 !!! tip "Check the version you're running"
@@ -21,7 +21,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.
-- **[Gate for workers that bind and never start](operations/troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: opt-in.
+- **[Gate for workers that bind and never start](operations/troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull)** <span class="gag-v2-badge">v2</span>: opt-in.
   Stop claiming jobs while bound workers never reach running, so an image that will not pull cannot quietly absorb the set's capacity.
   Reported whether or not the gate is on.
 - **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.
@@ -50,6 +50,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
   An unknown group fails the set closed.
 - **[Cross-tenant scale-set name guard](operations/troubleshooting.md#actionsgateway-reports-scalesetnamecollision)**: a set's first `runnerLabel` names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
   Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.
+- **[Agent-identity collision guard](operations/upgrade.md#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name)** <span class="gag-new-badge">new in 1.8</span>: two pools reaching one agent identity both register the same GitHub runner name.
+  Admission now rejects the second, so the pair never forms; the holder is named only when the tenant owns both.
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
 - **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.
@@ -65,7 +67,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Secure-by-default hardening](design/05-security.md)**: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.
 - **[Runner template library](operations/runner-template-library.md)**: three shipped worker pod shapes (`plain`, `kata-dind`, `privileged-dind`), each applied with one `kubectl apply -k`, so a tenant starts from a validated template instead of transcribing a capability set by hand.
   Only templates CI exercises may ship, and a gate enforces it.
-- **[Shared worker storage](operations/worker-shared-storage.md)** <span class="gag-new-badge">new in 1.6</span>: a validated reference architecture for a `ReadWriteMany` volume several jobs mount to pass files, with its `fsGroup` requirement measured.
+- **[Shared worker storage](operations/worker-shared-storage.md)**: a validated reference architecture for a `ReadWriteMany` volume several jobs mount to pass files, with its `fsGroup` requirement measured.
   The classes it was exercised against are named; a harness validates yours.
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
 - **[Untrusted-PR egress posture](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)** <span class="gag-new-badge">new in 1.7</span>: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
@@ -89,10 +91,12 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Scraping setup](operations/observability-metrics-access.md)**: wiring the mutual-TLS metrics endpoints into your Prometheus.
 - **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code.
 - **[Grafana dashboards](operations/observability-dashboards.md)**: tenant, platform, budget, and security dashboards, all as code.
-- **[Why a set is not being offered jobs](operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: `RunnerSet` status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
+- **[Why a set is not being offered jobs](operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)** <span class="gag-v2-badge">v2</span>: `RunnerSet` status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
   Readable from `kubectl describe`, so answering it no longer needs metrics access.
+- **[Egress attribution readiness](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.8</span>: an `EgressAuditUnattributed` condition and gauge say whether both halves of that attribution are on, and name the half that is not.
+  Advisory: it never gates `Ready`.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
-- **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
+- **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
 - **[Which host each job reached](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.7</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.
 
 ## Install and day-2 operations
@@ -104,7 +108,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Upgrade and rollback](operations/upgrade.md)**: versioned upgrade procedures and the rollback path for each release.
 - **[Stale-CRD startup check](operations/troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)**: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave `runnerGroup` accepted and silently pruned.
 - **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)**: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
-- **[Observed runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
+- **[Observed runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-v2-badge">v2</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
   A self-report from the tenant's own container, not an attestation.
 - **[Registry-read runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-new-badge">new in 1.8</span>: the gateway reads the runner version out of the worker image in its registry before any pod runs it, so a digest-only or custom-tagged image gets a verdict rather than `Unknown`.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
