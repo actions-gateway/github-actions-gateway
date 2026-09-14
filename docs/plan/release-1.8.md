@@ -59,7 +59,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 | Q1059 | Every `v2beta1` kind on the dogfood cluster (soak criterion 2) | rides | ✅ closed 2026-09-14, reading positive |
 | Q1060 | Conversion round-trips on real dogfood objects (soak criterion 3) | rides | ✅ closed 2026-09-14, reading positive |
 | Q452 | GA `v2` and the deprecated FQDN aliases | rides | ✅ closed 2026-09-08 |
-| [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ docs half shipped with Q452; release-notes line open |
+| [Q1085](../queue/Q1085.md) | The `v2beta1` removal notice: operator docs, enum godoc and admission warning name `v2.0.0` | rides | ✅ both halves shipped: docs with Q452, the release-notes line in `v1.8.0.md`. Items 2 and 3 are 1.9 |
 | — | RC validated on dogfood | gates | ✅ `v1.8.0-rc.2` validated 2026-09-14 at `86fbb6061` and recorded at `refs/validated/v1.8.0-rc.2`. It supersedes `v1.8.0-rc.1`, which Q1108 took off the released surface |
 
 ## Explicitly out of scope
