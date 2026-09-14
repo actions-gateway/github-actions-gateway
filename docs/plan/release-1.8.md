@@ -90,7 +90,12 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
    That was written before Q1062 and Q1011 landed, and no longer describes the window.
    What binds is the narrower claim underneath it: the enum members are unchanged, so a reported member add or removal is a finding.
    Q1062's five condition reasons and its one metric are additive publications expected here; Q1011's new `api/apinames` package is exported Go surface the checker has no category for, so it is reviewed by hand.
-6. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
+6. ❌ **[Q1108](../queue/Q1108.md) closed**: a drained scale-set worker whose pod is gone before the recovery claim lands is recovered rather than reported.
+   Added as a gating row on 2026-09-13, after the release notes' drain highlight was found to read as though drains are recovered now.
+   They are not: the class that reports `EvictionRecoveryEvidenceLost` and needs a manual re-run survives this release.
+   It is not a 1.8 regression -- it has shipped reported since `v1.5.0` (#1441), and item 1's Q1029 closes its invisible sibling -- so this gates by decision rather than by defect, to make the release's claim the strong one.
+   The row carries an open design question (the guard ConfigMap's single-writer invariant) that is settled before the fix is written.
+7. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
 
 ## Critical path
 
