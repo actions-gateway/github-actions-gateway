@@ -3262,11 +3262,22 @@ Consequences an operator should know:
   Its job never ran to a reportable end, so there is no failed job for `rerun-failed-jobs` to act on; detection requires a recorded container exit that the deletion preceded, which such a pod does not have.
   It is recovered by the `abandoned` path instead, which force-cancels the run first: see [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 - **A cancelled run is never re-run.** Nothing in the gateway deletes a cancelled run's pod, so it carries no mark.
-- **A small fraction of drains lose the window entirely** (scale-set tier only).
-  The pod is the disruption's only record, and the kubelet removes it once the container's exit is published — so if the AGC's claim lands after that, nothing recovers the run and no later reconcile can.
-  It is reported rather than silent: `actions_gateway_eviction_recovery_evidence_lost_total{cause="deletion"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded on the `RunnerSet`.
+- **A drain whose pod goes before the AGC writes to it is still recovered** (scale-set tier only, since Q1108).
+  The kubelet removes a drained worker once the container's exit is published, which used to end the recovery, because the at-most-once claim was an annotation on that pod.
+  The claim now lives in a per-`RunnerSet` `scaleset-recovery-claims-<name>` ConfigMap the AGC writes before it calls GitHub, so it outlives the pod and the run is re-run normally.
+  Nothing is asked of you, and nothing new appears in the metrics for it.
+- **What is still reported as unrecoverable is a claim the AGC could not record at all** (scale-set tier only).
+  If the write to that ConfigMap fails — the tenant `Role` short the `configmaps` grant, an apiserver the AGC cannot reach, or a ConfigMap holding unparseable data — `actions_gateway_eviction_recovery_evidence_lost_total{cause="deletion"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded on the `RunnerSet`.
   Those runs need a manual re-run.
-  A sustained rate means the AGC is not reaching the window — check whether it is CPU-starved or its pod watch is lagging the API server, not whether the policy or role is wrong.
+  The metric is the same one a lost pod used to produce and it still means the same thing to act on; what changed is the cause behind it, so check the AGC's permissions and the ConfigMap rather than its responsiveness:
+
+  ```sh
+  kubectl get configmap -n <namespace> scaleset-recovery-claims-<runnerset> -o yaml
+  kubectl auth can-i update configmaps -n <namespace> \
+    --as=system:serviceaccount:<namespace>:<agc-serviceaccount>
+  ```
+
+  A ConfigMap the AGC cannot parse is repaired by deleting it — it holds claims, not work, so deleting it re-opens the at-most-once window for whatever is in flight at that instant and nothing else.
 - **On an AGC before Q1029, a smaller fraction was not reported by any metric** (scale-set tier only).
   The recovery scan read the worker pods once per reconcile, so a drained worker was judged only if a reconcile began between the kubelet publishing the terminal phase and removing the object, and a reconcile already in flight held the next one past that window.
   If none did, the pod was never seen: no claim, no metric, no Event, and no log line naming it.
@@ -3306,11 +3317,11 @@ kubectl logs -n <namespace> <worker-pod> --previous \
 kubectl logs -n <namespace> deploy/<agc-deployment> \
   | grep -E 'worker pod disrupted; scheduling auto-retry|disruption auto-retry'
 
-# Scale-set tier: whether a disruption was found and then lost because the pod went
-# away before the claim landed. Names the pod, so it maps to the run that needs a
+# Scale-set tier: whether a disruption was found and then dropped because its claim
+# could not be recorded durably. Names the pod, so it maps to the run that needs a
 # manual re-run.
 kubectl logs -n <namespace> deploy/<agc-deployment> \
-  | grep 'disruption was lost before it could be claimed'
+  | grep 'could not be claimed durably'
 
 # Scale-set tier: every verdict the scan reached, by pod. Needs spec.logLevel:
 # debug, because two of the six verdicts log at Debug: at the default info a pod
@@ -3319,7 +3330,7 @@ kubectl logs -n <namespace> deploy/<agc-deployment> \
   | grep -E 'disrupt' | grep '<worker-pod>'
 ```
 
-If a drain of running workers produced no re-run, check whether the pods carried the `actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was down across the teardown window, lost the pod before it could claim it (`eviction_recovery_evidence_lost_total`), or the pods carried no run identity (see [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run), whose scale-set failure modes apply to drains identically).
+If a drain of running workers produced no re-run, check whether the pods carried the `actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was down across the teardown window, could not record its claim (`eviction_recovery_evidence_lost_total`), or the pods carried no run identity (see [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run), whose scale-set failure modes apply to drains identically).
 
 **Resolution / how to drain safely.**
 - **Prefer a quiet window anyway.** The re-run restarts each interrupted job from the beginning, so a drain mid-job still costs the work done so far — and each interrupted run spends re-run budget.
@@ -3359,11 +3370,11 @@ Expected behaviour is one automatic re-run per preempted run.
    The run is still re-run, but under `cause="vanished"` rather than `cause="preemption"`: the AGC persists the run behind every worker it builds, and on start re-runs any whose pod is no longer there.
    So check `cause="vanished"` before concluding nothing fired — a preemption counter that stays flat while the vanished one moves is this case, not a defect.
    The classic tier is unaffected: its provisioning goroutine is already watching the pod, and if that goroutine is gone the session is gone with it.
-5. **The AGC saw the victim but lost it before claiming it** (scale-set tier only).
-   The same window as (4), missed by a margin rather than entirely: recovery reads the pod off the informer and claims it through the live API, so a pod removed in between yields a claim that finds nothing.
-   `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
-   A manual re-run is required unless the AGC restarts, which is the one thing that re-reads the persisted record and picks the run up under `cause="vanished"`.
-   A sustained rate points at AGC responsiveness — CPU starvation, or a pod watch lagging the API server — rather than at the role or the policy.
+5. **The AGC could not record its claim** (scale-set tier only).
+   Recovery writes an at-most-once claim to the set's `scaleset-recovery-claims-<name>` ConfigMap before it calls GitHub, so that a second reconcile or a second replica cannot spend another slot of the run's budget for one disruption.
+   A write it cannot make leaves the disruption unrecovered: `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
+   Check the tenant `Role`'s `configmaps` grant (`get`, `create`, `update`) and whether the ConfigMap holds parseable data; a manual re-run is required for the affected run.
+   **A victim removed before the claim landed is not this case and needs nothing** — since Q1108 the claim outlives the pod, so the recovery proceeds off the evidence already read from the informer.
 
 **Diagnostics.**
 
@@ -3383,7 +3394,8 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 **Resolution.**
 - **Raise `maxEvictionRetries`** on the `RunnerGroup`/`RunnerSet` spec (default 2, max 10) if a workload is legitimately displaced more than twice per run.
 - **Fix the missing run identity** per the scale-set runbook linked above; without it no disruption of any cause can be recovered on that tier.
-- **Re-run the affected run manually** for anything lost to case 4, and keep AGC restarts (upgrades, node maintenance on the control-plane namespace) out of windows where a floor tier is actively preempting.
+- **Re-run the affected run manually** for anything lost to case 5, and keep AGC restarts (upgrades, node maintenance on the control-plane namespace) out of windows where a floor tier is actively preempting.
+  Case 4 needs no manual re-run: the run is recovered under `cause="vanished"` once the AGC is back.
 
 ---
 
