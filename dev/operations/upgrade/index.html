@@ -1674,6 +1674,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3355,6 +3366,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4026,6 +4048,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap">Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap</a></li>
 <li><a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job</a></li>
 <li><a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed</a></li>
 <li><a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)</a></li>
@@ -4101,6 +4124,25 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap">Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap<a class="headerlink" href="#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every <code>ScaleSet</code>-protocol <code>RunnerSet</code>.
+Nothing to do; one new object appears per set that has a worker disrupted.</p>
+<p>A drained or preempted worker's pod used to carry the <code>actions-gateway.com/eviction-handled-at</code> annotation that made its recovery at-most-once, and the kubelet removes that pod seconds after the container exits.
+A recovery whose write lost that race was reported and abandoned, and its run needed a manual re-run.
+The claim now lives in a per-<code>RunnerSet</code> ConfigMap that outlives the pod, so those runs are recovered normally.</p>
+<p>Operational consequences:</p>
+<ul>
+<li><strong>A second ConfigMap per set.</strong> <code>scaleset-recovery-claims-&lt;set&gt;</code> appears the first time one of that set's workers is disrupted, beside the existing <code>scaleset-guards-&lt;set&gt;</code>.
+  It carries the same <code>actions-gateway.com/runner-set</code> label, is owner-ref'd to the set so the garbage collector reaps it, and is bounded by a one-hour claim TTL and a 256-entry cap rather than by history.
+  A tooling script that lists ConfigMaps by that label and takes the first now gets two objects in no fixed order.</li>
+<li><strong><code>eviction_recovery_evidence_lost_total</code> narrows without changing meaning.</strong> It still counts disruptions whose runs will not be re-run automatically, so an alert on it needs no edit, but the cause behind it is now a claim the AGC could not write rather than a pod that went away.
+  Expect the rate to fall; a rate that does not points at the <code>configmaps</code> grant rather than at AGC responsiveness.</li>
+<li><strong>The pod annotation stays and still means what it said.</strong> It is written after the claim, as the marker an operator reads and the filter that keeps the recovery scan off a pod it has already judged.</li>
+<li><strong>RBAC:</strong> unchanged.
+  The AGC already holds <code>get</code>, <code>create</code> and <code>update</code> on <code>configmaps</code> for the guard ConfigMap.</li>
+</ul>
+<p><strong>Rolling back</strong> restores the old behaviour: a drain whose pod goes before the claim lands needs a manual re-run again.
+A leftover <code>scaleset-recovery-claims-&lt;set&gt;</code> is inert on older versions, which never read it, and is collected with its <code>RunnerSet</code>.</p>
 <h3 id="non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job<a class="headerlink" href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every runner group or runner set that sets <code>spec.scaleUp</code> on the classic acquisition tier.
 It is off by default, so a tenant that never configured a ramp sees nothing.

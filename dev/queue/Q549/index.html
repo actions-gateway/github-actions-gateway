@@ -2610,8 +2610,11 @@ The sampler is no longer asserted on; an empty sequence is a fact about a <code>
 And the scan now logs the terminating workers it judged and declined, which gives the spec a third "this attempt proves nothing" discriminator beside a replaced control plane and a lost claim: no verdict at all means the claim patch was never attempted, so the chart role was never exercised, and the attempt re-stages under the same <code>maxAttempts</code> budget.</p>
 <p>Reaching <code>Fail</code> now means the AGC judged the pod, so the two causes the failure text names are the two that remain.
 The product gap underneath, Q1029, is closed: a drain is judged off the worker-pod watch event as its phase change arrives, so its recovery no longer needs a reconcile to <em>begin</em> inside the pod's teardown window.
-Residual: a regression in the scan's own List selector still presents as silence and would re-stage rather than fail.
-Soak clock runs from the fix; blast radius is both e2e lanes, which are merge-group-only (<a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">Q675</a>).</p>
+Residual: a regression in the scan's own List selector still presents as silence and would re-stage rather than fail.</p>
+<p>Soak clock runs from the fix; blast radius is both e2e lanes, which are merge-group-only (<a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">Q675</a>).</p>
+<p><strong>Q1108 removed the third re-staging arm and did not restart that clock.</strong> A claim lost to the pod's deletion used to re-stage because no AGC could recover it; the claim now outlives the pod, so that attempt is one the AGC must recover from and the spec fails on it.
+One fewer excuse and no new one cannot mask a flake, so the clock still runs from the Q1029 fix.
+What it does add is a <code>Fail</code> cause to read for: an AGC that cannot write its recovery-claim ConfigMap logs <code>could not be claimed durably</code>, which points at the chart role's <code>configmaps</code> grant rather than its <code>pods</code> one.</p>
 
 
 

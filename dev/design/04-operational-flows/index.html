@@ -3482,21 +3482,25 @@ Both are relocated onto the worker pod, which makes the mechanism restart-safe r
     participant L as Listener
     participant P as Worker Pod
     participant R as RunnerSet reconciler
+    participant C as Recovery-claim ledger (ConfigMap)
     participant GH as GitHub
     Q--&gt;&gt;L: JobAssigned (ownerName, repositoryName, workflowRunId)
     L-&gt;&gt;P: provision, stamping run-id/repository + acquisition-protocol=ScaleSet
     Note over L: fire-and-forget — the runner pulls and completes its own job
     P--&gt;&gt;R: Failed/Evicted, DisruptionTarget=PreemptionByScheduler, or Failed + deletionTimestamp; the reconciler's pod watch hands the event's pod to recovery at once (Q1029), and a scan at the top of every reconcile lists for what no event reached
-    R-&gt;&gt;P: claim: stamp eviction-handled-at (optimistic lock)
+    R-&gt;&gt;C: claim the pod's recovery (optimistic lock) — outlives the pod (Q1108)
     alt claim won and identity present
+        R-&gt;&gt;P: stamp eviction-handled-at (best-effort cache filter)
         R-&gt;&gt;GH: POST .../runs/{run_id}/rerun-failed-jobs (retried until the run concludes — the classic loop above)
     else identity absent
         Note over R: eviction_recovery_identity_unknown_total++, Warning Event (manual re-run)
-    else claim lost
+    else claim held elsewhere
         Note over R: the other detection path, another reconcile, or a replica owns it — skip
+    else claim unrecordable
+        Note over R: eviction_recovery_evidence_lost_total++, Warning Event (manual re-run)
     end</code></pre>
 <p>Three properties make this equivalent rather than merely similar.
-The claim is stamped <strong>before</strong> the GitHub call, so recovery is at-most-once per disrupted pod across reconciles, restarts, and replicas — a duplicate re-run would silently spend another slot of the run's budget.
+The claim is taken <strong>before</strong> the GitHub call and <strong>off</strong> the pod, so recovery is at-most-once per disrupted pod across reconciles, restarts and replicas, and survives the pod's own deletion: a duplicate re-run would silently spend another slot of the run's budget, and a lost claim used to cost the run its recovery entirely (Q1108, below).
 The recovery scan runs <strong>before</strong> the worker-pod reaper in the same reconcile, so a terminal pod is never deleted before its identity is read.
 And the budget is the same budget, keyed by <code>run_id</code> alone: <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and both disruption causes</strong> together, with the <code>tier</code> and <code>cause</code> metric labels splitting the reporting but not the cap.</p>
 <h4 id="which-disruptions-are-recovered-and-which-are-not">Which disruptions are recovered, and which are not<a class="headerlink" href="#which-disruptions-are-recovered-and-which-are-not" title="Permanent link">&para;</a></h4>
@@ -3570,23 +3574,44 @@ And only this arm takes the check: an eviction, a preemption and a vanished work
 The residual is a cancelled run whose worker is <em>also</em> evicted or preempted before it stops, which is re-run as before.</p>
 <h5 id="detecting-a-disruption-is-not-the-same-as-claiming-it">Detecting a disruption is not the same as claiming it<a class="headerlink" href="#detecting-a-disruption-is-not-the-same-as-claiming-it" title="Permanent link">&para;</a></h5>
 <p>The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and recovery reads the pod off the informer (the watch event, or the scan's cached List) while it claims through the live API.
-So a pod can pass the discriminator and still be gone before its claim patch lands, and the run is then unrecoverable by any reconcile, in any replica, because the pod <em>is</em> the disruption's record.
+So a pod can pass the discriminator and still be gone before a claim written <em>on that pod</em> could land.
 Measured on three <code>e2e-calico</code> runs on 2026-08-12, where a drained worker was removed within about two seconds of the delete request, well inside its 30-second grace period, because the container exits as soon as it is signalled (<a href="../../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Q809</a>).</p>
-<p>Two things follow, and both are deliberate:</p>
+<p><strong>The pod is doing two jobs, and only one of them has to survive the delete.</strong> It is the <em>evidence</em>, meaning the cause and the run identity, which recovery has already read off the informer before it claims.
+And it is the <em>substrate</em> the at-most-once claim is written on.
+Losing the evidence would be fatal; losing the substrate is not, because the substrate can live somewhere the delete does not reach.</p>
+<p><strong>So the claim does not live on the pod (Q1108).</strong> A per-<code>RunnerSet</code> recovery-claim ledger, in a ConfigMap the owning reconciler writes under an optimistic lock, is what arbitrates: a recovery keyed by the worker pod's name is entered there before anything calls GitHub, and whoever wins that write owns the run's single recovery attempt.
+The pod's <code>eviction-handled-at</code> annotation is still stamped, and is still what an operator reads, but it is now a cache-level filter that keeps the scan from re-judging a pod it has already adjudicated, not a lock.
+It is written after the ledger claim is won, as a plain merge patch, and a failure to write it costs one redundant ledger read rather than a correctness property.</p>
+<p>Three properties come out of that, and the third is why the ledger and not something cheaper:</p>
 <ul>
-<li><strong>The loss is reported, not swallowed.</strong> <code>actions_gateway_eviction_recovery_evidence_lost_total</code> increments and an <code>EvictionRecoveryEvidenceLost</code> Warning Event names the pod, so a dropped re-run is visible rather than indistinguishable from no disruption having happened.</li>
-<li><strong>It is not recovered from the cached copy.</strong> The claim is what makes recovery at-most-once, and acting on an in-memory pod after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption.
-  A visible manual re-run is the better trade than a silently doubled budget.</li>
+<li><strong>A drained worker whose pod is gone is recovered rather than reported.</strong> The claim never needed the pod, so its removal takes nothing the recovery depends on.</li>
+<li><strong>At-most-once still holds across reconciles, replicas and restarts</strong>, on the ledger's own <code>resourceVersion</code> rather than the pod's.
+  It has to be the ledger and not a fallback: one claimant stamps the pod, the pod is deleted, and a second claimant working from a pre-stamp cached copy then sees <code>NotFound</code> on its own write.
+  That sequence was already known and already counted, so falling back to a durable claim only on a <code>NotFound</code> would have re-run such a run a second time.</li>
+<li><strong>An in-process claim set alone would not have been enough</strong>, which is why there is a durable object and not just a lock.
+  A lock closes the two goroutines inside one AGC, and the correlated case is precisely the one it misses: draining a node takes the AGC's own pod out alongside the workers on it, so the rollout that puts two AGCs in one window is the same event as the drain they are racing.</li>
 </ul>
+<p><strong>Why the ledger is its own object rather than the guard ConfigMap the listener already writes (Q606/Q844).</strong> Sharing that object was the cheaper-looking answer and is unsound as stated: the listener's <code>Save</code> re-serialises the whole of <code>guards.json</code> from its in-memory state, so anything the reconciler wrote <em>inside</em> that document is overwritten on the next poll cycle that concludes or retires anything.
+Writing a second data key in the same ConfigMap would survive that, since <code>Save</code> preserves keys it does not own, but it makes the two writers contend on one <code>resourceVersion</code>, and a conflict there is not symmetric: a failed <code>Save</code> holds the listener's queue-message deletes until the next cycle, while a failed claim costs only a retry.
+A separate object keeps the listener's single-writer invariant literally true, costs one ConfigMap per <code>RunnerSet</code> that has ever had a worker disrupted (created lazily, owner-ref'd to the set, garbage-collected with it), and needs no RBAC the AGC does not already hold.</p>
+<p>A finalizer on the worker pod was rejected rather than weighed: it closes the race by holding the object open, but <code>kubectl drain</code> would then block on the AGC being alive, which is exactly when a node is drained, and <a href="../appendix-h-v2-api-decomposition/">appendix-h</a> already records stuck-<code>Terminating</code> resources as a common cost of finalizers.</p>
+<p><strong>What the ledger costs.</strong> One uncached <code>Get</code> and one <code>Update</code> per disruption, on a path that previously took one pod patch; disruptions are rare by construction, and the budget that bounds them (<code>maxEvictionRetries</code>, default 2) says so.
+One AGC's own claims are serialised behind a mutex before that write, so the compare-and-swap arbitrates between replicas rather than between goroutines: a node drain disrupts every worker it holds at once, and both detection paths see each of them, which is enough concurrent claimants to exhaust a retry budget sized for replicas.
+Entries are swept on write, past a TTL that has to outlive every possible rival claimant: a stale informer copy, the watch handler's own 30-second budget, and the once-per-process orphan scan a restart runs.
+The set is additionally capped, so the object cannot grow without bound on a <code>RunnerSet</code> under sustained preemption.
+Overflowing the cap can cost at-most-once for the oldest claim it drops, which is a strictly better failure than the manual re-run it replaces.</p>
+<p><strong>A tenant can write in its own namespace, so the ledger is tenant-reachable.</strong> That was already true of the pod annotation it replaces, and the exposure is the same shape: forging a claim <em>suppresses</em> a re-run, it does not fabricate one.
+Deleting the ConfigMap re-opens the window for whatever is in flight and nothing else, because the entries are claims rather than work.</p>
+<p><strong>How often this fires in production is not measured.</strong> The three sightings are <code>e2e-calico</code> runs of a probe container that traps <code>TERM</code> and exits at once; a real runner takes its grace period to report.
+So the window is established and its production frequency is not.</p>
 <p>A scan alone could also miss a drain outright, and that loss had no report at all: the scan runs once per reconcile over the informer cache, so a drained worker whose window opened and closed between two reconciles was never listed and never judged, with no pod to count and no Event to attach.
 A reconcile already in flight held the next one past the window, since the queue runs one reconcile of a key at a time and the listener bootstrap does its GitHub I/O inside <code>Reconcile</code>: an 8-second gap between reconcile completions swallowed a 3.4-second window on the Q549 sightings.
 So the disruption is observed from the worker-pod watch as well (Q1029): the phase-change or preemption event that enqueues the reconcile hands its pod straight to the same judge and the same claim, and recovery no longer waits on the queue.
-The scan stays for what no event reaches, such as a pod already terminal when the process started, and the claim annotation arbitrates between the two, so a pod both see is recovered once.
+The scan stays for what no event reaches, such as a pod already terminal when the process started, and the ledger arbitrates between the two, so a pod both see is recovered once.
 What the scan <em>can</em> still say is the other half.
 It logs the terminating workers it did judge and decline, at <code>Debug</code>, so an unrecovered drain that appears nowhere in the log is separable from one the discriminator rejected.</p>
-<p>A conflict on that patch is a different thing and <em>is</em> retried.
-The optimistic lock exists to arbitrate between claimants, but the apiserver raises the same conflict for any concurrent write, and the kubelet publishing the terminal phase is guaranteed to be racing, since that transition is the edge that triggers the reconcile.
-Only a re-read showing the claim annotation already set ends the attempt.</p>
+<p><strong>What is still reported as unrecoverable</strong>, under the same <code>actions_gateway_eviction_recovery_evidence_lost_total</code> counter and <code>EvictionRecoveryEvidenceLost</code> Warning Event the lost pod used to produce, is a claim the AGC could not durably record at all: the ConfigMap write failing past its retries.
+The metric's meaning is unchanged where an operator acts on it ("this disruption was detected and its run will not be re-run automatically"); what narrowed is the set of ways to reach it.</p>
 <p>Note that the <code>DisruptionTarget</code> <strong>condition type</strong> alone is not the discriminator for either deleted-pod row: the eviction API stamps it too, with reason <code>EvictionByEvictionAPI</code>, and a bare <code>kubectl delete pod</code> stamps nothing.
 Preemption detection matches the full type/status/reason triple; drain detection keys on the deletion mark at terminal publish, ordered on both tiers against the container's recorded <code>finishedAt</code> — as the deletion <em>request</em> time, <code>deletionTimestamp</code> minus the grace period the apiserver folds into it.</p>
 <p>The raw mark sits a whole grace period after the request, so comparing it directly recognises only a worker that ignored SIGTERM to its SIGKILL and misses every runner that shuts down cleanly — the shipped Q502 form, caught by <code>E2E_AGC_ScaleSetRecovery</code> on a real kubelet (Q519; envtest never sees the offset because unscheduled pods delete with grace collapsed to zero).</p>

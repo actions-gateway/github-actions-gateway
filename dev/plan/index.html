@@ -2729,8 +2729,8 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 </tr>
 <tr>
 <td><a href="release-1.8/">release-1.8.md</a></td>
-<td>The 1.8 release gate: the scale-set drain recovery lost when no reconcile starts inside a terminating worker's window (Q1029), plus the two v2 GA soak readings and the Phase 2 alias decision that ride without gating</td>
-<td>⚠️ Scoped 2026-09-07, and its one gating row, Q1029, closed the same day: recovery now runs off the worker-pod watch, and the fix raises the floor to PATCH. Q1059 and Q1060 rode and closed positive on 2026-09-14, Q452's alias decision closed 2026-09-08, <a href="../queue/Q1085/">Q1085</a>'s removal notice rides with its docs half shipped, and <code>v1.8.0-rc.1</code> is cut and validated</td>
+<td>The 1.8 release gate: both halves of the scale-set drain recovery a terminating worker's window used to cost, the swallowed window (Q1029) and the claim that raced the pod's deletion (Q1108), plus the two v2 GA soak readings and the Phase 2 alias decision that ride without gating</td>
+<td>⚠️ Scoped 2026-09-07. Q1029 closed the same day, recovery running off the worker-pod watch; Q1108 was added as a second gating row on 2026-09-13 and closed that day, moving the at-most-once claim into its own ConfigMap so it outlives the pod. Q1059 and Q1060 rode and closed positive on 2026-09-14, Q452's alias decision closed 2026-09-08, and <a href="../queue/Q1085/">Q1085</a>'s removal notice rides with its docs half shipped. <code>v1.8.0-rc.1</code> is cut and validated but no longer covers what ships: Q1108 is on the released surface, so the tag needs a fresh candidate</td>
 </tr>
 <tr>
 <td><a href="release-1.9/">release-1.9.md</a></td>
