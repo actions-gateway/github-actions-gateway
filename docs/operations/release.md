@@ -1154,6 +1154,19 @@ This half exists because `v1.3.0` shipped without it too: the 1.3 row read `❌ 
 
 #### The bump on `main` does not reach the published release
 
+**Bump the pins before the tag and this whole section is a fallback**, which is what [step 2](#2-tag-and-push) tells you to do and what `v1.8.0` was the first release to do.
+[`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) accepts a pin naming a release that has a candidate tagged and no stable tag yet, so the bump lands on `main` during the candidate window without reddening `make check` for every PR in it.
+The tag then carries the right pins itself and the republish needs no branch:
+
+```bash
+gh workflow run pages --ref main \
+  -f version=X.Y.Z -f alias=stable -f set_default=true -f docs_ref=vX.Y.Z
+```
+
+Then confirm it with `make verify-published-docs VERSION=vX.Y.Z`, as below.
+
+**Everything below is the recovery for a bump that landed after the tag**, which is how every release before `v1.8.0` was cut.
+
 Landing it on `main` fixes `make check` and the `dev` docs, and **nothing else**.
 The site builds each version from its tag ([step 2](#2-tag-and-push)), so `/X.Y.Z/` is frozen at what the tag's tree said, which is the *previous* release's pins.
 So are `stable` and the root redirect a visitor lands on.
@@ -1162,7 +1175,7 @@ So are `stable` and the root redirect a visitor lands on.
 
 The publish run does its own, narrower live check first: after deploying, it polls until the site actually serves the version, and fails with the republish command when it does not (Q1000, [website.md](../development/website.md#what-the-publish-job-verifies-and-why-it-takes-two-checks)).
 That answers *did the deploy reach the site*, which is what `v1.6.0` got wrong.
-It cannot answer *do the published pages pin the right release*, because a tag's own tree carries the previous release's pins until the republish below.
+It cannot answer *do the published pages pin the right release*, because a tag whose pins were bumped afterwards carries the previous release's until the republish below.
 So a green publish run is not a substitute for the command at the end of this step.
 
 The two facts are stated separately above and were never reconciled.
@@ -1170,10 +1183,7 @@ Three of the four releases cut since `1.0.0` published the previous version's in
 Measured on the live site 2026-08-10: `/1.1.0/` and `/1.2.0/` both advertise `--version 1.0.0`, and `/1.4.0/` advertised `1.3.0` together with the `v1.3.0` CRD manifest URL, as did `stable` and the root redirect, for the three hours until it was reported.
 `v1.3.0` is correct only because Q638's hand-fix happened to land before that tag.
 
-Nor can the bump simply move ahead of the tag: [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) compares each pin for **equality** with the newest stable tag, so a pin naming the release about to be cut fails exactly as loudly as one naming the release before it, reddening `make check` and `doc-links` for every PR in the window.
-The `GAG_RELEASE_TAG` override is a gate-testing hook, set nowhere in CI.
-
-So the bump lands twice, and the release's own docs are republished from the second copy:
+A tag's tree cannot be changed, so the release's own docs are republished from a branch that is the tag plus the bump:
 
 ```bash
 git switch -c release-X.Y vX.Y.Z
@@ -1189,6 +1199,7 @@ gh workflow run pages --ref main \
 
 `release-X.Y` is the tag plus the pin bump and nothing else — verify with `git diff --stat vX.Y.Z..release-X.Y` before pushing, because anything else on it publishes as documentation of a release that never shipped it.
 Keep the branch: it is the backport line [patch releases](#patch-releases-and-backports) already want, and `GAG_DOCS_SOURCE_REF` points the published version's source links at it.
+A release that bumped early still wants that branch for the backport line, cut from the tag with nothing cherry-picked onto it.
 
 For a backport patch to an older line, drop `-f alias=stable -f set_default=true`.
 Those belong to the highest release, and a dispatch applies them verbatim rather than checking ([pages.yml](../../.github/workflows/pages.yml)).
