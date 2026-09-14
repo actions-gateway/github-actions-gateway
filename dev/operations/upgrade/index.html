@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.7.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -4918,12 +4918,12 @@ Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, 
 The chart is the <strong>sole</strong> install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of the local chart with floating image tags.</p>
 <blockquote>
-<p><strong>Current release — <code>v1.7.0</code></strong> (chart version = release tag without the leading <code>v</code>).
-Pin <code>--version 1.7.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.7.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
+<p><strong>Current release — <code>v1.8.0</code></strong> (chart version = release tag without the leading <code>v</code>).
+Pin <code>--version 1.8.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.8.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
 <a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.7.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.8.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>

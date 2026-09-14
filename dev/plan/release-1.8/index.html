@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.7.0 is here.</strong>
-      An in-cluster registry mirror that closes worker egress to almost nothing, an egress record naming the tenant and the job, and a scale set that releases withheld capacity promptly.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.7.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -3070,9 +3070,11 @@ It exists because Q1108 moved four provisioner files on the released surface, so
 </tr>
 </tbody>
 </table>
-<p><strong>Q1048's mirror client census did not report, for the second window running.</strong> One client graded <code>OK</code>; the other, <code>169.254.4.6</code>, resolved to no pod and no node, which is a worker already reaped on its TTL.
+<p><strong>Q1048's mirror client census did not report, for the second window running.</strong> One client graded <code>OK</code>; the other address, <code>169.254.4.6</code>, resolved to no pod and no node.
 The gate records that as <em>not taken</em> rather than as a pass, which is the behaviour <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1926">#1926</a> gave it.
-A second attempt reproducing the same failure makes the TTL race the likely cause rather than a slow run, which is a finding about the census rather than about this candidate.</p>
+The cause is not established, and the TTL race this doc first named is refuted for this window: <code>169.254.0.0/16</code> is link-local, so that address was never a pod IP and no reaping could explain it.
+That explanation came from the gate's own echo, which is where <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh">progress.sh</a> deliberately puts a hypothesis; the recorded reading says only what was seen.
+Lifting the echo's guess into this table is the near-miss that comment documents, repeated one release later.</p>
 <p><strong>What this run does not cover</strong>, both stated by the gate rather than inferred: the placeability rung's negative verdict stays undriven, because it needs a pod this autoscaling pool cannot place (<a href="../../queue/Q1025/">Q1025</a>), and the gate runs against github.com, so it says nothing about GitHub Enterprise Server.</p>
 
 
