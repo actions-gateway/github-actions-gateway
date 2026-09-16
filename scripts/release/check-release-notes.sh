@@ -86,6 +86,7 @@ findings=0
 counts_checked=0
 counts_skipped=0
 counts_approx=0
+counts_unranged=0
 for note in "${notes[@]}"; do
 	name="${note#"${REPO_ROOT}"/}"
 	[[ -f "$note" ]] || {
@@ -142,10 +143,25 @@ for note in "${notes[@]}"; do
 	# reader wants. That form is recognised and reported rather than checked, so
 	# the one thing left to fail on is a note that names a range and asserts no
 	# figure at all.
+	#
+	# Both figures are read from inside the section, never from the whole file.
+	# md-reflow puts every sentence at column 0, so an unscoped match lets any
+	# sentence anywhere decide the verdict: a note whose count was deleted passed
+	# as `approximate` on the strength of `Nearly 20 commits, mostly documentation,
+	# land after the freeze.` sitting further down, which is the same deletion this
+	# rule exists to fail.
 	from_tag="$(awk '/^## Everything since v/ { print $4; exit }' "$note")"
 	to_tag="$(basename "$note" .md)"
-	claimed="$(awk '/^[0-9]+ commits[,. ]/ { print $1; exit }' "$note")"
-	approx="$(awk '/^(Over|About|Around|Roughly|Nearly) [0-9]+ commits[,. ]/ { print $1 " " $2; exit }' "$note")"
+	claimed="$(awk '
+		/^## Everything since v/ { inrange = 1; next }
+		/^## / { inrange = 0 }
+		inrange && /^[0-9]+ commits[,. ]/ { print $1; exit }
+	' "$note")"
+	approx="$(awk '
+		/^## Everything since v/ { inrange = 1; next }
+		/^## / { inrange = 0 }
+		inrange && /^(Over|About|Around|Roughly|Nearly) [0-9]+ commits[,. ]/ { print $1 " " $2; exit }
+	' "$note")"
 
 	if [[ -n "$from_tag" && -z "$claimed" && -z "$approx" ]]; then
 		printf '%s: names a range since %s and asserts no commit count\n' "$name" "$from_tag" >&2
@@ -156,6 +172,12 @@ for note in "${notes[@]}"; do
 		counts_approx=$((counts_approx + 1))
 		printf '%s: commit figure is approximate by construction (%s) — reported, not checked\n' \
 			"$name" "$approx" >&2
+	elif [[ -z "$from_tag" ]]; then
+		# No range heading, so there is no range to count over. Right for a
+		# fragment passed by hand, and counted anyway: without this the buckets
+		# silently stop summing to the note count, which is the shape of hole
+		# the rules above exist to close.
+		counts_unranged=$((counts_unranged + 1))
 	fi
 
 	if [[ -n "$from_tag" && -n "$claimed" ]]; then
@@ -211,5 +233,5 @@ if ((findings > 0)); then
 	printf '\ncheck-release-notes: %d finding(s)\n' "$findings" >&2
 	exit 1
 fi
-printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags, %d approximate)\n' \
-	"${#notes[@]}" "$counts_checked" "$counts_skipped" "$counts_approx"
+printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags, %d approximate, %d with no range heading)\n' \
+	"${#notes[@]}" "$counts_checked" "$counts_skipped" "$counts_approx" "$counts_unranged"

@@ -146,13 +146,13 @@ ${wrong_count} commits, some of them carrying a \`feat\` subject.
 	printf '## Everything since v1.6.0\n\n%s commits.\n' "$real_count" >"$WORK/v1.7.0.md"
 	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
 	expect "the summary reports the count it checked" \
-		"1 commit count(s) checked, 0 skipped for want of tags, 0 approximate" \
+		"1 commit count(s) checked, 0 skipped for want of tags, 0 approximate, 0 with no range heading" \
 		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
 
 	printf '## Everything since v9.9.8\n\n4 commits.\n' >"$WORK/v9.9.9.md"
 	summary="$("$SUBJECT" "$WORK/v9.9.9.md" 2>&1)"
 	expect "the summary reports a skip as a skip, not as a check" \
-		"0 commit count(s) checked, 1 skipped for want of tags, 0 approximate" \
+		"0 commit count(s) checked, 1 skipped for want of tags, 0 approximate, 0 with no range heading" \
 		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
 
 	# A count that is gone is the case the checked/skipped pair could not see: it
@@ -177,17 +177,69 @@ Over 40 commits.
 	printf '## Everything since v1.6.0\n\nOver 40 commits.\n' >"$WORK/v1.7.0.md"
 	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
 	expect "the summary reports an approximate figure as neither checked nor skipped" \
-		"0 commit count(s) checked, 0 skipped for want of tags, 1 approximate" \
+		"0 commit count(s) checked, 0 skipped for want of tags, 1 approximate, 0 with no range heading" \
 		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
 
 	# A note with no range heading at all is not this rule's business — most
 	# fixtures in this suite are exactly that, and flagging them would make the
-	# rule fire on every note fragment anyone checks by hand.
+	# rule fire on every note fragment anyone checks by hand. It is still
+	# counted, so the buckets go on summing to the note count.
 	named_case_ "a note with no range heading is left alone" 0 v1.7.0.md \
 		'## Highlights
 
 A claim that holds.
 '
+
+	printf '## Highlights\n\nA claim that holds.\n' >"$WORK/v1.7.0.md"
+	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
+	expect "an unranged note is counted, so the buckets still sum" \
+		"0 commit count(s) checked, 0 skipped for want of tags, 0 approximate, 1 with no range heading" \
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+
+	# Both figures are read from inside the section. md-reflow puts every
+	# sentence at column 0, so an unscoped match let a hedged sentence ANYWHERE
+	# in the file answer for the section: the same deleted count passed as
+	# `approximate` with this line present and failed without it, which is a
+	# verdict decided by unrelated prose.
+	named_case_ "a hedged sentence outside the section cannot stand in for the count" 1 v1.7.0.md \
+		'## Everything since v1.6.0
+
+These nine ship in the product.
+
+## Project and tooling
+
+Nearly 20 commits, mostly documentation, land after the freeze.
+'
+
+	# Control for the case above: the same hedge INSIDE the section is the
+	# approximate form and must still be honoured, or the fix above would have
+	# closed the hole by breaking v1.3.0.
+	named_case_ "the same hedge inside the section is still the approximate form" 0 v1.7.0.md \
+		'## Everything since v1.6.0
+
+Nearly 20 commits, mostly documentation.
+
+## Project and tooling
+
+Other work.
+'
+
+	# And an exact count is read from the section too, not from stray prose: a
+	# bare `N commits.` further down must not answer for a section that has none.
+	#
+	# This one asserts the REASON, not the exit status. Unscoped, the stray `12`
+	# is read as the section's claim and fails as a MISMATCH against the real 68,
+	# which is exit 1 for the wrong reason: the case stayed green with the fix
+	# deleted, so the status alone could not see the defect it was written for.
+	printf '## Everything since v1.6.0\n\nThese nine ship in the product.\n\n## Project and tooling\n\n12 commits. That is the tooling total.\n' >"$WORK/v1.7.0.md"
+	rc=0
+	out="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)" || rc=$?
+	if [[ "$rc" == 1 && "$out" == *"asserts no commit count"* && "$out" != *"says 12 commits"* ]]; then
+		ok "an exact count outside the section cannot stand in for it either"
+	else
+		bad "an exact count outside the section cannot stand in for it either (rc=$rc)"
+		printf '       %s\n' "$out" >&2
+	fi
 else
 	printf '[check-release-notes-test] SKIP commit-count cases — no v1.7.0 tag here\n' >&2
 fi
