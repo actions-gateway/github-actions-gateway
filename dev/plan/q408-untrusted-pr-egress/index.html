@@ -3341,7 +3341,7 @@ That closes the reachability half of <a href="#23-what-the-measurement-changes">
 </ol>
 <p><strong>Gated, but only as far as a linter reaches.</strong> <code>deploy/registry-mirror/</code> joins <code>make manifest-validate</code>: yamllint over the tree, and kubeconform over the base manifests plus the overlay's PVCs, which are all native kinds.
 That is schema and syntax, and it says nothing about whether the instances serve, so it narrows what is unchecked off the cluster without closing it.
-<code>deploy/kata-ci/</code> is in the same script's <code>standalone_manifests</code> list and in no workflow path filter, so an edit to it alone runs neither check; that gap is filed as <a href="../../queue/Q1004/">Q1004</a> and is not this phase's.</p>
+<code>deploy/kata-ci/</code> is in the same script's <code>standalone_manifests</code> list and was named by no workflow path filter, so an edit to it alone ran neither check; that gap was Q1004, and <code>manifest-validate.yml</code>'s <code>manifests</code> filter now names the directory.</p>
 <h3 id="37-the-phase-2-validation-battery">3.7 The Phase 2 validation battery<a class="headerlink" href="#37-the-phase-2-validation-battery" title="Permanent link">&para;</a></h3>
 <p>The plan spelt this out as prose, <em>curl the mirror's <code>/v2/</code> and pull one image through each instance from a debug pod</em>, and it is now <code>scripts/dogfood/e2e-mirror-validate.sh</code>, because Phase 3 re-runs the same battery once the clients are wired and Phase 4 re-runs it under the tight policy.
 A booked dogfood session is the scarce resource in all three, so the battery is a command that returns a verdict rather than a transcript somebody re-reads.</p>
