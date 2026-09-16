@@ -13,7 +13,7 @@
 # This script closes that gap the cheap way — advice, not a gate. It inspects the
 # working tree, the index, and this branch's commits that aren't on the base for
 # any dependency-file change, and if it finds one, prints a single line pointing
-# at `make vendor-sync` (the one-shot remedy) and the CI gates that will judge it.
+# at `make deps-sync` (the one-shot remedy) and the CI gates that will judge it.
 # It NEVER fails: it is invoked as the last step of `make check` and must not turn
 # a green gate red. All git calls are read-only and offline (no fetch).
 #
@@ -80,7 +80,7 @@ done < <(collect | sort -u)
 {
 	printf '\n'
 	printf 'note: this change touches Go dependency files, which `make check` does NOT gate.\n'
-	printf '      Run `make vendor-sync` before pushing — CI runs vendor-check, tidy-check,\n'
+	printf '      Run `make deps-sync` before pushing — CI runs vendor-check, tidy-check,\n'
 	printf '      and license-notices (outside the fast gate); a green `make check` does not\n'
 	printf '      imply they pass. Files:\n'
 	printf '        %s\n' "${changed_dep_files[@]}"

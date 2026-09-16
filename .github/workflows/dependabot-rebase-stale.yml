@@ -15,7 +15,7 @@ name: dependabot-rebase-stale
 # does the rebase itself: scripts/ci/dependabot-rebase-stale.sh discards the
 # conflicted tree, replays the PR's version bumps on current main with `go get`
 # (refusing any that Go reports as a downgrade), regenerates everything with
-# `make vendor-sync`, and force-pushes the result.
+# `make deps-sync`, and force-pushes the result.
 #
 # It does NOT start the PR's checks: the force-push uses GITHUB_TOKEN, so GitHub
 # creates the runs for it and then holds every one at action_required until a
@@ -57,7 +57,7 @@ concurrency:
 jobs:
   rebase:
     runs-on: ubuntu-latest
-    # A replay is a full `make vendor-sync` (tidy every workspace module,
+    # A replay is a full `make deps-sync` (tidy every workspace module,
     # re-vendor, regenerate notices) per PR, and the script caps itself at
     # MAX_PRS per run.
     timeout-minutes: 45

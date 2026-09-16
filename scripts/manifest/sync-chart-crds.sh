@@ -16,7 +16,8 @@
 # actions-gateway.com CRDs (ActionsGateway, EgressProxy, RunnerSet, RunnerTemplate,
 # ClusterRunnerTemplate — the v2 decomposition, Q149).
 #
-#   scripts/manifest/sync-chart-crds.sh            # write the chart CRD templates (make chart-crds)
+#   scripts/manifest/sync-chart-crds.sh            # write the chart CRD templates and refresh the
+#                                         # GMC-bundled RunnerGroup CRD (make chart-crds)
 #   scripts/manifest/sync-chart-crds.sh --check    # fail if the chart copies are stale, or if
 #                                         # the GMC-bundled RunnerGroup CRD has drifted
 #                                         # from the AGC authoritative copy (make chart-crds-check)
@@ -218,6 +219,14 @@ render() {
 
 sync() {
 	local i
+	# The bundled copy first: the RunnerGroup chart template renders FROM the AGC
+	# authoritative copy, so refreshing it afterwards would leave the two one
+	# generation apart. check() diffs them byte for byte, and only cmd/agc's
+	# manifests target can produce the content, so copying is the whole remedy.
+	if ! cmp -s "$SRC_RUNNERGROUP" "$GMC_BUNDLED_RUNNERGROUP"; then
+		cp "$SRC_RUNNERGROUP" "$GMC_BUNDLED_RUNNERGROUP"
+		echo "refreshed the GMC-bundled RunnerGroup CRD from $SRC_RUNNERGROUP."
+	fi
 	for i in "${!CRD_SRCS[@]}"; do
 		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
 	done
@@ -242,8 +251,8 @@ check() {
 	if ! diff -u "$GMC_BUNDLED_RUNNERGROUP" "$SRC_RUNNERGROUP"; then
 		echo "ERROR: the GMC-bundled RunnerGroup CRD ($GMC_BUNDLED_RUNNERGROUP) has drifted" >&2
 		echo "from the AGC authoritative copy ($SRC_RUNNERGROUP) — likely a k8s.io/api skew (Q73)." >&2
-		echo "Fix: regenerate the AGC copy (make -C cmd/agc manifests), cp it over the bundled" >&2
-		echo "path, then re-run 'make chart-crds'. ('make -C cmd/gmc manifests' cannot refresh" >&2
+		echo "Fix: regenerate the AGC copy (make -C cmd/agc manifests), then run 'make chart-crds'," >&2
+		echo "which copies it over the bundled path. ('make -C cmd/gmc manifests' cannot refresh" >&2
 		echo "the bundled copy — the type lives in cmd/agc/api/. For a k8s.io/api skew, align" >&2
 		echo "the module versions first — see Q68.)" >&2
 		rc=1

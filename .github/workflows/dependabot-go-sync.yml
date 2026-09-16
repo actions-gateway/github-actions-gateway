@@ -5,7 +5,7 @@ name: dependabot-go-sync
 # vendor/, tools/vendor/, go.work.sum, and THIRD-PARTY-NOTICES all desync and the
 # vendor-check / tidy-check / license-notices gates fail on the bot's PR (#198
 # needed a hand-crafted sync commit). This workflow re-runs the full sync flow
-# (make vendor-sync) on the PR branch and commits the result back, so a human no
+# (make deps-sync) on the PR branch and commits the result back, so a human no
 # longer has to (Q111). Sibling of the go.sum tidiness normalization (Q94).
 #
 # Withheld checks: the sync commit is pushed with the default GITHUB_TOKEN.
@@ -19,7 +19,7 @@ name: dependabot-go-sync
 # re-fire this workflow on its own sync commit: the `if:` below gates on the PR
 # author, which is still dependabot[bot] after a github-actions[bot] push, so it
 # does not block the re-fire. What bounds the chain is that each generation's
-# runs are withheld behind their own approval, plus `make vendor-sync` being
+# runs are withheld behind their own approval, plus `make deps-sync` being
 # idempotent, so a pass over an already-synced tree commits nothing.
 #
 # Release the checks with "Approve and run", which starts the existing runs in
@@ -73,8 +73,8 @@ jobs:
       # (workspace + tools) + regenerate THIRD-PARTY-NOTICES. Single source of
       # truth shared with the local remedy and the *-check gates. No-ops cleanly
       # when nothing drifted.
-      - name: re-sync vendor + notices (make vendor-sync)
-        run: make vendor-sync
+      - name: re-sync vendor, notices + generated output (make deps-sync)
+        run: make deps-sync
       - name: commit and push any drift
         run: |
           set -euo pipefail
