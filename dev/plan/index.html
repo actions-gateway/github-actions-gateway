@@ -2972,11 +2972,6 @@ Each has inline ✓ markers per item.</p>
 <td>✅ Done — filed 2026-07-20; the F1 Secret leak shipped same-day (Q373, #727), F2's probe rewrite as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (ownerRef-policy question spun out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gate (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (condition-collector residual spun out to Q403, since shipped as <code>metrics_v1.go</code>); re-run trigger deferred as <a href="../queue/Q372/">Q372</a></td>
 </tr>
 <tr>
-<td><a href="merge-drivers-go/">merge-drivers-go.md</a></td>
-<td>Move the four git merge drivers off shell and <code>awk</code> onto Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point, so the three-way set merge and its order reconstruction can be unit-tested. markdown-gates-parser.md excluded them, but for an argument against goldmark rather than against Go</td>
-<td>🚧 In progress. Phase 1 (the shared runtime, the keyed-record set merge, and the two table drivers) shipped 2026-08-31, with an awk-versus-Go differential over 400 generated three-way cases agreeing on stdout and exit status in all 400 across seven refusal classes. Phase 2 (the roadmap driver, the bullet encode/decode, and the deletion of <code>merge-keyed-records.awk</code>) shipped 2026-09-16 on the same shape of differential. Phase 3 (<a href="../queue/Q1047/">Q1047</a>) carries the gate-lists driver's second set merge</td>
-</tr>
-<tr>
 <td><a href="website/">website.md</a></td>
 <td>Public GitHub Pages site: MkDocs Material rendering of <code>docs/</code> + a custom landing page and "vs ARC" comparison; domain decision folded in (org move)</td>
 <td>✅ Done — scaffold, landing, comparison, and public launch shipped (was Q52/Q99/Q129, all completed)</td>
@@ -3630,6 +3625,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/worker-egress-proxy/">archive/worker-egress-proxy.md</a></td>
 <td>Worker traffic must route through per-tenant proxy pool</td>
 <td>Archived 2026-09-12, Q1099. NetworkPolicy split shipped (commit <code>4932ce7</code>); proxied worker→GitHub egress live-validated via M4 §12</td>
+</tr>
+<tr>
+<td><a href="archive/merge-drivers-go/">archive/merge-drivers-go.md</a></td>
+<td>Move the four git merge drivers off shell and <code>awk</code> onto Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point, so the three-way set merge and its order reconstruction can be unit-tested. markdown-gates-parser.md excluded them, but for an argument against goldmark rather than against Go</td>
+<td>Archived 2026-09-16, Q1047. All three phases landed: the shared runtime and the two table drivers (#1819, 2026-08-31), the roadmap driver and the deletion of <code>merge-keyed-records.awk</code> (#1954, 2026-09-16), and the gate-lists driver with the shell merge half of <code>merge-driver-common.sh</code> retired behind it. Each phase kept its suite's assertions unchanged and shipped an old-versus-new differential over generated three-way inputs; Phase 3's agrees on bytes and exit status everywhere except one deliberate class, a duplicated entry within one side, which the awk carried silently and the Go core refuses</td>
 </tr>
 </tbody>
 </table>

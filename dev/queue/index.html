@@ -2905,14 +2905,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Decision:</strong> we spend a session on the upstream-report batch.</td>
 </tr>
 <tr>
-<td><a href="Q1047/">Q1047</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh">Fold the gate-lists driver's second set merge onto the shared Go core</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Phase 3 of <a href="../plan/merge-drivers-go/">merge-drivers-go.md</a>, and the reason the plan covers four drivers rather than three.</td>
-</tr>
-<tr>
 <td><a href="Q372/">Q372</a></td>
 <td><a href="../plan/structural-debt-audit-2026-07/">Re-run the structural debt audit</a></td>
 <td><code>debt</code></td>
@@ -3473,12 +3465,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> an adopter who cannot run Kata reports the gap.</td>
 </tr>
 <tr>
-<td><a href="Q947/">Q947</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint</code>'s filter omits the two wrapper scripts its jobs run</a></td>
+<td><a href="Q1120/">Q1120</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint</code>'s filter misses four data-file inputs its jobs read</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Both lists name <code>queue.py</code> and <code>check-queue-rules.py</code> but not <code>scripts/docs/lint-queue.sh</code> or <code>scripts/docs/check-queue-rules.sh</code>, which …</td>
+<td>Four tracked files are read by <code>lint-status</code> and matched by no pattern in either of the workflow's two path lists, so a PR changing only …</td>
 </tr>
 <tr>
 <td><a href="Q948/">Q948</a></td>
@@ -3903,6 +3895,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>git merge-tree</code> is the command a session reaches for, and in this repo it answers a different question than the one being asked.</td>
+</tr>
+<tr>
+<td><a href="Q1122/">Q1122</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh">gate-lists-check accepts a gate or suite listed twice</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>gate-lists-check</code> reconciles every managed list in <code>mk/gate-lists.mk</code> against the files on disk in both directions, which is what stops a …</td>
 </tr>
 </tbody>
 </table>

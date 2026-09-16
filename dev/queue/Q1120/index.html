@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q947/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1120/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>status-lint's filter omits the two wrapper scripts its jobs run - GitHub Actions Gateway</title>
+        <title>status-lint's filter misses four data-file inputs its jobs read - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#status-lints-filter-omits-the-two-wrapper-scripts-its-jobs-run" class="md-skip">
+        <a href="#status-lints-filter-misses-four-data-file-inputs-its-jobs-read" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              status-lint's filter omits the two wrapper scripts its jobs run
+              status-lint's filter misses four data-file inputs its jobs read
             
           </span>
         </div>
@@ -2579,6 +2579,47 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#four-shapes-which-is-what-a-gate-has-to-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Four shapes, which is what a gate has to model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-census-instrument-that-fails-open-is-the-same-defect-class-one-level-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A census instrument that fails open is the same defect class, one level up
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-fifth-instance-is-one-call-away-with-nothing-to-catch-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fifth instance is one call away, with nothing to catch it
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,10 +2638,70 @@
   
 
 
-<h1 id="status-lints-filter-omits-the-two-wrapper-scripts-its-jobs-run"><code>status-lint</code>'s filter omits the two wrapper scripts its jobs run<a class="headerlink" href="#status-lints-filter-omits-the-two-wrapper-scripts-its-jobs-run" title="Permanent link">&para;</a></h1>
-<p>Both lists name <code>queue.py</code> and <code>check-queue-rules.py</code> but not <code>scripts/docs/lint-queue.sh</code> or <code>scripts/docs/check-queue-rules.sh</code>, which are what the jobs actually <code>run:</code>, so a change confined to a wrapper skips the workflow that gates it.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh">check-path-filters.sh</a> cannot see it: assertion 3 reads pattern → disk, never disk → pattern.
-Measured 2026-08-21 by scanning every workflow's <code>run:</code> script paths against its own filter — the only two real hits, the other two being comment mentions of <code>check-path-filters.sh</code> in the e2e lanes.</p>
+<h1 id="status-lints-filter-misses-four-data-file-inputs-its-jobs-read"><code>status-lint</code>'s filter misses four data-file inputs its jobs read<a class="headerlink" href="#status-lints-filter-misses-four-data-file-inputs-its-jobs-read" title="Permanent link">&para;</a></h1>
+<p>Four tracked files are read by <code>lint-status</code> and matched by no pattern in either of the workflow's two path lists, so a PR changing only one of them skips the gate that reads it and <code>status-lint-gate</code> reports green.</p>
+<p><strong>Measured 2026-09-16 against <code>6d9d90454</code></strong>, the head at which Q947 closed four other inputs of the same job.
+At that tree the enumeration identified 16 inputs, 12 covered and these 4 not.
+Both numbers are floors rather than a census: the 16 is what two instruments plus three reviewing sessions found, and the section below is why that is not the same as what is there.
+Re-derive both before acting on the ratio, and note the denominator can grow without the gap growing.</p>
+<ul>
+<li><code>docs/index.md</code> and <code>docs/why-gag.md</code>, built into <code>badge_pages</code> at <code>scripts/docs/check-roadmap.sh:48:for page in</code> and passed to <code>roadmapcheck</code>, which validates badge markup on them (<code>devtools/docs/roadmapcheck/badges.go</code>).</li>
+<li><code>docs/development/flake-watch-retired.md</code> and <code>docs/plan/README.md</code>, held as <code>LEDGER</code> and <code>PLAN_INDEX</code> at <code>scripts/docs/check-queue-rules.py:63:LEDGER =</code> and <code>:64</code>.</li>
+</ul>
+<p><strong>The second pair is the severity argument.</strong> Both are <code>read_text()</code> at <code>scripts/docs/check-queue-rules.py:399:ledger =</code> and the line after behind <code>if ... is_file() else ""</code>, so an unreadable or changed file yields empty rather than failing.
+Rule 8 (a flake item may not vanish) and rule 9 (a plan's last item obliges its index row) then return a verdict computed against nothing, and the gate reports <code>ok</code>.
+That is a silent wrong verdict, not a skipped check.</p>
+<p><strong>Separate from <a href="../Q948/">Q948</a>, which is the general reverse assertion.</strong> This row is four entries in two lists, and Q948 is the gate that would find them.
+Filing rather than folding into the PR that found them (Q947's, which fixed four other inputs of the same job): those were scripts the job runs or reaches, and these are data files passed as arguments under <code>docs/</code>, which is a different shape wearing the same symptom.</p>
+<h2 id="four-shapes-which-is-what-a-gate-has-to-model">Four shapes, which is what a gate has to model<a class="headerlink" href="#four-shapes-which-is-what-a-gate-has-to-model" title="Permanent link">&para;</a></h2>
+<p>Measured 2026-09-16 on <code>status-lint.yml</code> alone, across the window from <code>59c70462</code> to <code>6d9d90454</code>.
+Eight inputs were found uncovered over four shapes, four of them fixed in that window and four still open:</p>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>Instance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A wrapper script the job <code>run:</code>s</td>
+<td><code>lint-queue.sh</code>, <code>check-queue-rules.sh</code></td>
+</tr>
+<tr>
+<td>A lib a <code>run:</code> script sources</td>
+<td><code>scripts/lib/common.sh</code></td>
+</tr>
+<tr>
+<td>A backend a Python backend execs</td>
+<td><code>find-duplicate-rows.sh</code></td>
+</tr>
+<tr>
+<td>A data file passed as an argument</td>
+<td>the four above</td>
+</tr>
+</tbody>
+</table>
+<p>The instance count is the less useful number.
+A shape is what an enumerator has to handle, and the fourth shape is reachable by no walk of the execution graph, because the files are not scripts and the paths are built by string concatenation.</p>
+<h2 id="a-census-instrument-that-fails-open-is-the-same-defect-class-one-level-up">A census instrument that fails open is the same defect class, one level up<a class="headerlink" href="#a-census-instrument-that-fails-open-is-the-same-defect-class-one-level-up" title="Permanent link">&para;</a></h2>
+<p>Two instruments were written to enumerate this job's inputs and <strong>both returned clean, small, plausible under-reports</strong>:</p>
+<ol>
+<li>A walk of execution edges resolved <code>$SCRIPT_DIR</code> by deleting it, which left a leading <code>/</code> and made the path join absolute.
+   It reported seven files and had silently dropped the <code>check-roadmap.sh</code> → <code>common.sh</code> edge already known to exist.
+   Caught only because that edge was known; undetectable to anyone who did not already have the answer.</li>
+<li>Its Python-constant matcher was anchored to <code>(?:scripts|devtools)/</code>, so it could not match a constant holding a <code>docs/</code> path, which is exactly what <code>LEDGER</code> and <code>PLAN_INDEX</code> are.
+   Caught only by a third method with a different blind spot.</li>
+</ol>
+<p>Neither failure had a symptom.
+The repair for the first was to assert a known edge as a control and fail when the walk misses it; an enumerator that cannot come back the other way is not a check.
+Anything built for Q948 needs that property, or it reproduces the defect it is gating one level up.</p>
+<h2 id="a-fifth-instance-is-one-call-away-with-nothing-to-catch-it">A fifth instance is one call away, with nothing to catch it<a class="headerlink" href="#a-fifth-instance-is-one-call-away-with-nothing-to-catch-it" title="Permanent link">&para;</a></h2>
+<p><code>scripts/agent/local-throttle.sh</code> is deliberately <strong>not</strong> an input today, and that is measured rather than judged.
+The measurement is the reviewing session's on PR #1944, not this row's author's: a <code>bash -x</code> trace of <code>check-roadmap.sh</code> at head <code>6d9d90454</code> shows the script zero times, with the <code>roadmapcheck</code> build, the <code>common.sh</code> source and <code>resolve_release_tag</code> in the same trace as positive controls.
+But <code>common.sh</code> reaches it from two functions, <code>init_throttle</code> and <code>serialize_heavy_build</code>, and <code>check-roadmap.sh</code> both sources that file and builds a Go binary, which is what <code>serialize_heavy_build</code> exists for.
+One future call from anything those scripts reach makes the filter stale, and no gate catches the transition.
+A comment naming the condition belongs beside the definition in <code>scripts/lib/common.sh</code> rather than in the workflow, since it is the person editing <code>common.sh</code> who needs it.</p>
 
 
 

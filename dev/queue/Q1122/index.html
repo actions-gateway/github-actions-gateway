@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1047/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1122/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Fold the gate-lists driver's second set merge onto the shared Go core - GitHub Actions Gateway</title>
+        <title>gate-lists-check accepts a gate or suite listed twice - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#fold-the-gate-lists-drivers-second-set-merge-onto-the-shared-go-core" class="md-skip">
+        <a href="#gate-lists-check-accepts-a-gate-or-suite-listed-twice" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Fold the gate-lists driver's second set merge onto the shared Go core
+              gate-lists-check accepts a gate or suite listed twice
             
           </span>
         </div>
@@ -2597,15 +2597,16 @@
   
 
 
-<h1 id="fold-the-gate-lists-drivers-second-set-merge-onto-the-shared-go-core">Fold the gate-lists driver's second set merge onto the shared Go core<a class="headerlink" href="#fold-the-gate-lists-drivers-second-set-merge-onto-the-shared-go-core" title="Permanent link">&para;</a></h1>
-<p>Phase 3 of <a href="../../plan/merge-drivers-go/">merge-drivers-go.md</a>, and the reason the plan covers four drivers rather than three.</p>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh"><code>git-merge-gate-lists.sh</code></a> never called <code>merge-keyed-records.awk</code>.
-Its <code>merge_entries</code> is a second three-way set merge with its own tie-breaking (survivors keep base order, then ours-only additions, then theirs-only) because a Makefile list entry is a bare word rather than a Markdown record.
-That is the same algorithm the shared core now owns, reached by a different key reader.</p>
-<p>The rest of the driver is genuinely its own: lifting each managed variable's backslash-continued assignment out behind a <code>#__GATE_LIST_SLOT_&lt;VAR&gt;__</code> sentinel so the Makefile merges as ordinary text, and rendering the block back with ours' operator, indent and line width, appending when only additions arrived, re-rendering the whole block only when a removal forces it, because a full re-render churns every wrapped line of a 30-line list and buries the real change.</p>
-<p>Keep the round-trip check: the rendered block is re-read and its entry set must equal the set that went in, or the merge falls back.
-That check is the one thing standing between a render bug and a silently dropped test suite, which is the failure <code>gate-lists-check</code> exists to catch.</p>
-<p><code>MANAGED_VARS</code> must stay reconciled against the assignments in <code>mk/gate-lists.mk</code> in both directions, which <code>scripts/ci/git-merge-gate-lists-test.sh</code> asserts today via <code>--managed-vars</code>; whatever replaces that flag has to keep both directions.</p>
+<h1 id="gate-lists-check-accepts-a-gate-or-suite-listed-twice">gate-lists-check accepts a gate or suite listed twice<a class="headerlink" href="#gate-lists-check-accepts-a-gate-or-suite-listed-twice" title="Permanent link">&para;</a></h1>
+<p><code>gate-lists-check</code> reconciles every managed list in <code>mk/gate-lists.mk</code> against the files on disk in both directions, which is what stops a gate being dropped or invented.
+It says nothing about an entry appearing twice in one list.</p>
+<p>Measured 2026-09-16 by duplicating the first <code>QUEUE_GATES</code> entry and running the gate: it passed, and the rendered command carried <code>queue-lint queue-lint</code>.
+A duplicated entry runs that gate twice, taking a second slot out of the capped fan-out for a result nobody reads.
+The five lists are all distinct today (59, 3, 13, 30 and 129 entries, no repeats), so this is a latent gap rather than a live defect.</p>
+<p>The gate-lists merge driver refuses a merge of a file in this state rather than carrying the duplicate through, and names the entry.
+That refusal is the only thing that currently reports the condition, and it reports it at merge time to whoever is rebasing rather than to whoever introduced it.
+The reconciler is where it belongs, because that is what runs on the PR that adds the duplicate.</p>
+<p>Unrelated to <a href="../Q574/">Q574</a>, which is one registry for the path lists the <em>workflows</em> write twice; this is one list assigning one entry twice.</p>
 
 
 

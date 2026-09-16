@@ -393,10 +393,6 @@
          <lastmod>2026-09-16</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/merge-drivers-go/</loc>
-         <lastmod>2026-09-16</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-5/</loc>
          <lastmod>2026-09-16</lastmod>
     </url>
@@ -618,6 +614,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/markdown-gates-parser/</loc>
+         <lastmod>2026-09-16</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/merge-drivers-go/</loc>
          <lastmod>2026-09-16</lastmod>
     </url>
     <url>
@@ -1117,10 +1117,6 @@
          <lastmod>2026-09-16</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q1047/</loc>
-         <lastmod>2026-09-16</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1048/</loc>
          <lastmod>2026-09-16</lastmod>
     </url>
@@ -1285,7 +1281,15 @@
          <lastmod>2026-09-16</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1120/</loc>
+         <lastmod>2026-09-16</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1121/</loc>
+         <lastmod>2026-09-16</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1122/</loc>
          <lastmod>2026-09-16</lastmod>
     </url>
     <url>
@@ -1578,10 +1582,6 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q944/</loc>
-         <lastmod>2026-09-16</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/queue/Q947/</loc>
          <lastmod>2026-09-16</lastmod>
     </url>
     <url>
