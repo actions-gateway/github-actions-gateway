@@ -570,10 +570,10 @@ jobs:
   #
   # The 201s is contention, not slow tests: the suites sum to 892 suite-seconds
   # locally under a cap of 16 and 7,484 on CI. Nothing capped it on CI, so
-  # every suite started at once — 32x a
-  # 4-vCPU runner's cores. The Makefile now takes `fanout-jobs`, four times the vCPU count,
-  # (Q1105); `run-parallel.sh` announces the width it ran at, including on a run
-  # this timeout cancels. Q966 still owns the LOCAL number, which is unchanged.
+  # every suite started at once — 32x a 4-vCPU runner's cores. The Makefile now
+  # takes `fanout-jobs`, four times the vCPU count (Q1105); `run-parallel.sh`
+  # announces the width it ran at, including on a run this timeout cancels.
+  # Q966 still owns the LOCAL number, which is unchanged.
   #
   # Same `needs`/`if` as shellcheck: both gate the scripts/ tree, and the
   # `workflows` half is there because scripts-test asserts workflow-facing
