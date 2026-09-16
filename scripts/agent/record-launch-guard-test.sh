@@ -102,11 +102,36 @@ assert_silent 'unregistered command' 'make check > tmp/check.log 2>&1'
 assert_silent 'pr-sentinel watcher' \
 	'bash "/Users/x/.claude/plugins/cache/pr-sentinel/scripts/pr-sentinel-watch.sh" 1234'
 
-# Mention-only: the registry's patterns are anchored so a read of a registered
-# script is not an invocation of it. Asserted here too because this hook fires
-# on a different event than the one foreground-guard-patterns-test.sh covers.
-assert_silent 'mention only' \
+# Mention-only. Five of the seven live registry patterns carry no command
+# anchor of their own, so these all denied until the hook started matching at
+# command position. The first case is the anchored dogfood family; the rest are
+# the `make`/`go test` families, which inherit nothing and so are the ones that
+# actually exercise the anchoring. Both directions: every command below names a
+# registered tier in text, and none of them runs one.
+assert_silent 'mention: dogfood read' \
 	'git show origin/main:scripts/dogfood/release-sentinel.sh'
+assert_silent 'mention: git grep' \
+	"git grep -n 'make e2e' docs/"
+assert_silent 'mention: grep -r' \
+	"grep -rn 'go test -race' docs/"
+assert_silent 'mention: sed address' \
+	"sed -n '/make test-race/p' docs/development/testing.md"
+assert_silent 'mention: commit message' \
+	'git commit -m "test: stabilise make test-race flake"'
+assert_silent 'mention: pr body' \
+	'gh pr create --body "runs make test-integration nightly"'
+assert_silent 'mention: quoted semicolon' \
+	'git commit -m "check; make test-race"'
+
+# A quoted separator must not split the command: without quote-aware lexing the
+# case above becomes a second segment that starts with the tier name.
+
+# Command position survives an assignment prefix, a wrapper, and a chain, so
+# anchoring must not cost a real launch.
+assert_denies 'leading assignment' 'FOO=1 make test-race'
+assert_denies 'env wrapper' 'env FOO=1 make test-race'
+assert_denies 'second in chain' 'cd cmd/agc && make test-race'
+assert_denies 'after a semicolon' 'make check; make test-race'
 
 # A foreground call is foreground-guard's Class B, not this hook's.
 out="$(drive "${REPO_ROOT}" '{"tool_name":"Bash","tool_input":{"command":"make test-race"}}')"
@@ -145,6 +170,24 @@ wrapper_at="${deny_reason%%scripts/agent/record-launch.sh*}"
 override_at="${deny_reason%%RECORD_LAUNCH_GUARD_OVERRIDE=*}"
 ((${#wrapper_at} < ${#override_at})) ||
 	fail 'the override must be named after the fix, not before it'
+
+# A leading `VAR=val` must be hoisted ahead of the wrapper. record-launch.sh
+# runs its argv directly, so an assignment left after the wrapper name is
+# executed as a program: `record-launch.sh FOO=1 make test-race` exits 127
+# with `FOO=1: command not found` and the run never starts. Both dogfood
+# patterns match an assignment prefix explicitly, so the deny fires on this
+# shape and a paste that cannot run is a deny with no remediation in it.
+prefixed_reason="$(drive "${REPO_ROOT}" "$(bg_payload 'FOO=1 make test-race')" |
+	python3 -c 'import json,sys
+raw = sys.stdin.read()
+try:
+    print(json.loads(raw)["hookSpecificOutput"]["permissionDecisionReason"])
+except (ValueError, KeyError, TypeError):
+    print("")')"
+[[ "${prefixed_reason}" == *"FOO=1 scripts/agent/record-launch.sh make test-race"* ]] ||
+	fail 'a leading assignment must be hoisted ahead of the wrapper'
+[[ "${prefixed_reason}" != *"record-launch.sh FOO=1"* ]] ||
+	fail 'the paste must not leave an assignment after the wrapper name'
 
 # --- controls ---------------------------------------------------------------
 
