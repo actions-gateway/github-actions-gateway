@@ -2,7 +2,7 @@
 
 **Status:** filed 2026-08-30.
 Phase 1 shipped 2026-08-31 in [#1819](https://github.com/actions-gateway/github-actions-gateway/pull/1819): the shared runtime, the keyed-record set merge and the two table drivers are in `devtools/git/`.
-Phase 2 shipped 2026-09-16: the roadmap driver, its bullet encode/decode and the `<!-- q:QN -->` key reader are in `devtools/git/`, and `merge-keyed-records.awk` is deleted.
+Phase 2 shipped 2026-09-16 in [#1954](https://github.com/actions-gateway/github-actions-gateway/pull/1954): the roadmap driver, its bullet encode/decode and the `<!-- q:QN -->` key reader are in `devtools/git/`, and `merge-keyed-records.awk` is deleted.
 Phase 3 ([Q1047](../queue/Q1047.md)) is open.
 
 Four git merge drivers resolve this repo's contended registry files, and at filing all four were shell over `awk`: 1,603 lines across six files, of which `merge-keyed-records.awk` was the 320-line three-way set merge that three of them shared.
