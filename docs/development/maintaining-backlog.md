@@ -236,7 +236,7 @@ A message to a human is a filing with the safety rail removed.
 
 It fired twice on 2026-08-12, in both directions.
 A worker raised the "X-test fails under `make check`, passes standalone" family as an unfiled class; a dispatcher relayed it, citing Q596's 2418 runs and Q703's 240 as evidence that no class row existed.
-[Q738](../queue/Q738.md) already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
+Q738, since shipped into [testing.md](testing.md#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it) and so no longer a row to link to, already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
 The observation was real and the escalation still cost a wrong premise, which is the same shape as the three duplicate filings above: right finding, no matcher in the path.
 
 Before escalating, run the search you would run before filing, and say what it returned.
