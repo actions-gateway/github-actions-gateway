@@ -18,4 +18,4 @@ render:
   # Affinity, ObjectMeta, …) link to on kubernetes.io. Bump alongside the
   # k8s.io/api minor in api/go.mod so the linked schema is the one the CRDs
   # actually embed: k8s.io/api v0.36.x is Kubernetes 1.36.
-  kubernetesVersion: 1.36
+  kubernetesVersion: 1.37
