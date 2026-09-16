@@ -23,8 +23,12 @@ on:
       - 'docs/roadmap.md'
       - 'docs/features.md'
       - 'scripts/docs/check-roadmap.sh'
+      # Both halves of each store gate: the job `run:`s the wrapper, so naming
+      # only the backend skips this workflow on a wrapper-only change (Q947).
+      - 'scripts/docs/check-queue-rules.sh'
       - 'scripts/docs/check-queue-rules.py'
       - 'scripts/docs/check-queue-claims.sh'
+      - 'scripts/docs/lint-queue.sh'
       - 'scripts/docs/queue.py'
       - 'docs/queue/**'
       # The roadmap gate reads its rows through the shared parse layer in
@@ -66,8 +70,10 @@ jobs:
               - 'docs/roadmap.md'
               - 'docs/features.md'
               - 'scripts/docs/check-roadmap.sh'
+              - 'scripts/docs/check-queue-rules.sh'
               - 'scripts/docs/check-queue-rules.py'
               - 'scripts/docs/check-queue-claims.sh'
+              - 'scripts/docs/lint-queue.sh'
               - 'scripts/docs/queue.py'
               - 'docs/queue/**'
               - 'devtools/**'
