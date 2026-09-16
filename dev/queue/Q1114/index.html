@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1106/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1114/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A test probe lands in the live workflows dir and races concurrent gates - GitHub Actions Gateway</title>
+        <title>check-uses-pinned cannot tell a vanished default pick from a bad path - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-test-probe-lands-in-the-live-workflows-dir-and-races-concurrent-gates" class="md-skip">
+        <a href="#check-uses-pinned-cannot-tell-a-vanished-default-pick-from-a-bad-path" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A test probe lands in the live workflows dir and races concurrent gates
+              check-uses-pinned cannot tell a vanished default pick from a bad path
             
           </span>
         </div>
@@ -2597,72 +2597,16 @@
   
 
 
-<h1 id="a-test-probe-lands-in-the-live-workflows-dir-and-races-concurrent-gates">A test probe lands in the live workflows dir and races concurrent gates<a class="headerlink" href="#a-test-probe-lands-in-the-live-workflows-dir-and-races-concurrent-gates" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> any gate that enumerates a <code>.github/workflows/</code> directory fails on a file it cannot open or cannot parse, naming <code>zz-uses-pinned-test-probe.yml</code>. → top of Queue, escalated.</p>
-<p><strong>The mechanism, reproduced 2026-09-16.</strong> The row was filed with it read off the two scripts, and the reproduction changed the fix.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned-test.sh">check-uses-pinned-test.sh</a> created and removed an untracked tag-pinned workflow inside the root <code>.github/workflows/</code> while <code>make check</code> fanned out.
-Driving a reader in a loop against a churning probe produced three distinct failures, not the one the row asserted:</p>
-<table>
-<thead>
-<tr>
-<th>Class</th>
-<th>What the reader sees</th>
-<th>Measured under churn</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Vanish</td>
-<td>the path the listing returned is gone by the open</td>
-<td><code>check-gate-needs.sh</code> 4/40, <code>check-uses-pinned.sh</code> 2/20, <code>actionlint</code> 1/20</td>
-</tr>
-<tr>
-<td>Presence</td>
-<td>the probe <em>is</em> a tag pin, so rejecting it is correct</td>
-<td><code>check-uses-pinned.sh</code> 12/20</td>
-</tr>
-<tr>
-<td>Torn read</td>
-<td>the file is opened mid-write and parses short</td>
-<td><code>actionlint</code> 1/20, <code>"jobs" section is missing</code></td>
-</tr>
-</tbody>
-</table>
-<p>The <code>check-uses-pinned.sh</code> split reconciles: 12 plus 2 is the 14 of 20 runs that failed.
-Its rate is the one with power behind it; the single-figure rates are one or two events each, and a second 20-run pass at the root read <code>check-gate-needs.sh</code> at 0/20, so that reader's exposure is real but its rate here is not a number to quote.</p>
-<p>The probe's window is <strong>1.43 s</strong>, one sample from one suite run, opening about 6 s in.
-<code>check-gate-needs.sh</code> takes 1.49 s and <code>check-uses-pinned.sh</code> 2.40 s, so a reader is comparable in width to the window rather than dwarfed by it.</p>
-<p><strong>A second unprovoked sighting, 2026-09-16.</strong> Reported by the session holding Q1102 on <code>claude/elegant-lumiere-0a91c8</code>; their measurement and their log, not one taken here.
-It is the missing-file class and not the torn read: <code>pathfilters: open &lt;abs path&gt;/.github/workflows/zz-uses-pinned-test-probe.yml: no such file or directory</code>, then <code>check-gate-needs: could not read the jobs of ...</code>, then <code>make[1]: *** [gate-needs-check] Error 2</code>.
-An ordinary <code>make check</code> on an unrelated docs-and-scripts change, not a driven reproduction, which is the whole of what it establishes and the one property the churn harness above structurally cannot: the class fires on its own.
-Two sightings three days apart, in sessions that had never spoken.</p>
-<p>The failing run spanned roughly 10:06:47 to 10:11:52 PDT over 59 commands, <code>gate-needs-check</code> itself taking 6 s, and a clean re-run of the same tree finished 10:22:04.
-<strong>No load reading was taken at failure time</strong>, and the nearest one is 40 minutes later, so nothing here says what the host was carrying during the window.
-Whether a sibling lane was running its own <code>make check</code> is likewise unmeasured rather than absent.</p>
-<p><code>gate-needs-check</code> was the only failure: <code>actionlint</code>, <code>path-filters-check</code>, <code>uses-pinned-check</code> and <code>gate-lists-check</code> all passed in the same fan-out.
-That is luck rather than structure, and the churn rates above are what say so, since each of those readers has been driven red by the same probe.
-<code>scripts-test</code> passed too, both <code>check-uses-pinned-test</code> and <code>check-gate-needs-test</code> inside it, with the probe visibly in play (<code>selection includes an untracked workflow ... yes</code>).
-So the suite that plants the probe and the suite that tests the reader were both green while the real gate reading the real directory went red.
-Log line order is not evidence of sequencing here, because <code>run-parallel</code> buffers per command and position reflects flush order.</p>
-<p>The original's quoted text renders the path relative and this one renders it absolute, which is transcription rather than a second call path: <code>pathfilters</code> prints the path it was handed, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-gate-needs.sh">check-gate-needs.sh</a> builds <code>WF_DIR</code> from an absolute <code>REPO_ROOT</code>, as did the reproduction here.</p>
-<p>This sighting is <code>gate-needs-check</code> reading the probe in the <strong>root</strong> directory, which the fix moves out of.
-It is evidence about the pre-fix world and about frequency, and it is not evidence that the fix works.</p>
-<p><strong>One reader failed quietly rather than loudly, and so appears in no count.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-acting-steps-test.sh">workflow-acting-steps-test.sh</a> also enumerates the root directory, and greps each file it globbed.
-A probe that vanishes mid-loop makes <code>workflow_acts</code> read the file as not acting rather than error on it, so that reader returns a clean verdict having failed to read what it was pointed at.
-Nothing reports it, and it could never have appeared in a flake count.
-Found while checking a coupling raised by the lane adding <code>withheld-runs-watch.yml</code>, whose own conclusion was negative.</p>
-<p><strong>Why reader tolerance could not be the whole fix.</strong> The row offered it as the property <code>check-gate-needs.sh</code> wants anyway, and it is.
-But <code>actionlint</code> walks the directory itself inside a third-party binary, so no tolerance written here reaches it, and the torn read is not an <code>ENOENT</code> any tolerance would recognise.
-<code>check-uses-pinned.sh</code> cannot take it either: its own group 2 asserts that an unreadable file is exit 2, which is the fail-closed property the gate exists for.</p>
-<p><strong>What shipped.</strong> The probe moved to <code>cmd/gmc/.github/workflows/</code>, which is in this gate's selection and in no other reader's, so it is still an untracked workflow in the real tree; and it is SHA-pinned, so a concurrent <code>uses-pinned-check</code> sees a legitimate file.
-<code>check-gate-needs.sh</code> skips a workflow that vanished between the listing and the open and reports the count, while a file still present and still unreadable stays a refusal; that half guards against every other writer of the directory, not just this probe.
-Group 4's end-to-end assertion became: the default run stays green and its own scanned-file count rises by exactly one, which is what says the untracked file reached the scan rather than only the listing.</p>
-<p>Post-fix, the same churn harness against the relocated probe: <code>check-uses-pinned.sh</code> failed once in 20, and <code>check-gate-needs.sh</code> and <code>actionlint</code> did not fail.
-<strong>Those last two carry no denominator on purpose.</strong> Neither reader looks under <code>cmd/gmc/</code>, so no state of the world reachable from where they were pointed would have reddened them.
-Writing them <code>0/20</code> would read as twenty trials that could have gone the other way, and a constructed zero has none; the qualifying sentence does not travel when the number gets quoted, which is how the figure would end up meaning more than it does.
-What that run confirms is the relocation, not any tolerance.
-What tests the tolerance is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-gate-needs-test.sh">check-gate-needs-test.sh</a>, where a stubbed reader reproduces the state a vanish leaves behind; deleting the tolerance turns that case red and leaves its control, a file still present and still unreadable, green.</p>
-<p><strong>Parked rather than closed because of that 1/20.</strong> It is <code>check-uses-pinned.sh</code> racing its own suite on the vanish path, which its fail-closed design forbids it from tolerating; separating a default-selected path that disappeared from an explicitly named path that never existed is its own change and is filed separately.</p>
+<h1 id="check-uses-pinned-cannot-tell-a-vanished-default-pick-from-a-bad-path">check-uses-pinned cannot tell a vanished default pick from a bad path<a class="headerlink" href="#check-uses-pinned-cannot-tell-a-vanished-default-pick-from-a-bad-path" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> <code>uses-pinned-check</code> fails with <code>usespin: open &lt;path&gt;: no such file or directory</code> for a path nobody named on the command line.</p>
+<p>The gate builds its own file list when given no arguments, filters it through <code>select_present_files</code>, then hands it to <code>usespin</code>, which opens each path.
+A file removed in that gap fails the gate on a path the gate itself chose — measured 2026-09-16 at 1 in 20 runs against a probe being created and removed continuously in a directory the selection covers, so the real rate is far lower and the shape is the point rather than the number.</p>
+<p>Every other writer of those directories can produce it, not only a test: a rebase, a branch switch, an editor saving over a workflow.</p>
+<p>What makes it awkward is that the obvious tolerance is forbidden.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned-test.sh">check-uses-pinned-test.sh</a> group 2 asserts that an unreadable file is exit 2 and never 0, which is the fail-closed property the gate exists for, so <code>usespin</code> may not simply skip what it cannot open.
+The distinction the gate needs is one it already draws elsewhere: a path the caller <strong>named</strong> must fail closed, while one the gate <strong>selected</strong> and that has since disappeared is not evidence about any pin.
+That is a flag on <code>usespin</code> set only for the default file set, or a re-selection and single retry in the script, plus a Go test for each side of the split.</p>
+<p>Q1106 is the sibling; it closed the same race for <code>check-gate-needs.sh</code>, whose reader has no fail-closed constraint, and moved the probe that exposed this one out of the shared directory.</p>
 
 
 

@@ -2692,9 +2692,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1106/">Q1106</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned-test.sh">A test probe lands in the live workflows dir and races concurrent gates</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><strong>Event:</strong> any gate that enumerates <code>.github/workflows/</code> fails on a file it cannot open, naming <code>zz-uses-pinned-test-probe.yml</code> or any …</td>
+<td><strong>Event:</strong> any gate that enumerates a <code>.github/workflows/</code> directory fails on a file it cannot open or cannot parse, naming …</td>
 </tr>
 <tr>
 <td><a href="Q1105/">Q1105</a></td>
@@ -3863,6 +3863,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>XS</td>
 <td><code>docs/javascripts/extra.js</code> turns a page's leading <code>&gt; **Audience:**</code> blockquote into pills by splitting the text on commas, which assumes …</td>
+</tr>
+<tr>
+<td><a href="Q1114/">Q1114</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned.sh">check-uses-pinned cannot tell a vanished default pick from a bad path</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>uses-pinned-check</code> fails with <code>usespin: open &lt;path&gt;: no such file or directory</code> for a path nobody named on the command line.</td>
 </tr>
 </tbody>
 </table>

@@ -2709,6 +2709,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-suite-that-writes-into-a-directory-the-fan-out-reads-has-three-ways-to-redden-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A suite that writes into a directory the fan-out reads has three ways to redden it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-coverage-budget-is-wall-clock-so-it-measures-scheduling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4781,6 +4792,19 @@ Switching from matching processes to distinct paths does <strong>not</strong> fi
 Process counts stay citable as process counts; a distinct-suite count taken this way does not.</p>
 <p>Capping is not free either, because the same runner backs <code>make check</code> itself at 45 gates, with <code>scripts-test</code> nested inside as one of them, plus <code>docs-gates</code> at 23 and <code>queue-gates</code> at 11.
 A cap nests, so <code>check</code> would take a slot and open another capped runner beneath it.</p>
+<h3 id="a-suite-that-writes-into-a-directory-the-fan-out-reads-has-three-ways-to-redden-it">A suite that writes into a directory the fan-out reads has three ways to redden it<a class="headerlink" href="#a-suite-that-writes-into-a-directory-the-fan-out-reads-has-three-ways-to-redden-it" title="Permanent link">&para;</a></h3>
+<p>A <code>scripts/</code> suite needing a real file in a real directory, such as a workflow under <code>.github/workflows/</code>, puts that file where ~45 concurrent gates are reading.
+Q1106 measured what a reader then sees, driving each one in a loop against a probe being created and removed:</p>
+<ul>
+<li><strong>The path vanishes</strong> between the listing and the open, so the reader fails on a file it just enumerated.
+  <code>check-gate-needs.sh</code> 4/40, <code>check-uses-pinned.sh</code> 2/20, <code>actionlint</code> 1/20.</li>
+<li><strong>The file is present and is a real finding.</strong> A tag-pinned probe is exactly what <code>uses-pinned-check</code> exists to reject: 12/20.</li>
+<li><strong>The file is read mid-write</strong> and parses short.
+  <code>actionlint</code> reported <code>"jobs" section is missing</code> on a probe that was momentarily half-written.</li>
+</ul>
+<p>Teaching the readers to tolerate it fixes at most the first, and not always: <code>actionlint</code> walks the directory inside a third-party binary, and <code>check-uses-pinned.sh</code> asserts that an unreadable file is exit 2, which is the fail-closed property it exists for.
+So put the file where only the gate under test reads it (<code>cmd/gmc/.github/workflows/</code> is in that gate's selection and no other reader's), and make it a file no gate would object to, moving any assertion that needs a <em>bad</em> file onto an explicit file set.
+Where a reader has no fail-closed constraint, skipping a path that has since disappeared is still worth having on its own: the directory is unlocked, so the gate races a rebase, a branch switch and an editor too.</p>
 <h3 id="the-coverage-budget-is-wall-clock-so-it-measures-scheduling">The coverage budget is wall clock, so it measures scheduling<a class="headerlink" href="#the-coverage-budget-is-wall-clock-so-it-measures-scheduling" title="Permanent link">&para;</a></h3>
 <p><code>scripts/go/coverage.sh</code> runs every workspace package in one <code>go test</code> with a <code>-timeout</code> that Go applies <strong>per test binary, as wall clock from the moment that binary starts</strong>.
 A binary that is not scheduled spends the budget doing nothing, so the number gates contention as much as it gates test duration.</p>
