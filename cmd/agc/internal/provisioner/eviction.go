@@ -189,8 +189,8 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // budget), so a re-run that never lands is surfaced to the operator via the
 // EvictionRerunFailures counter and an owner Event rather than retried further.
 func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string) {
-	window := time.NewTimer(p.rerunWindow())
-	defer window.Stop()
+	windowC, stopWindow := p.startRerunWindow()
+	defer stopWindow()
 
 	for call := 1; ; call++ {
 		err := p.attemptRerun(ctx, owner, repo, runID, log, cause)
@@ -227,7 +227,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 			log.Warn("disruption auto-retry abandoned before the original run concluded",
 				"runID", runID, "cause", cause, "error", ctx.Err())
 			return
-		case <-window.C:
+		case <-windowC:
 			reason := rerunFailureReasonNeverConcluded
 			if errors.Is(err, errRunConclusionUnreadable) {
 				reason = rerunFailureReasonConclusionUnknown
@@ -237,7 +237,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 				"runID", runID, "cause", cause, "reason", reason, "window", p.rerunWindow(), "rerunCalls", call)
 			p.recordRerunFailure(target, runID, tier, cause, reason, err)
 			return
-		case <-time.After(p.rerunRetryInterval()):
+		case <-p.rerunRetryTick():
 		}
 	}
 }
@@ -324,6 +324,25 @@ func (p *Provisioner) rerunRetryInterval() time.Duration {
 		return p.EvictionRerunRetryInterval
 	}
 	return defaultEvictionRerunRetryInterval
+}
+
+// startRerunWindow starts the timer that ends the re-run loop, returning its channel
+// and stop func. Tests override rerunWindowC to close the window on a refusal count
+// instead of on wall clock (Q1089).
+func (p *Provisioner) startRerunWindow() (<-chan time.Time, func()) {
+	if p.rerunWindowC != nil {
+		return p.rerunWindowC(p.rerunWindow())
+	}
+	t := time.NewTimer(p.rerunWindow())
+	return t.C, func() { t.Stop() }
+}
+
+// rerunRetryTick is one wait between refused re-run attempts.
+func (p *Provisioner) rerunRetryTick() <-chan time.Time {
+	if p.rerunRetryC != nil {
+		return p.rerunRetryC(p.rerunRetryInterval())
+	}
+	return time.After(p.rerunRetryInterval())
 }
 
 // reserveEvictionRetry atomically checks the per-run eviction-retry budget and,

@@ -2063,6 +2063,10 @@ Behind a stubbed `curl` the same expression measures the host instead.
 Measured 2026-09-03 with the stub sleeping 59 s per request, the suite's 60 s budget broke the loop after one attempt and all three assertions about *retrying* had nothing to observe, the same three that had gone red on a loaded `make check` five days earlier.
 Injecting the clock leaves that available on a slower machine, so the repair is a budget the run cannot reach, assertions read off the loop's own attempt counter rather than off elapsed seconds, and a non-convergence guard counted in **requests**, the same currency as the assertion, so the guard cannot become a second clock (Q1034).
 
+**The same shape reaches Go, where the clock is `time.NewTimer`/`time.After` rather than `SECONDS`.** `TestHandleEviction_RunNeverConcludingIsSurfaced` set a 50 ms re-run window against a loopback `httptest.Server` and asserted `calls > 1`, which asks whether two HTTP round trips plus goroutine scheduling fit inside 50 ms, a property of the host: red at load average 82.64 on 2026-09-09 and green twice on the same tree.
+The repair fills both channels the loop selects on through unexported `rerunWindowC`/`rerunRetryC` seams: the handler closes the window on the attempt it wants to be the last and every earlier wait fires immediately, so exactly one case is ever ready at a pass and the assertion becomes an exact count the handler decided.
+Measured 2026-09-16 closing Q1089: 200 consecutive runs green at load average 82.21, the load the original failure was taken at.
+
 ### A `directive is unused` red is about the linter's silence, not the directive
 
 `nolintlint` runs with `allow-unused: false` (`.golangci.yml`), so a `//nolint:<linter>` directive that suppressed nothing fails the build.

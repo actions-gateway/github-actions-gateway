@@ -408,6 +408,15 @@ type Provisioner struct {
 	// drive the eviction-counter TTL sweep deterministically.
 	now func() time.Time
 
+	// rerunWindowC and rerunRetryC supply the two timers bounding the Q503 re-run
+	// loop: the window that ends it and the wait between refused attempts. nil means
+	// the real clock. Tests override both so the number of attempts is a property the
+	// handler fixes rather than one the loop races the host's scheduler for — a real
+	// window asserts only that N loopback round trips fit inside it, which is a
+	// property of the host (Q1089). rerunWindowC returns the channel and its stop func.
+	rerunWindowC func(time.Duration) (<-chan time.Time, func())
+	rerunRetryC  func(time.Duration) <-chan time.Time
+
 	// admission is the in-memory reservation counter that gates job acquisition
 	// on worker capacity before AcquireJob claims the job from GitHub (Q59). Its
 	// zero value is ready to use, so a struct-literal Provisioner (tests) gets a
