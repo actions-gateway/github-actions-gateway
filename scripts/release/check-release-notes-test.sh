@@ -146,14 +146,48 @@ ${wrong_count} commits, some of them carrying a \`feat\` subject.
 	printf '## Everything since v1.6.0\n\n%s commits.\n' "$real_count" >"$WORK/v1.7.0.md"
 	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
 	expect "the summary reports the count it checked" \
-		"1 commit count(s) checked, 0 skipped for want of tags" \
+		"1 commit count(s) checked, 0 skipped for want of tags, 0 approximate" \
 		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
 
 	printf '## Everything since v9.9.8\n\n4 commits.\n' >"$WORK/v9.9.9.md"
 	summary="$("$SUBJECT" "$WORK/v9.9.9.md" 2>&1)"
 	expect "the summary reports a skip as a skip, not as a check" \
-		"0 commit count(s) checked, 1 skipped for want of tags" \
+		"0 commit count(s) checked, 1 skipped for want of tags, 0 approximate" \
 		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+
+	# A count that is gone is the case the checked/skipped pair could not see: it
+	# matched neither, incremented neither, and the ok line said nothing. So a
+	# deleted count read exactly like a corrected one, which is the whole thing
+	# the rule exists to stop (Q1102).
+	named_case_ "a note naming a range and asserting no count fails" 1 v1.7.0.md \
+		'## Everything since v1.6.0
+
+These nine ship in the product.
+'
+
+	# An approximate figure is a legitimate note, not a deleted count: v1.3.0
+	# opens `Over 450 commits` against a 463-commit window on purpose. It must
+	# pass, and it must not pass as a *checked* count.
+	named_case_ "a deliberately approximate figure passes" 0 v1.7.0.md \
+		'## Everything since v1.6.0
+
+Over 40 commits.
+'
+
+	printf '## Everything since v1.6.0\n\nOver 40 commits.\n' >"$WORK/v1.7.0.md"
+	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
+	expect "the summary reports an approximate figure as neither checked nor skipped" \
+		"0 commit count(s) checked, 0 skipped for want of tags, 1 approximate" \
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+
+	# A note with no range heading at all is not this rule's business — most
+	# fixtures in this suite are exactly that, and flagging them would make the
+	# rule fire on every note fragment anyone checks by hand.
+	named_case_ "a note with no range heading is left alone" 0 v1.7.0.md \
+		'## Highlights
+
+A claim that holds.
+'
 else
 	printf '[check-release-notes-test] SKIP commit-count cases — no v1.7.0 tag here\n' >&2
 fi
