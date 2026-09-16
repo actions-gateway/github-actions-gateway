@@ -298,3 +298,25 @@ func TestDecodeTakesAnAddedRecordsOwnSpacing(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// The tail override, on a list where nothing else can supply the tail.
+//
+// TestDecodeGivesTheLastRecordTheListTail cannot reach it: there the surviving
+// record's own three-way spacing rule returns the list's tail value anyway, so
+// the assertion holds whether or not the override fires. Here the merged list
+// is one bullet that no side recorded a tail for — ours respaced the list,
+// theirs replaced the bullet — and only the override can put the merged tail on
+// it.
+func TestDecodeLastRecordTakesAMergedTailNoSideRecorded(t *testing.T) {
+	a, b := "- a <!-- q:Q10 -->", "- b <!-- q:Q11 -->"
+	base := list(1, []string{a}, []int{1})
+	ours := list(2, []string{a}, []int{2})
+	theirs := list(1, []string{b}, []int{1})
+	got, err := Decode(base, ours, theirs, []string{b})
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if want := []string{b, "", ""}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q — the surviving bullet kept its own separator instead of the list's merged tail", got, want)
+	}
+}

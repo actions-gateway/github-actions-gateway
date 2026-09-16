@@ -166,6 +166,13 @@ func Split(lines []string) (*Doc, error) {
 // because a bullet whose title wraps can carry its binding further down. A
 // separator that is not an empty line would not survive being rebuilt from a
 // count, so it disqualifies the run the same way an unannotated bullet does.
+//
+// Keying here is the annotation matching, while MarkerKey additionally requires
+// every ID to be well formed. The two deliberately disagree: a run whose
+// bindings are malformed is encoded, reaches the merge with empty keys, and is
+// refused there as unparseable — one uncertain merge taking the fallback,
+// rather than every malformed bullet colliding on a single empty key. Tightening
+// this to match MarkerKey would turn that refusal into a silent collision.
 func encode(run []string, offset int) (*List, bool, error) {
 	list := &List{}
 	pend, pendN := "", 0
