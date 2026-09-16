@@ -2923,9 +2923,11 @@ No decision left for Q612.</p>
 </ol>
 <p>Each keeps its <code>scripts/</code> entry point, per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a>: the gate map stays in one place.</p>
 <h3 id="out-of-scope-deliberately">Out of scope, deliberately<a class="headerlink" href="#out-of-scope-deliberately" title="Permanent link">&para;</a></h3>
-<p><code>git-merge-status.sh</code> (retired with the table, Q889) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> stay as they are, as does the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> sibling.
+<p><code>git-merge-status.sh</code> (retired with the table, Q889), the shared set-semantics merge and the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> sibling stay as they are.
 A merge driver must reconstruct the file <strong>line for line</strong>, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.</p>
+<p><strong>Read since as a ruling against Go, which it is not.</strong> The argument above rules out goldmark; Go over <code>bufio</code> reconstructs a file line for line exactly as <code>awk</code> does.
+<a href="../../merge-drivers-go/">merge-drivers-go.md</a> moved all four drivers to <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/git"><code>devtools/git</code></a> on that reading, and the shared merge is <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/git/keyedrecords"><code>devtools/git/keyedrecords</code></a>.</p>
 <p>Also out: <code>check-codegen-drift.sh</code>, the <code>chart-*-check.sh</code> family, <code>validate-egress-ip.sh</code>, <code>dogfood/setup.sh</code>, and the <code>e2e/</code> scripts.
 They are long, but they orchestrate external CLIs (<code>kubectl</code>, <code>helm</code>, <code>docker</code>, <code>controller-gen</code>).
 Shell is the right language; Go would be <code>exec.Command</code> soup.

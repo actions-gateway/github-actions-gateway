@@ -2652,8 +2652,9 @@
 <h1 id="the-merge-drivers-on-go">The merge drivers on Go<a class="headerlink" href="#the-merge-drivers-on-go" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> filed 2026-08-30.
 Phase 1 shipped 2026-08-31 in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1819">#1819</a>: the shared runtime, the keyed-record set merge and the two table drivers are in <code>devtools/git/</code>.
-Phase 2 (<a href="../../queue/Q1046/">Q1046</a>) and Phase 3 (<a href="../../queue/Q1047/">Q1047</a>) are open.</p>
-<p>Four git merge drivers resolve this repo's contended registry files, and all four are shell over <code>awk</code>: 1,603 lines across six files, of which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> is the 320-line three-way set merge that three of them share.
+Phase 2 shipped 2026-09-16 in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1954">#1954</a>: the roadmap driver, its bullet encode/decode and the <code>&lt;!-- q:QN --&gt;</code> key reader are in <code>devtools/git/</code>, and <code>merge-keyed-records.awk</code> is deleted.
+Phase 3 (<a href="../../queue/Q1047/">Q1047</a>) is open.</p>
+<p>Four git merge drivers resolve this repo's contended registry files, and at filing all four were shell over <code>awk</code>: 1,603 lines across six files, of which <code>merge-keyed-records.awk</code> was the 320-line three-way set merge that three of them shared.
 This plan moves the stack to Go in <code>devtools/</code>, keeping every <code>scripts/</code> entry point.</p>
 <h2 id="why-and-why-the-existing-answer-does-not-cover-it">Why, and why the existing answer does not cover it<a class="headerlink" href="#why-and-why-the-existing-answer-does-not-cover-it" title="Permanent link">&para;</a></h2>
 <p><a href="../archive/markdown-gates-parser/">markdown-gates-parser.md</a> moved four <code>awk</code> Markdown <em>gates</em> onto goldmark and excluded the drivers, on this reasoning:</p>
@@ -2662,11 +2663,12 @@ This plan moves the stack to Go in <code>devtools/</code>, keeping every <code>s
 </blockquote>
 <p>That is correct, and it rules out <strong>goldmark</strong>, not <strong>Go</strong>.
 Go over <code>bufio</code>/<code>strings</code> reconstructs line for line exactly as <code>awk</code> does.
-The exclusion has been read since as a ruling against Go, which is why that doc's line is corrected as part of Phase 1.</p>
+The exclusion has been read since as a ruling against Go, so that doc's line carries the distinction.
+It was added in Phase 2, which is also where the link it carried to the deleted <code>awk</code> had to go.</p>
 <p>The case for moving is testability, not correctness-today.
 No defect is measured in any of the four drivers, and this plan asserts none.</p>
 <ul>
-<li><strong>The algorithm is the untested part.</strong> <code>merge-keyed-records.awk</code> decides a three-way set merge <em>and</em> reconstructs row order by inferring which side reordered, comparing each side's shared-row sequence against the base's.
+<li><strong>The algorithm is the untested part.</strong> <code>merge-keyed-records.awk</code> decided a three-way set merge <em>and</em> reconstructed row order by inferring which side reordered, comparing each side's shared-row sequence against the base's.
   Nothing exercises <code>seq_equal</code>, the skeleton walk, or the splice in isolation; all four suites drive a whole driver end to end.</li>
 <li><strong>Its failure mode is silent state loss.</strong> The file carries a completeness backstop and an emitted-vs-surviving count check because a dropped row is worse than a conflict marker.
   Those are the assertions of an author who could not unit-test the thing.</li>
@@ -2683,14 +2685,17 @@ A driver invocation is human-paced, so the build cost is irrelevant either way.<
   Each becomes a thin script that builds the binary into <code>.build/</code> and execs it, the pattern <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-roadmap.sh"><code>check-roadmap.sh</code></a> already uses.</li>
 <li><strong>The fallback contract.</strong> Every uncertainty still re-runs <code>git merge-file</code> and keeps its conflict markers, and the exit status still stays under 128 so git records a conflict rather than a crashed driver.
   A failed <code>go build</code> is one more uncertainty and takes the same path.</li>
-<li><strong>The four test suites</strong>, 1,949 lines, unchanged.
-  They drive the entry point with git's placeholders and never reach inside, so they are the differential oracle for the port: a Go driver that changes any observable behaviour fails them.</li>
+<li><strong>The four test suites</strong>, 1,949 lines at filing, with no change to any assertion.
+  They drive the entry point with git's placeholders and never reach inside, so they are the differential oracle for the port: a Go driver that changes any observable behaviour fails them.
+  A suite that copies the driver into a throwaway repo does gain symlinks to <code>devtools/</code> and <code>.build/</code>, because the copied entry point builds the binary.
+  That is scaffolding, not an assertion.</li>
 </ul>
 <h2 id="scope-one-phase-each">Scope, one phase each<a class="headerlink" href="#scope-one-phase-each" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Phase 1</strong>: the shared runtime (<code>devtools/git/mergedriver</code>: argument handling, <code>--install</code>, labels, fallback), the keyed-record set merge, and the two table drivers (<code>scriptindex</code>, <code>planindex</code>).</li>
 <li><strong>Phase 2</strong>: the roadmap driver, including the bullet encode/decode and the spacing three-way rule.
-   Deletes <code>merge-keyed-records.awk</code>.</li>
+   Deletes <code>merge-keyed-records.awk</code>.
+   The encode/decode is <code>devtools/git/mdroadmap</code>, which is also where <code>MarkerKey</code> lives: the roadmap is bullet lists rather than tables, so it does not belong beside <code>mdregistry</code>'s table splitter.</li>
 <li><strong>Phase 3</strong>: the gate-lists driver, folding its second set merge onto the shared core.</li>
 </ol>
 <p>One binary with a subcommand per driver, so the four entry points share one build and one artifact.</p>

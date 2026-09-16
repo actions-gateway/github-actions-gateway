@@ -2639,7 +2639,11 @@
 
 
 <h1 id="three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun">Three unrelated suites fail under concurrent load and pass on rerun<a class="headerlink" href="#three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a <code>scripts-test</code> suite fails inside a capped local fan-out and passes standalone straight afterwards, on <code>main</code>; or <code>git-merge-script-index-test</code> or <code>git-merge-plan-index-test</code> fails anywhere with a <code>merge-*-index: the build failed with:</code> line, which is the driver-build race below recurring past its fix.</p>
+<p><strong>Event:</strong> a <code>scripts-test</code> suite fails inside a capped local fan-out and passes standalone straight afterwards, on <code>main</code>; or one of the merge-driver suites (<code>git-merge-script-index-test</code>, <code>git-merge-plan-index-test</code>, <code>git-merge-roadmap-test</code>) fails anywhere with a <code>merge-&lt;driver&gt;: the build failed with:</code> line, which is the driver-build race below recurring past its fix.</p>
+<p>The roadmap suite joined that set when its driver became Go, and the trigger this row carried until then could not see it.
+The prefix is each driver's own <code>DRIVER_LOG</code>, so the line reads <code>merge-roadmap:</code>, which the old <code>merge-*-index:</code> glob does not match.
+Driven 2026-09-16 by breaking the Go build and running the driver, rather than read off the two suites already listed, since a prefix that did not follow the assumed pattern is exactly what made the trigger stale.
+<code>git-merge-gate-lists-test</code> joins the set when the open item porting the last driver lands.</p>
 <p>The mitigation is the cap: <code>run-parallel.sh</code> takes <code>RUN_PARALLEL_JOBS</code>, and the Makefile exports <code>local-throttle.sh fanout-jobs</code> as its default, physical cores minus 2 on a GUI dev shell and unbounded on a headless one.
 CI was unbounded too until Q1105 capped it at four times the runner's vCPUs.
 So <code>make check</code>'s 51-gate level and <code>make scripts-test</code>'s 119-suite level each start at most that many at once instead of all of them.
