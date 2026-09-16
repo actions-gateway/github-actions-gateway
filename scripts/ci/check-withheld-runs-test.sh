@@ -178,6 +178,37 @@ expect_rc rc-findings 1 "[{\"number\":1,\"headRefOid\":\"$WITHHELD_SHA\"}]" "[$H
 expect_rc rc-empty-head-sha 2 '[{"number":1,"headRefOid":""}]' '[]'
 expect_rc rc-malformed-pr-list 2 'null' '[]'
 
+# expect_out NAME WANT_SUBSTRING PR_LIST_JSON RUNS_JSON
+# Asserts on what the run PRINTED, not on its status. The defect these cover
+# exited 0 correctly and said the wrong thing.
+expect_out() {
+	local name="$1" want="$2"
+	stub_gh "$3" "$4"
+	PATH="$STUB_DIR:$PATH" "$SCRIPT" >"$STUB_DIR/out" 2>&1 || true
+	if grep -qF "$want" "$STUB_DIR/out"; then
+		printf 'ok   %-26s %s\n' "$name" "$want"
+	else
+		printf 'FAIL %-26s want %s in: %s\n' "$name" "$want" \
+			"$(tr '\n' ' ' <"$STUB_DIR/out")" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# A clean scan must state its denominator. Without it a scan over PRs and a scan
+# over none printed the same line and the watch workflow closed its issue on
+# either, asserting every PR had been released when none had been looked at.
+# Deleting the count from report()'s zero-findings branch reddens both.
+expect_out examined-two '(2 open PR(s) examined)' \
+	"[{\"number\":1,\"headRefOid\":\"$CLEAN_SHA\"},{\"number\":2,\"headRefOid\":\"$CLEAN_SHA\"}]" \
+	"[$PASS_RUN]"
+expect_out examined-none '(0 open PR(s) examined)' '[]' '[]'
+
+# A PR list filled exactly to the limit cannot be told from one the limit
+# truncated, so it refuses. gh reports no truncation flag of its own.
+SATURATED="$(jq -nc --arg sha "$CLEAN_SHA" \
+	'[range(500) | {number: (. + 1), headRefOid: $sha}]')"
+expect_rc rc-pr-list-at-limit 2 "$SATURATED" '[]'
+
 if ((fails > 0)); then
 	printf '\n%d test(s) failed\n' "$fails" >&2
 	exit 1

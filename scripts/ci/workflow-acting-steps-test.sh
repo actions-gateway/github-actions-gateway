@@ -7,7 +7,7 @@
 # WHY THESE STEPS AND NOT EVERY run: BODY.
 # `make check` runs targets over the tree and no target enters a workflow step's
 # shell, so a `run:` body is first executed by the runner on the event that
-# triggers it. Eleven of the thirty workflows carry no `pull_request` trigger, so
+# triggers it. Thirteen of the thirty-two workflows carry no `pull_request` trigger, so
 # their bodies first run after merge — or at a `v*` tag for publish.yml. Neither
 # actionlint nor shellcheck's integration executes a body, so a defect in what
 # the script DECIDES is invisible to both: release-freeze-watch.yml reached
@@ -16,11 +16,11 @@
 # issue retiring a candidate nothing had measured. All of actionlint, shellcheck
 # and `make check` were green, and it had a full review.
 #
-# Covering all thirty is not proportionate, so the subject is the steps that act
+# Covering all thirty-two is not proportionate, so the subject is the steps that act
 # rather than report — those that open an issue, push, publish or tag — minus the
 # ones a `pull_request` event already executes. That derivation, and what it
 # excludes, is in docs/development/testing.md § Driving a workflow `run:` body.
-# Two steps qualify today:
+# Three steps qualify today:
 #
 #   release-freeze-watch.yml  `check` + `report`  — opens/comments/closes an issue
 #   withheld-runs-watch.yml   `check` + `report`  — opens/comments/closes an issue
@@ -496,7 +496,7 @@ STUB
 
 # run_withheld_check CASE DELEGATE_RC WANT_RC [LOG_TEXT] — echoes the sandbox.
 run_withheld_check() {
-	local case="$1" drc="$2" want="$3" log="${4:-No open PR has withheld checks on its current head.}"
+	local case="$1" drc="$2" want="$3" log="${4:-No open PR has withheld checks on its current head (7 open PR(s) examined).}"
 	local dir got
 	dir="$(new_sandbox "$case")"
 	write_withheld_delegate "$dir" "$drc"
@@ -578,7 +578,7 @@ run_withheld_report() {
 
 HELD_TITLE='Checks withheld awaiting approval: #1877'
 
-dir="$(run_withheld_report withheld-report-clean 0 'No open PR has withheld checks on its current head.' '' '')"
+dir="$(run_withheld_report withheld-report-clean 0 'No open PR has withheld checks on its current head (7 open PR(s) examined).' '' '')"
 if [[ -n "$dir" ]]; then
 	expect_no_call withheld-report-clean "$dir" 'gh issue create' &&
 		expect_no_call withheld-report-clean "$dir" 'gh issue comment' &&
@@ -586,9 +586,12 @@ if [[ -n "$dir" ]]; then
 		pass withheld-report-clean 'nothing withheld opens nothing'
 fi
 
-dir="$(run_withheld_report withheld-report-resolves 0 'No open PR has withheld checks on its current head.' 42 "$HELD_TITLE")"
+# The resolve comment must carry the checker's denominator rather than restate
+# its verdict: "every open PR" over a population nobody counted is the claim this
+# watch exists to stop making, and it read identically over an empty list.
+dir="$(run_withheld_report withheld-report-resolves 0 'No open PR has withheld checks on its current head (7 open PR(s) examined).' 42 "$HELD_TITLE")"
 if [[ -n "$dir" ]]; then
-	expect_call withheld-report-resolves "$dir" 'gh issue comment 42 --body Resolved: every open PR' &&
+	expect_call withheld-report-resolves "$dir" 'gh issue comment 42 --body Resolved. No open PR has withheld checks on its current head (7 open PR(s) examined).' &&
 		expect_call withheld-report-resolves "$dir" 'gh issue close 42' &&
 		expect_no_call withheld-report-resolves "$dir" 'gh issue create' &&
 		pass withheld-report-resolves 'released PRs close the open issue'
@@ -754,7 +757,7 @@ fi
 # ============================================================================
 #
 # Without this the suite covers a frozen pair, and a `gh issue create` added to
-# workflow thirty-one is invisible — the same false negative the path-filter gate
+# workflow thirty-three is invisible — the same false negative the path-filter gate
 # exists for one rung over. So every workflow carrying an acting command is
 # either driven above or listed here with why it is not, and an entry naming a
 # workflow that no longer acts fails too: a stale exclusion is how the set drifts

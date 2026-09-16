@@ -732,7 +732,7 @@ It was caught by hand-driving the step, with actionlint, shellcheck and `make ch
 
 #### Which steps are in scope
 
-Driving every `run:` body in thirty workflows is not proportionate, so the subject is derived rather than enumerated: a step is in scope when it **acts** (opens an issue, pushes a ref, publishes an artifact, or tags) **and** no `pull_request` event executes it.
+Driving every `run:` body in thirty-two workflows is not proportionate, so the subject is derived rather than enumerated: a step is in scope when it **acts** (opens an issue, pushes a ref, publishes an artifact, or tags) **and** no `pull_request` event executes it.
 
 Eleven workflows carry no `pull_request` trigger at all, measured by parsing each `on:` block.
 A grep answers ten, because `release-freeze-watch.yml` names `pull_request` only in a comment explaining why it has none.
@@ -760,7 +760,7 @@ Two workflows act only through a delegate: `dependabot-rebase-stale.yml` calls `
 The decisions are in the delegate, which has its own suite, so driving the wrapper would test the flag and nothing else.
 
 **A closing assertion holds that derivation to the tree, both directions.** Every workflow running an acting command must be driven or listed in the suite's `acting_registry()` with a reason, and a registry line naming a workflow that no longer exists, or no longer acts, fails too.
-Without it the suite would cover a frozen pair and a thirty-first workflow could start opening issues uncovered, which is the same false negative the [path-filter gate](#the-path-filter-gate) exists for one rung over.
+Without it the suite would cover a frozen pair and a thirty-third workflow could start opening issues uncovered, which is the same false negative the [path-filter gate](#the-path-filter-gate) exists for one rung over.
 
 #### The shell a body is driven under
 

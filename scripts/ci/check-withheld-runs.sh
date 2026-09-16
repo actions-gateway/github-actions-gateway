@@ -62,6 +62,15 @@ readonly WITHHELD_CONCLUSION='action_required'
 # deployment-protection hold on the github-pages environment - which fires on
 # push to main and can also read action_required - out of a PR-scoped finding.
 readonly PR_EVENT='pull_request'
+# How many open PRs one scan will look at. A row count equal to this is refused
+# rather than reported on, because gh cannot say whether it truncated.
+#
+# 500 rather than 100 because the guard is what carries the safety and the
+# number only decides where a false refusal lands. `--limit` paginates past the
+# 100-row API page: measured 2026-09-16 on gh 2.100.0, --limit 150 and --limit
+# 250 return 150 and 250 rows. This repo runs 15 open PRs, so 500 costs one page
+# in practice and puts the boundary somewhere worth refusing on anyway.
+readonly PR_LIST_LIMIT=500
 
 usage() {
 	cat <<'EOF'
@@ -110,11 +119,16 @@ select_withheld() {
 # PR's current head from the PR itself and its runs from that exact SHA.
 collect_pr_runs() {
 	local prs sha runs
-	prs="$(gh pr list --state open --limit 100 --json number,headRefOid)"
+	prs="$(gh pr list --state open --limit "$PR_LIST_LIMIT" --json number,headRefOid)"
 	# An empty or malformed read here would widen every later query instead of
 	# narrowing it, so refuse rather than report "nothing withheld".
 	jq -e 'type == "array"' >/dev/null <<<"$prs" ||
 		cannot_measure "could not read the open PR list"
+	# A list filled exactly to the limit is indistinguishable from one the limit
+	# truncated, and a truncated population reports "nothing withheld" about the
+	# PRs it never saw. Refuse instead; exit 2 is loud where a wrong 0 is not.
+	(($(jq 'length' <<<"$prs") < PR_LIST_LIMIT)) ||
+		cannot_measure "open PR list came back at the $PR_LIST_LIMIT-row limit, so it may be truncated"
 
 	echo '['
 	local first=1 number
@@ -139,7 +153,7 @@ collect_pr_runs() {
 # report - print the findings in the form the watch workflow quotes into its
 # issue, and return 1 when there are any.
 report() {
-	local findings="$1" number sha ratio count=0
+	local findings="$1" examined="${2:-?}" number sha ratio count=0
 
 	while read -r number sha ratio; do
 		[[ -n "$number" ]] || continue
@@ -149,7 +163,10 @@ report() {
 	done <<<"$findings"
 
 	if ((count == 0)); then
-		echo 'No open PR has withheld checks on its current head.'
+		# The denominator is the point: without it a scan of twenty PRs and a
+		# scan of none print the same line, and the workflow closes its issue
+		# saying every PR was released on the strength of either.
+		printf 'No open PR has withheld checks on its current head (%s open PR(s) examined).\n' "$examined"
 		return 0
 	fi
 	cat <<-EOF
@@ -188,7 +205,7 @@ main() {
 		# survivable and the buried message was not.
 		collected="$(collect_pr_runs)"
 		findings="$(select_withheld <<<"$collected")"
-		report "$findings" || rc=$?
+		report "$findings" "$(jq 'length' <<<"$collected")" || rc=$?
 		exit "$rc"
 		;;
 	-h | --help)

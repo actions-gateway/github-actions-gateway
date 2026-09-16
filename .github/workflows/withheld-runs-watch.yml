@@ -101,8 +101,11 @@ jobs:
             --json number --jq '.[0].number // empty')"
           if [ "${RC}" -eq 0 ]; then
             if [ -n "${existing}" ]; then
-              gh issue comment "${existing}" --body \
-                "Resolved: every open PR's checks have been released."
+              # The checker's own line, not a restatement of it: that line
+              # carries the denominator, and "every open PR" asserted over a
+              # population nobody counted is the claim this watch exists to
+              # stop making.
+              gh issue comment "${existing}" --body "Resolved. ${LOG}"
               gh issue close "${existing}"
             fi
             exit 0
