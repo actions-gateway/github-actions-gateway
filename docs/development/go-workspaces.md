@@ -143,10 +143,15 @@ When you change any module's `go.mod` (add, upgrade, or remove a dep):
 1. Run `scripts/go/go-work-tidy.sh` to tidy all modules in dependency order.
 2. Run `go work sync` to sync the workspace build list.
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
-4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit so they stay in sync.
+4. Regenerate everything derived from a dependency: `make generate`, then `make chart-crds`, then `make api-reference`.
+5. Commit the `go.mod`, `go.sum`, `vendor/`, and regenerated files together in the same commit so they stay in sync.
 
-`make vendor-sync` (→ `scripts/go/vendor-sync.sh`) runs steps 1–3 plus the `THIRD-PARTY-NOTICES` regen in one shot, so you can do the whole sync with a single command and then commit the result.
+`make deps-sync` runs all of the above in one shot, so you can do the whole sync with a single command and then commit the result.
 It is the same remedy the [Dependabot auto-sync workflow](#dependabot-go-bumps-are-auto-synced) runs.
+`make vendor-sync` (→ [`scripts/go/vendor-sync.sh`](../../scripts/go/vendor-sync.sh)) is its vendoring half alone (steps 1–3 plus the `THIRD-PARTY-NOTICES` regen), and is what `vendor-check` and `tidy-check` name as their remedy.
+
+**Step 4 is not optional for a `k8s.io/*` bump.** The CRDs embed upstream core types, so a Kubernetes minor bump lands new fields and reworded descriptions in controller-gen's output, which flows on into the chart CRD templates and moves the schema version `docs/reference/api.md` links against.
+Skipping it leaves `codegen-check`, `chart-crds-check`, and `api-reference-check` red on a tree whose `vendor-check` and `tidy-check` are green.
 
 If the change **added, removed, or re-pointed an inter-module `replace` edge** (or added/deleted a workspace module), also update the module table's **Internal deps** column and the **Dependency direction** graph in [Workspace layout](#workspace-layout) above — those are maintained by hand and will otherwise drift.
 
@@ -184,10 +189,10 @@ So the shared `vendor/`, `tools/vendor/`, `go.work.sum`, and `THIRD-PARTY-NOTICE
 
 The `dependabot-go-sync` workflow (`.github/workflows/dependabot-go-sync.yml`, Q111) does that for you.
 It triggers on every PR but its job runs only for a same-repo, Dependabot-authored PR whose branch is a Go-module update (`dependabot/go_modules/…` — the branch slug is `go_modules`, not the `gomod` package-ecosystem key in `dependabot.yml`).
-It runs `make vendor-sync` — the one-shot remedy that performs the whole [Changing dependencies](#changing-dependencies) flow plus the notices regen — and pushes any resulting diff back onto the Dependabot branch as a `chore(deps): sync …` commit.
+It runs `make deps-sync` — the one-shot remedy that performs the whole [Changing dependencies](#changing-dependencies) flow, notices and generated output included — and pushes any resulting diff back onto the Dependabot branch as a `chore(deps): sync …` commit.
 It no-ops cleanly (no commit) when nothing drifted, so a metadata-only bump costs one fast run.
 
-Run the same remedy locally with `make vendor-sync` (→ `scripts/go/vendor-sync.sh`) whenever you change a dependency by hand.
+Run the same remedy locally with `make deps-sync` whenever you change a dependency by hand.
 
 ### A synced branch stops auto-rebasing, and is rebased for you
 
@@ -199,7 +204,7 @@ On every `main` push, plus a daily safety net at 07:47 UTC and `workflow_dispatc
 The branch-tip check matters: a branch the bot still owns rebases itself, and force-pushing over that would clobber it mid-flight.
 A run is capped at `MAX_PRS=3` PRs and names any it defers to the next run.
 
-**It replays, it never merges.** The conflicted tree is discarded outright: the branch is reset to current `main`, every version bump the PR introduced is re-applied there with `go get`, and `make vendor-sync` regenerates the vendor trees, `go.work.sum`, and `THIRD-PARTY-NOTICES`.
+**It replays, it never merges.** The conflicted tree is discarded outright: the branch is reset to current `main`, every version bump the PR introduced is re-applied there with `go get`, and `make deps-sync` regenerates the vendor trees, `go.work.sum`, `THIRD-PARTY-NOTICES`, and the controller-gen output derived from them.
 Bumps are recovered by diffing the `require` directives of each `go.mod` between the merge base and the branch tip, so a *grouped* PR ("bump the go-deps group across 1 directory with 5 updates") replays every one of its modules.
 The branch name carries only the group's hash, so it cannot be parsed for this.
 
@@ -234,7 +239,7 @@ So prefer "Approve and run" because it releases what is already queued instead o
 
 **The loop safety does not come from the trigger being suppressed, because it is not suppressed.** Approving the withheld runs re-runs `dependabot-go-sync` against its own sync commit: its `if:` gates on the pull request's author, which is still `dependabot[bot]` after a `github-actions[bot]` force-push, so that guard does not stop the re-fire either.
 What bounds the chain is the approval gate itself, one per generation, so it cannot run away unattended.
-`make vendor-sync` is idempotent, so a pass over an already-synced tree commits nothing and the chain stops there; a pass that finds fresh drift, because `main` moved under the branch, commits again and the next generation is withheld in its turn.
+`make deps-sync` is idempotent, so a pass over an already-synced tree commits nothing and the chain stops there; a pass that finds fresh drift, because `main` moved under the branch, commits again and the next generation is withheld in its turn.
 Measured 2026-09-04 on [#1821](https://github.com/actions-gateway/github-actions-gateway/pull/1821): the approved sync run `33508119165` ran from 21:15:28Z to 21:16:23Z and pushed a second `chore(deps): sync workspace vendor + THIRD-PARTY-NOTICES` commit, `df7e39c`, authored 21:16:17Z, whose own 16 runs all read `action_required` at attempt 1.
 
 Using a stored Personal Access Token (PAT) instead of `GITHUB_TOKEN` would let the checks run without the hold, but the repo deliberately keeps no such credential, so the approval click is the accepted trade-off.

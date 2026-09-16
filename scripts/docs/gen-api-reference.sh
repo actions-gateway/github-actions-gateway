@@ -16,6 +16,9 @@
 #   scripts/docs/gen-api-reference.sh          # write docs/reference/api.md (make api-reference)
 #   scripts/docs/gen-api-reference.sh --check  # fail if the committed page is stale
 #                                              # (make api-reference-check, in `make check`)
+#   scripts/docs/gen-api-reference.sh --sync   # same as the write mode, but first re-pin
+#                                              # render.kubernetesVersion from api/go.mod
+#                                              # instead of failing (make deps-sync)
 #
 # Inputs: api/hack/crd-ref-docs/config.yaml and the markdown templates beside it.
 # Params: CRD_REF_DOCS (path to the tool binary; the Makefile builds it from the
@@ -38,12 +41,16 @@ OUTPUT="docs/reference/api.md"
 API_GOWORK="$REPO_ROOT/api/go.work.gen"
 
 check_mode=false
-if [[ "${1:-}" == "--check" ]]; then
-	check_mode=true
-elif [[ $# -gt 0 ]]; then
-	echo "usage: $0 [--check]" >&2
+sync_mode=false
+case "${1:-}" in
+--check) check_mode=true ;;
+--sync) sync_mode=true ;;
+"") ;;
+*)
+	echo "usage: $0 [--check | --sync]" >&2
 	exit 2
-fi
+	;;
+esac
 
 if [[ ! -x "$CRD_REF_DOCS" ]]; then
 	echo "error: crd-ref-docs not found at $CRD_REF_DOCS — run 'make tools'" >&2
@@ -54,8 +61,9 @@ fi
 # types (PodTemplateSpec, Affinity, ObjectMeta) link to. Nothing else reads it, so
 # left alone it silently falls behind the k8s.io/api the CRDs actually embed and
 # the page links a schema the API no longer matches. k8s.io/api v0.N.x is
-# Kubernetes 1.N. Both modes assert it, so the writing path cannot mint stale
-# links either.
+# Kubernetes 1.N. The check and write modes both assert it, so the writing path
+# cannot mint stale links either; --sync re-pins it instead, because a dependency
+# bump has already decided the answer and no human is there to type it.
 api_minor="$(awk '$1 == "k8s.io/api" && $2 ~ /^v0\.[0-9]+\./ { split($2, v, "."); print v[2]; exit }' api/go.mod)"
 config_version="$(awk -F': *' '$1 ~ /kubernetesVersion$/ { print $2; exit }' "$CONFIG")"
 if [[ -z "$api_minor" ]]; then
@@ -63,10 +71,22 @@ if [[ -z "$api_minor" ]]; then
 	exit 1
 fi
 if [[ "$config_version" != "1.${api_minor}" ]]; then
-	echo "error: $CONFIG pins render.kubernetesVersion: ${config_version:-<unset>}, but api/go.mod" >&2
-	echo "       requires k8s.io/api v0.${api_minor}.x (Kubernetes 1.${api_minor}). Set it to" >&2
-	echo "       1.${api_minor} and run 'make api-reference'." >&2
-	exit 1
+	if [[ "$sync_mode" == true ]]; then
+		# --sync is the unattended path (make deps-sync, and the Dependabot
+		# workflows behind it). The correct value is a pure function of
+		# api/go.mod, so there is nothing for a human to decide.
+		awk -v want="1.${api_minor}" '
+			$1 ~ /kubernetesVersion:$/ { sub(/:.*/, ": " want); print; next }
+			{ print }
+		' "$CONFIG" > "${CONFIG}.tmp"
+		mv "${CONFIG}.tmp" "$CONFIG"
+		echo "set $CONFIG render.kubernetesVersion to 1.${api_minor} (from api/go.mod)."
+	else
+		echo "error: $CONFIG pins render.kubernetesVersion: ${config_version:-<unset>}, but api/go.mod" >&2
+		echo "       requires k8s.io/api v0.${api_minor}.x (Kubernetes 1.${api_minor}). Set it to" >&2
+		echo "       1.${api_minor} and run 'make api-reference' (or run 'make deps-sync')." >&2
+		exit 1
+	fi
 fi
 
 work_dir="tmp/api-reference"

@@ -21,7 +21,7 @@
 # v0.38.0 across three modules. So the conflicted tree is discarded outright:
 # the branch is reset to current main, each version bump the PR introduced is
 # re-applied with `go get`, and every generated artifact (vendor trees,
-# go.work.sum, THIRD-PARTY-NOTICES) is rebuilt by `make vendor-sync`. Each bump
+# go.work.sum, THIRD-PARTY-NOTICES) is rebuilt by `make deps-sync`. Each bump
 # is additionally guarded - a `go get` that Go itself reports as a downgrade is
 # rolled back and skipped - and a PR left with no applicable bumps is pushed
 # nothing at all, for a human to close.
@@ -45,7 +45,7 @@ BASE_BRANCH="${BASE_BRANCH:-main}"
 REMOTE="${REMOTE:-origin}"
 MERGEABLE_POLL_ATTEMPTS="${MERGEABLE_POLL_ATTEMPTS:-6}"
 MERGEABLE_POLL_DELAY="${MERGEABLE_POLL_DELAY:-10}"
-# Each replay runs a full `make vendor-sync` (tidy across every workspace
+# Each replay runs a full `make deps-sync` (tidy across every workspace
 # module, re-vendor, regenerate notices), so a weekly Dependabot wave that
 # strands several PRs at once would otherwise run for an hour. Cap the run and
 # name what it deferred; the next main push or the daily schedule takes the rest.
@@ -81,7 +81,7 @@ notices. See the header of this script for why it replays instead of merging.
   --select         filter `gh pr list` JSON on stdin to candidate PR numbers
 
 Env: BASE_BRANCH (default main), REMOTE (default origin), MAX_PRS (default 3 -
-     each replay runs a full vendor-sync, so a run is capped and names what it
+     each replay runs a full deps-sync, so a run is capped and names what it
      deferred), MERGEABLE_POLL_ATTEMPTS / MERGEABLE_POLL_DELAY - GitHub computes
      mergeability asynchronously, so a PR reports UNKNOWN for a few seconds
      after main moves (default 6 attempts, 10s apart).
@@ -105,7 +105,7 @@ gomod_requires() {
 #
 # Requires present on only one side are deliberately ignored. A require that
 # appears or disappears is `go mod tidy` bookkeeping rather than a dependency
-# bump, and the final `make vendor-sync` redoes that bookkeeping anyway; trying
+# bump, and the final `make deps-sync` redoes that bookkeeping anyway; trying
 # to replay it would fight tidy over indirect requires main has since dropped.
 bumps_between() {
 	local base_file="$1" tip_file="$2"
@@ -341,8 +341,8 @@ rebase_pr() {
 		return 0
 	fi
 
-	step "PR #$number: regenerating vendor trees and notices (make vendor-sync)"
-	make vendor-sync
+	step "PR #$number: regenerating vendor trees, notices and generated output (make deps-sync)"
+	make deps-sync
 
 	if git diff --quiet "$REMOTE/$BASE_BRANCH" -- .; then
 		echo "  the replay produced no diff against $BASE_BRANCH - the PR is obsolete, leaving it alone"
@@ -363,7 +363,7 @@ rebase_pr() {
 		disowned this branch when the vendor sync commit landed on it, so it could
 		not rebase itself once $BASE_BRANCH moved. The bumps were replayed on
 		current $BASE_BRANCH with 'go get' and every generated artifact rebuilt
-		with 'make vendor-sync'; the conflicted tree was discarded rather than
+		with 'make deps-sync'; the conflicted tree was discarded rather than
 		merged, because merging a stale Go bump can silently downgrade a module.
 
 		Bump audit:

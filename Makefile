@@ -649,6 +649,13 @@ api-reference: $(CRD_REF_DOCS) ## Regenerate docs/reference/api.md from the api/
 api-reference-check: $(CRD_REF_DOCS) ## Fail if docs/reference/api.md drifted from the api/v2beta1 Go types it is generated from (Q632)
 	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh --check
 
+# api-reference with the kubernetesVersion pin re-derived from api/go.mod rather
+# than asserted. Only `deps-sync` wants this: a human editing a type should see
+# the pin mismatch and decide, but a dependency bump has already decided it.
+.PHONY: api-reference-sync
+api-reference-sync: $(CRD_REF_DOCS) ## Regenerate docs/reference/api.md, re-pinning kubernetesVersion from api/go.mod (used by `deps-sync`)
+	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh --sync
+
 .PHONY: build
 build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
 
@@ -954,8 +961,23 @@ tidy-check: ## Fail if any go.mod/go.sum/go.work.sum is not tidy (CI tidiness ga
 # runs to auto-repair a Dependabot Go bump (Q111), which can't run `go work
 # vendor` itself. No-ops cleanly when nothing drifted.
 .PHONY: vendor-sync
-vendor-sync: ## Re-sync module files + vendor trees + THIRD-PARTY-NOTICES (the dependency-change / Dependabot remedy)
+vendor-sync: ## Re-sync module files + vendor trees + THIRD-PARTY-NOTICES (the vendoring half of `deps-sync`)
 	scripts/go/vendor-sync.sh
+
+# The whole dependency-change remedy, vendoring plus everything generated FROM a
+# dependency. A k8s.io/api minor bump is the case that needs all of it: the CRDs
+# embed upstream core types, so new fields and reworded descriptions land in
+# controller-gen output, flow on into the chart templates, and move the schema
+# version the API reference links against. `make vendor-sync` alone leaves all
+# three stale, which is how a Dependabot k8s bump reached CI with green
+# vendor-check and tidy-check and a red codegen-check.
+# Ordered, not a prerequisite list: each step reads the previous one's output.
+.PHONY: deps-sync
+deps-sync: ## Re-sync vendoring AND regenerate everything derived from it (the dependency-change / Dependabot remedy)
+	$(MAKE) vendor-sync
+	$(MAKE) generate
+	$(MAKE) chart-crds
+	$(MAKE) api-reference-sync
 
 ##@ Security
 
