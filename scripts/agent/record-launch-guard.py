@@ -131,8 +131,14 @@ WRAPPER_SPECS = {
 }
 
 # How deep a `bash -c` inside a `bash -c` is followed. Two is already more
-# nesting than anything in this repo writes; the bound is here so a crafted
-# string cannot spin the hook.
+# nesting than anything in this repo writes. Past the bound the hook stops
+# looking and stays silent rather than denying: it cannot tell whether a tier
+# is in there, so a deny would fire on depth alone and name no fix, which is
+# how a guard teaches override-by-reflex.
+#
+# The bound caps work, not a crash. Each level re-quotes the one inside it, so
+# the string doubles per level past about six: depth 12 is 4,206 characters and
+# Python's own recursion limit sits at a depth no command string reaches.
 MAX_NESTING = 3
 
 ASSIGNMENT = re.compile(r'^\w+=')

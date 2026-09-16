@@ -1571,6 +1571,7 @@ So put the handle on disk: launch long background work through the wrapper rathe
 **For the tiers in the slow-command registry this is enforced, not asked for** (Q739).
 [`record-launch-guard.py`](../../scripts/agent/record-launch-guard.py) is a `PreToolUse` hook that denies a backgrounded launch of anything `.claude/foreground-guard.json` registers as slow unless it goes through the wrapper, and the deny carries the wrapped command to run instead.
 It reads that registry rather than keeping a list of its own, so a tier added there is covered here too.
+It matches at command position, and peels an allowlist of wrappers first, so a tier behind `timeout`, `nice`, `stdbuf`, `xargs`, `env` or a `bash -c` body is still seen; nested shells are followed to a depth of three (`MAX_NESTING` in the hook), and past that it stops looking and says nothing, so a launch buried deeper escapes.
 Everything off the registry (`make check`, an ad-hoc `go test`) is still the prose rule above and nothing more.
 This is the half foreground-guard leaves open: that guard denies a *foreground* heavy tier and names `run_in_background: true` as the fix, then exempts the backgrounded form outright (measured 2026-09-16 against foreground-guard 0.7.0 by driving its hook), so the launch that needs the handle is the one it passes silently.
 
