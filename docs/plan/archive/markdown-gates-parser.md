@@ -124,9 +124,12 @@ Each keeps its `scripts/` entry point, per [`scripts/README.md`](../../../script
 
 ### Out of scope, deliberately
 
-`git-merge-status.sh` (retired with the table, Q889) and [`merge-keyed-records.awk`](../../../scripts/lib/merge-keyed-records.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../../scripts/docs/git-merge-plan-index.sh) sibling.
+`git-merge-status.sh` (retired with the table, Q889), the shared set-semantics merge and the [`git-merge-plan-index.sh`](../../../scripts/docs/git-merge-plan-index.sh) sibling stay as they are.
 A merge driver must reconstruct the file **line for line**, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.
+
+**Read since as a ruling against Go, which it is not.** The argument above rules out goldmark; Go over `bufio` reconstructs a file line for line exactly as `awk` does.
+[merge-drivers-go.md](../merge-drivers-go.md) moved all four drivers to [`devtools/git`](../../../devtools/git) on that reading, and the shared merge is [`devtools/git/keyedrecords`](../../../devtools/git/keyedrecords).
 
 Also out: `check-codegen-drift.sh`, the `chart-*-check.sh` family, `validate-egress-ip.sh`, `dogfood/setup.sh`, and the `e2e/` scripts.
 They are long, but they orchestrate external CLIs (`kubectl`, `helm`, `docker`, `controller-gen`).

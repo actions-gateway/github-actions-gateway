@@ -316,7 +316,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-vendored-skills-test \
                  docs/doc-blocks-test \
                  dogfood/e2e-mirror-hits-test dogfood/e2e-mirror-clients-test \
-                 lib/registry-mirror-test lib/merge-keyed-records-test \
+                 lib/registry-mirror-test \
                  lib/common-test \
                  manifest/check-registry-mirror-wiring-test \
                  manifest/check-registry-mirror-catalog-deny-test \

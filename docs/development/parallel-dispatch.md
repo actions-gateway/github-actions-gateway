@@ -448,7 +448,7 @@ The local probe now runs first and the paginated timeline read stays behind the 
 
 ### Driver-owned does not mean auto-resolving
 
-**It means resolved *by key*.** A keyed merge still conflicts when both sides change the same key, and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) refuses rather than guessing in three enumerated cases: changed differently on both sides, deleted on one side and changed on the other, and the same new ID added on both sides with different text.
+**It means resolved *by key*.** A keyed merge still conflicts when both sides change the same key, and [`devtools/git/keyedrecords`](../../devtools/git/keyedrecords) refuses rather than guessing in three enumerated cases: changed differently on both sides, deleted on one side and changed on the other, and the same new ID added on both sides with different text.
 It leaves ordinary conflict markers by design, because a wrongly resolved row loses backlog state while a marker costs a minute.
 Measured 2026-08-12: two PRs edited the same two rows of the `scripts/README.md` registry, and the script-index driver refused the file while the backlog driver resolved `docs/STATUS.md` alongside it, in the same rebase.
 So "the conflict is confined to the driver-owned files" answers who owns the resolution, not whether one is needed, and a plan resting on the rebase coming out clean has to survive the case where it does not.
