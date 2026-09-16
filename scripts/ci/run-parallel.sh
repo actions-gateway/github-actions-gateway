@@ -25,10 +25,13 @@
 # (Q819).
 #
 # RUN_PARALLEL_JOBS — how many commands may run at once. Unset or 0 starts every
-# command immediately, so a 119-suite fan-out is 119 concurrent processes by
-# construction (Q822); the Makefile exports the throttle's `jobs` as the default
-# on a GUI dev shell. A cap inherits into a nested fan-out, so `make check` at
-# N holds each level to N rather than the whole tree. Slots are handed out in
+# command immediately, so a 130-suite fan-out is 130 concurrent processes by
+# construction (Q822). The Makefile exports the throttle's `fanout-jobs` as the
+# default: physical cores minus two on a GUI dev shell, and since Q1105 four
+# times the vCPU count on CI, where the uncapped width was 32x a runner's
+# cores. The width in force is announced before the first spawn. A cap inherits
+# into a nested fan-out, so `make check` at N holds each level to N rather than
+# the whole tree. Slots are handed out in
 # argument order, and reaping is `wait -n -p` (bash 5.1+, the floor
 # check-tools.sh declares), because the parent has to learn which child freed a
 # slot, and a per-pid wait in spawn order cannot.
@@ -57,6 +60,15 @@ jobs="${RUN_PARALLEL_JOBS:-0}"
 if [[ ! "$jobs" =~ ^[0-9]+$ ]]; then
     printf '%s: RUN_PARALLEL_JOBS must be a non-negative integer, got %q\n' "${0##*/}" "$jobs" >&2
     exit 1
+fi
+
+# Announced before the first spawn rather than in the summary: a run its job
+# timeout cancels mid-fan-out never reaches the summary, and the width it ran at
+# is the first thing anyone reading that cancelled log needs (Q1105).
+if (( jobs > 0 )); then
+    printf '[run-parallel] %d command(s), at most %d at once\n' "$#" "$jobs"
+else
+    printf '[run-parallel] %d command(s), unbounded\n' "$#"
 fi
 
 pids=()

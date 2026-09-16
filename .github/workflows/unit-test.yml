@@ -565,14 +565,15 @@ jobs:
   #
   # Why 10 and not 5: ~253s of work here (16s setup + 201s + the tail), which
   # leaves a 5-minute box 16% of headroom against a suite count that grows by
-  # one per new gate — 119 at Q822, 128 today. Still a cap rather than room to
+  # one per new gate — 119 at Q822, 130 today. Still a cap rather than room to
   # grow into: it is here to kill a hang.
   #
-  # The 201s is contention, not slow tests. `run-parallel.sh` starts all 128 at
-  # once here because `local-throttle.sh jobs` prints nothing when CI is set, by
-  # design; the same suites sum to 892 suite-seconds locally under a cap of 16
-  # and 7,484 on CI. Capping the CI fan-out is the real fix and is Q1105's
-  # remaining half, keyed to Q966, which owns the number.
+  # The 201s is contention, not slow tests: the suites sum to 892 suite-seconds
+  # locally under a cap of 16 and 7,484 on CI. Nothing capped it on CI, so
+  # every suite started at once — 32x a
+  # 4-vCPU runner's cores. The Makefile now takes `fanout-jobs`, four times the vCPU count,
+  # (Q1105); `run-parallel.sh` announces the width it ran at, including on a run
+  # this timeout cancels. Q966 still owns the LOCAL number, which is unchanged.
   #
   # Same `needs`/`if` as shellcheck: both gate the scripts/ tree, and the
   # `workflows` half is there because scripts-test asserts workflow-facing

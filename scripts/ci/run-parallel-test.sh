@@ -274,6 +274,21 @@ want_peak 'unset runs commands concurrently' '>=' 2
 RUN_PARALLEL_JOBS=1 cap_run 0
 want_peak 'a cap of 1 serializes' '==' 1
 
+# The width is announced BEFORE the first spawn, so a run its job timeout
+# cancels mid-fan-out still says what it ran at (Q1105) — the summary never
+# prints in that case, and the width is the first thing the cancelled log is
+# read for. Both directions, because a capped run reporting "unbounded" and an
+# uncapped one reporting a cap are each a wrong answer to the only question
+# that log can still be asked.
+RUN_PARALLEL_JOBS=3 rp "a:true" "b:true"
+want 'a capped run announces its width' '^\[run-parallel\] 2 command\(s\), at most 3 at once$'
+want_no 'a capped run is not called unbounded' 'unbounded'
+
+rc=0
+out="$(env -u RUN_PARALLEL_JOBS "$RP" "a:true" "b:true" 2>&1)" || rc=$?
+want 'an uncapped run announces unbounded' '^\[run-parallel\] 2 command\(s\), unbounded$'
+want_no 'an uncapped run announces no cap' 'at most'
+
 # The queue keeps draining past a failure and past a kill, each keeping its own
 # classification: a cap changes when a command starts, never whether it runs or
 # how its status is read.

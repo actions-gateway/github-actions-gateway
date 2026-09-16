@@ -235,7 +235,9 @@ firstparty_nonworkspace_modules() {
 # init_throttle — populate THROTTLE_JOBS / THROTTLE_PREFIX from
 # scripts/agent/local-throttle.sh: a parallelism cap (physical cores − 2) and a
 # low-priority QoS command prefix on an interactive GUI dev shell, both empty
-# on CI/headless/SSH so heavy phases run at full speed there. See that
+# on CI/headless/SSH so heavy phases run at full speed there. `jobs` and not
+# `fanout-jobs`, deliberately: THROTTLE_JOBS reaches GOMAXPROCS and
+# `golangci-lint -j`, which must stay unset on a runner (Q1105). See that
 # script's header for the detection rules and rationale (an unthrottled run
 # can trip the macOS WindowServer watchdog and freeze the GUI).
 #

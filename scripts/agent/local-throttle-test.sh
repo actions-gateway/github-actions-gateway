@@ -98,6 +98,74 @@ expect_eq workers-override-zero 12 \
 expect_eq workers-override-junk 12 \
 	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; GAG_DISPATCH_WORKERS=lots compute_workers)"
 
+# --- compute_ci_jobs -------------------------------------------------------
+# logical_cpus is stubbed per case so the CI cap is asserted at the runner
+# widths that matter, from whatever machine runs this suite.
+
+# The widths this repo actually dispatches to: a GitHub-hosted runner and the
+# gag-ci-scaleset lane. Both must land far below the uncapped width, which is
+# one command per suite in SCRIPTS_TESTS (130 and climbing).
+expect_eq ci-jobs-4-vcpu 16 "$(logical_cpus() { printf '4'; }; compute_ci_jobs)"
+expect_eq ci-jobs-2-vcpu 8 "$(logical_cpus() { printf '2'; }; compute_ci_jobs)"
+expect_eq ci-jobs-8-vcpu 32 "$(logical_cpus() { printf '8'; }; compute_ci_jobs)"
+
+# An unreadable CPU count must leave the fan-out UNCAPPED (0), never serialize
+# it. Falling back to 1 the way physical_cores does would take a 130-suite
+# fan-out from ~200s to its full serial cost on a runner we merely failed to
+# measure — a far worse failure than the oversubscription this cap exists to
+# bound, and one nothing else here would catch.
+expect_eq ci-jobs-unreadable 0 "$(logical_cpus() { printf '0'; }; compute_ci_jobs)"
+
+# logical_cpus' OWN fallback, reached through the real function body rather than
+# a stub: an OS with neither branch leaves the count unread, and it must resolve
+# to 0. The arms above stub logical_cpus, so they assert what compute_ci_jobs
+# does with a zero and cannot see this line at all — changing it to physical_cores'
+# `n=1` left every one of them green.
+expect_eq logical-cpus-unknown-os 0 "$(os_kind() { printf 'other'; }; logical_cpus)"
+
+# The cap is sized from LOGICAL cpus, not physical: a runner is provisioned in
+# vCPUs, and on an SMT host physical_cores reports half of them. Stubbing the
+# two apart is what separates the functions — reading physical_cores here would
+# answer 8 instead of 16 and no other assertion would notice.
+# shellcheck disable=SC2329 # the physical_cores stub is never invoked, and that
+# is the assertion: shellcheck reporting it unused is the same finding this case
+# makes at runtime. If compute_ci_jobs ever reads it, this suppression goes stale
+# and the expected value below moves from 16 to 8.
+expect_eq ci-jobs-ignores-physical-cores 16 \
+	"$(logical_cpus() { printf '4'; }; physical_cores() { printf '2'; }; compute_ci_jobs)"
+
+# --- fanout-jobs vs jobs ---------------------------------------------------
+# These two agree on a dev shell and diverge on CI, and the divergence is the
+# whole point of the separate verb.
+
+# On CI only `fanout-jobs` answers. `jobs` MUST stay empty there: init_throttle
+# feeds it to GOMAXPROCS, `golangci-lint -j` and `go test -p`, so answering it
+# on CI would hand the Go toolchain 4x the runner's vCPUs in every Go job in
+# the repo — a repo-wide regression to bound a shell fan-out. Nothing else here
+# would notice, because no Go gate reads this script directly.
+expect_eq main-ci-fanout-answers 16 \
+	"$(logical_cpus() { printf '4'; }; CI=true main fanout-jobs)"
+expect_eq main-ci-jobs-stays-empty '' \
+	"$(logical_cpus() { printf '4'; }; CI=true main jobs)"
+
+# The other desktop settings stay off on CI for the same reason they always
+# have: each protects a GUI or arbitrates between sibling sessions.
+expect_eq main-ci-prefix-silent '' "$(CI=true main prefix)"
+expect_eq main-ci-slots-silent '' "$(CI=true main slots)"
+expect_eq main-ci-lockfile-silent '' "$(CI=true main lockfile)"
+
+# Off CI the two verbs agree, so a dev shell's fan-out is sized exactly as it
+# was before Q1105.
+expect_eq main-local-jobs-unchanged 6 \
+	"$(unset CI; os_kind() { printf 'darwin'; }; physical_cores() { printf '8'; }; main jobs)"
+expect_eq main-local-fanout-matches-jobs 6 \
+	"$(unset CI; os_kind() { printf 'darwin'; }; physical_cores() { printf '8'; }; main fanout-jobs)"
+
+# A headless non-CI shell caps neither: no GUI to protect and no runner to
+# bound, which is the third case the CI branch must not swallow.
+expect_eq fanout-headless-empty '' \
+	"$(unset CI; os_kind() { printf 'linux'; }; linux_has_gui() { return 1; }; compute_fanout_jobs)"
+
 # --- qos_prefix ------------------------------------------------------------
 # os_kind is stubbed per case so both platforms' prefixes are asserted wherever
 # this runs. These strings ARE the throttle: the wrong one either freezes the
