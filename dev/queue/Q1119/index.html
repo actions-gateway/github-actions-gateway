@@ -2650,10 +2650,12 @@ It is the e2e lane's only failure: <code>70 Passed | 1 Failed | 0 Pending | 7 Sk
 <p>The base is not broken: the other six <code>e2e (calico)</code> merge-group runs in the window all succeeded, <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1943">#1943</a> among them, nine minutes earlier on the commit #1877 was queued on top of.</p>
 <p>The PR's own diff cannot plausibly reach this assertion: it bumps <code>github.com/prometheus/client_model</code> 0.6.2 to 0.6.3 and the <code>google.golang.org/protobuf</code> vendor files under it.
 That is a generated metric-type schema, and the failing path is an HTTP CONNECT tunnel to GitHub.
-<strong>Not yet settled by measurement</strong> — no rerun has been taken, so "unrelated" remains a reading of the diff rather than a demonstration.</p>
+<strong>Settled by rerun 2026-09-16 23:03Z.</strong> The same test on the same PR passed in the merge group after the branch was replayed onto current <code>main</code>, with no change to the assertion or to the code under it, and #1877 merged.
+A test that fails once and passes on rerun with no code change is a flake by the repo's own definition, so the 502 was environmental and the bump was never implicated.</p>
 <h2 id="why-it-is-worth-a-row-rather-than-a-rerun">Why it is worth a row rather than a rerun<a class="headerlink" href="#why-it-is-worth-a-row-rather-than-a-rerun" title="Permanent link">&para;</a></h2>
 <p>A merge-group-only test that fails on external network reachability spends a full queue cycle per occurrence and evicts a PR whose own gates were all green, and <code>[real-github-egress]</code> says the dependency is real GitHub rather than the fake.
-Settle the cause first (rerun the lane on the same head; if it passes, the 502 is environmental), then decide whether the assertion needs a retry budget, a clearer failure that distinguishes proxy-side from upstream-side 502, or demotion out of the merge-group gate.</p>
+The cause is settled; what is left is the cost.
+One environmental 502 spends a full queue cycle and evicts a PR whose own gates were all green, so decide between a retry budget, a clearer failure that distinguishes a proxy-side 502 from an upstream-side one, and demotion out of the merge-group gate.</p>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <p>Eight attempts already happen inside the test, so a naive retry loop is not the fix; the attempts all failed the same way within the window.
 Capture the EgressProxy's own logs in the failure output, so a future occurrence says whether the proxy refused the tunnel or the upstream did.</p>
