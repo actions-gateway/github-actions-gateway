@@ -1241,6 +1241,14 @@ They are recorded here so the next reader reaches the measurement before rebuild
   Any rule simple enough to state here flags that section, so the gate's first act would be to report correct notes as broken.
   Check counts when curating a list, which is when the list changes and when you can see what it enumerates.
 
+- **A `feat`/`fix`/`perf` subject count beside the commit count.** `v1.7.0` and `v1.8.0` opened the section with one ("68 commits, 29 of them carrying a `feat`, `fix` or `perf` subject"), and nothing a reader does with the section touches it.
+  No list beneath it holds that many items (`v1.8.0`'s folds enumerate 4, 4 and 3), and the figure that decides the version is the semver floor, which [`semver-floor.sh`](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/semver-floor.sh) reads off the released surface rather than off commit subjects.
+  The two notes did not even count the same predicate: one included `perf` and the other did not, while the four notes before them asserted nothing of the kind.
+  **Both figures were accurate when they were removed**, re-derived 2026-09-16 at 29 and 28, and neither window holds a `perf` commit, so the differing predicate changed no number.
+  They went for being unread, not for being wrong.
+  What kept them from being worth gating is the commit count's problem: the figure goes stale on every merge, including the pull request carrying its own correction, so keeping the clause would have meant deriving it at publish time for a reader who was not using it.
+  Both notes now stop at the commit count, which **is** gated; the subject count is not written any more (Q1102).
+
 - **`blob/` links.** The rule is real (link the versioned site so a reader lands on *that* release's instructions), but it has a legitimate exception, and `v1.5.0`'s single `blob/` link is it.
   Postmortems are not published to the site, so there is no versioned URL to point at and the source tree is the only target.
   A gate here needs an allowlist, and an allowlist of "documents that exist outside the site" is a second inventory to maintain for one link per release.

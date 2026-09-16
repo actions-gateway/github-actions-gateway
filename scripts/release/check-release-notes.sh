@@ -8,7 +8,7 @@
 # Scope is deliberately narrow. Most of what the runbook asks of a release note is
 # judgement — whether a caveat is a landmine, whether a claim still holds — and a
 # gate that guessed at those would fail good notes and train its reader to ignore
-# it. See release.md § Checks that stay human for the two that were measured and
+# it. See release.md § Checks that stay human for the ones that were measured and
 # rejected on exactly that ground.
 #
 # What is left is genuinely mechanical, and each rule below is a defect the
@@ -78,8 +78,15 @@ findings=0
 # skip path, and a run that checked no count at all must not read as a clean
 # one. Reported on the ok line rather than failed, because a tagless fork is a
 # legitimate tree (Q1002).
+#
+# A third bucket, because two of those are not the only ways a count goes
+# unchecked: a note can name a range and assert no figure at all, and that read
+# as a clean pass with nothing on the ok line to say so. Deleting the count from
+# a note was therefore indistinguishable from correcting it (Q1102).
 counts_checked=0
 counts_skipped=0
+counts_approx=0
+counts_unranged=0
 for note in "${notes[@]}"; do
 	name="${note#"${REPO_ROOT}"/}"
 	[[ -f "$note" ]] || {
@@ -130,9 +137,48 @@ for note in "${notes[@]}"; do
 	# filename names this one — so nothing here guesses at tag ordering. That also
 	# means a note is checked against the range it claims, not the range it should
 	# have claimed; getting the heading wrong is a different defect.
+	#
+	# A figure may be deliberately approximate — v1.3.0 opens `Over 450 commits`
+	# against a 463-commit window, where the exact number carries nothing the
+	# reader wants. That form is recognised and reported rather than checked, so
+	# the one thing left to fail on is a note that names a range and asserts no
+	# figure at all.
+	#
+	# Both figures are read from inside the section, never from the whole file.
+	# md-reflow puts every sentence at column 0, so an unscoped match lets any
+	# sentence anywhere decide the verdict: a note whose count was deleted passed
+	# as `approximate` on the strength of `Nearly 20 commits, mostly documentation,
+	# land after the freeze.` sitting further down, which is the same deletion this
+	# rule exists to fail.
 	from_tag="$(awk '/^## Everything since v/ { print $4; exit }' "$note")"
 	to_tag="$(basename "$note" .md)"
-	claimed="$(awk '/^[0-9]+ commits[,. ]/ { print $1; exit }' "$note")"
+	claimed="$(awk '
+		/^## Everything since v/ { inrange = 1; next }
+		/^## / { inrange = 0 }
+		inrange && /^[0-9]+ commits[,. ]/ { print $1; exit }
+	' "$note")"
+	approx="$(awk '
+		/^## Everything since v/ { inrange = 1; next }
+		/^## / { inrange = 0 }
+		inrange && /^(Over|About|Around|Roughly|Nearly) [0-9]+ commits[,. ]/ { print $1 " " $2; exit }
+	' "$note")"
+
+	if [[ -n "$from_tag" && -z "$claimed" && -z "$approx" ]]; then
+		printf '%s: names a range since %s and asserts no commit count\n' "$name" "$from_tag" >&2
+		printf '  the section opens with one; a deleted count reads exactly like a correct one\n' >&2
+		printf '  scripts/release/semver-floor.sh %s %s prints the figure\n' "$from_tag" "$to_tag" >&2
+		findings=$((findings + 1))
+	elif [[ -n "$from_tag" && -z "$claimed" ]]; then
+		counts_approx=$((counts_approx + 1))
+		printf '%s: commit figure is approximate by construction (%s) — reported, not checked\n' \
+			"$name" "$approx" >&2
+	elif [[ -z "$from_tag" ]]; then
+		# No range heading, so there is no range to count over. Right for a
+		# fragment passed by hand, and counted anyway: without this the buckets
+		# silently stop summing to the note count, which is the shape of hole
+		# the rules above exist to close.
+		counts_unranged=$((counts_unranged + 1))
+	fi
 
 	if [[ -n "$from_tag" && -n "$claimed" ]]; then
 		# Both tags must exist to count between them. A shallow CI checkout has
@@ -187,5 +233,5 @@ if ((findings > 0)); then
 	printf '\ncheck-release-notes: %d finding(s)\n' "$findings" >&2
 	exit 1
 fi
-printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags)\n' \
-	"${#notes[@]}" "$counts_checked" "$counts_skipped"
+printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags, %d approximate, %d with no range heading)\n' \
+	"${#notes[@]}" "$counts_checked" "$counts_skipped" "$counts_approx" "$counts_unranged"
