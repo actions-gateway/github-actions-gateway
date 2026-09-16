@@ -2719,7 +2719,7 @@ Bumping the <code>go</code> directive (e.g. for a stdlib CVE) is therefore a <st
    The pinned digest must already ship ≥ the new patch, or every image build fails with <code>go: /src/go.work requires go &gt;= X (running Y; GOTOOLCHAIN=local)</code>.
    Dependabot bumps these digests weekly (see <a href="../dependency-updates/">dependency-updates.md</a>), but a CVE-driven bump can't wait for it: resolve the current digest with <code>docker buildx imagetools inspect golang:1.NN</code> (top-level <code>Digest:</code> line) and verify the patch with <code>docker run --rm golang:1.NN@sha256:&lt;digest&gt; go version</code>.</li>
 <li><strong><code>vendor/modules.txt</code></strong> — it records the <code>go</code> directive of the workspace-replaced modules, so the bump drifts the committed vendor tree.
-   Run <code>make vendor-sync</code> and <strong>commit</strong> the result: CI's <code>vendor-check</code> diffs against git HEAD, so a dirty-but-correct working tree still fails.</li>
+   Run <code>make deps-sync</code> and <strong>commit</strong> the result: CI's <code>vendor-check</code> diffs against git HEAD, so a dirty-but-correct working tree still fails.</li>
 </ol>
 <p>A green <code>make check</code> does <strong>not</strong> cover parts 2–3 — the vendor/tidy/notices gates are CI-only (see <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>).
 Local <code>make vulncheck</code> genuinely re-verifies a stdlib fix: outside the image, <code>GOTOOLCHAIN=auto</code> fetches the newer toolchain, and govulncheck reads that version — confirm you see <code>No vulnerabilities found.</code></p>

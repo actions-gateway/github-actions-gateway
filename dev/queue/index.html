@@ -2697,6 +2697,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> the <code>scripts-test</code> job fails on a <code>gag-ci-scaleset</code> runner with any of `FAIL rule 9: an anchored last item still obliges the …</td>
 </tr>
 <tr>
+<td><a href="Q1119/">Q1119</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">E2E_V2_ProxyConnectWorks 502s the CONNECT tunnel, evicting a queued PR</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>E2E_V2_MultiGateway [It] E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy</code> (<code>[real-github-egress]</code>) …</td>
+</tr>
+<tr>
 <td><a href="Q1106/">Q1106</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned-test.sh">A test probe lands in the live workflows dir and races concurrent gates</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2799,6 +2807,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A withheld <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</td>
+</tr>
+<tr>
+<td><a href="Q1118/">Q1118</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/dependabot-rebase-stale.sh">Rescue a Dependabot PR that is behind main, not only a conflicted one</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>eligible()</code> skips any PR whose mergeable state is not <code>CONFLICTING</code>, on the reasoning its own comment states: "A branch merely behind main …</td>
 </tr>
 <tr>
 <td><a href="Q822/">Q822</a></td>

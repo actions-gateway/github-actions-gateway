@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/development/go-workspaces/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1118/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Agent reference: Go workspaces, vendoring, and worktrees - GitHub Actions Gateway</title>
+        <title>Rescue a Dependabot PR that is behind main, not only a conflicted one - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#agent-reference-go-workspaces-vendoring-and-worktrees" class="md-skip">
+        <a href="#rescue-a-dependabot-pr-that-is-behind-main-not-only-a-conflicted-one" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Agent reference: Go workspaces, vendoring, and worktrees
+              Rescue a Dependabot PR that is behind main, not only a conflicted one
             
           </span>
         </div>
@@ -2586,160 +2586,32 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#workspace-layout" class="md-nav__link">
+  <a href="#measured-2026-09-16" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workspace layout
+        Measured 2026-09-16
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Workspace layout">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#dependency-direction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dependency direction
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#why-replace-directives-are-still-present" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why replace directives are still present
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#first-party-go-tooling-stays-outside-the-workspace" class="md-nav__link">
+  <a href="#the-fix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        First-party Go tooling stays outside the workspace
+        The fix
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="First-party Go tooling stays outside the workspace">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#why-it-stays-out-of-the-workspace-and-out-of-scripts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why it stays out of the workspace, and out of scripts/
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wiring-a-new-first-party-module" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Wiring a new first-party module
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#changing-dependencies" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Changing dependencies
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Changing dependencies">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#module-file-tidiness-is-gated-in-ci" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Module-file tidiness is gated in CI
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#vendor-integrity-is-gated-in-ci" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Vendor integrity is gated in CI
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dependabot-go-bumps-are-auto-synced" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dependabot Go bumps are auto-synced
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A synced branch stops auto-rebasing, and is rebased for you
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#both-bot-pushes-leave-the-checks-withheld-pending-approval" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Both bot pushes leave the checks withheld pending approval
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#worktrees" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Worktrees
+        Notes
       
     </span>
   </a>
@@ -2766,273 +2638,34 @@
   
 
 
-<h1 id="agent-reference-go-workspaces-vendoring-and-worktrees">Agent reference: Go workspaces, vendoring, and worktrees<a class="headerlink" href="#agent-reference-go-workspaces-vendoring-and-worktrees" title="Permanent link">&para;</a></h1>
-<h2 id="workspace-layout">Workspace layout<a class="headerlink" href="#workspace-layout" title="Permanent link">&para;</a></h2>
-<p>This repo uses a <code>go.work</code> workspace with no root-level Go module.
-The workspace modules are listed below in dependency order (leaf first).
-The <strong>Internal deps</strong> column lists the other workspace modules each one imports via <code>replace</code> directives:</p>
-<table>
-<thead>
-<tr>
-<th>Directory</th>
-<th>Module path</th>
-<th>Internal deps</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>api/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/api</code></td>
-<td>—</td>
-</tr>
-<tr>
-<td><code>githubapp/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/githubapp</code></td>
-<td>—</td>
-</tr>
-<tr>
-<td><code>broker/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/broker</code></td>
-<td><code>githubapp</code></td>
-</tr>
-<tr>
-<td><code>scaleset/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/scaleset</code></td>
-<td><code>githubapp</code></td>
-</tr>
-<tr>
-<td><code>cmd/probe/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/probe</code></td>
-<td><code>broker</code>, <code>githubapp</code>, <code>scaleset</code></td>
-</tr>
-<tr>
-<td><code>cmd/agc/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/agc</code></td>
-<td><code>api</code>, <code>broker</code>, <code>githubapp</code></td>
-</tr>
-<tr>
-<td><code>cmd/gmc/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/gmc</code></td>
-<td><code>api</code>, <code>broker</code>, <code>githubapp</code>, <code>agc</code></td>
-</tr>
-<tr>
-<td><code>cmd/proxy/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/proxy</code></td>
-<td>—</td>
-</tr>
-<tr>
-<td><code>cmd/worker/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/worker</code></td>
-<td>—</td>
-</tr>
-<tr>
-<td><code>test/fakegithub/</code></td>
-<td><code>github.com/actions-gateway/github-actions-gateway/fakegithub</code></td>
-<td><code>broker</code></td>
-</tr>
-</tbody>
-</table>
-<p>The <code>api/</code> module holds the v2 (<code>actions-gateway.com</code>) <code>v2alpha1</code> API kinds shared by both controllers.
-It is a pure API leaf — only <code>k8s.io/*</code> and <code>controller-runtime</code> scheme deps, no internal deps — so both <code>agc</code> and <code>gmc</code> import it without inverting the layering.
-It exists to break a would-be module cycle: the AGC's <code>RunnerSet</code> reconciler must read the GMC-group <code>ActionsGateway</code>/<code>EgressProxy</code>, but <code>gmc</code> already imports <code>agc</code>, so the shared kinds live in this neutral module instead of either controller importing the other's API package (Q164).
-The v1 (<code>actions-gateway.github.com</code>) kinds stay in <code>cmd/agc/api/v1alpha1</code> and <code>cmd/gmc/api/v1alpha1</code>.</p>
-<h3 id="dependency-direction">Dependency direction<a class="headerlink" href="#dependency-direction" title="Permanent link">&para;</a></h3>
-<p>The internal-dep edges form a directed acyclic graph that fans out from the two shared libraries (each arrow reads "depends on"):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>probe ─┐
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>agc ───┼─► broker ─► githubapp
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>gmc ───┘
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>fakegithub ─► broker   (broker/brokerstub only — the stdlib-only shared-double core)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>gmc ─► agc
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>agc, gmc ─► api
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>scaleset ─► githubapp
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>proxy, worker   (standalone — no internal deps)
-</code></pre></div>
-<p><code>scaleset</code> (the GAG-owned runner-scale-set protocol client, Q264 Option E) is a <code>broker</code>-style leaf that depends only on <code>githubapp</code>; it has no importer yet — the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.</p>
-<p><code>githubapp</code> (GitHub App auth/JWT) and <code>broker</code> (the GitHub broker client) are the shared libraries; the <code>cmd/*</code> binaries depend <em>on</em> them, never the reverse.
-<code>api</code> (the shared v2 API kinds) is a third leaf both controllers depend on.
-The one cross-binary edge is <code>gmc → agc</code> (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the <code>api</code> leaf exists precisely so the AGC can read the GMC-group v2 kinds without an <code>agc → gmc</code> back-edge that would close a cycle.
-<strong>Keep edges pointing toward the leaves:</strong> a new import that makes <code>githubapp</code>, <code>broker</code>, or <code>api</code> depend on a <code>cmd/*</code> module, or makes <code>agc</code> depend on <code>gmc</code>, inverts the layering and should be restructured instead.
-Go's compiler rejects outright <em>cycles</em> for free; this graph captures the intended <em>direction</em> so a technically-legal-but-wrong edge is caught in review.
-<code>scripts/go/go-work-tidy.sh</code> derives this same order at runtime (via <code>go list -m all</code>) to tidy modules leaf-first.</p>
-<p>All runtime modules share a single <code>vendor/</code> at the repo root, produced by <code>go work vendor</code> and committed to git.
-Docker builds and CI rely on this — they invoke <code>go build</code> with <code>-mod=vendor</code> auto-selected (no proxy.golang.org during build).</p>
-<p><code>test/fakegithub</code> is an HTTP stub used by fake-GitHub e2e tests, listed in <code>go.work</code> so its packages are covered by <code>go work vendor</code>.
-It imports one internal package — <code>broker/brokerstub</code>, the shared session/credential mechanics every in-repo broker double now builds on (Q368) — which is deliberately standard-library-only, so the fakegithub binary links no third-party code and its distroless, Trivy-scanned image stays lean.
-Keep <code>broker/brokerstub</code> dependency-free for that reason: an import of the <code>broker</code> client (githubapp/JWT/Prometheus) would enlarge the scanned surface.</p>
-<p><code>tools/</code> has its own separate <code>vendor/</code> (<code>tools/vendor/</code>) for the kubebuilder/controller-gen toolchain.
-That's independent and managed by <code>make tools</code>.
-Do not merge it into the workspace vendor.
-It holds pinned third-party tools only — first-party Go tooling gets its own module, per <a href="#first-party-go-tooling-stays-outside-the-workspace">First-party Go tooling stays outside the workspace</a>.</p>
-<p>When you need to <em>read</em> a dependency's source, read the committed <code>vendor/</code> (or <code>tools/vendor/</code>) tree, not the module cache — <code>~/go/pkg/mod</code> sits outside the worktree (so workspace-guard prompts on it) <em>and</em> may hold a different version than the <code>-mod=vendor</code> build actually uses.</p>
-<h3 id="why-replace-directives-are-still-present">Why replace directives are still present<a class="headerlink" href="#why-replace-directives-are-still-present" title="Permanent link">&para;</a></h3>
-<p><code>broker</code>, <code>githubapp</code>, and the <code>cmd/*</code> modules depend on each other using <code>replace</code> directives in their individual <code>go.mod</code> files, even though the workspace <code>use</code> directives already provide local overrides at build time.
-This is necessary because <code>go mod tidy</code> and <code>go work sync</code> validate that required versions are resolvable; the zero pseudo-version placeholder (<code>v0.0.0-00010101000000-000000000000</code>) is only valid alongside a <code>replace</code> directive.
-Do not remove those <code>replace</code> lines — they are load-bearing for tidy.</p>
-<h2 id="first-party-go-tooling-stays-outside-the-workspace">First-party Go tooling stays outside the workspace<a class="headerlink" href="#first-party-go-tooling-stays-outside-the-workspace" title="Permanent link">&para;</a></h2>
-<p>Repo tooling written in Go — gate implementations, linters, report generators — goes in <code>devtools/</code>, a module deliberately <strong>not</strong> listed in <code>go.work</code>.</p>
-<table>
-<thead>
-<tr>
-<th>Directory</th>
-<th>Holds</th>
-<th>In <code>go.work</code>?</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>tools/</code></td>
-<td>pinned <strong>third-party</strong> build tools (<code>tools.go</code> blank imports, built by <code>make tools</code> into <code>.build/</code>)</td>
-<td>no</td>
-</tr>
-<tr>
-<td><code>devtools/</code></td>
-<td><strong>first-party</strong> Go programs backing <code>make</code> targets</td>
-<td>no</td>
-</tr>
-</tbody>
-</table>
-<p>Packages inside <code>devtools/</code> are grouped by the gate that runs them, mirroring <code>scripts/</code>: <code>devtools/ci/pathfilters/</code> is the Go half of a <code>ci/</code> gate whose entry point stays <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh"><code>scripts/ci/check-path-filters.sh</code></a>.
-That keeps "which gate runs this?" answerable from the path, which is what the CI path filters need — they are plain prefix globs.</p>
-<p>A gate needs no separate compile step in its Makefile target: <code>go build</code>/<code>go run</code> cache, so the first invocation pays the compile and later ones do not.
-Which of the two to use depends on how often the gate calls the program:</p>
-<ul>
-<li><strong>Called once</strong> — <code>go run</code> from the module directory, like <code>tools/</code>: <code>(cd devtools &amp;&amp; go run ./ci/pathfilters …)</code>.
-  Warm that costs ~42ms.</li>
-<li><strong>Called in a loop</strong> — build once into the gitignored <code>.build/</code> and exec the binary, which costs ~17ms a call against ~42ms for a <code>go run</code> that re-links every time.
-  <code>check-path-filters.sh</code> does this in <code>ensure_pathfilters</code>; it invokes the extractor dozens of times per run.</li>
-<li><strong>Its exit status is the gate's verdict</strong> — build and exec even when called once.
-  <code>go run</code> adds an <code>exit status 1</code> line of its own to stderr on top of the program's findings, and suppressing that would suppress the toolchain's compile errors with it.
-  <code>check-doc-links.sh</code> builds for this reason.
-  Put the binary beside the source it is built from, not under the tree being checked: a test suite points the gate at a throwaway repo.</li>
-</ul>
-<p>Every gate here already passes <code>-o</code> into the gitignored <code>.build/</code>.
-Building one <strong>by hand</strong> while iterating is the case that does not: <code>go build ./&lt;group&gt;/&lt;tool&gt;</code> with no <code>-o</code> drops the binary in the module directory under the package's own name, where nothing ignores it and only reading <code>git status</code> before staging catches it.
-Point <code>GOBIN</code> at the same ignored directory instead, and an ad-hoc build lands where the gates' binaries already do:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>devtools<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">GOWORK</span><span class="o">=</span>off<span class="w"> </span><span class="nv">GOBIN</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>git<span class="w"> </span>rev-parse<span class="w"> </span>--show-toplevel<span class="k">)</span><span class="s2">/.build"</span><span class="w"> </span>go<span class="w"> </span>install<span class="w"> </span>./release/semverfloor<span class="o">)</span>
-</code></pre></div>
-<p>That scales with the tree: <code>devtools/</code> holds ten <code>main</code> packages, so the alternative is ten <code>.gitignore</code> entries to keep in step with it.</p>
-<h3 id="why-it-stays-out-of-the-workspace-and-out-of-scripts">Why it stays out of the workspace, and out of <code>scripts/</code><a class="headerlink" href="#why-it-stays-out-of-the-workspace-and-out-of-scripts" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh"><code>scripts/ci/check-path-filters.sh</code></a> fails any workspace-covering filter that does not match every <code>go.work</code> module, and that set includes <code>e2e-test.yml:e2e</code> and <code>security-scan.yml:code</code>.
-A module in the workspace therefore drags every change to it through an image bake and an e2e cluster — an unbounded per-PR cost to pay for a docs linter.</p>
-<p>It cannot live under <code>scripts/</code> either.
-A Go module brings a <code>vendor/</code> tree, and vendored dependencies ship shell scripts (41 across the current <code>vendor/</code> and <code>tools/vendor/</code> — <code>zap/checklicense.sh</code>, <code>kubebuilder/test_e2e.sh</code>, and others).
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/shellcheck-scripts.sh"><code>scripts/ci/shellcheck-scripts.sh</code></a> lints <code>scripts/**/*.sh</code> recursively, so third-party shell would land in the shellcheck gate.</p>
-<h3 id="wiring-a-new-first-party-module">Wiring a new first-party module<a class="headerlink" href="#wiring-a-new-first-party-module" title="Permanent link">&para;</a></h3>
-<p>Outside <code>go.work</code> the Go gates do not see the module: <code>go-test.sh</code>, <code>go-lint.sh</code>, <code>coverage.sh</code> and <code>go-vulncheck.sh</code> all iterate <code>workspace_modules()</code> (<code>go work edit -json</code>).
-What they loop with <code>GOWORK=off</code> is <code>firstparty_nonworkspace_modules()</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>, and <strong>that needs no edit</strong> — it is <code>nonworkspace_modules()</code> (every tracked <code>go.mod</code> outside <code>go.work</code>, vendored trees excluded) minus <code>tools/</code>.
-<code>go-work-tidy.sh</code> consumes the wider <code>nonworkspace_modules()</code>, because <code>go mod tidy</code> normalises a module's files whoever wrote its imports.
-Both were hand-maintained lists until Q670/Q667, where the cost of a gate that covers a module only on remembering to widen it was measured directly: forgetting is silent, and every gate stays green.
-What still needs doing:</p>
-<ol>
-<li>Vendor it in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>scripts/go/vendor-sync.sh</code></a>, beside the existing <code>tools/</code> line: <code>(cd devtools &amp;&amp; GOWORK=off go mod vendor)</code>, and add the same tree to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>scripts/go/vendor-check.sh</code></a> so the integrity gate actually diffs it.</li>
-<li>Add <code>&lt;module&gt;/vendor/**</code> to the <code>vendor</code> path filter, so that gate re-runs when the tree changes.</li>
-<li>Classify <code>&lt;module&gt;/**</code> in a <strong>narrow</strong> CI path filter — the lint/scripts jobs, never e2e — so <code>check-path-filters.sh</code> assertion 1 passes.</li>
-<li>Add a pointer from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> so the gate map stays in one place.</li>
-</ol>
-<p><strong>It owes no <code>THIRD-PARTY-NOTICES</code> entry.</strong> That file is generated from the repo-root <code>vendor/</code> tree alone, because attribution is triggered by distributing a binary and these modules are never shipped — the same reason <code>tools/vendor/</code> is excluded.
-Adding a dependency here is therefore not a notices change.
-Scope rule and the source-tree/SBOM distinctions: <a href="../building/#what-it-covers--and-why-build-time-tooling-does-not">building.md</a>.</p>
-<p>Each gate needs its own <code>GOWORK=off</code> pass rather than a widened module list: they run a single workspace-wide invocation (<code>go test</code> over every module pattern, <code>gofmt -l</code> over every module dir), and that invocation resolves against <code>go.work</code>, which by construction does not list this module.</p>
-<p><strong><code>coverage.sh</code> is a partial exception.</strong> Its ratchet builds one profile from the workspace build list and filters it per module, so a non-workspace module carries no baseline row and no floor — widening that means merging a second profile, which has not been worth it for a module of this size.
-It does still <em>run</em> those tests, unmeasured, because <code>make check</code> calls <code>cover-check</code> in place of <code>make test</code>: without that pass the fast gate would never execute them, and they would only run under <code>make test</code>/<code>make test-race</code>.</p>
-<p><code>scripts/go/check-go-version.sh</code> needs no change: it already asserts a single <code>go</code> directive across every <code>go.mod</code>, so a new module inherits the check.</p>
-<h2 id="changing-dependencies">Changing dependencies<a class="headerlink" href="#changing-dependencies" title="Permanent link">&para;</a></h2>
-<p>When you change any module's <code>go.mod</code> (add, upgrade, or remove a dep):</p>
-<ol>
-<li>Run <code>scripts/go/go-work-tidy.sh</code> to tidy all modules in dependency order.</li>
-<li>Run <code>go work sync</code> to sync the workspace build list.</li>
-<li>Run <code>go work vendor</code> at the repo root to update the shared <code>vendor/</code>.</li>
-<li>Regenerate everything derived from a dependency: <code>make generate</code>, then <code>make chart-crds</code>, then <code>make api-reference</code>.</li>
-<li>Commit the <code>go.mod</code>, <code>go.sum</code>, <code>vendor/</code>, and regenerated files together in the same commit so they stay in sync.</li>
-</ol>
-<p><code>make deps-sync</code> runs all of the above in one shot, so you can do the whole sync with a single command and then commit the result.
-It is the same remedy the <a href="#dependabot-go-bumps-are-auto-synced">Dependabot auto-sync workflow</a> runs.
-<code>make vendor-sync</code> (→ <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>scripts/go/vendor-sync.sh</code></a>) is its vendoring half alone (steps 1–3 plus the <code>THIRD-PARTY-NOTICES</code> regen), and is what <code>vendor-check</code> and <code>tidy-check</code> name as their remedy.</p>
-<p><strong>Step 4 is not optional for a <code>k8s.io/*</code> bump.</strong> The CRDs embed upstream core types, so a Kubernetes minor bump lands new fields and reworded descriptions in controller-gen's output, which flows on into the chart CRD templates and moves the schema version <code>docs/reference/api.md</code> links against.
-Skipping it leaves <code>codegen-check</code>, <code>chart-crds-check</code>, and <code>api-reference-check</code> red on a tree whose <code>vendor-check</code> and <code>tidy-check</code> are green.</p>
-<p>If the change <strong>added, removed, or re-pointed an inter-module <code>replace</code> edge</strong> (or added/deleted a workspace module), also update the module table's <strong>Internal deps</strong> column and the <strong>Dependency direction</strong> graph in <a href="#workspace-layout">Workspace layout</a> above — those are maintained by hand and will otherwise drift.</p>
-<p>Do not run <code>go mod tidy</code> or <code>go mod vendor</code> inside an individual module — that produces state that conflicts with the workspace vendor.
-<code>scripts/go/go-work-tidy.sh</code> handles correct ordering across modules so you don't have to.</p>
-<h3 id="module-file-tidiness-is-gated-in-ci">Module-file tidiness is gated in CI<a class="headerlink" href="#module-file-tidiness-is-gated-in-ci" title="Permanent link">&para;</a></h3>
-<p><code>go mod tidy</code> is the canonical normaliser for each module's <code>go.mod</code>/<code>go.sum</code>: it adds the missing entries (including a <code>/go.mod</code> hash row for every module in the build graph) and drops the unused ones.
-If a committed <code>go.sum</code> is not in that canonical shape, step 1 above re-adds those rows and step 2 re-resolves any stale indirect <code>require</code> versions — producing a spurious diff that contributors keep reverting (Q94).
-The <code>tidy-check</code> CI job (<code>make tidy-check</code> → <code>scripts/go/go-tidy-check.sh</code>) re-runs steps 1–2 and fails on any drift in <code>go.mod</code>/<code>go.sum</code>/<code>go.work.sum</code>, so the committed module files stay tidy-canonical.
-Run <code>make tidy-check</code> locally to reproduce the gate; like <code>vendor-check</code> it can need network on a cold cache, so it is intentionally <strong>not</strong> part of the fast <code>make check</code> gate.
-The remedy for a failure is steps 1–2 + commit, never an exemption.</p>
-<p><strong>The gate's reach is step 1's module list, not its diff.</strong> It diffs <code>**/go.mod</code> across the whole repo, so <code>devtools/</code> and <code>tools/</code> were always inside the pathspec — but step 1 enumerated <code>go.work</code> alone, so nothing rewrote them and a tidy defect committed in both passed the gate clean (Q667).
-<code>go-work-tidy.sh</code> now tidies the non-workspace modules too, discovered rather than named; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-work-tidy-test.sh"><code>go-work-tidy-test.sh</code></a> asserts every tracked module gets a <code>go mod tidy</code>, so the next module is covered without widening a list.
-Reproducing this class of defect needs the injected untidiness <strong>committed</strong>: an uncommitted <code>go.mod</code> edit is itself drift the gate reports, which fails it for the wrong reason and reads as coverage.</p>
-<p><strong>Editing imports is a dependency change.</strong> Adding the first import of a module <code>go.mod</code> records as <code>// indirect</code> promotes it to a direct <code>require</code>; dropping the last import demotes or removes it.
-Either way the module files are untidy with nothing but a <code>.go</code> file in the diff, so run steps 1–2 after an import edit, not just after a version bump.
-The <code>tidy-check</code> job's path filter watches <code>**/*.go</code> for exactly this reason (Q545): before it did, PR #890 merged an untidy <code>cmd/gmc/go.mod</code> and the gate then failed on <code>main</code> — and on every branch cut from it — until #907 re-tidied six days later.</p>
-<h3 id="vendor-integrity-is-gated-in-ci">Vendor integrity is gated in CI<a class="headerlink" href="#vendor-integrity-is-gated-in-ci" title="Permanent link">&para;</a></h3>
-<p><code>go build -mod=vendor</code> checks only <code>vendor/modules.txt</code> consistency — it never verifies that the vendored <em>source</em> matches the hashes in <code>go.sum</code>, so a tampered <code>vendor/</code> (or <code>tools/vendor/</code>) edit would compile into the signed release images undetected (Q126).
-The <code>vendor-check</code> CI job (<code>make vendor-check</code> → <code>scripts/go/vendor-check.sh</code>) re-runs the vendor flow above — which re-fetches every module verified against <code>go.sum</code> — and fails on any diff against the committed trees.
-Run <code>make vendor-check</code> locally to reproduce the gate; it needs network on a cold module cache (it re-fetches from the proxy), so it is intentionally <strong>not</strong> part of the fast <code>make check</code> gate.</p>
-<p>A <strong>Dependabot</strong> <code>go.mod</code>/<code>go.sum</code> bump lands a desynced vendor tree (the bot can't run <code>go work vendor</code>), so it fails this gate by design — the fix is the follow-up vendor sync, which is now automated (see <a href="#dependabot-go-bumps-are-auto-synced">Dependabot Go bumps are auto-synced</a> below), not an exemption.</p>
-<h3 id="dependabot-go-bumps-are-auto-synced">Dependabot Go bumps are auto-synced<a class="headerlink" href="#dependabot-go-bumps-are-auto-synced" title="Permanent link">&para;</a></h3>
-<p>A Dependabot Go-module PR updates one module's <code>go.mod</code>/<code>go.sum</code> but <strong>cannot</strong> run <code>go work vendor</code>, <code>go work sync</code>, or regenerate <code>THIRD-PARTY-NOTICES</code>.
-So the shared <code>vendor/</code>, <code>tools/vendor/</code>, <code>go.work.sum</code>, and <code>THIRD-PARTY-NOTICES</code> all desync and the <code>vendor-check</code>, <code>tidy-check</code>, and <code>license-notices</code> gates fail together — historically (#198) a maintainer had to hand-craft a sync commit.</p>
-<p>The <code>dependabot-go-sync</code> workflow (<code>.github/workflows/dependabot-go-sync.yml</code>, Q111) does that for you.
-It triggers on every PR but its job runs only for a same-repo, Dependabot-authored PR whose branch is a Go-module update (<code>dependabot/go_modules/…</code> — the branch slug is <code>go_modules</code>, not the <code>gomod</code> package-ecosystem key in <code>dependabot.yml</code>).
-It runs <code>make deps-sync</code> — the one-shot remedy that performs the whole <a href="#changing-dependencies">Changing dependencies</a> flow, notices and generated output included — and pushes any resulting diff back onto the Dependabot branch as a <code>chore(deps): sync …</code> commit.
-It no-ops cleanly (no commit) when nothing drifted, so a metadata-only bump costs one fast run.</p>
-<p>Run the same remedy locally with <code>make deps-sync</code> whenever you change a dependency by hand.</p>
-<h3 id="a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you">A synced branch stops auto-rebasing, and is rebased for you<a class="headerlink" href="#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you" title="Permanent link">&para;</a></h3>
-<p>Dependabot only rebases a branch it still owns, and the <code>chore(deps): sync …</code> commit marks the branch as modified by someone else.
-From that point Dependabot leaves it alone, so a synced PR that is not merged before <code>main</code> moves under it goes <strong>permanently conflicting</strong> and never self-heals on its own.</p>
-<p>The <code>dependabot-rebase-stale</code> workflow (<code>.github/workflows/dependabot-rebase-stale.yml</code>, Q427) rescues it.
-On every <code>main</code> push, plus a daily safety net at 07:47 UTC and <code>workflow_dispatch</code>, it looks for open, same-repo, <code>CONFLICTING</code> Dependabot <code>go_modules</code> PRs whose branch tip is no longer Dependabot's, and rebases each one with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/dependabot-rebase-stale.sh"><code>scripts/ci/dependabot-rebase-stale.sh</code></a>.
-The branch-tip check matters: a branch the bot still owns rebases itself, and force-pushing over that would clobber it mid-flight.
-A run is capped at <code>MAX_PRS=3</code> PRs and names any it defers to the next run.</p>
-<p><strong>It replays, it never merges.</strong> The conflicted tree is discarded outright: the branch is reset to current <code>main</code>, every version bump the PR introduced is re-applied there with <code>go get</code>, and <code>make deps-sync</code> regenerates the vendor trees, <code>go.work.sum</code>, <code>THIRD-PARTY-NOTICES</code>, and the controller-gen output derived from them.
-Bumps are recovered by diffing the <code>require</code> directives of each <code>go.mod</code> between the merge base and the branch tip, so a <em>grouped</em> PR ("bump the go-deps group across 1 directory with 5 updates") replays every one of its modules.
-The branch name carries only the group's hash, so it cannot be parsed for this.</p>
-<p>Replaying rather than merging is what makes it safe.
-The branch's <code>go.mod</code>/<code>go.sum</code> were resolved against the older <code>main</code>, so a merge can silently <em>downgrade</em> a module <code>main</code> has since moved forward: PRs #733, #734, and #735 each conflicted only in <code>api/go.mod</code> and <code>api/go.sum</code>, yet merging any of them as-is would have reverted <code>golang.org/x/text</code> from v0.39.0 back to v0.38.0 across <code>api/</code>, <code>cmd/agc</code>, and <code>cmd/gmc</code>.
-Each bump is additionally guarded by Go's own signal: a <code>go get</code> that prints <code>downgraded</code> is rolled back and skipped, which also catches the transitive downgrades a direct version comparison would miss.
-A PR whose every bump is already on <code>main</code> is pushed nothing at all and left for a human to close.</p>
-<p>So <strong>never hand-resolve that conflict</strong>, and never reach for a merge commit.
-Merge Go bump PRs promptly; if one goes stale, the workflow rebases it.</p>
-<p><strong>Why the workflow rebases instead of commenting <code>@dependabot recreate</code>.</strong> Because it cannot.
-Dependabot accepts comment commands only from <strong>users</strong> with push access, and rejects GitHub Apps and bots outright with "Sorry, only users with push access can use that command" (<a href="https://github.com/dependabot/dependabot-core/issues/9147">dependabot/dependabot-core#9147</a>, still open).
-A comment posted by <code>github-actions[bot]</code> with the workflow's <code>GITHUB_TOKEN</code> is ignored.
-This repo deliberately stores no Personal Access Token, so the automation has to do the rebase itself.
-A maintainer typing <code>@dependabot recreate</code> by hand still works, and remains the equivalent manual remedy.</p>
-<p>Run it locally against the live repo with <code>scripts/ci/dependabot-rebase-stale.sh --list</code> (print what it would act on), <code>--dry-run</code> (rebase locally, push nothing), or <code>--bumps A/go.mod B/go.mod</code> (print the bumps it would extract from a pair of files).</p>
-<h3 id="both-bot-pushes-leave-the-checks-withheld-pending-approval">Both bot pushes leave the checks withheld pending approval<a class="headerlink" href="#both-bot-pushes-leave-the-checks-withheld-pending-approval" title="Permanent link">&para;</a></h3>
-<p>The sync commit and the rebase force-push are both pushed with the workflow's default <code>GITHUB_TOKEN</code>.
-GitHub <strong>does</strong> create the workflow runs for that push, and then holds them: every run on the new head is created with conclusion <code>action_required</code> and does not start until someone approves it.
-So an empty check list on a synced PR is a hold rather than a workflow that never fired, and it never clears on its own (Q1052, which owns the measurement and the detection gap).</p>
-<p><strong>Release them with "Approve and run"</strong> on the PR's checks tab.
-That starts the runs already sitting on the current head, in place, as attempt 2.
-It is also the path every released case in this repo has actually taken: of the ten historical cases Q1052 measured, nine have zero <code>reopened</code> timeline events and <code>run_attempt: 2</code> on the same run id.
-Closing and reopening the PR fires a fresh <code>pull_request</code> event, which queues a second full set of runs at attempt 1 rather than starting the ones already on the head.
-On <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1695">#1695</a>, the only pull request here carrying both sets on one head, that second set was not withheld: all 13 of its runs have <code>created_at</code> equal to <code>run_started_at</code>.
-So prefer "Approve and run" because it releases what is already queued instead of re-running the whole matrix, not because reopening fails.</p>
-<p><strong>The loop safety does not come from the trigger being suppressed, because it is not suppressed.</strong> Approving the withheld runs re-runs <code>dependabot-go-sync</code> against its own sync commit: its <code>if:</code> gates on the pull request's author, which is still <code>dependabot[bot]</code> after a <code>github-actions[bot]</code> force-push, so that guard does not stop the re-fire either.
-What bounds the chain is the approval gate itself, one per generation, so it cannot run away unattended.
-<code>make deps-sync</code> is idempotent, so a pass over an already-synced tree commits nothing and the chain stops there; a pass that finds fresh drift, because <code>main</code> moved under the branch, commits again and the next generation is withheld in its turn.
-Measured 2026-09-04 on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1821">#1821</a>: the approved sync run <code>33508119165</code> ran from 21:15:28Z to 21:16:23Z and pushed a second <code>chore(deps): sync workspace vendor + THIRD-PARTY-NOTICES</code> commit, <code>df7e39c</code>, authored 21:16:17Z, whose own 16 runs all read <code>action_required</code> at attempt 1.</p>
-<p>Using a stored Personal Access Token (PAT) instead of <code>GITHUB_TOKEN</code> would let the checks run without the hold, but the repo deliberately keeps no such credential, so the approval click is the accepted trade-off.
-(Fork-authored Dependabot PRs are out of scope: <code>GITHUB_TOKEN</code> can't push to a fork, and this repo's Dependabot pushes branches to the repo itself, not a fork.)</p>
-<h2 id="worktrees">Worktrees<a class="headerlink" href="#worktrees" title="Permanent link">&para;</a></h2>
-<p>Worktrees (<code>.claude/worktrees/&lt;name&gt;/</code>) each have their own <code>go.work</code> that may differ from the root one.</p>
-<p><strong>Running go commands in a worktree:</strong> <code>go test ./...</code> from the worktree root fails because <code>.</code> is not in <code>go.work</code>'s <code>use</code> block.
-Use per-module commands instead — Go finds <code>go.work</code> by walking up parent directories from <code>cmd/agc</code>, <code>cmd/probe</code>, etc. To run a single go command against a specific module from the worktree root, set <code>GOWORK</code> explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">GOWORK</span><span class="o">=</span>/path/to/worktree/go.work<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>github.com/actions-gateway/github-actions-gateway/agc/...
-</code></pre></div>
-<p><strong>No root module at the repo root.</strong> There is no <code>./go.mod</code> and no <code>use .</code> in <code>go.work</code>.
-An earlier revision had a root module (<code>github.com/actions-gateway/github-actions-gateway</code>) that had to be supplied via <code>replace</code> rather than <code>use</code> to work around a Go workspace prefix-match bug (Go resolved packages under <code>.../agc/...</code> to the root module instead of <code>cmd/agc/</code> when both appeared in <code>use</code>).
-The root module was dropped entirely in the broker/githubapp refactor (commit <code>6c23b0d</code>), eliminating the ambiguity.
-Do not add <code>use .</code> or a <code>replace github.com/actions-gateway/github-actions-gateway =&gt; ./</code> back — it would reintroduce the prefix-match problem.</p>
+<h1 id="rescue-a-dependabot-pr-that-is-behind-main-not-only-a-conflicted-one">Rescue a Dependabot PR that is behind main, not only a conflicted one<a class="headerlink" href="#rescue-a-dependabot-pr-that-is-behind-main-not-only-a-conflicted-one" title="Permanent link">&para;</a></h1>
+<p><code>eligible()</code> skips any PR whose mergeable state is not <code>CONFLICTING</code>, on the reasoning its own comment states: "A branch merely behind main is mergeable and needs no help."
+That held while every required gate read only the branch's own tree.
+It stopped holding once a required gate started reading state that moves on its own.</p>
+<h2 id="measured-2026-09-16">Measured 2026-09-16<a class="headerlink" href="#measured-2026-09-16" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/1878">#1878</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1880">#1880</a>, both based 2026-09-10 and both <code>MERGEABLE</code>, fail <code>release-pins</code> and <code>doc-links-gate</code>.
+Neither PR changes a single file under <code>docs/</code>, <code>README.md</code>, or <code>CONTRIBUTING.md</code> — they touch <code>THIRD-PARTY-NOTICES</code>, four <code>go.mod</code>/<code>go.sum</code> pairs, and <code>vendor/</code>.
+<code>release-pins-check</code> fails because it compares the install/upgrade pins against the newest stable tag, and v1.8.0 was tagged 2026-09-14, after the branch base; <code>main</code> is green on the same gate.</p>
+<p>So the gate's verdict is a function of wall-clock time, not of the branch.
+Nothing heals it: Dependabot disowned both branches when the <code>chore(deps): sync …</code> commit landed, and this script skips them for being mergeable.
+They sit red until a human intervenes, which is the exact failure mode Q427 created this script to end.</p>
+<h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
+<p>Add a second eligibility arm: a Dependabot <code>go_modules</code> PR whose tip is not Dependabot's, that is behind <code>origin/main</code> and whose checks are failing, is as stranded as a conflicting one.
+Prefer "behind <strong>and</strong> red" over "behind" alone, so a behind-but-green PR is still left to the merge queue rather than force-pushed for no reason.</p>
+<p>The replay path itself needs no change — it already resets to current <code>main</code> and re-applies the bumps, which is exactly what a stale base wants.
+Reuse the <code>MAX_PRS</code> cap so a day of accumulated staleness cannot fan out.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>The sibling gap in the same bot chain is the generated-output drift a k8s bump leaves behind; that one is fixed by <code>make deps-sync</code>.
+This row is only about <em>which</em> PRs the rescue considers.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
