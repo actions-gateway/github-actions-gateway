@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q966/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1116/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Is 2 heavy slots at 16 jobs on 18 cores the right point? - GitHub Actions Gateway</title>
+        <title>Three scripts-test suites fail only on the dogfood runner - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#is-2-heavy-slots-at-16-jobs-on-18-cores-the-right-point" class="md-skip">
+        <a href="#three-scripts-test-suites-fail-only-on-the-dogfood-runner" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Is 2 heavy slots at 16 jobs on 18 cores the right point?
+              Three scripts-test suites fail only on the dogfood runner
             
           </span>
         </div>
@@ -2597,16 +2597,49 @@
   
 
 
-<h1 id="is-2-heavy-slots-at-16-jobs-on-18-cores-the-right-point">Is 2 heavy slots at 16 jobs on 18 cores the right point?<a class="headerlink" href="#is-2-heavy-slots-at-16-jobs-on-18-cores-the-right-point" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-24: <code>local-throttle.sh</code> reports <code>jobs</code> = physical cores minus 2 and <code>slots</code> = 2, so two heavy phases put 32 threads on 18 cores before any sibling session exists.
-<code>serialize_heavy_build</code> records why <code>slots</code> moved from 1 to 2, and that reasoning is about queue depth rather than about what the gates then measure.</p>
-<p><code>jobs</code> is derived from <code>hw.physicalcpu</code>; <code>slots</code> is the literal <code>DEFAULT_HEAVY_BUILD_SLOTS=2</code>, returned for anything at or above <code>MIN_CORES_FOR_MULTIPLE_SLOTS=4</code>.
-So the one number bounding machine-wide concurrency scales with neither the core count nor the number of sessions: it is 2 on a four-core laptop and 2 here.
-The script says so itself at <code>scripts/agent/local-throttle.sh:80</code>, "Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three".
-Measured 2026-08-24 during a 12-session batch, which this repo's own dispatch playbook recommends: 97.43 / 149.30 / 118.63 on 18 cores, against the ~1.8x the defaults make the designed floor.</p>
-<p>What makes it worth re-deciding is that the gates' own budgets are wall clock, so they absorb the oversubscription directly rather than merely running slower: <a href="../../development/testing/#the-coverage-budget-is-wall-clock-so-it-measures-scheduling"><code>api/apinames</code> spent 37.983s on 0.645s of work</a> under it.
-<a href="../Q823/">Q823</a> bought headroom by raising one budget; this asks whether the machine should be handing out 1.8x in the first place.</p>
-<p>Needs the maintainer: it changes every gate run for every session on the box, and the trade is queue depth against measurement fidelity.</p>
+<h1 id="three-scripts-test-suites-fail-only-on-the-dogfood-runner">Three scripts-test suites fail only on the dogfood runner<a class="headerlink" href="#three-scripts-test-suites-fail-only-on-the-dogfood-runner" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> the <code>scripts-test</code> job fails on a <code>gag-ci-scaleset</code> runner with any of <code>FAIL rule 9: an anchored last item still obliges the flip (rc=0 want=1)</code>, <code>FAIL a target that does not render is caught: want rc 1, got 0</code>, or <code>FAIL the recorded stop takes the run AND its children: want 'yes', got 'no'</code>.</p>
+<p><strong>Measured 2026-09-16</strong> from the only two <code>unit-test.yml</code> runs that have put this job on the lane, both <code>workflow_dispatch</code> on <code>main</code> with <code>target_gag=true</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>When</th>
+<th>Commit</th>
+<th>Job</th>
+<th>Suites failing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34802508013">34802508013</a></td>
+<td>2026-09-14 03:24Z</td>
+<td>f771594d11</td>
+<td>364s</td>
+<td><code>check-registry-mirror-render-test</code>, <code>check-queue-rules-test</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34827435782">34827435782</a></td>
+<td>2026-09-14 09:20Z</td>
+<td>86fbb6061a</td>
+<td>314s</td>
+<td>those two, plus <code>record-launch-test</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both concluded <code>failure</code> rather than a timeout <code>cancelled</code>, and every other step in each job succeeded.</p>
+<p><strong>It reproduces, so it is not a flake, and the label drops accordingly.</strong> Two runs six hours apart on different commits produced character-identical assertion text for the first two suites.
+A flake passes on rerun without a code change; these did not.</p>
+<p><strong>The lane is 2 for 2 and <code>ubuntu-latest</code> is 0 for 11.</strong> Across the <code>unit-test.yml</code> runs carrying this job on 2026-09-15 and 2026-09-16, <code>scripts-test</code> was green every time on <code>ubuntu-latest</code> at 140-245s.
+No green run exists on the scaleset lane, so runner and outcome are still perfectly confounded and the association cannot yet be called causal; what the second run removes is the possibility that one reading was chance.</p>
+<p><strong>One signature spans all three suites</strong>, which is why this row is no longer about rule 9.
+Each assertion wants the active answer and gets the passive one: a checker told to exit 1 exits 0, twice, in two unrelated checkers; and a stop that must reach the run's children reports that it did not.
+That last one is the most legible, because reaching a child process is a property of the process group rather than of any assertion's logic, and a worker pod's PID namespace is exactly the kind of thing that differs from a GitHub-hosted VM.
+<strong>Unverified:</strong> no reading has been taken inside the pod, and the three are grouped on the shape of their failure rather than on a mechanism anyone has traced.</p>
+<p>For <code>check-queue-rules</code> specifically the line beside the failure reads <code>check-queue-rules: ok (1 item(s), 2 at the merge base, rules 8, 9, 11, 13 and 14)</code>, a one-item view, so the thread there is whether the fixture's second item was absent when rule 9 was evaluated, which would make the rule vacuous rather than wrong.</p>
+<p>Reaching the lane again needs a <code>workflow_dispatch</code> with <code>target_gag</code>, which is what a third reading costs.</p>
+<p>Not <a href="../Q822/">Q822</a>: that row's trigger names <code>git-merge-script-index-test</code> and <code>git-merge-plan-index-test</code> and a <code>merge-*-index: the build failed with:</code> line, and these are different suites reaching different verdicts.
+Not <a href="../Q947/">Q947</a>, which is <code>status-lint</code>'s path filter omitting a checker's wrapper rather than any checker's own behaviour.</p>
 
 
 

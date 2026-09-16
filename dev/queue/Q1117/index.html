@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q966/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1117/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Is 2 heavy slots at 16 jobs on 18 cores the right point? - GitHub Actions Gateway</title>
+        <title>One suite is the whole of the scripts-test fan-out's wall time - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#is-2-heavy-slots-at-16-jobs-on-18-cores-the-right-point" class="md-skip">
+        <a href="#one-suite-is-the-whole-of-the-scripts-test-fan-outs-wall-time" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Is 2 heavy slots at 16 jobs on 18 cores the right point?
+              One suite is the whole of the scripts-test fan-out's wall time
             
           </span>
         </div>
@@ -2597,16 +2597,19 @@
   
 
 
-<h1 id="is-2-heavy-slots-at-16-jobs-on-18-cores-the-right-point">Is 2 heavy slots at 16 jobs on 18 cores the right point?<a class="headerlink" href="#is-2-heavy-slots-at-16-jobs-on-18-cores-the-right-point" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-24: <code>local-throttle.sh</code> reports <code>jobs</code> = physical cores minus 2 and <code>slots</code> = 2, so two heavy phases put 32 threads on 18 cores before any sibling session exists.
-<code>serialize_heavy_build</code> records why <code>slots</code> moved from 1 to 2, and that reasoning is about queue depth rather than about what the gates then measure.</p>
-<p><code>jobs</code> is derived from <code>hw.physicalcpu</code>; <code>slots</code> is the literal <code>DEFAULT_HEAVY_BUILD_SLOTS=2</code>, returned for anything at or above <code>MIN_CORES_FOR_MULTIPLE_SLOTS=4</code>.
-So the one number bounding machine-wide concurrency scales with neither the core count nor the number of sessions: it is 2 on a four-core laptop and 2 here.
-The script says so itself at <code>scripts/agent/local-throttle.sh:80</code>, "Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three".
-Measured 2026-08-24 during a 12-session batch, which this repo's own dispatch playbook recommends: 97.43 / 149.30 / 118.63 on 18 cores, against the ~1.8x the defaults make the designed floor.</p>
-<p>What makes it worth re-deciding is that the gates' own budgets are wall clock, so they absorb the oversubscription directly rather than merely running slower: <a href="../../development/testing/#the-coverage-budget-is-wall-clock-so-it-measures-scheduling"><code>api/apinames</code> spent 37.983s on 0.645s of work</a> under it.
-<a href="../Q823/">Q823</a> bought headroom by raising one budget; this asks whether the machine should be handing out 1.8x in the first place.</p>
-<p>Needs the maintainer: it changes every gate run for every session on the box, and the trade is queue depth against measurement fidelity.</p>
+<h1 id="one-suite-is-the-whole-of-the-scripts-test-fan-outs-wall-time">One suite is the whole of the scripts-test fan-out's wall time<a class="headerlink" href="#one-suite-is-the-whole-of-the-scripts-test-fan-outs-wall-time" title="Permanent link">&para;</a></h1>
+<p><strong>Measured on CI 2026-09-16</strong> across both capped <code>scripts-test</code> jobs Q1105 produced: 130 suites at a cap of 16 elapsed 129s against a slowest member of 125s, then 103s against 97s.
+The floor is not most of the wall time, it is nearly all of it in both, and the other 129 suites cost 1,766 and 1,394 suite-seconds between them at a median of 4s and 3s.
+So the job cannot finish faster than <code>check-registry-mirror-render-test</code> whatever happens to the rest, and a further widening or narrowing of the cap cannot reach it (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">run-parallel.sh</a>, Q819).</p>
+<p><strong>The suite to shorten is not the one local runs predicted.</strong> On an 18-core M5 Max across four runs at caps of 130, 36, 18 and 9, <code>check-roadmap-test</code> cost 77s, 74s, 88s and 83s and was the slowest every time.
+On CI it comes second in both runs, at 103s and 84s, behind <code>check-registry-mirror-render-test</code> at 125s and 97s, with <code>gate-list-test</code> third at 101s and 78s.
+The ranking is identical across the two, so it is not one reading's noise.
+Neither moves with the width, so both are intrinsically that long rather than stretched by contention; the local ranking simply does not transfer, which is why this row now names the CI reading.</p>
+<p><strong>What makes the reading possible at all</strong> is the cap.
+Uncapped, every suite's wall time inflated toward the step's and the three slowest were only 8% of the total, so no suite was legible as a floor.
+Q1105 capped the fan-out and explicitly does not claim to cut the job's wall time; this row is why it cannot, and the two were flagged as near-duplicates for that reason.
+They stay separate: a cap bounds how many suites are in flight, and nothing about a cap reaches one suite's own duration.</p>
+<p>What these three suites spend their time on is unread, which is the next step.</p>
 
 
 

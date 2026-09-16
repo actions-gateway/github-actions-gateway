@@ -2598,7 +2598,7 @@
 
 
 <h1 id="local-throttle-silently-disables-itself-when-ci-is-set-on-a-dev-mac">local-throttle silently disables itself when CI is set on a dev Mac<a class="headerlink" href="#local-throttle-silently-disables-itself-when-ci-is-set-on-a-dev-mac" title="Permanent link">&para;</a></h1>
-<p><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>local-throttle.sh:154</code></a>).
+<p><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>local-throttle.sh:178</code></a>).
 On darwin the function would otherwise return 0 unconditionally, so on a dev Mac a set <code>CI</code> is the only thing that turns throttling off, and it turns off all of it at once: no <code>nice</code>/<code>taskpolicy</code> prefix, no physical-cores − 2 cap, and an empty jobs value, so <code>run-parallel.sh</code> starts all 119 script suites simultaneously.</p>
 <p>Measured 2026-09-07 while working Q1061.
 A session ran <code>CI=true make check</code> to mirror what CI does, on a box already carrying many concurrent agent sessions.
