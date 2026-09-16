@@ -189,6 +189,72 @@ except (ValueError, KeyError, TypeError):
 [[ "${prefixed_reason}" != *"record-launch.sh FOO=1"* ]] ||
 	fail 'the paste must not leave an assignment after the wrapper name'
 
+reason_for() {
+	drive "${REPO_ROOT}" "$(bg_payload "$1")" |
+		python3 -c 'import json,sys
+raw = sys.stdin.read()
+try:
+    print(json.loads(raw)["hookSpecificOutput"]["permissionDecisionReason"])
+except (ValueError, KeyError, TypeError):
+    print("")'
+}
+
+# A trailing `&` must not survive into the paste. record-launch.sh backgrounds
+# the run itself and propagates its exit status; echoing the `&` back
+# double-backgrounds the wrapper and discards the status the same sentence
+# promises the caller.
+amp_reason="$(reason_for 'bash scripts/dogfood/release-sentinel.sh &')"
+[[ "${amp_reason}" != *"release-sentinel.sh &"* ]] ||
+	fail 'the paste must drop a trailing &'
+
+# A redirect is not a chain. Without dropping the redirection target this reads
+# as three segments and takes the chain branch below.
+redir_reason="$(reason_for 'make test-race > tmp/race.log 2>&1')"
+[[ "${redir_reason}" == *"scripts/agent/record-launch.sh make test-race > tmp/race.log"* ]] ||
+	fail 'a redirected single command must still be pasted whole'
+
+# A chain gets an instruction, never a front-wrapped paste. Pasting the wrapper
+# onto `make check; make test-race` wraps `make check` and leaves the tier
+# running unwrapped, so a session that complied would have defeated the hook.
+chain_reason="$(reason_for 'make check; make test-race')"
+[[ "${chain_reason}" != *"record-launch.sh make check;"* ]] ||
+	fail 'the paste must not wrap the first member of a chain'
+[[ "${chain_reason}" == *"scripts/agent/record-launch.sh make test-race"* ]] ||
+	fail 'a chain deny must name the matching command'
+[[ "${chain_reason}" == *'leave the registered tier running unwrapped'* ]] ||
+	fail 'a chain deny must say why the wrapper cannot go on the front'
+
+# --- the lexer's own fallback -----------------------------------------------
+
+# An apostrophe in running text defeats POSIX lexing, and running text reaches
+# a command string constantly: a heredoc body, a commit message. These must go
+# silent rather than falling through to a whole-string match, which would make
+# the mention-matching defect reachable by ordinary English.
+assert_silent 'apostrophe in a heredoc' \
+	"$(printf 'cat > tmp/note.md <<%sEOF%s\ndon%st run make test-race here\nEOF' "'" "'" "'")"
+assert_silent 'apostrophe in a message' \
+	"git commit -m \"don't gate on make test-race\""
+assert_silent 'unbalanced double quote' \
+	'echo "make test-race'
+
+# The second lexing pass has to earn its place, and silence cannot show that:
+# the cases above go silent whether or not it runs, because a failed lex and a
+# correct read both end in no opinion. This is the case that separates them --
+# a real launch, chained ahead of a heredoc whose body holds an apostrophe. On
+# POSIX lexing alone the whole string is unreadable and the launch escapes.
+assert_denies 'launch ahead of a heredoc' \
+	"$(printf 'make test-race > tmp/r.log 2>&1; cat > tmp/note.md <<%sEOF%s\ndon%st forget\nEOF' "'" "'" "'")"
+
+# Likewise the redirect drop: it changes no verdict, only which command the
+# chain branch names. Without it the deny reports the first segment with its
+# redirection glued on, which is not a command anybody can act on.
+redir_chain_reason="$(reason_for 'make check > tmp/a.log; make test-race')"
+# shellcheck disable=SC2016  # the backticks are literal markdown in the deny
+# text, so the needle must stay unexpanded -- expanding it here would assert
+# against the output of `make check` rather than against the reason string.
+[[ "${redir_chain_reason}" == *'wrap `make check`'* ]] ||
+	fail 'a chain deny must name the first command without its redirection'
+
 # --- controls ---------------------------------------------------------------
 
 # The deny depends on the registry: empty it and the same command goes silent.

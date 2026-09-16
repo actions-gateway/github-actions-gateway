@@ -74,7 +74,18 @@ DOC = 'docs/development/testing.md#the-launch-record'
 # A token that ends one simple command and begins another. shlex returns these
 # as their own tokens only when they are unquoted, which is what keeps a
 # `git commit -m "...; make test-race"` from splitting inside its own message.
-SEPARATOR = re.compile(r'^[;&|()<>{}]+$')
+COMMAND_SEPARATOR = re.compile(r'^(?:[;&|]+|[(){}])$')
+
+# A token carrying a redirection. What follows it in the same segment is a
+# filename rather than a command, so it is dropped: without this a plain
+# `make test-race > tmp/race.log 2>&1` reads as three segments, and the paste
+# below would take it for a chain.
+REDIRECT = re.compile(r'[<>]')
+
+# A trailing `&`. record-launch.sh backgrounds the run itself and propagates
+# its exit status, so echoing one back into the paste double-backgrounds the
+# wrapper and throws away the status the reason promises the caller.
+TRAILING_BACKGROUND = re.compile(r'\s*&\s*$')
 
 # Words that take a command as their argument, so the real command word is the
 # next one. The registry's own dogfood patterns already step over the first
@@ -112,6 +123,30 @@ def slow_patterns(project_dir):
             and isinstance(ms, (int, float)) and not isinstance(ms, bool)]
 
 
+def lex(command):
+    """Tokens for `command`, or None when neither mode can read it.
+
+    POSIX mode first: it strips quotes, so a quoted argument can never look
+    like a command word. It also rejects an apostrophe in running text, and
+    `don't` reaches a command string every time somebody writes a heredoc body
+    or a commit message -- so non-POSIX mode is tried next. That keeps the
+    quote characters but still groups a quoted run into a single token, which
+    is all the anchoring below needs.
+
+    Without the second pass the fallback is reachable by ordinary English
+    rather than only by malformed input, which is how `git commit -m "don't
+    gate on make test-race"` comes back a deny.
+    """
+    for posix in (True, False):
+        lexer = shlex.shlex(command, posix=posix, punctuation_chars=True)
+        lexer.whitespace_split = True
+        try:
+            return list(lexer)
+        except ValueError:
+            continue
+    return None
+
+
 def simple_commands(command):
     """Each simple command in `command`, space-joined, from its command word on.
 
@@ -120,25 +155,32 @@ def simple_commands(command):
     arguments survive lexing as single tokens, which is what keeps a message or
     a search pattern that merely names a tier from ever landing at position 0.
 
-    Raises ValueError on input shlex cannot lex, such as an unbalanced quote.
+    None when the command cannot be lexed at all. The caller treats that as no
+    opinion, per the module's fail-open rule: a string that defeats both lexing
+    modes is not a command bash would run either, so silence here gives up no
+    real launch.
     """
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-    groups, current = [], []
-    for token in lexer:
-        if SEPARATOR.match(token):
+    tokens = lex(command)
+    if tokens is None:
+        return None
+
+    groups, current, redirected = [], [], False
+    for token in tokens:
+        if COMMAND_SEPARATOR.match(token):
             groups.append(current)
-            current = []
-        else:
+            current, redirected = [], False
+        elif REDIRECT.search(token):
+            redirected = True
+        elif not redirected:
             current.append(token)
     groups.append(current)
 
     out = []
-    for tokens in groups:
-        while tokens and (ASSIGNMENT.match(tokens[0]) or tokens[0] in WRAPPERS):
-            tokens = tokens[1:]
-        if tokens:
-            out.append(' '.join(tokens))
+    for words in groups:
+        while words and (ASSIGNMENT.match(words[0]) or words[0] in WRAPPERS):
+            words = words[1:]
+        if words:
+            out.append(' '.join(words))
     return out
 
 
@@ -151,24 +193,19 @@ def first_match(command, patterns):
     deny.
 
     An uncompilable pattern is skipped rather than fatal: a typo in the config
-    must not take the guard down with it. Input shlex cannot lex falls back to
-    the unanchored search, which leans toward denying -- a command malformed
-    enough to defeat the lexer must not become the way past this hook.
+    must not take the guard down with it. An unlexable command yields no match
+    at all, which is the module's fail-open rule rather than an exception to it.
     """
-    try:
-        candidates = simple_commands(command)
-    except ValueError:
-        candidates = None
+    candidates = simple_commands(command)
+    if candidates is None:
+        return None
 
     for pat in patterns:
         try:
             expr = re.compile(pat)
         except re.error:
             continue
-        if candidates is None:
-            if expr.search(command):
-                return pat
-        elif any(expr.match(candidate) for candidate in candidates):
+        if any(expr.match(candidate) for candidate in candidates):
             return pat
     return None
 
@@ -176,19 +213,48 @@ def first_match(command, patterns):
 def paste(command):
     """The wrapper invocation to hand back, ready to run as written.
 
-    Any leading `VAR=val` run is hoisted ahead of the wrapper. record-launch.sh
-    runs its argv directly (`"$@" &`), so an assignment left after the wrapper
-    name is executed as a program: measured 2026-09-16,
-    `record-launch.sh FOO=1 echo hello` exits 127 with `FOO=1: command not
-    found`, while `FOO=1 record-launch.sh env` exits 0 with FOO in the child's
-    environment. Both dogfood patterns match an assignment prefix explicitly,
-    so the deny fires on that shape and the paste has to survive it.
+    A trailing `&` is dropped and any leading `VAR=val` run is hoisted ahead of
+    the wrapper. record-launch.sh runs its argv directly (`"$@" &`), so an
+    assignment left after the wrapper name is executed as a program: measured
+    2026-09-16, `record-launch.sh FOO=1 echo hello` exits 127 with
+    `FOO=1: command not found`, while `FOO=1 record-launch.sh env` exits 0 with
+    FOO in the child's environment. Both dogfood patterns match an assignment
+    prefix explicitly, so the deny fires on that shape and the paste has to
+    survive it.
     """
+    command = TRAILING_BACKGROUND.sub('', command)
     hoisted = LEADING_ASSIGNMENTS.match(command)
     if hoisted:
         return '%sscripts/agent/%s %s' % (
             hoisted.group(1), WRAPPER, hoisted.group(2))
     return 'scripts/agent/%s %s' % (WRAPPER, command)
+
+
+def fix_clause(command, pattern):
+    """How to say what to do, which depends on whether a paste can be right.
+
+    Only a single simple command can be rewritten mechanically. Pasting the
+    wrapper onto the front of a chain wraps its *first* member: for
+    `make check; make test-race` that yields
+    `record-launch.sh make check; make test-race`, which wraps the wrong
+    command and leaves the registered tier running unwrapped. A session that
+    ran it would have complied with the deny and defeated the hook, so a chain
+    gets an instruction naming the segment instead of a rewrite.
+    """
+    candidates = simple_commands(command) or []
+    if len(candidates) <= 1:
+        return ('Fix: launch it through the wrapper, which writes the pid, the '
+                'worktree and a verbatim stop command to tmp/launches/: `%s`, '
+                'redirected to a log under tmp/' % paste(command))
+
+    matched = next(
+        (c for c in candidates if re.compile(pattern).match(c)), candidates[-1])
+    return ('Fix: this runs several commands, so the wrapper cannot go on the '
+            'front of it -- that would wrap `%s` and leave the registered '
+            'tier running unwrapped. Wrap the matching command where it sits, '
+            'keeping the rest of the chain around it: '
+            '`scripts/agent/%s %s`, redirected to a log under tmp/'
+            % (candidates[0], WRAPPER, matched))
 
 
 def reason(pattern, command):
@@ -201,16 +267,15 @@ def reason(pattern, command):
         '%s: this backgrounded run matches the slow-command pattern `%s`, and '
         'it carries no stop handle. A compaction drops the launching task id, '
         'leaving nothing to aim at but a kill by pattern, which reaches every '
-        "worktree's copy of the same command. Fix: launch it through the "
-        'wrapper, which writes the pid, the worktree and a verbatim stop '
-        'command to tmp/launches/: `%s`, redirected to a log '
-        'under tmp/ (the wrapper propagates the run\'s exit status, so a '
+        "worktree's copy of the same command. %s "
+        '(the wrapper propagates the run\'s exit status, so a '
         '`; rc=$?; echo "EXIT=$rc"; exit $rc` tail still reports the run). '
         'Read the records back with `scripts/agent/%s --list`. See %s. '
         'If this run genuinely must not be wrapped (the pr-sentinel watcher '
         'is the one such case, and it matches no registered pattern), re-run '
         'with a %s=<reason> prefix.'
-        % (LABEL, pattern, paste(command), WRAPPER, DOC, OVERRIDE))
+        % (LABEL, pattern, fix_clause(command, pattern), WRAPPER, DOC,
+           OVERRIDE))
 
 
 def main():
