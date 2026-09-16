@@ -2501,6 +2501,11 @@ So write the error-path fixture when the gate is written, rather than after it h
 This is distinct from timing a gate, which the fan-out already reports.
 That measures a gate doing its job slowly, where this exercises the branch it takes when the job cannot be done at all.
 
+**The suite checking a gate has a failure path of its own, and `set -o pipefail` can delete it.** Q1047's merge-driver suite reads a merged variable back through `make`, and the helper that does so pipes `make` through `tr`/`sed`/`sort`; an unparseable makefile therefore ended the script at that pipeline, before the handler that would have named the failing case and printed `make`'s own error.
+The handler was unreachable precisely when it mattered, because an unparseable makefile is the defect class it exists to report: a re-rendered gate list that lost a continuation backslash, which `make` then assigns as a fraction of itself.
+What that prints is a bare non-zero exit and no failure line, which reads as the harness breaking rather than as the gate catching something.
+Tolerate the failing read where it is captured (`|| true`) so the handler below it can run, and prove the path by feeding the suite a merge that really is broken.
+
 ### Assert the recovery property, not the mechanism believed to deliver it
 
 A test that exists to pin a safety or recovery property — "the gate cannot starve a tenant", "the queue drains eventually", "the retry budget is bounded" — should assert that property as an observable outcome.
