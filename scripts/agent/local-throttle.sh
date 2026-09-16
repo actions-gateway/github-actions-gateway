@@ -243,11 +243,13 @@ compute_jobs() {
 # CI_OVERSUBSCRIPTION, or 0 when the vCPU count cannot be read, which leaves the
 # run uncapped exactly as it was before Q1105.
 #
-# The count is what the kernel advertises, so on a self-hosted runner in a pod
-# it is the node's rather than the pod's cgroup quota — `nproc` reads
-# sched_getaffinity, not the CPU limit. That over-sizes the cap on the
-# gag-ci-scaleset lane and is still far below the uncapped width it replaces, so
-# it is left alone rather than guessed at.
+# The count is the host's, so it is right only on a lane with no cgroup CPU
+# quota. Neither lane this repo runs sets one: every job here is `ubuntu-latest`
+# unless a workflow_dispatch routes it to gag-ci-scaleset, whose RunnerTemplate
+# takes CPU requests-only with no limit on purpose, so a worker bursts to its
+# whole node. A lane whose template set `limits.cpu`, as
+# deploy/templates/kata-dind does, would need this re-derived from the quota
+# rather than from the core count.
 compute_ci_jobs() {
 	local cpus
 	cpus="$(logical_cpus)"
