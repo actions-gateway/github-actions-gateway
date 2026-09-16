@@ -27,6 +27,13 @@
 # workflow directory that resolved to no files, and a tree with no `-gate` job in
 # it at all.
 #
+# One tolerance, which is the other side of the same coin: a file that has
+# disappeared between the listing and the open is skipped rather than fatal. The
+# directory is shared and unlocked, so this gate races every writer of it (a
+# rebase, a branch switch, an editor, a test probe: Q1106), and a path that is
+# gone tells this gate nothing about any gate's `needs:`. A file that is still
+# there and still unreadable is a refusal, as before.
+#
 # Usage: check-gate-needs.sh [--dir <workflows dir>]
 set -euo pipefail
 shopt -s inherit_errexit
@@ -57,7 +64,9 @@ done
 EXEMPT=(
 )
 
-PATHFILTERS_BIN="$REPO_ROOT/.build/pathfilters"
+# Overridable so the suite can drive the read failures below without racing a
+# real writer (cf. ACTIONLINT in actionlint-workflows.sh).
+PATHFILTERS_BIN="${PATHFILTERS_BIN:-$REPO_ROOT/.build/pathfilters}"
 
 ensure_pathfilters() {
 	[[ -x "$PATHFILTERS_BIN" ]] && return 0
@@ -93,11 +102,21 @@ main() {
 		exit 2
 	fi
 
-	local errors=0 gates_seen=0 pairs=0
+	local errors=0 gates_seen=0 pairs=0 vanished=0
 	for f in "${workflows[@]}"; do
 		local base parsed
 		base="$(basename "$f")"
 		parsed="$("$PATHFILTERS_BIN" jobs "$f")" || {
+			# The directory is not locked, so the listing above and this open
+			# are two reads of a tree any other process may be writing: a file
+			# the glob returned can be gone by the time it is opened (Q1106).
+			# A path that no longer exists is skipped; every other read failure
+			# is still fatal, because an unparseable workflow must never read
+			# as one that was checked.
+			if [[ ! -e "$f" ]]; then
+				vanished=$((vanished + 1))
+				continue
+			fi
 			printf 'check-gate-needs: could not read the jobs of %s\n' "$base" >&2
 			exit 2
 		}
@@ -129,6 +148,12 @@ main() {
 		done <<<"$ids"
 	done
 
+	# Ahead of the refusals below: a run where every file vanished trips the
+	# no-gate one, and this count is what explains it.
+	if ((vanished > 0)); then
+		printf 'check-gate-needs: %d file(s) disappeared between the listing and the open and were skipped\n' \
+			"$vanished" >&2
+	fi
 	if ((gates_seen == 0)); then
 		printf 'check-gate-needs: no *-gate job found under %s, so this gate would check nothing\n' "$WF_DIR" >&2
 		exit 2

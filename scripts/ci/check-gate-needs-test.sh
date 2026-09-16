@@ -17,6 +17,14 @@
 # runs, a lone scalar `needs:` is read the same as a sequence, and a second gate
 # job is not itself required to be waited on.
 #
+# The last pair covers the vanish tolerance (Q1106) and its control. Driving it
+# with a real race would give a test that mostly passes for the wrong reason, so
+# the reader binary is stubbed instead: one stub reproduces the state a vanish
+# leaves behind (the open failed AND the path is gone), the other a plain read
+# failure with the file still present. The first must be skipped and the second
+# must still be a refusal — without the control, deleting the refusal entirely
+# would pass.
+#
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -165,6 +173,52 @@ YML
 expect "a tree with no gate job at all is a refusal" 2 "$dir"
 
 expect "a directory that does not exist is a refusal" 2 "$WORK/nope"
+
+# --- a file that vanishes between the listing and the open ------------------
+
+# stub_pathfilters BEHAVIOUR — write a stand-in for the reader binary and echo
+# its path. It answers `jobs <file>` for every workflow except vanish.yml; for
+# that one it fails the way the real binary does on an unopenable path, having
+# first deleted the file (BEHAVIOUR=vanish) or left it alone (BEHAVIOUR=keep).
+stub_pathfilters() {
+	local path="$WORK/pathfilters-$1"
+	cat >"$path" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+file="\$2"
+if [[ "\${file##*/}" == vanish.yml ]]; then
+	[[ "$1" == vanish ]] && rm -f "\$file"
+	printf 'pathfilters: open %s: no such file or directory\n' "\$file" >&2
+	exit 1
+fi
+printf 'alpha\t\nt-gate\talpha\n'
+STUB
+	chmod +x "$path"
+	printf '%s\n' "$path"
+}
+
+dir="$(write_wf vanishing <<'YML'
+name: t
+on: [pull_request]
+jobs:
+  alpha:
+    runs-on: ubuntu-latest
+    steps: [{run: 'true'}]
+  t-gate:
+    needs: [alpha]
+    runs-on: ubuntu-latest
+    steps: [{run: 'true'}]
+YML
+)"
+cp "$dir/wf.yml" "$dir/vanish.yml"
+
+PATHFILTERS_BIN="$(stub_pathfilters vanish)" \
+	expect "a workflow that vanished before the open is skipped" 0 "$dir"
+expect_out "  and the skip is reported, not silent" 'disappeared between the listing and the open'
+
+cp "$dir/wf.yml" "$dir/vanish.yml"
+PATHFILTERS_BIN="$(stub_pathfilters keep)" \
+	expect "a file still present and still unreadable is a refusal" 2 "$dir"
 
 if ((fails > 0)); then
 	printf '\n%d test(s) failed\n' "$fails" >&2
