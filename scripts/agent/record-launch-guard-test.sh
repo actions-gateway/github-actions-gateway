@@ -249,8 +249,24 @@ chain_reason="$(reason_for 'make check; make test-race')"
 	fail 'the paste must not wrap the first member of a chain'
 [[ "${chain_reason}" == *"scripts/agent/record-launch.sh make test-race"* ]] ||
 	fail 'a chain deny must name the matching command'
-[[ "${chain_reason}" == *'leave the registered tier running unwrapped'* ]] ||
+[[ "${chain_reason}" == *'not the first command here'* ]] ||
 	fail 'a chain deny must say why the wrapper cannot go on the front'
+# shellcheck disable=SC2016  # the backticks are literal markdown in the deny
+# text, so the needle must stay unexpanded.
+[[ "${chain_reason}" == *'leave `make test-race` running unwrapped'* ]] ||
+	fail 'a chain deny must name the command that would be left unwrapped'
+
+# A chain whose FIRST member is the tier still takes the paste, because the
+# shell hands the wrapper only that member: `record-launch.sh make test-race;
+# echo done` wraps correctly. Declining here withheld a runnable fix, and the
+# explanation that came instead named the wrapped command as the one left
+# unwrapped, so the two halves of one sentence contradicted each other. Every
+# other chain fixture puts the tier second, so nothing else reaches this.
+first_reason="$(reason_for 'make test-race; echo "see record-launch.sh"')"
+[[ "${first_reason}" == *'scripts/agent/record-launch.sh make test-race; echo'* ]] ||
+	fail 'a chain led by the tier must still be pasted'
+[[ "${first_reason}" != *'not the first command here'* ]] ||
+	fail 'a chain led by the tier must not claim the tier is not first'
 
 # --- the lexer's own fallback -----------------------------------------------
 

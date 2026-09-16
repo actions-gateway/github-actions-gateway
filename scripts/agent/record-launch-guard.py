@@ -257,19 +257,27 @@ def fix_clause(command, pattern):
     gets an instruction naming the segment instead of a rewrite.
     """
     candidates = simple_commands(command) or []
-    if len(candidates) <= 1:
+    matched = next(
+        (c for c in candidates if re.compile(pattern).match(c)), None)
+
+    # The front paste is right exactly when the command it would wrap is the
+    # matched one, which is true of a lone command and of a chain whose first
+    # member is the tier -- `make test-race; echo done` wraps correctly,
+    # because the shell hands the wrapper only the first member. Declining to
+    # paste there withheld a runnable fix, and the explanation that came
+    # instead contradicted itself: it named the wrapped command as the one
+    # left unwrapped.
+    if matched is None or not candidates or candidates[0] == matched:
         return ('Fix: launch it through the wrapper, which writes the pid, the '
                 'worktree and a verbatim stop command to tmp/launches/: `%s`, '
                 'redirected to a log under tmp/' % paste(command))
 
-    matched = next(
-        (c for c in candidates if re.compile(pattern).match(c)), candidates[-1])
-    return ('Fix: this runs several commands, so the wrapper cannot go on the '
-            'front of it -- that would wrap `%s` and leave the registered '
-            'tier running unwrapped. Wrap the matching command where it sits, '
+    return ('Fix: the registered tier is not the first command here, so the '
+            'wrapper cannot go on the front -- that would wrap `%s` and leave '
+            '`%s` running unwrapped. Wrap the matching command where it sits, '
             'keeping the rest of the chain around it: '
             '`scripts/agent/%s %s`, redirected to a log under tmp/'
-            % (candidates[0], WRAPPER, matched))
+            % (candidates[0], matched, WRAPPER, matched))
 
 
 def reason(pattern, command):
