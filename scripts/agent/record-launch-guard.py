@@ -87,12 +87,25 @@ REDIRECT = re.compile(r'[<>]')
 # wrapper and throws away the status the reason promises the caller.
 TRAILING_BACKGROUND = re.compile(r'\s*&\s*$')
 
+# The override, as an assignment at the head of some command rather than as a
+# mention anywhere in the string. `OVERRIDE in command` would let a real launch
+# through for quoting the variable's name in an echo, which is the same
+# mention-matching defect the anchoring above exists to fix, pointed the other
+# way: that one refuses what it should allow, this one allows what it should
+# refuse.
+OVERRIDE_PREFIX = re.compile(
+    r'(?:^|[;&|(]\s*)(?:\w+=\S+\s+)*' + re.escape(OVERRIDE) + r'=')
+
 # Words that take a command as their argument, so the real command word is the
 # next one. The registry's own dogfood patterns already step over the first
 # four; `env` and `time` are here because they run their argv directly too.
 WRAPPERS = frozenset(('bash', 'sh', 'exec', 'nohup', 'env', 'time'))
 
 ASSIGNMENT = re.compile(r'^\w+=')
+
+# Any run of whitespace, including the newline an escaped line break leaves
+# behind inside a token.
+WHITESPACE = re.compile(r'\s+')
 
 # A leading run of `VAR=val` words, hoisted ahead of the wrapper in the paste.
 LEADING_ASSIGNMENTS = re.compile(r'^((?:\w+=\S+\s+)+)(.*)$', re.S)
@@ -180,12 +193,19 @@ def simple_commands(command):
         while words and (ASSIGNMENT.match(words[0]) or words[0] in WRAPPERS):
             words = words[1:]
         if words:
-            out.append(' '.join(words))
+            # Runs of whitespace collapse to one space, which is what makes the
+            # registry's single-space patterns hold against the spellings bash
+            # treats as identical: `make  test-race`, a tab, and an escaped
+            # newline, which POSIX lexing leaves sitting inside the token after
+            # it. The registry has the same gap and cannot be fixed from here,
+            # since it is shared with foreground-guard (Q1123); this closes it
+            # on the hook's own side.
+            out.append(WHITESPACE.sub(' ', ' '.join(words)).strip())
     return out
 
 
-def first_match(command, patterns):
-    """The first registered pattern a command word matches, or None.
+def first_match(candidates, patterns):
+    """The first registered pattern one of `candidates` matches, or None.
 
     `match` against each simple command rather than `search` over the whole
     string, for the reason in the module docstring: most of the live patterns
@@ -193,13 +213,8 @@ def first_match(command, patterns):
     deny.
 
     An uncompilable pattern is skipped rather than fatal: a typo in the config
-    must not take the guard down with it. An unlexable command yields no match
-    at all, which is the module's fail-open rule rather than an exception to it.
+    must not take the guard down with it.
     """
-    candidates = simple_commands(command)
-    if candidates is None:
-        return None
-
     for pat in patterns:
         try:
             expr = re.compile(pat)
@@ -299,12 +314,23 @@ def main():
     if not isinstance(command, str) or not command.strip():
         silent()
 
-    # Already wrapped, or deliberately exempted.
-    if WRAPPER in command or OVERRIDE + '=' in command:
+    # Deliberately exempted. Anchored, so quoting the variable's name in an
+    # echo beside a real launch does not buy the launch an exemption.
+    if OVERRIDE_PREFIX.search(command):
+        silent()
+
+    candidates = simple_commands(command)
+    if candidates is None:
+        silent()
+
+    # Already wrapped. The wrapper has to be some command's own first word: a
+    # `git show` of the script, or an echo naming it, is a mention rather than
+    # a use, and treating it as one let a launch beside it through.
+    if any(c.split(' ', 1)[0].endswith(WRAPPER) for c in candidates):
         silent()
 
     project_dir = os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd()
-    pattern = first_match(command, slow_patterns(project_dir))
+    pattern = first_match(candidates, slow_patterns(project_dir))
     if pattern is None:
         silent()
 

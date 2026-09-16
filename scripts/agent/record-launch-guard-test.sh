@@ -94,6 +94,34 @@ assert_silent 'override prefix' \
 	'RECORD_LAUNCH_GUARD_OVERRIDE=measuring-the-guard make test-race'
 assert_silent 'unregistered command' 'make check > tmp/check.log 2>&1'
 
+# Both exemptions have to be uses rather than mentions, or a real launch buys
+# itself an exemption by naming one. This is the anchoring question pointed the
+# other way: the mention-only cases below are a deny that should be silence,
+# and these are a silence that should be a deny. The second is the direction
+# the hook exists to prevent, so it is asserted here rather than inferred from
+# those.
+assert_denies 'wrapper merely mentioned' \
+	'make test-race; echo "see scripts/agent/record-launch.sh"'
+assert_denies 'override merely mentioned' \
+	'make test-race; echo "RECORD_LAUNCH_GUARD_OVERRIDE=x is the escape hatch"'
+# Three spellings, because a narrowing that only looks inside quotes passes the
+# echo above and fails both of these.
+assert_denies 'wrapper in a comment' \
+	'make test-race  # unlike record-launch.sh'
+assert_denies 'wrapper in an argument' \
+	'make test-race ARGS=scripts/agent/record-launch.sh'
+
+# Whitespace bash treats as insignificant. The registry's patterns want exactly
+# one space (`make (-C [^ ]+ )?test-race\b`), and `(-C [^ ]+ )?` cannot absorb a
+# second one, so all of these run a real tier and match no pattern as written.
+# The hook collapses whitespace runs before matching, which closes the gap on
+# its own side; the registry keeps it, and that half is Q1123.
+assert_denies 'two spaces' 'make  test-race'
+assert_denies 'tab separator' "$(printf 'make\ttest-race')"
+assert_denies 'escaped newline' "$(printf 'make \\\ntest-race')"
+assert_denies 'two spaces after -C' 'make -C  cmd/agc test-integration'
+assert_denies 'two spaces in go test' 'go  test -race ./...'
+
 # The one documented exception. It is out by construction — it matches no
 # registered pattern — and this pins that, because the watcher's auto-approval
 # needs exactly three bare tokens and a deny here would strand an unattended
