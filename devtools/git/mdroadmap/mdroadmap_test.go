@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/actions-gateway/github-actions-gateway/devtools/git/keyedrecords"
 )
 
 func TestMarkerKey(t *testing.T) {
@@ -318,5 +320,46 @@ func TestDecodeLastRecordTakesAMergedTailNoSideRecorded(t *testing.T) {
 	}
 	if want := []string{b, "", ""}; !reflect.DeepEqual(got, want) {
 		t.Errorf("got %q, want %q — the surviving bullet kept its own separator instead of the list's merged tail", got, want)
+	}
+}
+
+// The seam between encode and MarkerKey, asserted rather than only described.
+//
+// encode admits a run on the annotation matching; MarkerKey additionally
+// requires every ID well formed. So a run whose bullets all carry malformed
+// bindings is encoded as a list and reaches the merge with empty keys, where it
+// is refused as unparseable — one uncertain merge taking the fallback, rather
+// than every malformed bullet colliding on a single empty key.
+//
+// Tightening encode to match MarkerKey would fold such a run into prose
+// instead, which is a different and worse outcome: git would merge those
+// bullets by line position, which is what the driver exists to avoid.
+func TestAMalformedBindingReachesTheMergeAndIsRefusedThere(t *testing.T) {
+	doc, err := Split(page(
+		"intro",
+		"- **A** <!-- q:notanid -->",
+		"",
+		"- **B** <!-- q:alsobad -->",
+		"",
+	))
+	if err != nil {
+		t.Fatalf("Split refused the run outright: %v — encode is meant to admit it", err)
+	}
+	if len(doc.Lists) != 1 {
+		t.Fatalf("got %d lists, want 1: the run is annotated, so encode admits it", len(doc.Lists))
+	}
+	for _, r := range doc.Lists[0].Records {
+		if got := MarkerKey(r); got != "" {
+			t.Errorf("MarkerKey(%q) = %q, want empty: the IDs are malformed", r, got)
+		}
+	}
+	_, err = keyedrecords.Merge(
+		doc.Lists[0].Records, doc.Lists[0].Records, doc.Lists[0].Records, MarkerKey)
+	var u *keyedrecords.Uncertain
+	if !errors.As(err, &u) {
+		t.Fatalf("Merge = %v, want an Uncertain refusal; an empty key must not resolve", err)
+	}
+	if !strings.Contains(u.Reason, "not a well-formed record") {
+		t.Errorf("reason = %q, want it to name the unparseable record", u.Reason)
 	}
 }
