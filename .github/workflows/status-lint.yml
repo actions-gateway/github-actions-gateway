@@ -30,6 +30,10 @@ on:
       - 'scripts/docs/check-queue-claims.sh'
       - 'scripts/docs/lint-queue.sh'
       - 'scripts/docs/queue.py'
+      # Rule 13 shells out: check-queue-rules.py execs find-duplicate-rows.sh
+      # for every titled row and parses its stdout, raising Unreadable if it
+      # cannot run. A backend's own subprocess is an input too (Q947).
+      - 'scripts/docs/find-duplicate-rows.sh'
       - 'docs/queue/**'
       # check-roadmap.sh sources scripts/lib/common.sh for resolve_release_tag,
       # without which rule 9 cannot say what a `new in X.Y` chip is behind, so a
@@ -79,6 +83,7 @@ jobs:
               - 'scripts/docs/check-queue-claims.sh'
               - 'scripts/docs/lint-queue.sh'
               - 'scripts/docs/queue.py'
+              - 'scripts/docs/find-duplicate-rows.sh'
               - 'docs/queue/**'
               - 'scripts/lib/**'
               - 'devtools/**'
