@@ -91,6 +91,11 @@ jobs:
               # the reference PrometheusRule and the two Grafana dashboards
               # reached operators with nothing in CI having parsed them.
               - 'deploy/monitoring/**'
+              # The Q226 Kata-on-GKE spike manifests: this gate yamllints the
+              # whole directory and kubeconforms runtimeclass.yaml and
+              # runner-pod.yaml by name, so the directory is one of its inputs
+              # and belongs on this list like its neighbours (Q1004).
+              - 'deploy/kata-ci/**'
               # The Q408 registry pull-through cache: yamllint'd and
               # kubeconform'd by this gate as hand-authored operator YAML, and
               # a security surface — its NetworkPolicies are the untrusted-PR

@@ -323,7 +323,7 @@ That closes the reachability half of [§2.3](#23-what-the-measurement-changes) i
 
 **Gated, but only as far as a linter reaches.** `deploy/registry-mirror/` joins `make manifest-validate`: yamllint over the tree, and kubeconform over the base manifests plus the overlay's PVCs, which are all native kinds.
 That is schema and syntax, and it says nothing about whether the instances serve, so it narrows what is unchecked off the cluster without closing it.
-`deploy/kata-ci/` is in the same script's `standalone_manifests` list and in no workflow path filter, so an edit to it alone runs neither check; that gap is filed as [Q1004](../queue/Q1004.md) and is not this phase's.
+`deploy/kata-ci/` is in the same script's `standalone_manifests` list and was named by no workflow path filter, so an edit to it alone ran neither check; that gap was Q1004, and `manifest-validate.yml`'s `manifests` filter now names the directory.
 
 ### 3.7 The Phase 2 validation battery
 
