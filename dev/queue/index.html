@@ -2961,14 +2961,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured: of 38 local shell-kill targets only 2 carried a worktree anchor; the rest match every session (Q690 killed the <code>make check</code> …</td>
 </tr>
 <tr>
-<td><a href="Q739/">Q739</a></td>
-<td><a href="../development/testing/#the-launch-record">Nothing makes <code>record-launch.sh</code> fire, so its handle is optional</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a …</td>
-</tr>
-<tr>
 <td><a href="Q1041/">Q1041</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">A pages deploy can succeed while the site never serves the version</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -3553,6 +3545,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the contention sweep reads <code>origin/gh-pages</code> as …</td>
 </tr>
 <tr>
+<td><a href="Q1112/">Q1112</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/settings.json">Two repo-local hooks refuse without naming themselves</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td>Neither <code>PreToolUse</code> hook this repo wires emits its own name, so a session it refuses cannot tell which of the six-odd guards spoke.</td>
+</tr>
+<tr>
+<td><a href="Q1113/">Q1113</a></td>
+<td><a href="../operations/release/">release.md detaches the gate with nohup, bypassing the launch record</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>docs/operations/release.md:394</code> detaches the release-validation gate as `nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N …</td>
+</tr>
+<tr>
 <td><a href="Q993/">Q993</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.mdreflow.yaml"><code>mdreflow</code> joins an author's sentence split, and the gate ratifies it</a></td>
 <td><code>ci</code> <code>docs</code> <code>debt</code></td>
@@ -3895,6 +3903,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>gate-lists-check</code> reconciles every managed list in <code>mk/gate-lists.mk</code> against the files on disk in both directions, which is what stops a …</td>
+</tr>
+<tr>
+<td><a href="Q1123/">Q1123</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/foreground-guard.json">The slow-command patterns match a mention, and miss a real spelling</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>slow.commands</code> holds seven patterns and only the two <code>scripts/dogfood/*.sh</code> ones carry a command anchor.</td>
 </tr>
 </tbody>
 </table>

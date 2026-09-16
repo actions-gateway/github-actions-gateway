@@ -5713,7 +5713,8 @@ Either way the rule is the same: confirm a pass by reading the output, never fro
 <p><strong>An empty result set is not a pass.</strong> The recorded status can be a clean <code>0</code> for a run that never happened — a <code>$(MAKE)</code> typo (make syntax; the shell reads it as command substitution) or any unresolvable command leaves a log holding nothing but a <code>command not found</code>, and the trailing <code>echo</code> dutifully records success.
 So verify by presence, not absence of failure: the log must contain the <code>ok &lt;package&gt;</code> line for every package the tier was supposed to cover.
 Zero <code>ok</code> lines and zero <code>FAIL</code> lines means the suite did not run.</p>
-<p>Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/<code>sleep</code>-poll forms, and its slow-command registry in <code>.claude/foreground-guard.json</code> names the tiers above (<code>make test-race</code>, <code>make test-integration</code>, the <code>e2e</code> targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.</p>
+<p>Both rules in this section are enforced mechanically by hooks: foreground-guard prompts on foreground watch/<code>sleep</code>-poll forms, and its slow-command registry in <code>.claude/foreground-guard.json</code> names the tiers above (<code>make test-race</code>, <code>make test-integration</code>, the <code>e2e</code> targets) with their minimum timeouts.
+The <a href="#the-launch-record">launch record</a> guard reads that same registry to require a stop handle once a tier is backgrounded, so keeping it in sync when a tier's runtime or target name changes now serves both.</p>
 <h3 id="stopping-a-run-name-the-target-never-the-program">Stopping a run: name the target, never the program<a class="headerlink" href="#stopping-a-run-name-the-target-never-the-program" title="Permanent link">&para;</a></h3>
 <p>Killing a run to reclaim compute is legitimate and often correct.
 The machine is shared across parallel worktree sessions, <code>make check</code> is long, and the heavy tiers (the kind e2e clusters, the dogfood validation gate) are effectively singletons that do not run concurrently on a small host.
@@ -5725,7 +5726,7 @@ Q690's load harness cleaned up with <code>pkill -f 'make scripts-test'</code>, w
 <p>In order of preference:</p>
 <ul>
 <li><strong>Stop the background task by its handle.</strong> The launching task is the only reference that cannot match somebody else's process.</li>
-<li><strong>Then the launch record</strong>, if the run was started through <a href="#the-launch-record"><code>record-launch.sh</code></a>, which holds the same handle on disk where a compaction cannot reach it.
+<li><strong>Then the launch record</strong>, which holds the same handle on disk where a compaction cannot reach it, and which is present for every registered heavy tier now that <a href="#the-launch-record"><code>record-launch.sh</code></a> is enforced there rather than remembered.
   <code>scripts/agent/record-launch.sh --list</code> prints what is running and the command that stops it.</li>
 <li><strong>If neither exists</strong>, run <code>pgrep -fl &lt;pattern&gt;</code> first, read what it <em>would</em> hit, then kill by PID.</li>
 <li><strong>If a pattern is unavoidable</strong>, anchor it to the worktree path.
@@ -5740,6 +5741,12 @@ Note that a lease directory has to be host-wide to be worth anything, which puts
 <p>The launching task id is normally a run's only handle, and a compaction drops it while the process keeps running.
 That is how a session ends up killing by pattern with nothing to aim at.
 So put the handle on disk: launch long background work through the wrapper rather than directly.</p>
+<p><strong>For the tiers in the slow-command registry this is enforced, not asked for</strong> (Q739).
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch-guard.py"><code>record-launch-guard.py</code></a> is a <code>PreToolUse</code> hook that denies a backgrounded launch of anything <code>.claude/foreground-guard.json</code> registers as slow unless it goes through the wrapper, and the deny carries the wrapped command to run instead.
+It reads that registry rather than keeping a list of its own, so a tier added there is covered here too.
+It matches at command position, and peels an allowlist of wrappers first, so a tier behind <code>timeout</code>, <code>nice</code>, <code>stdbuf</code>, <code>xargs</code>, <code>env</code> or a <code>bash -c</code> body is still seen; nested shells are followed to a depth of three (<code>MAX_NESTING</code> in the hook), and past that it stops looking and says nothing, so a launch buried deeper escapes.
+Everything off the registry (<code>make check</code>, an ad-hoc <code>go test</code>) is still the prose rule above and nothing more.
+This is the half foreground-guard leaves open: that guard denies a <em>foreground</em> heavy tier and names <code>run_in_background: true</code> as the fix, then exempts the backgrounded form outright (measured 2026-09-16 against foreground-guard 0.7.0 by driving its hook), so the launch that needs the handle is the one it passes silently.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scripts/agent/record-launch.sh<span class="w"> </span>make<span class="w"> </span>check<span class="w"> </span>&gt;<span class="w"> </span>tmp/check.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span>
 </code></pre></div>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>scripts/agent/record-launch.sh</code></a> writes one <code>key=value</code> record per run under <code>tmp/launches/</code> (pid, worktree, the command, and a <code>stop=</code> line to run verbatim) and removes it when the run ends, so what is on disk is what is live.
@@ -5771,7 +5778,8 @@ Measured 2026-08-11 against pr-sentinel 0.8.0 (<code>scripts/pr-sentinel-stop-ho
   Foregrounding does not: the guard reads the command string alone, so a foreground launch is auto-approved and still invisible to the stop hook.</li>
 </ul>
 <p>Skipping the wrapper costs nothing here.
-The launch record exists to keep a compute-heavy run killable after a compaction drops its task id, and a watcher that sleeps between polls is neither worth reclaiming nor something to kill by pattern.</p>
+The launch record exists to keep a compute-heavy run killable after a compaction drops its task id, and a watcher that sleeps between polls is neither worth reclaiming nor something to kill by pattern.
+The guard above cannot reach the watcher, since it fires only on the slow-command registry and the watcher matches nothing in it, and <code>record-launch-guard-test.sh</code> pins that: a deny here would cost the launch its three-token auto-approval and strand an unattended worker on a permission prompt with its PR unwatched.</p>
 <h3 id="ad-hoc-shell-varies-dont-rely-on-word-splitting">Ad-hoc shell varies: don't rely on word-splitting<a class="headerlink" href="#ad-hoc-shell-varies-dont-rely-on-word-splitting" title="Permanent link">&para;</a></h3>
 <p>Committed scripts under <code>scripts/</code> are <code>#!/usr/bin/env bash</code> and follow <a href="../bash-style/">bash-style.md</a>, so their behaviour is pinned by the shebang.
 <strong>Ad-hoc commands are not pinned</strong> — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images.

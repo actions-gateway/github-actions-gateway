@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q739/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1112/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing makes record-launch.sh fire, so its handle is optional - GitHub Actions Gateway</title>
+        <title>Two repo-local hooks refuse without naming themselves - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-makes-record-launchsh-fire-so-its-handle-is-optional" class="md-skip">
+        <a href="#two-repo-local-hooks-refuse-without-naming-themselves" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing makes record-launch.sh fire, so its handle is optional
+              Two repo-local hooks refuse without naming themselves
             
           </span>
         </div>
@@ -2597,9 +2597,18 @@
   
 
 
-<h1 id="nothing-makes-record-launchsh-fire-so-its-handle-is-optional">Nothing makes <code>record-launch.sh</code> fire, so its handle is optional<a class="headerlink" href="#nothing-makes-record-launchsh-fire-so-its-handle-is-optional" title="Permanent link">&para;</a></h1>
-<p>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a compaction.
-Candidate seam: foreground-guard <code>hint</code>, unverified.</p>
+<h1 id="two-repo-local-hooks-refuse-without-naming-themselves">Two repo-local hooks refuse without naming themselves<a class="headerlink" href="#two-repo-local-hooks-refuse-without-naming-themselves" title="Permanent link">&para;</a></h1>
+<p>Neither <code>PreToolUse</code> hook this repo wires emits its own name, so a session it refuses cannot tell which of the six-odd guards spoke.
+<code>claude-no-subagent-workers-hook.sh</code> asks with <code>This looks like a parallel-dispatch worker (own worktree or PR-producing prompt).</code>; <code>devtools/agent/gothrottle</code>'s three verdicts open <code>Auto-throttled</code>, <code>Blocked: this</code> and <code>Blocked: the throttle probe</code>.
+Measured 2026-09-16 by reading the emit sites.</p>
+<p>A deny leaves no decision record, because Claude Code persists a hook's stdout only for a call it goes on to run, so the reason string is the only evidence the hook ran at all.
+That makes an unprefixed refusal unattributable forever: the session cannot work out which override variable is on offer, and a friction report that recovers denials by matching an opener finds none of these.
+The installed plugin guards all do carry it (<code>foreground-guard:</code>, <code>exit-status-guard:</code>, <code>workspace-guard:</code>), which is what makes the two local ones read as somebody else's.</p>
+<p>Fix: open every <code>permissionDecisionReason</code> with the hook script's own filename stem plus a colon and one space, at position 0.
+That is the repo-local form of the rule, since neither hook is a plugin with a <code>plugin.json</code> to take a name from.
+<code>record-launch-guard.py</code> already does and asserts it, so the shape and its assertion are both in <code>scripts/agent/</code> to copy.</p>
+<p>Notes: the gothrottle strings are in <code>devtools/agent/gothrottle/decide.go</code>, so that half is a Go change with table-test churn; the sub-agent hook is one string.
+Split if the Go half grows.</p>
 
 
 
