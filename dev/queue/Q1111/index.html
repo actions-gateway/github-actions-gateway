@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1089/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1111/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>TestHandleEviction_RunNeverConcludingIsSurfaced measures the host - GitHub Actions Gateway</title>
+        <title>webhookretry's budget test measures the host, not the retry loop - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#testhandleeviction_runneverconcludingissurfaced-measures-the-host" class="md-skip">
+        <a href="#webhookretrys-budget-test-measures-the-host-not-the-retry-loop" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              TestHandleEviction_RunNeverConcludingIsSurfaced measures the host
+              webhookretry's budget test measures the host, not the retry loop
             
           </span>
         </div>
@@ -2597,28 +2597,19 @@
   
 
 
-<h1 id="testhandleeviction_runneverconcludingissurfaced-measures-the-host"><code>TestHandleEviction_RunNeverConcludingIsSurfaced</code> measures the host<a class="headerlink" href="#testhandleeviction_runneverconcludingissurfaced-measures-the-host" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>TestHandleEviction_RunNeverConcludingIsSurfaced</code> or <code>TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces</code> fails on <code>main</code>: an attempt-count mismatch, or a hang where the loop's select finds no ready case. → top of Queue, escalated.</p>
-<p>The test set <code>EvictionRerunWindow: 50ms</code> and <code>EvictionRerunRetryInterval: 5ms</code>, drove <code>handleEviction</code> against a real <code>httptest.Server</code> answering 403, and asserted <code>calls &gt; 1</code> ("the window must span several refused attempts").
-Nothing in that assertion was about the retry loop.
-It was about whether two loopback HTTP round trips plus goroutine scheduling fit inside 50ms of wall clock, which is a property of the host.</p>
-<p><strong>Observed 2026-09-09 (Q1078).</strong> A <code>make check</code> failed it with <code>"1" is not greater than "1"</code> while the box was at load average 82.64 on 18 cores and the gate fan-out took 424s.
-The same tree passed the same test twice afterwards, with no code changed between the three runs.
-CI never saw it: <code>git log -S</code> on the <code>50 * time.Millisecond</code> literal returns only #1010, which introduced it (Q503/Q510), and #1515 (Q811), neither widening it for a flake.
-CI's runners are 2-vCPU, so the margin there was not obviously better than a loaded dev Mac's.</p>
-<p><strong>The fix.</strong> Both timers the re-run loop selects on now come from nil-defaulted seams (<code>rerunWindowC</code>, <code>rerunRetryC</code>), and the test fills them: the handler closes the window on the attempt it wants to be the last, and every earlier wait fires immediately, so exactly one select case is ever ready at a pass and the assertion is an exact count the handler decided, which is the shape the neighbouring <code>TestHandleEviction_RetriesUntilTheRunConcludes</code> already had.
-Production behaviour is unchanged; with both seams nil the loop is <code>time.NewTimer</code> plus <code>time.After</code> as before.
-The second site carrying the identical 50ms window (the Q811 unreadable-conclusion test) is repaired the same way, and its <code>gets &gt; 1</code> is now an exact count too.
-Measured 2026-09-16: 200 consecutive <code>-race</code> runs green at load average 82.21, the load the original failure was taken at, and each test now takes ~0.01s instead of racing 50ms of wall clock.</p>
-<p><strong>Seaming the window bypasses the production timer, so it needs its own cover.</strong> Once both tests fill the seams, nothing exercises <code>startRerunWindow</code>'s real branch: replacing it with a channel that never fires leaves the whole provisioner package green.
-<code>TestHandleEviction_TheUnseamedWindowCloses</code> closes that, with the seams nil and a real 50ms window, asserting the <code>EvictionRerunFailures</code> counter alone and never an attempt count.
-That is not this row's defect reintroduced: it needs the window to close eventually, which 50ms of wall clock always delivers, rather than N round trips to fit inside it.
-Measured both ways: the test itself runs in 0.05-0.07s intact, and goes red at 60.05s against the broken branch, where it falls through to the detached context's API budget instead.</p>
-<p><strong>Sweep.</strong> The idiom is an assertion that a counter exceeded a number inside a real deadline the test set.
-The repo's Go tests hold 43 <code>Greater</code>/<code>GreaterOrEqual</code> assertions, of which roughly 14 to 21 take a counter as their subject depending on how the subject is matched.
-This is not a census: every one read is sound, but not all 43 were classified, and the first pass reported seven from a regex narrow enough to miss the one in the file this row edits.
-The sound ones fall into two shapes, a signal-decided count behind an <code>assert.Eventually</code> or a fake clock's <code>Advance</code> (the <code>cmd/agc/internal/listener</code> cases, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges_test.go"><code>ipranges_test.go</code></a>), and a stub-decided one where the handler chooses when to stop refusing (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset_internal_test.go"><code>eviction_scaleset_internal_test.go</code></a>, and <code>TestHandleEviction_DrainedRunStillReRuns</code> in this row's own file).
-One genuine instance turned up, in another module, and is filed as Q1111.</p>
+<h1 id="webhookretrys-budget-test-measures-the-host-not-the-retry-loop">webhookretry's budget test measures the host, not the retry loop<a class="headerlink" href="#webhookretrys-budget-test-measures-the-host-not-the-retry-loop" title="Permanent link">&para;</a></h1>
+<p><code>shrinkRetryPacing(t, 50*time.Millisecond, time.Millisecond)</code> gives the retry loop a 50ms wall-clock budget, and the test then asserts <code>calls &gt; 1</code> ("it should have retried before giving up").
+Nothing in that assertion is about the retry loop.
+<code>retryOnTransientWebhookError</code> computes <code>deadline := time.Now().Add(webhookRetryBudget)</code> and stops as soon as <code>time.Until(deadline) &lt;= 0</code>, so the assertion asks whether a second closure call plus one 1ms <code>time.After</code> fits inside 50ms of wall clock, which is a property of the host.
+A first call descheduled past 50ms, which is one scheduling quantum on a saturated box, returns after one attempt and the assertion reads <code>1 &gt; 1</code>.</p>
+<p><strong>Found by the idiom sweep that closed Q1089</strong>, which was the same shape in <code>cmd/agc</code> and did fire: red at load average 82.64 on 2026-09-09, green twice on the same tree.
+This instance has <strong>never been observed failing</strong>, so it is filed rather than bumped to the top under the flakes-first rule.
+Its margin is wider than Q1089's, since the op is an in-process closure rather than two loopback HTTP round trips plus a goroutine handoff, but the class is identical and the box runs at load 30-75 routinely.</p>
+<p><strong>The work.</strong> Make the attempt count a property the test fixes rather than one it races the host for.
+Q1089's repair is the model: the loop's two timers become nil-defaulted seams, and the stub closes the budget on the attempt it wants to be the last, so exactly one select case is ever ready and the assertion becomes an exact count.
+<code>webhookretry.go</code> reads its clock as <code>time.Now()</code> plus <code>time.After(webhookRetryGap)</code>, so both need a seam, which is why this was left out of Q1089's PR: it is a production change in a second module, and that PR was scoped to <code>cmd/agc</code>.
+Widening the budget is not a fix, only a wider race.
+The sibling case at <code>cmd/gmc/migrate/webhookretry_test.go:55</code> (<code>shrinkRetryPacing(t, 5*time.Second, time.Millisecond)</code>, asserting <code>calls == 3</code>) is already sound: the op decides when to stop refusing, and the budget only has to not expire.</p>
 
 
 

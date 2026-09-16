@@ -3756,9 +3756,17 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1089/">Q1089</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_internal_test.go"><code>TestHandleEviction_RunNeverConcludingIsSurfaced</code> measures the host</a></td>
 <td><code>tests</code> <code>flake</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>The test sets <code>EvictionRerunWindow: 50ms</code> and <code>EvictionRerunRetryInterval: 5ms</code>, drives <code>handleEviction</code> against a real <code>httptest.Server</code> …</td>
+<td><strong>Event:</strong> <code>TestHandleEviction_RunNeverConcludingIsSurfaced</code> or <code>TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces</code> fails on …</td>
+</tr>
+<tr>
+<td><a href="Q1111/">Q1111</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/migrate/webhookretry_test.go">webhookretry's budget test measures the host, not the retry loop</a></td>
+<td><code>tests</code> <code>flake</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>shrinkRetryPacing(t, 50*time.Millisecond, time.Millisecond)</code> gives the retry loop a 50ms wall-clock budget, and the test then asserts …</td>
 </tr>
 <tr>
 <td><a href="Q1103/">Q1103</a></td>
