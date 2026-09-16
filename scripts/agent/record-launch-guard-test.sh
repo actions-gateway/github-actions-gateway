@@ -151,6 +151,38 @@ assert_denies 'escaped newline' "$(printf 'make \\\ntest-race')"
 assert_denies 'two spaces after -C' 'make -C  cmd/agc test-integration'
 assert_denies 'two spaces in go test' 'go  test -race ./...'
 
+# Command-taking wrappers. Anchoring made these invisible: before it a
+# whole-string search caught them for the wrong reason, and matching at command
+# position made the wrapper the command word. Every one of these denied at the
+# first commit of this PR and went silent after the third, which is a
+# regression the anchoring introduced and this peels back. The direction is the
+# expensive one: a false deny announces itself, a missed launch does not.
+assert_denies 'bash -c' "bash -c 'make test-race'"
+assert_denies 'sh -c' 'sh -c "make test-race"'
+assert_denies 'bash -lc bundled flags' "bash -lc 'make e2e SUITE=single-node'"
+assert_denies 'bash -c holding a chain' "bash -c 'make check; make test-race'"
+assert_denies 'nice' 'nice -n 10 make test-race'
+assert_denies 'timeout' 'timeout 600 make test-race'
+assert_denies 'timeout go test' 'timeout 600 go test -race ./...'
+assert_denies 'stdbuf attached flag' 'stdbuf -oL make test-race'
+assert_denies 'xargs attached flag' 'xargs -I{} make test-race'
+assert_denies 'nested wrappers' 'nohup timeout 600 make test-race'
+assert_denies 'timeout then env' 'timeout 600 env FOO=1 make test-race'
+
+# The peel is an allowlist, so it must not make a mention reachable: a word
+# stepped over wrongly would put an ordinary argument at command position.
+assert_silent 'wrapper over a mention' 'nohup echo "make test-race"'
+assert_silent 'xargs over a mention' 'xargs -I{} echo "make test-race"'
+assert_silent 'wrapper, unregistered target' 'timeout 600 make check'
+# Three shells deep, which is the nesting bound. The bound is a cost cap, not a
+# correctness rule: past it the hook stops looking and a launch escapes, so the
+# fixture pins where the cap sits rather than asserting the cap is right.
+nested3='bash -c "bash -c \"bash -c '\''make test-race'\''\""'
+assert_denies 'three shells deep' "${nested3}"
+
+assert_silent 'shell -c already wrapped' \
+	"bash -c 'scripts/agent/record-launch.sh make test-race'"
+
 # The one documented exception. It is out by construction — it matches no
 # registered pattern — and this pins that, because the watcher's auto-approval
 # needs exactly three bare tokens and a deny here would strand an unattended
@@ -315,6 +347,12 @@ first_reason="$(reason_for 'make test-race; echo "see record-launch.sh"')"
 # exemption, the pasted string went silent for the same reason the original
 # bypass did, so one defect hid both itself and its detector. A property test
 # is only as strong as the predicate it round-trips through.
+#
+# It constrains the deny path and nothing else. A hole in the match path
+# produces no deny, so no paste, so nothing for this to check: the eight
+# wrapper forms above went silent for a whole commit while every round-trip
+# here stayed green. Read a green round-trip as "the fixes we offer are
+# fixes", never as coverage of what we fail to catch.
 roundtrip() {
 	local label="$1" command="$2" reason pasted out
 	reason="$(reason_for "${command}")"
@@ -340,6 +378,8 @@ roundtrip 'leading assignment' 'FOO=1 make test-race'
 roundtrip 'tier then echo'     'make test-race; echo done'
 roundtrip 'tier then wrapped'  'make test-race; scripts/agent/record-launch.sh true'
 roundtrip 'two tiers'          'make test-race; make e2e SUITE=single-node'
+roundtrip 'wrapped tier'       'timeout 600 make test-race'
+roundtrip 'shell -c tier'      "bash -c 'make test-race'"
 
 # --- the lexer's own fallback -----------------------------------------------
 

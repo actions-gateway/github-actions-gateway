@@ -96,10 +96,44 @@ TRAILING_BACKGROUND = re.compile(r'\s*&\s*$')
 OVERRIDE_PREFIX = re.compile(
     r'(?:^|[;&|(]\s*)(?:\w+=\S+\s+)*' + re.escape(OVERRIDE) + r'=')
 
-# Words that take a command as their argument, so the real command word is the
-# next one. The registry's own dogfood patterns already step over the first
-# four; `env` and `time` are here because they run their argv directly too.
-WRAPPERS = frozenset(('bash', 'sh', 'exec', 'nohup', 'env', 'time'))
+# Words that take a command as their argument, so the real command word is a
+# later one. An allowlist rather than a heuristic, the same rule and mostly the
+# same table as devtools/agent/gothrottle/decide.go: a name absent here stops
+# the peel, because peeling a word that is not a wrapper would let an ordinary
+# argument reach command position and be matched as a launch.
+#
+# `flags` names the options that take a separate value, so the value is stepped
+# over with them. Any other `-` word is stepped over alone, which covers the
+# attached forms (`-oL`, `-I{}`, `-lc`). `operands` is how many plain words the
+# wrapper takes before its command; `assigns` allows `VAR=val` ahead of it;
+# `shell` means the command arrives as one quoted argument rather than as the
+# remaining argv, so it is re-lexed rather than stepped over.
+#
+# gothrottle omits the throttling wrappers deliberately, because its own
+# alreadyThrottled answers those. That reason does not transfer: `nice -n 10
+# make test-race` is a real launch and this hook has to see it.
+WRAPPER_SPECS = {
+    'timeout': {'flags': ('-s', '--signal', '-k', '--kill-after'),
+                'operands': 1},
+    'env': {'flags': ('-u', '--unset'), 'assigns': True},
+    'stdbuf': {'flags': ('-i', '-o', '-e', '--input', '--output', '--error')},
+    'nice': {'flags': ('-n', '--adjustment')},
+    'xargs': {'flags': ('-I', '-i', '-n', '-P', '-d', '-E', '-s',
+                        '--replace', '--max-args', '--max-procs')},
+    'nohup': {},
+    'command': {},
+    'exec': {},
+    'time': {},
+    'bash': {'shell': True},
+    'sh': {'shell': True},
+    'zsh': {'shell': True},
+    'dash': {'shell': True},
+}
+
+# How deep a `bash -c` inside a `bash -c` is followed. Two is already more
+# nesting than anything in this repo writes; the bound is here so a crafted
+# string cannot spin the hook.
+MAX_NESTING = 3
 
 ASSIGNMENT = re.compile(r'^\w+=')
 
@@ -160,7 +194,47 @@ def lex(command):
     return None
 
 
-def simple_commands(command):
+def peel(words):
+    """Step over leading wrapper words, returning (remaining, nested scripts).
+
+    Wrappers nest (`nohup timeout 600 make test-race`), so this loops. A shell
+    wrapper ends the loop: its command is one quoted argument, handed back to
+    be re-lexed rather than stepped over, because `bash -c 'make check; make
+    test-race'` is a whole script inside a single token.
+
+    Anchoring made this necessary. Before it, a whole-string search caught
+    `timeout 600 make test-race` for the wrong reason; matching at command
+    position is right and made the wrapper invisible, which is the expensive
+    direction: the tier launches, no record is written, and nothing is said.
+    """
+    nested = []
+    while words:
+        spec = WRAPPER_SPECS.get(words[0])
+        if spec is None:
+            break
+        words = words[1:]
+
+        while words and words[0].startswith('-') and words[0] != '-':
+            if words[0] in spec.get('flags', ()) and len(words) > 1:
+                words = words[2:]
+            else:
+                words = words[1:]
+
+        if spec.get('assigns'):
+            while words and ASSIGNMENT.match(words[0]):
+                words = words[1:]
+
+        words = words[spec.get('operands', 0):]
+
+        if spec.get('shell'):
+            if words:
+                nested.append(words[0])
+            return [], nested
+
+    return words, nested
+
+
+def simple_commands(command, depth=0):
     """The simple commands in `command`, as (assignments, command) pairs.
 
     Leading `VAR=val` assignments and command-taking wrappers are stepped over,
@@ -195,10 +269,15 @@ def simple_commands(command):
     out = []
     for words in groups:
         assignments = []
-        while words and (ASSIGNMENT.match(words[0]) or words[0] in WRAPPERS):
-            if ASSIGNMENT.match(words[0]):
-                assignments.append(words[0])
+        while words and ASSIGNMENT.match(words[0]):
+            assignments.append(words[0])
             words = words[1:]
+
+        words, nested = peel(words)
+        for script in nested:
+            if depth < MAX_NESTING:
+                out.extend(simple_commands(script, depth + 1) or [])
+
         if words:
             # Runs of whitespace collapse to one space, which is what makes the
             # registry's single-space patterns hold against the spellings bash
