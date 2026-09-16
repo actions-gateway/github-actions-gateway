@@ -50,7 +50,7 @@ func (d roadmapDriver) run(in *invocation) {
 
 	var result []string
 	for i := range base.Lists {
-		prose, clean := in.mergeProse(work, i, base.Lists[i].Pre, ours.Lists[i].Pre, theirs.Lists[i].Pre)
+		prose, clean := in.mergeSegment(work, i, base.Lists[i].Pre, ours.Lists[i].Pre, theirs.Lists[i].Pre)
 		if !clean {
 			in.fallback("the prose before list %d conflicts", i+1)
 		}
@@ -67,7 +67,7 @@ func (d roadmapDriver) run(in *invocation) {
 		result = append(result, bullets...)
 	}
 
-	post, clean := in.mergeProse(work, len(base.Lists), base.Post, ours.Post, theirs.Post)
+	post, clean := in.mergeSegment(work, len(base.Lists), base.Post, ours.Post, theirs.Post)
 	if !clean {
 		in.fallback("the prose after the last list conflicts")
 	}

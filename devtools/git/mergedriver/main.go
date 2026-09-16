@@ -23,6 +23,9 @@ const usage = "usage: mergedriver <driver> %O %A %B %L %P %S %X %Y"
 var drivers = map[string]struct {
 	spec spec
 	run  func(*invocation)
+	// flags handles a driver's own non-merge invocations, ahead of git's
+	// placeholders. It reports whether it consumed the arguments.
+	flags func([]string) bool
 }{
 	"scriptindex": {
 		spec: spec{
@@ -47,6 +50,15 @@ var drivers = map[string]struct {
 			defaultPath: "docs/roadmap.md",
 		},
 		run: roadmapDriver{}.run,
+	},
+	"gatelists": {
+		spec: spec{
+			name:        "gatelists",
+			log:         "merge-gate-lists",
+			defaultPath: "mk/gate-lists.mk",
+		},
+		run:   gateListsDriver{vars: managedVars}.run,
+		flags: gateListsDriver{vars: managedVars}.flags,
 	},
 	"planindex": {
 		spec: spec{
@@ -77,6 +89,9 @@ func main() {
 	if !ok {
 		fmt.Fprintf(os.Stderr, "mergedriver: unknown driver %q\n", os.Args[1])
 		os.Exit(2)
+	}
+	if d.flags != nil && d.flags(os.Args[2:]) {
+		return
 	}
 	in, err := d.spec.parse(os.Args[2:])
 	if err != nil {

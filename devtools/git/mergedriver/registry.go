@@ -61,7 +61,7 @@ func (d registryDriver) run(in *invocation) {
 
 	var result []string
 	for i := range base.Tables {
-		prose, clean := in.mergeProse(work, i, base.Tables[i].Pre, ours.Tables[i].Pre, theirs.Tables[i].Pre)
+		prose, clean := in.mergeSegment(work, i, base.Tables[i].Pre, ours.Tables[i].Pre, theirs.Tables[i].Pre)
 		if !clean {
 			in.fallback("the prose before table %d conflicts", i+1)
 		}
@@ -74,7 +74,7 @@ func (d registryDriver) run(in *invocation) {
 		result = append(result, rows...)
 	}
 
-	post, clean := in.mergeProse(work, len(base.Tables), base.Post, ours.Post, theirs.Post)
+	post, clean := in.mergeSegment(work, len(base.Tables), base.Post, ours.Post, theirs.Post)
 	if !clean {
 		in.fallback("the prose after the last table conflicts")
 	}
@@ -115,12 +115,14 @@ func (d registryDriver) duplicates(lines []string) []string {
 	return dupes
 }
 
-// mergeProse three-way merges one prose segment with git's own merge, so the
-// text between the tables resolves exactly as it would have without a driver.
-func (in *invocation) mergeProse(work string, n int, base, ours, theirs []string) ([]string, bool) {
+// mergeSegment three-way merges one segment of the file with git's own merge,
+// so everything outside the records a driver understands — prose between the
+// tables, the Makefile around the lists — resolves exactly as it would have
+// without a driver.
+func (in *invocation) mergeSegment(work string, n int, base, ours, theirs []string) ([]string, bool) {
 	paths := make([]string, 3)
 	for i, side := range [][]string{base, ours, theirs} {
-		p := filepath.Join(work, []string{"base", "ours", "theirs"}[i]+".pre."+strconv.Itoa(n))
+		p := filepath.Join(work, []string{"base", "ours", "theirs"}[i]+".seg."+strconv.Itoa(n))
 		if err := writeLines(p, side); err != nil {
 			in.fallback("a prose segment could not be staged")
 		}

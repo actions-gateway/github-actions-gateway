@@ -72,9 +72,33 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// Merge resolves base/ours/theirs into one record block.
+// Order selects how the surviving records are laid out. Which rules survive is
+// not affected: that is one set of per-key rules either way, and it is the half
+// with the silent-state-loss failure mode.
+type Order int
+
+const (
+	// Reconstruct infers which side reordered and splices each side's additions
+	// back at the position that side put them. For a file whose record order a
+	// reader is meant to read, which is what the Markdown registries are.
+	Reconstruct Order = iota
+
+	// BaseThenAdditions keeps the surviving base records in base order, then
+	// ours-only additions in ours' order, then theirs-only in theirs'. For a
+	// set whose order carries nothing, where inferring a reorder would refuse a
+	// merge over a difference that means nothing and churn lines nobody moved.
+	BaseThenAdditions
+)
+
+// Merge resolves base/ours/theirs into one record block, with the record order
+// reconstructed. See MergeOrdered for the rules and for the other order.
+func Merge(base, ours, theirs []string, key KeyFunc) ([]string, error) {
+	return MergeOrdered(base, ours, theirs, key, Reconstruct)
+}
+
+// MergeOrdered resolves base/ours/theirs into one record block.
 //
-// The rules, per key:
+// The rules, per key, whatever the order:
 //   - deleted on either side (and unchanged on the other) -> deleted
 //   - added on either side                                -> present
 //   - changed on one side only                            -> that change
@@ -83,13 +107,16 @@ func truncate(s string, n int) string {
 //   - deleted on one side, changed on the other           -> uncertain
 //   - same new key added on both sides with different text -> uncertain
 //
-// Record order is meaningful in these files, so it is reconstructed rather than
-// assumed: the records both sides kept form a skeleton, and each side's
+// Under Reconstruct, record order is meaningful, so it is reconstructed rather
+// than assumed: the records both sides kept form a skeleton, and each side's
 // additions are spliced back in at the position that side put them. When the
 // two sides order the shared records differently, the side that still agrees
 // with the base did not reorder, so the other side's order is the intended one.
 // When both reordered, that is uncertain.
-func Merge(base, ours, theirs []string, key KeyFunc) ([]string, error) {
+//
+// Under BaseThenAdditions none of that applies: nothing is inferred from a
+// reorder and nothing is uncertain about one.
+func MergeOrdered(base, ours, theirs []string, key KeyFunc, order Order) ([]string, error) {
 	b, err := readSide("base", base, key)
 	if err != nil {
 		return nil, err
@@ -108,12 +135,50 @@ func Merge(base, ours, theirs []string, key KeyFunc) ([]string, error) {
 		return nil, err
 	}
 
+	if order == BaseThenAdditions {
+		return emitBaseThenAdditions(b, o, t, keep)
+	}
+
 	skeleton, err := orderSkeleton(b, o, t, keep)
 	if err != nil {
 		return nil, err
 	}
 
 	return emit(o, t, keep, skeleton)
+}
+
+// emitBaseThenAdditions lays the surviving base records down in base order,
+// then each side's additions in that side's own order.
+//
+// The completeness check at the end is the same one emit makes, and for the
+// same reason: losing a record is the one outcome worse than a conflict marker.
+func emitBaseThenAdditions(b, o, t *side, keep map[string]string) ([]string, error) {
+	var out []string
+	emitted := make(map[string]bool, len(keep))
+	push := func(id string) {
+		text, live := keep[id]
+		if !live || emitted[id] {
+			return
+		}
+		emitted[id] = true
+		out = append(out, text)
+	}
+
+	for _, id := range b.seq {
+		push(id)
+	}
+	for _, s := range []*side{o, t} {
+		for _, id := range s.seq {
+			if _, inBase := b.text[id]; !inBase {
+				push(id)
+			}
+		}
+	}
+
+	if len(out) != len(keep) {
+		return nil, uncertainf("internal: emitted %d of %d surviving records", len(out), len(keep))
+	}
+	return out, nil
 }
 
 // allKeys lists every key any side holds, base order first, then the keys ours

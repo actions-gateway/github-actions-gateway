@@ -59,7 +59,7 @@ contains() {
 # --- what the driver manages, and what the file assigns --------------------
 
 # The driver reports its own array rather than this suite parsing it out of the
-# source, so a reformatted MANAGED_VARS cannot make the reconciliation below
+# source, so a reformatted managed list cannot make the reconciliation below
 # read a list nobody runs on.
 mapfile -t MANAGED < <("$DRIVER" --managed-vars)
 if ((${#MANAGED[@]} == 0)); then
@@ -68,7 +68,7 @@ if ((${#MANAGED[@]} == 0)); then
 	exit 1
 fi
 
-# The same rule lift_vars opens an assignment with, so the two agree on what
+# The same rule mklists.Lift opens an assignment with, so the two agree on what
 # counts as one.
 mapfile -t ASSIGNED < <(awk '
 	/^[A-Z_]+[ \t]*[:+?]?=/ { name = $0; sub(/[ \t]*[:+?]?=.*$/, "", name); print name }
@@ -89,7 +89,7 @@ SUBJECT_VAR="${ASSIGNED[-1]}"  # carries the entries every merge assertion is ab
 # --- the driver's list against the file it merges --------------------------
 #
 # Both directions, because the two failures are different and both silent. A
-# name the driver manages that the file does not assign makes lift_vars
+# name the driver manages that the file does not assign makes mklists.Lift
 # hard-fail, so the driver refuses every merge and git leaves ordinary conflict
 # markers. A list the file assigns that the driver does not manage is merged by
 # git alone, so two PRs appending to it collide on adjacent lines — the conflict
@@ -103,7 +103,7 @@ if ((${#stale[@]} == 0)); then
 	ok "every variable the driver manages is assigned in mk/gate-lists.mk"
 else
 	bad "every variable the driver manages is assigned in mk/gate-lists.mk" \
-		"MANAGED_VARS names ${stale[*]}, which mk/gate-lists.mk does not assign; the driver refuses every merge of that file until the two agree"
+		"the driver names ${stale[*]}, which mk/gate-lists.mk does not assign; the driver refuses every merge of that file until the two agree"
 fi
 
 unmanaged=()
@@ -114,7 +114,7 @@ if ((${#unmanaged[@]} == 0)); then
 	ok "every list in mk/gate-lists.mk is one the driver manages"
 else
 	bad "every list in mk/gate-lists.mk is one the driver manages" \
-		"mk/gate-lists.mk assigns ${unmanaged[*]}, which MANAGED_VARS omits; appends to those still conflict by line position"
+		"mk/gate-lists.mk assigns ${unmanaged[*]}, which the driver omits; appends to those still conflict by line position"
 fi
 
 # --- fixtures ---------------------------------------------------------------
