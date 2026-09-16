@@ -31,6 +31,10 @@ on:
       - 'scripts/docs/lint-queue.sh'
       - 'scripts/docs/queue.py'
       - 'docs/queue/**'
+      # check-roadmap.sh sources scripts/lib/common.sh for resolve_release_tag,
+      # without which rule 9 cannot say what a `new in X.Y` chip is behind, so a
+      # common.sh change changes this gate's verdict (Q947).
+      - 'scripts/lib/**'
       # The roadmap gate reads its rows through the shared parse layer in
       # devtools/ (Q613), so a change there changes this gate's verdict.
       - 'devtools/**'
@@ -76,6 +80,7 @@ jobs:
               - 'scripts/docs/lint-queue.sh'
               - 'scripts/docs/queue.py'
               - 'docs/queue/**'
+              - 'scripts/lib/**'
               - 'devtools/**'
               - '.github/workflows/status-lint.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
