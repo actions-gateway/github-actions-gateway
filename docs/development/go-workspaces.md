@@ -233,7 +233,7 @@ So an empty check list on a synced PR is a hold rather than a workflow that neve
 **A hold is reported, so a PR cannot age unnoticed in it.** [`withheld-runs-watch.yml`](../../.github/workflows/withheld-runs-watch.yml) runs daily and opens one issue naming every open PR whose current head carries a withheld run, closing it when they are all released.
 It runs on a schedule rather than on `pull_request`, because a check on that trigger would be withheld along with everything else it reports on.
 It reads the run state rather than the head commit's author, so it also covers a `GITHUB_TOKEN`-*authored* PR, such as the updatecli bumps in [dependency-updates.md](dependency-updates.md#operating-notes), which take the same hold by a different route.
-Two cases it deliberately does not report are argued in the header of [`check-withheld-runs.sh`](../../scripts/ci/check-withheld-runs.sh): a hold already released, whose `action_required` approval overwrites, and a PR carrying no runs at all, which reads identically to a branch pushed seconds ago.
+Two cases it deliberately does not report are argued in the header of [`check-withheld-runs.sh`](../../scripts/ci/check-withheld-runs.sh): a hold already released, whose `action_required` the approval overwrites, and a PR carrying no runs at all, which reads identically to a branch pushed seconds ago.
 
 **Release them with "Approve and run"** on the PR's checks tab.
 That starts the runs already sitting on the current head, in place, as attempt 2.

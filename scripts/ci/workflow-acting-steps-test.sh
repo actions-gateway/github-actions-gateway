@@ -23,6 +23,7 @@
 # Two steps qualify today:
 #
 #   release-freeze-watch.yml  `check` + `report`  — opens/comments/closes an issue
+#   withheld-runs-watch.yml   `check` + `report`  — opens/comments/closes an issue
 #   pages.yml                 `mike`              — pushes the gh-pages version tree
 #
 # THE POSITIVE CONTROLS ARE THE LOAD-BEARING HALF. A suite of "must not act"
@@ -44,6 +45,7 @@ EXTRACT="$REPO_ROOT/scripts/ci/workflow-step-body.sh"
 
 FREEZE_WORKFLOW=".github/workflows/release-freeze-watch.yml"
 PAGES_WORKFLOW=".github/workflows/pages.yml"
+WITHHELD_WORKFLOW=".github/workflows/withheld-runs-watch.yml"
 
 WORK="$REPO_ROOT/tmp/workflow-acting-steps.$$"
 mkdir -p "$WORK"
@@ -80,7 +82,7 @@ refuse() {
 # means this constant is stale and the suite refuses.
 ACTIONS_SHELL=(bash --noprofile --norc -e)
 
-for wf in "$FREEZE_WORKFLOW" "$PAGES_WORKFLOW"; do
+for wf in "$FREEZE_WORKFLOW" "$WITHHELD_WORKFLOW" "$PAGES_WORKFLOW"; do
 	[[ -f "$wf" ]] || refuse "$wf does not exist, so there are no bodies to drive"
 	if grep -nE '^[[:space:]]*(shell|defaults):' "$wf" >/dev/null; then
 		refuse "$wf now sets shell: or defaults:, so \`${ACTIONS_SHELL[*]}\` may no longer be the shell its steps get — re-derive it from GitHub's defaults before trusting this suite"
@@ -100,11 +102,15 @@ extract() {
 CHECK_BODY="$(extract "$FREEZE_WORKFLOW" check freeze-check)"
 REPORT_BODY="$(extract "$FREEZE_WORKFLOW" report freeze-report)"
 MIKE_BODY="$(extract "$PAGES_WORKFLOW" mike pages-mike)"
+WITHHELD_CHECK_BODY="$(extract "$WITHHELD_WORKFLOW" check withheld-check)"
+WITHHELD_REPORT_BODY="$(extract "$WITHHELD_WORKFLOW" report withheld-report)"
 
 # Each subject must still contain the act the cases assert on. Without this a
 # body rewritten to do nothing would satisfy every negative case in the suite.
 grep -q 'gh issue create' "$REPORT_BODY" ||
 	refuse "the report step no longer runs \`gh issue create\`, so its cases assert about a step that has stopped acting"
+grep -q 'gh issue create' "$WITHHELD_REPORT_BODY" ||
+	refuse "withheld-runs-watch's report step no longer runs \`gh issue create\`, so its cases assert about a step that has stopped acting"
 grep -q 'git push origin gh-pages' "$MIKE_BODY" ||
 	refuse "the mike step no longer runs \`git push origin gh-pages\`, so its cases assert about a step that has stopped acting"
 
@@ -460,6 +466,199 @@ else
 fi
 
 # ============================================================================
+# withheld-runs-watch.yml `check` + `report` — the PRs waiting on approval
+# ============================================================================
+#
+# Same two-step shape as release-freeze-watch above, and the same classifier:
+# 0 is "nothing withheld", 1 is "these PRs are", and 2 or above is the delegate
+# failing to measure rather than reporting. A crash reaching the report step
+# opens an issue naming no PRs, which is the report this watch exists to make
+# trustworthy.
+
+# write_withheld_delegate DIR RC — scripts/ci/check-withheld-runs.sh, printing
+# $DELEGATE_OUT and leaving by RC (a number, or `kill` to die on SIGKILL, which
+# is the shape the runner produces rather than the arithmetic of exit 137).
+write_withheld_delegate() {
+	local dir="$1" rc="$2" path="$1/scripts/ci/check-withheld-runs.sh"
+	mkdir -p "$dir/scripts/ci"
+	cat >"$path" <<'STUB'
+#!/usr/bin/env bash
+set -uo pipefail
+printf '%s\n' "${DELEGATE_OUT:-}"
+STUB
+	if [[ "$rc" == kill ]]; then
+		printf 'kill -KILL $$\n' >>"$path"
+	else
+		printf 'exit %s\n' "$rc" >>"$path"
+	fi
+	chmod +x "$path"
+}
+
+# run_withheld_check CASE DELEGATE_RC WANT_RC [LOG_TEXT] — echoes the sandbox.
+run_withheld_check() {
+	local case="$1" drc="$2" want="$3" log="${4:-No open PR has withheld checks on its current head.}"
+	local dir got
+	dir="$(new_sandbox "$case")"
+	write_withheld_delegate "$dir" "$drc"
+	got="$(drive "$dir" "$WITHHELD_CHECK_BODY" "GH_TOKEN=stub" "DELEGATE_OUT=$log")"
+	expect_rc "$case" "$want" "$got" "$dir" || return 0
+	printf '%s\n' "$dir"
+}
+
+HELD_LOG='PR #1877: 16/16 runs withheld on 88ebcaa9ff33'
+
+dir="$(run_withheld_check withheld-check-none 0 0)"
+if [[ -n "$dir" ]]; then
+	expect_out_file withheld-check-none "$dir" 'rc=0' &&
+		expect_out_file withheld-check-none "$dir" 'log<<WITHHELD_EOF' &&
+		pass withheld-check-none 'rc=0 reaches the report step'
+fi
+
+dir="$(run_withheld_check withheld-check-findings 1 0 "$HELD_LOG")"
+if [[ -n "$dir" ]]; then
+	expect_out_file withheld-check-findings "$dir" 'rc=1' &&
+		expect_out_file withheld-check-findings "$dir" 'log<<WITHHELD_EOF' &&
+		pass withheld-check-findings 'rc=1 reaches the report step'
+fi
+
+# The codes that must not reach the report step. 2 is the checker's own "could
+# not measure" — an unreadable PR list, or a head SHA that is not an object name,
+# either of which would otherwise widen the runs query to the whole repository.
+withheld_crash_case=(withheld-check-unmeasurable withheld-check-crash-7)
+withheld_crash_rc=(2 7)
+for i in 0 1; do
+	name="${withheld_crash_case[$i]}"
+	drc="${withheld_crash_rc[$i]}"
+	dir="$(run_withheld_check "$name" "$drc" 1 '')"
+	if [[ -n "$dir" ]]; then
+		expect_stdout "$name" "$dir" '::error::withheld-runs-watch could not measure' &&
+			expect_no_out_file "$name" "$dir" 'log<<WITHHELD_EOF' &&
+			pass "$name" "delegate rc=$drc fails the job and reports nothing"
+	fi
+done
+
+dir="$(new_sandbox withheld-check-killed)"
+write_withheld_delegate "$dir" kill
+got="$(drive "$dir" "$WITHHELD_CHECK_BODY" "GH_TOKEN=stub" "DELEGATE_OUT=")"
+expect_rc withheld-check-killed 1 "$got" "$dir" &&
+	expect_stdout withheld-check-killed "$dir" '::error::withheld-runs-watch could not measure' &&
+	expect_no_out_file withheld-check-killed "$dir" 'log<<WITHHELD_EOF' &&
+	pass withheld-check-killed 'a SIGKILLed delegate (137) fails the job'
+
+# The same regression the freeze watch shipped: `-eq 2` where the crash codes are
+# 2 and above. Without this control the cases above pass for a classifier that
+# always fails as readily as for the right one.
+sed 's/-ge 2/-eq 2/' "$WITHHELD_CHECK_BODY" >"$WORK/withheld-check-eq2.sh"
+if cmp -s "$WITHHELD_CHECK_BODY" "$WORK/withheld-check-eq2.sh"; then
+	fail withheld-regression-eq2 'the -ge 2 comparison is gone from the check step, so this control mutates nothing'
+else
+	dir="$(new_sandbox withheld-regression-eq2)"
+	write_withheld_delegate "$dir" 7
+	got="$(drive "$dir" "$WORK/withheld-check-eq2.sh" "GH_TOKEN=stub" "DELEGATE_OUT=$HELD_LOG")"
+	die_if_killed withheld-regression-eq2 "$got"
+	if [[ "$got" == 0 ]] && grep -qF 'log<<WITHHELD_EOF' "$dir/outputs"; then
+		pass withheld-regression-eq2 'the -eq 2 defect lets rc=7 through, so these cases can fail'
+	else
+		fail withheld-regression-eq2 "the -eq 2 body did not reproduce the defect (rc=$got)"
+	fi
+fi
+
+# run_withheld_report CASE RC LOG EXISTING TITLE — echoes the sandbox.
+run_withheld_report() {
+	local case="$1" rc="$2" log="$3" existing="$4" title="$5"
+	local dir got
+	dir="$(new_sandbox "$case")"
+	write_gh_stub "$dir"
+	got="$(drive "$dir" "$WITHHELD_REPORT_BODY" \
+		"GH_TOKEN=stub" "RC=$rc" "LOG=$log" \
+		"GH_STUB_EXISTING=$existing" "GH_STUB_TITLE=$title")"
+	expect_rc "$case" 0 "$got" "$dir" || return 0
+	printf '%s\n' "$dir"
+}
+
+HELD_TITLE='Checks withheld awaiting approval: #1877'
+
+dir="$(run_withheld_report withheld-report-clean 0 'No open PR has withheld checks on its current head.' '' '')"
+if [[ -n "$dir" ]]; then
+	expect_no_call withheld-report-clean "$dir" 'gh issue create' &&
+		expect_no_call withheld-report-clean "$dir" 'gh issue comment' &&
+		expect_call withheld-report-clean "$dir" 'gh label create withheld-checks --force' &&
+		pass withheld-report-clean 'nothing withheld opens nothing'
+fi
+
+dir="$(run_withheld_report withheld-report-resolves 0 'No open PR has withheld checks on its current head.' 42 "$HELD_TITLE")"
+if [[ -n "$dir" ]]; then
+	expect_call withheld-report-resolves "$dir" 'gh issue comment 42 --body Resolved: every open PR' &&
+		expect_call withheld-report-resolves "$dir" 'gh issue close 42' &&
+		expect_no_call withheld-report-resolves "$dir" 'gh issue create' &&
+		pass withheld-report-resolves 'released PRs close the open issue'
+fi
+
+# THE POSITIVE CONTROL. A withheld PR with no issue open must open one, naming it,
+# so a report step that stopped acting fails here rather than passing every
+# "must not act" case above.
+dir="$(run_withheld_report withheld-report-opens 1 "$HELD_LOG" '' '')"
+if [[ -n "$dir" ]]; then
+	expect_call withheld-report-opens "$dir" "gh issue create --label withheld-checks --title $HELD_TITLE" &&
+		pass withheld-report-opens 'a withheld PR opens an issue naming it'
+fi
+
+dir="$(run_withheld_report withheld-report-already 1 "$HELD_LOG" 42 "$HELD_TITLE")"
+if [[ -n "$dir" ]]; then
+	expect_no_call withheld-report-already "$dir" 'gh issue create' &&
+		expect_no_call withheld-report-already "$dir" 'gh issue close' &&
+		expect_stdout withheld-report-already "$dir" 'already reported on issue #42' &&
+		pass withheld-report-already 'a PR held for a week stays one notification'
+fi
+
+# The set changing is what re-reports, so a second PR entering the hold must
+# supersede rather than sit silently behind the first one's title.
+dir="$(run_withheld_report withheld-report-supersedes 1 "$HELD_LOG
+PR #1878: 16/16 runs withheld on 08956469aa11" 42 "$HELD_TITLE")"
+if [[ -n "$dir" ]]; then
+	expect_call withheld-report-supersedes "$dir" 'gh issue close 42' &&
+		expect_call withheld-report-supersedes "$dir" \
+			'gh issue create --label withheld-checks --title Checks withheld awaiting approval: #1877 #1878' &&
+		pass withheld-report-supersedes 'a second held PR supersedes the open issue'
+fi
+
+# A log the title's sed finds no PR number in. The issue must still open, and say
+# so, rather than reading as a finding about a PR called nothing.
+dir="$(run_withheld_report withheld-report-log-without-pr 1 'the checker printed something unexpected' '' '')"
+if [[ -n "$dir" ]]; then
+	expect_call withheld-report-log-without-pr "$dir" \
+		'gh issue create --label withheld-checks --title Checks withheld awaiting approval: open pull requests' &&
+		pass withheld-report-log-without-pr 'a log naming no PR still opens an issue'
+fi
+
+# The cross-step control: `check` produces the report step's inputs rather than a
+# case handing them over, so a classifier that clamps the delegate's exit code
+# leaves RC empty and opens nothing.
+dir="$(new_sandbox withheld-end-to-end)"
+write_withheld_delegate "$dir" 1
+write_gh_stub "$dir"
+got="$(drive "$dir" "$WITHHELD_CHECK_BODY" "GH_TOKEN=stub" "DELEGATE_OUT=$HELD_LOG")"
+if ! expect_rc withheld-end-to-end 0 "$got" "$dir"; then
+	:
+else
+	step_rc="$(awk -F= '/^rc=/ { print $2 }' "$dir/outputs")"
+	die_if_killed withheld-end-to-end "$step_rc"
+	step_log="$(awk '/^log<<WITHHELD_EOF$/ { inblk = 1; next } /^WITHHELD_EOF$/ { inblk = 0 } inblk { print }' "$dir/outputs")"
+	if [[ "$step_rc" != 1 ]]; then
+		fail withheld-end-to-end "the check step published rc=${step_rc:-<empty>}, not 1"
+	elif [[ "$step_log" != *'PR #1877'* ]]; then
+		fail withheld-end-to-end "the check step published a log that does not name the PR: ${step_log:-<empty>}"
+	else
+		got="$(drive "$dir" "$WITHHELD_REPORT_BODY" \
+			"GH_TOKEN=stub" "RC=$step_rc" "LOG=$step_log" \
+			"GH_STUB_EXISTING=" "GH_STUB_TITLE=")"
+		expect_rc withheld-end-to-end 0 "$got" "$dir" &&
+			expect_call withheld-end-to-end "$dir" "gh issue create --label withheld-checks --title $HELD_TITLE" &&
+			pass withheld-end-to-end 'a withheld PR travels from check to an open issue'
+	fi
+fi
+
+# ============================================================================
 # pages.yml `mike` — the step that pushes the gh-pages version tree
 # ============================================================================
 #
@@ -577,6 +776,7 @@ ACTING_PATTERN='gh (issue|pr|release|label) |git (push|tag)|docker push|helm pus
 acting_registry() {
 	cat <<'EOF'
 release-freeze-watch.yml|driven|its check and report steps are the subject above
+withheld-runs-watch.yml|driven|its check and report steps are the subject above
 pages.yml|driven|its mike step is the subject above
 dependabot-go-sync.yml|pre-merge|pull_request is its only trigger, so every Dependabot PR executes this body before it merges
 e2e-reusable.yml|pre-merge|called by the e2e lanes on merge_group, so the queue runs it on the candidate merge; and its docker push targets the registry the same job stands up
