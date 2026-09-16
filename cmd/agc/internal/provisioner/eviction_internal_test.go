@@ -360,6 +360,41 @@ func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
 		"a re-run that never landed needs an owner-visible Event, not just a log line")
 }
 
+// TestHandleEviction_TheUnseamedWindowCloses covers what the seams above bypass: that
+// a Provisioner with nil rerunWindowC ever closes its re-run window at all. The seamed
+// tests would stay green if startRerunWindow's real branch returned a channel that
+// never fires, because they never take it.
+//
+// The assertion is the failure counter alone, never an attempt count, so this is not
+// the Q1089 shape reintroduced: it needs the window to close eventually, which 50ms of
+// wall clock always delivers, rather than N loopback round trips to fit inside it. How
+// many attempts the loop got there in is the host's business and nothing asserts it.
+func TestHandleEviction_TheUnseamedWindowCloses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(alreadyRunningBody))
+	}))
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:                    m,
+		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL:               srv.URL,
+		HTTPClient:                 srv.Client(),
+		EvictionRerunWindow:        50 * time.Millisecond,
+		EvictionRerunRetryInterval: time.Millisecond,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "1089", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
+
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
+		"a real timer must end the loop; the never-concluded reason pins it to the window branch")
+}
+
 // TestHandleEviction_TerminalFailuresDoNotRetry pins the discrimination: only the
 // still-running refusal means "again later". A 403 with any other message (a
 // permissions problem) and a 5xx are terminal — retrying either would hammer an
