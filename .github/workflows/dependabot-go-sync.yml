@@ -24,7 +24,9 @@ name: dependabot-go-sync
 #
 # Release the checks with "Approve and run", which starts the existing runs in
 # place; close+reopen queues a second full set instead, so it is the costlier
-# click rather than a broken one. See
+# click rather than a broken one. A hold does not go unnoticed while it waits:
+# withheld-runs-watch.yml runs daily and opens one issue naming every open PR
+# whose current head carries a withheld run (Q1052). See
 # docs/development/go-workspaces.md, section "Both bot pushes leave the checks
 # withheld pending approval", for the measurement and for why a stored PAT,
 # which would avoid the hold, is deliberately not used.

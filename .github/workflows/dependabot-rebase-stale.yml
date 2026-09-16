@@ -21,7 +21,8 @@ name: dependabot-rebase-stale
 # creates the runs for it and then holds every one at action_required until a
 # maintainer approves. That is the same one-click step every synced Dependabot PR
 # already needs, and the click is "Approve and run" rather than close + reopen;
-# the workflow leaves a PR comment saying so. See
+# the workflow leaves a PR comment saying so, and withheld-runs-watch.yml opens
+# an issue daily for any PR still sitting in the hold (Q1052). See
 # docs/development/go-workspaces.md, section "Both bot pushes leave the checks
 # withheld pending approval".
 on:

@@ -1,0 +1,140 @@
+name: withheld-runs-watch
+
+# Reports when an open pull request's checks are withheld awaiting a maintainer's
+# approval, and cannot say so itself (Q1052).
+#
+# When one of this repo's own workflows force-pushes to a PR branch with the
+# default GITHUB_TOKEN - dependabot-go-sync.yml (Q111) and
+# dependabot-rebase-stale.yml (Q427) both do - GitHub creates every run for that
+# push and holds it at action_required until somebody clicks "Approve and run".
+# Nothing surfaces that. statusCheckRollup is empty, which is the answer a branch
+# pushed seconds ago also gives, and mergeStateStatus reads BLOCKED, which is what
+# a failing required check reads. So the PR ages with no signature of its own:
+# measured 2026-09-04, 10 of 40 recent Dependabot PRs were held for between 1m35s
+# and 4d01h03m, #1877's own hold ran six days to 2026-09-16, and #1825 kept a HIGH
+# severity CVE live on main's dependencies for 31h35m while two unrelated PRs sat
+# hard-blocked on the trivy gates behind it.
+#
+# WHY A SCHEDULE AND NOT A PULL-REQUEST CHECK.
+# The condition under report is precisely that this PR's pull_request runs are
+# withheld, so a check on that trigger is withheld along with everything else it
+# would report on. It has to run from a trigger the hold does not reach.
+#
+# WHY AN ISSUE AND NOT A RED RUN.
+# Same reasoning as release-freeze-watch.yml: a failed run scrolls out of the
+# Actions list, which is the exact failure being fixed, and this fires as the
+# ordinary consequence of a good sync push, so a red main would invite other
+# sessions to "fix" it. The issue closes itself when the PRs are approved.
+#
+# WHAT IT CANNOT SEE, DELIBERATELY. A hold already released, whose action_required
+# is overwritten by the real result on approval, and a PR carrying no runs at all,
+# which is indistinguishable from a branch pushed seconds ago. Both are argued in
+# the header of scripts/ci/check-withheld-runs.sh.
+on:
+  schedule:
+    # Daily at 06:41 UTC, ahead of dependabot-rebase-stale.yml's 07:47 so a PR
+    # this run names is still in the state it was named for when that one acts.
+    - cron: '41 6 * * *'
+  # For re-asking straight after approving, without waiting for tomorrow.
+  workflow_dispatch:
+
+# One run at a time; two concurrent runs would race to create the same issue.
+# Not cancel-in-progress: losing a run's issue update is worse than waiting.
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read         # read each open PR's workflow runs
+      pull-requests: read   # discover the open PRs and their current heads
+      issues: write         # the report persists until somebody approves
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: which open PRs have withheld checks?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          scripts/ci/check-withheld-runs.sh \
+            > "${RUNNER_TEMP}/withheld.log" 2>&1 || rc=$?
+          cat "${RUNNER_TEMP}/withheld.log"
+          echo "rc=${rc}" >> "${GITHUB_OUTPUT}"
+          # Exit 2 is "could not measure" and anything above it is the delegate
+          # dying rather than exiting. Both are defects in the check rather than
+          # findings about the PRs, and the report step reads every non-zero code
+          # as a finding, so they fail the job loudly instead of reaching it.
+          if [ "${rc}" -ge 2 ]; then
+            echo "::error::withheld-runs-watch could not measure the open PRs"
+            exit 1
+          fi
+          {
+            echo 'log<<WITHHELD_EOF'
+            cat "${RUNNER_TEMP}/withheld.log"
+            echo 'WITHHELD_EOF'
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC: ${{ steps.check.outputs.rc }}
+          LOG: ${{ steps.check.outputs.log }}
+        run: |
+          # The label is the lookup key, so it is created here rather than being
+          # repo state somebody set up by hand. `--force` updates an existing one,
+          # so this is idempotent and a fork works too.
+          gh label create withheld-checks --force \
+            --color FBCA04 \
+            --description "An open PR's checks are withheld awaiting approval"
+
+          # One open issue at a time, found by label rather than by title, so the
+          # title can name the PRs without becoming the lookup key.
+          existing="$(gh issue list --label withheld-checks --state open \
+            --json number --jq '.[0].number // empty')"
+          if [ "${RC}" -eq 0 ]; then
+            if [ -n "${existing}" ]; then
+              gh issue comment "${existing}" --body \
+                "Resolved: every open PR's checks have been released."
+              gh issue close "${existing}"
+            fi
+            exit 0
+          fi
+
+          # The PR numbers the finding names. Re-reported only when that set
+          # changes, so a PR held for a week stays one notification.
+          prs="$(printf '%s\n' "${LOG}" | sed -n 's/^PR #\([0-9][0-9]*\):.*/#\1/p' | paste -sd' ' -)"
+          title="Checks withheld awaiting approval: ${prs:-open pull requests}"
+          # Via a file rather than an argument: the body is multi-line and carries
+          # a fenced block, which no amount of quoting survives on a command line.
+          # The heredoc body is written flush against the `run:` block's own
+          # indentation, which the YAML block scalar strips before bash sees it.
+          cat >"${RUNNER_TEMP}/body.md" <<EOF
+          Detected by \`.github/workflows/withheld-runs-watch.yml\`.
+
+          \`\`\`
+          ${LOG}
+          \`\`\`
+
+          Nothing here is broken: a GITHUB_TOKEN push creates these runs and
+          GitHub withholds them. Release each PR with "Approve and run" on its
+          checks tab. This issue closes itself on the next run once they start.
+          EOF
+          if [ -n "${existing}" ]; then
+            current="$(gh issue view "${existing}" --json title --jq .title)"
+            if [ "${current}" = "${title}" ]; then
+              echo "already reported on issue #${existing}"
+              exit 0
+            fi
+            gh issue comment "${existing}" --body "Superseded: ${title}"
+            gh issue close "${existing}"
+          fi
+          gh issue create --label withheld-checks --title "${title}" \
+            --body-file "${RUNNER_TEMP}/body.md"

@@ -246,6 +246,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  agent/qos-cluster-probe-test agent/validate-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
+                 ci/check-withheld-runs-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
                  ci/check-errexit-prologue-test ci/check-tools-test \
                  ci/git-merge-gate-lists-test \

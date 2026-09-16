@@ -101,7 +101,7 @@ The scheduled [`updatecli.yml`](../../.github/workflows/updatecli.yml) workflow 
 
 - **Repo setting prerequisite.** updatecli opens PRs with the default `GITHUB_TOKEN`, so *Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"* must be enabled.
 - **The bump PR's checks are created and then withheld.** updatecli opens the PR with the default `GITHUB_TOKEN`, and GitHub creates that PR's workflow runs and then holds every one at `action_required` until a maintainer approves.
-  It is the same hold a `GITHUB_TOKEN` *push* gets, whose mechanism is in [go-workspaces.md](go-workspaces.md#both-bot-pushes-leave-the-checks-withheld-pending-approval) and whose detection gap is Q1052.
+  It is the same hold a `GITHUB_TOKEN` *push* gets, whose mechanism, and the daily watch that names a PR still sitting in it, are in [go-workspaces.md](go-workspaces.md#both-bot-pushes-leave-the-checks-withheld-pending-approval).
   An empty check list on one of these PRs is therefore a hold rather than a workflow that never fired, and it never clears on its own.
   Release the runs with **Approve and run** on the checks tab, which starts the ones already sitting on the head rather than queueing a second full set.
   **On a kind, cluster-autoscaler, or Karpenter bump this step is the whole point, not a formality:** those PRs are the only triggers the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock) has, so merging one without releasing the checks is the one path that lets an upstream vocabulary reword through unobserved.
