@@ -331,6 +331,11 @@ The measurements taken here are about what a message may carry:
 
 - **A message does reach an idle worker and drive a turn**: measured 2026-08-11, two trials, 16 s and about 20 s from send to read, the second after 25 to 35 minutes of idle with no other event in the turn.
   Its **timing** is what is not guaranteed, so it carries wakes and nudges, never a deadline.
+- **A finding about another session's PR goes to that session, not to a comment on the PR.** The delivery measured above is the reason: a message drives a turn in the session that can act, and a comment is a notification nobody is obliged to read.
+  [The safety valve](#the-safety-valve-reaches-the-dispatcher-not-the-maintainer) is not a counterexample; a stuck worker comments on *its own* PR precisely because the dispatcher is already reading it.
+  Measured 2026-09-16 on [#1954](https://github.com/actions-gateway/github-actions-gateway/pull/1954): an independent review found a test whose fixture could not discriminate the mechanism the test was named for, and routing it to the author session put the fix and a second test on `main` in the same merge.
+  A comment thread would have outlived the PR without changing it.
+  The maintainer's standing instruction, given 2026-09-16, is to message the session rather than comment.
 - **A message describing repo state carries its own expiry, or it arrives wrong.** Measured 2026-08-09: a message asked a session to rebase onto an open PR's branch, that PR merged before the session acted, and the instruction had to be chased with a correction.
   "Rebase onto X, or onto `main` if X has already merged when you read this" costs one clause and needs no chasing.
 - **A message asserting a mechanism carries its measurement, or says it has none.** Q805's worker, having spent its session correcting the unmeasured claim [its own chip forwarded](#what-the-worker-prompt-adds-here), then sent the dispatcher an unmeasured mechanism of its own that a third session refuted inside the hour.
