@@ -231,7 +231,10 @@ On a Linux/WSL desktop you instead get input lag and compositor stutter while th
 To prevent that, these phases auto-throttle on an **interactive, GUI-bearing dev shell**: the scripts behind the make targets (`scripts/go/go-test.sh`, `scripts/go/go-lint.sh`, `scripts/go/coverage.sh`) run them with both CPU priority **and** disk I/O demoted below the desktop (macOS: `nice -n 10 taskpolicy -d throttle`; Linux/WSL: `nice -n 19`, plus `ionice -c 3` when available), and cap parallelism to physical-cores − 2 (`golangci-lint -j`, `go test -p`, `GOMAXPROCS`, and since Q822 the [fast-gate fan-outs](#the-fast-gates-fan-out-past-the-heavy-build-semaphore) through `RUN_PARALLEL_JOBS`).
 Detection and sizing live in [`scripts/agent/local-throttle.sh`](../../scripts/agent/local-throttle.sh).
 
-**Setting `CI` yourself turns all of that off.** `throttle_active` returns false on any non-empty `CI` before it looks at the OS, so `CI=true make check` locally runs with no prefix, no core cap, and no `RUN_PARALLEL_JOBS`, starting every fast-gate suite at once.
+**Setting `CI` yourself turns the desktop half of that off.** `throttle_active` returns false on any non-empty `CI` before it looks at the OS, so `CI=true make check` locally runs with no QoS prefix, no core cap and no heavy-build slot.
+`RUN_PARALLEL_JOBS` is the exception since Q1105: it comes from `fanout-jobs`, a separate verb that answers on CI at four times the vCPU count, so the fan-outs are capped rather than unbounded.
+On an 18-core Mac that is 72, above the 130 suites, so it does not bind there.
+`jobs` itself still prints nothing on CI, which is what keeps the CI number away from `GOMAXPROCS` and `golangci-lint -j`.
 On a loaded dev box that manufactures wall-clock failures that are indistinguishable from real flakes (Q1084).
 Run the gate as plain `make check`; reproduce a CI-only behaviour with a workflow dispatch rather than by exporting `CI`.
 
@@ -386,15 +389,25 @@ What a fresh worktree still pays, and why it stays:
 
 `serialize_heavy_build` bounds how many heavy phases run at once across sessions, and the fast gates are outside it.
 `make scripts-test` calls [`run-parallel.sh`](../../scripts/ci/run-parallel.sh), which launches every spec with `&` into a pid list and then waits.
-With `RUN_PARALLEL_JOBS` unset there is no cap in it, and `SCRIPTS_TESTS` holds 119, so all 119 start at once by construction.
+With `RUN_PARALLEL_JOBS` unset there is no cap in it, and `SCRIPTS_TESTS` holds 130, so all 130 start at once by construction.
 That is a property of the runner rather than a measurement, and no sampling improves on it.
 So a session in its fast gates has no machine-wide bound while a sibling's heavy phase holds one of two lock slots.
 That is the contention [Q822](../queue/Q822.md) suspected.
 
 **`RUN_PARALLEL_JOBS=N` caps a fan-out at N concurrent commands** (Q822): slots are handed out in argument order, a freed slot goes to the next spec, and the verdict, the `FAILED`/`KILLED` split and the per-label wall time are unchanged.
-The cap inherits into a nested fan-out, so `make check` at N holds the 51-gate level and the 119-suite level to N each rather than the tree to N. It reaps with `wait -n -p`, which is why the [bash floor](bash-style.md#bash-51-is-a-declared-host-prerequisite) is 5.1.
-The Makefile exports `RUN_PARALLEL_JOBS` as `local-throttle.sh jobs`, the same per-run cap the [heavy phases](#resource-auto-throttle-on-gui-dev-machines) take: physical cores minus 2 on a GUI dev shell, and empty on CI or headless, where the fan-outs stay unbounded.
+The cap inherits into a nested fan-out, so `make check` at N holds the 59-gate level and the 130-suite level to N each rather than the tree to N. It reaps with `wait -n -p`, which is why the [bash floor](bash-style.md#bash-51-is-a-declared-host-prerequisite) is 5.1.
+The Makefile exports `RUN_PARALLEL_JOBS` as `local-throttle.sh fanout-jobs`: on a GUI dev shell that is the same per-run cap the [heavy phases](#resource-auto-throttle-on-gui-dev-machines) take, physical cores minus 2, and on a headless shell it is empty, where the fan-outs stay unbounded.
 `RUN_PARALLEL_JOBS=0 make check` restores the unbounded run on a dev shell; the environment wins over the default.
+
+**On CI the cap is four times the runner's vCPU count** (Q1105), sized in `CI_OVERSUBSCRIPTION`.
+It is a separate verb from `jobs` on purpose: `init_throttle` feeds `jobs` to `GOMAXPROCS`, `golangci-lint -j` and `go test -p`, so a CI answer there would hand the Go toolchain 4x the runner's vCPUs in every Go job in the repo.
+Uncapped, a 4-vCPU runner started all 130 suites at once, 32x its cores, which is where the 8.4x per-suite inflation above comes from.
+The multiple is not an optimum: no crossover could be measured, because on an 18-core dev Mac the variance *within* one cap swamps the difference *between* caps (cap 18 ran 106s and 182s on one tree, cap 0 ran 78s and 151s, as ambient load climbed from 30 to 112 across the sweep).
+What the same runs do establish is that 130 suites on 18 cores, an oversubscription of 7.2x, costs nothing against any capped run, and that CPU-seconds is flat across every width (528-582s), so oversubscription wastes no CPU at that ratio.
+4x sits inside the only band shown to be harmless.
+A count the OS will not report leaves the run **uncapped**, never serialized.
+
+Capping cuts per-suite inflation and is not known to cut the job's wall time; those are different quantities and this row's evidence only reaches the first.
 
 **What a cap buys is measured, and it is not wall time.** Eleven `make scripts-test` runs on 2026-09-07, 18 cores, load average 26 to 153, beside a sibling session's `go test -race -tags integration` throughout; the exec column is fork+exec of `/usr/bin/true` sampled every 50 ms for the run's whole duration.
 Suite-seconds is the sum of the runner's own per-label wall times.

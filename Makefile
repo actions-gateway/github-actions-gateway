@@ -88,11 +88,15 @@ all: generate build test ## Generate, build, and test all modules
 include mk/gate-lists.mk
 
 # Every run-parallel.sh fan-out below runs RUN_PARALLEL_JOBS commands at once,
-# defaulting to the throttle's per-run parallelism cap: physical cores - 2 on a
-# GUI dev shell, empty and so unbounded on CI/headless. Exported so a nested
+# defaulting to `fanout-jobs`: physical cores - 2 on a GUI dev shell, four times
+# the vCPU count on CI (Q1105), and empty — so unbounded — on a headless shell,
+# which is neither. Deliberately not `jobs`, which init_throttle feeds to
+# GOMAXPROCS and `golangci-lint -j`: a fan-out of shell suites and a share of
+# the machine for one toolchain are different numbers, and they diverge on CI.
+# Exported so a nested
 # $(MAKE) and its own fan-out inherit one answer; `?=` lets the environment
 # override it and skips the probe when a parent make already exported it (Q822).
-RUN_PARALLEL_JOBS ?= $(shell scripts/agent/local-throttle.sh jobs)
+RUN_PARALLEL_JOBS ?= $(shell scripts/agent/local-throttle.sh fanout-jobs)
 export RUN_PARALLEL_JOBS
 
 .PHONY: check

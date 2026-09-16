@@ -45,8 +45,16 @@
 # scripts/agent/qos-cluster-probe.sh
 # (compute ceiling) and scripts/agent/validate-throttle.sh (desktop cost).
 #
-# Throttling is auto-detected and applies ONLY to an interactive, GUI-bearing
-# dev machine that is not CI:
+# `fanout-jobs` is the one setting that also answers on CI, and it answers a
+# different question there (Q1105): not "leave the desktop some cores" but "do
+# not start 130 shell suites at once on a 4-vCPU runner". It is sized by
+# CI_OVERSUBSCRIPTION below rather than by GUI_CORE_HEADROOM. Everything else —
+# `jobs`, the QoS prefix, the lock, the slot count — stays off on CI, because
+# each protects a desktop or arbitrates between sibling sessions, and a runner
+# has neither.
+#
+# The desktop throttling below is auto-detected and applies ONLY to an
+# interactive, GUI-bearing dev machine that is not CI:
 #   * the CI env var must be unset (GitHub Actions et al. set it), and
 #   * macOS — always (Macs have a GUI worth protecting), or
 #   * Linux — only when a graphical session is present (DISPLAY or
@@ -62,7 +70,8 @@
 # addresses the actual binding constraint.
 #
 # Usage (consumed by the root Makefile):
-#   scripts/agent/local-throttle.sh jobs       # parallelism cap, or empty when off
+#   scripts/agent/local-throttle.sh jobs       # heavy-phase cap, or empty when off
+#   scripts/agent/local-throttle.sh fanout-jobs # run-parallel fan-out cap (answers on CI)
 #   scripts/agent/local-throttle.sh prefix     # command priority wrapper, or empty when off
 #   scripts/agent/local-throttle.sh lockfile [N] # Nth cross-session lock path (default 1)
 #   scripts/agent/local-throttle.sh slots      # how many concurrent heavy runs are allowed
@@ -115,6 +124,21 @@ shopt -s inherit_errexit
 
 # Physical cores left for the GUI/foreground apps when throttling.
 readonly GUI_CORE_HEADROOM=2
+
+# How far a CI fan-out may oversubscribe the runner's vCPUs (Q1105). These
+# suites are dominated by process creation rather than computation — measured
+# 2026-09-16 over `make scripts-test`, 63% of the fan-out's CPU is system time
+# (339s sys against 196s user) — so a cap at 1x vCPUs idles cores whenever a
+# suite blocks, and the cap itself becomes the constraint.
+#
+# 4 is the largest ratio this repo has evidence for rather than an optimum: no
+# crossover could be measured locally, because within-cap variance on an
+# 18-core dev Mac (cap 18 ran 106s and 182s on one tree) swamped every
+# between-cap difference. What the local runs do establish is that 130 suites
+# on 18 cores — 7.2x — costs nothing against any capped run, so 4x sits inside
+# the only band shown to be harmless while still taking a 4-vCPU runner from
+# 32x down to 4x.
+readonly CI_OVERSUBSCRIPTION=4
 
 # Concurrent heavy runs allowed on a machine with enough cores to overlap two of
 # them. Below that there is nothing to overlap: 3 physical cores means jobs=1,
@@ -183,6 +207,29 @@ physical_cores() {
 	printf '%s' "$n"
 }
 
+# logical_cpus prints the CPU count the OS advertises, or 0 when it cannot be
+# read. Distinct from physical_cores on purpose: that one counts a hyperthread
+# pair once, because two threads on one core cannot both keep a desktop
+# responsive. A CI runner has no desktop and is provisioned and billed in
+# vCPUs, so vCPUs are the unit its fan-out cap belongs to.
+#
+# 0 rather than physical_cores' 1 on failure: the caller treats 0 as "no cap",
+# which is what these runs did before Q1105. Falling back to 1 would serialize
+# a 130-suite fan-out on a machine we merely failed to measure.
+logical_cpus() {
+	local n=""
+	case "$(os_kind)" in
+		darwin) n="$(sysctl -n hw.logicalcpu 2>/dev/null || true)" ;;
+		linux)
+			if command -v nproc >/dev/null 2>&1; then
+				n="$(nproc 2>/dev/null || true)"
+			fi
+			;;
+	esac
+	[[ "$n" =~ ^[0-9]+$ ]] || n=0
+	printf '%s' "$n"
+}
+
 # compute_jobs prints max(1, physical_cores - GUI_CORE_HEADROOM).
 compute_jobs() {
 	local cores jobs
@@ -190,6 +237,44 @@ compute_jobs() {
 	jobs=$(( cores - GUI_CORE_HEADROOM ))
 	(( jobs < 1 )) && jobs=1
 	printf '%s\n' "$jobs"
+}
+
+# compute_ci_jobs prints the fan-out cap for a CI runner: its vCPU count times
+# CI_OVERSUBSCRIPTION, or 0 when the vCPU count cannot be read, which leaves the
+# run uncapped exactly as it was before Q1105.
+#
+# The count is the host's, so it is right only on a lane with no cgroup CPU
+# quota. Neither lane this repo runs sets one: every job here is `ubuntu-latest`
+# unless a workflow_dispatch routes it to gag-ci-scaleset, whose RunnerTemplate
+# takes CPU requests-only with no limit on purpose, so a worker bursts to its
+# whole node. A lane whose template set `limits.cpu`, as
+# deploy/templates/kata-dind does, would need this re-derived from the quota
+# rather than from the core count.
+compute_ci_jobs() {
+	local cpus
+	cpus="$(logical_cpus)"
+	(( cpus < 1 )) && { printf '0\n'; return; }
+	printf '%s\n' $(( cpus * CI_OVERSUBSCRIPTION ))
+}
+
+# compute_fanout_jobs prints the cap for a run-parallel.sh fan-out. It agrees
+# with `jobs` on a GUI dev shell and is a separate verb because the two size
+# different things, and CI is where they diverge (Q1105).
+#
+# `jobs` is a share of the machine handed to ONE toolchain: init_throttle feeds
+# it to GOMAXPROCS, `golangci-lint -j` and `go test -p`. A fan-out cap bounds
+# how many independent shell suites are in flight. Routing the CI number
+# through `jobs` would have set GOMAXPROCS=16 and -j 16 on a 4-vCPU runner in
+# every Go job in CI — oversubscribing the Go scheduler repo-wide to bound a
+# shell fan-out. So `jobs` stays empty on CI, as it was, and only this verb
+# answers there.
+compute_fanout_jobs() {
+	if [[ -n "${CI:-}" ]]; then
+		compute_ci_jobs
+		return
+	fi
+	throttle_active || return 0
+	compute_jobs
 }
 
 # has_ionice returns success when ionice(1) is installed. A named function rather
@@ -324,6 +409,13 @@ main() {
 		return
 	fi
 
+	# `fanout-jobs` answers on CI, which `jobs` deliberately does not; see
+	# compute_fanout_jobs for why they are different numbers.
+	if [[ "$want" == "fanout-jobs" ]]; then
+		compute_fanout_jobs
+		return
+	fi
+
 	# Off-switch and non-GUI/CI: print nothing so the Makefile runs unthrottled.
 	if ! throttle_active; then
 		return 0
@@ -335,7 +427,7 @@ main() {
 		lockfile) lock_file "${2:-1}" ;;
 		slots) compute_slots ;;
 		*)
-			printf 'usage: %s {jobs|prefix|lockfile [N]|slots|workers}\n' "$0" >&2
+			printf 'usage: %s {jobs|fanout-jobs|prefix|lockfile [N]|slots|workers}\n' "$0" >&2
 			return 2
 			;;
 	esac
