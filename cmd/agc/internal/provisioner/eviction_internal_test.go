@@ -283,14 +283,94 @@ func TestHandleEviction_RetriesUntilTheRunConcludes(t *testing.T) {
 	assert.True(t, ok, "one recovery must consume exactly one of the two budget slots")
 }
 
+// handlerPacedWindow drives the re-run loop off the handler instead of the wall clock
+// (Q1089). The handler closes the window on the attempt the test wants to be the last,
+// and every wait before that fires immediately, so the loop makes exactly that many
+// attempts on a loaded host and an idle one alike. A real window asserts only that N
+// loopback round trips plus goroutine scheduling fit inside it, which is a property of
+// the host: a 50ms one failed at load average 82 and passed twice on the same tree.
+//
+// Exactly one of the two channels is ever ready at a pass, so the loop's select has no
+// race to lose: while attempts remain the wait fires and the window is open, and on the
+// last attempt the window is closed and the wait never fires.
+type handlerPacedWindow struct {
+	windowC chan time.Time
+	calls   *atomic.Int64
+	last    int64
+}
+
+func newHandlerPacedWindow(calls *atomic.Int64, last int64) *handlerPacedWindow {
+	return &handlerPacedWindow{windowC: make(chan time.Time), calls: calls, last: last}
+}
+
+// closeOn closes the window once the handler has recorded the last attempt. Handlers
+// call it with the incremented count, before writing the response.
+func (h *handlerPacedWindow) closeOn(n int64) {
+	if n == h.last {
+		close(h.windowC)
+	}
+}
+
+func (h *handlerPacedWindow) window(time.Duration) (<-chan time.Time, func()) {
+	return h.windowC, func() {}
+}
+
+func (h *handlerPacedWindow) retry(time.Duration) <-chan time.Time {
+	ch := make(chan time.Time, 1)
+	if h.calls.Load() < h.last {
+		ch <- time.Time{}
+	}
+	return ch
+}
+
 // TestHandleEviction_RunNeverConcludingIsSurfaced bounds the Q503 retry loop: if the
 // re-run window closes with GitHub still refusing, recovery gives up loudly — the
 // failure counter and an owner Event — rather than retrying forever or, worse,
 // pretending the spent budget slot recovered anything.
 func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
+	const refusals = 3
+
 	var calls atomic.Int64
+	paced := newHandlerPacedWindow(&calls, refusals)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
+		paced.closeOn(calls.Add(1))
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(alreadyRunningBody))
+	}))
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:      m,
+		TokenFunc:    func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL: srv.URL,
+		HTTPClient:   srv.Client(),
+		rerunWindowC: paced.window,
+		rerunRetryC:  paced.retry,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "777", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
+
+	assert.Equal(t, int64(refusals), calls.Load(), "the window spans every refused attempt the handler makes, then closes")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
+	assert.Contains(t, target.events, "EvictionRerunFailed",
+		"a re-run that never landed needs an owner-visible Event, not just a log line")
+}
+
+// TestHandleEviction_TheUnseamedWindowCloses covers what the seams above bypass: that
+// a Provisioner with nil rerunWindowC ever closes its re-run window at all. The seamed
+// tests would stay green if startRerunWindow's real branch returned a channel that
+// never fires, because they never take it.
+//
+// The assertion is the failure counter alone, never an attempt count, so this is not
+// the Q1089 shape reintroduced: it needs the window to close eventually, which 50ms of
+// wall clock always delivers, rather than N loopback round trips to fit inside it. How
+// many attempts the loop got there in is the host's business and nothing asserts it.
+func TestHandleEviction_TheUnseamedWindowCloses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(alreadyRunningBody))
 	}))
@@ -303,18 +383,16 @@ func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
 		GitHubAPIURL:               srv.URL,
 		HTTPClient:                 srv.Client(),
 		EvictionRerunWindow:        50 * time.Millisecond,
-		EvictionRerunRetryInterval: 5 * time.Millisecond,
+		EvictionRerunRetryInterval: time.Millisecond,
 	}
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "777", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "1089", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
 
-	assert.Greater(t, calls.Load(), int64(1), "the window must span several refused attempts")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
-	assert.Contains(t, target.events, "EvictionRerunFailed",
-		"a re-run that never landed needs an owner-visible Event, not just a log line")
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
+		"a real timer must end the loop; the never-concluded reason pins it to the window branch")
 }
 
 // TestHandleEviction_TerminalFailuresDoNotRetry pins the discrimination: only the
@@ -513,10 +591,13 @@ func TestHandleEviction_UngatedCausesDoNotReadTheConclusion(t *testing.T) {
 // the existing window and, if it never becomes readable, the recovery ends as a failure
 // the operator can act on rather than as a re-run fired blind.
 func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) {
+	const rereads = 3
+
 	var gets, reruns atomic.Int64
+	paced := newHandlerPacedWindow(&gets, rereads)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			gets.Add(1)
+			paced.closeOn(gets.Add(1))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -527,12 +608,12 @@ func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) 
 
 	m := rerunLoopMetrics()
 	p := &Provisioner{
-		Metrics:                    m,
-		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
-		GitHubAPIURL:               srv.URL,
-		HTTPClient:                 srv.Client(),
-		EvictionRerunWindow:        50 * time.Millisecond,
-		EvictionRerunRetryInterval: 5 * time.Millisecond,
+		Metrics:      m,
+		TokenFunc:    func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL: srv.URL,
+		HTTPClient:   srv.Client(),
+		rerunWindowC: paced.window,
+		rerunRetryC:  paced.retry,
 	}
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -540,7 +621,7 @@ func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) 
 	<-p.handleEviction(context.Background(), target, "owner", "repo", "812", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
 
 	assert.Equal(t, int64(0), reruns.Load(), "an unreadable conclusion must not be read as 'not cancelled'")
-	assert.Greater(t, gets.Load(), int64(1), "the window must span several re-reads, not give up on the first error")
+	assert.Equal(t, int64(rereads), gets.Load(), "the window spans every re-read the handler makes, not just the first error")
 	assert.Equal(t, float64(1),
 		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonConclusionUnknown)),
 		"a recovery that never re-ran needs its own reason, not the still-running one")
