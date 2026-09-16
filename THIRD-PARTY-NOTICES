@@ -467,7 +467,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/felixge/httpsnoop (v1.0.4)
+Module: github.com/felixge/httpsnoop (v1.1.0)
 License file: github.com/felixge/httpsnoop/LICENSE.txt
 ================================================================================
 
@@ -1675,7 +1675,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag (v0.27.1)
+Module: github.com/go-openapi/swag (v0.28.0)
 License file: github.com/go-openapi/swag/LICENSE
 ================================================================================
 
@@ -1883,7 +1883,7 @@ License file: github.com/go-openapi/swag/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/cmdutils (v0.27.1)
+Module: github.com/go-openapi/swag/cmdutils (v0.28.0)
 License file: github.com/go-openapi/swag/cmdutils/LICENSE
 ================================================================================
 
@@ -2091,7 +2091,7 @@ License file: github.com/go-openapi/swag/cmdutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/conv (v0.27.1)
+Module: github.com/go-openapi/swag/conv (v0.28.0)
 License file: github.com/go-openapi/swag/conv/LICENSE
 ================================================================================
 
@@ -2299,7 +2299,7 @@ License file: github.com/go-openapi/swag/conv/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/fileutils (v0.27.1)
+Module: github.com/go-openapi/swag/fileutils (v0.28.0)
 License file: github.com/go-openapi/swag/fileutils/LICENSE
 ================================================================================
 
@@ -2507,7 +2507,7 @@ License file: github.com/go-openapi/swag/fileutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/jsonutils (v0.27.1)
+Module: github.com/go-openapi/swag/jsonutils (v0.28.0)
 License file: github.com/go-openapi/swag/jsonutils/LICENSE
 ================================================================================
 
@@ -2715,7 +2715,7 @@ License file: github.com/go-openapi/swag/jsonutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/loading (v0.27.1)
+Module: github.com/go-openapi/swag/loading (v0.28.0)
 License file: github.com/go-openapi/swag/loading/LICENSE
 ================================================================================
 
@@ -2923,7 +2923,7 @@ License file: github.com/go-openapi/swag/loading/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/mangling (v0.27.1)
+Module: github.com/go-openapi/swag/mangling (v0.28.0)
 License file: github.com/go-openapi/swag/mangling/LICENSE
 ================================================================================
 
@@ -3131,7 +3131,7 @@ License file: github.com/go-openapi/swag/mangling/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/netutils (v0.27.1)
+Module: github.com/go-openapi/swag/netutils (v0.28.0)
 License file: github.com/go-openapi/swag/netutils/LICENSE
 ================================================================================
 
@@ -3339,7 +3339,7 @@ License file: github.com/go-openapi/swag/netutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/pools (v0.27.1)
+Module: github.com/go-openapi/swag/pools (v0.28.0)
 License file: github.com/go-openapi/swag/pools/LICENSE
 ================================================================================
 
@@ -3547,7 +3547,7 @@ License file: github.com/go-openapi/swag/pools/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/stringutils (v0.27.1)
+Module: github.com/go-openapi/swag/stringutils (v0.28.0)
 License file: github.com/go-openapi/swag/stringutils/LICENSE
 ================================================================================
 
@@ -3755,7 +3755,7 @@ License file: github.com/go-openapi/swag/stringutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/typeutils (v0.27.1)
+Module: github.com/go-openapi/swag/typeutils (v0.28.0)
 License file: github.com/go-openapi/swag/typeutils/LICENSE
 ================================================================================
 
@@ -3963,7 +3963,7 @@ License file: github.com/go-openapi/swag/typeutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/yamlutils (v0.27.1)
+Module: github.com/go-openapi/swag/yamlutils (v0.28.0)
 License file: github.com/go-openapi/swag/yamlutils/LICENSE
 ================================================================================
 
@@ -4933,7 +4933,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/grpc-ecosystem/grpc-gateway/v2 (v2.29.0)
+Module: github.com/grpc-ecosystem/grpc-gateway/v2 (v2.30.0)
 License file: github.com/grpc-ecosystem/grpc-gateway/v2/LICENSE
 ================================================================================
 
@@ -7393,7 +7393,7 @@ License file: go.opentelemetry.io/auto/sdk/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp (v0.69.0)
+Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp (v0.70.0)
 License file: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/LICENSE
 ================================================================================
 
@@ -7629,7 +7629,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel (v1.45.0)
+Module: go.opentelemetry.io/otel (v1.46.0)
 License file: go.opentelemetry.io/otel/LICENSE
 ================================================================================
 
@@ -7865,7 +7865,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace (v1.45.0)
+Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace (v1.46.0)
 License file: go.opentelemetry.io/otel/exporters/otlp/otlptrace/LICENSE
 ================================================================================
 
@@ -8101,7 +8101,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc (v1.45.0)
+Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc (v1.46.0)
 License file: go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/LICENSE
 ================================================================================
 
@@ -8337,7 +8337,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/metric (v1.45.0)
+Module: go.opentelemetry.io/otel/metric (v1.46.0)
 License file: go.opentelemetry.io/otel/metric/LICENSE
 ================================================================================
 
@@ -8573,7 +8573,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/sdk (v1.45.0)
+Module: go.opentelemetry.io/otel/sdk (v1.46.0)
 License file: go.opentelemetry.io/otel/sdk/LICENSE
 ================================================================================
 
@@ -8809,7 +8809,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/trace (v1.45.0)
+Module: go.opentelemetry.io/otel/trace (v1.46.0)
 License file: go.opentelemetry.io/otel/trace/LICENSE
 ================================================================================
 
@@ -9931,7 +9931,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/time (v0.15.0)
+Module: golang.org/x/time (v0.16.0)
 License file: golang.org/x/time/LICENSE
 ================================================================================
 
@@ -10205,7 +10205,7 @@ License file: gomodules.xyz/jsonpatch/v2/LICENSE
 
 
 ================================================================================
-Module: google.golang.org/genproto/googleapis/api (v0.0.0-20260803160001-6ac0973c030d)
+Module: google.golang.org/genproto/googleapis/api (v0.0.0-20260819154853-08b0e4226688)
 License file: google.golang.org/genproto/googleapis/api/LICENSE
 ================================================================================
 
@@ -10413,7 +10413,7 @@ License file: google.golang.org/genproto/googleapis/api/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/genproto/googleapis/rpc (v0.0.0-20260803160001-6ac0973c030d)
+Module: google.golang.org/genproto/googleapis/rpc (v0.0.0-20260819154853-08b0e4226688)
 License file: google.golang.org/genproto/googleapis/rpc/LICENSE
 ================================================================================
 
@@ -13344,7 +13344,7 @@ License file: k8s.io/kube-openapi/pkg/validation/strfmt/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/metrics (v0.36.4)
+Module: k8s.io/metrics (v0.37.0)
 License file: k8s.io/metrics/LICENSE
 ================================================================================
 
