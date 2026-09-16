@@ -457,6 +457,21 @@ Process counts stay citable as process counts; a distinct-suite count taken this
 Capping is not free either, because the same runner backs `make check` itself at 45 gates, with `scripts-test` nested inside as one of them, plus `docs-gates` at 23 and `queue-gates` at 11.
 A cap nests, so `check` would take a slot and open another capped runner beneath it.
 
+### A suite that writes into a directory the fan-out reads has three ways to redden it
+
+A `scripts/` suite needing a real file in a real directory, such as a workflow under `.github/workflows/`, puts that file where ~45 concurrent gates are reading.
+Q1106 measured what a reader then sees, driving each one in a loop against a probe being created and removed:
+
+- **The path vanishes** between the listing and the open, so the reader fails on a file it just enumerated.
+  `check-gate-needs.sh` 4/40, `check-uses-pinned.sh` 2/20, `actionlint` 1/20.
+- **The file is present and is a real finding.** A tag-pinned probe is exactly what `uses-pinned-check` exists to reject: 12/20.
+- **The file is read mid-write** and parses short.
+  `actionlint` reported `"jobs" section is missing` on a probe that was momentarily half-written.
+
+Teaching the readers to tolerate it fixes at most the first, and not always: `actionlint` walks the directory inside a third-party binary, and `check-uses-pinned.sh` asserts that an unreadable file is exit 2, which is the fail-closed property it exists for.
+So put the file where only the gate under test reads it (`cmd/gmc/.github/workflows/` is in that gate's selection and no other reader's), and make it a file no gate would object to, moving any assertion that needs a *bad* file onto an explicit file set.
+Where a reader has no fail-closed constraint, skipping a path that has since disappeared is still worth having on its own: the directory is unlocked, so the gate races a rebase, a branch switch and an editor too.
+
 ### The coverage budget is wall clock, so it measures scheduling
 
 `scripts/go/coverage.sh` runs every workspace package in one `go test` with a `-timeout` that Go applies **per test binary, as wall clock from the moment that binary starts**.

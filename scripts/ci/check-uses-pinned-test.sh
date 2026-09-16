@@ -22,7 +22,8 @@
 #      walk stopped matching", the failure this repo has shipped before (Q571).
 #   4. Default file selection covers the whole tree, including the three
 #      cmd/gmc/.github/workflows/ scaffolding files that actionlint never sees,
-#      picks up an untracked new workflow, and excludes vendored action.yml.
+#      picks up an untracked new workflow and scans it rather than only listing
+#      it, and excludes vendored action.yml.
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -36,11 +37,28 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 GATE="$REPO_ROOT/scripts/ci/check-uses-pinned.sh"
 FIXTURE_ROOT="$REPO_ROOT/tmp/check-uses-pinned-test.$$"
-# Group 4 needs an untracked workflow in the real .github/workflows/ to prove the
-# selection sees one; it is removed on every exit path, including a failed
-# assertion, so a test run cannot leave a tag-pinned file behind for the gate
-# itself to trip over.
-PROBE="$REPO_ROOT/.github/workflows/zz-uses-pinned-test-probe.yml"
+# Group 4 needs an untracked workflow in the real tree to prove the selection
+# sees one. Two things about it are load-bearing, both of them Q1106.
+#
+# It lives under cmd/gmc/ rather than the root .github/workflows/. That root
+# directory is read concurrently by actionlint, check-gate-needs.sh and
+# check-path-filters.sh in the same `make check` fan-out. With the probe
+# churning there, 2 of 20 actionlint runs went red: one on a path its own walk
+# had just listed and was then unable to stat, one on the probe read
+# half-written (`"jobs" section is missing`). actionlint walks the directory
+# inside a third-party binary, so neither is reachable by tolerance in our own
+# readers. cmd/gmc/.github/workflows/ is in this gate's selection and in no
+# other reader's, so the probe still proves what it has to from the real tree.
+#
+# It is pinned, not tagged. A tag-pinned probe is a true finding to a
+# concurrent `make uses-pinned-check`, which failed on it in 12 of 20 runs. So
+# what group 4 takes from the probe is that default selection reaches an
+# untracked workflow AND feeds it to the scan; that a bad pin in the scanned
+# set exits 1 is group 1's subject, over an explicit file set.
+#
+# It is removed on every exit path, including a failed assertion, so a test run
+# cannot leave a stray workflow behind.
+PROBE="$REPO_ROOT/cmd/gmc/.github/workflows/zz-uses-pinned-test-probe.yml"
 mkdir -p "$FIXTURE_ROOT"
 trap 'rm -rf "$FIXTURE_ROOT" "$PROBE"' EXIT INT TERM
 
@@ -72,6 +90,14 @@ run_gate() {
 	GATE_STATUS=$?
 	set -e
 	GATE_OUT="$(cat "$log")"
+}
+
+# scanned_count — the file count the last run reported, which is what tells a
+# file the selection merely listed from one the scan actually read.
+scanned_count() {
+	awk '/workflow\/action file\(s\)/ {
+		for (i = 1; i < NF; i++) if ($i == "across") { print $(i + 1); exit }
+	}' <<<"$GATE_OUT"
 }
 
 # expect_status NAME WANT FILE... — the gate exits WANT over these files.
@@ -129,6 +155,7 @@ expect_output "  and says the walk may have stopped" 'stopped matching'
 # 4. Default selection covers the whole tree.
 expect_status "the tracked tree passes" 0
 expect_output "  covering cmd/gmc scaffolding too" "file(s)"
+tracked_count="$(scanned_count)"
 
 # The selection the gate makes when given no arguments. Captured whole rather
 # than piped into grep: `grep -q` exits on its first match, and the SIGPIPE that
@@ -157,12 +184,21 @@ expect_selected "selection includes cmd/gmc workflows" yes \
 expect_selected "selection excludes vendored action.yml" no \
 	'tools/vendor/github.com/securego/gosec/v2/action.yml' "$sel"
 
-printf 'name: p\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n' >"$PROBE"
+printf 'name: p\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@%s # v7.0.1\n' \
+	"$PINNED" >"$PROBE"
 expect_selected "selection includes an untracked workflow" yes \
-	'.github/workflows/zz-uses-pinned-test-probe.yml' "$(selected)"
-# The probe is a tag-pinned workflow: while it exists the default-selection gate
-# must see it and fail, which is this assertion's real subject.
-expect_status "an untracked tag pin fails the default run" 1
+	'cmd/gmc/.github/workflows/zz-uses-pinned-test-probe.yml' "$(selected)"
+# Being listed is not being read. The default run's own file count is what says
+# the probe reached the scan, and it is the assertion a pinned probe can still
+# carry — see the note on PROBE.
+expect_status "the default run stays green with the probe present" 0
+probe_count="$(scanned_count)"
+if [[ -n "$tracked_count" && -n "$probe_count" ]] && ((probe_count == tracked_count + 1)); then
+	ok "  and the untracked workflow reaches the scan" "$tracked_count -> $probe_count file(s)"
+else
+	bad "  and the untracked workflow reaches the scan" \
+		"want $((${tracked_count:-0} + 1)), got ${probe_count:-none}"
+fi
 rm -f "$PROBE"
 
 if ((fails > 0)); then
