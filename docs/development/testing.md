@@ -1533,7 +1533,8 @@ Either way the rule is the same: confirm a pass by reading the output, never fro
 So verify by presence, not absence of failure: the log must contain the `ok <package>` line for every package the tier was supposed to cover.
 Zero `ok` lines and zero `FAIL` lines means the suite did not run.
 
-Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
+Both rules in this section are enforced mechanically by hooks: foreground-guard prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts.
+The [launch record](#the-launch-record) guard reads that same registry to require a stop handle once a tier is backgrounded, so keeping it in sync when a tier's runtime or target name changes now serves both.
 
 ### Stopping a run: name the target, never the program
 
@@ -1549,7 +1550,7 @@ Q690's load harness cleaned up with `pkill -f 'make scripts-test'`, which matche
 In order of preference:
 
 - **Stop the background task by its handle.** The launching task is the only reference that cannot match somebody else's process.
-- **Then the launch record**, if the run was started through [`record-launch.sh`](#the-launch-record), which holds the same handle on disk where a compaction cannot reach it.
+- **Then the launch record**, which holds the same handle on disk where a compaction cannot reach it, and which is present for every registered heavy tier now that [`record-launch.sh`](#the-launch-record) is enforced there rather than remembered.
   `scripts/agent/record-launch.sh --list` prints what is running and the command that stops it.
 - **If neither exists**, run `pgrep -fl <pattern>` first, read what it *would* hit, then kill by PID.
 - **If a pattern is unavoidable**, anchor it to the worktree path.
@@ -1566,6 +1567,13 @@ Note that a lease directory has to be host-wide to be worth anything, which puts
 The launching task id is normally a run's only handle, and a compaction drops it while the process keeps running.
 That is how a session ends up killing by pattern with nothing to aim at.
 So put the handle on disk: launch long background work through the wrapper rather than directly.
+
+**For the tiers in the slow-command registry this is enforced, not asked for** (Q739).
+[`record-launch-guard.py`](../../scripts/agent/record-launch-guard.py) is a `PreToolUse` hook that denies a backgrounded launch of anything `.claude/foreground-guard.json` registers as slow unless it goes through the wrapper, and the deny carries the wrapped command to run instead.
+It reads that registry rather than keeping a list of its own, so a tier added there is covered here too.
+It matches at command position, and peels an allowlist of wrappers first, so a tier behind `timeout`, `nice`, `stdbuf`, `xargs`, `env` or a `bash -c` body is still seen; nested shells are followed to a depth of three (`MAX_NESTING` in the hook), and past that it stops looking and says nothing, so a launch buried deeper escapes.
+Everything off the registry (`make check`, an ad-hoc `go test`) is still the prose rule above and nothing more.
+This is the half foreground-guard leaves open: that guard denies a *foreground* heavy tier and names `run_in_background: true` as the fix, then exempts the backgrounded form outright (measured 2026-09-16 against foreground-guard 0.7.0 by driving its hook), so the launch that needs the handle is the one it passes silently.
 
 ```bash
 scripts/agent/record-launch.sh make check > tmp/check.log 2>&1
@@ -1604,6 +1612,7 @@ Measured 2026-08-11 against pr-sentinel 0.8.0 (`scripts/pr-sentinel-stop-hook.py
 
 Skipping the wrapper costs nothing here.
 The launch record exists to keep a compute-heavy run killable after a compaction drops its task id, and a watcher that sleeps between polls is neither worth reclaiming nor something to kill by pattern.
+The guard above cannot reach the watcher, since it fires only on the slow-command registry and the watcher matches nothing in it, and `record-launch-guard-test.sh` pins that: a deny here would cost the launch its three-token auto-approval and strand an unattended worker on a permission prompt with its PR unwatched.
 
 ### Ad-hoc shell varies: don't rely on word-splitting
 
