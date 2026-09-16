@@ -6,10 +6,10 @@
 #
 # Both cases are Q822's. Every invocation of a ported driver rebuilds
 # devtools/git/mergedriver into one shared .build/mergedriver, and `make
-# scripts-test` runs the scriptindex and planindex suites concurrently, so
-# placements and execs of that path overlap. Three CI sightings and one local
-# one reported `the driver could not be built` with no cause, because the
-# build's output went to /dev/null.
+# scripts-test` runs the scriptindex, planindex and roadmap suites
+# concurrently, so placements and execs of that path overlap. Three CI sightings
+# and one local one reported `the driver could not be built` with no cause,
+# because the build's output went to /dev/null.
 #
 # The fixture is its own tiny Go module rather than devtools/, so a build can be
 # made to fail on demand without touching the real driver, and a successful one

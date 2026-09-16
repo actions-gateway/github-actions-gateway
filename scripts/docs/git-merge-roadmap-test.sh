@@ -29,6 +29,9 @@ shopt -s inherit_errexit
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "$REPO_ROOT/scripts/lib/common.sh"
+# The fixture repos symlink this in so the copied entry point can cache the Go
+# driver it builds; a dangling symlink would fail the build instead.
+mkdir -p "$REPO_ROOT/.build"
 DRIVER="$REPO_ROOT/scripts/docs/git-merge-roadmap.sh"
 TARGET='docs/roadmap.md'
 
@@ -133,8 +136,13 @@ merge_repo() {
 	repo="$(plain_repo "$1")"
 	mkdir -p "$repo/scripts/lib" "$repo/scripts/docs"
 	cp "$DRIVER" "$repo/scripts/docs/git-merge-roadmap.sh"
-	cp "$REPO_ROOT/scripts/lib/merge-keyed-records.awk" "$repo/scripts/lib/"
 	cp "$REPO_ROOT/scripts/lib/merge-driver-common.sh" "$repo/scripts/lib/"
+	# The merge is Go now, so the copied entry point needs the module it builds
+	# and somewhere to cache the binary. Symlinks rather than copies: the point
+	# of the throwaway repo is an isolated .git and .gitattributes, not an
+	# isolated toolchain.
+	ln -s "$REPO_ROOT/devtools" "$repo/devtools"
+	ln -s "$REPO_ROOT/.build" "$repo/.build"
 	chmod +x "$repo/scripts/docs/git-merge-roadmap.sh"
 	(cd "$repo" && ./scripts/docs/git-merge-roadmap.sh --install >/dev/null)
 	printf -- '%s\n' "$repo"

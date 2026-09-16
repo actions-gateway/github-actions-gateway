@@ -3,15 +3,15 @@
 # merge-driver-common.sh — the shell every merge driver in this repo shares.
 #
 # It is sourced, never executed, and it carries two halves while the port to Go
-# is under way (Q1046, Q1047):
+# is under way (Q1047):
 #
-#   merge_driver_exec  the ported drivers (scriptindex, planindex). Handles
-#                      --help and --install, then builds and execs
+#   merge_driver_exec  the ported drivers (scriptindex, planindex, roadmap).
+#                      Handles --help and --install, then builds and execs
 #                      devtools/git/mergedriver, which is where the merge
 #                      happens. A caller sets DRIVER_SUBCOMMAND.
-#   merge_driver_init  the drivers still implemented in shell (roadmap, Q1046;
-#                      gatelists, Q1047), with the argument handling, conflict
-#                      labels and fallback they merge with. Goes when they do.
+#   merge_driver_init  the one driver still implemented in shell (gatelists,
+#                      Q1047), with the argument handling, conflict labels and
+#                      fallback it merges with. Goes when it does.
 #
 # The entry point stays shell either way, because `git config
 # merge.<name>.driver` stores a path git runs directly: it has to work in a

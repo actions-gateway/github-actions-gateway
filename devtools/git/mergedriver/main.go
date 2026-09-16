@@ -40,6 +40,14 @@ var drivers = map[string]struct {
 			},
 		}.run,
 	},
+	"roadmap": {
+		spec: spec{
+			name:        "roadmap",
+			log:         "merge-roadmap",
+			defaultPath: "docs/roadmap.md",
+		},
+		run: roadmapDriver{}.run,
+	},
 	"planindex": {
 		spec: spec{
 			name:        "planindex",
