@@ -161,12 +161,16 @@ def lex(command):
 
 
 def simple_commands(command):
-    """Each simple command in `command`, space-joined, from its command word on.
+    """The simple commands in `command`, as (assignments, command) pairs.
 
     Leading `VAR=val` assignments and command-taking wrappers are stepped over,
-    so the string starts at the word the shell would actually execute. Quoted
-    arguments survive lexing as single tokens, which is what keeps a message or
-    a search pattern that merely names a tier from ever landing at position 0.
+    so the string starts at the word the shell would actually execute, and the
+    assignments come back beside it because an override prefix belongs to the
+    command it prefixes rather than to the whole string.
+
+    Quoted arguments survive lexing as single tokens, which is what keeps a
+    message or a search pattern that merely names a tier from ever landing at
+    position 0.
 
     None when the command cannot be lexed at all. The caller treats that as no
     opinion, per the module's fail-open rule: a string that defeats both lexing
@@ -190,7 +194,10 @@ def simple_commands(command):
 
     out = []
     for words in groups:
+        assignments = []
         while words and (ASSIGNMENT.match(words[0]) or words[0] in WRAPPERS):
+            if ASSIGNMENT.match(words[0]):
+                assignments.append(words[0])
             words = words[1:]
         if words:
             # Runs of whitespace collapse to one space, which is what makes the
@@ -200,29 +207,52 @@ def simple_commands(command):
             # it. The registry has the same gap and cannot be fixed from here,
             # since it is shared with foreground-guard (Q1123); this closes it
             # on the hook's own side.
-            out.append(WHITESPACE.sub(' ', ' '.join(words)).strip())
+            out.append((assignments,
+                        WHITESPACE.sub(' ', ' '.join(words)).strip()))
     return out
 
 
-def first_match(candidates, patterns):
-    """The first registered pattern one of `candidates` matches, or None.
+def exempt(assignments, cmd):
+    """Whether this one command is already handled, on its own terms.
 
-    `match` against each simple command rather than `search` over the whole
-    string, for the reason in the module docstring: most of the live patterns
-    have no anchor of their own, and a search makes every mention of a tier a
-    deny.
-
-    An uncompilable pattern is skipped rather than fatal: a typo in the config
-    must not take the guard down with it.
+    Per command, not per string. The exemption used to be `any segment is
+    wrapped`, which let one wrapped member silence every other member:
+    `record-launch.sh true; make test-race` went silent while the tier beside
+    it launched with no handle. Same for the override, which belongs to the
+    command it prefixes.
     """
+    if cmd.split(' ', 1)[0].endswith(WRAPPER):
+        return True
+    return any(a.startswith(OVERRIDE + '=') for a in assignments)
+
+
+def unwrapped_matches(candidates, patterns):
+    """(pattern, [command, ...]) -- every un-exempt command matching any
+    registered pattern, and the first pattern that matched one.
+
+    All of them, not just the first: a fix that wraps one member of a chain
+    leaves the others launching, so the caller has to know whether wrapping a
+    single command would actually finish the job.
+    """
+    live = [cmd for assignments, cmd in candidates
+            if not exempt(assignments, cmd)]
+
+    exprs = []
     for pat in patterns:
         try:
-            expr = re.compile(pat)
+            exprs.append((pat, re.compile(pat)))
         except re.error:
             continue
-        if any(expr.match(candidate) for candidate in candidates):
-            return pat
-    return None
+
+    hits, named = [], None
+    for cmd in live:
+        for pat, expr in exprs:
+            if expr.match(cmd):
+                hits.append(cmd)
+                if named is None:
+                    named = pat
+                break
+    return named, hits
 
 
 def paste(command):
@@ -245,42 +275,41 @@ def paste(command):
     return 'scripts/agent/%s %s' % (WRAPPER, command)
 
 
-def fix_clause(command, pattern):
+def fix_clause(command, candidates, hits):
     """How to say what to do, which depends on whether a paste can be right.
 
-    Only a single simple command can be rewritten mechanically. Pasting the
-    wrapper onto the front of a chain wraps its *first* member: for
-    `make check; make test-race` that yields
-    `record-launch.sh make check; make test-race`, which wraps the wrong
-    command and leaves the registered tier running unwrapped. A session that
-    ran it would have complied with the deny and defeated the hook, so a chain
-    gets an instruction naming the segment instead of a rewrite.
+    The front paste is right only when wrapping the first command finishes the
+    job: one unwrapped tier, and it is that first command. The shell hands
+    record-launch.sh only the first member, so `make test-race; echo done`
+    wraps correctly, while `make check; make test-race` would wrap `make check`
+    and leave the tier running, and `make test-race; make e2e` would wrap one
+    tier and leave the other. All three used to take the paste at some point,
+    and the last is the sharp one: a session that complied with the deny still
+    launched a registered tier with no handle.
     """
-    candidates = simple_commands(command) or []
-    matched = next(
-        (c for c in candidates if re.compile(pattern).match(c)), None)
-
-    # The front paste is right exactly when the command it would wrap is the
-    # matched one, which is true of a lone command and of a chain whose first
-    # member is the tier -- `make test-race; echo done` wraps correctly,
-    # because the shell hands the wrapper only the first member. Declining to
-    # paste there withheld a runnable fix, and the explanation that came
-    # instead contradicted itself: it named the wrapped command as the one
-    # left unwrapped.
-    if matched is None or not candidates or candidates[0] == matched:
+    first = candidates[0][1] if candidates else None
+    if len(hits) == 1 and hits[0] == first:
         return ('Fix: launch it through the wrapper, which writes the pid, the '
                 'worktree and a verbatim stop command to tmp/launches/: `%s`, '
                 'redirected to a log under tmp/' % paste(command))
+
+    if len(hits) > 1:
+        listed = ', '.join('`scripts/agent/%s %s`' % (WRAPPER, h) for h in hits)
+        return ('Fix: %d registered tiers run here, so no single wrapper on '
+                'the front covers them -- it would wrap `%s` and leave the '
+                'rest launching with no handle. Wrap each one where it sits: '
+                '%s, each redirected to its own log under tmp/'
+                % (len(hits), first, listed))
 
     return ('Fix: the registered tier is not the first command here, so the '
             'wrapper cannot go on the front -- that would wrap `%s` and leave '
             '`%s` running unwrapped. Wrap the matching command where it sits, '
             'keeping the rest of the chain around it: '
             '`scripts/agent/%s %s`, redirected to a log under tmp/'
-            % (candidates[0], matched, WRAPPER, matched))
+            % (first, hits[0], WRAPPER, hits[0]))
 
 
-def reason(pattern, command):
+def reason(pattern, command, candidates, hits):
     """The deny text: the rewrite first, the override last.
 
     Leading with the escape hatch is what teaches a session to reach for it
@@ -297,7 +326,7 @@ def reason(pattern, command):
         'If this run genuinely must not be wrapped (the pr-sentinel watcher '
         'is the one such case, and it matches no registered pattern), re-run '
         'with a %s=<reason> prefix.'
-        % (LABEL, pattern, fix_clause(command, pattern), WRAPPER, DOC,
+        % (LABEL, pattern, fix_clause(command, candidates, hits), WRAPPER, DOC,
            OVERRIDE))
 
 
@@ -322,30 +351,22 @@ def main():
     if not isinstance(command, str) or not command.strip():
         silent()
 
-    # Deliberately exempted. Anchored, so quoting the variable's name in an
-    # echo beside a real launch does not buy the launch an exemption.
-    if OVERRIDE_PREFIX.search(command):
-        silent()
-
     candidates = simple_commands(command)
     if candidates is None:
         silent()
 
-    # Already wrapped. The wrapper has to be some command's own first word: a
-    # `git show` of the script, or an echo naming it, is a mention rather than
-    # a use, and treating it as one let a launch beside it through.
-    if any(c.split(' ', 1)[0].endswith(WRAPPER) for c in candidates):
-        silent()
-
+    # Both exemptions are applied per command inside unwrapped_matches, not to
+    # the string as a whole: one wrapped or overridden member must not cover a
+    # real launch standing beside it.
     project_dir = os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd()
-    pattern = first_match(candidates, slow_patterns(project_dir))
+    pattern, hits = unwrapped_matches(candidates, slow_patterns(project_dir))
     if pattern is None:
         silent()
 
     json.dump({'hookSpecificOutput': {
         'hookEventName': 'PreToolUse',
         'permissionDecision': 'deny',
-        'permissionDecisionReason': reason(pattern, command),
+        'permissionDecisionReason': reason(pattern, command, candidates, hits),
     }}, sys.stdout)
     sys.stdout.write('\n')
     sys.exit(0)

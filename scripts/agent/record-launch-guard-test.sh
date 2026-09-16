@@ -111,6 +111,35 @@ assert_denies 'wrapper in a comment' \
 assert_denies 'wrapper in an argument' \
 	'make test-race ARGS=scripts/agent/record-launch.sh'
 
+# Both exemptions are per command, not per string. As `any(segment is
+# exempt)` one wrapped or overridden member covered every other member, so a
+# real tier launched beside a token wrapped call with no handle at all. The
+# suite could not see it because every exemption fixture above is a single
+# command, which is the same blind spot as the chain fixtures had.
+assert_denies 'wrapped member, tier beside it' \
+	'scripts/agent/record-launch.sh true; make test-race'
+assert_denies 'wrapped member, e2e beside it' \
+	'scripts/agent/record-launch.sh echo x && make e2e SUITE=single-node'
+assert_denies 'wrapped tier, tier beside it' \
+	'scripts/agent/record-launch.sh make check; make test-race'
+assert_denies 'tier first, wrapped member after' \
+	'make test-race; scripts/agent/record-launch.sh true'
+assert_denies 'override on another member' \
+	'RECORD_LAUNCH_GUARD_OVERRIDE=why true; make test-race'
+
+# And the legitimate forms of the same shapes must still go silent, or the
+# tightening above has simply broken the exemptions.
+assert_silent 'wrapped, then an echo' \
+	'scripts/agent/record-launch.sh make test-race; echo done'
+assert_silent 'override, then an echo' \
+	'RECORD_LAUNCH_GUARD_OVERRIDE=why make test-race; echo done'
+assert_silent 'every tier wrapped' \
+	'scripts/agent/record-launch.sh make test-race; scripts/agent/record-launch.sh make e2e'
+
+# Two registered tiers in one command: no single wrapper on the front covers
+# both, so there is no paste to hand back.
+assert_denies 'two tiers in one chain' 'make test-race; make e2e SUITE=single-node'
+
 # Whitespace bash treats as insignificant. The registry's patterns want exactly
 # one space (`make (-C [^ ]+ )?test-race\b`), and `(-C [^ ]+ )?` cannot absorb a
 # second one, so all of these run a real tier and match no pattern as written.
@@ -267,6 +296,50 @@ first_reason="$(reason_for 'make test-race; echo "see record-launch.sh"')"
 	fail 'a chain led by the tier must still be pasted'
 [[ "${first_reason}" != *'not the first command here'* ]] ||
 	fail 'a chain led by the tier must not claim the tier is not first'
+
+# --- the paste must not itself be a launch ----------------------------------
+
+# A general property rather than a case: whatever command the deny hands back,
+# feeding it to the hook again must produce silence. A paste that still denies
+# is a fix that does not fix, and a paste that goes silent while a registered
+# tier still runs unwrapped is worse -- the session complies and the launch
+# escapes. That is exactly what `make test-race; make e2e` did: it pasted one
+# wrapper on the front, which silenced the hook because the first member was
+# then wrapped, while the second tier launched with no handle.
+#
+# Nothing here had to think of that case, which is the point of asserting a
+# property rather than a list of shapes.
+#
+# Its reach has a limit worth knowing. The round-trip only sees a bad paste
+# because the exemption below is per command: with the old per-string
+# exemption, the pasted string went silent for the same reason the original
+# bypass did, so one defect hid both itself and its detector. A property test
+# is only as strong as the predicate it round-trips through.
+roundtrip() {
+	local label="$1" command="$2" reason pasted out
+	reason="$(reason_for "${command}")"
+	[[ -n "${reason}" ]] || {
+		fail "${label}: expected a deny to round-trip"
+		return 0
+	}
+	pasted="${reason#*tmp/launches/: \`}"
+	# No paste offered (the multi-tier branch hands back an instruction), so
+	# there is nothing to feed back. `return 0` and not a bare `return`: the
+	# latter carries the failed test's status out of the function and `set -e`
+	# then kills the suite with no output at all.
+	[[ "${pasted}" != "${reason}" ]] || return 0
+	pasted="${pasted%%\`*}"
+	out="$(drive "${REPO_ROOT}" "$(bg_payload "${pasted}")")"
+	[[ -z "${out}" ]] ||
+		fail "${label}: the pasted fix is itself denied: ${pasted}"
+}
+
+roundtrip 'lone tier'          'make test-race'
+roundtrip 'redirected tier'    'make test-race > tmp/race.log 2>&1'
+roundtrip 'leading assignment' 'FOO=1 make test-race'
+roundtrip 'tier then echo'     'make test-race; echo done'
+roundtrip 'tier then wrapped'  'make test-race; scripts/agent/record-launch.sh true'
+roundtrip 'two tiers'          'make test-race; make e2e SUITE=single-node'
 
 # --- the lexer's own fallback -----------------------------------------------
 
