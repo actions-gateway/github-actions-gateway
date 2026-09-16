@@ -59,7 +59,7 @@ contains() {
 # --- what the driver manages, and what the file assigns --------------------
 
 # The driver reports its own array rather than this suite parsing it out of the
-# source, so a reformatted MANAGED_VARS cannot make the reconciliation below
+# source, so a reformatted managed list cannot make the reconciliation below
 # read a list nobody runs on.
 mapfile -t MANAGED < <("$DRIVER" --managed-vars)
 if ((${#MANAGED[@]} == 0)); then
@@ -68,7 +68,7 @@ if ((${#MANAGED[@]} == 0)); then
 	exit 1
 fi
 
-# The same rule lift_vars opens an assignment with, so the two agree on what
+# The same rule mklists.Lift opens an assignment with, so the two agree on what
 # counts as one.
 mapfile -t ASSIGNED < <(awk '
 	/^[A-Z_]+[ \t]*[:+?]?=/ { name = $0; sub(/[ \t]*[:+?]?=.*$/, "", name); print name }
@@ -89,7 +89,7 @@ SUBJECT_VAR="${ASSIGNED[-1]}"  # carries the entries every merge assertion is ab
 # --- the driver's list against the file it merges --------------------------
 #
 # Both directions, because the two failures are different and both silent. A
-# name the driver manages that the file does not assign makes lift_vars
+# name the driver manages that the file does not assign makes mklists.Lift
 # hard-fail, so the driver refuses every merge and git leaves ordinary conflict
 # markers. A list the file assigns that the driver does not manage is merged by
 # git alone, so two PRs appending to it collide on adjacent lines — the conflict
@@ -103,7 +103,7 @@ if ((${#stale[@]} == 0)); then
 	ok "every variable the driver manages is assigned in mk/gate-lists.mk"
 else
 	bad "every variable the driver manages is assigned in mk/gate-lists.mk" \
-		"MANAGED_VARS names ${stale[*]}, which mk/gate-lists.mk does not assign; the driver refuses every merge of that file until the two agree"
+		"the driver names ${stale[*]}, which mk/gate-lists.mk does not assign; the driver refuses every merge of that file until the two agree"
 fi
 
 unmanaged=()
@@ -114,7 +114,7 @@ if ((${#unmanaged[@]} == 0)); then
 	ok "every list in mk/gate-lists.mk is one the driver manages"
 else
 	bad "every list in mk/gate-lists.mk is one the driver manages" \
-		"mk/gate-lists.mk assigns ${unmanaged[*]}, which MANAGED_VARS omits; appends to those still conflict by line position"
+		"mk/gate-lists.mk assigns ${unmanaged[*]}, which the driver omits; appends to those still conflict by line position"
 fi
 
 # --- fixtures ---------------------------------------------------------------
@@ -129,6 +129,38 @@ makefile() {
 		echo
 		case "$v" in
 		"$SUBJECT_VAR") printf '%s := %s\n' "$v" "$1" ;;
+		"$WRAPPED_VAR") printf '%s := filler-a filler-b \\\n                    filler-c\n' "$v" ;;
+		*) printf '%s := filler-a filler-b\n' "$v" ;;
+		esac
+	done
+	printf '\n.PHONY: all\nall:\n\t@echo hi\n'
+}
+
+# makefile_wrapped ENTRIES — the same makefile with $SUBJECT_VAR written over
+# continuations, which the re-render case needs and `makefile` cannot give it.
+# The driver takes its wrap width from the assignment's head line, so a list
+# written on one line yields a width wider than anything a re-render emits and
+# nothing ever wraps. Only this shape reaches the wrapping.
+makefile_wrapped() {
+	local v e first
+	local -a entries
+	read -r -a entries <<<"$1"
+	echo "# leading prose"
+	for v in "${ASSIGNED[@]}"; do
+		echo
+		case "$v" in
+		"$SUBJECT_VAR")
+			first=1
+			for e in "${entries[@]}"; do
+				if ((first)); then
+					printf '%s := %s' "$v" "$e"
+					first=0
+				else
+					printf ' \\\n                 %s' "$e"
+				fi
+			done
+			printf '\n'
+			;;
 		"$WRAPPED_VAR") printf '%s := filler-a filler-b \\\n                    filler-c\n' "$v" ;;
 		*) printf '%s := filler-a filler-b\n' "$v" ;;
 		esac
@@ -171,7 +203,13 @@ expect_set() {
 		return
 	fi
 	local got want
-	got="$(entries_of "$FIXTURE_DIR/out" "$var")"
+	# Tolerate a failing read, because a failing read is the interesting case:
+	# entries_of pipes make through tr/sed/sort, so under `set -o pipefail` a
+	# makefile make cannot parse takes the whole suite down with it and the
+	# check below never runs. That is the one failure this oracle exists to
+	# catch -- a rendered block that dropped a continuation parses as a
+	# fraction of its list -- so it has to reach the report rather than abort.
+	got="$(entries_of "$FIXTURE_DIR/out" "$var")" || true
 	if [[ -s "$FIXTURE_DIR/make.err" ]]; then
 		bad "$desc" "make could not parse the merged file: $(head -1 "$FIXTURE_DIR/make.err")"
 		return
@@ -230,6 +268,33 @@ else
 	bad "a list neither side touched is left byte for byte" \
 		"$(diff <(grep -A2 "^$WRAPPED_VAR" "$FIXTURE_DIR/base") <(grep -A2 "^$WRAPPED_VAR" "$FIXTURE_DIR/out") | head -4 | tr '\n' ' ')"
 fi
+
+# --- the re-render path, which only a removal reaches ------------------------
+#
+# Every case above is an append or a refusal, so the driver's re-render branch
+# runs in none of them: an append keeps ours' lines and rewraps nothing. A
+# removal forces the whole block to be rebuilt, which is where a wrap can be
+# emitted without its continuation and silently assign a fraction of the list.
+#
+# Both sides have to change the list, or the assertion cannot fail. With only
+# theirs changing, a driver that renders a broken block falls back, and the
+# plain three-way merge of a one-sided change is clean and produces the right
+# answer — so the guard and the fallback agree and the test passes either way.
+# Here ours adds and theirs removes, so the fallback conflicts and only a
+# correct render can satisfy the assertion.
+#
+# The entries are long and the assignment is wrapped so the rebuilt block has
+# to wrap too.
+LONG="long-entry-aaaa long-entry-bbbb long-entry-cccc long-entry-dddd"
+LONG="$LONG long-entry-eeee long-entry-ffff long-entry-gggg long-entry-hhhh"
+
+makefile_wrapped "$LONG doomed-entry" >"$FIXTURE_DIR/base"
+makefile_wrapped "$LONG doomed-entry ours-added" >"$FIXTURE_DIR/ours"
+makefile_wrapped "$LONG" >"$FIXTURE_DIR/theirs"
+run_merge "$FIXTURE_DIR/base" "$FIXTURE_DIR/ours" "$FIXTURE_DIR/theirs"
+# shellcheck disable=SC2086 # $LONG is a deliberate word-split into arguments
+expect_set "a removal re-renders the block and every line still continues" "$SUBJECT_VAR" \
+	$LONG ours-added
 
 # --- refuses what it is not ------------------------------------------------
 

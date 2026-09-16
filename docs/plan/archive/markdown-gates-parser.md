@@ -129,7 +129,7 @@ A merge driver must reconstruct the file **line for line**, including the confli
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.
 
 **Read since as a ruling against Go, which it is not.** The argument above rules out goldmark; Go over `bufio` reconstructs a file line for line exactly as `awk` does.
-[merge-drivers-go.md](../merge-drivers-go.md) moved all four drivers to [`devtools/git`](../../../devtools/git) on that reading, and the shared merge is [`devtools/git/keyedrecords`](../../../devtools/git/keyedrecords).
+[merge-drivers-go.md](merge-drivers-go.md) moved all four drivers to [`devtools/git`](../../../devtools/git) on that reading, and the shared merge is [`devtools/git/keyedrecords`](../../../devtools/git/keyedrecords).
 
 Also out: `check-codegen-drift.sh`, the `chart-*-check.sh` family, `validate-egress-ip.sh`, `dogfood/setup.sh`, and the `e2e/` scripts.
 They are long, but they orchestrate external CLIs (`kubectl`, `helm`, `docker`, `controller-gen`).

@@ -198,7 +198,7 @@ Parsing structured text is necessary but not sufficient.
 A script that must reproduce its input **byte for byte** is worse off with an abstract syntax tree, which discards exactly the fidelity it depends on.
 The four merge drivers are the worked case, and they show what the rule does and does not rule out: an AST, not a language.
 They parse Markdown tables and Makefile assignments and are now Go over `bufio`, in [`devtools/git`](../../devtools/git), which reconstructs a file line for line exactly as the `awk` they replaced did, conflict-marker fallback included, where goldmark could not.
-[merge-drivers-go.md](../plan/merge-drivers-go.md) records the distinction and the testability argument that motivated the move.
+[merge-drivers-go.md](../plan/archive/merge-drivers-go.md) records the distinction and the testability argument that motivated the move.
 
 #### Worked examples
 

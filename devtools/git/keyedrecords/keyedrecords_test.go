@@ -277,3 +277,111 @@ func TestNoSurvivingRecordIsEverDropped(t *testing.T) {
 		t.Errorf("B was deleted on ours and untouched on theirs, so it must not survive: %q", got)
 	}
 }
+
+// --- BaseThenAdditions -------------------------------------------------------
+//
+// The other order, for a block whose record order carries nothing: the gate
+// lists in mk/gate-lists.mk, which make expands as sets. What these assert is
+// that the survival rules are the ones above — one set of per-key rules serves
+// both orders — while a reorder stops being something to infer from or to
+// refuse over.
+
+func mergeSet(t *testing.T, base, ours, theirs []string) []string {
+	t.Helper()
+	got, err := MergeOrdered(base, ours, theirs, firstField, BaseThenAdditions)
+	if err != nil {
+		t.Fatalf("MergeOrdered: unexpected error %v", err)
+	}
+	return got
+}
+
+func TestBaseThenAdditionsKeepsBaseOrderThenEachSidesAdditions(t *testing.T) {
+	got := mergeSet(t,
+		lines("A a", "B b", "C c"),
+		lines("A a", "O o", "B b", "C c"),
+		lines("A a", "B b", "T t", "C c"))
+	want := lines("A a", "B b", "C c", "O o", "T t")
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// The refusal Reconstruct makes over a reorder is exactly what must not happen
+// here: a Makefile list whose entries moved has not changed at all.
+func TestBaseThenAdditionsAcceptsAReorderOnBothSides(t *testing.T) {
+	got := mergeSet(t,
+		lines("A a", "B b", "C c"),
+		lines("C c", "A a", "B b"),
+		lines("B b", "C c", "A a"))
+	want := lines("A a", "B b", "C c")
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	// And the same input under the other order is refused, which is what makes
+	// the two orders a real choice rather than a spelling.
+	if _, err := MergeOrdered(
+		lines("A a", "B b", "C c"),
+		lines("C c", "A a", "B b"),
+		lines("B b", "C c", "A a"), firstField, Reconstruct); err == nil {
+		t.Error("Reconstruct accepted a both-sides reorder")
+	}
+}
+
+// Every survival rule is shared with Reconstruct. A record deleted on one side
+// and untouched on the other stays deleted, which is the rule a gate list
+// depends on most: a suite deleted deliberately must not come back.
+func TestBaseThenAdditionsKeepsTheSurvivalRules(t *testing.T) {
+	got := mergeSet(t,
+		lines("A a", "B b"),
+		lines("A a"),
+		lines("A a", "B b", "T t"))
+	want := lines("A a", "T t")
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("deleted record came back: got %q, want %q", got, want)
+	}
+
+	var u *Uncertain
+	_, err := MergeOrdered(
+		lines("A a"), lines("A ours"), lines("A theirs"), firstField, BaseThenAdditions)
+	if !errors.As(err, &u) {
+		t.Errorf("an edit/edit was not refused: %v", err)
+	}
+}
+
+func TestBaseThenAdditionsDropsNoSurvivingRecord(t *testing.T) {
+	base := lines("A a", "B b", "C c", "D d")
+	ours := lines("D d", "A a", "O o", "C c")
+	theirs := lines("B b", "T t", "A a", "C c")
+	got := mergeSet(t, base, ours, theirs)
+	// A and C survive on every side; B and D were each deleted on one side and
+	// untouched on the other; O and T are one-sided additions.
+	want := lines("A a", "C c", "O o", "T t")
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// Merge is MergeOrdered's Reconstruct, so a caller that wants the other order
+// has to say so. Asserting it here keeps a default flip from being silent.
+func TestMergeDefaultsToReconstruct(t *testing.T) {
+	base := lines("A a", "B b", "C c")
+	ours := lines("A a", "O o", "B b", "C c")
+	theirs := lines("A a", "B b", "C c")
+	viaMerge, err := Merge(base, ours, theirs, firstField)
+	if err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	viaOrdered, err := MergeOrdered(base, ours, theirs, firstField, Reconstruct)
+	if err != nil {
+		t.Fatalf("MergeOrdered: %v", err)
+	}
+	if strings.Join(viaMerge, "|") != strings.Join(viaOrdered, "|") {
+		t.Errorf("Merge = %q, Reconstruct = %q", viaMerge, viaOrdered)
+	}
+	// The two orders disagree on this input, so the assertion above is not
+	// satisfied by both of them happening to agree.
+	viaSet := mergeSet(t, base, ours, theirs)
+	if strings.Join(viaMerge, "|") == strings.Join(viaSet, "|") {
+		t.Error("the orders agree here, so this input cannot tell them apart")
+	}
+}
