@@ -5,8 +5,8 @@ go 1.26.6
 require (
 	github.com/actions-gateway/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 // workspace-local
 	github.com/actions-gateway/github-actions-gateway/api v0.0.0-00010101000000-000000000000 // workspace-local
-	github.com/onsi/ginkgo/v2 v2.32.1
-	github.com/onsi/gomega v1.42.1
+	github.com/onsi/ginkgo/v2 v2.32.2
+	github.com/onsi/gomega v1.43.0
 	github.com/stretchr/testify v1.12.1
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
@@ -19,7 +19,7 @@ require (
 	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
 	github.com/go-logr/logr v1.4.4
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/client_model v0.6.2
+	github.com/prometheus/client_model v0.6.3
 	go.uber.org/zap v1.28.0
 )
 
@@ -99,7 +99,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.37.0 // indirect

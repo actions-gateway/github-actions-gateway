@@ -5859,7 +5859,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/onsi/ginkgo/v2 (v2.32.1)
+Module: github.com/onsi/ginkgo/v2 (v2.32.2)
 License file: github.com/onsi/ginkgo/v2/LICENSE
 ================================================================================
 
@@ -5885,7 +5885,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
-Module: github.com/onsi/gomega (v1.42.1)
+Module: github.com/onsi/gomega (v1.43.0)
 License file: github.com/onsi/gomega/LICENSE
 ================================================================================
 
@@ -6208,7 +6208,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/prometheus/client_model (v0.6.2)
+Module: github.com/prometheus/client_model (v0.6.3)
 License file: github.com/prometheus/client_model/LICENSE
 ================================================================================
 
@@ -6415,7 +6415,7 @@ License file: github.com/prometheus/client_model/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/prometheus/client_model (v0.6.2)
+Module: github.com/prometheus/client_model (v0.6.3)
 License file: github.com/prometheus/client_model/NOTICE
 ================================================================================
 
@@ -10848,7 +10848,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: google.golang.org/protobuf (v1.36.12-0.20260120151049-f2248ac996af)
+Module: google.golang.org/protobuf (v1.36.12)
 License file: google.golang.org/protobuf/LICENSE
 ================================================================================
 
