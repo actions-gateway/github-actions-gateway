@@ -40,7 +40,9 @@ Two gating rows and the candidate validation, in the order they land.
 
 **Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.** Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when `v2` first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 `v1.8.0` tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
-Inside one release the sequencing still recovers most of it: the reject and the pre-upgrade check are in the tree before `v2` is served, which is the property that matters, and what is lost is the clean-population *window* an earlier tag would have given.
+Inside one release the sequencing recovers what it can, which is less than a tag's worth.
+The reject and the pre-upgrade check are in the tree before `v2` is served, so `main`, the dogfood cluster and the review order all meet the guard before the hazard.
+An operator does not: both halves arrive under the same tag, so for them the clean-population *window* an earlier tag would have given is gone rather than narrowed.
 
 **Nothing rides.** `scripts/release/semver-floor.sh v1.8.0` read `FLOOR: NONE` on 2026-09-17 over the 26 commits since the tag: six carry a `feat` or `fix` type and none touches a released artifact, so nothing user-visible has accumulated and a tag today would publish no change.
 1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](release-ladder.md#why-16-exists-rather-than-folding-into-15)).
