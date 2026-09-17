@@ -611,7 +611,9 @@ When coverage rises well above a floor, the gate prints a note suggesting `make 
 **Why the tolerance carries two units.** A tolerance fixed in percentage points does not mean the same thing on every module, because what it absorbs is statements and a statement is worth `100/N` points.
 The measured modules span 192 statements (`api`) to 5,523 (`cmd/agc`), a 29-fold range, so a flat 0.5pp buys `cmd/agc` 27.6 statements of slack and `api` **0.96**: one statement flipping fails the gate on the small module and is invisible on the large one.
 Q803 measured both halves of that on `cmd/proxy`.
-Two CI runs of byte-identical source read 78.7% and 79.3% with the package reporting `ok` both times, so two statements went unexercised without any test failing; 22 uncached local runs across three regimes (the package alone, workspace-wide, and workspace-wide pinned to 2 cores to emulate the runner) all read 79.3%, which is why the flip shows up only on a contended runner.
+Two CI runs of byte-identical source read 78.7% and 79.3% with the package reporting `ok` both times, so two statements went unexercised without any test failing; 22 uncached local runs across three regimes (the package alone, workspace-wide, and workspace-wide at `GOMAXPROCS=2 -p 2`) all read 79.3%.
+That third regime was written up here as pinning the run to 2 cores to emulate the runner, and it does not: two processes at `GOMAXPROCS=2` take 3.99 CPU-seconds per wall-second, so `-p 2` made it four ([why a local harness cannot reach a small runner](#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it), Q738).
+The flip does still show up only on a contended runner; what those 22 runs establish is narrower than a negative taken at the runner's shape.
 Meanwhile the recorded floor of 79.5% had become unreachable, since 348 statements can only produce 79.31% or 79.60%.
 It was correct when recorded, at 356 statements; #1013 then removed 8 of them, which moved the number to 79.3% and left the floor eating 0.19pp of a 0.5pp tolerance before any noise arrived, so one statement of slack remained and the observed flip cost two.
 The gate now prints a `note:` when a module sits below its floor but inside tolerance, because a bare `ok` is what hid that shortfall for the 13 days between #1013 and Q803.
@@ -2763,7 +2765,7 @@ Where none does, keep polling the signal, add the *other* real outcome as its ow
 
 #### A throwaway load harness is a measuring instrument, so calibrate it
 
-Four failure modes, each measured here, and each producing a **confident, wrong verdict**:
+Six failure modes, each measured here, and each producing a **confident, wrong verdict**:
 
 - **The load never started.** Q690's first harness backgrounded its generators with `setsid`, which does not exist on macOS.
   All three generators died instantly, 40 samples passed against an idle machine, and the run looked like strong evidence of no flake.
@@ -2774,6 +2776,22 @@ Four failure modes, each measured here, and each producing a **confident, wrong 
 - **The subject changed under the harness.** Q703's loop reported a hit on run 8 that was its own session's in-flight edit: a `trace()` call had been temporarily made unconditional to check that an assertion went red without it, and the loop caught that tree.
   It reads as a reproduction, and it is the flake's own signature, so nothing about the log says otherwise.
   Land the code first, then measure; the doc and backlog work that fills the wait is exactly the work a running gate does not decide ([run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), so do that against a tree the harness is not sampling.
+- **The harness's machine was the wrong shape, and nothing recorded what shape it had** (Q738).
+  `GOMAXPROCS` bounds how many threads run Go user code *inside one process*.
+  It is not a CPU allocation and it does not bound the machine, so `go test -p N` multiplies it: measured 2026-09-16 on go1.26.6/arm64, two processes at `GOMAXPROCS=2` take 3.99 CPU-seconds per wall-second against one process's 2.00.
+  Q803's regime C was exactly that shape, written up as pinned to 2 cores.
+  The phenomenon it was reaching for is *sharing*, which `GOMAXPROCS` never produces: under a `--cpus=2` quota the same pair takes 2.02 and each process falls to 1.01, where under `GOMAXPROCS` each keeps its own 2.00.
+  A goroutine that never waits cannot flake a timing-tolerant test.
+- **Ambient load is the other half of that shape, and it is nobody's flag.** Same binary, same flags, 38 minutes apart on this machine: an unrestricted run took 2.69 CPU-seconds per wall-second at load 103 and 7.87 at load 19.
+  A harness's effective machine is whatever else the box was running, so `uptime` goes beside every reading.
+  A loaded box also flatters the wrong-shape harness: the two-process host arm read 2.90 where the uncontended container arm read 3.99, close enough to 2 to pass for a successful pin.
+
+**What does reproduce a small runner is a cgroup CPU quota.** `docker run --cpus=2` bounds every thread in the process tree, and the runtime reads the quota, so `GOMAXPROCS` comes out at 2 with no environment variable set at all (measured on go1.26.6, this repo's pinned version).
+Assert that by reading `/sys/fs/cgroup/cpu.max` from inside the container rather than trusting the flag you passed: an arm that cannot prove its own premise is the first failure mode above wearing a container.
+One thing the quota does not fix is `runtime.NumCPU()`, which still reports the host's count inside it, so code sizing a pool off `NumCPU` runs at host scale either way.
+
+**And prefer a reading whose direction survives load.** A figure above a cap refutes the cap; a figure below it proves nothing, because a contended host starves a process for reasons that have nothing to do with the cap.
+Say which of the two you got rather than quoting the number as though it settled things either way.
 
 ### A fixture repo must not run background git
 
