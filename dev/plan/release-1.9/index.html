@@ -2662,15 +2662,18 @@
 
 <h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: shape decided 2026-09-08, not scoped.</strong> The rung exists because Rule #4b requires it, not because a defect asked for it, and its content cannot start until 1.8's soak readings land.
-Nothing here is a commitment to a date, and the version is provisional: if 1.8's readings come back negative, the <code>v2beta1</code> shape fix they name lands first and this rung moves.</p>
+<p><strong>Status: scoped 2026-09-17.</strong> The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
+The version is no longer provisional.
+It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
+Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
 <p><code>v2.0.0</code> advances the storage version to <code>v2</code> and drops <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code> and classic acquisition.
 It cannot also be the release that <em>introduces</em> <code>v2</code>: Kubernetes' <a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">deprecation policy</a> rule #4b says the storage version "may not advance until after a release has been made that supports both the new version and the previous version".</p>
 <p>The rule is a convention rather than something the apiserver enforces, so what it buys here is the argument, and it is <strong>rollback</strong>.
 Once stored objects are rewritten as <code>v2</code>, a cluster cannot return to a release whose CustomResourceDefinitions do not define <code>v2</code>.
-Without this rung that destination is <code>v1.8.0</code>, which would make <code>v2.0.0</code> — the largest upgrade this project asks anyone to make, carrying the <code>v1</code>→<code>v2</code> migration and four removals — the one upgrade with no way back.</p>
+Without this rung that destination is <code>v1.8.0</code>, which would make <code>v2.0.0</code> the one upgrade with no way back.
+It is already the largest this project asks anyone to make, carrying the <code>v1</code>→<code>v2</code> migration and four removals.</p>
 <p>It is also the only place the <code>v2beta1</code> ↔ <code>v2</code> conversion edge runs before it is mandatory.
 <a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">v2-ga.md</a>'s Phase 1 soak validates <code>v2beta1</code>'s shape and says nothing about a conversion that does not exist yet.</p>
 <p>Full reasoning: <a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">release-ladder.md</a>.</p>
@@ -2680,6 +2683,7 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2's step 1 carries a <code>+kubebuilder:storageversion</code> marker that belongs to Phase 3 and <code>v2.0.0</code>; moving it is part of <a href="../../queue/Q413/">Q413</a>, not a follow-up.</p>
 <p>The hub <em>may</em> move to <code>v2</code> here: <code>convertViaHub</code> routes spoke to hub to spoke, and nothing ties the hub to the storage version.</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
+<p>Two gating rows and the candidate validation, in the order they land.</p>
 <table>
 <thead>
 <tr>
@@ -2691,26 +2695,40 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 </thead>
 <tbody>
 <tr>
+<td><a href="../../queue/Q1085/">Q1085</a></td>
+<td>Admission rejects new <code>CiliumFQDN</code>/<code>CalicoFQDN</code> writes, and the pre-upgrade alias check joins the checklist</td>
+<td><code>1.9-gate</code></td>
+<td>🔲 ready, and first: it is the guard for the hazard Q413 introduces</td>
+</tr>
+<tr>
 <td><a href="../../queue/Q413/">Q413</a></td>
 <td><a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2: add <code>v2</code> to all five kinds, serve it beside <code>v2beta1</code>, extend conversion coverage. Storage marker withheld</td>
 <td><code>1.9-gate</code></td>
 <td>🔲 ready: the soak read clean 2026-09-14</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1085/">Q1085</a></td>
-<td>Admission rejects new <code>CiliumFQDN</code>/<code>CalicoFQDN</code> writes, and the pre-upgrade alias check joins the checklist</td>
-<td><code>1.9-gate</code></td>
-<td>🔲 open, lands in 1.8 if there is room</td>
+<td>—</td>
+<td>RC validated on dogfood</td>
+<td>gates</td>
+<td>🔲 no candidate cut</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
+<code>v1.8.0</code> tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
+Inside one release the sequencing recovers what it can, which is less than a tag's worth.
+The reject and the pre-upgrade check are in the tree before <code>v2</code> is served, so <code>main</code>, the dogfood cluster and the review order all meet the guard before the hazard.
+An operator does not: both halves arrive under the same tag, so for them the clean-population <em>window</em> an earlier tag would have given is gone rather than narrowed.</p>
+<p><strong>Nothing rides.</strong> <code>scripts/release/semver-floor.sh v1.8.0</code> read <code>FLOOR: NONE</code> on 2026-09-17 over the 26 commits since the tag: six carry a <code>feat</code> or <code>fix</code> type and none touches a released artifact, so nothing user-visible has accumulated and a tag today would publish no change.
+1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did (<a href="../release-ladder/#why-16-exists-rather-than-folding-into-15">release-ladder.md</a>).
+That is a reading rather than a decision: whether anything <em>should</em> ride is scope the maintainer sets, and the ledger takes a row for each item that does.</p>
 <h2 id="definition-of-done">Definition of Done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong><a href="../../queue/Q413/">Q413</a>'s Phase 2 has landed</strong> with <code>v2</code> served on all five kinds and <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers.</li>
 <li><strong>The conversion round-trips both directions</strong> across <code>v2beta1</code> ↔ <code>v2</code> on real objects, not only in unit tests.
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.</li>
-<li><strong><a href="../../queue/Q1085/">Q1085</a> has landed</strong>, here or in 1.8.
-   After this tag its two remaining halves stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
+<li><strong><a href="../../queue/Q1085/">Q1085</a>'s items 2 and 3 have landed</strong>, and landed before Q413.
+   1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
 <li><strong>The published tag serves both versions</strong>, which is the Rule #4b evidence <code>v2.0.0</code> depends on.
    Record it here, since <code>v2.0.0</code>'s own pre-flight cannot re-derive that a <em>previous</em> release served both.</li>
 </ol>

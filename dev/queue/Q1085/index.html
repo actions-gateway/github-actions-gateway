@@ -2599,8 +2599,10 @@
 
 <h1 id="v2beta1-deprecation-notice-alias-reject-and-the-pre-upgrade-check">v2beta1 deprecation notice, alias reject, and the pre-upgrade check<a class="headerlink" href="#v2beta1-deprecation-notice-alias-reject-and-the-pre-upgrade-check" title="Permanent link">&para;</a></h1>
 <p>Q1082 decided that <code>v2beta1</code> is not served past <code>v2.0.0</code>, which puts three pieces of work on the critical path that were optional while the aliases had until <code>v3.0.0</code>.
-<strong>The deadline is 1.9, the <a href="../../plan/release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">Rule #4b overlap release</a>, and 1.8 is the better target.</strong> 1.9 is where <code>v2</code> starts being served, so it is the first release in which a conversion that cannot represent an alias can be asked for at all.
-Landing items 2 and 3 in 1.8 means the population is already clean when <code>v2</code> appears; landing them in 1.9 means the guard and the hazard arrive together, which still works and has no margin.
+<strong>The deadline is 1.9</strong>, the <a href="../../plan/release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">Rule #4b overlap release</a>, and it is now the only target.
+1.9 is where <code>v2</code> starts being served, so it is the first release in which a conversion that cannot represent an alias can be asked for at all.
+This row preferred 1.8, where the population would already be clean when <code>v2</code> appeared; <code>v1.8.0</code> tagged on 2026-09-14 without items 2 or 3, so what ships is the other case, where the guard and the hazard arrive in one release with no margin.
+The consequence is an ordering rather than a risk to carry: items 2 and 3 land ahead of <a href="../Q413/">Q413</a> inside 1.9, so the reject and the check are in the tree before <code>v2</code> is served.
 Item 1 is complete: the docs half shipped with Q452, and the release-notes half is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.8.0.md">v1.8.0.md</a> under Deprecations.
 What remains is items 2 and 3, both 1.9.</p>
 <ol>

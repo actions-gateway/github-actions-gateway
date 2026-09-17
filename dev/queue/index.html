@@ -2652,7 +2652,7 @@ With no network, <code>--no-pr-check</code> hands out the top item and says noth
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.8-gate</code> (blocks the Release 1.8 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>1.9-gate</code> (blocks the Release 1.9 tag, the <a href="../plan/release-ladder/">Rule 4b overlap release</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.9-gate</code> (blocks the Release 1.9 tag, the <a href="../plan/release-ladder/">Rule 4b overlap release</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)<br />
 <strong>Ranks:</strong> <code>make queue-rank ARGS="--after &lt;rank&gt; --before &lt;rank&gt;"</code> (also <code>--head</code> / <code>--tail</code>): it warns when the key it mints is one the store already holds (<a href="../development/maintaining-backlog/#mint-the-rank-dont-write-one">why a tie is legal</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.
@@ -2698,7 +2698,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1119/">Q1119</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">E2E_V2_ProxyConnectWorks 502s the CONNECT tunnel, evicting a queued PR</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>M</td>
@@ -2953,6 +2953,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured: of 38 local shell-kill targets only 2 carried a worktree anchor; the rest match every session (Q690 killed the <code>make check</code> …</td>
 </tr>
 <tr>
+<td><a href="Q1125/">Q1125</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e setup fetches cert-manager's manifest live and unretried</a></td>
+<td><code>ci</code> <code>flake</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The e2e cluster step runs <code>make apply-cert-manager</code>, which is <code>cmd/gmc/Makefile:100:kubectl apply -f $(_CERTMANAGER_URL)</code> in that module …</td>
+</tr>
+<tr>
 <td><a href="Q1041/">Q1041</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">A pages deploy can succeed while the site never serves the version</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -2979,7 +2987,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q794/">Q794</a></td>
 <td><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code> no longer needs to pin <code>acquisitionProtocol: Classic</code></a></td>
-<td><code>debt</code></td>
+<td><code>debt</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>It writes Classic onto every set it emits, whose stated reason — keeping multi-label matching — Q726 removed.</td>
@@ -3099,7 +3107,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1027/">Q1027</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">A patch line's e2e leg dispatches from main, not the candidate</a></td>
-<td><code>ci</code> <code>dogfood</code></td>
+<td><code>ci</code> <code>dogfood</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (scripts/dogfood/validate-release.sh:510), so the e2e matrix leg runs <code>main</code>'s …</td>
@@ -3115,7 +3123,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1069/">Q1069</a></td>
 <td><a href="../operations/observability-metrics/">Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef</a></td>
-<td><code>feature</code> <code>security</code></td>
+<td><code>feature</code> <code>security</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>M</td>
 <td><code>EgressAuditUnattributed</code> and <code>actions_gateway_egress_audit_unattributed</code> (Q1062) read the proxy half from …</td>
@@ -3123,7 +3131,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1070/">Q1070</a></td>
 <td><a href="../operations/observability-dashboards/#security-dashboard">Key a security-dashboard panel on the egress-audit attribution gauge</a></td>
-<td><code>feature</code> <code>docs</code></td>
+<td><code>feature</code> <code>docs</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Q1062 shipped <code>actions_gateway_egress_audit_unattributed</code>, the series the security dashboard's own Row 1 prose says a consumer-keyed panel …</td>
@@ -3678,7 +3686,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>debt</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check …</td>
+<td><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check ([``scripts/agent/local-throttle.sh:178:[[ -n …</td>
 </tr>
 <tr>
 <td><a href="Q980/">Q980</a></td>
@@ -3699,7 +3707,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1101/">Q1101</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">A v2 ActionsGateway gets no AGC ServiceMonitor</a></td>
-<td><code>bug</code> <code>docs</code></td>
+<td><code>bug</code> <code>docs</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>M</td>
 <td><code>applyOrPruneServiceMonitors</code> builds the two per-tenant <code>ServiceMonitor</code>s that let Prometheus scrape a tenant's AGC and proxy over mTLS.</td>
@@ -3779,7 +3787,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1049/">Q1049</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/brokertest/server.go"><code>brokertest</code> strands a queued job when its session is deleted</a></td>
-<td><code>tests</code> <code>debt</code></td>
+<td><code>tests</code> <code>debt</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-09-03 while fixing <a href="Q1008/">Q1008</a>.</td>
@@ -3811,7 +3819,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1019/">Q1019</a></td>
 <td>Dogfood scripts write shared kubeconfig state on every run</td>
-<td><code>debt</code> <code>dogfood</code> <code>retro</code></td>
+<td><code>debt</code> <code>dogfood</code> <code>retro</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> …</td>
@@ -3843,7 +3851,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1050/">Q1050</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh">17 of 19 go-throttle shell cases re-run the Go table test's matrix</a></td>
-<td><code>tests</code> <code>debt</code></td>
+<td><code>tests</code> <code>debt</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><strong>Measured 2026-09-03</strong> by extracting each suite's case commands and normalising whitespace: of the 19 command literals in …</td>
@@ -3903,6 +3911,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>slow.commands</code> holds seven patterns and only the two <code>scripts/dogfood/*.sh</code> ones carry a command anchor.</td>
+</tr>
+<tr>
+<td><a href="Q1124/">Q1124</a></td>
+<td><a href="../development/maintaining-backlog/#a-label-earns-its-place-by-discriminating"><code>debt</code> labels 40% of the store, the shape that retired <code>infra</code></a></td>
+<td><code>debt</code> <code>docs</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Measured 2026-09-17</strong> with <code>python3 scripts/docs/queue.py metrics --labels</code> over the 152 rows this branch started from: <code>debt</code> is on …</td>
 </tr>
 </tbody>
 </table>

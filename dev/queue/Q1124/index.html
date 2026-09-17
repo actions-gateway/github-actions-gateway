@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1088/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1124/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Shell gates skip every script outside scripts/ - GitHub Actions Gateway</title>
+        <title>debt labels 40% of the store, the shape that retired infra - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#shell-gates-skip-every-script-outside-scripts" class="md-skip">
+        <a href="#debt-labels-40-of-the-store-the-shape-that-retired-infra" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Shell gates skip every script outside scripts/
+              debt labels 40% of the store, the shape that retired infra
             
           </span>
         </div>
@@ -2597,51 +2597,23 @@
   
 
 
-<h1 id="shell-gates-skip-every-script-outside-scripts">Shell gates skip every script outside <code>scripts/</code><a class="headerlink" href="#shell-gates-skip-every-script-outside-scripts" title="Permanent link">&para;</a></h1>
-<p><code>shellcheck</code>, <code>errexit-prologue-check</code> and <code>script-modes-check</code> all select their files with the same expression, <code>git_candidates 'scripts/*.sh'</code> (<code>scripts/ci/shellcheck-scripts.sh:33:git_candidates 'scripts/*.sh'</code>, <code>scripts/ci/check-errexit-prologue.sh:57:git_candidates 'scripts/*.sh'</code>, <code>scripts/ci/check-script-modes.sh:99:git_candidates 'scripts/*.sh' | select_present_files</code>).
-The rationale each states is about shell, not about a directory: <code>check-errexit-prologue.sh</code> exists because <code>set -e</code> does not reach inside a command substitution (Q733), which is true of any bash file in the tree.</p>
-<p><strong>Measured 2026-09-09.</strong> Four non-vendored, non-testdata scripts sit outside that selection, and every one of them declares <code>set -euo pipefail</code> without <code>shopt -s inherit_errexit</code>, which is the exact state <code>errexit-prologue-check</code> exists to reject:</p>
-<table>
-<thead>
-<tr>
-<th>Script</th>
-<th>Reader</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh"><code>deploy/monitoring/preview/render.sh</code></a></td>
-<td>the dashboard preview harness</td>
-</tr>
-<tr>
-<td><a href="../../operations/examples/install-apiserver-audit-policy.sh"><code>docs/operations/examples/install-apiserver-audit-policy.sh</code></a></td>
-<td><strong>operators</strong>, who copy and run it</td>
-</tr>
-<tr>
-<td><a href="../../assets/render-wormhole-animation.sh"><code>docs/assets/render-wormhole-animation.sh</code></a></td>
-<td>the website asset build</td>
-</tr>
-<tr>
-<td><code>cmd/gmc/.devcontainer/post-install.sh</code></td>
-<td>devcontainer setup</td>
-</tr>
-</tbody>
-</table>
-<p>All four are shellcheck-clean today, which is what makes this worth adding rather than urgent, and also why "it passes" proves nothing on its own: assert a seeded fault fails.
-The operator example is the one with a reader outside this repo.</p>
-<p><strong>What it already cost.</strong> Q1072 added a lock to <code>render.sh</code> and had to hand-run <code>shellcheck</code> to get any verdict on it at all, because no target in the tree would read the file.
-A hand-run check is not a gate: it holds for exactly the session that remembered.</p>
-<p><strong>The gap has a second layer, and CI measured it on that PR.</strong> The file selection above is what the gate reads once it runs; whether it runs at all is a path filter, and that filter misses the same tree.
-<code>.github/workflows/unit-test.yml:135:- 'scripts/**'</code> sits under a <code>scripts:</code> filter listing <code>scripts/**</code> plus <code>deploy/templates/**</code>, <code>deploy/dogfood-e2e/**</code> and the MkDocs hooks, but not <code>deploy/monitoring/preview/**</code>.
-Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1887">#1887</a> at head <code>13bf50b2e</code>, whose largest single-file change is 90 inserted lines of bash in <code>render.sh</code>: <code>gh pr checks</code> reported 40 pass and 26 skipping, and <code>shellcheck</code> was one of the 26.
-So a PR can be entirely a shell change and still show a green check set in which no shellcheck ran: the <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">skipped-is-not-passed</a> shape, reached through the filter rather than the gate.
-Widening one half without the other fixes nothing: the filter decides whether the job starts, the pathspec decides what it then reads.</p>
-<p><strong>The selection, settled 2026-09-17: every tracked <code>*.sh</code>, less <code>vendor/</code>, <code>tools/vendor/</code> and <code>testdata/</code> by pattern.</strong> Widening the pathspec pulls in ~50 vendored scripts and the two fixtures, none of which this repo may reformat, so an exclusion is needed either way.
-The three candidates were that, enumerating the non-vendored roots, and a registry file the way <code>mk/gate-lists.mk</code> does for gates.
-<strong>The registry loses on the defect's own shape.</strong> This row exists because four scripts sat outside a selection nobody widened, so the selection has to be fail-closed: a new script is covered unless somebody excludes it.
-A registry is opt-in, so the next script written outside <code>scripts/</code> and left unregistered reproduces this exact row, and a root enumeration has the same failure one directory up.
-<code>mk/gate-lists.mk</code> is the right precedent for gates, where an unregistered gate is loud because it does not run at all; an unregistered <em>subject</em> is silent, which is the inversion.</p>
-<p><code>script-modes-check</code> keeps its narrower selection rather than widening with the other two: a <code>docs/operations/examples/</code> script an operator copies has different mode expectations than an entry point under <code>scripts/</code>, and this row does not settle what those should be.</p>
+<h1 id="debt-labels-40-of-the-store-the-shape-that-retired-infra"><code>debt</code> labels 40% of the store, the shape that retired <code>infra</code><a class="headerlink" href="#debt-labels-40-of-the-store-the-shape-that-retired-infra" title="Permanent link">&para;</a></h1>
+<p><strong>Measured 2026-09-17</strong> with <code>python3 scripts/docs/queue.py metrics --labels</code> over the 152 rows this branch started from: <code>debt</code> is on <strong>61</strong>, which is 40.1%.
+<a href="../../development/maintaining-backlog/#a-label-earns-its-place-by-discriminating">maintaining-backlog.md</a> records that <code>infra</code> was retired at 69 of 160, which is 43.1%, and sets the bar for a label at <code>docs/development/maintaining-backlog.md:828:it would land on more than a third of rows</code> on that page.
+So <code>debt</code> sits <strong>three points</strong> below the share that retired the label it replaced, on 61 rows against <code>tests</code> 51, <code>ci</code> 44, <code>docs</code> 21 and <code>feature</code> 21.</p>
+<p><code>tests</code> clears the population half of that bar too, which is not usually read as a problem: 51 of 152 is 33.6% against a third at 50.67 rows.
+The bar's two halves are a disjunction, so clearing the count is enough on its own and naming the question does not rescue a label from it.
+What defuses it here is arithmetic rather than grammar.
+That margin is one row wide and does not survive this row being filed: at 154 rows a third is 51.33, so <code>tests</code> at 51 falls back under.
+The number is a prompt rather than a verdict at this store's size, and that cuts the same way for <code>debt</code>.</p>
+<p><code>debt</code>'s declared scope is "refactors, dedup, and dead-surface removal with no behavior change", and the question it answers is <em>what can I clean up without a design decision</em>.
+That question is still a real one, which is what makes this different from <code>infra</code>: <code>infra</code> had no question of its own and had become "engineering work that isn't docs, tests, or security".
+The reading to take is whether 61 rows all answer <code>debt</code>'s question, or whether some of them are carrying it because nothing narrower exists.</p>
+<p>The same page warns against applying the number past its argument: a store whose work is nearly all one kind runs that label high without anything being wrong, and this backlog is largely internal engineering hygiene by construction.
+So the count is the finding and the retirement is not.</p>
+<p><strong>Ask:</strong> whether 40% on <code>debt</code> reads as the <code>infra</code> failure or as a true reading of what this backlog is.
+It is a call about the vocabulary an adopter and every future session navigate the store by, and both answers are defensible on the same number, so nothing here is a measurement waiting to be taken.
+If it is the failure, the repair the page prescribes is a narrower split rather than a rename, and every split candidate is a second question about what this repo wants the column to cut.</p>
 
 
 

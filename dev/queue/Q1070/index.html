@@ -2606,6 +2606,9 @@ Say on the panel that a <code>1</code> here is the opt-in default rather than a 
 "N of M gateways unattributed" carries the same fact without a band that is always lit, at the cost of losing the since-when a timeline gives for free.</p>
 <p>The reason this was not folded into Q1062 is the render, not the JSON: <code>make dashboard-render-check</code> fails a dashboard changed beyond its panel descriptions whose screenshot did not, so the panel needs a live Grafana + Prometheus to re-render <code>docs/assets/grafana-dashboard-security.png</code> per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/README.md</code></a>.
 A consumer-keyed <em>traffic</em> panel, proxy series filtered to the gateways reading <code>1</code>, is the larger question behind it and needs its own decision about what a mixed pool should show.</p>
+<p><strong>Ask:</strong> whether the security dashboard's <code>1 = flagged</code> state timeline may carry a series that is near-solid lit across a fleet that has not opted in.
+The row makes the case that it trains the eye to discount three neighbours where a <code>1</code> is a real fault, and the stat panel that avoids it loses the since-when a timeline gives for free.
+That is a call about what the audit persona should see rather than about the series, and it decides the render this row is otherwise blocked behind.</p>
 
 
 

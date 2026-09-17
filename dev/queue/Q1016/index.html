@@ -2611,8 +2611,11 @@ GKE routes control-plane-to-pod traffic through the konnectivity tunnel, and <co
 With no agent connected the API server cannot reach any in-cluster webhook, whatever the endpoints say, and it fails instantly rather than timing out.</p>
 <p>So the diagnostic that separates the three is the konnectivity agent, and it appears in none of the entry's steps.</p>
 <p><strong>Two deliverables, and the second is what stops it recurring.</strong> Add the variant to the troubleshooting entry, with the agent listing as its distinguishing reading.
-Then decide whether <code>wait_for_gmc</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/gmc.sh">scripts/dogfood/lib/gmc.sh</a>) should also wait for a Ready konnectivity agent: it already encodes "bring the GMC up before applying v2 objects", and this is the same ordering rule with a second precondition the script does not know about.
+Then extend <code>wait_for_gmc</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/gmc.sh">scripts/dogfood/lib/gmc.sh</a>) to wait for a Ready konnectivity agent as well.
 The cost of not fixing it is one failed apply and a re-run on every scale-from-zero, which is every dogfood session that starts at rest.</p>
+<p><strong>Settles (answered):</strong> groomed 2026-09-17, on the row's own argument and against nothing arguing the other way.
+<code>wait_for_gmc</code> already encodes "bring the GMC up before applying v2 objects"; a connected konnectivity agent is that same ordering rule with one more precondition, and the measurement above is what shows the function's current preconditions do not cover the failure it exists to prevent.
+So the second deliverable is a task rather than a choice, and the row is dispatchable as written.</p>
 <p><strong>Not a Q408 defect</strong>, and deliberately not folded into that PR: the posture change is egress, this is bring-up sequencing, and they share only the session that found it.</p>
 
 

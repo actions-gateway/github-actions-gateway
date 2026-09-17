@@ -2605,8 +2605,9 @@ Twelve sites return it, counted 2026-09-07 from golangci-lint 2.13.2's SA1019 re
 <ul>
 <li><strong>After a finalizer add</strong> (2 in agc, 1 in gmc): the <code>Update</code> that added the finalizer fires the primary watch, so the requeue is a second reconcile of a state the event already reconciles.
   Dropping it to <code>ctrl.Result{}</code> rests on the primary watch carrying no generation predicate, which holds today (<code>SetupWithManager</code> puts predicates on the secondary watches only) and is an argument until an envtest case pins it.</li>
-<li><strong>On a status-update conflict</strong> (the rest): the conventional shape returns the conflict error and lets the workqueue back off; these swallow it and requeue silently by design (the archived k8s-best-practices plan, row A2, chose that in 2026-06).
-  Either keep the silence with a short fixed <code>RequeueAfter</code>, or return the error and accept a <code>Reconciler error</code> log line per conflict.</li>
+<li><strong>On a status-update conflict</strong> (the rest): the conventional shape returns the conflict error and lets the workqueue back off; these swallow it and requeue silently by design.
+  <strong>Keep the silence, with a short fixed <code>RequeueAfter</code>.</strong> Settled 2026-09-17 against the archived <a href="../../plan/archive/k8s-best-practices/">k8s-best-practices</a> row A2, which took that decision on 2026-06-03 and did not merely inherit it: the finding was that the GMC <em>dropped</em> the write, and the fix was to requeue rather than to start returning the error.
+  <code>TestUpdateStatus_RequeuesOnConflict</code> pins it, so returning the error is a test change as well as a behaviour change, and neither is in this row's scope.</li>
 </ul>
 <p>Delete the exclusion in the same change, so a new use of the field fails the gate.</p>
 

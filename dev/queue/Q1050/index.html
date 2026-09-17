@@ -2605,8 +2605,14 @@ So the shell suite re-runs the decision matrix the table test already owns, thro
 Whether that needs 17 cases or 3 is the open question, and it is a judgement about how much end-to-end signal a seam is worth rather than a defect.</p>
 <p><strong>Not a flake row, and it is no longer one.</strong> Each duplicated case costs a probe fork, and a starved fork used to redden the suite; <a href="../Q1031/">Q1031</a> closed that by re-asking a probe that never answered, so cutting the case count no longer buys reliability.
 What it would buy is run time and one less place to edit when the decision matrix moves.</p>
+<p><strong>The run-time half is bounded small, groomed 2026-09-17.</strong> <a href="../Q1117/">Q1117</a> measured the capped <code>scripts-test</code> fan-out on CI and named its three longest suites, <code>check-registry-mirror-render-test</code>, <code>check-roadmap-test</code> and <code>gate-list-test</code>; <code>claude-go-throttle-hook-test</code> is in neither run's top three, so it falls in the remaining 129 suites at a median of 4s and 3s.
+That bounds rather than measures it, since nobody has timed this suite by name, but the job cannot finish faster than its 125s and 97s floors, so no cut here reaches the wall time.
+What survives as the case for cutting is edit-locality alone, against two end-to-end escapes (Q624, Q696) that bought those cases.</p>
 <p>Weigh it against the reason those cases exist: the suite asserts both directions because both fail silently (Q624, closed), and its wrapper and heredoc cases were each added after a real escape (Q696, Q624).
 Deleting an end-to-end assertion because a unit test covers the same input is the move that looks clean and loses the integration signal, so this needs the argument made rather than a count applied.</p>
+<p><strong>Ask:</strong> whether 17 duplicated end-to-end cases or 3 is the right price for this seam.
+The run-time arm is bounded above and the reliability arm closed with <a href="../Q1031/">Q1031</a>, so what is left is how much end-to-end signal a duplicated case is worth against the cost of one more place to edit, with two real escapes (Q624, Q696) arguing the other way.
+Both answers are defensible on the same 17, so nothing here is a measurement waiting to be taken.</p>
 
 
 

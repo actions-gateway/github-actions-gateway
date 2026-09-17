@@ -2640,7 +2640,7 @@ Per-run attribution:</p>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/29346467482">29346467482</a> (07-14)</td>
 <td><code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> + <code>E2E_V2_ProxyConnectWorks</code></td>
-<td>Both the v1 proxy and the v2 EgressProxy returned <code>CONNECT tunnel failed, response 502</code> on every attempt — clients reached the proxies fine (NP dataplane healthy); the proxies could not dial <strong>real GitHub</strong>. A shared upstream cause on the hosted runner's external egress (network/DNS blip), not cluster-internal. Not Q300's mechanism; watch for recurrence before filing separately.</td>
+<td>Both the v1 proxy and the v2 EgressProxy returned <code>CONNECT tunnel failed, response 502</code> on every attempt — clients reached the proxies fine (NP dataplane healthy); the proxies could not dial <strong>real GitHub</strong>. A shared upstream cause on the hosted runner's external egress (network/DNS blip), not cluster-internal. Not Q300's mechanism; watch for recurrence before filing separately. <strong>It recurred and is filed: <a href="../../queue/Q1119/">Q1119</a>.</strong></td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/29432174271">29432174271</a> (07-15)</td>
@@ -2651,6 +2651,11 @@ Per-run attribution:</p>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/29634174711">29634174711</a> (07-18)</td>
 <td><code>E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees</code></td>
 <td><strong>Not Q300 — this was Q349, pre-fix.</strong> The run's commit <code>0160e26</code> (a Dependabot merge) predates the Q349 fix (PR #692, merged later that day): deliveries stayed 0 through the 90 s window, the exact Q349 signature #692 removes by gating the spec on the HPA being scaling-active. This run drove the erroneous "#612 held &lt;5 days" escalation. All subsequent <code>main</code> runs (6+ with #692 in) are green.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35156765438">35156765438</a> (09-16)</td>
+<td><code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> + <code>E2E_V2_ProxyConnectWorks</code></td>
+<td><strong>The 07-14 pair again, and the recurrence that row said to watch for.</strong> Both specs failed on <code>push main</code> at 22:24:33Z over 27 attempts of <code>CONNECT tunnel failed, response 502</code> with <code>HTTP_CODE=000</code>, and the calico merge group had taken the v2 spec alone five hours earlier. External-egress class, not Q300's mechanism, so this row stays deferred. Filed and measured in <a href="../../queue/Q1119/">Q1119</a>.</td>
 </tr>
 </tbody>
 </table>

@@ -2601,12 +2601,18 @@
 <p><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (scripts/dogfood/validate-release.sh:510), so the e2e matrix leg runs <code>main</code>'s copy of <code>e2e-test.yml</code> and its test code against the candidate's GAG runners.
 For a minor cut from <code>main</code>'s head those are near enough the same tree.
 For a patch cut off an older tag they are not, and Q879 made validating a patch line compulsory, so the case now happens by design rather than never.</p>
-<p>Decide what a patch line should dispatch, and whether the default should be the candidate's ref rather than <code>main</code>.
-The same tension is already documented at release.md's "A release line carries its own validation harness": the gate runs the scripts in your checkout against the artifacts of the tag, deliberately, so pinning the dispatch to the candidate is not obviously right either.
-It may be that <code>main</code> is correct and only the runbook needs to say so.</p>
+<p>Decide what a patch line should dispatch, and whether the default should be the candidate's ref rather than <code>main</code>.</p>
+<p><strong>The row's own counter-argument does not survive reading its citation, groomed 2026-09-17.</strong> It said the tension is "already documented" at release.md's <em>A release line carries its own validation harness</em>, so pinning the dispatch to the candidate is not obviously right either.
+That paragraph argues the opposite way: <code>docs/operations/release.md:1288:the gate runs *the scripts in your checkout* against *the artifacts of the tag*</code>, and the line under it says a <code>release-X.Y</code> branch "inherits whatever harness that commit had".
+Checkout-wins is therefore the documented posture, and <code>E2E_DISPATCH_REF</code> defaulting to <code>main</code> is the one leg that breaks it rather than the one leg that follows it.</p>
+<p><strong>What is genuinely open</strong> is whether that posture reaches a <em>dispatched workflow ref</em> at all, which release.md never says: <code>validate-release.sh</code> and the dogfood scripts under it are local files a checkout supplies, and <code>e2e-test.yml</code> plus its test code are fetched by ref at dispatch time, so nothing in the runbook has ruled on the third case.
+Whoever settles it starts from the full paragraph rather than the row's summary of it.</p>
 <p>Unmeasured: nobody has run the gate on a patch line.
 The mechanism above is read off the source, not observed, and no patch release has ever been cut here (all seven stable tags are <code>.0</code>).
 Surfaced by the review of #1788.</p>
+<p><strong>Ask:</strong> whether the <em>checkout-wins</em> posture release.md states for <code>validate-release.sh</code> is meant to reach a dispatched workflow ref as well.
+No measurement can answer it, since no patch release has ever been cut here, and the runbook has never ruled on the third case.
+Both readings ship a working gate; they differ in what a patch line's e2e leg is evidence <em>about</em>.</p>
 
 
 

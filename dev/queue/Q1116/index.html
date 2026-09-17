@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#one-of-the-three-has-a-mechanism-now-and-it-is-not-the-shared-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One of the three has a mechanism now, and it is not the shared signature
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2636,6 +2655,18 @@ No green run exists on the scaleset lane, so runner and outcome are still perfec
 Each assertion wants the active answer and gets the passive one: a checker told to exit 1 exits 0, twice, in two unrelated checkers; and a stop that must reach the run's children reports that it did not.
 That last one is the most legible, because reaching a child process is a property of the process group rather than of any assertion's logic, and a worker pod's PID namespace is exactly the kind of thing that differs from a GitHub-hosted VM.
 <strong>Unverified:</strong> no reading has been taken inside the pod, and the three are grouped on the shape of their failure rather than on a mechanism anyone has traced.</p>
+<h2 id="one-of-the-three-has-a-mechanism-now-and-it-is-not-the-shared-signature">One of the three has a mechanism now, and it is not the shared signature<a class="headerlink" href="#one-of-the-three-has-a-mechanism-now-and-it-is-not-the-shared-signature" title="Permanent link">&para;</a></h2>
+<p><strong>Traced 2026-09-17 from the job's own output, which carries the answer beside the failure.</strong> <code>check-registry-mirror-render-test</code>'s failure is not a checker refusing the active answer.
+It is one assertion needing a capability the lane lacks, sitting outside the guard its neighbours use.</p>
+<p>The checker skips on purpose and says so: <code>scripts/manifest/check-registry-mirror-render.sh:186:if ! command -v kubectl &gt;/dev/null 2&gt;&amp;1; then</code> opens a branch printing <code>scripts/manifest/check-registry-mirror-render.sh:192:kubectl not on PATH (it is e2e-tier in scripts/ci/check-tools.sh), so the render assertions were skipped</code> before it exits 0.
+Both failing runs print that note, then <code>registry-mirror target list agrees with the tree: 4 render targets, 2 non-targets (renders not checked)</code>.</p>
+<p>The test guards for that skip everywhere except at the failing line.
+It computes <code>have_kubectl</code> and branches on it at <code>scripts/manifest/check-registry-mirror-render-test.sh:123:if ((have_kubectl)); then</code> and at seven later assertions.
+Rule 1's two are unguarded deliberately, for the reason at <code>scripts/manifest/check-registry-mirror-render-test.sh:133:and it must fire with or without kubectl, since it reads no render</code> in that comment, and both passed on the lane.
+Rule 2's <code>scripts/manifest/check-registry-mirror-render-test.sh:151:expect 'a target that does not render is caught' 1</code> does read a render and is not guarded, which is why it is the one that fails.</p>
+<p>That also breaks the confound: <code>ubuntu-latest</code> ships kubectl and a scaleset worker pod does not, so runner and outcome track each other through a missing tool rather than through anything about the lane's process model.</p>
+<p><strong>This weakens the grouping rather than confirming it.</strong> A missing capability guard on one assertion is not what <code>check-queue-rules-test</code>'s one-item fixture view looks like, so the three are less likely to share a cause than the paragraph above supposes.
+Read the other two for their own mechanisms rather than for this one.</p>
 <p>For <code>check-queue-rules</code> specifically the line beside the failure reads <code>check-queue-rules: ok (1 item(s), 2 at the merge base, rules 8, 9, 11, 13 and 14)</code>, a one-item view, so the thread there is whether the fixture's second item was absent when rule 9 was evaluated, which would make the rule vacuous rather than wrong.</p>
 <p>Reaching the lane again needs a <code>workflow_dispatch</code> with <code>target_gag</code>, which is what a third reading costs.</p>
 <p>Not <a href="../Q822/">Q822</a>: that row's trigger names <code>git-merge-script-index-test</code> and <code>git-merge-plan-index-test</code> and a <code>merge-*-index: the build failed with:</code> line, and these are different suites reaching different verdicts.

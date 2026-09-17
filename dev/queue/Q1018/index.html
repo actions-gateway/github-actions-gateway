@@ -2621,6 +2621,13 @@ The two are not in tension: only the caller knows which venue it is in, so the s
 <p><strong>The live second instance of the same choice is <code>scripts/ci/check-template-library.sh</code></strong>, whose render half degrades to a printed skip with no way to require it, and which <code>unit-test.yml</code> runs unflagged.
 Its skip is the venue-defect kind, not the legitimate kind, so it can go green in CI while rendering nothing.
 Whether it gains a <code>--require-render</code> of its own or the summary line this row proposes is the same open question, but it should not be left reading as the legitimate case.</p>
+<p><strong>Settles (answered):</strong> the two halves this row still leaves open are both answered in the tree, and the first is read here rather than pointed at.
+<em>Script or step</em> is answered by precedent, taken 2026-09-17: <strong>twelve</strong> workflows write <code>GITHUB_STEP_SUMMARY</code> across <strong>thirteen</strong> sites, and all thirteen redirect to it inline from a workflow step rather than from a script.
+The only script in the tree that writes it is <code>scripts/e2e/e2e-report-summary.sh</code>, at <code>scripts/e2e/e2e-report-summary.sh:175:summarize_report "$file" &gt;&gt;"$GITHUB_STEP_SUMMARY"</code> there, and it falls back to stdout when the variable is unset.
+Thirteen to one for the step, so the majority this row said to follow is the step.
+The row's own earlier count of seven was wrong by five and is corrected here.
+<em>Whether a skip should also annotate</em> is answered by <code>scripts/manifest/check-registry-mirror-render.sh</code>, which this row already records as the other half of the pattern: the script offers both behaviours and the call site picks, so the legitimate skip annotates and the venue-defect skip fails.
+What is genuinely undecided is only which of those two <code>scripts/ci/check-template-library.sh</code> should take, and the row already argues it is the venue-defect kind.</p>
 
 
 

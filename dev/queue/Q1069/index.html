@@ -2618,6 +2618,9 @@ It is wrong in both directions, and the first is the one Q1062 exists to prevent
 - <strong>A per-<code>RunnerSet</code> twin</strong>, set by the AGC's RunnerSet reconciler, which already resolves the set's pool for its own <code>EgressUnattributed</code> condition.
   Keeps the resolution where it happens and gives a panel a per-set key, at the cost of a second condition and gauge in a second binary.</p>
 <p>Whichever lands, the gateway gauge's own caveat ("scoped to <code>defaultProxyRef</code>") comes out of <code>observability-metrics.md</code>, <code>observability-logging.md</code>, <code>tenant-onboarding.md</code>, <code>appendix-g-future-enhancements.md</code> §G.3, and the condition godoc in <code>api/apiconditions/conditions.go</code>.</p>
+<p><strong>Settles:</strong> the per-<code>RunnerSet</code> twin has more of the repo behind it than the row's even-handed framing suggests, and the read that settles it is cheap.
+The AGC's RunnerSet reconciler already resolves the set's own pool for <code>EgressUnattributed</code>, so the twin adds a condition beside one that exists rather than a resolution path that does not, and <a href="../Q1070/">Q1070</a> wants a per-set key for a panel that the gateway rollup cannot supply.
+Confirm that resolution is already on the AGC's path in <code>runnerset_target.go</code>, weigh it against the GMC hot-path <code>Get</code>s the other shape adds, and write the answer here.</p>
 
 
 

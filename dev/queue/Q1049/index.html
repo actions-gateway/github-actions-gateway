@@ -2608,6 +2608,9 @@ This row is the class: the next test to enqueue twice has to know the rule, and 
 <p>Candidate: on DELETE, move that session's undelivered messages to another active session of the same owner, or hold them for the next session that owner registers.
 Weigh it against what per-session isolation currently buys: <code>sigterm_test.go</code> and the Q260 fan-out accounting both enqueue per session deliberately, so re-offering must not silently redeliver where a test asserts a job was dropped.
 Decide that before writing it; a wrong answer here makes a test double lie in a new direction rather than the old one.</p>
+<p><strong>Measure:</strong> read what <code>sigterm_test.go</code> and the Q260 fan-out accounting actually assert when a job goes undelivered, then decide the stub's DELETE behaviour against that.
+The row names them as the constraint and nobody has read them for this question: if either asserts a <em>dropped</em> job by observing it never arrives, re-offering to a sibling session makes that assertion unfalsifiable and the answer is hold-for-the-next-session-of-that-owner rather than re-offer.
+If neither does, re-offer is the closer model of real GitHub and the cheaper stub.</p>
 
 
 

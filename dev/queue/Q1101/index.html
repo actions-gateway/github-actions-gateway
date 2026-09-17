@@ -2599,7 +2599,7 @@
 
 <h1 id="a-v2-actionsgateway-gets-no-agc-servicemonitor">A v2 ActionsGateway gets no AGC ServiceMonitor<a class="headerlink" href="#a-v2-actionsgateway-gets-no-agc-servicemonitor" title="Permanent link">&para;</a></h1>
 <p><code>applyOrPruneServiceMonitors</code> builds the two per-tenant <code>ServiceMonitor</code>s that let Prometheus scrape a tenant's AGC and proxy over mTLS.
-Measured 2026-09-12: its only caller is <code>actionsgateway_controller.go:289</code>, the <strong>v1</strong> reconciler.
+Measured 2026-09-12: its only caller is <code>cmd/gmc/internal/controller/actionsgateway_controller.go:289:if err := r.applyOrPruneServiceMonitors(ctx, ag); err != nil {</code>, the <strong>v1</strong> reconciler.
 The v2 reconciler has no call to it and no ServiceMonitor path of its own, so a v2 <code>ActionsGateway</code> gets the AGC metrics <code>Service</code> (<code>buildAGCServiceV2</code>) and nothing that scrapes it.
 <code>buildMetricsServiceMonitor</code> takes a <code>*gmcv1alpha1.ActionsGateway</code>, so it cannot be called from the v2 path as it stands.</p>
 <p>A v2 <code>EgressProxy</code> is unaffected: <code>egressproxy_metrics.go</code> reconciles its own monitor.
@@ -2609,6 +2609,9 @@ The other is that it was missed, which is what the v1 code path being intact and
 Settle it against <a href="../../design/appendix-h-v2-api-decomposition/">appendix-h</a> and the M3b history before writing either a monitor or a design note.</p>
 <p><a href="../../operations/observability-metrics-access/">observability-metrics-access.md</a> now says v2 gets no AGC monitor and points here; that line comes out when this row resolves, whichever way it goes.
 Found while sweeping the v1-only AGC identifiers (Q1099), which is why it is filed rather than fixed: the sweep was a naming change and this is a missing reconciler.</p>
+<p><strong>Settles:</strong> against <a href="../../design/appendix-h-v2-api-decomposition/">appendix-h</a> and the M3b history, exactly as the row says.
+This is a read rather than a judgement: either the v2 metrics decomposition records a per-gateway monitor as deferred, in which case the gap is a decision and the row becomes a design note, or it does not, in which case the intact-but-uncalled v1 path is a miss and the row becomes a reconciler.
+Nothing else in this row can move until that read is taken.</p>
 
 
 

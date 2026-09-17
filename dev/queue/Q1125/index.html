@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1088/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1125/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Shell gates skip every script outside scripts/ - GitHub Actions Gateway</title>
+        <title>e2e setup fetches cert-manager's manifest live and unretried - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#shell-gates-skip-every-script-outside-scripts" class="md-skip">
+        <a href="#e2e-setup-fetches-cert-managers-manifest-live-and-unretried" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Shell gates skip every script outside scripts/
+              e2e setup fetches cert-manager's manifest live and unretried
             
           </span>
         </div>
@@ -2579,6 +2579,69 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#measured-2026-09-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured 2026-09-17
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-repo-already-states-the-goal-this-path-misses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The repo already states the goal this path misses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-bumped-deliberately" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not bumped, deliberately
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-two-paths-disagree-about-retry-not-only-about-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two paths disagree about retry, not only about caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,51 +2660,34 @@
   
 
 
-<h1 id="shell-gates-skip-every-script-outside-scripts">Shell gates skip every script outside <code>scripts/</code><a class="headerlink" href="#shell-gates-skip-every-script-outside-scripts" title="Permanent link">&para;</a></h1>
-<p><code>shellcheck</code>, <code>errexit-prologue-check</code> and <code>script-modes-check</code> all select their files with the same expression, <code>git_candidates 'scripts/*.sh'</code> (<code>scripts/ci/shellcheck-scripts.sh:33:git_candidates 'scripts/*.sh'</code>, <code>scripts/ci/check-errexit-prologue.sh:57:git_candidates 'scripts/*.sh'</code>, <code>scripts/ci/check-script-modes.sh:99:git_candidates 'scripts/*.sh' | select_present_files</code>).
-The rationale each states is about shell, not about a directory: <code>check-errexit-prologue.sh</code> exists because <code>set -e</code> does not reach inside a command substitution (Q733), which is true of any bash file in the tree.</p>
-<p><strong>Measured 2026-09-09.</strong> Four non-vendored, non-testdata scripts sit outside that selection, and every one of them declares <code>set -euo pipefail</code> without <code>shopt -s inherit_errexit</code>, which is the exact state <code>errexit-prologue-check</code> exists to reject:</p>
-<table>
-<thead>
-<tr>
-<th>Script</th>
-<th>Reader</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh"><code>deploy/monitoring/preview/render.sh</code></a></td>
-<td>the dashboard preview harness</td>
-</tr>
-<tr>
-<td><a href="../../operations/examples/install-apiserver-audit-policy.sh"><code>docs/operations/examples/install-apiserver-audit-policy.sh</code></a></td>
-<td><strong>operators</strong>, who copy and run it</td>
-</tr>
-<tr>
-<td><a href="../../assets/render-wormhole-animation.sh"><code>docs/assets/render-wormhole-animation.sh</code></a></td>
-<td>the website asset build</td>
-</tr>
-<tr>
-<td><code>cmd/gmc/.devcontainer/post-install.sh</code></td>
-<td>devcontainer setup</td>
-</tr>
-</tbody>
-</table>
-<p>All four are shellcheck-clean today, which is what makes this worth adding rather than urgent, and also why "it passes" proves nothing on its own: assert a seeded fault fails.
-The operator example is the one with a reader outside this repo.</p>
-<p><strong>What it already cost.</strong> Q1072 added a lock to <code>render.sh</code> and had to hand-run <code>shellcheck</code> to get any verdict on it at all, because no target in the tree would read the file.
-A hand-run check is not a gate: it holds for exactly the session that remembered.</p>
-<p><strong>The gap has a second layer, and CI measured it on that PR.</strong> The file selection above is what the gate reads once it runs; whether it runs at all is a path filter, and that filter misses the same tree.
-<code>.github/workflows/unit-test.yml:135:- 'scripts/**'</code> sits under a <code>scripts:</code> filter listing <code>scripts/**</code> plus <code>deploy/templates/**</code>, <code>deploy/dogfood-e2e/**</code> and the MkDocs hooks, but not <code>deploy/monitoring/preview/**</code>.
-Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1887">#1887</a> at head <code>13bf50b2e</code>, whose largest single-file change is 90 inserted lines of bash in <code>render.sh</code>: <code>gh pr checks</code> reported 40 pass and 26 skipping, and <code>shellcheck</code> was one of the 26.
-So a PR can be entirely a shell change and still show a green check set in which no shellcheck ran: the <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">skipped-is-not-passed</a> shape, reached through the filter rather than the gate.
-Widening one half without the other fixes nothing: the filter decides whether the job starts, the pathspec decides what it then reads.</p>
-<p><strong>The selection, settled 2026-09-17: every tracked <code>*.sh</code>, less <code>vendor/</code>, <code>tools/vendor/</code> and <code>testdata/</code> by pattern.</strong> Widening the pathspec pulls in ~50 vendored scripts and the two fixtures, none of which this repo may reformat, so an exclusion is needed either way.
-The three candidates were that, enumerating the non-vendored roots, and a registry file the way <code>mk/gate-lists.mk</code> does for gates.
-<strong>The registry loses on the defect's own shape.</strong> This row exists because four scripts sat outside a selection nobody widened, so the selection has to be fail-closed: a new script is covered unless somebody excludes it.
-A registry is opt-in, so the next script written outside <code>scripts/</code> and left unregistered reproduces this exact row, and a root enumeration has the same failure one directory up.
-<code>mk/gate-lists.mk</code> is the right precedent for gates, where an unregistered gate is loud because it does not run at all; an unregistered <em>subject</em> is silent, which is the inversion.</p>
-<p><code>script-modes-check</code> keeps its narrower selection rather than widening with the other two: a <code>docs/operations/examples/</code> script an operator copies has different mode expectations than an entry point under <code>scripts/</code>, and this row does not settle what those should be.</p>
+<h1 id="e2e-setup-fetches-cert-managers-manifest-live-and-unretried">e2e setup fetches cert-manager's manifest live and unretried<a class="headerlink" href="#e2e-setup-fetches-cert-managers-manifest-live-and-unretried" title="Permanent link">&para;</a></h1>
+<p>The e2e cluster step runs <code>make apply-cert-manager</code>, which is <code>cmd/gmc/Makefile:100:kubectl apply -f $(_CERTMANAGER_URL)</code> in that module, and the URL behind it is <code>cmd/gmc/Makefile:24:releases/download/$(CERTMANAGER_VERSION)/cert-manager.yaml</code> on github.com.
+One fetch, no retry, on the critical path of every e2e run in both CNI lanes.</p>
+<h2 id="measured-2026-09-17">Measured 2026-09-17<a class="headerlink" href="#measured-2026-09-17" title="Permanent link">&para;</a></h2>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34856925669">34856925669</a>, <code>e2e (calico)</code> on <code>push main</code> at 2026-09-14 14:45Z, went red on exactly that:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>error: unable to read URL "https://github.com/cert-manager/cert-manager/releases/download/v1.20.2/cert-manager.yaml", server reported 504 Gateway Timeout, status code=504
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make[1]: *** [Makefile:100: apply-cert-manager] Error 1
+</code></pre></div>
+<p>The lane had already stood a three-node cluster up and preloaded cert-manager's controller, webhook and cainjector images, so the run was almost entirely spent before the fetch that killed it.</p>
+<h2 id="the-repo-already-states-the-goal-this-path-misses">The repo already states the goal this path misses<a class="headerlink" href="#the-repo-already-states-the-goal-this-path-misses" title="Permanent link">&para;</a></h2>
+<p>The images are cached and the manifest is not, in the same step.
+<code>actions/cache</code> keyed on <code>cert-manager-images-${CERTMANAGER_VERSION}</code> restores <code>/tmp/cert-manager-images</code>, the preload loop reads its <code>images.txt</code>, and the very next line is <code>.github/workflows/e2e-reusable.yml:654:make apply-cert-manager</code>, which goes back to github.com for the manifest.</p>
+<p>The sibling metrics-server cache states the goal outright at <code>.github/workflows/e2e-reusable.yml:529:The cached dir holds the image tar and the image list</code> in that comment, finishing on the line below: so a hit needs no manifest fetch.
+That is the property the cert-manager path was given a cache for and does not have.</p>
+<p>So the fix has a precedent in the file it belongs in: cache the manifest beside the images it was parsed for, and apply from the cached copy.
+<code>scripts/fetch/prepull-manifest-images.sh</code> already downloads that exact URL to extract the image refs, so a cache hit has the bytes in hand and discards them.</p>
+<h2 id="not-bumped-deliberately">Not bumped, deliberately<a class="headerlink" href="#not-bumped-deliberately" title="Permanent link">&para;</a></h2>
+<p><a href="../../development/maintaining-backlog/#flake-fixes-go-first">maintaining-backlog.md</a> exempts this shape from the flakes-first rule at <code>docs/development/maintaining-backlog.md:672:a flake rooted in an outside service that hasn't recurred (file, don't bump)</code> on that page.
+A 504 from github.com's release CDN is an outside service and this is one occurrence, so the row is filed on its own merit rather than moved to the top.
+It gets bumped if it recurs.</p>
+<h2 id="the-two-paths-disagree-about-retry-not-only-about-caching">The two paths disagree about retry, not only about caching<a class="headerlink" href="#the-two-paths-disagree-about-retry-not-only-about-caching" title="Permanent link">&para;</a></h2>
+<p><code>scripts/fetch/prepull-manifest-images.sh</code> fetches <strong>the same URL</strong> on a cache miss and fetches it properly: <code>scripts/fetch/prepull-manifest-images.sh:61:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> is the line.
+<code>make apply-cert-manager</code> then fetches it again through <code>kubectl apply -f</code> with no retry at all.
+So the repo already knows this URL is worth retrying, in the script that reads it first.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>Two other e2e fetch failures sit in the same window and are <strong>not</strong> established as the same cause: <code>ErrImagePull</code> in <code>E2E_V2_TwoGatewaysCoexist</code>'s <code>BeforeAll</code> (merge group, 2026-09-16 19:11Z), and six <code>curl: (22)</code> responses of 500 before exit 22 (<code>push main</code>, 2026-09-10 22:52Z).
+Read both when fixing this one; they may be one class or three.
+The proxy 502s are a separate class and are <a href="../Q1119/">Q1119</a>.</p>
 
 
 

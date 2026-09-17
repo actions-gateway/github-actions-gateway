@@ -2608,11 +2608,16 @@ The number is therefore not an artifact of that change.</p>
 <p>The baseline drifts between re-records rather than moving with any one change, which is what makes the margin a standing condition rather than an incident.
 Nothing watches the margin, so the failure mode is quiet: a floor the tolerance is absorbing asserts progressively less, and the first loud signal is a real regression arriving after the slack is spent.</p>
 <p><strong>The fix wants a quiet tree, which is why this is a row rather than a hunk.</strong> <code>make cover-update</code> rewrites <code>coverage-baseline.txt</code> for every module at once, so it collides with any branch whose diff moves a covered line; there were 17 open PRs when this was filed.
-Re-record when the tree is quiet, and decide at the same time whether a floor that only tolerance keeps green should re-record downward at all, or whether <code>cmd/proxy</code> wants tests instead.
+Re-record when the tree is quiet.
 Found while working Q719; out of that item's scope, filed rather than fixed.</p>
 <p><strong>Why this outlives <a href="../Q989/">Q989</a>.</strong> That row is parked in Flake watch and records the same <code>./cmd/probe</code> shortfall, but only as the supporting fact that made its own defect observable: <code>make cover-update</code> would clear the shortfall and with it the evidence.
 When Q989 retires, that fact goes with it.
-This row is where the shortfall lives on its own terms, and the decision it wants is unchanged: re-record on a quiet tree, and decide at the same time whether a floor that only tolerance keeps green should re-record downward at all, or whether the module wants tests.</p>
+This row is where the shortfall lives on its own terms, and what it wants is a re-record on a quiet tree.</p>
+<p><strong>Settles (answered):</strong> groomed 2026-09-17.
+This row twice deferred <em>whether a floor only tolerance keeps green should re-record downward at all</em>, and <a href="../../development/testing/">testing.md</a> answered it at <code>docs/development/testing.md:620:Re-record when you see it: the tolerance is for transient noise, not for a floor the tree can no longer reach.</code> on that page.
+Downward is also the cheap direction there, since <code>docs/development/testing.md:603:instead contribute a lower but still-defended floor</code> costs the ratchet nothing and never causes a false failure.
+So re-record on the quiet tree, and file a separate row if anyone wants the number back through tests.
+The same sentence also named <code>cmd/proxy</code> as the module wanting tests, which this row's own re-measurement puts <em>at</em> its floor rather than below it; the module below is <code>cmd/probe</code>, and the row already says to read it for the class.</p>
 
 
 

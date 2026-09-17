@@ -2610,6 +2610,9 @@ This row is the record of what that deferred, not a re-opening of it.</p>
 Idempotent, removes a shared-state write from every dogfood script, and leaves the guard in force for the case that matters, which is switching to a <em>different</em> cluster.
 The risk to weigh is a kubeconfig entry that is present but stale (a rebuilt cluster reusing the name), where skipping the fetch turns a working refresh into a confusing failure on the next call; a cheap mitigation is to fetch when the entry is older than some age, or to keep the fetch behind an opt-out rather than removing it.</p>
 <p>An override is the wrong long-term shape here for the reason overrides usually are: used routinely it stops being a decision and becomes a prefix nobody reads.</p>
+<p><strong>Settles:</strong> the direction is argued in the row and nothing in it argues the other way, so what is left to settle is the stale-entry mitigation, and the row already offers both candidates.
+Read what <code>gke_get_credentials_and_verify</code>'s callers do after a cluster recreate that reuses a name: if no dogfood script survives a rebuild without re-running <code>setup.sh</code>, the stale-entry case cannot arise from a dogfood session and the plain verify-then-fetch-on-mismatch shape is enough.
+If it can, take the opt-out rather than the age check, which needs a clock nothing else here keeps.</p>
 
 
 
