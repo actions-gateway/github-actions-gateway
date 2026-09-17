@@ -230,3 +230,79 @@ func dumpCommand(label, name string, args ...string) {
 	}
 	_, _ = fmt.Fprintf(GinkgoWriter, "--- %s ---\n%s\n", label, out)
 }
+
+// DumpEgressProxyDiagnostics writes the EgressProxy's own account of a failed
+// `real-github-egress` CONNECT spec to the Ginkgo output, and stamps a verdict
+// that names which hop refused (Q1119).
+//
+// The two proxy-CONNECT specs failed together on 2026-09-16 with
+// `curl: (56) CONNECT tunnel failed, response 502`, and only one of them
+// captured anything proxy-side: the v1 spec dumps every pod in the namespace
+// via DumpProvisioningDiagnostics and so caught nine "upstream dial failed"
+// lines across two replicas, while the v2 spec dumps its AGC Deployments alone
+// and caught none. The banner closes that gap for both and, unlike a raw log
+// dump, distinguishes a proxy whose log could not be read from one that handled
+// no CONNECT at all — the two produce identical empty text, and only one of
+// them attributes anything.
+//
+// It reads pod logs, the proxy's NetworkPolicy and the pod descriptions.
+// Nothing here reads a Secret: describe renders a Secret-backed volume as its
+// name, which is how the proxy's TLS material reaches the pod.
+//
+// It is best-effort: every command failure is reported inline and skipped,
+// never propagated, so calling it from a failure-gated AfterEach cannot mask
+// the original failure. Call it only when the spec has already failed.
+func DumpEgressProxyDiagnostics(ns, proxyDeployment string) {
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"\n===== EgressProxy CONNECT diagnostics (namespace=%s deployment=%s) =====\n", ns, proxyDeployment)
+
+	evidence := collectProxyReplicaEvidence(ns, proxyDeployment)
+	verdict := AttributeProxyConnect(evidence)
+
+	dumpCommand("proxy pod descriptions in "+ns,
+		"kubectl", "describe", "pods", "-n", ns, "-l", "app="+proxyDeployment)
+	// The egress rule set is what separates a locally dropped SYN from one that
+	// left the node, so it is evidence for the dial-failure verdict rather than
+	// background. Sampled: it carries GitHub's full meta range set.
+	dumpNetworkPolicies("networkpolicies in "+ns, ns)
+
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"\n=== EGRESSPROXY CONNECT ATTRIBUTION: %s ===\n%s%s",
+		verdict, FormatProxyConnectEvidence(evidence), ProxyConnectGuidance(verdict))
+
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"===== end EgressProxy CONNECT diagnostics (namespace=%s deployment=%s) =====\n\n", ns, proxyDeployment)
+}
+
+// collectProxyReplicaEvidence reads each proxy replica's log and scores it.
+//
+// Per pod rather than `logs deploy/<name>`, which follows one replica only: the
+// 2026-09-16 failure spread its dial failures over both, so a single-replica
+// read would have reported seven of the nine and no second replica at all. A
+// pod whose log will not fetch is carried as unreadable rather than dropped, so
+// the verdict can tell an empty dump from a silent proxy.
+func collectProxyReplicaEvidence(ns, proxyDeployment string) []ProxyReplicaEvidence {
+	pods, err := Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"-l", "app="+proxyDeployment, "-o", "name"))
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- proxy pods in %s: unavailable (%v) ---\n", ns, err)
+		return nil
+	}
+
+	var evidence []ProxyReplicaEvidence
+	for _, pod := range strings.Fields(pods) {
+		// --tail is generous: the retry budget drives up to nine CONNECTs per
+		// spec across two specs, and the startup line that dates the replica
+		// must not scroll out behind them.
+		out, logErr := Run(exec.Command("kubectl", "logs", pod, "-n", ns,
+			"--tail=400", "--all-containers", "--prefix"))
+		if logErr != nil {
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- %s logs in %s: unavailable (%v) ---\n", pod, ns, logErr)
+			evidence = append(evidence, ScoreProxyReplicaLog(pod, "", false))
+			continue
+		}
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- %s logs in %s ---\n%s\n", pod, ns, out)
+		evidence = append(evidence, ScoreProxyReplicaLog(pod, out, true))
+	}
+	return evidence
+}

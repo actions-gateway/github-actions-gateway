@@ -90,6 +90,13 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 			// Both AGCs share the fakegithub/infra; dump each gateway's AGC state.
 			utils.DumpAGCSessionDiagnostics(tenantNS, alphaAGC, infraNamespace, fakegithubServiceName)
 			utils.DumpAGCSessionDiagnostics(tenantNS, betaAGC, infraNamespace, fakegithubServiceName)
+			// The AGC dumps reach their own Deployments only, so a CONNECT 502
+			// out of ProxyConnectWorks used to leave nothing proxy-side in the
+			// output at all (Q1119). Unconditional: the proxy is this suite's
+			// shared egress path, so its account is evidence for any failure
+			// here, and the banner attributes nothing when there is nothing to
+			// attribute.
+			utils.DumpEgressProxyDiagnostics(tenantNS, proxyDeploy)
 		}
 	})
 
