@@ -110,8 +110,9 @@ The scheduled [`updatecli.yml`](../../.github/workflows/updatecli.yml) workflow 
   It cannot say whether reopening *alone* would release a PR nobody has approved, because that one had already been approved when it happened.
   A stored App token would remove the hold; it is deliberately not used yet (one more secret to manage), matching the go-sync rationale.
 - **Triage cadence.** updatecli is scheduled just after Dependabot so all dependency PRs land together and are reviewed in one weekly pass.
-- **A stale Go bump PR rebases itself, but never merge one by hand.** The vendor sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged while `main` moves goes conflicting and cannot self-rebase.
-  [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) replays its bumps onto current `main` instead (Q427).
+- **A stale Go bump PR rebases itself, but never merge one by hand.** The vendor sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged while `main` moves cannot self-rebase.
+  It then strands either as a conflict, or as a cleanly mergeable PR that is permanently red, which happens where a required gate reads state that moves on its own: `release-pins-check` compares the install pins against the newest stable tag, so tagging a release reddens every branch based before it (Q1118).
+  [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) replays the bumps of both onto current `main` instead (Q427).
   Resolving that conflict by hand can silently downgrade a module; see [go-workspaces.md](go-workspaces.md#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you).
 - **Manifest rot.** A manifest is bespoke: if an upstream renames a release asset or changes its checksum-file layout, the run fails or no-ops.
   Watch the scheduled run's status; a silent green with no PR for a long-stale pin is the signal to check the manifest.

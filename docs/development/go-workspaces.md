@@ -197,10 +197,19 @@ Run the same remedy locally with `make deps-sync` whenever you change a dependen
 ### A synced branch stops auto-rebasing, and is rebased for you
 
 Dependabot only rebases a branch it still owns, and the `chore(deps): sync …` commit marks the branch as modified by someone else.
-From that point Dependabot leaves it alone, so a synced PR that is not merged before `main` moves under it goes **permanently conflicting** and never self-heals on its own.
+From that point Dependabot leaves it alone, so a synced PR that is not merged before `main` moves under it strands and never self-heals.
 
-The `dependabot-rebase-stale` workflow (`.github/workflows/dependabot-rebase-stale.yml`, Q427) rescues it.
-On every `main` push, plus a daily safety net at 07:47 UTC and `workflow_dispatch`, it looks for open, same-repo, `CONFLICTING` Dependabot `go_modules` PRs whose branch tip is no longer Dependabot's, and rebases each one with [`scripts/ci/dependabot-rebase-stale.sh`](../../scripts/ci/dependabot-rebase-stale.sh).
+It strands two ways, and both want the same remedy.
+It goes **permanently conflicting** when `main` edits the same `go.mod` rows.
+Or it stays cleanly mergeable and goes **permanently red**, because a required gate reads state that moves on its own: `release-pins-check` compares the install and upgrade pins against the newest stable tag, so tagging a release reddens every branch based before it, whatever that branch contains.
+Measured 2026-09-16 on [#1878](https://github.com/actions-gateway/github-actions-gateway/pull/1878) and [#1880](https://github.com/actions-gateway/github-actions-gateway/pull/1880): both `MERGEABLE`, both failing `release-pins` and `doc-links-gate`, neither touching a single file under `docs/`, and `main` green on the same gates.
+That verdict is a function of wall-clock time rather than of the branch, so only a rebase clears it (Q1118).
+
+The `dependabot-rebase-stale` workflow (`.github/workflows/dependabot-rebase-stale.yml`, Q427) rescues both.
+On every `main` push, plus a daily safety net at 07:47 UTC and `workflow_dispatch`, it looks for open, same-repo Dependabot `go_modules` PRs whose branch tip is no longer Dependabot's, and rebases each stranded one with [`scripts/ci/dependabot-rebase-stale.sh`](../../scripts/ci/dependabot-rebase-stale.sh).
+A PR counts as stranded when it is `CONFLICTING`, or when it is behind `main` **and** its checks are failing.
+Both halves of that second test carry weight: a behind-but-green PR is left to the merge queue, which rebases it there, and a PR level with `main` that is red is red on its own tree, so replaying it would reproduce the same red.
+Checks withheld at `action_required` count as pending rather than failing, because that is the state this workflow's own force-push leaves behind; reading them as a failure would have it re-rescue its own work on every later `main` push.
 The branch-tip check matters: a branch the bot still owns rebases itself, and force-pushing over that would clobber it mid-flight.
 A run is capped at `MAX_PRS=3` PRs and names any it defers to the next run.
 
@@ -222,7 +231,7 @@ A comment posted by `github-actions[bot]` with the workflow's `GITHUB_TOKEN` is 
 This repo deliberately stores no Personal Access Token, so the automation has to do the rebase itself.
 A maintainer typing `@dependabot recreate` by hand still works, and remains the equivalent manual remedy.
 
-Run it locally against the live repo with `scripts/ci/dependabot-rebase-stale.sh --list` (print what it would act on), `--dry-run` (rebase locally, push nothing), or `--bumps A/go.mod B/go.mod` (print the bumps it would extract from a pair of files).
+Run it locally against the live repo with `scripts/ci/dependabot-rebase-stale.sh --list` (print what it would act on), `--dry-run` (rebase locally, push nothing), `--bumps A/go.mod B/go.mod` (print the bumps it would extract from a pair of files), or `--verdict STATE BEHIND CHECKS` (print the stranded-or-not decision for three readings, without touching GitHub).
 
 ### Both bot pushes leave the checks withheld pending approval
 

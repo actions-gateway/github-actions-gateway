@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# dependabot-rebase-stale.sh - rebase a conflicted Dependabot Go-module PR onto
-# current main by replaying its version bumps (Q427).
+# dependabot-rebase-stale.sh - rebase a stranded Dependabot Go-module PR onto
+# current main by replaying its version bumps (Q427, Q1118).
 #
 # WHY THIS EXISTS INSTEAD OF `@dependabot recreate`
 # dependabot-go-sync.yml (Q111) pushes a `chore(deps): sync ...` commit onto the
@@ -69,16 +69,21 @@ Usage: scripts/ci/dependabot-rebase-stale.sh [--dry-run] [PR_NUMBER ...]
        scripts/ci/dependabot-rebase-stale.sh --list
        scripts/ci/dependabot-rebase-stale.sh --bumps BASE_GO_MOD TIP_GO_MOD
        scripts/ci/dependabot-rebase-stale.sh --select < GH_PR_LIST_JSON
+       scripts/ci/dependabot-rebase-stale.sh --checks < GH_ROLLUP_JSON
+       scripts/ci/dependabot-rebase-stale.sh --verdict STATE BEHIND CHECKS
 
-Rebase every conflicted Dependabot Go-module PR onto the base branch by
-replaying its version bumps there, then regenerating the vendor trees and
-notices. See the header of this script for why it replays instead of merging.
+Rebase every stranded Dependabot Go-module PR onto the base branch by replaying
+its version bumps there, then regenerating the vendor trees and notices. A PR is
+stranded when it conflicts, or when it is behind the base branch with failing
+checks. See the header of this script for why it replays instead of merging.
 
   (no PR numbers)  discover every open PR and act on the eligible ones
   --dry-run        analyse and rebase locally, push and comment nothing
   --list           print the eligible PR numbers, one per line, and exit
   --bumps          print the bumps between two go.mod files, then exit
   --select         filter `gh pr list` JSON on stdin to candidate PR numbers
+  --checks         classify a `statusCheckRollup` array on stdin, then exit
+  --verdict        print the rescue/skip decision for three readings, then exit
 
 Env: BASE_BRANCH (default main), REMOTE (default origin), MAX_PRS (default 3 -
      each replay runs a full deps-sync, so a run is capped and names what it
@@ -176,6 +181,106 @@ mergeable_state() {
 	printf 'UNKNOWN\n'
 }
 
+# behind_by HEAD_REF - print how many commits the base branch has that HEAD_REF
+# does not. No `gh pr view` field answers this: mergeStateStatus reports BEHIND
+# only where a branch must be up to date to merge, and this repo's merge queue
+# deliberately does not require that, so a stale branch here reads BLOCKED or
+# UNSTABLE like any other. The compare API reports it directly. Prints 0 when
+# the comparison cannot be made, so an API hiccup skips the PR rather than
+# rebasing it on a guess.
+behind_by() {
+	local head_ref="$1" out
+	if ! out="$(gh api "repos/{owner}/{repo}/compare/$BASE_BRANCH...$head_ref" \
+		--jq '.behind_by' 2>/dev/null)"; then
+		printf '0\n'
+		return 0
+	fi
+	[[ "$out" =~ ^[0-9]+$ ]] || out=0
+	printf '%s\n' "$out"
+}
+
+# checks_verdict - read a `statusCheckRollup` JSON array on stdin and print
+# FAILING, PENDING, PASSING or NONE. Split from checks_state so the
+# classification can be tested against recorded rollups.
+#
+# ACTION_REQUIRED is deliberately PENDING and not FAILING. It is what a run
+# carries while GitHub withholds it pending a maintainer's approval, which is
+# the state this script's own force-push leaves behind (see the header). Read as
+# a failure, it would qualify a just-rescued PR for a second rescue as soon as
+# the base moved again - a force-push and a comment on every base push. A
+# withheld run has not run.
+#
+# CANCELLED, NEUTRAL, SKIPPED and STALE are terminal and are not evidence of a
+# broken tree, so they count as neither failing nor pending.
+checks_verdict() {
+	jq -r '
+		[ .[]?
+		  | if .__typename == "StatusContext" then (.state // "PENDING")
+		    elif .status == "COMPLETED" then (.conclusion // "PENDING")
+		    else "PENDING" end
+		] as $s
+		| if ($s | length) == 0 then "NONE"
+		  elif ($s | any(. == "FAILURE" or . == "ERROR" or . == "TIMED_OUT" or . == "STARTUP_FAILURE")) then "FAILING"
+		  elif ($s | any(. == "PENDING" or . == "EXPECTED" or . == "ACTION_REQUIRED")) then "PENDING"
+		  else "PASSING" end'
+}
+
+# checks_state PR_NUMBER - print the checks verdict for one PR. UNKNOWN when the
+# rollup cannot be read, which no arm treats as stranded.
+checks_state() {
+	local pr="$1" rollup
+	if ! rollup="$(gh pr view "$pr" --json statusCheckRollup --jq .statusCheckRollup 2>/dev/null)"; then
+		printf 'UNKNOWN\n'
+		return 0
+	fi
+	checks_verdict <<<"$rollup"
+}
+
+# rescue_verdict STATE BEHIND CHECKS - decide whether a PR is stranded. Prints
+# `rescue <arm>` or `skip <reason>` and always exits 0, so the decision is a
+# pure function of three readings and is testable without a live PR.
+#
+# Two arms, because a Dependabot branch strands two ways and they are different
+# states wanting the same remedy:
+#
+#   conflicting     the branch cannot merge at all - Q427's original case.
+#   behind-and-red  the branch merges cleanly, but it is behind the base branch
+#                   and its checks are failing. A required gate whose verdict
+#                   reads state that moves on its own fails a branch whose own
+#                   tree is fine: release-pins-check compares the install pins
+#                   against the newest stable tag, so tagging a release reddens
+#                   every branch based before it. Nothing heals it - Dependabot
+#                   disowned the branch when the sync commit landed (Q1118).
+#
+# Behind ALONE is not enough: a behind-but-green PR merges through the merge
+# queue, which rebases it there, so force-pushing it would be noise nobody
+# asked for. Red alone is not enough either: a bump that genuinely breaks the
+# build is red on its own tree, and replaying it onto current main reproduces
+# the same red.
+rescue_verdict() {
+	local state="$1" behind="$2" checks="$3"
+	[[ "$behind" =~ ^[0-9]+$ ]] || behind=0
+
+	if [[ "$state" == "CONFLICTING" ]]; then
+		printf 'rescue conflicting\n'
+		return 0
+	fi
+	if [[ "$state" != "MERGEABLE" ]]; then
+		printf 'skip mergeable state is %s\n' "$state"
+		return 0
+	fi
+	if ((behind == 0)); then
+		printf 'skip mergeable and level with %s\n' "$BASE_BRANCH"
+		return 0
+	fi
+	if [[ "$checks" != "FAILING" ]]; then
+		printf 'skip %s commits behind %s but its checks are %s - the merge queue rebases it\n' \
+			"$behind" "$BASE_BRANCH" "$checks"
+		return 0
+	fi
+	printf 'rescue behind-and-red\n'
+}
+
 # is_dependabot_author LOGIN - true when LOGIN is either spelling gh uses for
 # the Dependabot app. Only for a PR *author*; a commit author is always the
 # bracket form, which is what keeps the tip-author check below honest.
@@ -192,10 +297,11 @@ is_dependabot_author() {
 #      owns rebases itself, and racing that with a force-push would clobber the
 #      bot mid-flight. Only a branch carrying the sync commit on top is
 #      stranded - and that is exactly the branch whose tip is github-actions.
-#   3. It is actually CONFLICTING. A branch merely behind main is mergeable and
-#      needs no help; an UNKNOWN one is left to the next run.
+#   3. It is stranded - CONFLICTING, or mergeable-but-behind with failing
+#      checks. rescue_verdict carries the reasoning for both arms; an UNKNOWN
+#      mergeable state is left to the next run.
 eligible() {
-	local json="$1" number author head_ref tip_author state
+	local json="$1" number author head_ref tip_author state behind checks verdict reason
 	number="$(jq -r .number <<<"$json")"
 	author="$(jq -r .author.login <<<"$json")"
 	head_ref="$(jq -r .headRefName <<<"$json")"
@@ -218,10 +324,20 @@ eligible() {
 		return 1
 	fi
 	state="$(mergeable_state "$number")"
-	if [[ "$state" != "CONFLICTING" ]]; then
-		echo "  PR #$number: skip - mergeable state is $state" >&2
+	# Only the mergeable arm needs these two reads, and each is an API call, so a
+	# conflicting PR still costs exactly what it did before.
+	behind=0
+	checks=NONE
+	if [[ "$state" == "MERGEABLE" ]]; then
+		behind="$(behind_by "$head_ref")"
+		checks="$(checks_state "$number")"
+	fi
+	read -r verdict reason <<<"$(rescue_verdict "$state" "$behind" "$checks")"
+	if [[ "$verdict" != "rescue" ]]; then
+		echo "  PR #$number: skip - $reason" >&2
 		return 1
 	fi
+	echo "  PR #$number: rescue - $reason ($state, $behind behind $BASE_BRANCH, checks $checks)" >&2
 	return 0
 }
 
@@ -417,6 +533,16 @@ while (($#)); do
 	--select)
 		require_cmd jq https://jqlang.github.io/jq/download/
 		select_candidates
+		exit 0
+		;;
+	--checks)
+		require_cmd jq https://jqlang.github.io/jq/download/
+		checks_verdict
+		exit 0
+		;;
+	--verdict)
+		[[ $# -ge 4 ]] || die "--verdict needs STATE BEHIND CHECKS"
+		rescue_verdict "$2" "$3" "$4"
 		exit 0
 		;;
 	-h | --help)
