@@ -2661,6 +2661,12 @@
 
 
 <h1 id="a-pr-whose-workflows-await-approval-blocks-silently-and-forever">A PR whose workflows await approval blocks silently and forever<a class="headerlink" href="#a-pr-whose-workflows-await-approval-blocks-silently-and-forever" title="Permanent link">&para;</a></h1>
+<p><strong>Decision:</strong> whether a withheld PR is surfaced at all, or the maintainer finds it at their own cadence.
+The approval click is where a Dependabot bump gets reviewed, so the hold is a control in use rather than only a defect, and a watch that names held PRs is a convenience rather than a fix.
+Detection was built and declined: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1950">#1950</a> shipped a scheduled watch, went green under review, and was closed unmerged on 2026-09-17.</p>
+<p><strong>The hold is not a supply-chain control.</strong> Measured 2026-09-17: Dependabot's own push to <code>9a8bc88b</code> on the <code>cmd/proxy</code> go-deps branch started 13 runs at attempt 1 with no hold, <code>unit-test</code> and <code>security-scan</code> among them.
+The bumped dependency's code compiles and its tests execute on the runner before anyone approves anything.
+Only the second generation is withheld, the <code>github-actions[bot]</code> sync commit, which re-vendors module versions that have already been built and tested once.</p>
 <p>A withheld <code>action_required</code> run is indistinguishable from a PR nobody has pushed to, and it holds every PR that needs the fix.</p>
 <h2 id="what-selects-them-the-head-commits-author">What selects them: the head commit's author<a class="headerlink" href="#what-selects-them-the-head-commits-author" title="Permanent link">&para;</a></h2>
 <p><strong>Measured 2026-09-04 06:25 PDT.</strong> A Dependabot PR's runs are withheld exactly when its <strong>head commit is authored by <code>github-actions[bot]</code></strong>: that is, when one of this repo's own workflows has force-pushed to the branch with the default <code>GITHUB_TOKEN</code>.
@@ -2710,7 +2716,9 @@ Confirming it means changing a repository setting and re-measuring, which needs 
 <h2 id="why-it-is-invisible">Why it is invisible<a class="headerlink" href="#why-it-is-invisible" title="Permanent link">&para;</a></h2>
 <p><code>statusCheckRollup</code> is empty, so every instrument that reads a PR's checks reports <em>no checks</em> rather than <em>checks withheld</em>, which is the same answer it gives for a branch pushed seconds ago.
 <code>mergeStateStatus</code> reads <code>BLOCKED</code>, which is also what a PR with a failing required check reads.
-So the state has no signature of its own at either level, and the PR ages out of view.</p>
+So the state has no signature at either of those levels, and the PR ages out of view.
+It does carry one a layer down, measured 2026-09-17: a held head's check suites read <code>conclusion: ACTION_REQUIRED</code> with <code>checkRuns.totalCount == 0</code>, and that zero is why <code>statusCheckRollup</code> comes back empty, the rollup being assembled from check runs.
+One GraphQL query returns it for every open PR at once.</p>
 <p><strong>The durable fingerprint is <code>run_attempt</code>, not the conclusion.</strong> Approving a withheld run overwrites <code>action_required</code> with the real result, so the evidence of the hold is erased from the conclusion and survives only as <code>run_attempt &gt;= 2</code> with <code>run_started_at</code> well after <code>created_at</code>.
 That is why a scan for <code>action_required</code> finds only PRs that are stuck <em>right now</em>, and why the ten historical cases above had to be recovered from the timing instead.</p>
 <h2 id="the-repo-documents-the-opposite-mechanism-in-eight-places">The repo documents the opposite mechanism, in eight places<a class="headerlink" href="#the-repo-documents-the-opposite-mechanism-in-eight-places" title="Permanent link">&para;</a></h2>
