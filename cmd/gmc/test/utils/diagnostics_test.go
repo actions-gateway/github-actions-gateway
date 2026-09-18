@@ -227,3 +227,144 @@ func TestDumpAGCSessionDiagnosticsRequestsReplicaSetRevisionOrdering(t *testing.
 		t.Errorf("revisions table does not request a creation timestamp:\n%s", dumped)
 	}
 }
+
+// fakeKubectlForProxy puts a kubectl on PATH that models one EgressProxy
+// Deployment: it answers the selector go-template with wantSelector, lists a
+// single proxy pod ONLY when asked for exactly that selector, and answers
+// `logs` with one upstream-dial-failure line. Asking for any other selector
+// lists nothing, which is what a hardcoded label does against the version it
+// was not written for.
+func fakeKubectlForProxy(t *testing.T, wantSelector string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = deployment ]; then printf '" + wantSelector + ",'; exit 0; fi\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = pods ]; then\n" +
+		"  for a in \"$@\"; do [ \"$a\" = '" + wantSelector + "' ] && { echo 'pod/proxy-0'; exit 0; }; done\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"if [ \"$1\" = logs ]; then\n" +
+		"  for a in \"$@\"; do [ \"$a\" = --previous ] && exit 1; done\n" +
+		"  echo '{\"level\":\"ERROR\",\"msg\":\"upstream dial failed\",\"error\":\"dial tcp 1.2.3.4:443: i/o timeout\"}'\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"echo \"fake kubectl $*\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "kubectl"), []byte(script), 0o700); err != nil { //nolint:gosec // test fixture must be executable
+		t.Fatalf("write fake kubectl: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// The selector is read from the Deployment rather than assumed, because v1 and
+// v2 do not share one: v1 selects `app: actions-gateway-proxy` and a v2
+// EgressProxy selects `actions-gateway.com/egress-proxy: <name>` and carries no
+// bare `app` key at all (Q582). A selector hardcoded from either side finds no
+// pods on the other, and finding no pods is scored NO-EVIDENCE — so the version
+// the banner was added for would have reported nothing, indistinguishably from
+// a dump that failed.
+func TestDumpEgressProxyDiagnosticsReadsTheDeploymentsOwnSelector(t *testing.T) {
+	for _, tc := range []struct {
+		name, deployment, selector string
+	}{
+		{"v2 identity label", "shared-proxy", "actions-gateway.com/egress-proxy=shared"},
+		{"v1 bare app label", "actions-gateway-proxy", "app=actions-gateway-proxy"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeKubectlForProxy(t, tc.selector)
+			buf := captureGinkgoWriter(t)
+			DumpEgressProxyDiagnostics("tenant", tc.deployment)
+
+			out := buf.String()
+			if !strings.Contains(out, "EGRESSPROXY CONNECT ATTRIBUTION: UPSTREAM-DIAL-FAILED") {
+				t.Errorf("did not attribute the dial failure; the selector found no pods:\n%s", out)
+			}
+			if !strings.Contains(out, "i/o timeout") {
+				t.Errorf("the dial error is missing from the evidence:\n%s", out)
+			}
+		})
+	}
+}
+
+// An unreadable Deployment must yield NO-EVIDENCE, never a selector of "" —
+// `kubectl get pods -l ""` matches every pod in the namespace, which would
+// score the curl pod's own logs as the proxy's.
+func TestDumpEgressProxyDiagnosticsRefusesAnEmptySelector(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = deployment ]; then exit 1; fi\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = pods ]; then echo 'pod/should-not-be-read'; exit 0; fi\n" +
+		"echo \"fake kubectl $*\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "kubectl"), []byte(script), 0o700); err != nil { //nolint:gosec // test fixture must be executable
+		t.Fatalf("write fake kubectl: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	buf := captureGinkgoWriter(t)
+	DumpEgressProxyDiagnostics("tenant", "shared-proxy")
+
+	out := buf.String()
+	if !strings.Contains(out, "EGRESSPROXY CONNECT ATTRIBUTION: NO-EVIDENCE") {
+		t.Errorf("an unreadable Deployment did not score NO-EVIDENCE:\n%s", out)
+	}
+	if strings.Contains(out, "should-not-be-read") {
+		t.Errorf("an empty selector listed pods it must not have:\n%s", out)
+	}
+}
+
+// fakeKubectlForRestartedProxy models a replica that restarted: its CURRENT log
+// is silent and its PREVIOUS container's log holds the dial failure. Scoring the
+// current log alone therefore reports readable-and-silent, which is
+// PROXY-NOT-REACHED — a positive verdict pointing at the hops before the proxy,
+// for a replica whose own dial is what failed.
+func fakeKubectlForRestartedProxy(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = deployment ]; then printf 'app=p,'; exit 0; fi\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = pods ]; then echo 'pod/proxy-0'; exit 0; fi\n" +
+		"if [ \"$1\" = logs ]; then\n" +
+		"  for a in \"$@\"; do [ \"$a\" = --previous ] && {\n" +
+		"    echo '{\"level\":\"ERROR\",\"msg\":\"upstream dial failed\",\"error\":\"dial tcp 9.9.9.9:443: i/o timeout\"}'\n" +
+		"    exit 0; }; done\n" +
+		"  echo '{\"level\":\"INFO\",\"msg\":\"proxy starting\"}'\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"echo \"fake kubectl $*\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "kubectl"), []byte(script), 0o700); err != nil { //nolint:gosec // test fixture must be executable
+		t.Fatalf("write fake kubectl: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// A restart must change the verdict, not just decorate the evidence line. This
+// drives the collector rather than setting the flag by hand: the detection and
+// the rendering are separate, and a test that only sets the field passes while
+// detection is broken.
+func TestDumpEgressProxyDiagnosticsFoldsInARestartedReplicasPreviousLog(t *testing.T) {
+	fakeKubectlForRestartedProxy(t)
+	buf := captureGinkgoWriter(t)
+	DumpEgressProxyDiagnostics("tenant", "p")
+
+	out := buf.String()
+	// The verdict is the assertion that matters: without the previous log this
+	// reads PROXY-NOT-REACHED and sends the reader at the wrong hop.
+	if !strings.Contains(out, "EGRESSPROXY CONNECT ATTRIBUTION: UPSTREAM-DIAL-FAILED") {
+		t.Errorf("the previous container's dial failure was not scored:\n%s", out)
+	}
+	if !strings.Contains(out, "restarted") {
+		t.Errorf("the restart is not named in the evidence:\n%s", out)
+	}
+}
+
+// The complement: a replica that never restarted must not be annotated as one,
+// so the annotation stays readable as a fact rather than boilerplate. Driven
+// through the collector, where `kubectl logs --previous` exits non-zero.
+func TestDumpEgressProxyDiagnosticsDoesNotClaimARestartThatDidNotHappen(t *testing.T) {
+	fakeKubectlForProxy(t, "actions-gateway.com/egress-proxy=shared")
+	buf := captureGinkgoWriter(t)
+	DumpEgressProxyDiagnostics("tenant", "shared-proxy")
+
+	if out := buf.String(); strings.Contains(out, "restarted") {
+		t.Errorf("a replica with no previous container is annotated as restarted:\n%s", out)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,11 +93,16 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 			utils.DumpAGCSessionDiagnostics(tenantNS, betaAGC, infraNamespace, fakegithubServiceName)
 			// The AGC dumps reach their own Deployments only, so a CONNECT 502
 			// out of ProxyConnectWorks used to leave nothing proxy-side in the
-			// output at all (Q1119). Unconditional: the proxy is this suite's
-			// shared egress path, so its account is evidence for any failure
-			// here, and the banner attributes nothing when there is nothing to
-			// attribute.
-			utils.DumpEgressProxyDiagnostics(tenantNS, proxyDeploy)
+			// output at all (Q1119). Gated on the label rather than on Failed()
+			// alone, as the sibling preflight AfterEach is: PROXY-NOT-REACHED is
+			// a positive verdict with a directive, not an abstention, so a
+			// failing non-egress spec would be told to inspect a hop it never
+			// used. The label also bounds the log window, since a verdict read
+			// from a 400-line tail otherwise spans whichever earlier spec left
+			// dial failures in it.
+			if slices.Contains(CurrentSpecReport().Labels(), realGitHubEgressLabel) {
+				utils.DumpEgressProxyDiagnostics(tenantNS, proxyDeploy)
+			}
 		}
 	})
 

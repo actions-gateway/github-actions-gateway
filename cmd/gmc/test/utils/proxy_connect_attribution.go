@@ -70,6 +70,11 @@ type ProxyReplicaEvidence struct {
 	// is the point: eight identical "i/o timeout" lines are one fact repeated,
 	// while an "i/o timeout" beside a "connection refused" is two.
 	DialErrors []string
+	// Restarted reports that a previous container's log was found and folded
+	// into the text scored here. It is rendered because a restart changes what
+	// silence means: without the earlier log a replica that did fail a dial
+	// reads as readable-and-silent.
+	Restarted bool
 }
 
 const (
@@ -192,6 +197,9 @@ func FormatProxyConnectEvidence(evidence []ProxyReplicaEvidence) string {
 		fmt.Fprintf(&b, "  %s: %d destination-denied, %d upstream-dial-failed", ev.Replica, ev.Denials, ev.DialFailures)
 		if len(ev.DialErrors) > 0 {
 			fmt.Fprintf(&b, " %v", ev.DialErrors)
+		}
+		if ev.Restarted {
+			b.WriteString(" (restarted; previous container's log folded in)")
 		}
 		b.WriteString("\n")
 	}

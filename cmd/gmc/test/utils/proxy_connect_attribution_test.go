@@ -191,3 +191,23 @@ func TestProxyConnectAttributionTokensAreDistinct(t *testing.T) {
 		seen[a.String()] = a
 	}
 }
+
+// TestFormatProxyConnectEvidenceNamesARestart pins the restart annotation. A
+// restarted replica keeps its CONNECT record in the previous container, so
+// without it a replica that DID fail a dial reads as readable-and-silent, and
+// PROXY-NOT-REACHED is a positive verdict pointing at the wrong hop.
+func TestFormatProxyConnectEvidenceNamesARestart(t *testing.T) {
+	ev := ScoreProxyReplicaLog("pod/a", logOf(proxyDialFail), true)
+	ev.Restarted = true
+	out := FormatProxyConnectEvidence([]ProxyReplicaEvidence{ev})
+	if !strings.Contains(out, "restarted") {
+		t.Errorf("a restarted replica is not named as one:\n%s", out)
+	}
+
+	quiet := FormatProxyConnectEvidence([]ProxyReplicaEvidence{
+		ScoreProxyReplicaLog("pod/b", logOf(proxyDialFail), true),
+	})
+	if strings.Contains(quiet, "restarted") {
+		t.Errorf("a replica that did not restart is annotated as one:\n%s", quiet)
+	}
+}

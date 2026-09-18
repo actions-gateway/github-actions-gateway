@@ -3961,7 +3961,9 @@ Read the [EgressProxy CONNECT attribution](#egressproxy-connect-attribution-q111
 #### EgressProxy CONNECT attribution (Q1119)
 
 The two proxy-CONNECT specs, `E2E_GMC_TenantProvisioning_ProxyConnectWorks` (v1) and `E2E_V2_ProxyConnectWorks` (v2), fail with `curl: (56) CONNECT tunnel failed, response 502` when the tunnel does not establish, and that one signature covers three different hops.
-`DumpEgressProxyDiagnostics` ([`diagnostics.go`](../../cmd/gmc/test/utils/diagnostics.go)) runs from both specs' failure-gated `AfterEach`, dumps every proxy replica's log, and stamps an `EGRESSPROXY CONNECT ATTRIBUTION: <verdict>` banner naming which hop refused.
+`DumpEgressProxyDiagnostics` ([`diagnostics.go`](../../cmd/gmc/test/utils/diagnostics.go)) runs from both specs' `AfterEach`, dumps every proxy replica's log, and stamps an `EGRESSPROXY CONNECT ATTRIBUTION: <verdict>` banner naming which hop refused.
+It is gated on a failure **and** the `real-github-egress` label, exactly as the sibling preflight `AfterEach` is, because three of the four verdicts are positive findings with a directive rather than abstentions: an unlabelled spec failing on an HPA assertion would otherwise be told to inspect a CONNECT path it never used.
+The label gate also bounds the log window, since a verdict read from a 400-line tail otherwise spans whatever earlier spec left dial failures in it.
 
 The proxy emits exactly two CONNECT-path log lines and each names a distinct hop ([`handleConnect`](../../cmd/proxy/proxy.go)): a destination its allowlist rejects logs `CONNECT destination not allowed` and answers **403**, and a `net.DialTimeout` that fails logs `upstream dial failed` and answers **502**.
 A CONNECT it establishes logs nothing, which is why silence is a verdict of its own rather than a success.
@@ -3976,6 +3978,12 @@ A CONNECT it establishes logs nothing, which is why silence is a verdict of its 
 **`NO-EVIDENCE` and `PROXY-NOT-REACHED` are the pair the banner exists to separate**, because an unreadable dump and a proxy nothing reached produce identical empty text and only one of them attributes anything.
 Each replica is read individually rather than through `kubectl logs deploy/<name>`, which follows one replica: the 2026-09-16 failure spread its dial failures over both, so a single-replica read would have reported seven of the nine and no second replica at all.
 A replica whose log will not fetch is carried as unreadable rather than dropped, so the banner's replica count matches the Deployment's.
+A replica that restarted has its previous container's log folded in and is annotated as restarted, because its CONNECT record is in that log and reading only the current one scores a replica whose own dial failed as readable-and-silent.
+
+**The pod selector is read from the Deployment, never assumed**, because v1 and v2 do not share one and v2's divergence is deliberate. v1 selects `app: actions-gateway-proxy`; a v2 `EgressProxy` selects `actions-gateway.com/egress-proxy: <name>` and carries no bare `app` key at all, so that a v2 pod is never claimed by v1's PDB, HPA or anti-affinity during a migration's coexistence window ([`egressProxyPodSelector`](../../cmd/gmc/internal/controller/egressproxy_builder.go), Q582).
+A selector hardcoded from either side matches nothing on the other, and matching nothing is scored `NO-EVIDENCE`, which is indistinguishable from a dump that failed.
+The dump therefore reads `.spec.selector.matchLabels` off the Deployment at failure time, which serves both versions on one code path and cannot go stale when a builder changes its labels.
+An unreadable Deployment yields no evidence rather than an empty selector: `kubectl get pods -l ""` matches every pod in the namespace, which would score the curl pod's own logs as the proxy's.
 
 **Why it was added.** On the 2026-09-16 kindnet run only the v1 spec captured anything proxy-side: `DumpProvisioningDiagnostics` dumps every pod in the namespace and so caught the dial failures, while the v2 spec dumps its AGC Deployments alone and caught none.
 The v1 evidence that *was* captured sat in the output as 150 lines of JSON and the failure was still triaged off the runner-host HTTP banner above, which scored the two identical failures `BLOCKED` and `REACHABLE` minutes apart.
