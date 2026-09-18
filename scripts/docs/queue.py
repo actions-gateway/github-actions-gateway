@@ -512,6 +512,38 @@ NOTES_IN_TABLE = 140
 # survive a list.
 TITLE_MAX = 72
 
+# A release gate label is the store's release axis: `1.9-gate` says the item
+# blocks the 1.9 tag. `render --group release` reads the version out of the
+# label rather than resolving it to a plan doc, so no label-to-plan mapping is
+# needed here — that binding is its own checker's job.
+GATE_LABEL_RE = re.compile(r"^(\d+)\.(\d+)-gate$")
+UNSCHEDULED = "Unscheduled"
+
+
+def release_groups(items):
+    """[(heading, [item, ...])] — one section per release, unscheduled last.
+
+    An item gating two releases is listed under each, so "what blocks 1.9"
+    stays complete; section counts therefore sum above the store's total.
+    """
+    gated, loose, keys = {}, [], {}
+    for i in items:
+        hit = False
+        for label in i.labels:
+            m = GATE_LABEL_RE.match(label)
+            if not m:
+                continue
+            hit = True
+            head = f"Release {m.group(1)}.{m.group(2)}"
+            keys[head] = (int(m.group(1)), int(m.group(2)))
+            gated.setdefault(head, []).append(i)
+        if not hit:
+            loose.append(i)
+    out = [(h, gated[h]) for h in sorted(gated, key=keys.get)]
+    if loose:
+        out.append((UNSCHEDULED, loose))
+    return out
+
 
 def summarize(notes, limit=NOTES_IN_TABLE):
     """The first sentence, or a clean truncation, whichever comes first."""
@@ -525,6 +557,27 @@ def summarize(notes, limit=NOTES_IN_TABLE):
     return notes[:cut if cut > 0 else limit].rstrip(",;:") + " …"
 
 
+def _render_table(rows):
+    print("| ID | Item | Labels | St | Sz | Notes |")
+    print("|---|---|---|---|---|---|")
+    mark = {"ready": "🔲", "blocked": "🚫", "deferred": "💤"}
+    for i in rows:
+        title = f"[{i.title}]({i.target})" if i.target else i.title
+        labels = " ".join(f"`{label}`" for label in i.labels)
+        notes = summarize(i.notes).replace("|", r"\|")
+        # The id links to the item's own page: this table is what a reader
+        # meets first, and the page is where the full text lives.
+        print(f"| [{i.id}]({i.id}.md) | {title} | {labels} "
+              f"| {mark.get(i.status, '?')} | {i.size or ''} | {notes} |")
+
+
+def _render_text(rows):
+    for i in rows:
+        labels = ",".join(i.labels)
+        print(f"{i.status:<8} {i.id:<6} {i.size or '-':<2} {i.title}"
+              + (f"   [{labels}]" if labels else ""))
+
+
 def cmd_render(args):
     items, problems = load(args.store or store_dir())
     for p in problems:
@@ -532,23 +585,19 @@ def cmd_render(args):
     shown = [i for i in items if args.all or i.status != "deferred"]
     if args.label:
         shown = [i for i in shown if args.label in i.labels]
-    if args.format == "table":
-        print("| ID | Item | Labels | St | Sz | Notes |")
-        print("|---|---|---|---|---|---|")
-        mark = {"ready": "🔲", "blocked": "🚫", "deferred": "💤"}
-        for i in shown:
-            title = f"[{i.title}]({i.target})" if i.target else i.title
-            labels = " ".join(f"`{label}`" for label in i.labels)
-            notes = summarize(i.notes).replace("|", r"\|")
-            # The id links to the item's own page: this table is what a reader
-            # meets first, and the page is where the full text lives.
-            print(f"| [{i.id}]({i.id}.md) | {title} | {labels} "
-                  f"| {mark.get(i.status, '?')} | {i.size or ''} | {notes} |")
-    else:
-        for i in shown:
-            labels = ",".join(i.labels)
-            print(f"{i.status:<8} {i.id:<6} {i.size or '-':<2} {i.title}"
-                  + (f"   [{labels}]" if labels else ""))
+    emit = _render_table if args.format == "table" else _render_text
+    if args.group != "release":
+        emit(shown)
+        return 1 if problems else 0
+    for n, (head, rows) in enumerate(release_groups(shown)):
+        if n:
+            print()
+        if args.format == "table":
+            print(f"### {head} ({len(rows)})")
+            print()
+        else:
+            print(f"# {head} ({len(rows)})")
+        emit(rows)
     return 1 if problems else 0
 
 
@@ -1687,6 +1736,9 @@ def main(argv=None):
     r.add_argument("--all", action="store_true", help="include deferred items")
     r.add_argument("--label", metavar="LABEL",
                    help="only items carrying LABEL, e.g. " + OPEN_QUESTION)
+    r.add_argument("--group", choices=("release",), metavar="AXIS",
+                   help="section the output by release gate label; "
+                        "rows gating nothing land under Unscheduled")
     r.set_defaults(fn=cmd_render)
 
     n = sub.add_parser("next", help="print the top ready item")
