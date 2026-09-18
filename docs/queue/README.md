@@ -18,6 +18,13 @@ With no network, `--no-pr-check` hands out the top item and says nothing checked
 python3 scripts/docs/queue.py render
 ```
 
+`--group release` sections the output by gate label, in version order, with everything that gates no release under **Unscheduled**.
+That is the answer to *what is left before the next minor*, and to how much of the store is not release work at all.
+
+```bash
+python3 scripts/docs/queue.py render --group release
+```
+
 ## Conventions
 
 **Status:** `ready` · `blocked` · `deferred`  

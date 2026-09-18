@@ -733,6 +733,65 @@ expect_eq "Q4 Q7 Q9 " "$(ids "$S" --all)" "render: --all includes deferred"
 expect_eq "Q4: Title for Q4" "$(python3 "$Q" --store "$S" next --title --no-pr-check)" \
     "next: picks the top ready item"
 
+# --- render --group release -----------------------------------------------
+#
+# The release axis, read out of the `X.Y-gate` labels. Sections are versions,
+# so they must order numerically: a string sort files 1.10 above 1.9, which is
+# the inversion this asserts against.
+
+gated() {  # gated <dir> <id> <rank> <label>...
+    local dir="$1" id="$2" rank="$3"
+    shift 3
+    mkdir -p "$dir"
+    {
+        printf -- '---\nid: %s\nrank: %s\nstatus: ready\nsize: S\nlabels:\n' \
+            "$id" "$rank"
+        printf -- '    - %s\n' "$@"
+        printf -- '---\n\n# Title for %s\n' "$id"
+    } > "$dir/$id.md"
+}
+
+heads() {  # heads <store> [args...]
+    local store="$1"
+    shift
+    python3 "$Q" --store "$store" render --group release "$@" \
+        | sed -n 's/^# //p' | tr '\n' '|'
+}
+
+G="$TMP/group"
+gated "$G" Q10 a0 1.9-gate
+gated "$G" Q20 a1 1.10-gate
+gated "$G" Q30 a2 2.0-gate
+item  "$G" Q40 a3 ready
+expect_eq "Release 1.9 (1)|Release 1.10 (1)|Release 2.0 (1)|Unscheduled (1)|" \
+    "$(heads "$G")" "render --group: sections order by version, not string"
+expect_eq "Q10 Q20 Q30 Q40 " \
+    "$(python3 "$Q" --store "$G" render --group release | grep -v '^#' \
+        | awk 'NF {print $2}' | tr '\n' ' ')" \
+    "render --group: every item lands in exactly one section"
+
+# A row gating two releases belongs in both: a reader asking what blocks 1.9
+# needs it there whether or not 2.0 also names it.
+D="$TMP/group-two"
+gated "$D" Q11 a0 1.9-gate 2.0-gate
+expect_eq "Release 1.9 (1)|Release 2.0 (1)|" "$(heads "$D")" \
+    "render --group: a two-gate row is listed under each release"
+
+# Grouping is a view, not a filter: --all and --label still decide membership.
+E="$TMP/group-filter"
+gated "$E" Q12 a0 1.9-gate
+item  "$E" Q13 a1 deferred
+expect_eq "Release 1.9 (1)|" "$(heads "$E")" \
+    "render --group: deferred stays hidden without --all"
+expect_eq "Release 1.9 (1)|Unscheduled (1)|" "$(heads "$E" --all)" \
+    "render --group: --all brings the deferred row into Unscheduled"
+
+# The store with no gated row at all must not print an empty release section.
+F="$TMP/group-none"
+item "$F" Q14 a0 ready
+expect_eq "Unscheduled (1)|" "$(heads "$F")" \
+    "render --group: no gate labels means one Unscheduled section"
+
 # --- next: the open-PR check (Q990) ---------------------------------------
 #
 # A stub gh rather than the real one: the check reaches the network by design,
