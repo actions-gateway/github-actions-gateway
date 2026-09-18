@@ -884,9 +884,10 @@ It is the one row that does not flip to ✅ and vanish: rewrite it as each RC re
 Both are reversible and both are cheap, which is the point: the expensive failure is a release whose scope quietly drifts because nothing recorded what it was.
 
 **A `-gate` label is also a public promise.** [`docs/roadmap.md`](../roadmap.md) is where an adopter reads it, so adding or removing one is an edit to both files and a punt that skips the second leaves the promise standing.
-`make roadmap-check` reconciles them in both directions: every `X.Y-gate` row must be named by a roadmap bullet's `<!-- q:QN -->` annotation, and a bullet that writes a version into its prose must name a row carrying that gate.
+`make roadmap-check` reconciles them in both directions: every `X.Y-gate` row that also carries `feature` or `security` must be named by a roadmap bullet's `<!-- q:QN -->` annotation, and a bullet that writes a version into its prose must name a row carrying that gate.
 Only the second reads the prose, and only it goes quiet once the version is a derived chip rather than a sentence; the coverage half reads the annotation and the label alone, so it holds whatever the bullet looks like.
-Naming a version without claiming to gate it stays free, which is how Q273's bullet names `v2.0.0` while carrying no label.
+Naming a version without claiming to gate it stays free, which is how Q273's bullet names `v2.0.0` without the page promising that tag.
+That is separate from the row's own `2.0-gate` label, which obliges no bullet because Q273 is a `docs` row.
 
 **A near-term roadmap bullet means "not waiting on an outside signal".** An item that waits on demand, on an unbuilt prerequisite, or on hardware belongs in Deferred with a revive trigger, which puts its bullet under *Exploring / longer-term*.
 The [release ladder](../plan/release-ladder.md) is where that rule and the current 1.5 → 1.6 → 2.0 shape are argued; what enforces it is rule 3, since a bullet naming only Deferred rows fails the gate.

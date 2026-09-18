@@ -444,10 +444,11 @@ expect "a v-prefixed patch version normalizes" 0 \
 
 # The Q273 trap, and the reason rule 8 keys on a gating verb rather than on a
 # version appearing anywhere. Q273's bullet names `v1.3.0` and `v2.0.0` to say
-# where the removal lands; it is a Deferred row event-gated on v2-ga Phase 3,
-# not a row blocking that tag, and it carries no gate label. A rule reading
-# "a bullet naming a version must carry the matching label" fails this page as
-# written, which is the false fire that would have forced a wrong edit.
+# where the removal lands, not to promise the page carries that gate. A rule
+# reading "a bullet naming a version must carry the matching label" fails this
+# page as written, which is the false fire that would have forced a wrong edit.
+# The fixture row is deliberately unlabelled, so what it holds green is the
+# verb keying alone; the real Q273 has carried `2.0-gate` since 2026-09-08.
 # shellcheck disable=SC2016 # backticks are Markdown code spans in the fixture
 Q273_SHAPE=$'- **[Retiring the old APIs](operations/v1alpha1-deprecation.md)** <!-- q:Q2 --> Committed, but not yet started.\n  `v1.3.0` is the one-release-ahead announcement; **`v2.0.0`** is the named release that removes all three together.\n  Gated on the `v2` GA API being validated, not on a date.'
 expect "naming a release is not claiming one" 0 \

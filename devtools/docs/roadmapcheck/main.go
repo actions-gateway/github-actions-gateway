@@ -88,9 +88,15 @@
 // A hand-typed version means a gating verb followed by a numbered release:
 // "Gating the 1.5 release", "so it gates the 1.5 release". Naming a version
 // without one is context rather than a commitment, and is deliberately not a
-// claim: Q273's bullet says `v2.0.0` "is the named release that removes all
-// three together", which describes where the removal lands and does not assert
-// that Q273 blocks that tag. Its row carries no gate label, and must not.
+// claim: Q273's bullet says `v2.0.0` "removes all four", which describes where
+// the removal lands and does not claim this page publishes that gate.
+//
+// The exemption is about the verb alone and says nothing about the row's
+// labels. Q273 has carried `2.0-gate` since 2026-09-08, and both rules stay
+// green: rule 8 never fires without the verb, and rule 7 obliges a bullet only
+// from a row also carrying `feature` or `security`, which a `docs` row does not
+// (docs/development/maintaining-backlog.md, "A gate label and its roadmap
+// bullet are two commits, and the first one is red").
 //
 // Usage:
 //
