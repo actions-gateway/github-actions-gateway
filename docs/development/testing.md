@@ -2150,7 +2150,9 @@ Note the shape: in all three of the scripts that had this bug, the *fixture* hel
 ### A test's environment assumptions must be probed, not inferred
 
 `runs-on` is an expression here, not a constant.
-Nine jobs resolve theirs at run time — seven in `unit-test.yml`, `integration-test`, and the e2e job in `e2e-reusable.yml` — so a `workflow_dispatch` with `target_gag=true` (or, for e2e, merely `vars.GAG_E2E_RUNNER` being set, which is not dispatch-gated) routes them to the self-hosted dogfood runner instead of `ubuntu-latest`.
+Sixteen jobs resolve theirs at run time, counted on 2026-09-18 as `runs-on:` lines naming either routing variable: 13 in `unit-test.yml` and one each in `integration-test.yml`, `q822-fs-probe.yml` and `e2e-reusable.yml`.
+A `workflow_dispatch` with `target_gag=true` (or, for e2e, merely `vars.GAG_E2E_RUNNER` being set, which is not dispatch-gated) routes them to the self-hosted dogfood runner instead of `ubuntu-latest`.
+Re-derive the count before citing it; it has been stale before.
 **"It passed in CI" is a statement about one runner image, not about where the test runs next.**
 
 So a test that depends on the environment — the uid it runs as, a tool on `PATH`, whether mode bits bite — must **attempt the operation and branch on the result**:
@@ -2175,6 +2177,44 @@ For the mode-bits case in Go, `writeUnreadable` (`cmd/worker/worker_test.go`) is
 So a test that needs a specific walk order cannot get it by naming its fixtures.
 A `claude-usage` test for "a replayed record is credited to the earliest session" was written that way, passed, and then still passed with the mechanism deleted, because the ordering it relied on happened to be the correct one on that filesystem.
 Pin the order explicitly — patch the iteration to hand the items over in the order that breaks the code — or the test asserts nothing on half the machines that run it.
+
+#### Three suites went green on `ubuntu-latest` while asserting nothing on the dogfood runner
+
+`scripts-test` is one of the jobs above, so `target_gag=true` is meant to run it inside the digest-pinned `ghcr.io/actions/actions-runner` image (`cmd/agc/names/names.go`) rather than on a hosted VM.
+Three suites failed there and nowhere else, from three unrelated causes: a tool the image omits, a locale it does not set, and a PID 1 that does not reap (Q1116).
+What they share is the shape.
+**Each was a green assertion that could not have gone red.** In two of the three the case that actually failed was a different one, so the visible red was never the silent defect: the assertion reading a render announced itself while the whole kubectl-absent block stayed quiet, and rule 9's anchored case failed while its pass-expecting sibling went green on the same broken fixture.
+That is the negative-space twin of [verifying a causation claim by deleting the mechanism](#verify-a-causation-claim-by-deleting-the-mechanism): there you remove the mechanism and require red, here the mechanism was absent already and the assertion stayed green.
+The three remedies below are unalike, and a check that finds one does not find the others: one needed the guard extending to the case outside it, one needed the fixture proving rather than trusting, and one needed a different probe entirely.
+What surfaced all three was running the suites in the image, not reading them.
+
+- **A tool the image omits.** `kubectl` is `e2e`-tier, so `check-registry-mirror-render.sh` prints a skip and exits 0.
+  Its test guards the render assertions on `have_kubectl`, and the one assertion that reads a render sat outside that guard, wanting the active answer from a checker that had already skipped.
+  The block of kubectl-absent cases was itself gated on kubectl being *present*, because it synthesizes that lane by shimming `kubectl` off `PATH`, so on the lane genuinely without one the only assertions still covering the gate never ran.
+- **No locale.** The image sets no `LANG`, so `locale charmap` is `ANSI_X3.4-1968` and bash 5.2.21's `printf` emits `\uXXXX` back as text instead of expanding it; `ubuntu-latest` sets `LANG=C.UTF-8`, where it expands.
+  A `check-queue-rules-test.sh` fixture wrote its open-plan marker with those escapes, so on the lane the row carried the characters `\u26A0` and rule 9 read the plan as already closed.
+  The sibling case that expects a *pass* passed on that same malformed fixture, which is what kept it invisible.
+  A fixture is an assertion's input, so it needs checking that it is what it claims: write the literal, then prove it landed.
+- **A PID 1 that does not reap.** `kill -0` succeeds on a zombie.
+  `record-launch-test.sh` orphans a grandchild by design, since the group signal takes its parent too, and a container PID 1 that never reaps leaves it a zombie, so a stop that *did* reach the child read as one that had not.
+
+**Reproduce all three locally rather than booking a dispatch.** No green run existed on that lane, so runner and outcome were perfectly confounded; running the suite in the image is what breaks that, per suite, in seconds:
+
+```bash
+docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w \
+  ghcr.io/actions/actions-runner:2.335.1 bash scripts/docs/check-queue-rules-test.sh
+```
+
+A worktree's `.git` is a file pointing at a gitdir outside the mount, so stage a plain copy of `scripts/` and `git init` it inside the container, since the suites resolve `REPO_ROOT` with `git rev-parse`.
+For the reaping case, start the container on `sleep infinity` and `docker exec` into it, so PID 1 is a process that never reaps.
+**A plain `docker run ... bash -c` does not reproduce it and goes green**, because bash as PID 1 reaps adopted orphans while blocked in `waitpid`, which retires the zombie the assertion is trying to observe.
+That green is a false negative and reads exactly like a fix, so a reader reaching for the obvious invocation concludes the defect is imaginary.
+
+**A `target_gag=true` dispatch is not by itself evidence that anything ran on the dogfood runner, and by design it often is not.** `runs-on` resolves through `vars.GAG_RUNNER`, and [gke-dogfood.md Part C3](../plan/gke-dogfood.md#c3-set-default-variable-cluster-off) parks that variable at `"ubuntu-latest"` precisely so a dispatch is a safe no-op while the cluster is off.
+So the resting state is a dispatch that is honoured, runs entirely on hosted VMs, and goes green.
+Measured 2026-09-18: the variable held `"ubuntu-latest"` and a `target_gag=true` run of `unit-test.yml` never touched the scaleset.
+Read the runner out of the log rather than inferring it from the input: a scaleset run names a `gag-ci-scaleset-...` runner, and `scripts-test` there prints `kubectl not on PATH`.
+A green rollup on a dispatch that never left `ubuntu-latest` is the same defect this section is about, one level up.
 
 ### Proving a flake fix: invert it
 

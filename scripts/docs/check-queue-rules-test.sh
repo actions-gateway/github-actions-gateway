@@ -80,6 +80,25 @@ seal() {  # seal <repo> — commit the base and make it the merge base
     git -C "$1" checkout -q -b claude/work
 }
 
+# open_row - append an OPEN plan index row, and prove the marker landed.
+#
+# The marker is written literally. `printf` expands \uXXXX only in a UTF-8
+# locale, and bash 5.2 on a runner image that sets none emits the escape text
+# instead -- measured on ghcr.io/actions/actions-runner, where LANG is unset and
+# `printf '\u26a0'` yields the six characters back (Q1116). The row then carries
+# no marker the checker recognizes, so rule 9 reads the plan as already closed.
+#
+# The grep is the point rather than a belt: the case below that expects a PASS
+# passes on that malformed fixture too, so the vacuous control hid the failing
+# one. A fixture that cannot be wrong is what the rule is asserted against.
+open_row() {  # open_row <repo>
+    printf '| [thing.md](thing.md) | A thing | ⚠️ Open |\n' >> "$1/docs/plan/README.md"
+    grep -q '⚠️ Open' "$1/docs/plan/README.md" || {
+        printf 'FAIL fixture: the open marker did not land in %s/docs/plan/README.md\n' "$1" >&2
+        exit 1
+    }
+}
+
 run() {  # run <repo> -> rc, output in $TMP/out
     local rc=0
     (cd "$1" && python3 "$CHECKER") > "$TMP/out" 2>&1 || rc=$?
@@ -134,7 +153,7 @@ expect 0 "$R" "rule 8 control: an ordinary item deletes freely"
 R="$TMP/r9"; newrepo "$R"
 item "$R" Q1 "ci" "../plan/thing.md"
 item "$R" Q2 "docs"
-printf '| [thing.md](thing.md) | A thing | ⚠️ Open |\n' >> "$R/docs/plan/README.md"
+open_row "$R"
 seal "$R"
 
 git -C "$R" rm -q docs/queue/Q1.md
@@ -154,7 +173,7 @@ expect 0 "$R" "rule 9: flipping the row clears it"
 R="$TMP/r9b"; newrepo "$R"
 item "$R" Q1 "ci" "../plan/thing.md"
 item "$R" Q2 "ci" "../plan/thing.md"
-printf '| [thing.md](thing.md) | A thing | ⚠️ Open |\n' >> "$R/docs/plan/README.md"
+open_row "$R"
 seal "$R"
 git -C "$R" rm -q docs/queue/Q1.md
 git -C "$R" commit -qm "complete one of two"
@@ -166,7 +185,7 @@ expect 0 "$R" "rule 9 control: a plan with an item left stays open"
 R="$TMP/r9c"; newrepo "$R"
 item "$R" Q1 "ci" "../plan/thing.md"
 item "$R" Q2 "ci" "../plan/thing.md#6-follow-on"
-printf '| [thing.md](thing.md) | A thing | \u26a0\ufe0f Open |\n' >> "$R/docs/plan/README.md"
+open_row "$R"
 seal "$R"
 git -C "$R" rm -q docs/queue/Q1.md
 git -C "$R" commit -qm "complete the item with the unanchored target"
@@ -176,7 +195,7 @@ expect 0 "$R" "rule 9 control: an anchored target still counts as live"
 R="$TMP/r9d"; newrepo "$R"
 item "$R" Q1 "ci" "../plan/thing.md#6-follow-on"
 item "$R" Q2 "docs"
-printf '| [thing.md](thing.md) | A thing | \u26a0\ufe0f Open |\n' >> "$R/docs/plan/README.md"
+open_row "$R"
 seal "$R"
 git -C "$R" rm -q docs/queue/Q1.md
 git -C "$R" commit -qm "complete the plan's last item, anchored"
