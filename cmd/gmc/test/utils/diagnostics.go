@@ -297,6 +297,11 @@ func proxyPodSelector(ns, proxyDeployment string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// kubectl's go-template emits a separator after EVERY map entry, so the raw
+	// render always ends in one, and a trailing comma is a parse error rather
+	// than a tolerated nicety: measured against a live apiserver, `-l 'app=x,'`
+	// is rejected with `found '', expected: identifier after ','` while
+	// `-l 'app=x'` is served. Untrimmed it would take out v1 and v2 alike.
 	selector := strings.TrimSuffix(strings.TrimSpace(out), ",")
 	if selector == "" {
 		return "", fmt.Errorf("deployment %s/%s has an empty selector", ns, proxyDeployment)

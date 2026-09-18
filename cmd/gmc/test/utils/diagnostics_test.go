@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:revive
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // supersededRSDescription is what `kubectl describe replicasets` prints for a
@@ -366,5 +367,68 @@ func TestDumpEgressProxyDiagnosticsDoesNotClaimARestartThatDidNotHappen(t *testi
 
 	if out := buf.String(); strings.Contains(out, "restarted") {
 		t.Errorf("a replica with no previous container is annotated as restarted:\n%s", out)
+	}
+}
+
+// fakeKubectlRenderingSelector puts a kubectl on PATH whose `get deployment`
+// answers with raw, exactly as the go-template renders it.
+func fakeKubectlRenderingSelector(t *testing.T, raw string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = deployment ]; then printf '%s' '" + raw + "'; exit 0; fi\n" +
+		"echo \"fake kubectl $*\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "kubectl"), []byte(script), 0o700); err != nil { //nolint:gosec // test fixture must be executable
+		t.Fatalf("write fake kubectl: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// The rendered selector must be one `kubectl -l` can parse, which is a stronger
+// claim than the template rendering. kubectl's go-template emits a separator
+// after every map entry, so the raw render always carries a trailing comma, and
+// a trailing comma is a parse error rather than a tolerated nicety — it would
+// take out v1 and v2 alike, which is worse than the version-specific bug this
+// selector was rewritten to fix. Parsing is asserted against the same
+// apimachinery parser that backs `--selector`.
+func TestProxyPodSelectorRendersASelectorThatParses(t *testing.T) {
+	for _, tc := range []struct{ name, raw, want string }{
+		{"v2 identity label", "actions-gateway.com/egress-proxy=shared,", "actions-gateway.com/egress-proxy=shared"},
+		{"v1 bare app label", "app=actions-gateway-proxy,", "app=actions-gateway-proxy"},
+		{"multi-label selector", "a=1,b=2,", "a=1,b=2"},
+		{"render with surrounding whitespace", "  app=p,\n", "app=p"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeKubectlRenderingSelector(t, tc.raw)
+			got, err := proxyPodSelector("tenant", "dep")
+			if err != nil {
+				t.Fatalf("proxyPodSelector: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("selector = %q, want %q", got, tc.want)
+			}
+			sel, perr := labels.Parse(got)
+			if perr != nil {
+				t.Fatalf("rendered selector %q does not parse, so `kubectl -l` would reject it: %v", got, perr)
+			}
+			if sel.Empty() {
+				t.Errorf("selector %q parsed as empty, which matches every pod in the namespace", got)
+			}
+		})
+	}
+}
+
+// An empty render is an error rather than an empty selector: the empty string
+// parses clean and reports Empty(), so `-l ""` matches every pod in the
+// namespace and the curl pod's own logs would be scored as the proxy's.
+func TestProxyPodSelectorRejectsAnEmptyRender(t *testing.T) {
+	sel, err := labels.Parse("")
+	if err != nil || !sel.Empty() {
+		t.Fatalf("premise wrong: labels.Parse(\"\") = (%v, err=%v), expected a clean empty selector", sel, err)
+	}
+
+	fakeKubectlRenderingSelector(t, "")
+	if got, err := proxyPodSelector("tenant", "dep"); err == nil {
+		t.Errorf("an empty render returned selector %q with no error", got)
 	}
 }
