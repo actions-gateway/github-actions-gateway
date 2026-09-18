@@ -2649,6 +2649,10 @@ A PR that merely cites the id has not claimed it, so read it and pass <code>--al
 With no network, <code>--no-pr-check</code> hands out the top item and says nothing checked it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python3<span class="w"> </span>scripts/docs/queue.py<span class="w"> </span>render
 </code></pre></div>
+<p><code>--group release</code> sections the output by gate label, in version order, with everything that gates no release under <strong>Unscheduled</strong>.
+That is the answer to <em>what is left before the next minor</em>, and to how much of the store is not release work at all.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python3<span class="w"> </span>scripts/docs/queue.py<span class="w"> </span>render<span class="w"> </span>--group<span class="w"> </span>release
+</code></pre></div>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
