@@ -310,6 +310,14 @@ func TestDumpEgressProxyDiagnosticsRefusesAnEmptySelector(t *testing.T) {
 	if strings.Contains(out, "should-not-be-read") {
 		t.Errorf("an empty selector listed pods it must not have:\n%s", out)
 	}
+	// Every command taking the selector, not just the one that feeds the
+	// verdict: `describe pods -l ""` matches the whole namespace and would
+	// print it under a heading claiming these are the proxy's pods. The fake
+	// echoes its own argv for any subcommand it does not model, so a describe
+	// that ran is visible here.
+	if strings.Contains(out, "describe pods") {
+		t.Errorf("an empty selector still described pods:\n%s", out)
+	}
 }
 
 // fakeKubectlForRestartedProxy models a replica that restarted: its CURRENT log

@@ -264,8 +264,13 @@ func DumpEgressProxyDiagnostics(ns, proxyDeployment string) {
 	evidence := collectProxyReplicaEvidence(ns, selector)
 	verdict := AttributeProxyConnect(evidence)
 
-	dumpCommand("proxy pod descriptions in "+ns,
-		"kubectl", "describe", "pods", "-n", ns, "-l", selector)
+	// Skipped rather than run with an empty selector, for collectProxyReplicaEvidence's
+	// reason one call up: `-l ""` matches everything, so this would describe every pod
+	// in the namespace under a heading that says these are the proxy's.
+	if selector != "" {
+		dumpCommand("proxy pod descriptions in "+ns,
+			"kubectl", "describe", "pods", "-n", ns, "-l", selector)
+	}
 	// The egress rule set is what separates a locally dropped SYN from one that
 	// left the node, so it is evidence for the dial-failure verdict rather than
 	// background. Sampled: it carries GitHub's full meta range set.
