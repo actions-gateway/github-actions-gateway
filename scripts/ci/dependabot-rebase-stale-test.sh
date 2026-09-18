@@ -259,12 +259,25 @@ expect_checks checks-skipped-is-not-red '[
 	{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"}
 ]' PASSING
 
-# THE LOOP GUARD. A GITHUB_TOKEN force-push - this script's own - leaves every
-# run withheld at ACTION_REQUIRED until a maintainer clicks Approve and run.
-# Classified FAILING, a PR this script just rescued would qualify for another
-# rescue the moment the base moved, force-pushing and commenting on every base
-# push forever. A withheld run has not run, so it is PENDING.
-expect_checks checks-withheld-is-pending '[
+# THE LOOP GUARD, in the shape GitHub actually produces. A GITHUB_TOKEN
+# force-push - this script's own - leaves the head's runs withheld, and a
+# withheld head carries check SUITES at action_required with zero check RUNS
+# under them, so the rollup is built from nothing and comes back null. Measured
+# 2026-09-18 on 88ebcaa9 and 8a1c6c4c: 16 suites each at completed/
+# action_required with latest_check_runs_count 0, 0 check runs, 0 statuses, and
+# `statusCheckRollup` null over GraphQL, against a positive control on a live
+# head that returned SUCCESS over 76 contexts. So the guard runs through NONE.
+# Both shapes a null rollup can reach checks_verdict as are asserted, because
+# `gh pr view --jq .statusCheckRollup` prints the literal null.
+expect_checks checks-withheld-rollup-is-null 'null' NONE
+expect_checks checks-withheld-rollup-is-empty '[]' NONE
+
+# Defence in depth, and NOT the loop guard - this conclusion does not reach the
+# rollup today, so nothing here depends on it. It is asserted so that if GitHub
+# ever does surface a withheld run, a run that has not run is still not a
+# failure. The assertion that actually pins the loop guard is
+# verdict-behind-no-checks below; breaking the arm reddens that one, not this.
+expect_checks checks-action-required-defence '[
 	{"__typename":"CheckRun","status":"COMPLETED","conclusion":"ACTION_REQUIRED"}
 ]' PENDING
 
@@ -322,6 +335,11 @@ expect_verdict verdict-behind-and-red MERGEABLE 12 FAILING rescue
 # arm from "rescue anything that is not green".
 expect_verdict verdict-behind-but-green MERGEABLE 12 PASSING skip
 expect_verdict verdict-behind-but-pending MERGEABLE 12 PENDING skip
+
+# Half of the loop guard: rescue_verdict declines when the checks are not
+# FAILING. Only half, because this hands rescue_verdict the word NONE and so
+# cannot see a checks_verdict that stopped producing it - the composed
+# assertion below is the one that covers both halves.
 expect_verdict verdict-behind-no-checks MERGEABLE 12 NONE skip
 
 # Red ALONE is not enough either: a bump that genuinely breaks the build is red
@@ -336,6 +354,47 @@ expect_verdict verdict-unknown-state-red UNKNOWN 0 FAILING skip
 # A non-numeric behind count is what behind_by prints when the compare API could
 # not be read. It must skip, not rescue on a guess.
 expect_verdict verdict-unreadable-behind MERGEABLE '' FAILING skip
+
+# --- the loop guard, end to end ----------------------------------------------
+#
+# THE assertion that pins the guard, because it runs the real path: a withheld
+# head's rollup goes through checks_verdict and its answer into rescue_verdict,
+# exactly as eligible() composes them. Neither single-function assertion can do
+# this. verdict-behind-no-checks is handed the word NONE, so it survives a
+# checks_verdict that stopped emitting NONE; checks-withheld-rollup-is-null
+# stops at the classification and never reaches the decision. Measured
+# 2026-09-18: mutating the empty-rollup arm to FAILING reddens the checks
+# assertions while verdict-behind-no-checks stays green, which is what this
+# assertion exists to catch.
+#
+# The state: this script force-pushed the head, GitHub withheld its runs, and
+# then main moved, so the PR is behind again. Rescuing it a second time would
+# force-push and comment on every base push from here on.
+
+# expect_rescue_path NAME ROLLUP_JSON BEHIND WANT - classify ROLLUP_JSON with
+# --checks, feed that verdict to --verdict, assert the decision.
+expect_rescue_path() {
+	local name="$1" rollup="$2" behind="$3" want="$4" checks line got
+	checks="$(printf '%s' "$rollup" | "$SCRIPT" --checks)"
+	line="$("$SCRIPT" --verdict MERGEABLE "$behind" "$checks")"
+	got="${line%% *}"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   %-28s checks=%-8s %s\n' "$name" "$checks" "$line"
+	else
+		printf 'FAIL %-28s want [%s] got [checks=%s %s]\n' "$name" "$want" "$checks" "$line" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+expect_rescue_path loop-guard-withheld-null 'null' 12 skip
+expect_rescue_path loop-guard-withheld-empty '[]' 12 skip
+
+# The control that keeps the two above readable: the same path, same behind
+# count, with a genuinely failing rollup, must rescue. Without it, a
+# checks_verdict wedged at NONE would satisfy both skips and look correct.
+expect_rescue_path loop-guard-control-red '[
+	{"__typename":"CheckRun","status":"COMPLETED","conclusion":"FAILURE"}
+]' 12 rescue
 
 # --verdict with a missing operand fails rather than deciding on two readings.
 if "$SCRIPT" --verdict MERGEABLE 3 >/dev/null 2>&1; then

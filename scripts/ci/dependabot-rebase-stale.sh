@@ -203,12 +203,19 @@ behind_by() {
 # FAILING, PENDING, PASSING or NONE. Split from checks_state so the
 # classification can be tested against recorded rollups.
 #
-# ACTION_REQUIRED is deliberately PENDING and not FAILING. It is what a run
-# carries while GitHub withholds it pending a maintainer's approval, which is
-# the state this script's own force-push leaves behind (see the header). Read as
-# a failure, it would qualify a just-rescued PR for a second rescue as soon as
-# the base moved again - a force-push and a comment on every base push. A
-# withheld run has not run.
+# A WITHHELD HEAD READS NONE, WHICH IS WHAT STOPS THIS SCRIPT LOOPING ON ITS OWN
+# FORCE-PUSH. GitHub withholds the runs a GITHUB_TOKEN push creates, and a
+# withheld head carries check SUITES at action_required with zero check RUNS
+# under them - so the rollup is built from nothing and comes back null. Measured
+# 2026-09-18 on 88ebcaa9 and 8a1c6c4c: 16 suites each at completed/
+# action_required with latest_check_runs_count 0, 0 check runs, 0 statuses, and
+# `statusCheckRollup` null over GraphQL. Q1052 owns that measurement; the
+# rescue arm needs FAILING, so NONE skips.
+#
+# ACTION_REQUIRED is classified PENDING as defence in depth only. It is not the
+# loop guard and cannot be: that conclusion never reaches the rollup today. It
+# is here so that if GitHub ever does surface a withheld run, a run that has not
+# run is still not a failure.
 #
 # CANCELLED, NEUTRAL, SKIPPED and STALE are terminal and are not evidence of a
 # broken tree, so they count as neither failing nor pending.
@@ -257,6 +264,11 @@ checks_state() {
 # asked for. Red alone is not enough either: a bump that genuinely breaks the
 # build is red on its own tree, and replaying it onto current main reproduces
 # the same red.
+#
+# Requiring FAILING is also what stops this script rescuing a head it pushed
+# itself: that head's checks are withheld, so checks_verdict reads NONE and this
+# arm declines. The PR stays declined until a maintainer releases the runs and
+# they fail on their own merits.
 rescue_verdict() {
 	local state="$1" behind="$2" checks="$3"
 	[[ "$behind" =~ ^[0-9]+$ ]] || behind=0
@@ -274,7 +286,7 @@ rescue_verdict() {
 		return 0
 	fi
 	if [[ "$checks" != "FAILING" ]]; then
-		printf 'skip %s commits behind %s but its checks are %s - the merge queue rebases it\n' \
+		printf 'skip %s commits behind %s but its checks are %s, not failing\n' \
 			"$behind" "$BASE_BRANCH" "$checks"
 		return 0
 	fi

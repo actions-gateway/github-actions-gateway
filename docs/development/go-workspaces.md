@@ -209,7 +209,12 @@ The `dependabot-rebase-stale` workflow (`.github/workflows/dependabot-rebase-sta
 On every `main` push, plus a daily safety net at 07:47 UTC and `workflow_dispatch`, it looks for open, same-repo Dependabot `go_modules` PRs whose branch tip is no longer Dependabot's, and rebases each stranded one with [`scripts/ci/dependabot-rebase-stale.sh`](../../scripts/ci/dependabot-rebase-stale.sh).
 A PR counts as stranded when it is `CONFLICTING`, or when it is behind `main` **and** its checks are failing.
 Both halves of that second test carry weight: a behind-but-green PR is left to the merge queue, which rebases it there, and a PR level with `main` that is red is red on its own tree, so replaying it would reproduce the same red.
-Checks withheld at `action_required` count as pending rather than failing, because that is the state this workflow's own force-push leaves behind; reading them as a failure would have it re-rescue its own work on every later `main` push.
+Requiring the checks to be *failing* is also what stops the workflow rescuing a head it pushed itself.
+GitHub withholds the runs a `GITHUB_TOKEN` push creates, and a withheld head carries check suites at `action_required` with no check runs under them, so its `statusCheckRollup` is empty and the rescue arm reads no failing checks and declines.
+That is the same empty check list the section below describes, and it is why the bound on a repeated rescue is the maintainer's **approval**, not the next `main` push: until someone releases the runs there is nothing for this arm to read as red (Q1052, Q1118).
+**What that costs, on a bump whose failure is real rather than stale.** The arm cannot tell a gate reading state that moves on its own from a bump that genuinely breaks the build, because both read as behind-and-red, so it replays both.
+Replaying a genuinely broken one trades a clear red required gate for a head carrying no checks at all, which is the state Q1052 measures as indistinguishable from a pull request nobody has pushed to and able to age unnoticed.
+It becomes legible again only when someone clicks **Approve and run**, which is the same click the rescue already needs.
 The branch-tip check matters: a branch the bot still owns rebases itself, and force-pushing over that would clobber it mid-flight.
 A run is capped at `MAX_PRS=3` PRs and names any it defers to the next run.
 
