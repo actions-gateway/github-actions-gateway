@@ -2822,14 +2822,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Decision:</strong> whether a withheld PR is surfaced at all, or the maintainer finds it at their own cadence.</td>
 </tr>
 <tr>
-<td><a href="Q1118/">Q1118</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/dependabot-rebase-stale.sh">Rescue a Dependabot PR that is behind main, not only a conflicted one</a></td>
-<td><code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>eligible()</code> skips any PR whose mergeable state is not <code>CONFLICTING</code>, on the reasoning its own comment states: "A branch merely behind main …</td>
-</tr>
-<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -3932,6 +3924,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><strong>Measured 2026-09-17</strong> with <code>python3 scripts/docs/queue.py metrics --labels</code> over the 152 rows this branch started from: <code>debt</code> is on …</td>
+</tr>
+<tr>
+<td><a href="Q1127/">Q1127</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/scripts">Sweep for assertions that could not have gone red</a></td>
+<td><code>tests</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>L</td>
+<td>A green assertion means the suite ran, not that the assertion could have failed.</td>
 </tr>
 </tbody>
 </table>

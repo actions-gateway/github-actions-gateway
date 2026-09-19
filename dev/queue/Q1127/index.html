@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1118/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1127/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Rescue a Dependabot PR that is behind main, not only a conflicted one - GitHub Actions Gateway</title>
+        <title>Sweep for assertions that could not have gone red - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#rescue-a-dependabot-pr-that-is-behind-main-not-only-a-conflicted-one" class="md-skip">
+        <a href="#sweep-for-assertions-that-could-not-have-gone-red" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Rescue a Dependabot PR that is behind main, not only a conflicted one
+              Sweep for assertions that could not have gone red
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#measured-2026-09-16" class="md-nav__link">
+  <a href="#what-was-measured-and-by-whom" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measured 2026-09-16
+        What was measured, and by whom
       
     </span>
   </a>
@@ -2597,10 +2597,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-fix" class="md-nav__link">
+  <a href="#why-one-sweep-will-not-close-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The fix
+        Why one sweep will not close it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done when
       
     </span>
   </a>
@@ -2638,25 +2649,45 @@
   
 
 
-<h1 id="rescue-a-dependabot-pr-that-is-behind-main-not-only-a-conflicted-one">Rescue a Dependabot PR that is behind main, not only a conflicted one<a class="headerlink" href="#rescue-a-dependabot-pr-that-is-behind-main-not-only-a-conflicted-one" title="Permanent link">&para;</a></h1>
-<p><code>eligible()</code> skips any PR whose mergeable state is not <code>CONFLICTING</code>, on the reasoning its own comment states: "A branch merely behind main is mergeable and needs no help."
-That held while every required gate read only the branch's own tree.
-It stopped holding once a required gate started reading state that moves on its own.</p>
-<h2 id="measured-2026-09-16">Measured 2026-09-16<a class="headerlink" href="#measured-2026-09-16" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/1878">#1878</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1880">#1880</a>, both based 2026-09-10 and both <code>MERGEABLE</code>, fail <code>release-pins</code> and <code>doc-links-gate</code>.
-Neither PR changes a single file under <code>docs/</code>, <code>README.md</code>, or <code>CONTRIBUTING.md</code> — they touch <code>THIRD-PARTY-NOTICES</code>, four <code>go.mod</code>/<code>go.sum</code> pairs, and <code>vendor/</code>.
-<code>release-pins-check</code> fails because it compares the install/upgrade pins against the newest stable tag, and v1.8.0 was tagged 2026-09-14, after the branch base; <code>main</code> is green on the same gate.</p>
-<p>So the gate's verdict is a function of wall-clock time, not of the branch.
-Nothing heals it: Dependabot disowned both branches when the <code>chore(deps): sync …</code> commit landed, and this script skips them for being mergeable.
-They sit red until a human intervenes, which is the exact failure mode Q427 created this script to end.</p>
-<h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
-<p>Add a second eligibility arm: a Dependabot <code>go_modules</code> PR whose tip is not Dependabot's, that is behind <code>origin/main</code> and whose checks are failing, is as stranded as a conflicting one.
-Prefer "behind <strong>and</strong> red" over "behind" alone, so a behind-but-green PR is still left to the merge queue rather than force-pushed for no reason.</p>
-<p>The replay path itself needs no change — it already resets to current <code>main</code> and re-applies the bumps, which is exactly what a stale base wants.
-Reuse the <code>MAX_PRS</code> cap so a day of accumulated staleness cannot fan out.</p>
+<h1 id="sweep-for-assertions-that-could-not-have-gone-red">Sweep for assertions that could not have gone red<a class="headerlink" href="#sweep-for-assertions-that-could-not-have-gone-red" title="Permanent link">&para;</a></h1>
+<p>A green assertion means the suite ran, not that the assertion could have failed.
+Six turned up on one day across three lanes, each passing for a reason unrelated to what it claimed to pin, and a green run is the expected output at every one of them.
+No coverage number moves, because the assertion does execute.</p>
+<h2 id="what-was-measured-and-by-whom">What was measured, and by whom<a class="headerlink" href="#what-was-measured-and-by-whom" title="Permanent link">&para;</a></h2>
+<p>Measured here, in <code>scripts/ci/dependabot-rebase-stale-test.sh</code> while fixing Q1118:</p>
+<ul>
+<li><strong>An assertion handed the value the code under test produces.</strong> The eligibility decision is two pure functions composed by <code>eligible()</code>; the suite reached each through its own flag, so the assertion naming the loop guard was invoked as <code>--verdict MERGEABLE 12 NONE</code> and was handed <code>NONE</code>, which is precisely what the classifier exists to compute.
+  Mutating the classifier's empty-rollup arm to <code>FAILING</code> reddened four other assertions and left that one green.</li>
+<li><strong>An assertion on a branch the live system never enters.</strong> The same suite pinned the guard on a <code>ACTION_REQUIRED</code> rollup entry that GitHub does not produce for a withheld head; the real path runs through an empty rollup.
+  Found by the reviewing lane, driven by mutation.</li>
+</ul>
+<p><strong>Measured by other lanes today, cited as corroboration and not verified here.</strong> Three of these are in a pull request that had not opened when this row was written, so read them from that lane rather than from this row:</p>
+<ul>
+<li>A selector matching no pods (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1963">#1963</a>).</li>
+<li>A fixture row present but inert, because <code>printf '\uXXXX'</code> expanded literally with no UTF-8 locale.</li>
+<li>A block exercising the kubectl-absent path, gated on kubectl being present, so it never ran at all.</li>
+<li><code>kill -0</code> reported a process alive where the process was a zombie.</li>
+</ul>
+<h2 id="why-one-sweep-will-not-close-it">Why one sweep will not close it<a class="headerlink" href="#why-one-sweep-will-not-close-it" title="Permanent link">&para;</a></h2>
+<p>The remedies do not transfer, which is the whole difficulty and the reason to say so in the row rather than leave it to whoever picks it up.</p>
+<ul>
+<li>Requiring <strong>non-zero cardinality</strong> on a subject finds the selector and the absent fixture row, and finds neither of the two measured here.</li>
+<li><strong>Mutating the mechanism and requiring red</strong> finds the stand-in and the unreachable branch, and would pass over an inert fixture that is genuinely present.</li>
+<li>Asking, per probe, <strong>what result would have falsified the claim</strong> is what catches <code>kill -0</code> on a zombie, where the instrument is sound and answers a narrower question than the sentence quoting it.</li>
+<li>Making a <strong>fixture prove it is what it claims</strong>, by asserting its decoded bytes rather than its presence, is the only one that reaches the <code>printf</code> case.</li>
+</ul>
+<p>A single cardinality sweep is the cheapest of these and finds the largest number of instances, so it is what gets written first and what a Done-when phrased as "sweep the suites" will be closed against.
+That leaves the mutation-only cases, which no green run anywhere surfaces.</p>
+<p><strong>Deliberately not filed as a taxonomy.</strong> A three-way split of these was proposed and checked against the day's measurements; it failed on two of three placements, so the categories above are named as remedies rather than as a classification anything should be sorted into.</p>
+<h2 id="done-when">Done when<a class="headerlink" href="#done-when" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Each of the four remedies has been run over the suites it can reach, and the row records which suites each one covered.</li>
+<li>At least one instance found by mutation rather than by cardinality, or a statement of what was mutated and why nothing reddened.</li>
+<li>Every composed subject in <code>make scripts-test</code>, meaning a pair of functions one calls through the other, has either an assertion exercising the real composition or a note saying the consumer does not depend on the producer.</li>
+<li>Closing on the cardinality pass alone is explicitly not sufficient.</li>
+</ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>The sibling gap in the same bot chain is the generated-output drift a k8s bump leaves behind; that one is fixed by <code>make deps-sync</code>.
-This row is only about <em>which</em> PRs the rescue considers.</p>
+<p><code>make scripts-test</code> runs 130 shell suites, which bounds the sweep but not its order; start where a subject is split into separately reachable functions, since that is the shape the two locally measured cases share.</p>
 
 
 
