@@ -218,6 +218,8 @@ The mechanics here:
   It does **not** decide whether a change should land, so enqueueing is the maintainer's action, taken after their review.
 - **One carve-out: restoring an enqueue the maintainer already made** (Q692).
   A worker may rebase and re-enqueue **only** when [`scripts/agent/pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
+  That is three calls, not two: `--assess` before the rebase, `--rebased` once the rebase is pushed, and `--confirm` after CI is green.
+  The middle one is what re-measures against the commit the rebase produced, so skipping it leaves `--confirm` waking on a head the assessment never looked at.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
   A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a `gh` failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
 - **`ELIGIBLE` is the authorization, not the mechanism.** `gh pr merge` cannot enqueue, because it routes through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so every form of it fails `Auto merge is not allowed for this repository` (re-measured 2026-09-04 on gh 2.100.0, with all nine required checks green, so it is not the documented fallback for unfinished checks).
@@ -387,6 +389,11 @@ Ask later why the PR was evicted, or whether the worker and the dispatcher saw t
 That is not hypothetical: a dispatcher's post-hoc read once contradicted a worker's contemporaneous `--assess`, and by then neither could be confirmed (Q810).
 
 [`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
+
+[`--rebased`](../../scripts/agent/pr-requeue-eligible.sh) runs once the rebase is pushed and re-binds that record to the commit the rebase produced, requiring the new merge to come back clean: healing the branch is what the rebase was for, so a conflict against the current base means it is unfinished or the base has moved under it again.
+It carries the eviction's own conflict set and OIDs forward rather than overwriting them, so the contemporaneous measurement above survives the re-binding.
+`--confirm` then requires the live head to equal the head the last record names, with no exception, which is what makes a force-push or a fixup landing after the rebase wake instead of riding through.
+The base is compared as a branch *name* throughout, because a retarget is the only base change that invalidates the measurement; the base commit advancing is normal here and deliberately not a refusal.
 
 **It captures on an ordinary `DIRTY` wake too, which it did not always do.** The eligibility checks used to run ahead of the probe, and the first of them is whether a human has ever enqueued the PR.
 A worker healing its own not-yet-enqueued PR is the common case and fails that check, so `--assess` refused and recorded a verdict carrying no OIDs and no conflict set: the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).

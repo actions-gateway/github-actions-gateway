@@ -32,6 +32,22 @@ So `--assess` records its verdict and `--confirm` reads it back; a missing or
 stale record fails closed to "wake the maintainer", the safe direction when a
 session loses context mid-flight.
 
+Between those two the rebase replaces the head, so the assessment describes a
+commit nobody is going to enqueue. `--rebased` closes that gap: run it once the
+rebase is pushed, and it re-measures against the commit the rebase produced and
+re-binds the record to it. `--confirm` then has one rule about the head, with no
+exception to reason about — the live head must be exactly what the last record
+names. A force-push landing after `--rebased`, a fixup commit, another session
+pushing, all move the head away from the record and wake.
+
+The base is the other half and works the other way. `--confirm` compares the base
+BRANCH, because that is the only base change that invalidates anything: a
+retarget is a different merge, and nothing here measured it. The base commit
+moving is not a wake and must not be, since this gate exists because things keep
+merging ahead of the PR — the tip has almost always advanced by confirm time, and
+the queue re-tests against whatever the tip is then regardless of what we
+measured.
+
 That assessment is also the only contemporaneous record of *why* the queue
 evicted a PR. The rebase heals the branch, and the same probe against current
 refs then reports a clean merge, so a later read can neither confirm nor refute
@@ -414,6 +430,100 @@ def assess(pr, gh, record_path, gitattributes, git=run_git):
     return f"{measured}\nELIGIBLE: {reason}{detail}"
 
 
+def check_still_the_measured_pr(last, base, head):
+    """The live PR is still the one the last record measured.
+
+    Two checks, guarding two different events, and neither substitutes for the
+    other.
+
+    The base is compared as a BRANCH NAME, which is what `baseRefName` carries.
+    A retarget is the only base change that invalidates anything here: a
+    different branch is a different merge, and nothing measured it. The base
+    *commit* advancing deliberately is not a wake — this gate exists because
+    things keep merging ahead of the PR, so the tip has almost always moved by
+    the time confirm runs, and the queue re-tests against whatever the tip is
+    then. Waking on that would refuse every re-enqueue the gate was written for.
+
+    The head is compared as an OID, because the whole assessment is a statement
+    about a merge between two specific commits. It says nothing about any other
+    head — including one whose conflicts fall outside the merge-driver-owned
+    files, which is the single property `--assess` exists to establish. The
+    rebase moves the head by design, and `--rebased` is what re-measures and
+    re-binds the record to the commit it produced; anything else that reaches
+    the head leaves the record describing a commit nobody is enqueuing.
+    """
+    if last.get("base") != base:
+        raise Wake(f"the PR was retargeted from {last.get('base')} to {base} "
+                   f"since the assessment, so the merge that was measured is "
+                   f"not the merge that would happen")
+    if last.get("head_oid") != head:
+        raise Wake(f"the PR's head is now {head}, and the last assessment "
+                   f"measured {last.get('head_oid')}; re-run --assess before a "
+                   f"rebase, or --rebased after one, so the record names the "
+                   f"commit that would be enqueued")
+
+
+def rebased(pr, gh, record_path, gitattributes, git=run_git):
+    """Re-bind an ELIGIBLE assessment to the commit the rebase produced.
+
+    Run once the rebase is pushed and before CI. Without it `--confirm` wakes,
+    because the recorded head is the pre-rebase one.
+
+    The merge probed here must come back clean: healing the branch is what the
+    rebase was for, so a conflict against the current base means it is
+    unfinished, or the base moved under it and the branch is dirty again. Either
+    way the state being restored is no longer the one the maintainer enqueued.
+
+    The eviction's own measurement is not overwritten. The new record carries
+    the assessment's conflict set forward, names the pair the assessment merged
+    in its reason, and the assessment's own record is still in the file above
+    it — `write_record` appends.
+    """
+    last = read_last_record(record_path)
+    if last.get("verdict") != "ELIGIBLE":
+        raise Wake(f"the last recorded assessment was {last.get('verdict')!r}, "
+                   f"not ELIGIBLE; there is nothing to re-bind")
+    prior = list(last.get("conflict") or [])
+    base = base_oid = head_oid = None
+
+    def record(verdict, reason, paths):
+        write_record(record_path, verdict, reason, base, base_oid, head_oid, paths)
+
+    try:
+        state, draft, base, head = gh.pr_fields()
+        if state != "OPEN":
+            raise Wake(f"the PR is {state}, not OPEN")
+        if draft:
+            raise Wake("the PR is a draft")
+        if last.get("base") != base:
+            raise Wake(f"the PR was retargeted from {last.get('base')} to "
+                       f"{base}; re-run --assess against the new base")
+
+        _, names = driver_config(gitattributes)
+        git(["fetch", "origin", base, "--quiet"])
+        base_oid, head_oid = resolve_commits(f"origin/{base}", head, pr, git)
+        left = conflicting_paths(base_oid, head_oid, names, git)
+        if left:
+            raise Wake(f"the rebase left conflicts against origin/{base}: "
+                       f"{' '.join(left)}", left)
+    except Wake as w:
+        record("WAKE", w.reason, w.conflicts or prior)
+        raise
+    except Unmeasurable as e:
+        record("UNMEASURABLE", str(e), prior)
+        raise
+
+    record("ELIGIBLE",
+           f"the rebase of {last.get('head_oid')} onto origin/{base} merges "
+           f"clean; the eviction was measured by git merge-tree --write-tree "
+           f"{last.get('base_oid')} {last.get('head_oid')}",
+           prior)
+    return (f"ELIGIBLE: the record now names head {head_oid}\n"
+            f"eviction measured: git merge-tree --write-tree "
+            f"{last.get('base_oid')} {last.get('head_oid')}\n"
+            f"conflicts then: {' '.join(prior) if prior else 'none'}")
+
+
 def confirm(pr, gh, record_path):
     state, draft, base, head = gh.pr_fields()
     if state != "OPEN":
@@ -424,18 +534,21 @@ def confirm(pr, gh, record_path):
     if last.get("verdict") != "ELIGIBLE":
         raise Wake(f"the recorded assessment was {last.get('verdict')!r}, "
                    f"not ELIGIBLE")
-    if last.get("base") != base:
-        raise Wake(f"the PR's base changed from {last.get('base')} to {base} "
-                   f"since the assessment")
+    check_still_the_measured_pr(last, base, head)
     if gh.in_queue():
         raise Wake("the PR is already in the merge queue; nothing to restore")
     if not gh.human_enqueued():
         raise Wake("no human has enqueued this PR, so there is nothing to restore")
     conflicts = last.get("conflict") or []
+    # Dated and named as a replay, because it is one. Printed as a bare
+    # `measured:` it reads as something this run went and took, which is the
+    # reading that let two superseded OIDs pass for current provenance.
     return ("ELIGIBLE: re-enqueue restores the maintainer's own earlier enqueue\n"
-            f"measured: git merge-tree --write-tree {last.get('base_oid')} "
+            f"replaying the assessment recorded at {last.get('at')}: "
+            f"git merge-tree --write-tree {last.get('base_oid')} "
             f"{last.get('head_oid')}\n"
-            f"conflicts: {' '.join(conflicts) if conflicts else 'none'}")
+            f"conflicts measured then: "
+            f"{' '.join(conflicts) if conflicts else 'none'}")
 
 
 def main(argv=None):
@@ -443,6 +556,9 @@ def main(argv=None):
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--assess", action="store_true",
                       help="before rebasing; records a verdict")
+    mode.add_argument("--rebased", action="store_true",
+                      help="after rebasing and pushing; re-binds the record "
+                           "to the commit the rebase produced")
     mode.add_argument("--confirm", action="store_true",
                       help="after CI is green; gates the enqueue")
     p.add_argument("pr", type=int)
@@ -458,6 +574,8 @@ def main(argv=None):
     try:
         if args.assess:
             print(assess(args.pr, gh, record_path, args.gitattributes))
+        elif args.rebased:
+            print(rebased(args.pr, gh, record_path, args.gitattributes))
         else:
             print(confirm(args.pr, gh, record_path))
         return 0
