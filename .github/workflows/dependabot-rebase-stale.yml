@@ -1,11 +1,15 @@
 name: dependabot-rebase-stale
 
-# Rescue Dependabot Go-module PRs that can no longer rebase themselves (Q427).
+# Rescue Dependabot Go-module PRs that can no longer rebase themselves (Q427,
+# Q1118).
 #
 # dependabot-go-sync.yml (Q111) pushes a `chore(deps): sync ...` commit onto the
 # bot's branch, which makes Dependabot disown it. From then on the bot never
-# rebases the branch again, so the PR goes permanently conflicting the moment
-# main moves under it and never self-heals.
+# rebases the branch again, so the PR strands the moment main moves under it and
+# never self-heals. Two ways: permanently conflicting, or cleanly mergeable and
+# permanently red, when a required gate reads state that moves on its own -
+# release-pins-check compares the install pins against the newest stable tag, so
+# tagging a release reddens every branch based before it (Q1118).
 #
 # The documented manual remedy, a maintainer commenting `@dependabot recreate`,
 # cannot be automated: Dependabot accepts comment commands only from *users*
@@ -19,7 +23,9 @@ name: dependabot-rebase-stale
 #
 # It does NOT start the PR's checks: the force-push uses GITHUB_TOKEN, so GitHub
 # creates the runs for it and then holds every one at action_required until a
-# maintainer approves. That is the same one-click step every synced Dependabot PR
+# maintainer approves. A head in that state has check suites and no check runs,
+# so its statusCheckRollup is empty - which is what stops the behind-and-red arm
+# rescuing a head this workflow pushed itself (Q1118). That is the same one-click step every synced Dependabot PR
 # already needs, and the click is "Approve and run" rather than close + reopen;
 # the workflow leaves a PR comment saying so. See
 # docs/development/go-workspaces.md, section "Both bot pushes leave the checks
