@@ -3930,7 +3930,7 @@ The pull steps fall back to retried upstream pulls there (helm is baked into the
 A handful of specs deliberately reach the **live** `api.github.com` (see the `real-github-egress` label above), so a transient outage of the CI runner's own GitHub egress kills them with signatures that look like product regressions — observed as a proxy CONNECT 502 (kindnet lane, 2026-07-14) and curl exit-28 timeouts including the proxy-less DirectEgress spec (Calico lane, 2026-07-19), both green on re-run.
 Two probes make such blips self-attribute instead of costing a triage:
 
-- **In-suite, at failure time (the authoritative signal):** when a `real-github-egress`-labelled spec fails, a suite-level `AfterEach` immediately issues an HTTPS GET to `api.github.com/zen` from the test process — the runner host, the segment every in-cluster path NATs through — and stamps a `RUNNER-HOST GITHUB PREFLIGHT: <verdict>` banner into the spec's failure output.
+- **In-suite, at failure time:** when a `real-github-egress`-labelled spec fails, a suite-level `AfterEach` immediately issues an HTTPS GET to `api.github.com/zen` from the test process — the runner host, the segment every in-cluster path NATs through — and stamps a `RUNNER-HOST GITHUB PREFLIGHT: <verdict>` banner into the spec's failure output.
   A non-fatal baseline probe logs the same verdict at suite start; it deliberately does **not** fail fast, since a start-time blip may clear before those specs run and a fatal preflight would add a flake surface rather than remove one.
 - **In the workflow's failure-diagnostic step:** `e2e-reusable.yml` curls `api.github.com/zen` from the runner alongside the cluster dumps and applies the same table in shell, covering the case where the suite process itself died before the `AfterEach` could report.
 
@@ -3951,6 +3951,43 @@ Those make the banner concrete but never change a verdict.
 
 Scoring `403` as `REACHABLE` was the original rule and the bug behind Q648: on 2026-08-03 the probe stamped `PREFLIGHT: OK (HTTP 403)` three times into a failing run, telling the operator to treat a rate-limited runner as a product regression; the re-run was green.
 Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a genuinely broken spec means re-running it forever — which is why `INCONCLUSIVE` exists and stays narrow: it covers only the responses that say *something other than GitHub* answered, and it names the one artifact (the body) that resolves it.
+
+**This banner scores an HTTP answer, so it cannot attribute a failure that never reached the HTTP layer.** Every row of the table above is a response GitHub sent, which means the TCP connection and the TLS handshake both completed.
+A proxy CONNECT 502 is a `net.DialTimeout` that never got that far.
+Measured on the 2026-09-16 kindnet run (job 104998010114), where both proxy-CONNECT specs failed on the identical signature minutes apart: the v1 failure scored `BLOCKED (HTTP 403; x-ratelimit-remaining=0)` and the v2 failure scored `REACHABLE (HTTP 200 in 164ms)`, while the proxy's own logs recorded nine `dial tcp 172.182.252.137:443: i/o timeout` across both replicas throughout.
+Neither verdict was wrong about the question it answers; neither answers this one.
+Read the [EgressProxy CONNECT attribution](#egressproxy-connect-attribution-q1119) banner for a dial-level failure, and this one for a failure that reached GitHub.
+
+#### EgressProxy CONNECT attribution (Q1119)
+
+The two proxy-CONNECT specs, `E2E_GMC_TenantProvisioning_ProxyConnectWorks` (v1) and `E2E_V2_ProxyConnectWorks` (v2), fail with `curl: (56) CONNECT tunnel failed, response 502` when the tunnel does not establish, and that one signature covers three different hops.
+`DumpEgressProxyDiagnostics` ([`diagnostics.go`](../../cmd/gmc/test/utils/diagnostics.go)) runs from both specs' `AfterEach`, dumps every proxy replica's log, and stamps an `EGRESSPROXY CONNECT ATTRIBUTION: <verdict>` banner naming which hop refused.
+It is gated on a failure **and** the `real-github-egress` label, exactly as the sibling preflight `AfterEach` is, because three of the four verdicts are positive findings with a directive rather than abstentions: an unlabelled spec failing on an HPA assertion would otherwise be told to inspect a CONNECT path it never used.
+The label gate also bounds the log window, since a verdict read from a 400-line tail otherwise spans whatever earlier spec left dial failures in it.
+
+The proxy emits exactly two CONNECT-path log lines and each names a distinct hop ([`handleConnect`](../../cmd/proxy/proxy.go)): a destination its allowlist rejects logs `CONNECT destination not allowed` and answers **403**, and a `net.DialTimeout` that fails logs `upstream dial failed` and answers **502**.
+A CONNECT it establishes logs nothing, which is why silence is a verdict of its own rather than a success.
+
+| Verdict | What the replica logs showed | What to do |
+|---|---|---|
+| `NO-EVIDENCE` | No replica's log could be fetched | Attributes nothing. Read the dump above for why the fetch failed before concluding anything about the egress path. |
+| `PROXY-NOT-REACHED` | Every log read, none carrying a denial or a dial failure | These replicas did not emit the client's 502. Look at the hops *before* the proxy: the workload NetworkPolicy, the Service endpoints, the CONNECT TLS handshake. |
+| `PROXY-REFUSED` | At least one `CONNECT destination not allowed` | The allowlist rejected the destination. That hop answers 403, so a 502 beside this verdict is a different request: check whether the destination resolved outside the egress allowlist between the two. |
+| `UPSTREAM-DIAL-FAILED` | At least one `upstream dial failed` | The proxy accepted the destination and its TCP dial did not complete. The proxy is not the refusing hop; the dial error in the banner names what happened past it. |
+
+**`NO-EVIDENCE` and `PROXY-NOT-REACHED` are the pair the banner exists to separate**, because an unreadable dump and a proxy nothing reached produce identical empty text and only one of them attributes anything.
+Each replica is read individually rather than through `kubectl logs deploy/<name>`, which follows one replica: the 2026-09-16 failure spread its dial failures over both, so a single-replica read would have reported seven of the nine and no second replica at all.
+A replica whose log will not fetch is carried as unreadable rather than dropped, so the banner's replica count matches the Deployment's.
+A replica that restarted has its previous container's log folded in and is annotated as restarted, because its CONNECT record is in that log and reading only the current one scores a replica whose own dial failed as readable-and-silent.
+
+**The pod selector is read from the Deployment, never assumed**, because v1 and v2 do not share one and v2's divergence is deliberate. v1 selects `app: actions-gateway-proxy`; a v2 `EgressProxy` selects `actions-gateway.com/egress-proxy: <name>` and carries no bare `app` key at all, so that a v2 pod is never claimed by v1's PDB, HPA or anti-affinity during a migration's coexistence window ([`egressProxyPodSelector`](../../cmd/gmc/internal/controller/egressproxy_builder.go), Q582).
+A selector hardcoded from either side matches nothing on the other, and matching nothing is scored `NO-EVIDENCE`, which is indistinguishable from a dump that failed.
+The dump therefore reads `.spec.selector.matchLabels` off the Deployment at failure time, which serves both versions on one code path and cannot go stale when a builder changes its labels.
+An unreadable Deployment yields no evidence rather than an empty selector: `kubectl get pods -l ""` matches every pod in the namespace, which would score the curl pod's own logs as the proxy's.
+
+**Why it was added.** On the 2026-09-16 kindnet run only the v1 spec captured anything proxy-side: `DumpProvisioningDiagnostics` dumps every pod in the namespace and so caught the dial failures, while the v2 spec dumps its AGC Deployments alone and caught none.
+The v1 evidence that *was* captured sat in the output as 150 lines of JSON and the failure was still triaged off the runner-host HTTP banner above, which scored the two identical failures `BLOCKED` and `REACHABLE` minutes apart.
+Scoring is a pure function over log text (`ScoreProxyReplicaLog`/`AttributeProxyConnect`, table-tested in `proxy_connect_attribution_test.go`) so every verdict is driven by a unit test, including the two that say the banner cannot attribute the failure.
 
 #### The Calico e2e lane
 

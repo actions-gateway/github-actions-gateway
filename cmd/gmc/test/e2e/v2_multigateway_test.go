@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,6 +91,18 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 			// Both AGCs share the fakegithub/infra; dump each gateway's AGC state.
 			utils.DumpAGCSessionDiagnostics(tenantNS, alphaAGC, infraNamespace, fakegithubServiceName)
 			utils.DumpAGCSessionDiagnostics(tenantNS, betaAGC, infraNamespace, fakegithubServiceName)
+			// The AGC dumps reach their own Deployments only, so a CONNECT 502
+			// out of ProxyConnectWorks used to leave nothing proxy-side in the
+			// output at all (Q1119). Gated on the label rather than on Failed()
+			// alone, as the sibling preflight AfterEach is: PROXY-NOT-REACHED is
+			// a positive verdict with a directive, not an abstention, so a
+			// failing non-egress spec would be told to inspect a hop it never
+			// used. The label also bounds the log window, since a verdict read
+			// from a 400-line tail otherwise spans whichever earlier spec left
+			// dial failures in it.
+			if slices.Contains(CurrentSpecReport().Labels(), realGitHubEgressLabel) {
+				utils.DumpEgressProxyDiagnostics(tenantNS, proxyDeploy)
+			}
 		}
 	})
 

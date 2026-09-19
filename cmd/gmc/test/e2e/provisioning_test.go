@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,6 +37,16 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
 			utils.DumpCNIEnforcerState()
+			// The provisioning dump already carries the proxy pods' logs, but as
+			// 150 lines of JSON a reader has to classify by hand: on 2026-09-16
+			// nine "upstream dial failed" lines sat in it and the failure was
+			// still triaged off the HTTP-layer preflight banner (Q1119). This
+			// scores the same lines into a verdict. Label-gated for the reason
+			// the v2 sibling is, and that gate is also what keeps the duplicate
+			// log dump to the one spec the proxy's account is about.
+			if slices.Contains(CurrentSpecReport().Labels(), realGitHubEgressLabel) {
+				utils.DumpEgressProxyDiagnostics(tenantNS, proxyName)
+			}
 		}
 	})
 

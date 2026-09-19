@@ -230,3 +230,142 @@ func dumpCommand(label, name string, args ...string) {
 	}
 	_, _ = fmt.Fprintf(GinkgoWriter, "--- %s ---\n%s\n", label, out)
 }
+
+// DumpEgressProxyDiagnostics writes the EgressProxy's own account of a failed
+// `real-github-egress` CONNECT spec to the Ginkgo output, and stamps a verdict
+// that names which hop refused (Q1119).
+//
+// The two proxy-CONNECT specs failed together on 2026-09-16 with
+// `curl: (56) CONNECT tunnel failed, response 502`, and only one of them
+// captured anything proxy-side: the v1 spec dumps every pod in the namespace
+// via DumpProvisioningDiagnostics and so caught nine "upstream dial failed"
+// lines across two replicas, while the v2 spec dumps its AGC Deployments alone
+// and caught none. The banner closes that gap for both and, unlike a raw log
+// dump, distinguishes a proxy whose log could not be read from one that handled
+// no CONNECT at all — the two produce identical empty text, and only one of
+// them attributes anything.
+//
+// It reads pod logs, the proxy's NetworkPolicy and the pod descriptions.
+// Nothing here reads a Secret: describe renders a Secret-backed volume as its
+// name, which is how the proxy's TLS material reaches the pod.
+//
+// It is best-effort: every command failure is reported inline and skipped,
+// never propagated, so calling it from a failure-gated AfterEach cannot mask
+// the original failure. Call it only when the spec has already failed.
+func DumpEgressProxyDiagnostics(ns, proxyDeployment string) {
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"\n===== EgressProxy CONNECT diagnostics (namespace=%s deployment=%s) =====\n", ns, proxyDeployment)
+
+	selector, selErr := proxyPodSelector(ns, proxyDeployment)
+	if selErr != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter,
+			"--- proxy selector for %s/%s: unavailable (%v) ---\n", ns, proxyDeployment, selErr)
+	}
+	evidence := collectProxyReplicaEvidence(ns, selector)
+	verdict := AttributeProxyConnect(evidence)
+
+	// Skipped rather than run with an empty selector, for collectProxyReplicaEvidence's
+	// reason one call up: `-l ""` matches everything, so this would describe every pod
+	// in the namespace under a heading that says these are the proxy's.
+	if selector != "" {
+		dumpCommand("proxy pod descriptions in "+ns,
+			"kubectl", "describe", "pods", "-n", ns, "-l", selector)
+	}
+	// The egress rule set is what separates a locally dropped SYN from one that
+	// left the node, so it is evidence for the dial-failure verdict rather than
+	// background. Sampled: it carries GitHub's full meta range set.
+	dumpNetworkPolicies("networkpolicies in "+ns, ns)
+
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"\n=== EGRESSPROXY CONNECT ATTRIBUTION: %s ===\n%s%s",
+		verdict, FormatProxyConnectEvidence(evidence), ProxyConnectGuidance(verdict))
+
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"===== end EgressProxy CONNECT diagnostics (namespace=%s deployment=%s) =====\n\n", ns, proxyDeployment)
+}
+
+// proxyPodSelector reads the Deployment's own `.spec.selector.matchLabels` and
+// renders it as a `kubectl -l` selector.
+//
+// Read rather than assumed, because v1 and v2 do not share a label and v2's
+// absence of v1's is deliberate. v1 selects `app: actions-gateway-proxy`; a v2
+// EgressProxy selects `actions-gateway.com/egress-proxy: <name>` and carries no
+// bare `app` key at all, so that a v2 pod is never claimed by v1's PDB, HPA or
+// anti-affinity during a migration's coexistence window (Q582,
+// `egressProxyPodSelector`). A selector hardcoded from either side therefore
+// matches nothing on the other, and matching nothing is indistinguishable from
+// a proxy that handled no CONNECT.
+func proxyPodSelector(ns, proxyDeployment string) (string, error) {
+	const tmpl = `{{range $k, $v := .spec.selector.matchLabels}}{{$k}}={{$v}},{{end}}`
+	out, err := Run(exec.Command("kubectl", "get", "deployment", proxyDeployment,
+		"-n", ns, "-o", "go-template="+tmpl))
+	if err != nil {
+		return "", err
+	}
+	// kubectl's go-template emits a separator after EVERY map entry, so the raw
+	// render always ends in one, and a trailing comma is a parse error rather
+	// than a tolerated nicety: measured against a live apiserver, `-l 'app=x,'`
+	// is rejected with `found '', expected: identifier after ','` while
+	// `-l 'app=x'` is served. Untrimmed it would take out v1 and v2 alike.
+	selector := strings.TrimSuffix(strings.TrimSpace(out), ",")
+	if selector == "" {
+		return "", fmt.Errorf("deployment %s/%s has an empty selector", ns, proxyDeployment)
+	}
+	return selector, nil
+}
+
+// collectProxyReplicaEvidence reads each proxy replica's log and scores it.
+//
+// Per pod rather than `logs deploy/<name>`, which follows one replica only: the
+// 2026-09-16 failure spread its dial failures over both, so a single-replica
+// read would have reported seven of the nine and no second replica at all. A
+// pod whose log will not fetch is carried as unreadable rather than dropped, so
+// the verdict can tell an empty dump from a silent proxy.
+//
+// An empty selector yields no evidence rather than every pod in the namespace:
+// `kubectl get pods -l ""` matches everything, which would score the curl pod's
+// own logs as the proxy's.
+func collectProxyReplicaEvidence(ns, selector string) []ProxyReplicaEvidence {
+	if selector == "" {
+		return nil
+	}
+	pods, err := Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"-l", selector, "-o", "name"))
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- proxy pods in %s: unavailable (%v) ---\n", ns, err)
+		return nil
+	}
+
+	var evidence []ProxyReplicaEvidence
+	for _, pod := range strings.Fields(pods) {
+		// --tail is generous: the retry budget drives up to nine CONNECTs per
+		// spec, and a replica serving several specs must not scroll its own
+		// dial failures out behind them.
+		out, logErr := Run(exec.Command("kubectl", "logs", pod, "-n", ns,
+			"--tail=400", "--all-containers", "--prefix"))
+		if logErr != nil {
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- %s logs in %s: unavailable (%v) ---\n", pod, ns, logErr)
+			evidence = append(evidence, ScoreProxyReplicaLog(pod, "", false))
+			continue
+		}
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- %s logs in %s ---\n%s\n", pod, ns, out)
+
+		// A restarted replica keeps its CONNECT record in the previous
+		// container, so reading only the current one scores a replica that DID
+		// fail a dial as readable-and-silent — a positive verdict pointing at
+		// the wrong hop. Absent on a replica that never restarted, which is the
+		// ordinary case and not an error.
+		prev, prevErr := Run(exec.Command("kubectl", "logs", pod, "-n", ns,
+			"--tail=400", "--all-containers", "--prefix", "--previous"))
+		restarted := prevErr == nil && strings.TrimSpace(prev) != ""
+		if restarted {
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- %s previous-container logs in %s ---\n%s\n", pod, ns, prev)
+			out = prev + "\n" + out
+		}
+
+		ev := ScoreProxyReplicaLog(pod, out, true)
+		ev.Restarted = restarted
+		evidence = append(evidence, ev)
+	}
+	return evidence
+}
