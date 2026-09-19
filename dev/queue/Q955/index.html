@@ -2603,6 +2603,9 @@ Q890 shipped the local half: <code>make vendored-skills-check</code> holds each 
 It cannot ask the other question, and that is the residue rather than an oversight, which is why this is a separate row.
 The repo is private, so a fetching gate needs a token this repo does not carry, and a gate whose oracle is the network fails when a third party sneezes.
 Measured 2026-08-21: upstream took 8 commits on <code>queue.py</code> and 1 to 2 on each of the other three in the five days after Q889 vendored them, none of it visible here.</p>
+<p>The network objection is against an inline gate, and a scheduled notifier is not one: <code>updatecli.yml</code> already runs Mondays to bump the version and checksum pins Dependabot cannot see, opening a PR per manifest, and a fetch that fails there reddens nothing.
+<code>vendored-skills.tsv</code> already carries <code>vendored_at</code> and <code>vendored_sha256</code>, which its header says exist so a re-vendor can diff upstream forward from a known point.
+Measured 2026-09-19: the vendored <code>pr-requeue-eligible.py</code> gates re-enqueues here through a <code>--confirm</code> that cannot detect head drift, and the fix is open upstream as <code>karlkfi/claude-skills#537</code>, so the drift this row describes now holds a known defect rather than unread commits.</p>
 
 
 
