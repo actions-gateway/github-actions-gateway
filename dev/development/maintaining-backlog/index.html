@@ -3575,9 +3575,10 @@ A ledger row makes "no RC has ever passed this" answerable at a glance.</p>
 </ul>
 <p>Both are reversible and both are cheap, which is the point: the expensive failure is a release whose scope quietly drifts because nothing recorded what it was.</p>
 <p><strong>A <code>-gate</code> label is also a public promise.</strong> <a href="../../roadmap/"><code>docs/roadmap.md</code></a> is where an adopter reads it, so adding or removing one is an edit to both files and a punt that skips the second leaves the promise standing.
-<code>make roadmap-check</code> reconciles them in both directions: every <code>X.Y-gate</code> row must be named by a roadmap bullet's <code>&lt;!-- q:QN --&gt;</code> annotation, and a bullet that writes a version into its prose must name a row carrying that gate.
+<code>make roadmap-check</code> reconciles them in both directions: every <code>X.Y-gate</code> row that also carries <code>feature</code> or <code>security</code> must be named by a roadmap bullet's <code>&lt;!-- q:QN --&gt;</code> annotation, and a bullet that writes a version into its prose must name a row carrying that gate.
 Only the second reads the prose, and only it goes quiet once the version is a derived chip rather than a sentence; the coverage half reads the annotation and the label alone, so it holds whatever the bullet looks like.
-Naming a version without claiming to gate it stays free, which is how Q273's bullet names <code>v2.0.0</code> while carrying no label.</p>
+Naming a version without claiming to gate it stays free, which is how Q273's bullet names <code>v2.0.0</code> without the page promising that tag.
+That is separate from the row's own <code>2.0-gate</code> label, which obliges no bullet because Q273 is a <code>docs</code> row.</p>
 <p><strong>A near-term roadmap bullet means "not waiting on an outside signal".</strong> An item that waits on demand, on an unbuilt prerequisite, or on hardware belongs in Deferred with a revive trigger, which puts its bullet under <em>Exploring / longer-term</em>.
 The <a href="../../plan/release-ladder/">release ladder</a> is where that rule and the current 1.5 → 1.6 → 2.0 shape are argued; what enforces it is rule 3, since a bullet naming only Deferred rows fails the gate.
 The failure mode it exists to catch is the comfortable one: leaving an item in the Queue because parking it feels like giving up.

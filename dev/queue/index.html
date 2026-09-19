@@ -2702,14 +2702,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
-<td><a href="Q1116/">Q1116</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">Three scripts-test suites fail only on the dogfood runner</a></td>
-<td><code>ci</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Event:</strong> the <code>scripts-test</code> job fails on a <code>gag-ci-scaleset</code> runner with any of `FAIL rule 9: an anchored last item still obliges the …</td>
-</tr>
-<tr>
 <td><a href="Q1119/">Q1119</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3940,6 +3932,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>L</td>
 <td>A green assertion means the suite ran, not that the assertion could have failed.</td>
+</tr>
+<tr>
+<td><a href="Q1128/">Q1128</a></td>
+<td><a href="../development/testing/#the-status-you-report-is-a-claim-too"><code>gh api</code> job logs exits 1 and writes nothing on escape sequences</a></td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Reading a workflow job's log to confirm a gate actually ran is the instrument …</td>
 </tr>
 </tbody>
 </table>

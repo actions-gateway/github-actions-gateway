@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1116/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1128/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Three scripts-test suites fail only on the dogfood runner - GitHub Actions Gateway</title>
+        <title>gh api job logs exits 1 and writes nothing on escape sequences - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#three-scripts-test-suites-fail-only-on-the-dogfood-runner" class="md-skip">
+        <a href="#gh-api-job-logs-exits-1-and-writes-nothing-on-escape-sequences" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Three scripts-test suites fail only on the dogfood runner
+              gh api job logs exits 1 and writes nothing on escape sequences
             
           </span>
         </div>
@@ -2586,10 +2586,32 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#one-of-the-three-has-a-mechanism-now-and-it-is-not-the-shared-signature" class="md-nav__link">
+  <a href="#measured-2026-09-18" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One of the three has a mechanism now, and it is not the shared signature
+        Measured 2026-09-18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-write-down" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to write down
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
       
     </span>
   </a>
@@ -2616,61 +2638,36 @@
   
 
 
-<h1 id="three-scripts-test-suites-fail-only-on-the-dogfood-runner">Three scripts-test suites fail only on the dogfood runner<a class="headerlink" href="#three-scripts-test-suites-fail-only-on-the-dogfood-runner" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <code>scripts-test</code> job fails on a <code>gag-ci-scaleset</code> runner with any of <code>FAIL rule 9: an anchored last item still obliges the flip (rc=0 want=1)</code>, <code>FAIL a target that does not render is caught: want rc 1, got 0</code>, or <code>FAIL the recorded stop takes the run AND its children: want 'yes', got 'no'</code>.</p>
-<p><strong>Measured 2026-09-16</strong> from the only two <code>unit-test.yml</code> runs that have put this job on the lane, both <code>workflow_dispatch</code> on <code>main</code> with <code>target_gag=true</code>:</p>
-<table>
-<thead>
-<tr>
-<th>Run</th>
-<th>When</th>
-<th>Commit</th>
-<th>Job</th>
-<th>Suites failing</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34802508013">34802508013</a></td>
-<td>2026-09-14 03:24Z</td>
-<td>f771594d11</td>
-<td>364s</td>
-<td><code>check-registry-mirror-render-test</code>, <code>check-queue-rules-test</code></td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34827435782">34827435782</a></td>
-<td>2026-09-14 09:20Z</td>
-<td>86fbb6061a</td>
-<td>314s</td>
-<td>those two, plus <code>record-launch-test</code></td>
-</tr>
-</tbody>
-</table>
-<p>Both concluded <code>failure</code> rather than a timeout <code>cancelled</code>, and every other step in each job succeeded.</p>
-<p><strong>It reproduces, so it is not a flake, and the label drops accordingly.</strong> Two runs six hours apart on different commits produced character-identical assertion text for the first two suites.
-A flake passes on rerun without a code change; these did not.</p>
-<p><strong>The lane is 2 for 2 and <code>ubuntu-latest</code> is 0 for 11.</strong> Across the <code>unit-test.yml</code> runs carrying this job on 2026-09-15 and 2026-09-16, <code>scripts-test</code> was green every time on <code>ubuntu-latest</code> at 140-245s.
-No green run exists on the scaleset lane, so runner and outcome are still perfectly confounded and the association cannot yet be called causal; what the second run removes is the possibility that one reading was chance.</p>
-<p><strong>One signature spans all three suites</strong>, which is why this row is no longer about rule 9.
-Each assertion wants the active answer and gets the passive one: a checker told to exit 1 exits 0, twice, in two unrelated checkers; and a stop that must reach the run's children reports that it did not.
-That last one is the most legible, because reaching a child process is a property of the process group rather than of any assertion's logic, and a worker pod's PID namespace is exactly the kind of thing that differs from a GitHub-hosted VM.
-<strong>Unverified:</strong> no reading has been taken inside the pod, and the three are grouped on the shape of their failure rather than on a mechanism anyone has traced.</p>
-<h2 id="one-of-the-three-has-a-mechanism-now-and-it-is-not-the-shared-signature">One of the three has a mechanism now, and it is not the shared signature<a class="headerlink" href="#one-of-the-three-has-a-mechanism-now-and-it-is-not-the-shared-signature" title="Permanent link">&para;</a></h2>
-<p><strong>Traced 2026-09-17 from the job's own output, which carries the answer beside the failure.</strong> <code>check-registry-mirror-render-test</code>'s failure is not a checker refusing the active answer.
-It is one assertion needing a capability the lane lacks, sitting outside the guard its neighbours use.</p>
-<p>The checker skips on purpose and says so: <code>scripts/manifest/check-registry-mirror-render.sh:186:if ! command -v kubectl &gt;/dev/null 2&gt;&amp;1; then</code> opens a branch printing <code>scripts/manifest/check-registry-mirror-render.sh:192:kubectl not on PATH (it is e2e-tier in scripts/ci/check-tools.sh), so the render assertions were skipped</code> before it exits 0.
-Both failing runs print that note, then <code>registry-mirror target list agrees with the tree: 4 render targets, 2 non-targets (renders not checked)</code>.</p>
-<p>The test guards for that skip everywhere except at the failing line.
-It computes <code>have_kubectl</code> and branches on it at <code>scripts/manifest/check-registry-mirror-render-test.sh:123:if ((have_kubectl)); then</code> and at seven later assertions.
-Rule 1's two are unguarded deliberately, for the reason at <code>scripts/manifest/check-registry-mirror-render-test.sh:133:and it must fire with or without kubectl, since it reads no render</code> in that comment, and both passed on the lane.
-Rule 2's <code>scripts/manifest/check-registry-mirror-render-test.sh:151:expect 'a target that does not render is caught' 1</code> does read a render and is not guarded, which is why it is the one that fails.</p>
-<p>That also breaks the confound: <code>ubuntu-latest</code> ships kubectl and a scaleset worker pod does not, so runner and outcome track each other through a missing tool rather than through anything about the lane's process model.</p>
-<p><strong>This weakens the grouping rather than confirming it.</strong> A missing capability guard on one assertion is not what <code>check-queue-rules-test</code>'s one-item fixture view looks like, so the three are less likely to share a cause than the paragraph above supposes.
-Read the other two for their own mechanisms rather than for this one.</p>
-<p>For <code>check-queue-rules</code> specifically the line beside the failure reads <code>check-queue-rules: ok (1 item(s), 2 at the merge base, rules 8, 9, 11, 13 and 14)</code>, a one-item view, so the thread there is whether the fixture's second item was absent when rule 9 was evaluated, which would make the rule vacuous rather than wrong.</p>
-<p>Reaching the lane again needs a <code>workflow_dispatch</code> with <code>target_gag</code>, which is what a third reading costs.</p>
-<p>Not <a href="../Q822/">Q822</a>: that row's trigger names <code>git-merge-script-index-test</code> and <code>git-merge-plan-index-test</code> and a <code>merge-*-index: the build failed with:</code> line, and these are different suites reaching different verdicts.
-Not Q947, which is <code>status-lint</code>'s path filter omitting a checker's wrapper rather than any checker's own behaviour.</p>
+<h1 id="gh-api-job-logs-exits-1-and-writes-nothing-on-escape-sequences"><code>gh api</code> job logs exits 1 and writes nothing on escape sequences<a class="headerlink" href="#gh-api-job-logs-exits-1-and-writes-nothing-on-escape-sequences" title="Permanent link">&para;</a></h1>
+<p>Reading a workflow job's log to confirm a gate actually ran is the instrument <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md</a> sends you to when a green check is not enough.
+It has a failure mode that turns a failed read into a plausible finding, and nothing in the output marks it.</p>
+<h2 id="measured-2026-09-18">Measured 2026-09-18<a class="headerlink" href="#measured-2026-09-18" title="Permanent link">&para;</a></h2>
+<p>Confirming that Q1118's new assertions had run on GitHub's runner rather than only locally:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh api "repos/{owner}/{repo}/actions/jobs/105392327528/logs" &gt; st.log 2&gt;&amp;1
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a># exit 1; st.log holds:
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>#   the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway
+</code></pre></div>
+<p>The log is <strong>not written</strong>, so a grep for the assertion names over <code>st.log</code> returns empty.
+That empty reads exactly like the assertions being absent, which is the conclusion under test and the alarming one — a gate job reporting green for a heavy job whose content never ran.
+Re-running with <code>--allow-escape-sequences</code> returned the real 423 KB log, with every assertion present.</p>
+<p>Both halves of the trap are ordinary practice.
+The redirect is what <a href="../../development/bash-style/">bash-style.md</a> and the exit-status rules ask for, and it is what routes the error message into the file a later grep reads.
+And a job log is exactly where a reader has already decided the answer matters.</p>
+<h2 id="what-to-write-down">What to write down<a class="headerlink" href="#what-to-write-down" title="Permanent link">&para;</a></h2>
+<p>One entry under testing.md § <a href="../../development/testing/#the-status-you-report-is-a-claim-too">The status you report is a claim too</a>, where the neighbouring rules about an empty result already live:</p>
+<ul>
+<li>The invocation carries <code>--allow-escape-sequences</code> whenever a job log is fetched to support a claim.</li>
+<li>Reconcile the fetch's own exit status before grepping what it wrote, since the error lands <em>in</em> the output file rather than beside it.</li>
+<li>A positive control settles it in one line: grep the log for an assertion that existed before the change under test, and disbelieve the read if that one is missing too.
+  The control is what separates "the read failed" from "the job did not run it", which no amount of re-reading the empty result can.</li>
+</ul>
+<p>The doc's own worked example is the first site to fix: the <code>gh api</code> line under § Diagnosing failures carries no flag, so a reader following it lands in exactly this case.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>No page owns this today.
+<code>docs/operations/release.md</code> and the archived <code>test-progress-visibility.md</code> mention escape sequences, but both are about keeping the repo's <em>own</em> progress output append-only, not about reading a log back out of the Actions API.</p>
+<p><code>collect_heartbeats</code> in <code>scripts/dogfood/e2e-run-watch.sh</code> fetches the same endpoint with <code>2&gt;/dev/null || true</code>, so the same response would yield no heartbeat lines rather than an error.
+Unverified — nobody has reproduced it there, and the repo's own progress output is deliberately ANSI-free, so it may never be what that job's log carries.</p>
+<p>Found while confirming PR #1962's path-gated gates; the finding is about the instrument rather than that change, so it did not ride along.</p>
 
 
 
