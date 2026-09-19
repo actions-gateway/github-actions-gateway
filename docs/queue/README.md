@@ -25,6 +25,20 @@ That is the answer to *what is left before the next minor*, and to how much of t
 python3 scripts/docs/queue.py render --group release
 ```
 
+`--capacity W` slices the ungated remainder into consecutive releases of at most `W` session-equivalents, in rank order.
+Gate-labelled rows are commitments, so they ride above the line and do not consume it.
+
+```bash
+python3 scripts/docs/queue.py render --group release --capacity 80
+```
+
+Nothing is assigned to a release by hand: a slice is a window over the rank order, so re-ranking a row re-plans every release below it and there is no second priority axis to drift out of step with `rank`.
+Sizes are weighted because they are not comparable (XS 0.5, S 1, M 2.5, L 6; an item with no size costs 1), so one `L` cannot displace six `S` on a row count.
+
+**Where 80 comes from.** Measured 2026-09-18 over the rows deleted from the store: 240 session-equivalents in the last 28 days and 146 in the last 14, against a 9-day median gap across the nine minors from `v1.0.0` to `v1.8.0`.
+That is 77 and 94 sessions per release window respectively, and about a tenth of those deletions are retirements rather than delivered work.
+Pick the number deliberately rather than treating it as a constant: it is a decision about how long a release should take, and the store's throughput is the evidence for it, not the answer.
+
 ## Conventions
 
 **Status:** `ready` · `blocked` · `deferred`  

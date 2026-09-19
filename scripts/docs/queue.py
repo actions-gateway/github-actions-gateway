@@ -545,6 +545,40 @@ def release_groups(items):
     return out
 
 
+# A release's contents are its gates plus as much ranked work as fits, so the
+# only thing a slice needs is a capacity and a cost per item. `size` is that
+# cost, weighted because the sizes are not comparable: the store's own scale
+# reads S as one session, M as two to three, and L as multi-session behind a
+# plan doc, so counting rows would let one L displace six S. An item carrying
+# no size costs one, the same as S.
+SIZE_WEIGHT = {"XS": 0.5, "S": 1.0, "M": 2.5, "L": 6.0}
+DEFAULT_WEIGHT = 1.0
+
+
+def weigh(items):
+    return sum(SIZE_WEIGHT.get(i.size, DEFAULT_WEIGHT) for i in items)
+
+
+def capacity_slices(items, capacity):
+    """[[item, ...]] — consecutive chunks of at most `capacity` weight.
+
+    Rank order is the only input, so re-ranking re-plans and nothing has to be
+    assigned by hand. An item heavier than the whole capacity takes a slice of
+    its own rather than being dropped or splitting one.
+    """
+    out, cur, load = [], [], 0.0
+    for i in items:
+        w = SIZE_WEIGHT.get(i.size, DEFAULT_WEIGHT)
+        if cur and load + w > capacity:
+            out.append(cur)
+            cur, load = [], 0.0
+        cur.append(i)
+        load += w
+    if cur:
+        out.append(cur)
+    return out
+
+
 def summarize(notes, limit=NOTES_IN_TABLE):
     """The first sentence, or a clean truncation, whichever comes first."""
     notes = " ".join((notes or "").split())
@@ -589,14 +623,28 @@ def cmd_render(args):
     if args.group != "release":
         emit(shown)
         return 1 if problems else 0
-    for n, (head, rows) in enumerate(release_groups(shown)):
+    sections = []
+    for head, rows in release_groups(shown):
+        # A gate is a commitment and rides above capacity; only the ungated
+        # remainder is sliced, and its first slice is what the next tag carries
+        # beyond its gates.
+        if head == UNSCHEDULED and args.capacity:
+            chunks = capacity_slices(rows, args.capacity)
+            for n, chunk in enumerate(chunks, 1):
+                sections.append((f"Slice {n}" + (" (next)" if n == 1 else ""),
+                                 chunk))
+        else:
+            sections.append((head, rows))
+    for n, (head, rows) in enumerate(sections):
         if n:
             print()
-        if args.format == "table":
-            print(f"### {head} ({len(rows)})")
-            print()
+        if args.capacity:
+            plural = "" if len(rows) == 1 else "s"
+            label = (f"{head} ({len(rows)} row{plural}, "
+                     f"{weigh(rows):g} sessions)")
         else:
-            print(f"# {head} ({len(rows)})")
+            label = f"{head} ({len(rows)})"
+        print(f"### {label}\n" if args.format == "table" else f"# {label}")
         emit(rows)
     return 1 if problems else 0
 
@@ -1739,6 +1787,10 @@ def main(argv=None):
     r.add_argument("--group", choices=("release",), metavar="AXIS",
                    help="section the output by release gate label; "
                         "rows gating nothing land under Unscheduled")
+    r.add_argument("--capacity", type=float, metavar="W",
+                   help="with --group release: slice the ungated remainder "
+                        "into releases of at most W session-equivalents "
+                        "(XS 0.5, S 1, M 2.5, L 6), in rank order")
     r.set_defaults(fn=cmd_render)
 
     n = sub.add_parser("next", help="print the top ready item")

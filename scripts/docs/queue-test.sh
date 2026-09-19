@@ -792,6 +792,65 @@ item "$F" Q14 a0 ready
 expect_eq "Unscheduled (1)|" "$(heads "$F")" \
     "render --group: no gate labels means one Unscheduled section"
 
+# --- render --group release --capacity ------------------------------------
+#
+# A release is its gates plus as much ranked work as fits, so a slice is a
+# window over the rank order and nothing is assigned by hand. Weights are
+# XS 0.5, S 1, M 2.5, L 6; an item with no size costs 1.
+
+sized() {  # sized <dir> <id> <rank> <size> [label]...
+    local dir="$1" id="$2" rank="$3" size="$4"
+    shift 4
+    mkdir -p "$dir"
+    {
+        printf -- '---\nid: %s\nrank: %s\nstatus: ready\nsize: %s\n' \
+            "$id" "$rank" "$size"
+        if (( $# )); then
+            printf -- 'labels:\n'
+            printf -- '    - %s\n' "$@"
+        fi
+        printf -- '---\n\n# Title for %s\n' "$id"
+    } > "$dir/$id.md"
+}
+
+# Sized so no row-count rule reproduces these boundaries: 4 then 1, against
+# a capacity of 4 that four S items fill exactly and one M then overruns.
+C="$TMP/cap"
+sized "$C" Q50 a0 S
+sized "$C" Q51 a1 S
+sized "$C" Q52 a2 S
+sized "$C" Q53 a3 S      # -> slice 1 = 4.0, exactly the line
+sized "$C" Q54 a4 M      # -> 6.5 would overrun, so slice 2 = 2.5
+expect_eq "Slice 1 (next) (4 rows, 4 sessions)|Slice 2 (1 row, 2.5 sessions)|" \
+    "$(heads "$C" --capacity 4)" \
+    "render --capacity: slices fill to the weight line, not a row count"
+expect_eq "Q50 Q51 Q52 Q53 Q54 " \
+    "$(python3 "$Q" --store "$C" render --group release --capacity 4 \
+        | grep -v '^#' | awk 'NF {print $2}' | tr '\n' ' ')" \
+    "render --capacity: slicing preserves rank order and drops nothing"
+
+# A gate is a commitment, so it is not sliced and does not consume capacity.
+K="$TMP/cap-gate"
+sized "$K" Q60 a0 L 1.9-gate
+sized "$K" Q61 a1 M
+sized "$K" Q62 a2 M
+expect_eq "Release 1.9 (1 row, 6 sessions)|Slice 1 (next) (2 rows, 5 sessions)|" \
+    "$(heads "$K" --capacity 5)" \
+    "render --capacity: a gated row rides above the capacity line"
+
+# An item heavier than the whole capacity gets a slice to itself rather than
+# being dropped or splitting one.
+H="$TMP/cap-heavy"
+sized "$H" Q70 a0 L      # 6, alone over a capacity of 2
+sized "$H" Q71 a1 S
+expect_eq "Slice 1 (next) (1 row, 6 sessions)|Slice 2 (1 row, 1 sessions)|" \
+    "$(heads "$H" --capacity 2)" \
+    "render --capacity: an oversized item takes its own slice"
+
+# No --capacity is the ungrouped-by-weight view, unchanged.
+expect_eq "Release 1.9 (1)|Unscheduled (2)|" "$(heads "$K")" \
+    "render --capacity: omitting it leaves the section headers alone"
+
 # --- next: the open-PR check (Q990) ---------------------------------------
 #
 # A stub gh rather than the real one: the check reaches the network by design,
