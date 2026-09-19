@@ -2653,6 +2653,15 @@ With no network, <code>--no-pr-check</code> hands out the top item and says noth
 That is the answer to <em>what is left before the next minor</em>, and to how much of the store is not release work at all.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python3<span class="w"> </span>scripts/docs/queue.py<span class="w"> </span>render<span class="w"> </span>--group<span class="w"> </span>release
 </code></pre></div>
+<p><code>--capacity W</code> slices the ungated remainder into consecutive releases of at most <code>W</code> session-equivalents, in rank order.
+Gate-labelled rows are commitments, so they ride above the line and do not consume it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>python3<span class="w"> </span>scripts/docs/queue.py<span class="w"> </span>render<span class="w"> </span>--group<span class="w"> </span>release<span class="w"> </span>--capacity<span class="w"> </span><span class="m">80</span>
+</code></pre></div>
+<p>Nothing is assigned to a release by hand: a slice is a window over the rank order, so re-ranking a row re-plans every release below it and there is no second priority axis to drift out of step with <code>rank</code>.
+Sizes are weighted because they are not comparable (XS 0.5, S 1, M 2.5, L 6; an item with no size costs 1), so one <code>L</code> cannot displace six <code>S</code> on a row count.</p>
+<p><strong>Where 80 comes from.</strong> Measured 2026-09-18 over the rows deleted from the store: 240 session-equivalents in the last 28 days and 146 in the last 14, against a 9-day median gap across the nine minors from <code>v1.0.0</code> to <code>v1.8.0</code>.
+That is 77 and 94 sessions per release window respectively, and about a tenth of those deletions are retirements rather than delivered work.
+Pick the number deliberately rather than treating it as a constant: it is a decision about how long a release should take, and the store's throughput is the evidence for it, not the answer.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
