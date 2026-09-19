@@ -2713,9 +2713,17 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1119/">Q1119</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>M</td>
-<td><code>E2E_V2_MultiGateway [It] E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy</code> (<code>[real-github-egress]</code>) …</td>
+<td><strong>Event:</strong> either proxy-CONNECT spec fails again on <code>curl: (56) CONNECT tunnel failed, response 502</code>, in either CNI lane, on a PR, a …</td>
+</tr>
+<tr>
+<td><a href="Q1126/">Q1126</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/github_egress_preflight_test.go">The runner-host preflight scores an HTTP answer for a dial failure</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The Q352 attribution banner scored two identical spec failures in one run in opposite directions, and the one it got most confidently wrong …</td>
 </tr>
 <tr>
 <td><a href="Q1106/">Q1106</a></td>
