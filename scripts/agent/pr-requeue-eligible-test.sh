@@ -327,46 +327,169 @@ check("an enqueue on the last of several pages is still found",
       FakeGh(head="0" * 40, enqueued_by="User", pages=4).human_enqueued(), True)
 
 # --- confirm fails closed -------------------------------------------------
+#
+# Every confirm case below varies the LIVE head against the recorded one. The
+# suite this replaced held it at "0"*40 in every case while the records said
+# "b"*40, so the happy path passed with the two already disagreeing — the
+# fixture encoded the defect it was meant to exclude.
+
+RECORDED_HEAD = "b" * 40
 
 with tempfile.TemporaryDirectory() as tmp:
     rec = Path(tmp) / "1.verdict"
-    gh = FakeGh(head="0" * 40, enqueued_by="User")
+    gh = FakeGh(head=RECORDED_HEAD, enqueued_by="User")
     try:
         r.confirm(1, gh, rec)
         fails.append("confirm passed with no record at all")
     except r.Wake:
         ok("confirm with no record wakes")
 
-    r.write_record(rec, "WAKE", "something", "main", "a" * 40, "b" * 40, [])
+    r.write_record(rec, "WAKE", "something", "main", "a" * 40, RECORDED_HEAD, [])
     try:
         r.confirm(1, gh, rec)
         fails.append("confirm passed on a recorded WAKE")
     except r.Wake:
         ok("confirm on a recorded WAKE wakes")
 
-    r.write_record(rec, "ELIGIBLE", "clean", "main", "a" * 40, "b" * 40, [])
+    r.write_record(rec, "ELIGIBLE", "clean", "main", "a" * 40, RECORDED_HEAD, [])
     out = r.confirm(1, gh, rec)
     check("confirm passes on the last record, not the first",
           "ELIGIBLE" in out, True)
     check("confirm replays the assessment's measurement",
-          "a" * 40 in out and "b" * 40 in out, True)
+          "a" * 40 in out and RECORDED_HEAD in out, True)
+    # A replayed pair printed as a bare "measured:" reads as provenance this run
+    # took, which is how two superseded OIDs passed for current.
+    check("confirm dates the replay rather than claiming a measurement",
+          "replaying the assessment recorded at" in out and "\nmeasured:" not in out,
+          True)
 
-    # The base moving is what invalidates an assessment taken before a rebase.
-    moved = FakeGh(head="0" * 40, base="release-1.5", enqueued_by="User")
+    # The head moving is what invalidates an assessment: it measured a merge
+    # between two named commits and says nothing about any other head.
+    moved_head = FakeGh(head="c" * 40, enqueued_by="User")
     try:
-        r.confirm(1, moved, rec)
-        fails.append("confirm ignored a changed base")
+        r.confirm(1, moved_head, rec)
+        fails.append("confirm ignored a head that moved since the assessment")
     except r.Wake as w:
-        check("confirm refuses when the base moved",
-              "base changed" in w.reason, True)
+        check("confirm refuses when the head moved",
+              "c" * 40 in w.reason and RECORDED_HEAD in w.reason, True)
+
+    # A retarget is the base change that invalidates the merge. The base branch
+    # NAME is what baseRefName carries, and it survives both a rebase and the
+    # base commit advancing, so this check sees a retarget and nothing else.
+    retargeted = FakeGh(head=RECORDED_HEAD, base="release-1.5", enqueued_by="User")
+    try:
+        r.confirm(1, retargeted, rec)
+        fails.append("confirm ignored a retarget")
+    except r.Wake as w:
+        check("confirm refuses when the PR was retargeted",
+              "retargeted" in w.reason, True)
 
     # Already queued means there is nothing to restore.
-    queued = FakeGh(head="0" * 40, enqueued_by="User", queued=True)
+    queued = FakeGh(head=RECORDED_HEAD, enqueued_by="User", queued=True)
     try:
         r.confirm(1, queued, rec)
         fails.append("confirm re-enqueued a PR already in the queue")
     except r.Wake:
         ok("confirm refuses a PR already in the queue")
+
+# --- --rebased re-binds the record to the commit the rebase produced -------
+#
+# The rebase always moves the head, so a confirm that wakes on head drift would
+# refuse every re-enqueue without this mode. These cases are what make the head
+# check usable rather than merely strict.
+
+def build_rebase_repo(tmp):
+    """A dirty pair, plus a clean head standing in for the rebase result."""
+    repo, _, base, head = build_repo(tmp, ["docs/STATUS.md"])
+    git(["checkout", "-q", "-b", "rebased", "main"], repo)
+    (repo / "unrelated.txt").write_text("new\n")
+    git(["add", "unrelated.txt"], repo)
+    git(["commit", "-qm", "rebased"], repo)
+    clean = git(["rev-parse", "HEAD"], repo)[1].strip()
+    git(["checkout", "-q", "main"], repo)
+    # Written last and left untracked: staged on a branch, checking main back
+    # out deletes it, and driver_config then reads nothing and reports every
+    # conflict as unowned.
+    (repo / ".gitattributes").write_text("docs/STATUS.md merge=backlog\n")
+    return repo, base, head, clean
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo, base, head, clean = build_rebase_repo(tmp)
+    ga = repo / ".gitattributes"
+
+    def rgit(args, cwd=None):
+        return git(args, repo)
+
+    rec = Path(tmp) / "v" / "1.verdict"
+    r.assess(1, FakeGh(head=head, enqueued_by="User"), rec, ga, rgit)
+
+    # Before --rebased, the recorded head is the pre-rebase one, so confirm on
+    # the rebased head has to wake. This is the live PR #1965 case.
+    try:
+        r.confirm(1, FakeGh(head=clean, enqueued_by="User"), rec)
+        fails.append("confirm passed on a head the assessment never measured")
+    except r.Wake as w:
+        check("a post-rebase head wakes until --rebased re-binds it",
+              head in w.reason, True)
+
+    out = r.rebased(1, FakeGh(head=clean, enqueued_by="User"), rec, ga, rgit)
+    check("--rebased names the new head", clean in out, True)
+    check("--rebased carries the eviction's own measurement forward",
+          f"merge-tree --write-tree {base} {head}" in out, True)
+    body = rec.read_text()
+    check("--rebased keeps the eviction's conflict set in the record",
+          body.count("conflict docs/STATUS.md"), 2)
+
+    out = r.confirm(1, FakeGh(head=clean, enqueued_by="User"), rec)
+    check("confirm passes once the record names the rebased head",
+          "ELIGIBLE" in out, True)
+
+    # A force-push after --rebased is exactly what the head check is for.
+    try:
+        r.confirm(1, FakeGh(head="d" * 40, enqueued_by="User"), rec)
+        fails.append("a force-push after --rebased was not caught")
+    except r.Wake as w:
+        check("a head moving after --rebased wakes", clean in w.reason, True)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo, base, head, _ = build_rebase_repo(tmp)
+    ga = repo / ".gitattributes"
+
+    def rgit(args, cwd=None):
+        return git(args, repo)
+
+    rec = Path(tmp) / "v" / "1.verdict"
+    r.assess(1, FakeGh(head=head, enqueued_by="User"), rec, ga, rgit)
+    # The unrebased head still conflicts with origin/main, so pointing --rebased
+    # at it is the "the rebase is not actually done" case.
+    try:
+        r.rebased(1, FakeGh(head=head, enqueued_by="User"), rec, ga, rgit)
+        fails.append("--rebased accepted a head that still conflicts")
+    except r.Wake as w:
+        check("--rebased refuses a head that did not heal the branch",
+              "docs/STATUS.md" in w.reason, True)
+    try:
+        r.confirm(1, FakeGh(head=head, enqueued_by="User"), rec)
+        fails.append("confirm passed after a refused --rebased")
+    except r.Wake:
+        ok("a refused --rebased leaves confirm waking")
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo, base, head, clean = build_rebase_repo(tmp)
+    ga = repo / ".gitattributes"
+
+    def rgit(args, cwd=None):
+        return git(args, repo)
+
+    rec = Path(tmp) / "v" / "1.verdict"
+    r.write_record(rec, "WAKE", "a code conflict", "main", base, head, [])
+    try:
+        r.rebased(1, FakeGh(head=clean, enqueued_by="User"), rec, ga, rgit)
+        fails.append("--rebased re-bound a record that was never ELIGIBLE")
+    except r.Wake as w:
+        check("--rebased refuses to re-bind a non-ELIGIBLE record",
+              "nothing to re-bind" in w.reason, True)
 
 for f in fails:
     print(f"FAIL {f}")

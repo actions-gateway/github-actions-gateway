@@ -114,7 +114,7 @@ Four files are copied out of `karlkfi/claude-skills` and run here as ordinary re
 |---|---|---|
 | [`scripts/docs/queue.py`](../../scripts/docs/queue.py) | `session-backlog/scripts/queue.py` | `46a4f185`, 2026-09-12 |
 | [`scripts/docs/rank-vectors.tsv`](../../scripts/docs/rank-vectors.tsv) | `session-backlog/scripts/rank-vectors.tsv` | `4b2af1fb`, 2026-09-05 |
-| [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `f961cba6`, 2026-08-16 |
+| [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `23a70df0`, 2026-09-19 |
 | [`scripts/agent/pr-mergeability-watch.py`](../../scripts/agent/pr-mergeability-watch.py) | `session-orchestrator/scripts/pr-mergeability-watch.py` | `08d11e9d`, 2026-09-05 |
 
 [Q889](../plan/archive/q889-backlog-item-store.md) phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.

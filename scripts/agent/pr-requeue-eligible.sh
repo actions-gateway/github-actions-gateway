@@ -17,6 +17,8 @@
 #
 # Usage:
 #   pr-requeue-eligible.sh --assess  <pr>   # before rebasing; records a verdict
+#   pr-requeue-eligible.sh --rebased <pr>   # after the rebase is pushed; re-binds
+#                                           # the record to the new head
 #   pr-requeue-eligible.sh --confirm <pr>   # after CI is green; gates the enqueue
 #
 # Exit: 0 eligible, 1 not eligible (reason on stdout), 2 usage error or a probe
