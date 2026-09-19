@@ -148,7 +148,16 @@ expect 'a declared target that left the tree is caught' 1 "declares 'overlays/pe
 root="$(fixture)"
 edit "${root}/overlays/shared-tenants/kustomization.yaml" '  - ../../base' '  - ../../nonexistent'
 run_checker "${root}"
-expect 'a target that does not render is caught' 1 'does not render, so an operator cannot apply it'
+# Reads a render, so it needs kubectl, which rule 1's cases deliberately do
+# without. Unguarded, this was the one assertion that failed on a runner shipping
+# no kubectl, wanting the active answer from a checker that had already skipped
+# (Q1116). The else branch holds the skip to its contract rather than dropping
+# the case, so the assertion still fires on a lane without kubectl.
+if ((have_kubectl)); then
+	expect 'a target that does not render is caught' 1 'does not render, so an operator cannot apply it'
+else
+	expect 'a target that does not render is caught' 0 'renders not checked'
+fi
 
 # --- rule 4: THE silent one --------------------------------------------------
 #
@@ -293,9 +302,15 @@ fi
 # More than one directory can provide it (this machine has /opt/homebrew/bin and
 # /usr/local/bin), so every one is shimmed, and the result is verified below
 # before anything is asserted over it.
+# With kubectl present the absent lane is synthesized by shimming it off PATH.
+# With kubectl genuinely absent -- a runner image that ships none, which is what
+# the dogfood scaleset runs -- that lane is already the one under test, so the
+# cases run against PATH as it stands. Gating the whole block on have_kubectl
+# left them unrun exactly where the render rules skip and these are the only
+# assertions still covering the gate (Q1116).
+nopath=""
+shim_n=0
 if ((have_kubectl)); then
-	nopath=""
-	shim_n=0
 	while IFS= read -r d; do
 		[[ -n "$d" ]] || continue
 		if [[ -x "$d/kubectl" ]]; then
@@ -311,35 +326,38 @@ if ((have_kubectl)); then
 		fi
 		nopath="${nopath:+${nopath}:}${d}"
 	done < <(tr ':' '\n' <<<"${PATH}")
-	if PATH="${nopath}" command -v kubectl >/dev/null 2>&1; then
-		echo "skip kubectl-absent cases: kubectl is still reachable with every providing directory shimmed"
-	elif ! PATH="${nopath}" bash -c 'shopt -s inherit_errexit' 2>/dev/null; then
-		# The shim has to leave a bash 4+ reachable, or every case below reports a
-		# shell error as though it were the verdict it was asserting.
-		echo "skip kubectl-absent cases: the shimmed PATH provides no bash supporting inherit_errexit"
-	else
-		root="$(fixture)"
-		rc=0
-		out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" 2>&1)" || rc=$?
-		expect 'without kubectl the render rules skip and say so' 0 'kubectl not on PATH'
-		expect 'and the target list is still reconciled' 0 'renders not checked'
+else
+	nopath="${PATH}"
+fi
 
-		# The degradation must not be total: rule 1 reads no render, so it has to
-		# keep firing. Without this case a skip that silently checked NOTHING would
-		# pass the two assertions above.
-		root="$(fixture)"
-		mkdir -p "${root}/overlays/regional"
-		cp "${root}/overlays/shared-tenants/kustomization.yaml" "${root}/overlays/regional/kustomization.yaml"
-		rc=0
-		out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" 2>&1)" || rc=$?
-		expect 'and an undeclared target still fails without kubectl' 1 'neither a declared render target'
+if ((have_kubectl)) && PATH="${nopath}" command -v kubectl >/dev/null 2>&1; then
+	echo "skip kubectl-absent cases: kubectl is still reachable with every providing directory shimmed"
+elif ! PATH="${nopath}" bash -c 'shopt -s inherit_errexit' 2>/dev/null; then
+	# The shim has to leave a bash 4+ reachable, or every case below reports a
+	# shell error as though it were the verdict it was asserting.
+	echo "skip kubectl-absent cases: the shimmed PATH provides no bash supporting inherit_errexit"
+else
+	root="$(fixture)"
+	rc=0
+	out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" 2>&1)" || rc=$?
+	expect 'without kubectl the render rules skip and say so' 0 'kubectl not on PATH'
+	expect 'and the target list is still reconciled' 0 'renders not checked'
 
-		root="$(fixture)"
-		rc=0
-		out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" --require-render 2>&1)" || rc=$?
-		expect '--require-render fails rather than skipping' 1 'nothing below ran'
-		expect_absent 'and does not also print the skip note' 1 'the render assertions were skipped'
-	fi
+	# The degradation must not be total: rule 1 reads no render, so it has to
+	# keep firing. Without this case a skip that silently checked NOTHING would
+	# pass the two assertions above.
+	root="$(fixture)"
+	mkdir -p "${root}/overlays/regional"
+	cp "${root}/overlays/shared-tenants/kustomization.yaml" "${root}/overlays/regional/kustomization.yaml"
+	rc=0
+	out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" 2>&1)" || rc=$?
+	expect 'and an undeclared target still fails without kubectl' 1 'neither a declared render target'
+
+	root="$(fixture)"
+	rc=0
+	out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" --require-render 2>&1)" || rc=$?
+	expect '--require-render fails rather than skipping' 1 'nothing below ran'
+	expect_absent 'and does not also print the skip note' 1 'the render assertions were skipped'
 fi
 
 # --- argument handling -------------------------------------------------------

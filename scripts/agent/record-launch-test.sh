@@ -172,14 +172,37 @@ eval "$(record_field "${record}" stop)"
 # by the wrapper's EXIT trap.
 wait "${wrapper_pid}" 2>/dev/null || true
 
+# gone - true once a pid is dead, a zombie counting as dead.
+#
+# `kill -0` succeeds on a zombie, and the grandchild becomes one the moment the
+# signal lands: its parent takes the same group signal, so it is orphaned onto
+# PID 1, and a PID 1 that does not reap leaves it a zombie forever. A runner
+# pod's does not. Measured 2026-09-18 on ghcr.io/actions/actions-runner: this
+# suite passes under a reaping PID 1 and fails under a non-reaping one with the
+# recorded stop reported as not having reached the child (Q1116) -- a stop that
+# had in fact reached it, read through an instrument that cannot see the
+# difference.
+gone() {  # gone <pid>
+	kill -0 "$1" 2>/dev/null || return 0
+	local state=""
+	if [[ -r "/proc/$1/stat" ]]; then
+		# comm is parenthesized and may contain spaces, so the state is the first
+		# field after the LAST ')' rather than $3.
+		state="$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1)"
+	else
+		state="$(ps -o state= -p "$1" 2>/dev/null | tr -d '[:space:]')"
+	fi
+	[[ "${state}" == Z* ]]
+}
+
 # The grandchild took the same group signal, but it is not a child of this
 # shell, so only polling can observe its reap. The cap backstops a grandchild
 # the group kill never reached: 120s is far past any reap delay, so reaching it
-# means the recorded stop command missed it — the failure this assertion exists
+# means the recorded stop command missed it -- the failure this assertion exists
 # to catch.
 stopped=no
 for _ in $(seq 1 2400); do
-	if ! kill -0 "${grandchild}" 2>/dev/null && ! kill -0 "${run_pid}" 2>/dev/null; then
+	if gone "${grandchild}" && gone "${run_pid}"; then
 		stopped=yes
 		break
 	fi
