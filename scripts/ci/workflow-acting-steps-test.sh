@@ -582,7 +582,7 @@ dependabot-go-sync.yml|pre-merge|pull_request is its only trigger, so every Depe
 e2e-reusable.yml|pre-merge|called by the e2e lanes on merge_group, so the queue runs it on the candidate merge; and its docker push targets the registry the same job stands up
 dependabot-rebase-stale.yml|delegated|the body picks one --dry-run flag and calls scripts/ci/dependabot-rebase-stale.sh, whose decisions are covered by ci/dependabot-rebase-stale-test
 updatecli.yml|delegated|the body picks apply vs diff and calls the updatecli binary; what it changes is updatecli.d/, not this script
-publish.yml|deferred|Q1056 — the release lane's acting steps need cosign, syft, docker, helm and gh stubs, a driver several times this one; its wiring is held statically by ci/check-publish-digest-test and the cosign-pin gate meanwhile
+publish.yml|driven-elsewhere|its release lane needs helm, cosign, yq, docker and gh stubs, which do not fit beside this suite's recorders, so its acting steps are driven by ci/workflow-publish-steps-test with a step-level registry of their own
 EOF
 }
 

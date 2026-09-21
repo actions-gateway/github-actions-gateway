@@ -256,6 +256,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-script-modes-test \
                  ci/check-template-library-test \
                  ci/workflow-acting-steps-test \
+                 ci/workflow-publish-steps-test \
                  manifest/check-registry-mirror-render-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \

@@ -741,27 +741,52 @@ A grep answers ten, because `release-freeze-watch.yml` names `pull_request` only
 That count is not itself the scope: a workflow with a `pull_request` trigger can still gate its acting job off that event, which `pages.yml` does.
 
 Five workflows run an acting command.
-Two are driven:
+Three are driven:
 
 | Workflow | Step | Acts by | Why a PR never runs it |
 |---|---|---|---|
 | `release-freeze-watch.yml` | `check`, `report` | `gh issue create` / `comment` / `close` | no `pull_request` trigger |
 | `pages.yml` | `mike` | `git push origin gh-pages` | the `publish` job is `if: github.event_name != 'pull_request'` |
+| `publish.yml` | six release-lane steps | `helm push` / `cosign sign` / `gh release create`, `upload`, `edit` | no `pull_request` trigger; it runs on a `v*` tag push |
 
-The other three are excluded, and the reasons are the scope claim rather than an aside:
+`publish.yml` is driven by a suite of its own, [`workflow-publish-steps-test.sh`](../../scripts/ci/workflow-publish-steps-test.sh) (Q1056), described [below](#publishyml-has-its-own-suite).
+
+The other two are excluded, and the reasons are the scope claim rather than an aside:
 
 - **`dependabot-go-sync.yml`** pushes to a Dependabot branch, and `pull_request` is its only trigger, so every Dependabot PR executes that body before it merges.
   It is not in the defect class.
 - **`e2e-reusable.yml`** pushes two images, and both e2e lanes that call it declare `merge_group`, so the queue runs it against the candidate merge commit before that commit lands.
   Its push also targets the registry the same job stands up, so it publishes nothing outside the run.
-- **`publish.yml`** is in the class and is deferred to Q1056.
-  Its acting steps need `cosign`, `syft`, `docker`, `helm` and `gh` stubs, a driver several times the size of this one, and its wiring is already held statically by [`check-publish-digest.sh`](../../scripts/ci/check-publish-digest.sh) and the cosign pin gate.
 
 Two workflows act only through a delegate: `dependabot-rebase-stale.yml` calls `scripts/ci/dependabot-rebase-stale.sh` and `updatecli.yml` calls the `updatecli` binary, and in both the `run:` body decides one flag.
 The decisions are in the delegate, which has its own suite, so driving the wrapper would test the flag and nothing else.
 
 **A closing assertion holds that derivation to the tree, both directions.** Every workflow running an acting command must be driven or listed in the suite's `acting_registry()` with a reason, and a registry line naming a workflow that no longer exists, or no longer acts, fails too.
 Without it the suite would cover a frozen pair and a thirty-first workflow could start opening issues uncovered, which is the same false negative the [path-filter gate](#the-path-filter-gate) exists for one rung over.
+
+#### publish.yml has its own suite
+
+[`workflow-publish-steps-test.sh`](../../scripts/ci/workflow-publish-steps-test.sh) drives the six acting `run:` bodies in `publish.yml`'s release lane (Q1056), on the same extractor and the same case shape as the suite above.
+They are separate for one reason: these bodies shell out to `helm`, `cosign`, `yq`, `docker` and `gh`, and two of the stubs have to print output a later line of the body parses, which does not fit beside a suite whose recorders answer `gh issue list`.
+`acting_registry()` in the Q1006 suite now classifies `publish.yml` as `driven-elsewhere` and names this one, so the whole-workflow assertion still reaches it.
+
+Publish triggers only on a `v*` tag push and a dispatch, so no pull request executes any of these bodies: the first run of each is the release it is publishing.
+[`check-publish-digest.sh`](../../scripts/ci/check-publish-digest.sh), `cosign-pin-check` and `semver-floor-sources-check` read the workflow's YAML and none of them enters a step's shell, so three decisions were unread before a release:
+
+- **A chart push whose digest did not parse must sign nothing.** `helm push` prints `Digest: sha256:…` and the body awks it back out so the signature binds to the pushed bytes rather than the floating tag; signing `…/charts/actions-gateway@` with an empty digest would produce a signature that verifies today and stops matching the moment anything re-pushes.
+- **`gh release create` must leave a curated Release alone, and must refuse a digest that is not a `sha256:`.** Those digests are what operators pin to.
+- **`gh release edit --draft=false` decides `--latest` from the tag's prerelease state alone.** It makes no comparison against the versions already released, so a stable backport cut after a newer minor claims `latest` and demotes that minor.
+  That is the asymmetry with `pages.yml`'s `mike` step, which moves the `stable` alias only to the highest released version.
+  The case records what the step does; whether a backport should claim it is a question about the release design, filed separately.
+
+Each subject carries a positive control that must still act, and three `regression` cases delete a guard from the extracted body and require the assertions to go red, so the suite is known to be able to fail.
+Every case builds its own sandbox, so a `cosign sign` recorded by one cannot satisfy another's assertion that none happened, which is exactly the pair of cases that would otherwise pass for the wrong reason.
+The real [`retry.sh`](../../scripts/fetch/retry.sh) is copied into the sandbox rather than stubbed, since every registry call in the lane routes through it.
+
+**The closing assertion is step-level rather than workflow-level**, since the workflow is already covered one rung up: each acting step must be driven or carry a `step_registry()` line, both directions, and a classification is checked rather than believed.
+An `undrivable` entry (today only `Sign image + attest SBOMs (keyless)`, which interpolates a `${{ }}` expression into its script) must still be one the extractor refuses, and a `read-only` entry must still match the acting pattern only through `git tag --list`.
+The scan skips comment lines and lines whose command is `echo` or `printf`: at step level a spurious match is not free, because an exclusion written for a prose mention would also cover a real act added to the same step later, and the announce-bar gate's `::error::` message says "the git tags".
+Anchoring to command position would be the stronger rule and is the wrong one here, because every registry call in the lane is wrapped as `scripts/fetch/retry.sh cosign sign …`, so `cosign sign` is never in command position and the whole lane would scan as inert.
 
 #### The shell a body is driven under
 
