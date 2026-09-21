@@ -31,13 +31,17 @@ const realGitHubEgressLabel = "real-github-egress"
 // rate-limit headers and a body excerpt: those name GitHub's own reason for the
 // refusal, and they are what resolves an INCONCLUSIVE verdict. Scoring rules and
 // their justification: utils.ScoreGitHubEgress.
-func runnerHostGitHubPreflight() (utils.GitHubEgressVerdict, string) {
+//
+// The status is returned alongside because it is what separates the two layers
+// a BLOCKED verdict spans; it is 0 when no response arrived, matching
+// ScoreGitHubEgress and utils.GitHubEgressGuidance.
+func runnerHostGitHubPreflight() (utils.GitHubEgressVerdict, string, int) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	start := time.Now()
 	resp, err := client.Get("https://api.github.com/zen")
 	elapsed := time.Since(start).Round(time.Millisecond)
 	if err != nil {
-		return utils.ScoreGitHubEgress(0, err), fmt.Sprintf("transport error after %s: %v", elapsed, err)
+		return utils.ScoreGitHubEgress(0, err), fmt.Sprintf("transport error after %s: %v", elapsed, err), 0
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
@@ -52,7 +56,7 @@ func runnerHostGitHubPreflight() (utils.GitHubEgressVerdict, string) {
 		}
 		summary += fmt.Sprintf("; body: %s", excerpt(body, 200))
 	}
-	return utils.ScoreGitHubEgress(resp.StatusCode, nil), summary
+	return utils.ScoreGitHubEgress(resp.StatusCode, nil), summary, resp.StatusCode
 }
 
 // excerpt collapses b to one whitespace-normalized line of at most limit bytes,
@@ -65,33 +69,13 @@ func excerpt(b []byte, limit int) string {
 	return string(r)
 }
 
-// preflightGuidance is the triage instruction stamped under each verdict.
-func preflightGuidance(v utils.GitHubEgressVerdict) string {
-	switch v {
-	case utils.EgressBlocked:
-		return "The runner host itself cannot get a usable answer out of https://api.github.com at failure\n" +
-			"time. The in-cluster path NATs through the same address, so it was refused too: this spec's\n" +
-			"failure is attributable to runner->GitHub egress — infrastructure, not a product regression\n" +
-			"(Q352). Re-run the job.\n"
-	case utils.EgressReachable:
-		return "GitHub serves the runner host at failure time, so a host-level egress blip is unlikely —\n" +
-			"treat this failure as real and inspect the in-cluster path\n" +
-			"(workload NP -> proxy -> egress NP -> GitHub).\n"
-	default:
-		return "Something answered, but not the way GitHub answers an unauthenticated /zen (200). Read the\n" +
-			"body excerpt above: if it is not GitHub's, an intermediary is intercepting runner egress and\n" +
-			"this failure is infrastructure — re-run. If it is GitHub's, the probe endpoint has changed and\n" +
-			"this banner cannot attribute the failure; fix the probe and triage the spec on its own output.\n"
-	}
-}
-
 // logRunnerHostGitHubBaseline records runner-host GitHub reachability at suite
 // start. Non-fatal by design: a blip at suite start may clear before the
 // real-GitHub specs run (their in-pod curls retry for minutes), so failing
 // fast here would add a flake surface instead of removing one. The failure-time
 // AfterEach below is the authoritative attribution signal.
 func logRunnerHostGitHubBaseline() {
-	verdict, summary := runnerHostGitHubPreflight()
+	verdict, summary, _ := runnerHostGitHubPreflight()
 	if verdict == utils.EgressReachable {
 		_, _ = fmt.Fprintf(GinkgoWriter, "runner-host GitHub preflight at suite start: REACHABLE (%s)\n", summary)
 		return
@@ -114,7 +98,8 @@ var _ = AfterEach(func() {
 	if !report.Failed() || !slices.Contains(report.Labels(), realGitHubEgressLabel) {
 		return
 	}
-	verdict, summary := runnerHostGitHubPreflight()
+	verdict, summary, status := runnerHostGitHubPreflight()
 	_, _ = fmt.Fprintf(GinkgoWriter,
-		"\n=== RUNNER-HOST GITHUB PREFLIGHT: %s (%s) ===\n%s", verdict, summary, preflightGuidance(verdict))
+		"\n=== RUNNER-HOST GITHUB PREFLIGHT: %s (%s) ===\n%s",
+		verdict, summary, utils.GitHubEgressGuidance(verdict, status))
 })

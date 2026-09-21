@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +47,67 @@ func TestScoreGitHubEgress(t *testing.T) {
 				t.Errorf("ScoreGitHubEgress(%d, %v) = %s, want %s", tc.status, tc.err, got, tc.want)
 			}
 		})
+	}
+}
+
+// The guidance is the half of the banner that tells the reader what to do, and
+// on 2026-09-16 it told them the wrong thing: a 403 scored BLOCKED and its
+// instruction attributed a dial-level CONNECT 502 to runner egress. What
+// separates the two cases is whether a response arrived, so the split is what
+// these cases pin (Q1126).
+func TestGitHubEgressGuidanceSplitsByLayer(t *testing.T) {
+	const dialClause = "evidence AGAINST a dial-level cause"
+
+	transport := GitHubEgressGuidance(EgressBlocked, 0)
+	refused := GitHubEgressGuidance(EgressBlocked, 403)
+
+	if transport == refused {
+		t.Fatal("BLOCKED renders one string for a transport error and an HTTP refusal; " +
+			"the two support opposite inferences about the dial layer")
+	}
+
+	// The refusal arm must carry the layer caveat...
+	if !strings.Contains(refused, dialClause) {
+		t.Errorf("BLOCKED on a 403 does not say the answer argues against a dial-level cause:\n%s", refused)
+	}
+	if !strings.Contains(refused, "EGRESSPROXY CONNECT ATTRIBUTION") {
+		t.Errorf("BLOCKED on a 403 does not route a dial-level failure to the sibling banner:\n%s", refused)
+	}
+
+	// ...and the transport-error arm must NOT: there the dial-level claim is
+	// the probe's own finding, so denying it would invert the attribution.
+	if strings.Contains(transport, dialClause) {
+		t.Errorf("BLOCKED on a transport error argues against a dial-level cause, which is the one\n"+
+			"case where the probe found exactly that:\n%s", transport)
+	}
+
+	// Every HTTP route to BLOCKED gets the caveat, not just the 403 that
+	// produced the incident.
+	for _, status := range []int{403, 408, 429, 500, 502, 503, 504} {
+		if got := GitHubEgressGuidance(EgressBlocked, status); !strings.Contains(got, dialClause) {
+			t.Errorf("BLOCKED on HTTP %d lacks the layer caveat", status)
+		}
+	}
+}
+
+// Each verdict must yield a non-empty instruction: a banner that names a state
+// and then says nothing is worse than no banner, because it reads as handled.
+func TestGitHubEgressGuidanceNeverEmpty(t *testing.T) {
+	cases := []struct {
+		verdict GitHubEgressVerdict
+		status  int
+	}{
+		{EgressBlocked, 0},
+		{EgressBlocked, 403},
+		{EgressReachable, 200},
+		{EgressInconclusive, 404},
+		{GitHubEgressVerdict(99), 0},
+	}
+
+	for _, tc := range cases {
+		if got := GitHubEgressGuidance(tc.verdict, tc.status); strings.TrimSpace(got) == "" {
+			t.Errorf("GitHubEgressGuidance(%s, %d) is empty", tc.verdict, tc.status)
+		}
 	}
 }
 
