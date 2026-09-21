@@ -474,9 +474,11 @@ func startEgressProxyReconcilerWithBackend(t *testing.T, ipCache *controller.IPR
 }
 
 // startEgressProxyReconcilerNoResync is startEgressProxyReconciler with the manager's
-// default (effectively infinite) cache sync period instead of the suite's 2s resync,
-// so a test can prove a reconcile was triggered by a watch event rather than by the
-// periodic resync re-enqueueing every EgressProxy (Q326).
+// default (effectively infinite) cache sync period instead of the suite's 2s resync.
+// That silences one of three periodic re-enqueues, not all of them: a not-ready pool
+// short-requeues every 15s, and the egress recheck requeues on its own cadence. So a
+// test that needs a watch event to be the only possible trigger must also drive the
+// proxy Deployment Ready and pass an ipCache marked freshly refreshed (Q326).
 func startEgressProxyReconcilerNoResync(t *testing.T, ipCache *controller.IPRangeCache) {
 	t.Helper()
 	startEgressProxyReconcilerOpts(t, ipCache, controller.FQDNBackendNone, nil)
