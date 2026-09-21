@@ -34,7 +34,7 @@ Two gating rows and the candidate validation, in the order they land.
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1085](../queue/Q1085.md) | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | 🔲 ready, and first: it is the guard for the hazard Q413 introduces |
+| Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
 | [Q413](../queue/Q413.md) | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | 🔲 ready: the soak read clean 2026-09-14 |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 
@@ -53,7 +53,7 @@ That is a reading rather than a decision: whether anything *should* ride is scop
 1. **[Q413](../queue/Q413.md)'s Phase 2 has landed** with `v2` served on all five kinds and `v2beta1` still the storage version, verified by reading `storage: true` off each shipped CustomResourceDefinition rather than off the markers.
 2. **The conversion round-trips both directions** across `v2beta1` ↔ `v2` on real objects, not only in unit tests.
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.
-3. **[Q1085](../queue/Q1085.md)'s items 2 and 3 have landed**, and landed before Q413.
+3. **Q1085's items 2 and 3 have landed**, and landed before Q413.
    1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: `v2` is served, so an unrepresentable object can be requested.
 4. **The published tag serves both versions**, which is the Rule #4b evidence `v2.0.0` depends on.
    Record it here, since `v2.0.0`'s own pre-flight cannot re-derive that a *previous* release served both.

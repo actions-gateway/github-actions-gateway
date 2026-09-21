@@ -4,11 +4,16 @@ package integration_test
 
 import (
 	"testing"
+	"time"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // These tests exercise the Q242 G.1 EgressProxy validating webhook end-to-end
@@ -27,7 +32,9 @@ func TestV2_EgressProxy_Admission_AllowsCoveredDestinations(t *testing.T) {
 		Spec: gmcv2alpha1.EgressProxySpec{
 			// FQDNs require an FQDN egress mode (CRD CEL); proxy.golang.org is a
 			// subdomain of the allowlisted golang.org, and 10.20.0.0/16 ⊆ 10.0.0.0/8.
-			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+			// The suite wires the webhook with --fqdn-policy-backend=cilium, so the
+			// FQDN intent is admitted without a backend rejection.
+			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN,
 			DestinationFQDNs: []string{"proxy.golang.org", "sum.golang.org"},
 			DestinationCIDRs: []string{"10.20.0.0/16"},
 		},
@@ -43,7 +50,7 @@ func TestV2_EgressProxy_Admission_RejectsOffAllowlistFQDN(t *testing.T) {
 	ep := &gmcv2alpha1.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "offlist", Namespace: ns},
 		Spec: gmcv2alpha1.EgressProxySpec{
-			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN,
 			DestinationFQDNs: []string{"evil.example.com"},
 		},
 	}
@@ -232,4 +239,130 @@ func TestV2_EgressProxy_Admission_NoDestinationsAlwaysAllowed(t *testing.T) {
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep), "an EgressProxy with no extra destinations must always be admitted")
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+}
+
+// --- Q1085: the deprecated-alias reject, and planting an object that predates it ---
+
+const egressProxyWebhookName = "vegressproxy-v2alpha1.kb.io"
+
+// setEgressProxyWebhookMatchPolicy rewrites the EgressProxy validating webhook's
+// matchPolicy in the live cluster. Exact makes the v2alpha1-scoped rule stop matching
+// a v2beta1 write, which is the only way to plant an EgressProxy already naming a
+// deprecated alias now that admission rejects a new one (Q1085).
+func setEgressProxyWebhookMatchPolicy(t *testing.T, p admissionv1.MatchPolicyType) {
+	t.Helper()
+	var vwc admissionv1.ValidatingWebhookConfiguration
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: "validating-webhook-configuration"}, &vwc))
+	found := false
+	for i := range vwc.Webhooks {
+		if vwc.Webhooks[i].Name == egressProxyWebhookName {
+			vwc.Webhooks[i].MatchPolicy = &p
+			found = true
+		}
+	}
+	require.True(t, found, "%s missing from the installed webhook configuration", egressProxyWebhookName)
+	require.NoError(t, k8sClient.Update(ctx, &vwc))
+}
+
+// createStoredAliasProxy plants an EgressProxy that already names a deprecated
+// CiliumFQDN/CalicoFQDN mode — the population the Q1085 reject freezes rather than
+// breaks, and the only way to exercise the alias emitters end to end now that a new
+// alias write is refused.
+//
+// It writes the v2beta1 hub, converted through the production ConvertTo, while the
+// validating webhook is narrowed to Exact so the v2alpha1-scoped rule does not match.
+// Tests in this package run sequentially (no t.Parallel anywhere in it), so the
+// narrowed window belongs to this call. ep is refreshed to the stored object on
+// return, so a caller can update or delete it as usual.
+func createStoredAliasProxy(t *testing.T, ep *gmcv2alpha1.EgressProxy) {
+	t.Helper()
+	require.Contains(t,
+		[]gmcv2alpha1.EgressPolicyMode{gmcv2alpha1.EgressPolicyModeCiliumFQDN, gmcv2alpha1.EgressPolicyModeCalicoFQDN},
+		ep.Spec.EgressPolicyMode,
+		"createStoredAliasProxy is for the deprecated aliases; every other mode goes through k8sClient.Create")
+
+	var hub gmcv2beta1.EgressProxy
+	require.NoError(t, ep.ConvertTo(&hub))
+
+	setEgressProxyWebhookMatchPolicy(t, admissionv1.Exact)
+	// The apiserver caches webhook configurations briefly, so retry until the
+	// narrowed policy is the one in force.
+	var err error
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if err = k8sClient.Create(ctx, &hub); err == nil {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	require.NoError(t, err, "plant a stored alias EgressProxy")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, &hub) })
+
+	restoreEgressProxyWebhookMatchPolicy(t, ep.Namespace)
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), ep))
+}
+
+// restoreEgressProxyWebhookMatchPolicy puts matchPolicy back to Equivalent and blocks
+// until the apiserver is enforcing it again, proved by the guard rejecting a
+// throwaway alias create. Returning before that would leave the next test running
+// against a cluster whose guard is still off, which reads as a passing create.
+func restoreEgressProxyWebhookMatchPolicy(t *testing.T, ns string) {
+	t.Helper()
+	setEgressProxyWebhookMatchPolicy(t, admissionv1.Equivalent)
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		canary := &gmcv2beta1.EgressProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: "alias-guard-canary", Namespace: ns},
+			Spec:       gmcv2beta1.EgressProxySpec{EgressPolicyMode: gmcv2beta1.EgressPolicyModeCiliumFQDN},
+		}
+		if err := k8sClient.Create(ctx, canary); err != nil {
+			return
+		}
+		require.NoError(t, k8sClient.Delete(ctx, canary))
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatal("the deprecated-alias guard never came back into force")
+}
+
+// TestV2_EgressProxy_Admission_RejectsNewDeprecatedAlias is the Q1085 asymmetry
+// against the real apiserver: a create naming a deprecated alias is refused, a stored
+// one is admitted unchanged, and migrating off one is admitted. It runs at v2beta1,
+// the storage version, so it also covers the conversion hop the v2alpha1-scoped
+// webhook rule reaches a v2beta1 write through (matchPolicy Equivalent).
+func TestV2_EgressProxy_Admission_RejectsNewDeprecatedAlias(t *testing.T) {
+	const ns = "v2-ep-alias-reject"
+	createNamespace(t, ns)
+
+	for name, mode := range map[string]gmcv2beta1.EgressPolicyMode{
+		"new-cilium": gmcv2beta1.EgressPolicyModeCiliumFQDN,
+		"new-calico": gmcv2beta1.EgressPolicyModeCalicoFQDN,
+	} {
+		fresh := &gmcv2beta1.EgressProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Spec:       gmcv2beta1.EgressProxySpec{EgressPolicyMode: mode},
+		}
+		err := k8sClient.Create(ctx, fresh)
+		require.Error(t, err, "a create naming %s must be rejected", mode)
+		assert.Contains(t, err.Error(), "may no longer be introduced")
+		assert.Contains(t, err.Error(), "v2.0.0")
+	}
+
+	// A stored alias predating the guard: re-applied unchanged, then migrated off.
+	stored := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "stored-alias", Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN},
+	}
+	createStoredAliasProxy(t, stored)
+
+	stored.Labels = map[string]string{"touched": "yes"}
+	require.NoError(t, k8sClient.Update(ctx, stored),
+		"re-applying a stored alias unchanged must stay admitted, or an operator mid-migration is locked out")
+
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(stored), stored))
+	stored.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeCalicoFQDN
+	require.Error(t, k8sClient.Update(ctx, stored), "swapping one alias for the other introduces a new one")
+
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(stored), stored))
+	stored.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	require.NoError(t, k8sClient.Update(ctx, stored), "the migration off an alias must be admitted")
 }

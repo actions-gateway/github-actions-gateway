@@ -54,9 +54,13 @@ The enforced policy is identical either way — each alias pins its namesake bac
 This is no longer optional, and the reason is mechanical rather than procedural.
 `v2` cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
 One unmigrated `EgressProxy` therefore breaks `kubectl get egressproxies` at `v2` for the entire cluster, not just for itself.
-A pre-upgrade check that finds them is tracked as [Q1085](../queue/Q1085.md); until it ships, `kubectl get egressproxies -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.spec.egressPolicyMode}{"\n"}{end}'` lists what to look at.
+A single `kubectl get` of one healthy pool still works, which is what makes the failure diagnosable but does not make it survivable: `kubectl get egressproxies -A` is what everything from a dashboard to a GitOps reconcile issues.
+Measured 2026-09-21 against a real apiserver, on the one conversion failure the current tree can produce: with one unconvertible object stored beside two healthy ones, both the namespaced and the cluster-wide `LIST` returned zero items and an error, while a targeted `GET` of each healthy neighbour succeeded.
 
-The admission webhook warns on every write that still names a deprecated value, and the warning names the removal release.
+**Find them with the [pre-upgrade alias check](upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)** in the Pre-Upgrade Validation Checklist, which prints one line per pool to migrate and nothing when the cluster is clean.
+
+The admission webhook **rejects** a write that introduces a deprecated value (a create, or an update that switches onto one), and the rejection names the removal release and the replacement.
+A pool that already stores one is admitted unchanged, with the warning, so an operator mid-migration can still re-apply it and edit the rest of its spec.
 
 ## Status
 

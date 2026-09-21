@@ -22,11 +22,15 @@ import (
 )
 
 // These tests exercise the Q208 CNI-native FQDN egress opt-in on the v2 EgressProxy
-// reconciler end-to-end against the real apiserver: selecting CiliumFQDN/CalicoFQDN
-// emits the matching CNI-native policy (asserted as an unstructured object — the suite
-// installs stub Cilium/Calico CRDs), drops the GitHub CIDR rule from the standard
-// NetworkPolicy (fail-closed), and removes the other-mode policy. The CIDR default is
-// covered by the existing v2_egressproxy_test.go emission test.
+// reconciler end-to-end against the real apiserver: a stored CiliumFQDN/CalicoFQDN
+// mode emits the matching CNI-native policy (asserted as an unstructured object — the
+// suite installs stub Cilium/Calico CRDs), drops the GitHub CIDR rule from the
+// standard NetworkPolicy (fail-closed), and removes the other-mode policy. The CIDR
+// default is covered by the existing v2_egressproxy_test.go emission test.
+//
+// The fixtures are planted with createStoredAliasProxy rather than created: admission
+// refuses a new alias write (Q1085), so what these emitters serve is exactly the
+// stored population that predates the guard.
 
 var (
 	ciliumGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
@@ -81,8 +85,7 @@ func TestV2_EgressProxy_CiliumFQDNMode(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
 		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN},
 	}
-	require.NoError(t, k8sClient.Create(ctx, ep))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	createStoredAliasProxy(t, ep)
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 
@@ -141,8 +144,7 @@ func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
 			DestinationCIDRs: []string{destCIDR},
 		},
 	}
-	require.NoError(t, k8sClient.Create(ctx, ep))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	createStoredAliasProxy(t, ep)
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 	var cnp *unstructured.Unstructured
@@ -213,8 +215,7 @@ func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 			MinReplicas:      ptr32(1),
 		},
 	}
-	require.NoError(t, k8sClient.Create(ctx, ep))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	createStoredAliasProxy(t, ep)
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 	require.Eventually(t, func() bool {
@@ -299,8 +300,7 @@ func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
 		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCalicoFQDN},
 	}
-	require.NoError(t, k8sClient.Create(ctx, ep))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	createStoredAliasProxy(t, ep)
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 

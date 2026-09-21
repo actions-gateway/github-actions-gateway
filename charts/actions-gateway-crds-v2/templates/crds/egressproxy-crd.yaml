@@ -175,8 +175,10 @@ spec:
                   reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
                   whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
                   CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at
-                  v2.0.0. It has no effect when managedNetworkPolicy is false. See
-                  the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.
+                  v2.0.0; admission rejects a new write naming one, and admits an object that
+                  already stores one unchanged. It has no effect when managedNetworkPolicy is
+                  false. See the EgressPolicyMode docs for the secure-by-default (fail-closed)
+                  guarantee.
                 enum:
                 - CIDR
                 - FQDN
@@ -1797,8 +1799,10 @@ spec:
                   reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
                   whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
                   CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at
-                  v2.0.0. It has no effect when managedNetworkPolicy is false. See
-                  the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.
+                  v2.0.0; admission rejects a new write naming one, and admits an object that
+                  already stores one unchanged. It has no effect when managedNetworkPolicy is
+                  false. See the EgressPolicyMode docs for the secure-by-default (fail-closed)
+                  guarantee.
                 enum:
                 - CIDR
                 - FQDN

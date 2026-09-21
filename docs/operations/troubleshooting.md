@@ -37,6 +37,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
 - [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
 - [Self-Serviced PriorityClasses Stopped Being Accepted All At Once](#self-serviced-priorityclasses-stopped-being-accepted-all-at-once)
+- [EgressProxy Rejected: CiliumFQDN / CalicoFQDN "may no longer be introduced"](#egressproxy-rejected-ciliumfqdn--calicofqdn-may-no-longer-be-introduced)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [ScaleSet RunnerSet Stuck Not Ready: `ScaleSetListenerStartFailed` Naming the Guard ConfigMap](#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap)
 - [AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing](#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing)
@@ -1092,6 +1093,49 @@ Both dynamic sets are restored on the next watch event, no restart.
 If the class is genuinely needed on both surfaces, it is not — that is the escalation the split exists to prevent.
 Create a second `PriorityClass` and give each surface its own; an `infra-` name prefix keeps the two sets obviously distinct.
 See [Disjointness is enforced on every edit](security-operations.md#disjointness-is-enforced-on-every-edit-not-only-at-startup).
+
+---
+
+## EgressProxy Rejected: `CiliumFQDN` / `CalicoFQDN` "may no longer be introduced"
+
+**Symptoms.** Applying an `EgressProxy` fails at admission:
+
+```text
+admission webhook "vegressproxy-v2alpha1.kb.io" denied the request:
+spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
+removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
+and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
+the same policy. An EgressProxy that already stores CiliumFQDN is still admitted unchanged,
+so an existing pool keeps working until you migrate it
+```
+
+A pool that was already running on the alias is unaffected, so this shows up on a **new** pool, on a pool being switched onto an alias, or on a GitOps apply that recreates a deleted one from a manifest nobody has updated.
+
+**Cause.** The two per-CNI `spec.egressPolicyMode` values are on the `v2.0.0` removal clock, and `v2` does not define them.
+A stored object naming one cannot be converted to `v2`, and a failed conversion fails the whole request it is served in, so one unmigrated `EgressProxy` empties `kubectl get egressproxies -A` for the cluster.
+Admission stops the population growing while it can still be drained; it deliberately leaves an already-stored value alone so an operator mid-migration is not locked out of their own object.
+
+**Recovery.** Replace the alias with the intent plus the operator-selected backend.
+On the `EgressProxy`:
+
+```yaml
+spec:
+  egressPolicyMode: FQDN   # was CiliumFQDN
+```
+
+and the platform operator sets the matching backend on the GMC:
+
+```text
+--fqdn-policy-backend=cilium   # or calico
+```
+
+The emitted policy is identical (each alias pins its namesake backend, and `FQDN` plus the matching selector resolves to the same emitter), so this is a re-label rather than a change in what is enforced.
+If the flag is not yours to set, the backend is a platform decision: see [expressing GitHub egress by FQDN](security-operations.md#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in).
+
+**If the flag says `none`**, the cluster has no FQDN backend and `egressPolicyMode: FQDN` is rejected for a different reason ("this cluster has no FQDN egress backend configured").
+Use `CIDR`, or ask the platform operator to enable a backend.
+
+**Finding every pool that still needs this** before an upgrade: [the pre-upgrade alias check](upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias).
 
 ---
 

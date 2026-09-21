@@ -12,7 +12,9 @@ The three independently versioned components — GMC, AGC, and worker image — 
 ## Table of Contents
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
+  - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
 - [Migration Notes](#migration-notes)
+  - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
   - [Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap](#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap)
   - [Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job](#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job)
   - [Non-breaking: `spec.scaleUp` now withholds intake instead of delaying jobs it has already claimed](#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed)
@@ -88,6 +90,26 @@ kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -
 # Metric: rate(controller_runtime_reconcile_errors_total[5m]) == 0
 ```
 
+### Before upgrading to `v2.0.0`: no `EgressProxy` still names a deprecated FQDN alias
+
+`v2.0.0` removes the deprecated `CiliumFQDN` and `CalicoFQDN` values of `EgressProxy.spec.egressPolicyMode`, along with every API version that defines them ([why](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock)).
+A stored object still naming one cannot be represented in `v2`, and a conversion failure fails the whole request it is served in, so one unmigrated `EgressProxy` anywhere in the cluster empties `kubectl get egressproxies -A` for everyone.
+
+Run this against the version that can still represent the aliases, and expect **no output**:
+
+```sh
+kubectl get egressproxies.v2beta1.actions-gateway.com -A -o jsonpath='{range .items[?(@.spec.egressPolicyMode=="CiliumFQDN")]}{.metadata.namespace}/{.metadata.name}{"\t"}{.spec.egressPolicyMode}{"\n"}{end}{range .items[?(@.spec.egressPolicyMode=="CalicoFQDN")]}{.metadata.namespace}/{.metadata.name}{"\t"}{.spec.egressPolicyMode}{"\n"}{end}'
+```
+
+Each line it prints is a pool to migrate before the upgrade: set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the matching GMC `--fqdn-policy-backend` (`cilium` or `calico`).
+The enforced policy is identical either way, so this is a re-label rather than a change in what is enforced.
+
+Two details the command depends on:
+
+- **Pin the version.** `kubectl get egressproxies` resolves to the preferred served version, which becomes `v2`, the version that cannot hold an alias.
+  The unpinned form is therefore the one that stops working exactly when you need it.
+- **Two `range` blocks, not one filter.** `kubectl`'s JSONPath has no `||` in a filter expression; a single combined filter fails to parse rather than matching nothing.
+
 Also check the release notes for the new version before upgrading, particularly:
 - CRD schema changes (new required fields, removed fields, validation tightening).
 - Behavior changes that require configuration updates before the new binary takes effect.
@@ -95,6 +117,34 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### A new `CiliumFQDN` / `CalicoFQDN` `EgressProxy` is now rejected at admission
+
+**Who is affected:** anyone who still creates an `EgressProxy` naming one of the two deprecated per-CNI `spec.egressPolicyMode` values, or switches an existing pool onto one.
+A pool that already stores one is unaffected and keeps running.
+
+**What changed.** The GMC admission webhook warned on these values; it now rejects a write that *introduces* one:
+
+```text
+spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
+removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
+and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
+the same policy.
+```
+
+A create is always a new write.
+An update is one only when it changes the value, so re-applying an unmigrated pool, editing the rest of its spec, and migrating it off the alias are all still admitted; switching one alias for the other is not.
+The warning stays for the unchanged case.
+
+**Why now rather than at `v2.0.0`.** `v2` does not define the aliases, so a stored object naming one cannot be represented once `v2` is served, and a failed conversion fails the whole request it is served in, and one such object empties `kubectl get egressproxies -A` for the cluster.
+This release is the first in which that conversion can be asked for at all, so the reject is what stops the population growing while there is still time to drain it.
+Find any that remain with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias).
+
+**What to do.** Set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the matching GMC `--fqdn-policy-backend` (`cilium` or `calico`).
+Each alias pins its namesake backend and `FQDN` plus the matching selector resolves to the same emitter, so the policy enforced on the wire does not change.
+
+**Rolling back** restores the warning: a new alias write is accepted again.
+Nothing about a stored object changes in either direction.
 
 ### Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap
 
