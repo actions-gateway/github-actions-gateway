@@ -211,6 +211,22 @@ def plan_file_of(body):
     return Path(target.split("#", 1)[0]).name if target else ""
 
 
+INDEX_ROW_LINK = re.compile(r"^\|\s*\[[^\]]*\]\(([^)#]+)")
+
+
+def index_row_plan(line):
+    """The plan a docs/plan/README.md row is *about*, from its first cell.
+
+    A plan is named all over that index: another plan's Status cell links it,
+    and so does the Archive table's prose. Matching any mention takes the first
+    such line, which is whichever row happens to sort earliest -- so
+    v2beta1-retirement.md resolved to the v2-ga.md row, and rule 9 read that
+    row's marker instead of its own.
+    """
+    m = INDEX_ROW_LINK.match(line)
+    return Path(m.group(1)).name if m else ""
+
+
 def rule9(base_items, head_items, index_text, failures):
     """Deleting a plan's last item obliges its index row to stop reading open."""
     excused = allow("QUEUE_ALLOW_PROGRESS_STALE")
@@ -222,7 +238,7 @@ def rule9(base_items, head_items, index_text, failures):
         if name in excused:
             continue
         for line in index_text.splitlines():
-            if f"({name})" not in line and f"]({name}" not in line:
+            if index_row_plan(line) != name:
                 continue
             if any(mark in line for mark in OPEN_MARKERS):
                 failures.append(
