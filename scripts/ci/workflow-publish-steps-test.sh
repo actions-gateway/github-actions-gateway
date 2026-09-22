@@ -49,14 +49,43 @@ WORK="$REPO_ROOT/tmp/workflow-publish-steps.$$"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
+# --- the verdict ledger -----------------------------------------------------
+#
+# Every verdict lands in a FILE rather than a shell variable, because most cases
+# below run their first assertion inside `dir="$(run_… )"`. A command
+# substitution is a subshell, so a `fails=$((fails + 1))` there increments a copy
+# the parent never sees: the FAIL line prints to stderr, the case's remaining
+# assertions are skipped, and the suite exits 0 reporting that everything passed.
+# An append from a subshell reaches the parent, so the ledger counts what the
+# variable could not.
+#
+# REPORTS carries every verdict, pass or fail. Each case reports exactly once, so
+# a case that vanished — deleted, or skipped because its `$dir` came back empty —
+# shows up as a count one short rather than as one fewer line in a log nobody
+# diffs.
+FAILURES="$WORK/failures"
+REPORTS="$WORK/reports"
+: >"$FAILURES"
+: >"$REPORTS"
 fails=0
+
+# The 19 cases plus registry-complete. Bump it with the case you add.
+EXPECTED_REPORTS=20
 
 fail() {
 	printf 'FAIL %-38s %s\n' "$1" "$2" >&2
-	fails=$((fails + 1))
+	printf '%s\n' "$1" >>"$FAILURES"
+	printf '%s\n' "$1" >>"$REPORTS"
 }
 
-pass() { printf 'ok   %-38s %s\n' "$1" "$2"; }
+pass() {
+	printf 'ok   %-38s %s\n' "$1" "$2"
+	printf '%s\n' "$1" >>"$REPORTS"
+}
+
+# count_fails — read the ledger back into $fails. Called wherever the count is
+# about to decide something, never assumed to be current.
+count_fails() { fails="$(grep -c . "$FAILURES" || true)"; }
 
 # refuse MESSAGE — exit 2 for anything that would leave this suite driving
 # nothing. A body that failed to extract runs clean, and every case built on it
@@ -357,6 +386,8 @@ fi
 dir="$(run_chart chart-crds-unparsed-signs-nothing "$CHART_CRDS_BODY" '' 1)"
 if [[ -n "$dir" ]]; then
 	expect_no_call chart-crds-unparsed-signs-nothing "$dir" 'cosign sign' &&
+		expect_stdout chart-crds-unparsed-signs-nothing "$dir" \
+			'could not parse pushed v2 CRD chart digest' &&
 		pass chart-crds-unparsed-signs-nothing 'the v2 CRD chart also signs nothing on an unparsed digest'
 fi
 
@@ -691,6 +722,8 @@ publish_acting_steps() {
 	' "$WORKFLOW"
 }
 
+count_fails
+registry_fails_before=$fails
 registry_names="$(step_registry | cut -d'|' -f1)"
 while IFS= read -r selector; do
 	[[ -n "$selector" ]] || continue
@@ -722,7 +755,27 @@ while IFS='|' read -r selector disposition _; do
 		fi
 	fi
 done < <(step_registry)
-((fails)) || pass registry-complete 'every acting step in publish.yml is driven or classified'
+count_fails
+if ((fails == registry_fails_before)); then
+	pass registry-complete 'every acting step in publish.yml is driven or classified'
+else
+	# Reported rather than silent. Keying this line on the GLOBAL count would
+	# skip it whenever any earlier case failed, and a reader of a red run could
+	# not then tell "the registry assertion passed" from "it never reported".
+	fail registry-complete 'the step registry is out of step with the workflow, see the registry: lines above'
+fi
+
+# A case that vanished reports neither ok nor FAIL, so the log shrinks by one
+# line and nothing else notices. Checked only on an otherwise-green run: a red
+# one already exits non-zero, and its count is not a fixed number.
+count_fails
+if ((fails == 0)); then
+	reports="$(grep -c . "$REPORTS" || true)"
+	if ((reports != EXPECTED_REPORTS)); then
+		fail report-count "the suite reported $reports verdicts, expected $EXPECTED_REPORTS — a case was added or lost without updating EXPECTED_REPORTS"
+		count_fails
+	fi
+fi
 
 if ((fails)); then
 	printf '\n%d test(s) failed\n' "$fails" >&2
