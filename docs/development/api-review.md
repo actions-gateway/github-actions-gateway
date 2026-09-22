@@ -168,7 +168,7 @@ Two features on one axis therefore look asymmetric when one predates the other, 
 The *container* answers a second question: does the opt-in carry knobs of its own?
 A pure ownership toggle whose knobs already exist as siblings is a `*bool`; an opt-in with settings meaningful only while it is on is a block whose presence **is** the switch — never a block with an `enabled` field, which is two fields answering one question.
 Match the neighbours on the same object before matching a different CRD: an operator meets the field in the object it lives in.
-Worked example, including why the `*bool` survives [prefer a string enum](#prefer-a-string-enum-to-a-bool): § E of [release-1.3.md](../plan/release-1.3.md).
+Worked example, including why the `*bool` survives [prefer a string enum](#prefer-a-string-enum-to-a-bool): § E of [release-1.3.md](../plan/archive/release-1.3.md).
 
 ### Decide optional, required, pointer, and default together
 
@@ -375,7 +375,7 @@ That last question is what keeps the urgent pile small: only wire-breaking chang
 ### Step 3 — record the outcome
 
 Write the verdict into the release's plan doc under `docs/plan/` (its Definition of Done section), naming what was reviewed and what was decided.
-Record all three buckets — reviewed, found-and-fixed, and accepted-without-change — so the next release can tell a deliberate choice from an unexamined one. §E of [release-1.3.md](../plan/release-1.3.md) is the worked example.
+Record all three buckets — reviewed, found-and-fixed, and accepted-without-change — so the next release can tell a deliberate choice from an unexamined one. §E of [release-1.3.md](../plan/archive/release-1.3.md) is the worked example.
 
 **"Ship as-is, deliberately" is a valid outcome** and the most common one.
 The point is that the choice is made rather than defaulted into.

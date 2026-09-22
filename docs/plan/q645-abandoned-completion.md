@@ -8,7 +8,7 @@ The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run i
 Remaining follow-up: [Q682](../queue/Q682.md) (sibling `skipped` arm).
 
 Queue item: Q645 (completed; done rows are deleted).
-Origin: [release-1.3.md § The rc.5 re-run](release-1.3.md#the-rc5-re-run-2026-08-02).
+Origin: [release-1.3.md § The rc.5 re-run](archive/release-1.3.md#the-rc5-re-run-2026-08-02).
 
 ## The question
 

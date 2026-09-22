@@ -1,6 +1,6 @@
 # v2 GA graduation plan (`v2beta1` → `v2`)
 
-The last rung of the graduation ladder defined in [v2-api.md § API maturity & graduation](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), and the release that executes the three coupled removals announced by [release-1.3.md](release-1.3.md).
+The last rung of the graduation ladder defined in [v2-api.md § API maturity & graduation](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), and the release that executes the three coupled removals announced by [release-1.3.md](archive/release-1.3.md).
 
 This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
@@ -138,7 +138,7 @@ That is a floor rather than a rate, since an external adopter is unknowable for 
 **`v2.0.0` opens by marking `v2` the storage version and migrating stored objects**, which 1.9 deliberately did not do.
 That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in Q1085 load-bearing: the migration is the moment an object naming a value `v2` cannot represent stops being readable.
 
-`v2.0.0` then executes all three removals announced by [release-1.3.md](release-1.3.md), plus a fourth decided later:
+`v2.0.0` then executes all three removals announced by [release-1.3.md](archive/release-1.3.md), plus a fourth decided later:
 
 - `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../queue/Q273.md)
 - `v2alpha1` — this plan

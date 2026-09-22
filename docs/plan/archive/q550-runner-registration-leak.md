@@ -8,7 +8,7 @@ Sibling row Q551 covered what the listener does *after* the collisions become un
 The two shipped separately the same day: this fix removes most of what *causes* the collisions, Q551 makes what remains recoverable and visible.
 
 > **Verified at unit and integration; not yet re-verified live.** The defect was found in the `v1.3.0-rc.2` dogfood window, and no tier below a live-GitHub run can confirm that the REST listing behaves as the fake models it.
-> The release gate's own dogfood validation is where that confirmation lands — it is part of the [Release 1.3](../release-1.3.md) Definition of Done rather than a Queue row.
+> The release gate's own dogfood validation is where that confirmation lands — it is part of the [Release 1.3](release-1.3.md) Definition of Done rather than a Queue row.
 > The `Warn` line added to the unresolvable-reclaim branch is what will name the live mechanism if it is still the one suspected here.
 
 ## Status
