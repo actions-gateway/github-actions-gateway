@@ -475,10 +475,15 @@ func startEgressProxyReconcilerWithBackend(t *testing.T, ipCache *controller.IPR
 
 // startEgressProxyReconcilerNoResync is startEgressProxyReconciler with the manager's
 // default (effectively infinite) cache sync period instead of the suite's 2s resync.
-// That silences one of three periodic re-enqueues, not all of them: a not-ready pool
-// short-requeues every 15s, and the egress recheck requeues on its own cadence. So a
-// test that needs a watch event to be the only possible trigger must also drive the
-// proxy Deployment Ready and pass an ipCache marked freshly refreshed (Q326).
+// That silences one of three periodic re-enqueues, not all of them. A not-ready pool
+// short-requeues every 15s, so the caller must drive the proxy Deployment Ready (Q326).
+// The egress recheck requeues every egressStaleThreshold/8 — ~6h at the 49h default —
+// and no cache state changes that, so a test clears it by finishing first, never by
+// disabling it: isolation here is time-bounded, not absolute.
+//
+// Isolation is also not yet reliable. A run with the referrer Watches deleted has been
+// observed green, so a test asserting a watch edge off this helper can pass with that
+// edge removed; Q541 tracks hardening it.
 func startEgressProxyReconcilerNoResync(t *testing.T, ipCache *controller.IPRangeCache) {
 	t.Helper()
 	startEgressProxyReconcilerOpts(t, ipCache, controller.FQDNBackendNone, nil)

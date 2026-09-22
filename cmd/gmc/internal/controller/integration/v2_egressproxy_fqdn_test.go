@@ -199,8 +199,9 @@ func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 	createNamespace(t, ns)
 	createGitHubAppSecret(t, ns, "github-app")
 
-	// A freshly-refreshed cache keeps EgressRulesStale quiet and pushes the periodic
-	// egress recheck far past this test.
+	// A freshly-refreshed cache keeps EgressRulesStale quiet (vacuously here — FQDN
+	// mode is not CIDR-refreshed). The periodic egress recheck is not affected by
+	// cache state: it requeues every threshold/8 (~6h), far past this test either way.
 	ipCache := &controller.IPRangeCache{}
 	ipCache.MarkRefreshed(time.Now())
 	startEgressProxyReconcilerNoResync(t, ipCache)
