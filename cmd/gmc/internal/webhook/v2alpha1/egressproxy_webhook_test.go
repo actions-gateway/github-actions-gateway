@@ -415,9 +415,9 @@ func TestEgressProxyCustomValidator_DeprecationWarnings(t *testing.T) {
 // a write that INTRODUCES CiliumFQDN/CalicoFQDN is rejected, one that leaves an
 // already-stored alias alone is admitted. The asymmetry is what stops the population
 // growing without breaking an operator who has not migrated — v2 cannot represent an
-// alias, and one such object fails the conversion request every object of a LIST is
-// batched into, so a flat reject would fail every re-apply while a flat accept leaves
-// the hazard growing.
+// alias, and one such object fails the request it is served in, erroring a LIST that
+// would return it, so a flat reject would fail every re-apply while a flat accept
+// leaves the hazard growing.
 func TestEgressProxyCustomValidator_RejectsNewDeprecatedMode(t *testing.T) {
 	v := &EgressProxyCustomValidator{
 		Allowlist:   allowlist.NewEgressDestination(nil, nil),

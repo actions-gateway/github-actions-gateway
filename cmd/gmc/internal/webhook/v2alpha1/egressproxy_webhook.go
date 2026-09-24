@@ -78,7 +78,8 @@ func deprecatedModeWarning(mode agcv2alpha1.EgressPolicyMode) string {
 //
 // The asymmetry is the point. v2 does not define the aliases (Q452), so at v2.0.0 an
 // unmigrated object is unrepresentable in the served version, and one such object
-// fails the conversion request every object of a LIST is batched into. Rejecting new
+// fails the request it is served in: a LIST that would return it comes back an error
+// with no items, while a targeted GET of a healthy neighbour still succeeds. Rejecting new
 // writes stops the population growing; admitting an unchanged one leaves an operator
 // mid-migration able to re-apply and edit the rest of the spec. A flat reject would
 // fail every re-apply of an object nobody has migrated yet, which is the failure this

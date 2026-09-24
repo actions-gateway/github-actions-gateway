@@ -108,7 +108,8 @@ Two details the command depends on:
 
 - **Pin the version.** `kubectl get egressproxies` resolves to the preferred served version, which becomes `v2`, the version that cannot hold an alias.
   The unpinned form is therefore the one that stops working exactly when you need it.
-- **Two `range` blocks, not one filter.** `kubectl`'s JSONPath has no `||` in a filter expression; a single combined filter fails to parse rather than matching nothing.
+- **Two `range` blocks, not one filter.** `kubectl`'s JSONPath has no `||` in a filter expression, so a single combined filter fails to parse rather than matching nothing.
+  Measured 2026-09-24 on the `kubectl` 1.36 client, which rejects the combined form with `unrecognized character in action: U+007C '|'`.
 
 Also check the release notes for the new version before upgrading, particularly:
 - CRD schema changes (new required fields, removed fields, validation tightening).

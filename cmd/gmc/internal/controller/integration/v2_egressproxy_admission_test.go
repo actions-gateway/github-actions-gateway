@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -285,6 +286,14 @@ func createStoredAliasProxy(t *testing.T, ep *gmcv2alpha1.EgressProxy) {
 	require.NoError(t, ep.ConvertTo(&hub))
 
 	setEgressProxyWebhookMatchPolicy(t, admissionv1.Exact)
+	// A require below FailNows past the inline restore, which would leave the guard
+	// narrowed for every later test in the package.
+	restored := false
+	t.Cleanup(func() {
+		if !restored {
+			restoreEgressProxyWebhookMatchPolicy(t, ep.Namespace)
+		}
+	})
 	// The apiserver caches webhook configurations briefly, so retry until the
 	// narrowed policy is the one in force.
 	var err error
@@ -299,6 +308,7 @@ func createStoredAliasProxy(t *testing.T, ep *gmcv2alpha1.EgressProxy) {
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, &hub) })
 
 	restoreEgressProxyWebhookMatchPolicy(t, ep.Namespace)
+	restored = true
 	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), ep))
 }
 
@@ -315,8 +325,13 @@ func restoreEgressProxyWebhookMatchPolicy(t *testing.T, ns string) {
 			ObjectMeta: metav1.ObjectMeta{Name: "alias-guard-canary", Namespace: ns},
 			Spec:       gmcv2beta1.EgressProxySpec{EgressPolicyMode: gmcv2beta1.EgressPolicyModeCiliumFQDN},
 		}
+		// Only the guard's own rejection proves it is back; any other error (a
+		// terminating namespace, a transient blip) would otherwise read as one.
 		if err := k8sClient.Create(ctx, canary); err != nil {
-			return
+			if strings.Contains(err.Error(), "may no longer be introduced") {
+				return
+			}
+			t.Fatalf("canary create failed for a reason other than the alias guard: %v", err)
 		}
 		require.NoError(t, k8sClient.Delete(ctx, canary))
 		time.Sleep(200 * time.Millisecond)
