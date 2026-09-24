@@ -38,8 +38,9 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
 
-	// A freshly-refreshed IP cache keeps EgressRulesStale quiet and pushes the
-	// periodic egress recheck out to threshold/8 (~6h) — far beyond this test.
+	// A freshly-refreshed IP cache keeps EgressRulesStale quiet. The periodic egress
+	// recheck is not affected by cache state: it requeues every threshold/8 (~6h),
+	// which is far beyond this test either way.
 	ipCache := &controller.IPRangeCache{}
 	ipCache.MarkRefreshed(time.Now())
 	startEgressProxyReconcilerNoResync(t, ipCache)
