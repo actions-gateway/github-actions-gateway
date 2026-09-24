@@ -2837,6 +2837,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#publishyml-has-its-own-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        publish.yml has its own suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-shell-a-body-is-driven-under" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5056,7 +5067,7 @@ It was caught by hand-driving the step, with actionlint, shellcheck and <code>ma
 A grep answers ten, because <code>release-freeze-watch.yml</code> names <code>pull_request</code> only in a comment explaining why it has none.
 That count is not itself the scope: a workflow with a <code>pull_request</code> trigger can still gate its acting job off that event, which <code>pages.yml</code> does.</p>
 <p>Five workflows run an acting command.
-Two are driven:</p>
+Three are driven:</p>
 <table>
 <thead>
 <tr>
@@ -5079,21 +5090,46 @@ Two are driven:</p>
 <td><code>git push origin gh-pages</code></td>
 <td>the <code>publish</code> job is <code>if: github.event_name != 'pull_request'</code></td>
 </tr>
+<tr>
+<td><code>publish.yml</code></td>
+<td>six release-lane steps</td>
+<td><code>helm push</code> / <code>cosign sign</code> / <code>gh release create</code>, <code>upload</code>, <code>edit</code></td>
+<td>no <code>pull_request</code> trigger; it runs on a <code>v*</code> tag push</td>
+</tr>
 </tbody>
 </table>
-<p>The other three are excluded, and the reasons are the scope claim rather than an aside:</p>
+<p><code>publish.yml</code> is driven by a suite of its own, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-publish-steps-test.sh"><code>workflow-publish-steps-test.sh</code></a> (Q1056), described <a href="#publishyml-has-its-own-suite">below</a>.</p>
+<p>The other two are excluded, and the reasons are the scope claim rather than an aside:</p>
 <ul>
 <li><strong><code>dependabot-go-sync.yml</code></strong> pushes to a Dependabot branch, and <code>pull_request</code> is its only trigger, so every Dependabot PR executes that body before it merges.
   It is not in the defect class.</li>
 <li><strong><code>e2e-reusable.yml</code></strong> pushes two images, and both e2e lanes that call it declare <code>merge_group</code>, so the queue runs it against the candidate merge commit before that commit lands.
   Its push also targets the registry the same job stands up, so it publishes nothing outside the run.</li>
-<li><strong><code>publish.yml</code></strong> is in the class and is deferred to Q1056.
-  Its acting steps need <code>cosign</code>, <code>syft</code>, <code>docker</code>, <code>helm</code> and <code>gh</code> stubs, a driver several times the size of this one, and its wiring is already held statically by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-publish-digest.sh"><code>check-publish-digest.sh</code></a> and the cosign pin gate.</li>
 </ul>
 <p>Two workflows act only through a delegate: <code>dependabot-rebase-stale.yml</code> calls <code>scripts/ci/dependabot-rebase-stale.sh</code> and <code>updatecli.yml</code> calls the <code>updatecli</code> binary, and in both the <code>run:</code> body decides one flag.
 The decisions are in the delegate, which has its own suite, so driving the wrapper would test the flag and nothing else.</p>
 <p><strong>A closing assertion holds that derivation to the tree, both directions.</strong> Every workflow running an acting command must be driven or listed in the suite's <code>acting_registry()</code> with a reason, and a registry line naming a workflow that no longer exists, or no longer acts, fails too.
 Without it the suite would cover a frozen pair and a thirty-first workflow could start opening issues uncovered, which is the same false negative the <a href="#the-path-filter-gate">path-filter gate</a> exists for one rung over.</p>
+<h4 id="publishyml-has-its-own-suite">publish.yml has its own suite<a class="headerlink" href="#publishyml-has-its-own-suite" title="Permanent link">&para;</a></h4>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-publish-steps-test.sh"><code>workflow-publish-steps-test.sh</code></a> drives the six acting <code>run:</code> bodies in <code>publish.yml</code>'s release lane (Q1056), on the same extractor and the same case shape as the suite above.
+They are separate for one reason: these bodies shell out to <code>helm</code>, <code>cosign</code>, <code>yq</code>, <code>docker</code> and <code>gh</code>, and two of the stubs have to print output a later line of the body parses, which does not fit beside a suite whose recorders answer <code>gh issue list</code>.
+<code>acting_registry()</code> in the Q1006 suite now classifies <code>publish.yml</code> as <code>driven-elsewhere</code> and names this one, so the whole-workflow assertion still reaches it.</p>
+<p>Publish triggers only on a <code>v*</code> tag push and a dispatch, so no pull request executes any of these bodies: the first run of each is the release it is publishing.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-publish-digest.sh"><code>check-publish-digest.sh</code></a>, <code>cosign-pin-check</code> and <code>semver-floor-sources-check</code> read the workflow's YAML and none of them enters a step's shell, so three decisions were unread before a release:</p>
+<ul>
+<li><strong>A chart push whose digest did not parse must sign nothing.</strong> <code>helm push</code> prints <code>Digest: sha256:…</code> and the body awks it back out so the signature binds to the pushed bytes rather than the floating tag; signing <code>…/charts/actions-gateway@</code> with an empty digest would produce a signature that verifies today and stops matching the moment anything re-pushes.</li>
+<li><strong><code>gh release create</code> must leave a curated Release alone, and must refuse a digest that is not a <code>sha256:</code>.</strong> Those digests are what operators pin to.</li>
+<li><strong><code>gh release edit --draft=false</code> decides <code>--latest</code> from the tag's prerelease state alone.</strong> It makes no comparison against the versions already released, so a stable backport cut after a newer minor claims <code>latest</code> and demotes that minor.
+  That is the asymmetry with <code>pages.yml</code>'s <code>mike</code> step, which moves the <code>stable</code> alias only to the highest released version.
+  The case records what the step does; whether a backport should claim it is a question about the release design, filed separately.</li>
+</ul>
+<p>Each subject carries a positive control that must still act, and three <code>regression</code> cases delete a guard from the extracted body and require the assertions to go red, so the suite is known to be able to fail.
+Every case builds its own sandbox, so a <code>cosign sign</code> recorded by one cannot satisfy another's assertion that none happened, which is exactly the pair of cases that would otherwise pass for the wrong reason.
+The real <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/retry.sh"><code>retry.sh</code></a> is copied into the sandbox rather than stubbed, since every registry call in the lane routes through it.</p>
+<p><strong>The closing assertion is step-level rather than workflow-level</strong>, since the workflow is already covered one rung up: each acting step must be driven or carry a <code>step_registry()</code> line, both directions, and a classification is checked rather than believed.
+An <code>undrivable</code> entry (today only <code>Sign image + attest SBOMs (keyless)</code>, which interpolates a <code>${{ }}</code> expression into its script) must still be one the extractor refuses, and a <code>read-only</code> entry must still match the acting pattern only through <code>git tag --list</code>.
+The scan skips comment lines and lines whose command is <code>echo</code> or <code>printf</code>: at step level a spurious match is not free, because an exclusion written for a prose mention would also cover a real act added to the same step later, and the announce-bar gate's <code>::error::</code> message says "the git tags".
+Anchoring to command position would be the stronger rule and is the wrong one here, because every registry call in the lane is wrapped as <code>scripts/fetch/retry.sh cosign sign …</code>, so <code>cosign sign</code> is never in command position and the whole lane would scan as inert.</p>
 <h4 id="the-shell-a-body-is-driven-under">The shell a body is driven under<a class="headerlink" href="#the-shell-a-body-is-driven-under" title="Permanent link">&para;</a></h4>
 <p><code>bash --noprofile --norc -e</code>, and deliberately <strong>not</strong> <code>-o pipefail</code>.
 GitHub's documented default <code>run:</code> shell is <code>bash -e {0}</code>; <code>-eo pipefail</code> arrives only with an explicit <code>shell: bash</code>, a job <code>defaults.run.shell</code>, or a workflow-level one.

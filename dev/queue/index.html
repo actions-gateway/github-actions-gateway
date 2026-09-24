@@ -2702,6 +2702,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q541/">Q541</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_egressproxy_fqdn_test.go">EgressProxy watch-isolation test passes with its watch deleted, at times</a></td>
+<td><code>tests</code> <code>flake</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost</code> claims the referrer watch edge is the only thing that can re-enqueue the proxy once …</td>
+</tr>
+<tr>
+<td><a href="Q1136/">Q1136</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-acting-steps-test.sh">workflow-acting-steps-test cannot fail: it counts in a subshell</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The suite prints <code>FAIL</code>, prints <code>all workflow acting-step tests passed</code>, and exits 0.</td>
+</tr>
+<tr>
 <td><a href="Q1119/">Q1119</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2950,20 +2966,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Inv.</td>
 </tr>
 <tr>
-<td><a href="Q1056/">Q1056</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Nothing drives publish.yml's acting <code>run:</code> bodies before a release</a></td>
-<td><code>ci</code> <code>tests</code> <code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q1006 shipped a driver for the workflow <code>run:</code> bodies that act, and scoped <code>publish.yml</code> out of it deliberately.</td>
-</tr>
-<tr>
 <td><a href="Q707/">Q707</a></td>
 <td><a href="../development/testing/#stopping-a-run-name-the-target-never-the-program">Ownership lease for local singleton tiers (e2e/kind slots)</a></td>
 <td><code>debt</code> <code>tests</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Measured: of 38 local shell-kill targets only 2 carried a worktree anchor; the rest match every session (Q690 killed the <code>make check</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1134/">Q1134</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">A backport tag claims <code>--latest</code>, demoting the newer minor</a></td>
+<td><code>ci</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>publish.yml</code>'s last release step runs <code>gh release edit "${TAG}" --repo "${REPO}" --draft=false "${extra[@]}"</code>, and <code>extra</code> picks up …</td>
 </tr>
 <tr>
 <td><a href="Q1125/">Q1125</a></td>
@@ -3052,14 +3068,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08: only 2 of 106 served v2beta1 fields were unread (<code>Sharing</code>, <code>allowedNamespaces</code>), both Q166's, and Q166 has landed, so …</td>
-</tr>
-<tr>
-<td><a href="Q541/">Q541</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/suite_integration_test.go">Test helper claims to isolate a watch trigger and does not</a></td>
-<td><code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>startEgressProxyReconcilerNoResync</code> says it proves a reconcile came from a watch, but a not-ready pool short-requeues every 15 s too — a …</td>
 </tr>
 <tr>
 <td><a href="Q574/">Q574</a></td>

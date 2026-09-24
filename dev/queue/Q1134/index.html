@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q541/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1134/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>EgressProxy watch-isolation test passes with its watch deleted, at times - GitHub Actions Gateway</title>
+        <title>A backport tag claims --latest, demoting the newer minor - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#egressproxy-watch-isolation-test-passes-with-its-watch-deleted-at-times" class="md-skip">
+        <a href="#a-backport-tag-claims---latest-demoting-the-newer-minor" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              EgressProxy watch-isolation test passes with its watch deleted, at times
+              A backport tag claims --latest, demoting the newer minor
             
           </span>
         </div>
@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,19 +2616,29 @@
   
 
 
-<h1 id="egressproxy-watch-isolation-test-passes-with-its-watch-deleted-at-times">EgressProxy watch-isolation test passes with its watch deleted, at times<a class="headerlink" href="#egressproxy-watch-isolation-test-passes-with-its-watch-deleted-at-times" title="Permanent link">&para;</a></h1>
-<p><code>TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost</code> claims the referrer watch edge is the only thing that can re-enqueue the proxy once the pool is Ready.
-Deleting both referrer <code>Watches</code> from <code>SetupWithManager</code> usually reddens it, but not always: across two sessions on 2026-09-21, 10 mutant runs at head f9e26b8 gave 9 FAIL and 1 PASS, so the assertion can pass with the mechanism it names removed.
-The single green was taken with the mutation verified present in the tree and the package confirmed to compile that source, so it is a real observation rather than a mutation that failed to land.
-Both hosts sat at load 13–80 on 18 cores; treat the split as evidence of non-determinism, never as a rate.
-Ten samples across two loaded hosts cannot support a frequency, and a number in a row gets quoted.</p>
-<p>Unverified hypothesis, stated as such: residual self-triggered reconciles from the Ready status write may straddle the gateway creation, letting a reconcile pick the referrer up with no referrer watch.
-A fix likely has to quiesce the reconcile chain before the gateway lands, rather than lengthen a timeout.
-A cheap directional probe before building anything, unverified and predicted from that hypothesis rather than measured: if the green really is a residual reconcile straddling the gateway creation, creating the gateway immediately after the Deployment status write instead of after the Ready assertion should make the green more frequent, and inserting a delay should make it rarer.
-A rate that does not move refutes the hypothesis cheaply; one that does puts the on-demand green this row needs within reach.</p>
-<p>Nobody has reproduced the green on demand, so a hardening fix cannot currently be shown to be load-bearing — whoever takes this needs a reliable red first, or the fix repeats the defect it closes.
-That is a deliberate scoping decision, ruled on when the row was re-scoped, not work left unfinished: a fix nobody can make fail would make this row unfalsifiable, which is the defect it exists to close.
-The helper godoc this row originally named was corrected in the same PR that restored this row; what remains is the racy isolation itself.</p>
+<h1 id="a-backport-tag-claims---latest-demoting-the-newer-minor">A backport tag claims <code>--latest</code>, demoting the newer minor<a class="headerlink" href="#a-backport-tag-claims---latest-demoting-the-newer-minor" title="Permanent link">&para;</a></h1>
+<p><code>publish.yml</code>'s last release step runs <code>gh release edit "${TAG}" --repo "${REPO}" --draft=false "${extra[@]}"</code>, and <code>extra</code> picks up <code>--latest</code> whenever the tag is not a prerelease.
+That test reads the tag alone: it makes no comparison against the versions already released.
+So a stable backport cut after a newer minor (<code>v1.5.1</code> published once <code>v1.6.0</code> exists) claims <code>latest</code> on the repository's releases page and demotes <code>v1.6.0</code>, which is the ref a reader arriving at <code>/releases/latest</code> gets.</p>
+<p>Measured 2026-09-21 by driving the extracted body with a <code>gh</code> stub: <code>TAG=v1.5.1 PRERELEASE=false</code> produces <code>gh release edit v1.5.1 … --draft=false --latest</code>, recorded as the <code>publish-backport-claims-latest</code> case in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-publish-steps-test.sh"><code>workflow-publish-steps-test.sh</code></a>.
+That case asserts what the step does today; it is not an assertion that the behaviour is right.</p>
+<p><strong>Two other gates in the same tag push already make the opposite call</strong>, which is what makes this worth asking rather than simply fixing.
+<code>pages.yml</code>'s <code>mike</code> step moves the <code>stable</code> alias and the default root redirect only to the highest released version, so the docs site is not demoted by a backport.
+<code>publish.yml</code>'s own announce-bar gate exempts a backport for the same reason, and <a href="../../operations/release/">release.md</a> states the rule in prose for both.
+Three mechanisms in one pipeline, and the one that sets the GitHub <code>latest</code> pointer is the odd one out.</p>
+<p><strong>It is an open question rather than a defect because the documented behaviour is the current one.</strong> release.md says a stable <code>≥1.0.0</code> tag means latest, and the step's comment explains <code>--latest</code> as restoring what <code>gh release create</code> would have picked had the release not been created as a draft, which is accurate about <code>gh</code>, and is a claim about a mechanism rather than about what the release should advertise.
+Settle which the project wants before writing code:</p>
+<ul>
+<li><strong>Leave it.</strong> <code>latest</code> then means most-recently-published, which is defensible and is what the prose says.</li>
+<li><strong>Guard it</strong>, mirroring <code>pages.yml</code>: pass <code>--latest</code> only when this tag is the highest stable release, resolved from <code>gh release list</code> or <code>git tag</code>.
+  That needs a read the step does not make today, and it needs deciding what happens when the read fails; claiming nothing is the safe answer and leaves <code>latest</code> on whatever held it.</li>
+</ul>
+<p>Whichever way it goes, the <code>publish-backport-claims-latest</code> case and the paragraph in <a href="../../development/testing/#publishyml-has-its-own-suite">testing.md</a> that names the asymmetry are updated with it.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p><strong>Ask:</strong> which of the two <code>latest</code> should mean here.
+The measurement is taken and the alternatives are costed above; what is left is the maintainer's call about what the releases page should advertise, and no amount of reading the repo settles it, because the repo currently says both things in different places.</p>
+<p>Found while writing the driver that Q1056 asked for, which named this as one of three decisions nothing exercised.
+No backport has been cut since the repository reached 1.0, so nothing has been demoted yet.</p>
 
 
 

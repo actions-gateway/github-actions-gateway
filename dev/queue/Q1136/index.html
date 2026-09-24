@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1056/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1136/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing drives publish.yml's acting run: bodies before a release - GitHub Actions Gateway</title>
+        <title>workflow-acting-steps-test cannot fail: it counts in a subshell - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-drives-publishymls-acting-run-bodies-before-a-release" class="md-skip">
+        <a href="#workflow-acting-steps-test-cannot-fail-it-counts-in-a-subshell" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing drives publish.yml's acting run: bodies before a release
+              workflow-acting-steps-test cannot fail: it counts in a subshell
             
           </span>
         </div>
@@ -2579,6 +2579,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,21 +2616,24 @@
   
 
 
-<h1 id="nothing-drives-publishymls-acting-run-bodies-before-a-release">Nothing drives publish.yml's acting <code>run:</code> bodies before a release<a class="headerlink" href="#nothing-drives-publishymls-acting-run-bodies-before-a-release" title="Permanent link">&para;</a></h1>
-<p>Q1006 shipped a driver for the workflow <code>run:</code> bodies that act, and scoped <code>publish.yml</code> out of it deliberately.
-This is the residue.</p>
-<p><code>publish.yml</code> triggers only on a <code>v*</code> tag push and a dispatch, so no pull request executes any of its bodies.
-Measured 2026-09-04 by parsing each workflow's <code>on:</code> block: it is one of eleven workflows with no <code>pull_request</code> trigger, and the only one of those whose bodies both act on the world outside the run and are undriven.
-Its acting steps run <code>cosign sign</code>, <code>cosign sign-blob</code>, <code>helm push</code>, <code>gh release create</code>, <code>gh release upload</code> and <code>gh release edit</code>: publishing, signing and releasing, each first executed during the release it is publishing.</p>
-<p><strong>What is already covered, so this row is not the whole gap.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-publish-digest.sh"><code>check-publish-digest.sh</code></a> holds the retried build's wiring statically, and <code>cosign-pin-check</code> and <code>semver-floor-sources-check</code> cover two more properties.
-Those read the YAML.
-None of them enters a step's shell, so nothing exercises what the bodies <em>decide</em>: which digest a <code>gh release edit --draft=false</code> promotes, whether a chart push that failed to parse its digest still signs something, what the <code>--latest</code> branch does on a backport tag.</p>
-<p><strong>Why Q1006 excluded it, and what would change that.</strong> The two steps Q1006 drives need one stub each (<code>gh</code>; <code>mike</code> plus <code>git</code>).
-<code>publish.yml</code>'s need <code>cosign</code>, <code>syft</code>, <code>docker</code>, <code>helm</code> and <code>gh</code>, several of them recording multi-line output later steps parse, which is a driver several times the size of the one that ships in Q1006 rather than an afternoon's extension of it.
-Sized M for that reason, not because the mechanism is unknown: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-step-body.sh"><code>workflow-step-body.sh</code></a> and the case shape in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-acting-steps-test.sh"><code>workflow-acting-steps-test.sh</code></a> both generalize, and the suite's <code>acting_registry()</code> already carries <code>publish.yml</code> with this row's id as its deferral reason.</p>
-<p><strong>The extractor already reaches all six, so this is a driver to write rather than steps to convert first.</strong> It refuses a body that interpolates a <code>${{ }}</code> expression into its script text, because the runner substitutes that before bash sees it, so a driven body would not be the body CI runs.
-Measured 2026-09-04: <code>workflow-step-body.sh</code> returns rc 0 for <code>chart</code>, <code>chart_crds_v2</code>, and the four release steps (<code>Compose and create the GitHub Release …</code>, <code>Render, sign, and attach the v2 CRD manifest …</code>, <code>Build, sign, and attach the gag-migrate CLI binaries …</code>, <code>Publish the release now every asset is attached</code>).
-All six take their inputs through <code>env:</code>, so the whole cost of this row is the stubs and the cases.</p>
+<h1 id="workflow-acting-steps-test-cannot-fail-it-counts-in-a-subshell">workflow-acting-steps-test cannot fail: it counts in a subshell<a class="headerlink" href="#workflow-acting-steps-test-cannot-fail-it-counts-in-a-subshell" title="Permanent link">&para;</a></h1>
+<p>The suite prints <code>FAIL</code>, prints <code>all workflow acting-step tests passed</code>, and exits 0.</p>
+<p>Measured 2026-09-21 on branch <code>claude/frosty-gauss-483196</code>, which differs from <code>main</code> in this file by one registry line.
+I changed <code>check-covers-main</code> to expect rc 7 from a delegate that exits 0, ran the suite, and got the <code>FAIL check-covers-main want rc=7 got rc=0</code> line, the all-passed banner, and exit status 0.
+The mutation was reverted; <code>git diff</code> against the branch head is empty.</p>
+<p><strong>The mechanism.</strong> <code>run_check</code>, <code>run_report</code> and <code>run_mike</code> are each called as <code>dir="$(run_… )"</code>. A command substitution is a subshell, so the <code>fails=$((fails + 1))</code> that <code>fail()</code> performs inside one increments a copy the parent never sees.
+<code>fail()</code>'s own output goes to stderr and is not captured, which is why the line still appears and reads like a real failure report.
+The function then hits <code>|| return 0</code>, <code>$dir</code> comes back empty, the <code>if [[ -n "$dir" ]]</code> block is skipped, and the rest of that case's assertions never run either.
+Nothing counts the cases, so a case that vanished this way leaves no trace in the exit status.</p>
+<p>Every case whose first assertion is the <code>expect_rc</code> inside one of those three helpers is affected.
+The cases that call <code>expect_rc</code> at top level are not, and do count.</p>
+<p><strong>The fix is written and measured</strong>, in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-publish-steps-test.sh"><code>workflow-publish-steps-test.sh</code></a>, which had the same defect because it was built on this suite's shape.
+A file-backed ledger: <code>fail()</code> and <code>pass()</code> append a line to <code>$WORK/failures</code> and <code>$WORK/reports</code>, and a <code>count_fails</code> reads the count back before it decides anything, because an append from a subshell does reach the parent.
+That suite also gained two controls this one still lacks, and both belong here as part of the same change: a report count, so a case that vanished fails rather than shrinking the log, and a <code>registry-complete</code> line keyed on the registry's own findings rather than the global count, so a red run can still tell "the registry assertion passed" from "it never reported".</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>Found by the independent reviewer of PR #1976 in the sibling suite that PR adds, and confirmed here by mutation rather than by reading.
+Not folded into that PR: its concern is driving publish.yml's bodies, and this is a defect in an already-merged suite.
+Ranked at the head because a gate that cannot fail is trusted by every PR that touches <code>.github/workflows/</code> until it is fixed.</p>
 
 
 
