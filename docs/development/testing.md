@@ -3992,17 +3992,20 @@ Those make the banner concrete but never change a verdict.
 Scoring `403` as `REACHABLE` was the original rule and the bug behind Q648: on 2026-08-03 the probe stamped `PREFLIGHT: OK (HTTP 403)` three times into a failing run, telling the operator to treat a rate-limited runner as a product regression; the re-run was green.
 Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a genuinely broken spec means re-running it forever — which is why `INCONCLUSIVE` exists and stays narrow: it covers only the responses that say *something other than GitHub* answered, and it names the one artifact (the body) that resolves it.
 
-**`BLOCKED` spans two layers, and the guidance under it says which one.** Four of the table's five rows are a response GitHub sent, which means the TCP connection and the TLS handshake both completed; the transport-error row is the one where nothing answered.
+**`BLOCKED` spans two layers, and the guidance under it says which one.** Four of the table's five rows are a response that arrived, which means the TCP connection and the TLS handshake both completed; the transport-error row is the one where nothing answered.
 Both score `BLOCKED`, and they support opposite inferences: a transport error is the probe finding a dial-level failure, while a 403 is the probe proving the dial *succeeded*.
 A proxy CONNECT 502 is a `net.DialTimeout` that never reached the HTTP layer, so an HTTP refusal cannot explain one.
 
-Measured on the 2026-09-16 kindnet run (job 104998010114), where both proxy-CONNECT specs failed on the identical signature 56 seconds apart: the v1 failure scored `BLOCKED (HTTP 403; x-ratelimit-remaining=0)` and the v2 failure scored `REACHABLE (HTTP 200 in 164ms)`, while the proxy's own logs recorded nine `upstream dial failed … host api.github.com:443 … dial tcp 172.182.252.137:443: i/o timeout` across both replicas throughout.
+Measured on the 2026-09-16 kindnet run (job 104998010114), where both proxy-CONNECT specs failed on the identical signature 56 seconds apart: the v1 failure scored `BLOCKED (HTTP 403; x-ratelimit-remaining=0)` and the v2 failure scored `REACHABLE (HTTP 200 in 164ms)`, while the proxy's own logs recorded nine `upstream dial failed … host api.github.com:443 … dial tcp 172.182.252.137:443: i/o timeout` across its two replicas between 22:22:51Z and 22:24:27Z, ending before either banner was stamped.
+Those nine are the v1 proxy's; the v2 spec's diagnostics dump its AGC Deployments alone and captured no proxy log at all (Q1119), so the `REACHABLE` verdict stood beside no dial-level evidence either way.
 Neither verdict was wrong about the question it answers; the `BLOCKED` one was delivered as an answer to this one, with an instruction on the end (Q1126).
 
 So [`GitHubEgressGuidance`](../../cmd/gmc/test/utils/github_egress.go) takes the status alongside the verdict and emits two different `BLOCKED` strings.
 The HTTP-refusal arm carries the layer caveat and routes a dial-level failure to the [EgressProxy CONNECT attribution](#egressproxy-connect-attribution-q1119) banner; the transport-error arm keeps the dial-level claim, which it earns.
 The verdict token is deliberately not split, since operators grep `BLOCKED`, and neither is the scoring table, which is correct for the question it asks (Q648).
 `github_egress_test.go` pins the split, including that the transport arm must *not* carry the caveat: denying a dial-level cause there would invert the one case where the probe found exactly that.
+
+Whichever verdict this banner stamps, read the [EgressProxy CONNECT attribution](#egressproxy-connect-attribution-q1119) banner for a dial-level failure and this one for a failure that reached GitHub.
 
 #### EgressProxy CONNECT attribution (Q1119)
 
