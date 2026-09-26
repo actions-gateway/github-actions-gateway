@@ -840,10 +840,17 @@ jobs:
             case "$gh_code" in
               2??) echo "  REACHABLE — GitHub served the runner; treat real-GitHub spec failures as real." ;;
               # /zen needs no credentials, so a refusal is about the source address —
-              # the address the in-cluster path NATs through.
+              # the address the in-cluster path NATs through. The layer caveat below
+              # mirrors utils.GitHubEgressGuidance's BLOCKED-with-a-response arm: a
+              # refusal is a response, so it cannot explain a dial-level failure
+              # (Q1126).
               403|408|429|5??)
                 echo "  BLOCKED — GitHub refused or could not serve this runner's address; real-GitHub"
-                echo "  spec failures in this run are infra, not product. Re-run the job." ;;
+                echo "  spec failures in this run are infra, not product. Re-run the job."
+                echo "  Mind the layer: this is an HTTP response, so the TCP connection and the TLS"
+                echo "  handshake completed. It is evidence AGAINST a dial-level cause, not for one."
+                echo "  For a CONNECT 502 or a dial timeout, read the EGRESSPROXY CONNECT ATTRIBUTION"
+                echo "  banner instead (Q1119)." ;;
               *)
                 echo "  INCONCLUSIVE — GitHub answers an unauthenticated /zen with 200 and nothing else,"
                 echo "  so an intermediary answered or the endpoint moved. Read the body." ;;
