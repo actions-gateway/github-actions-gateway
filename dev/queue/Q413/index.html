@@ -2618,7 +2618,7 @@
 
 <h1 id="serve-v2-beside-v2beta1-v2-ga-graduation-phase-2">Serve <code>v2</code> beside <code>v2beta1</code> (v2 GA graduation, Phase 2)<a class="headerlink" href="#serve-v2-beside-v2beta1-v2-ga-graduation-phase-2" title="Permanent link">&para;</a></h1>
 <p>Add the <code>v2</code> version to all five kinds and serve it alongside <code>v2beta1</code>, with the storage version deliberately unmoved.
-This blocks the 1.9 tag and is the second of its two gating rows, landing after Q1085.</p>
+This blocks the 1.9 tag and is now its only gating row: Q1085, the guard that had to land first, shipped in #1980 on 2026-09-26.</p>
 <p><strong>Scoped down to Phase 2 on 2026-09-14.</strong> This row previously carried Phases 1, 2 and 4 together, which meant one <code>1.9-gate</code> row holding work that ships at <code>v2.0.0</code>, so neither release could read its own blockers off the label.
 Phase 4 is now <a href="../Q1107/">Q1107</a>.
 Phase 1 was the soak, and it has produced its evidence.</p>

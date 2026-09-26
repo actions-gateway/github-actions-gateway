@@ -2660,11 +2660,11 @@ Measured 2026-09-04 with the same query over <code>.github/workflows/*.yml</code
 </thead>
 <tbody>
 <tr>
-<td><code>.github/workflows/e2e-reusable.yml:562</code></td>
+<td><code>.github/workflows/e2e-reusable.yml:674:if [[ "$bake_rc" -ne 0 ]]</code></td>
 <td><code>[[ "$bake_rc" -ne 0 ]]</code></td>
 </tr>
 <tr>
-<td><code>.github/workflows/e2e-reusable.yml:723</code></td>
+<td><code>.github/workflows/e2e-reusable.yml:835:if [[ $gh_rc -ne 0 ]]</code></td>
 <td><code>[[ $gh_rc -ne 0 ]]</code></td>
 </tr>
 <tr>
@@ -2682,6 +2682,10 @@ Measured 2026-09-04 with the same query over <code>.github/workflows/*.yml</code
 </tbody>
 </table>
 <p>Whether these are defects is a separate judgement per site, and one of the five is already settled the other way.</p>
+<p>Re-derived 2026-09-26: still five sites across the same three workflows, so the row's population claim holds.
+The two <code>e2e-reusable.yml</code> line numbers had drifted by about 112 lines and are re-pointed above.
+They were filed as bare <code>path:N</code> citations, which <code>queue.py lint</code> can only check against truncation, so nothing reported them for three weeks -- the three that carry no fragment and did not drift look identical to the two that did.
+Each now carries the line's own text.</p>
 <p><strong><code>.github/workflows/release-freeze-watch.yml:79</code> is correct as written; do not guard it.</strong> Its own comment at lines 74 to 78 says a signal death belongs inside that bucket: exit 2 is "could not measure", and "anything above it is the delegate crashing (126 not executable, 137 killed) rather than exiting", which fails the job loudly instead of reaching a report step that would read any non-zero as a spent candidate.
 A <code>die_if_killed</code>-shaped guard here would abort on precisely the case the classifier is written to catch, turning a working path into a broken one.
 Read 2026-09-04 from the workflow; Q1006's suite asserts both directions against real deaths, a 126 by removing the delegate's executable bit and a 137 by <code>kill -KILL $$</code>.</p>

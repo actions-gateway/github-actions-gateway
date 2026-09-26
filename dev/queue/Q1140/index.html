@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q948/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1140/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing asserts a path filter covers the inputs its gated jobs read - GitHub Actions Gateway</title>
+        <title>Pre-pull hit predicate trusts the cache layer, not the files it needs - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-asserts-a-path-filter-covers-the-inputs-its-gated-jobs-read" class="md-skip">
+        <a href="#pre-pull-hit-predicate-trusts-the-cache-layer-not-the-files-it-needs" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing asserts a path filter covers the inputs its gated jobs read
+              Pre-pull hit predicate trusts the cache layer, not the files it needs
             
           </span>
         </div>
@@ -2579,6 +2579,47 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-class-and-why-the-two-fixes-do-not-close-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The class, and why the two fixes do not close it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-guard-would-be-and-why-this-is-not-yet-a-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a guard would be, and why this is not yet a task
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,28 +2638,27 @@
   
 
 
-<h1 id="nothing-asserts-a-path-filter-covers-the-inputs-its-gated-jobs-read">Nothing asserts a path filter covers the inputs its gated jobs read<a class="headerlink" href="#nothing-asserts-a-path-filter-covers-the-inputs-its-gated-jobs-read" title="Permanent link">&para;</a></h1>
-<p>Every assertion runs pattern → repo: the registry is complete, workspace filters cover <code>go.work</code>, patterns pin live paths, duplicated lists agree, globstars expand.
-None runs the reverse, so an input a gated job reads and no pattern matches is invisible — the gate then goes green by skipping, which the file's own header calls the most expensive false negative.
-Four instances so far, all found by hand: Q881 (a tree, <code>docs/plan/*.md</code> against a filter naming two files in it), Q947 (two scripts a job runs, fixed), Q1004 (a directory <code>manifest-validate</code> lints that its own filter never named, fixed), and <code>mk/gate-lists.mk</code> below.
-The tree case needs a hand-kept script → tree map, so the design decision is how to keep that map from going stale the way the lists it guards do.</p>
-<p><strong>The fourth is the sharpest, because the uncovered input is not something its gates happen to read: it is their whole subject.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mk/gate-lists.mk"><code>mk/gate-lists.mk</code></a> is named by two path filters in the workflow tree, both in <code>manifest-validate.yml</code>: <code>dashboards</code> and <code>dashboard_tables</code>.
-Neither job whose subject it is names it: <code>gate-lists</code> runs <code>make gate-lists-check</code> behind doc-links.yml's <code>docs</code> filter, and the shellcheck job runs <code>make scripts-test</code>, and so <code>gate-list-test.sh</code>, behind unit-test.yml's <code>scripts</code> filter.
-The registry file's own header says every gate- or suite-adding PR appends one entry to it, so the canonical edit to that file is the one that reaches neither gate that reads it.</p>
-<p>Measured 2026-09-03 with this repo's own extractor, over every workflow:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>devtools<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">GOWORK</span><span class="o">=</span>off<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>../.build/pathfilters<span class="w"> </span>./ci/pathfilters<span class="o">)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">for</span><span class="w"> </span>w<span class="w"> </span><span class="k">in</span><span class="w"> </span>.github/workflows/*.yml<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>./.build/pathfilters<span class="w"> </span>filters<span class="w"> </span><span class="s2">"</span><span class="nv">$w</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-H<span class="w"> </span>--label<span class="o">=</span><span class="s2">"</span><span class="nv">$w</span><span class="s2">"</span><span class="w"> </span><span class="s1">'mk/'</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">true</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">done</span>
-</code></pre></div>
-<p>That returned <code>exhibit:.github/workflows/manifest-validate.yml:dashboards   mk/gate-lists.mk</code> and nothing else when the row was filed.
-Re-derived 2026-09-26: <code>dashboard_tables</code> (added by Q1091) now names the file too, so the sweep returns two lines rather than one.
-Both are still in the same workflow and neither gates a job that reads the gate lists, so the defect is unchanged and only the count moved.
-The two filter entries are <code>.github/workflows/manifest-validate.yml:149:- 'mk/gate-lists.mk'</code> under <code>dashboard_tables</code> and <code>.github/workflows/manifest-validate.yml:157:- 'mk/gate-lists.mk'</code> under <code>dashboards</code>.
-That sweep is the control as well as the finding, which is the half worth keeping: the extractor does report the file where a filter names it, so the empty <code>docs</code> and <code>scripts</code> results are real negatives rather than a query that never matched.
-<code>Makefile</code>, which both filters do name, does not cover it, because a filter matches changed paths textually and the <code>include mk/gate-lists.mk</code> at <code>Makefile:88</code> is not a path.</p>
-<p>Three independent misses rather than one, so the merge queue does not catch it either. doc-links.yml gates the job on <code>docs == 'true' || github.event_name == 'push'</code>: a PR misses on the filter, the queue's candidate misses because a <code>merge_group</code> event is not a push and the filter still decides, and the <code>push:</code> list for main omits <code>mk/**</code> as well.</p>
-<p>Found while confirming the heavy gates on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1829">#1829</a>, itself a <code>DOCS_GATES</code> change (Q1040), which reached both jobs only incidentally by also touching <code>scripts/**</code>.</p>
+<h1 id="pre-pull-hit-predicate-trusts-the-cache-layer-not-the-files-it-needs">Pre-pull hit predicate trusts the cache layer, not the files it needs<a class="headerlink" href="#pre-pull-hit-predicate-trusts-the-cache-layer-not-the-files-it-needs" title="Permanent link">&para;</a></h1>
+<p>A restored cache entry whose contents no longer match what the script expects takes the miss branch silently, so the only symptom is a cold run that looks like a first run.
+Two of the three pre-pulled manifests sat in that state for three months and nothing reported either.</p>
+<h2 id="the-class-and-why-the-two-fixes-do-not-close-it">The class, and why the two fixes do not close it<a class="headerlink" href="#the-class-and-why-the-two-fixes-do-not-close-it" title="Permanent link">&para;</a></h2>
+<p><code>actions/cache</code> reports a hit for the key; the script then checks whether <code>images.tar</code> and <code>images.txt</code> are both present and, finding them absent, re-fetches.
+That degradation is correct behaviour and it is also unobservable: a run that never warms reads exactly like a run whose key legitimately moved.</p>
+<p>Q1125 fixed cert-manager's entry and <a href="../Q1138/">Q1138</a> fixes metrics-server's, both by bumping a key generation.
+Those retire the two known instances.
+Neither stops a third entry skewing the same way the next time a tar is renamed without a key bump, which is precisely how both of these arose -- <a href="https://github.com/actions-gateway/github-actions-gateway/pull/319">#319</a> renamed the tar for all three manifests at once and bumped no key.</p>
+<h2 id="what-a-guard-would-be-and-why-this-is-not-yet-a-task">What a guard would be, and why this is not yet a task<a class="headerlink" href="#what-a-guard-would-be-and-why-this-is-not-yet-a-task" title="Permanent link">&para;</a></h2>
+<p>The shape raised in review was a self-guarding predicate: have the script assert the restored entry carries what it needs, and fail or re-fetch loudly rather than degrade quietly.
+<code>REQUIRE_MANIFEST</code> was the name floated for it.</p>
+<p>Unmeasured on both sides, and that is the whole reason this is a row rather than a diff.
+Nobody has established what the guard should do on a skew -- fail the run, warn and re-fetch, or emit an annotation -- and the answers differ in cost: failing turns a silent slow run into a red one, which is right for a defect nobody notices and wrong for a transient CDN miss the retry would have absorbed.
+Nor is it known whether a third manifest can skew now that the tar names are uniform.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>Declined during independent review of the cert-manager PR rather than folded into it, on the grounds that widening a finished diff for an unmeasured guard is worse than filing it.
+The author left the predicate alone and the reviewer flagged it once as the only finding in that review with no row behind it.
+This row is that filing decision, taken at the groom.</p>
+<p><strong>Settles:</strong> whether a third manifest can still skew is readable off the tree -- compare the tar and index names each of the three pre-pull paths writes against the names the hit predicate checks.
+If they are uniform the class is already closed by construction and this row is a delete, which is the cheapest outcome and the one to check first.</p>
 
 
 

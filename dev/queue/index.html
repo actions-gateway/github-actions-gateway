@@ -2726,6 +2726,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The suite prints <code>FAIL</code>, prints <code>all workflow acting-step tests passed</code>, and exits 0.</td>
 </tr>
 <tr>
+<td><a href="Q1138/">Q1138</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">metrics-server image cache has been dead since the 2026-06-19 tar rename</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>metrics-server-images-${METRICSSERVER_VERSION}</code> restores an entry the pre-pull script cannot use, so every e2e run in both lanes …</td>
+</tr>
+<tr>
 <td><a href="Q1119/">Q1119</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3952,7 +3960,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1135/">Q1135</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Nothing keeps the shell egress banner in step with the Go one</a></td>
-<td><code>ci</code> <code>tests</code></td>
+<td><code>ci</code> <code>tests</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The runner-host GitHub egress verdict is implemented twice, and only one copy is tested.</td>
@@ -3968,18 +3976,18 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1137/">Q1137</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/github_egress.go">Preflight <code>BLOCKED</code> asserts in-cluster egress is refused too, unmeasured</a></td>
-<td><code>ci</code> <code>docs</code></td>
+<td><code>ci</code> <code>docs</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Both <code>BLOCKED</code> arms of <code>GitHubEgressGuidance</code> tell the operator that the in-cluster path "NATs through the same address, so it is refused …</td>
 </tr>
 <tr>
-<td><a href="Q1138/">Q1138</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">metrics-server image cache has been dead since the 2026-06-19 tar rename</a></td>
-<td><code>ci</code></td>
+<td><a href="Q1140/">Q1140</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/prepull-manifest-images.sh">Pre-pull hit predicate trusts the cache layer, not the files it needs</a></td>
+<td><code>ci</code> <code>tests</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>metrics-server-images-${METRICSSERVER_VERSION}</code> restores an entry the pre-pull script cannot use, so every e2e run in both lanes …</td>
+<td>A restored cache entry whose contents no longer match what the script expects takes the miss branch silently, so the only symptom is a cold …</td>
 </tr>
 </tbody>
 </table>

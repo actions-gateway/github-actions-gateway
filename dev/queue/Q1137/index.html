@@ -2631,6 +2631,9 @@ That is the whole task: establish whether an unauthenticated per-IP 429/403 pred
 The layer split settled <em>which layer</em> a <code>BLOCKED</code> verdict speaks at; this row asks whether the verdict's claim about the in-cluster path holds at all.</p>
 <p>Raised in independent review of the preflight-layer PR, which deliberately left it alone rather than edit an operator instruction on an unmeasured hunch.
 Any change here moves a string two unit tests pin, so it lands with its own test update.</p>
+<p><strong>Measure:</strong> drive the in-cluster path while runner egress is refused and record whether it is refused too.
+The claim is about a NAT the row has never observed, so no precedent in the repo can settle it and no preference should -- the answer decides whether the banner keeps an operator instruction or drops it.
+A kind lane with the egress policy applied is the cheapest venue; say in the row which lane was used, because the two CNI lanes NAT differently and an answer from one is not an answer for both.</p>
 
 
 

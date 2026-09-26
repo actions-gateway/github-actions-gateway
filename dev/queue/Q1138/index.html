@@ -2653,6 +2653,8 @@ Calico's lane is per-PR on NetworkPolicy and proxy paths, so it can go quiet lon
 The key bump is therefore the only repair available, not one option among several.</p>
 <p>Eviction on inactivity is GitHub's documented policy rather than something measured here, and which eviction took calico's June entry, inactivity or LRU against the repository cache-size limit (264 entries at measurement), is not established and does not change the conclusion.</p>
 <p>Raised in independent review of the cert-manager PR, which found the dead entry while checking that its own generation bump was necessary.</p>
+<p><strong>Promoted out of the tail on 2026-09-26.</strong> It was filed at the tail mid-batch, where filing is cheap and ranking is not.
+The cost is paid by every e2e run in both lanes rather than once, and the fix is a single token, so the placement was wrong by both of the first two rank terms.</p>
 
 
 

@@ -2632,6 +2632,9 @@ A file-backed ledger: <code>fail()</code> and <code>pass()</code> append a line 
 That suite also gained two controls this one still lacks, and both belong here as part of the same change: a report count, so a case that vanished fails rather than shrinking the log, and a <code>registry-complete</code> line keyed on the registry's own findings rather than the global count, so a red run can still tell "the registry assertion passed" from "it never reported".</p>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <p>Found by the independent reviewer of PR #1976 in the sibling suite that PR adds, and confirmed here by mutation rather than by reading.
+That suite is merged, so the fix this row copies is now on <code>main</code> rather than in flight.</p>
+<h1 id="1981-also-established-that-the-registry-block-emits-a-verdict-on-three-paths-not-one----an-unclassified-step-a-stale-entry-and-an-entry-whose-live-check-fails----each-measured-separately-at-19-ok-and-2-fail">1981 also established that the registry block emits a verdict on three paths, not one -- an unclassified step, a stale entry, and an entry whose live check fails -- each measured separately at 19 ok and 2 FAIL.<a class="headerlink" href="#1981-also-established-that-the-registry-block-emits-a-verdict-on-three-paths-not-one----an-unclassified-step-a-stale-entry-and-an-entry-whose-live-check-fails----each-measured-separately-at-19-ok-and-2-fail" title="Permanent link">&para;</a></h1>
+<p>Port the <code>registry-complete</code> line with all three named, because a comment naming one of them is the defect #1981 was opened to fix.
 Not folded into that PR: its concern is driving publish.yml's bodies, and this is a defect in an already-merged suite.
 Ranked at the head because a gate that cannot fail is trusted by every PR that touches <code>.github/workflows/</code> until it is fixed.</p>
 

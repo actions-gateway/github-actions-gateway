@@ -2608,10 +2608,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#two-candidates-neither-settled" class="md-nav__link">
+  <a href="#three-candidates-none-settled" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two candidates, neither settled
+        Three candidates, none settled
       
     </span>
   </a>
@@ -2661,7 +2661,7 @@ The Go copy's test cannot see that.</p>
 <p>Q1126 shipped the layer caveat into both copies: an HTTP refusal arrives over a completed TCP connection, so it is evidence against a dial-level cause rather than for one.
 The Go side now has a test that fails if the two <code>BLOCKED</code> arms collapse back into one, and the shell side has the same sentences with nothing asserting they stay.
 A future edit to either can drift the pair silently, which is the state Q1126 was filed out of.</p>
-<h2 id="two-candidates-neither-settled">Two candidates, neither settled<a class="headerlink" href="#two-candidates-neither-settled" title="Permanent link">&para;</a></h2>
+<h2 id="three-candidates-none-settled">Three candidates, none settled<a class="headerlink" href="#three-candidates-none-settled" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Extend the workflow-step harness.</strong> <code>scripts/ci/workflow-step-body.sh</code> already extracts a step's body and <code>workflow-acting-steps-test.sh</code> drives one with stubs on <code>PATH</code>.
   Its header derives its subject deliberately as the steps that <strong>act</strong> rather than report, on proportionality grounds, and this step reports.
@@ -2669,10 +2669,15 @@ A future edit to either can drift the pair silently, which is the state Q1126 wa
   Note the step runs under <code>set +e</code> and dumps a dozen <code>kubectl</code> commands, so a case needs stubs for all of them.</li>
 <li><strong>Assert the text instead.</strong> A gate that requires the distinctive sentences of each <code>GitHubEgressGuidance</code> arm to appear in the workflow's matching arm is far smaller than driving the body, and catches drift rather than behaviour.
   It buys less and costs a fraction; whether that trade is right is the question this row is for.</li>
+<li><strong>Drive it elsewhere, with a step-level registry of its own.</strong> <code>scripts/ci/workflow-publish-steps-test.sh</code> (#1976, merged 2026-09-26) does exactly this for <code>publish.yml</code>: a second suite with its own <code>step_registry()</code> classifying each step as driven, driven-elsewhere, undrivable or read-only.
+  So the first candidate's widening problem has a third answer that needs no widening -- a reporting step is classified in a suite that expects reporting steps, rather than admitted to one whose header scopes it to steps that act.
+  Found while reviewing that PR; not in the row when it was filed.</li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <p>Not a flake: no run has failed on this, and the defect is a silent divergence rather than a failure.
 The measurement behind the class is on the 2026-09-16 kindnet run (job 104998010114), recorded in <a href="../../development/testing/#runnergithub-egress-attribution-q352">testing.md</a>.</p>
+<p><strong>Settles:</strong> <code>scripts/ci/workflow-publish-steps-test.sh</code> on <code>main</code> is the worked precedent for the third candidate, so the choice is readable off the repo rather than needing a measurement or a preference.
+Read it before picking, and record which candidate won and why in this row.</p>
 
 
 

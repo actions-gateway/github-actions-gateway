@@ -2855,6 +2855,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Local preview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#offline-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline export
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3706,6 +3723,7 @@ Convert against 20px, or measure, before filing a size finding.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>make<span class="w"> </span>docs-export<span class="w">  </span><span class="c1"># offline copy of the release scope, plus a zip, in site-export/</span>
 </code></pre></div>
 <p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain never touches the host Python — <code>python3</code> is the only host prerequisite (<code>scripts/ci/check-tools.sh</code>, extended tier).
 On Debian/Ubuntu the stdlib venv module ships separately: <code>apt-get install python3-venv</code> if <code>python3 -m venv</code> fails.</p>
@@ -3713,6 +3731,15 @@ On Debian/Ubuntu the stdlib venv module ships separately: <code>apt-get install 
 <p><strong><code>make check</code> does not run <code>make docs-build</code>.</strong> The fast gate covers <code>doc-links</code>, which resolves links and anchors against the Markdown; MkDocs' own strict validation runs in CI (<code>pages.yml</code>) and locally only when you invoke it.
 A change that alters rendering is therefore not verified by a green <code>make check</code> alone.
 Run <code>make docs-build</code> too, and for the card grids or a wide table, serve the site and look.</p>
+<h3 id="offline-export">Offline export<a class="headerlink" href="#offline-export" title="Permanent link">&para;</a></h3>
+<p><code>make docs-export</code> builds the release scope into <code>site-export/actions-gateway-site/</code> and zips it to <code>site-export/actions-gateway-site.zip</code>, for reading the site with no server and no network.
+Unzip it and open <code>index.html</code>.</p>
+<p>It builds from <code>mkdocs-offline.yml</code>, which inherits <code>mkdocs.yml</code> and adds Material's <code>offline</code> plugin.
+That plugin rewrites every link to a relative <code>.html</code> path and inlines the search index, so navigation and search work from disk; fonts, CSS, and JavaScript are already self-hosted.</p>
+<p><strong>A link written as raw HTML is the one exception.</strong> MkDocs never resolves it, so it keeps the live site's directory form (<code>../operations/foo/</code>), which opens a folder listing from disk.
+<code>hooks/offline_links.py</code> rewrites those to the page's <code>.html</code> file, and only when directory URLs are off, so the live site is untouched.
+After building, the target checks that every local <code>href</code> and <code>src</code> in the export names a file on disk and fails if one does not, listing the page and the link; <code>mkdocs --strict</code> cannot see these.
+Three things still need the live site: the version selector (it reads mike's <code>versions.json</code>), the outbound GitHub links, and the announce bar, which is frozen at the newest tag in your checkout.</p>
 <h2 id="the-two-link-gates">The two link gates<a class="headerlink" href="#the-two-link-gates" title="Permanent link">&para;</a></h2>
 <p><code>docs/</code> is rendered by two engines with different link semantics, so <strong>one gate cannot cover both</strong> (Q560):</p>
 <table>
