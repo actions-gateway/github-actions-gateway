@@ -153,12 +153,17 @@ extra:
 # item's `target` routinely points outside docs/ (a Go file, a workflow), which
 # is precisely what source_links absolutizes. Appended after it, those links
 # reach the build unrewritten and fail --strict.
+#
+# offline_links.py acts only when directory URLs are off, as in the offline
+# export (mkdocs-offline.yml): it points raw-HTML directory links at the page's
+# .html file. See website.md § Offline export.
 hooks:
   - hooks/release_version.py
   - hooks/release_gates.py
   - hooks/queue_page.py
   - hooks/source_links.py
   - hooks/backlog_link.py
+  - hooks/offline_links.py
 
 # Site-side link gate (Q560). scripts/docs/check-doc-links.sh resolves links the way
 # github.com does; MkDocs resolves them differently, so a link can pass that gate

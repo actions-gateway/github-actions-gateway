@@ -158,7 +158,7 @@ TREE_BANDS = (
     ("product_docs",
      ("docs/design/", "docs/operations/", "docs/releases/", "docs/reference/",
       "docs/assets/", "docs/stylesheets/", "docs/javascripts/", "overrides/"),
-     ("mkdocs.yml", "docs/CNAME", "docs/robots.txt", "docs/README.md",
+     ("mkdocs.yml", "mkdocs-offline.yml", "docs/CNAME", "docs/robots.txt", "docs/README.md",
       "docs/getting-started.md", "artifacthub-repo.yml", "README.md", "DESIGN.md",
       "LICENSE", "NOTICE", "SECURITY.md",
       # The pages MkDocs publishes from the docs/ root.
