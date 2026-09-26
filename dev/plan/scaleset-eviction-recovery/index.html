@@ -2810,7 +2810,7 @@
 The review found the optimization sits on top of a prerequisite that does not exist yet, so this plan covers both and sequences them.</p>
 <h2 id="why-this-matters">Why this matters<a class="headerlink" href="#why-this-matters" title="Permanent link">&para;</a></h2>
 <p><code>v2beta1</code> is ScaleSet-only, so the scale-set tier is the product's only future acquisition path.
-Classic is on the removal track for <code>v2.0.0</code> (<a href="../release-1.3/">release-1.3.md</a>).
+Classic is on the removal track for <code>v2.0.0</code> (<a href="../archive/release-1.3/">release-1.3.md</a>).
 Eviction recovery works on classic and does not exist on scale-set, which means the capability is scheduled to disappear with the protocol it was built for.</p>
 <p>Worker right-sizing (<a href="../runner-sizing-profiles/">runner-sizing-profiles.md</a>) compounds this.
 Tighter memory limits raise OOM-kill probability, which is one of the two ways a worker pod gets evicted.
@@ -3017,7 +3017,7 @@ Each planned step and what it became:</p>
 <p>Phase 3 additionally requires a measured before/after latency on dogfood, and a metric that distinguishes the two paths.</p>
 <h2 id="release-positioning">Release positioning<a class="headerlink" href="#release-positioning" title="Permanent link">&para;</a></h2>
 <p>Not a 1.3 gate.
-<a href="../release-1.3/">release-1.3.md</a> is scoped to the right-sizing headline, the <code>v2.0.0</code> deprecation notice, and release mechanics, and every gating row is S-sized with a known outcome.
+<a href="../archive/release-1.3/">release-1.3.md</a> is scoped to the right-sizing headline, the <code>v2.0.0</code> deprecation notice, and release mechanics, and every gating row is S-sized with a known outcome.
 This work is probe-first with an unknown outcome, and its live-GitHub probes would contend for the same dogfood session the release's headline validation needed.
 That validation is now done (Q359 closed 2026-07-25), so the contention argument no longer applies; the probe-first/unknown-outcome argument still does.</p>
 <p>Per <a href="../../development/maintaining-backlog/#dont-pre-assign-release-versions-to-backlog-items">maintaining-backlog.md</a>, no release label is assigned until a release is concretely scoped in a plan doc.

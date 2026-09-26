@@ -2870,14 +2870,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
 </tr>
 <tr>
-<td><a href="Q1085/">Q1085</a></td>
-<td><a href="../plan/v2beta1-retirement/">v2beta1 deprecation notice, alias reject, and the pre-upgrade check</a></td>
-<td><code>feature</code> <code>1.9-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q1082 decided that <code>v2beta1</code> is not served past <code>v2.0.0</code>, which puts three pieces of work on the critical path that were optional while the …</td>
-</tr>
-<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
@@ -3956,6 +3948,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Reading a workflow job's log to confirm a gate actually ran is the instrument …</td>
+</tr>
+<tr>
+<td><a href="Q1139/">Q1139</a></td>
+<td>Let a pin-bearing page cite a measured kubectl version</td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>check-release-pins.sh</code> asserts that every release-version literal on the five pin-bearing pages names the current release, so a …</td>
 </tr>
 </tbody>
 </table>

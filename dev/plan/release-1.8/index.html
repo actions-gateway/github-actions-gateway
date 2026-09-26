@@ -2765,7 +2765,7 @@
 <p><strong>Status: scoped 2026-09-07; every gating item is met.
 <code>v1.8.0-rc.1</code> was cut and validated on dogfood 2026-09-12 and still covers <code>main</code>, so the tag is a decision rather than a blocked one.</strong> What remains is the riding evidence: criteria 2 and 3 have no reading, and taking them needs another window against this same candidate, not a new one.
 The one gating row, Q1029, the scale-set drain recovery that was lost when no reconcile started inside a terminating worker's window, closed the same day: recovery now runs off the worker-pod watch event (<a href="#the-gating-row-q1029">below</a>).
-Three rows rode without gating: the two v2 GA soak readings, Q1059 and Q1060, both now closed on positive readings, and <a href="../../queue/Q1085/">Q1085</a>'s release-notes line.
+Three rows rode without gating: the two v2 GA soak readings, Q1059 and Q1060, both now closed on positive readings, and Q1085's release-notes line.
 The Phase 2 alias decision, Q452, closed 2026-09-08 and is what put Q1085 on the ledger (<a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">the decision</a>).
 The bump is measured rather than assumed: <code>semver-floor.sh v1.7.0</code> read 99 commits and <strong>FLOOR: MINOR</strong> on 2026-09-12, so the tag is <code>v1.8.0</code>.
 Four <code>feat</code>s on the released surface set it: Q1062, Q1011, Q988 and Q994, the last of which landed after this was scoped and rides unlabelled.
@@ -2819,7 +2819,7 @@ The fix does not depend on which step inside it was slow.</p>
 </tbody>
 </table>
 <p>A reading that comes back negative is the release working: it names the shape fix <code>v2beta1</code> still needs, which resets the soak clock and is exactly what GA is gated on finding first.</p>
-<p><strong><a href="../../queue/Q1085/">Q1085</a>'s notice rides here too, and only part of it is done.</strong> Deciding Q452 shipped the notice's docs half — the operator pages, both enum godocs and the admission warning now name <code>v2.0.0</code> as the removal release — which is what makes this tag the one-release-ahead announcement for <code>v2beta1</code> and the aliases.
+<p><strong>Q1085's notice rides here too, and only part of it is done.</strong> Deciding Q452 shipped the notice's docs half — the operator pages, both enum godocs and the admission warning now name <code>v2.0.0</code> as the removal release — which is what makes this tag the one-release-ahead announcement for <code>v2beta1</code> and the aliases.
 What 1.8 still owes is the release-notes line naming that removal, since a notice nobody reads in the release body is a notice by technicality.
 Q1085's other two halves, the admission reject and the pre-upgrade alias check, are deadlined at 1.9 and land here if there is room (<a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">why the deadline is 1.9</a>).</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
@@ -2858,7 +2858,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
 <td>✅ closed 2026-09-08</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1085/">Q1085</a></td>
+<td>Q1085</td>
 <td>The <code>v2beta1</code> removal notice: operator docs, enum godoc and admission warning name <code>v2.0.0</code></td>
 <td>rides</td>
 <td>✅ both halves shipped: docs with Q452, the release-notes line in <code>v1.8.0.md</code>. Items 2 and 3 are 1.9</td>
@@ -2886,7 +2886,7 @@ Q1085's other two halves, the admission reject and the pre-upgrade alias check, 
    All five <code>v2beta1</code> kinds reconciled on the dogfood cluster, the manufactured <code>EgressProxy</code> among them, and the standing tenant's <code>ActionsGateway</code> round-tripped both served versions with identical specs.
    The table is the renderer's output pasted unedited rather than a retyping of the gate's terminal output, so what the plan claims and what the window measured cannot drift.</li>
 <li>✅ <strong>Q452 decided</strong> (2026-09-08): <code>v2</code> omits both aliases, because the premise the question rested on was itself revisited and <code>v2beta1</code> is no longer served past <code>v2.0.0</code>.
-   The losing option's cost is recorded beside it in <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md</a>, and the work the answer puts on the critical path is <a href="../../queue/Q1085/">Q1085</a>.
+   The losing option's cost is recorded beside it in <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md</a>, and the work the answer puts on the critical path is Q1085.
    The API surface review in item 5 no longer expects no change: this release carries the enum godoc and admission-warning corrections that follow from it.</li>
 <li>◐ <strong>The two dogfood-window rows</strong> got their window from the <code>v1.8.0-rc.1</code> candidate, and it produced one of the two readings; the second window on 2026-09-14 did not change this item's verdict, because the row still outstanding is the one that needs live workers.
    Q1038's <code>mirror-timing</code> probe took its first live run against a real mirror in the candidate's Kata e2e leg and returned <code>SEPARATED</code> (hits ≤46ms, misses ≥147ms, 4 references, one cold and one warm fetch each) without failing the job, which closes it and settles the placement question as <code>e2e-reusable.yml</code>.

@@ -2609,7 +2609,7 @@ An apiserver refuses to drop a version still named in <code>storedVersions</code
 <p>The deliverable is the migration itself plus the evidence it completed: rewrite every stored object of all five kinds, prune <code>storedVersions</code> to <code>["v2"]</code>, and record the reading.
 Decide the mechanism first, and the choice is the row's first question: the <code>StorageVersionMigrator</code> is a separate controller with its own CRD and its own install story, while a read-write sweep over each kind needs no new component and no new dependency.
 Both need the same evidence, so <code>storedVersions</code> is the assertion either way.</p>
-<p>The pre-upgrade alias check in <a href="../Q1085/">Q1085</a> is a precondition rather than a neighbour: an <code>EgressProxy</code> naming <code>CiliumFQDN</code> or <code>CalicoFQDN</code> cannot be rewritten as <code>v2</code> at all, because <code>v2</code> does not define those values (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>).
+<p>The pre-upgrade alias check in Q1085 is a precondition rather than a neighbour: an <code>EgressProxy</code> naming <code>CiliumFQDN</code> or <code>CalicoFQDN</code> cannot be rewritten as <code>v2</code> at all, because <code>v2</code> does not define those values (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>).
 Running this before that check has cleared is how one unmigrated object stalls the migration partway.</p>
 
 

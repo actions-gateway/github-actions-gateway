@@ -2739,7 +2739,7 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 </tr>
 <tr>
 <td><strong>1.9</strong></td>
-<td>The Rule 4b overlap: <code>v2</code> served beside <code>v2beta1</code>, storage still <code>v2beta1</code>. The admission reject plus pre-upgrade check from <a href="../../queue/Q1085/">Q1085</a>, then <a href="../v2-ga/">v2-ga.md</a> Phase 2</td>
+<td>The Rule 4b overlap: <code>v2</code> served beside <code>v2beta1</code>, storage still <code>v2beta1</code>. The admission reject plus pre-upgrade check from Q1085, then <a href="../v2-ga/">v2-ga.md</a> Phase 2</td>
 <td><a href="../release-1.9/">release-1.9.md</a></td>
 </tr>
 <tr>
@@ -2781,7 +2781,7 @@ It is already the largest this project asks anyone to make, carrying the <code>v
 <p>The overlap release is also the only place the <code>v2beta1</code> ↔ <code>v2</code> conversion edge runs before it is mandatory.
 Phase 1's soak validates <code>v2beta1</code>'s shape; it says nothing about a conversion that does not exist yet.</p>
 <p>So 1.9 serves <code>v2</code> beside <code>v2beta1</code> and changes no storage version, and the storage marker moves from Phase 2 to Phase 3.
-It is deliberately thin: the work is Phase 2, which is already scoped, plus the two operator-facing halves of <a href="../../queue/Q1085/">Q1085</a> that want to land before the removal rather than with it.</p>
+It is deliberately thin: the work is Phase 2, which is already scoped, plus the two operator-facing halves of Q1085 that want to land before the removal rather than with it.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
 <p>Not scheduled, and that is a decision rather than an oversight.
 Each waits on a real signal, and each carries a revive trigger on the backlog rather than a release:</p>

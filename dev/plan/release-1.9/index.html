@@ -2695,10 +2695,10 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 </thead>
 <tbody>
 <tr>
-<td><a href="../../queue/Q1085/">Q1085</a></td>
+<td>Q1085</td>
 <td>Admission rejects new <code>CiliumFQDN</code>/<code>CalicoFQDN</code> writes, and the pre-upgrade alias check joins the checklist</td>
 <td><code>1.9-gate</code></td>
-<td>🔲 ready, and first: it is the guard for the hazard Q413 introduces</td>
+<td>✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the <a href="../../operations/upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">Pre-Upgrade Validation Checklist</a></td>
 </tr>
 <tr>
 <td><a href="../../queue/Q413/">Q413</a></td>
@@ -2727,7 +2727,7 @@ That is a reading rather than a decision: whether anything <em>should</em> ride 
 <li><strong><a href="../../queue/Q413/">Q413</a>'s Phase 2 has landed</strong> with <code>v2</code> served on all five kinds and <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers.</li>
 <li><strong>The conversion round-trips both directions</strong> across <code>v2beta1</code> ↔ <code>v2</code> on real objects, not only in unit tests.
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.</li>
-<li><strong><a href="../../queue/Q1085/">Q1085</a>'s items 2 and 3 have landed</strong>, and landed before Q413.
+<li><strong>Q1085's items 2 and 3 have landed</strong>, and landed before Q413.
    1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
 <li><strong>The published tag serves both versions</strong>, which is the Rule #4b evidence <code>v2.0.0</code> depends on.
    Record it here, since <code>v2.0.0</code>'s own pre-flight cannot re-derive that a <em>previous</em> release served both.</li>

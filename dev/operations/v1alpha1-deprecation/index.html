@@ -2963,8 +2963,11 @@ The enforced policy is identical either way — each alias pins its namesake bac
 <p>This is no longer optional, and the reason is mechanical rather than procedural.
 <code>v2</code> cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
 One unmigrated <code>EgressProxy</code> therefore breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the entire cluster, not just for itself.
-A pre-upgrade check that finds them is tracked as <a href="../../queue/Q1085/">Q1085</a>; until it ships, <code>kubectl get egressproxies -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.spec.egressPolicyMode}{"\n"}{end}'</code> lists what to look at.</p>
-<p>The admission webhook warns on every write that still names a deprecated value, and the warning names the removal release.</p>
+A single <code>kubectl get</code> of one healthy pool still works, which is what makes the failure diagnosable but does not make it survivable: <code>kubectl get egressproxies -A</code> is what everything from a dashboard to a GitOps reconcile issues.
+Measured 2026-09-21 against a real apiserver, on the one conversion failure the current tree can produce: with one unconvertible object stored beside two healthy ones, both the namespaced and the cluster-wide <code>LIST</code> returned zero items and an error, while a targeted <code>GET</code> of each healthy neighbour succeeded.</p>
+<p><strong>Find them with the <a href="../upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">pre-upgrade alias check</a></strong> in the Pre-Upgrade Validation Checklist, which prints one line per pool to migrate and nothing when the cluster is clean.</p>
+<p>The admission webhook <strong>rejects</strong> a write that introduces a deprecated value (a create, or an update that switches onto one), and the rejection names the removal release and the replacement.
+A pool that already stores one is admitted unchanged, with the warning, so an operator mid-migration can still re-apply it and edit the rest of its spec.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>All three are deprecated and still fully served.</strong> No release has removed any of them.

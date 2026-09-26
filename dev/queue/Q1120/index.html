@@ -2648,7 +2648,7 @@ Re-derive both before acting on the ratio, and note the denominator can grow wit
 <li><code>docs/index.md</code> and <code>docs/why-gag.md</code>, built into <code>badge_pages</code> at <code>scripts/docs/check-roadmap.sh:48:for page in</code> and passed to <code>roadmapcheck</code>, which validates badge markup on them (<code>devtools/docs/roadmapcheck/badges.go</code>).</li>
 <li><code>docs/development/flake-watch-retired.md</code> and <code>docs/plan/README.md</code>, held as <code>LEDGER</code> and <code>PLAN_INDEX</code> at <code>scripts/docs/check-queue-rules.py:63:LEDGER =</code> and <code>:64</code>.</li>
 </ul>
-<p><strong>The second pair is the severity argument.</strong> Both are <code>read_text()</code> at <code>scripts/docs/check-queue-rules.py:399:ledger =</code> and the line after behind <code>if ... is_file() else ""</code>, so an unreadable or changed file yields empty rather than failing.
+<p><strong>The second pair is the severity argument.</strong> Both are <code>read_text()</code> at <code>scripts/docs/check-queue-rules.py:415:ledger =</code> and the line after behind <code>if ... is_file() else ""</code>, so an unreadable or changed file yields empty rather than failing.
 Rule 8 (a flake item may not vanish) and rule 9 (a plan's last item obliges its index row) then return a verdict computed against nothing, and the gate reports <code>ok</code>.
 That is a silent wrong verdict, not a skipped check.</p>
 <p><strong>Separate from <a href="../Q948/">Q948</a>, which is the general reverse assertion.</strong> This row is four entries in two lists, and Q948 is the gate that would find them.

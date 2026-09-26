@@ -2730,7 +2730,7 @@ The analysis below is kept as taken, before the decision, so the cost that was a
 <p><strong>What the decision settles.</strong> <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a> flips to <em><code>v2</code> omits the aliases</em>, GA is born clean, and the aliases stop being on their own clock: they ride <code>v2.0.0</code> with <code>v1alpha1</code>, <code>v2alpha1</code> and classic.
 The published <code>v3.0.0</code> floor is walked back to <code>v2.0.0</code> across the operator docs, the enum godoc and the admission warning.</p>
 <p><strong>What it does not settle, and what it therefore obliges.</strong> Rule #4b is unaffected by semver: storage cannot advance to <code>v2</code> until a release has shipped serving both <code>v2beta1</code> and <code>v2</code>, so the overlap release below is still required and the deprecation notice still has to precede it.
-That package is <a href="../../queue/Q1085/">Q1085</a>: the notice, the admission change from warn to reject, and the pre-upgrade alias check.
+That package is Q1085: the notice, the admission change from warn to reject, and the pre-upgrade alias check.
 It is now on the critical path rather than optional.
 The check is load-bearing for a mechanical reason given in <a href="../v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">v2-ga.md</a>: one stored object naming an alias fails the whole conversion request that carries it, so it breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the cluster rather than for itself.</p>
 <hr />

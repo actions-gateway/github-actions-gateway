@@ -4635,8 +4635,8 @@ The GMC cannot know those ranges, so it names the gap: <code>GitHubEgressIncompl
 Supply the ranges in <code>spec.destinationCIDRs</code> — allowlisting them under <code>--allowed-egress-cidrs</code> first, since that field is platform-gated — or move the pool to an FQDN mode, which carries the host for you.
 See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">troubleshooting</a>.</p>
 </blockquote>
-<p><strong>Deprecated <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> The earlier per-CNI enum values still work: each pins its namesake backend regardless of <code>--fqdn-policy-backend</code>, so existing <code>EgressProxy</code> objects keep behaving exactly as before.
-They are <strong>deprecated</strong> — the admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code>.
+<p><strong>Deprecated <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> The earlier per-CNI enum values still work on a pool that already stores one: each pins its namesake backend regardless of <code>--fqdn-policy-backend</code>, so existing <code>EgressProxy</code> objects keep behaving exactly as before, and the admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code>.
+<strong>A new one is rejected</strong>, whether by a create or by an update that switches a pool onto an alias; re-applying an unmigrated pool unchanged, and migrating it off, are both still admitted.
 Migrate by changing the tenant field to <code>FQDN</code> and setting the matching operator backend.</p>
 <blockquote>
 <p><strong>They are removed at <code>v2.0.0</code></strong>, alongside <code>v1alpha1</code>, <code>v2alpha1</code> and classic acquisition.
