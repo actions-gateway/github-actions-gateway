@@ -606,6 +606,10 @@ Unzip it and open `index.html`.
 
 It builds from `mkdocs-offline.yml`, which inherits `mkdocs.yml` and adds Material's `offline` plugin.
 That plugin rewrites every link to a relative `.html` path and inlines the search index, so navigation and search work from disk; fonts, CSS, and JavaScript are already self-hosted.
+
+**A link written as raw HTML is the one exception.** MkDocs never resolves it, so it keeps the live site's directory form (`../operations/foo/`), which opens a folder listing from disk.
+`hooks/offline_links.py` rewrites those to the page's `.html` file, and only when directory URLs are off, so the live site is untouched.
+After building, the target checks that every local `href` and `src` in the export names a file on disk and fails if one does not, listing the page and the link; `mkdocs --strict` cannot see these.
 Three things still need the live site: the version selector (it reads mike's `versions.json`), the outbound GitHub links, and the announce bar, which is frozen at the newest tag in your checkout.
 
 ## The two link gates
