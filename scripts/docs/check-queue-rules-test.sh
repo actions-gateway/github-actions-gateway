@@ -201,6 +201,26 @@ git -C "$R" rm -q docs/queue/Q1.md
 git -C "$R" commit -qm "complete the plan's last item, anchored"
 expect 1 "$R" "rule 9: an anchored last item still obliges the flip" "rule 9: Q1"
 
+# A plan is named all over the index -- another plan's Status cell links it, and
+# so does the Archive table's prose. The rule must read the row the plan is
+# *about*, which is the one whose first cell links it, not whichever line
+# mentioning it sorts earliest. Closing Q1085 hit this: v2beta1-retirement.md
+# resolved to the v2-ga.md row above it, whose ⚠️ is correct and about a
+# different plan.
+R="$TMP/r9e"; newrepo "$R"
+item "$R" Q1 "ci" "../plan/thing.md"
+item "$R" Q2 "docs"
+printf '| [other.md](other.md) | Links [thing.md](thing.md) | ⚠️ Open |\n' >> "$R/docs/plan/README.md"
+printf '| [thing.md](thing.md) | A thing | ✅ Done |\n' >> "$R/docs/plan/README.md"
+grep -q 'Links \[thing.md\](thing.md) | ⚠️ Open' "$R/docs/plan/README.md" || {
+    printf 'FAIL fixture: the mentioning row did not land in %s/docs/plan/README.md\n' "$R" >&2
+    exit 1
+}
+seal "$R"
+git -C "$R" rm -q docs/queue/Q1.md
+git -C "$R" commit -qm "complete the plan's last item"
+expect 0 "$R" "rule 9 control: an open row merely *mentioning* the plan is not its row"
+
 # --- rule 11: the label vocabulary is closed -------------------------------
 
 R="$TMP/r11"; newrepo "$R"

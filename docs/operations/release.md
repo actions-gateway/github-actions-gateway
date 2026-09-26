@@ -104,7 +104,7 @@ A published field whose type changed or whose enum narrowed, and the non-CRD con
 
 - **A security fix users cannot get any other way.** Cut promptly, as a patch off the release branch if `main` carries unrelated risk ([Patch releases and backports](#patch-releases-and-backports)).
 - **A headline capability landed.** Scope a minor around it — one thing an adopter would upgrade *for*, with the rest of the window riding along.
-  That is the [1.3](../plan/release-1.3.md) pattern: worker right-sizing was the headline, and three dozen other changes shipped underneath it.
+  That is the [1.3](../plan/archive/release-1.3.md) pattern: worker right-sizing was the headline, and three dozen other changes shipped underneath it.
 - **User-visible fixes accumulated with no feature.** A patch release.
   The bar is that an operator running the current tag is hitting something already fixed, not that the fix count crossed a number.
 - **Internal-only churn.** Wait.
@@ -1290,7 +1290,7 @@ If `main` is clean and ready to ship, that's the next **minor** (`vX.(Y+1).0`), 
 >
 > The consequence is a rule for the **minor** cut, not the patch: tag `vX.Y.0` from a commit that carries the harness fixes you want the line to keep.
 > Cutting it from an older RC's commit to make the tag byte-match the validated artifact is the trap — it strands every gate fix found *during* that release's validation, which is exactly when gate fixes tend to be found.
-> `v1.3.0` is the worked example: rc.5's validation produced two harness fixes ([Q627](../plan/release-1.3.md#Q627) and the e2e watch deadline), and a `release-1.3` branch cut from rc.5's commit would reproduce both on every future `v1.3.x`.
+> `v1.3.0` is the worked example: rc.5's validation produced two harness fixes ([Q627](../plan/archive/release-1.3.md#Q627) and the e2e watch deadline), and a `release-1.3` branch cut from rc.5's commit would reproduce both on every future `v1.3.x`.
 >
 > Validating an RC whose product code matches `main` is unaffected: the images and CRDs come from the tag, the harness from your checkout, so the two move independently by design.
 

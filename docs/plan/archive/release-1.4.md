@@ -176,7 +176,7 @@ Each green check was re-run against a deliberately wrong identity (a `refs/heads
 ### No candidate had cleared this gate on the first attempt before
 
 Worth stating in the notes because it is checkable and because it is the return on this cycle's release-tooling work, not a lucky run.
-The 1.3 line needed four candidates to produce any verdict at all: rc.1 aborted when the gate's then repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and Q551 instead of a result, rc.3 aborted at `start.sh`'s AGC wait, and rc.4 was "the first verdict any RC in this line has produced" ([release-1.3.md](../release-1.3.md)).
+The 1.3 line needed four candidates to produce any verdict at all: rc.1 aborted when the gate's then repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and Q551 instead of a result, rc.3 aborted at `start.sh`'s AGC wait, and rc.4 was "the first verdict any RC in this line has produced" ([release-1.3.md](release-1.3.md)).
 
 **Scope the claim to what the record supports.** `validate-release.sh` landed 2026-07-12 (Q294, #619), the day `v1.1.0` was tagged, so `v1.0.0` and `v1.1.0` predate it entirely.
 `v1.2.0` had a single RC and the gate did exist by then, but no plan doc records a validation run for it, and no record is not the same as no run.

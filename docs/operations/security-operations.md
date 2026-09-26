@@ -664,8 +664,8 @@ The GMC also re-checks the emitted policy on a bounded cadence (a fraction of th
 > Supply the ranges in `spec.destinationCIDRs` — allowlisting them under `--allowed-egress-cidrs` first, since that field is platform-gated — or move the pool to an FQDN mode, which carries the host for you.
 > See [troubleshooting](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
-**Deprecated `CiliumFQDN` / `CalicoFQDN`.** The earlier per-CNI enum values still work: each pins its namesake backend regardless of `--fqdn-policy-backend`, so existing `EgressProxy` objects keep behaving exactly as before.
-They are **deprecated** — the admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend`.
+**Deprecated `CiliumFQDN` / `CalicoFQDN`.** The earlier per-CNI enum values still work on a pool that already stores one: each pins its namesake backend regardless of `--fqdn-policy-backend`, so existing `EgressProxy` objects keep behaving exactly as before, and the admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend`.
+**A new one is rejected**, whether by a create or by an update that switches a pool onto an alias; re-applying an unmigrated pool unchanged, and migrating it off, are both still admitted.
 Migrate by changing the tenant field to `FQDN` and setting the matching operator backend.
 
 > **They are removed at `v2.0.0`**, alongside `v1alpha1`, `v2alpha1` and classic acquisition.

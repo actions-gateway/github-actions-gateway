@@ -21,15 +21,18 @@ import (
 //     operator's --fqdn-policy-backend. FQDN intent is REJECTED at admission when the
 //     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
 //     closed and loud, never a silent runtime Degraded.
-//   - CiliumFQDN / CalicoFQDN are DEPRECATED aliases retained for backward
-//     compatibility. Each pins its namesake mechanism (a CiliumNetworkPolicy with
-//     toFQDNs, or a Calico NetworkPolicy with destination domains) regardless of the
-//     operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work
-//     and are REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition.
-//     They are enum members of v2alpha1 and v2beta1, both of which v2.0.0 removes,
-//     and the GA v2 version does not define them. Migrate before upgrading: v2 cannot
-//     represent an object naming an alias, and one such object fails the conversion
-//     for every object batched into the same request. See
+//   - CiliumFQDN / CalicoFQDN are DEPRECATED aliases, and admission no longer accepts
+//     a NEW one: a create naming either, or an update that switches onto one, is
+//     REJECTED. An EgressProxy that already stores one is admitted unchanged, with a
+//     warning, so an existing pool keeps working until it is migrated. Each alias pins
+//     its namesake mechanism (a CiliumNetworkPolicy with toFQDNs, or a Calico
+//     NetworkPolicy with destination domains) regardless of the operator backend. The
+//     FQDN intent plus --fqdn-policy-backend enforces the same policy. They are
+//     REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition: enum
+//     members of v2alpha1 and v2beta1, both of which v2.0.0 removes, and the GA v2
+//     version does not define them. Migrate before upgrading: v2 cannot represent an
+//     object naming an alias, and one such object fails the conversion for every
+//     object batched into the same request. See
 //     docs/operations/v1alpha1-deprecation.md.
 //
 // All FQDN-family modes are fail-closed: the standard NetworkPolicy still
@@ -51,13 +54,14 @@ const (
 	EgressPolicyModeFQDN EgressPolicyMode = "FQDN"
 	// EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium
 	// backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend.
-	// Prefer FQDN + --fqdn-policy-backend=cilium. Removed at v2.0.0; see the
-	// EgressPolicyMode doc comment.
+	// Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=cilium.
+	// Removed at v2.0.0; see the EgressPolicyMode doc comment.
 	EgressPolicyModeCiliumFQDN EgressPolicyMode = "CiliumFQDN"
 	// EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico
 	// backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless
-	// of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removed at
-	// v2.0.0; see the EgressPolicyMode doc comment.
+	// of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN +
+	// --fqdn-policy-backend=calico. Removed at v2.0.0; see the EgressPolicyMode doc
+	// comment.
 	EgressPolicyModeCalicoFQDN EgressPolicyMode = "CalicoFQDN"
 )
 
@@ -201,8 +205,10 @@ type EgressProxySpec struct {
 	// reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
 	// whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
 	// CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at
-	// v2.0.0. It has no effect when managedNetworkPolicy is false. See
-	// the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.
+	// v2.0.0; admission rejects a new write naming one, and admits an object that
+	// already stores one unchanged. It has no effect when managedNetworkPolicy is
+	// false. See the EgressPolicyMode docs for the secure-by-default (fail-closed)
+	// guarantee.
 	//
 	// +optional
 	// +kubebuilder:default=CIDR

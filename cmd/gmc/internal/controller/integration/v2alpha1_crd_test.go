@@ -273,7 +273,7 @@ func TestV2_EgressProxy_DestinationFQDNsAcceptedWithFQDNMode(t *testing.T) {
 	ep := &gmcv2alpha1.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "ok-fqdn", Namespace: ns},
 		Spec: gmcv2alpha1.EgressProxySpec{
-			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN,
 			DestinationFQDNs: []string{"proxy.golang.org", "sum.golang.org"},
 		},
 	}

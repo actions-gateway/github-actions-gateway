@@ -6,7 +6,7 @@ Make the three release-timing questions answerable from data the repo already re
 
 **Complete.** All three deliverables shipped 2026-07-31: [`scripts/release/release-delta.sh`](../../../scripts/release/release-delta.sh) with `release-delta-test.sh` under `make scripts-test`, the *When to cut* section in [operations/release.md](../../operations/release.md#when-to-cut), and the scope-ledger convention in [maintaining-backlog.md](../../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
 
-The fourth acceptance criterion — a release plan doc that opens with a ledger — is satisfied by [release-1.3.md](../release-1.3.md#scope-ledger) rather than deferred to 1.4: 1.3 was mid-flight with the prose status banner the gap section names, so it is both the worked example and the first beneficiary.
+The fourth acceptance criterion — a release plan doc that opens with a ledger — is satisfied by [release-1.3.md](release-1.3.md#scope-ledger) rather than deferred to 1.4: 1.3 was mid-flight with the prose status banner the gap section names, so it is both the worked example and the first beneficiary.
 
 Two decisions the implementation changed from the plan above:
 
@@ -22,7 +22,7 @@ Two decisions the implementation changed from the plan above:
 The gate-label machinery answers "can we cut the scoped release?" crisply, but two questions have no canonical answer today:
 
 - **"Has enough accumulated to justify a tag?"** — the delete-on-done Queue erases delivered work from STATUS.md by design, so nothing shows the unreleased delta.
-- **"What was planned vs delivered?"** — release plan docs narrate this in a prose status banner ([release-1.3.md](../release-1.3.md)), faithful but not measurable at a glance.
+- **"What was planned vs delivered?"** — release plan docs narrate this in a prose status banner ([release-1.3.md](release-1.3.md)), faithful but not measurable at a glance.
 
 Both are *derivable* because two disciplines are already enforced: Conventional Commits, and verbed `docs(status): … complete QN` subjects.
 Baseline measurement (2026-07-31): since `v1.2.0`, main had accumulated 332 commits — 31 `feat`, 65 `fix`, 10 `perf` — computed with two `git log` one-liners.

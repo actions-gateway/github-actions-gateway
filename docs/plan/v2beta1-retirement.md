@@ -8,7 +8,7 @@
 The published `v3.0.0` floor is walked back to `v2.0.0` across the operator docs, the enum godoc and the admission warning.
 
 **What it does not settle, and what it therefore obliges.** Rule #4b is unaffected by semver: storage cannot advance to `v2` until a release has shipped serving both `v2beta1` and `v2`, so the overlap release below is still required and the deprecation notice still has to precede it.
-That package is [Q1085](../queue/Q1085.md): the notice, the admission change from warn to reject, and the pre-upgrade alias check.
+That package is Q1085: the notice, the admission change from warn to reject, and the pre-upgrade alias check.
 It is now on the critical path rather than optional.
 The check is load-bearing for a mechanical reason given in [v2-ga.md](v2-ga.md#decided-v2-omits-ciliumfqdncalicofqdn): one stored object naming an alias fails the whole conversion request that carries it, so it breaks `kubectl get egressproxies` at `v2` for the cluster rather than for itself.
 

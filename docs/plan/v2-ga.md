@@ -1,6 +1,6 @@
 # v2 GA graduation plan (`v2beta1` → `v2`)
 
-The last rung of the graduation ladder defined in [v2-api.md § API maturity & graduation](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), and the release that executes the three coupled removals announced by [release-1.3.md](release-1.3.md).
+The last rung of the graduation ladder defined in [v2-api.md § API maturity & graduation](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), and the release that executes the three coupled removals announced by [release-1.3.md](archive/release-1.3.md).
 
 This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
@@ -127,7 +127,7 @@ They now ride the same `v2.0.0` clock as `v1alpha1`, `v2alpha1` and classic acqu
 **What this obliges, and it is the whole cost.** The storage migration in step 3 must not meet a stored `EgressProxy` naming an alias, because `v2` cannot represent one and the conversion contract cannot report a single object as absent.
 Read from the vendored [`apiextensions/v1` types](../../vendor/k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1/types.go) on 2026-09-07: `convertedObjects` "must also have the same size as the input list with the same objects in the same order", so the webhook cannot omit one; `ConversionResponse.Result` is a single `metav1.Status` for the whole request, so it cannot fail one; and on failure `convertedObjects` is "otherwise empty", so the failure takes the whole batch.
 `ConversionRequest.Objects` is a list, so one unrepresentable object breaks `kubectl get egressproxies` at `v2` for the cluster rather than for itself.
-That is what makes the pre-upgrade check load-bearing rather than a courtesy, and it is tracked as [Q1085](../queue/Q1085.md) alongside the deprecation notice and the admission change that precede it.
+That is what makes the pre-upgrade check load-bearing rather than a courtesy, and it is tracked as Q1085 alongside the deprecation notice and the admission change that precede it.
 The contract quotes are measured; that a `LIST` batches into one `ConversionRequest` follows from the field being a list and was not driven against an apiserver.
 
 **Why the migration is expected to be a no-op in practice.** No chart, overlay or e2e manifest in the tree sets an alias, measured 2026-09-07, and [Q245](q245-fqdn-intent-backend-split.md#migration--compatibility) recorded the only known consumers as tests and docs.
@@ -136,9 +136,9 @@ That is a floor rather than a rate, since an external adopter is unknowable for 
 ## Phase 3 — the storage advance and the coupled removals
 
 **`v2.0.0` opens by marking `v2` the storage version and migrating stored objects**, which 1.9 deliberately did not do.
-That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in [Q1085](../queue/Q1085.md) load-bearing: the migration is the moment an object naming a value `v2` cannot represent stops being readable.
+That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in Q1085 load-bearing: the migration is the moment an object naming a value `v2` cannot represent stops being readable.
 
-`v2.0.0` then executes all three removals announced by [release-1.3.md](release-1.3.md), plus a fourth decided later:
+`v2.0.0` then executes all three removals announced by [release-1.3.md](archive/release-1.3.md), plus a fourth decided later:
 
 - `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../queue/Q273.md)
 - `v2alpha1` — this plan
