@@ -766,8 +766,22 @@ else
 fi
 
 # A case that vanished reports neither ok nor FAIL, so the log shrinks by one
-# line and nothing else notices. Checked only on an otherwise-green run: a red
-# one already exits non-zero, and its count is not a fixed number.
+# line and nothing else notices.
+#
+# Checked only on an otherwise-green run, which DEFERS the finding rather than
+# making it: a run that is red for an unrelated reason and also short a case
+# reports the unrelated failure and says nothing about the count. Measured on a
+# run with one case deleted and another's needle neutered — 19 verdicts, one
+# reported failure, report-count silent. Nothing is lost, because the run
+# already exits non-zero and the next green one is green-with-19, which this
+# catches.
+#
+# The gate is here rather than unconditional because the registry block ABOVE
+# emits a variable number of verdicts: one per registry finding (an unclassified
+# step, a stale entry, or an entry whose live check fails) plus the summary line.
+# All three shapes measured separately, each giving 19 ok and 2 FAIL, so 21
+# against an EXPECTED_REPORTS of 20, which an unconditional check would call a
+# lost case.
 count_fails
 if ((fails == 0)); then
 	reports="$(grep -c . "$REPORTS" || true)"
