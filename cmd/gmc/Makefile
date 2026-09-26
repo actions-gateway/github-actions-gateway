@@ -22,6 +22,11 @@ ENVTEST_K8S_VERSION ?= 1.35.x
 
 CERTMANAGER_VERSION ?= v1.20.2
 _CERTMANAGER_URL    := https://github.com/cert-manager/cert-manager/releases/download/$(CERTMANAGER_VERSION)/cert-manager.yaml
+# The manifest the cert-manager targets apply and delete. Defaults to the pinned
+# release URL, which is a live unretried fetch; e2e overrides it with the copy
+# the pre-pull step already cached, keeping that fetch off the critical path
+# (Q1125).
+CERTMANAGER_MANIFEST ?= $(_CERTMANAGER_URL)
 
 .DEFAULT_GOAL := help
 
@@ -97,7 +102,7 @@ docker-build: ## Build and push the GMC Docker image to the local registry
 
 .PHONY: apply-cert-manager
 apply-cert-manager: ## Apply cert-manager manifests (pods start asynchronously)
-	kubectl apply -f $(_CERTMANAGER_URL)
+	kubectl apply -f $(CERTMANAGER_MANIFEST)
 
 .PHONY: wait-cert-manager
 wait-cert-manager: ## Wait for cert-manager deployments to be Available
@@ -113,7 +118,7 @@ install-cert-manager: apply-cert-manager wait-cert-manager ## Apply cert-manager
 
 .PHONY: uninstall-cert-manager
 uninstall-cert-manager: ## Remove cert-manager from the current kube-context
-	-kubectl delete -f $(_CERTMANAGER_URL)
+	-kubectl delete -f $(CERTMANAGER_MANIFEST)
 	-kubectl delete lease cert-manager-cainjector-leader-election cert-manager-controller \
 		-n kube-system --ignore-not-found --force --grace-period=0
 

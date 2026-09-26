@@ -500,14 +500,21 @@ jobs:
       - name: Cache cert-manager images
         # Both CNIs: cert-manager is applied on every e2e run. Keyed on
         # CERTMANAGER_VERSION so a bump invalidates it. The cached dir holds the
-        # image tar and the image list, so a hit needs no manifest fetch.
+        # image tar, the image list and the manifest itself, so a hit needs no
+        # fetch at all — not for the pre-pull, and not for the apply in the
+        # cluster step below (Q1125).
+        #
+        # The `-m2` generation is part of the key because the cached *contents*
+        # changed when the manifest joined them: an entry is immutable once
+        # written, so without it the pre-Q1125 entry would keep hitting and the
+        # apply would find no manifest to read.
         # Hosted-only — see the kind node cache step (Q408).
         if: runner.environment == 'github-hosted'
         id: cert-manager-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/cert-manager-images
-          key: cert-manager-images-${{ env.CERTMANAGER_VERSION }}
+          key: cert-manager-images-m2-${{ env.CERTMANAGER_VERSION }}
 
       - name: Pre-pull cert-manager images
         # Both CNIs. `make apply-cert-manager` (in the cluster step below) makes
@@ -517,7 +524,9 @@ jobs:
         # references into the runner's Docker daemon here (cached + retried); the
         # cluster step then kind-loads them onto the nodes so the rollout never
         # touches quay.io. The image list is persisted alongside the tar so the
-        # load step needs neither a manifest fetch nor a re-extract.
+        # load step needs neither a manifest fetch nor a re-extract, and the
+        # manifest itself is persisted so the apply reads it from here rather
+        # than fetching the same URL again, unretried (Q1125).
         run: |
           scripts/fetch/prepull-manifest-images.sh cert-manager \
             "https://github.com/cert-manager/cert-manager/releases/download/${CERTMANAGER_VERSION}/cert-manager.yaml" \
@@ -651,7 +660,10 @@ jobs:
             echo "==> preloading $img onto kind nodes"
             kind load docker-image --name actions-gateway-e2e "$img"
           done < /tmp/cert-manager-images/images.txt
-          make apply-cert-manager
+          # Apply the manifest the pre-pull step already fetched. Applying from
+          # the URL instead is a second fetch of the same bytes, unretried, and
+          # it killed run 34856925669 on a 504 from the release CDN (Q1125).
+          make apply-cert-manager CERTMANAGER_MANIFEST=/tmp/cert-manager-images/manifest.yaml
 
           echo "==> waiting for image build (bake) to finish"
           bake_rc=0

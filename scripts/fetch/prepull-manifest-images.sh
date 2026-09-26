@@ -20,13 +20,21 @@
 # persisted alongside the tar (images.txt) so a consumer that kind-loads the
 # images needs neither a re-fetch nor a re-extract.
 #
+# The fetched manifest is persisted too (manifest.yaml), so a consumer that
+# *applies* it can do so from the cache rather than fetching the same URL a
+# second time — unretried, on the e2e critical path (Q1125). It is written on a
+# miss only, so a consumer reading it must key its actions/cache entry such that
+# every entry was written by a version of this script that persists it: an entry
+# predating it still hits, loads the tar and returns, so the consumer fails on a
+# missing path rather than silently refetching.
+#
 # Usage:
 #   scripts/fetch/prepull-manifest-images.sh <name> <manifest-url> <cache-dir>
 #
 #   name         — friendly label used in log lines (e.g. cert-manager)
 #   manifest-url — URL of the pinned manifest to read image refs from
-#   cache-dir    — directory (an actions/cache path) holding images.tar +
-#                  images.txt; created on a cache miss
+#   cache-dir    — directory (an actions/cache path) holding images.tar,
+#                  images.txt + manifest.yaml; created on a cache miss
 #
 # Environment:
 #   PULL_RETRY_ATTEMPTS — forwarded to pull-image-with-retry.sh (default: 3)
@@ -46,6 +54,7 @@ fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tar="${dir}/images.tar"
 list="${dir}/images.txt"
+saved_manifest="${dir}/manifest.yaml"
 
 # Cache hit: the tar and its extracted list are both present, so load and return
 # without touching the network.
@@ -75,3 +84,4 @@ done
 mkdir -p "${dir}"
 docker save -o "${tar}" "${images[@]}"
 printf '%s\n' "${images[@]}" > "${list}"
+cp "${manifest}" "${saved_manifest}"
