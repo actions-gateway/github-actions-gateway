@@ -3764,6 +3764,7 @@ The `trivy` job uses it because its seven shards otherwise pull the same ~200 MB
 
 One constraint drives its shape, and it is easy to get wrong: **`docker load` cannot restore a manifest digest.** A saved-and-reloaded image comes back with its `RepoTags` but no `RepoDigests`, so a digest-pinned `name:tag@sha256:…` ref never resolves from the cache and the consumer silently pulls from the registry anyway — a cache that looks like it works and does nothing.
 The cached image is therefore re-exposed under a local-only tag (`BUILDKIT_LOCAL_IMAGE`) and the consumer points at that.
+The job creates the builder itself with `docker buildx create` rather than passing the tag through `setup-buildx-action`'s `driver-opts`: from v4.4.0 that action runs `docker pull` on the driver-opts image, which a local-only tag fails, and it skips the pull only for a builder that already exists.
 This does not weaken the pin: the cold-path pull is still digest-verified against the pinned ref, and the cache key carries that same digest, so the local tag can only ever name the bytes the pin selected.
 
 ### Image builds: retry the transport, never the pin

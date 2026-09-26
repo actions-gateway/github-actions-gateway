@@ -220,13 +220,24 @@ jobs:
         run: |
           scripts/fetch/prepull-image-cached.sh \
             "${BUILDKIT_IMAGE}" /tmp/buildkit-image "${BUILDKIT_LOCAL_IMAGE}"
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Create buildx builder from the pre-pulled image
+        # Pin the builder to the buildkit image pre-pulled above so the boot
+        # uses the local cache instead of pulling from Docker Hub. See the
+        # BUILDKIT_LOCAL_IMAGE note on the job env for why this is the local
+        # tag and not the digest-pinned ref.
+        #
+        # Created here rather than by the action's driver-opts: since v4.4.0 the
+        # action runs `docker pull` on the driver-opts image before creating a
+        # builder, which a local-only tag cannot satisfy (#1979: pull access
+        # denied for local/buildkit). It skips that pull for a builder that
+        # already exists, and buildx's own boot falls back to the local image.
+        run: |
+          docker buildx create --name scan-builder --driver docker-container \
+            --driver-opt "image=${BUILDKIT_LOCAL_IMAGE}" --use
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
-          # Pin the builder to the buildkit image pre-pulled above so the boot
-          # uses the local cache instead of pulling from Docker Hub. See the
-          # BUILDKIT_LOCAL_IMAGE note on the job env for why this is the local
-          # tag and not the digest-pinned ref.
-          driver-opts: image=${{ env.BUILDKIT_LOCAL_IMAGE }}
+          # Adopts and boots the builder created above; `use` is already set.
+          name: scan-builder
       # Two attempts: the base-image pull inside the build reaches the registry
       # with no retry of its own. Measured 2026-08-14 on #1515, this leg 403'd
       # HEAD-ing the pinned distroless digest while three sibling shards pulled
@@ -244,7 +255,7 @@ jobs:
         # Masks THIS attempt only. The rebuild below runs unmasked, so a second
         # failure still fails the job.
         continue-on-error: true
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile
@@ -270,7 +281,7 @@ jobs:
         # build is `load: true`, local only with nothing pushed, so a second
         # attempt can only ask the registry the same question twice, and
         # buildkit serves whatever layers the first attempt completed.
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile
