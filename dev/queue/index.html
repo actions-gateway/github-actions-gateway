@@ -2710,6 +2710,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost</code> claims the referrer watch edge is the only thing that can re-enqueue the proxy once …</td>
 </tr>
 <tr>
+<td><a href="Q1133/">Q1133</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/prepull-manifest-images.sh">Retry cannot span a release-CDN incident on the cert-manager manifest</a></td>
+<td><code>ci</code> <code>flake</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> is the only fetch of the pinned …</td>
+</tr>
+<tr>
 <td><a href="Q1136/">Q1136</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/workflow-acting-steps-test.sh">workflow-acting-steps-test cannot fail: it counts in a subshell</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code></td>
@@ -2977,9 +2985,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1125/">Q1125</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e setup fetches cert-manager's manifest live and unretried</a></td>
 <td><code>ci</code> <code>flake</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>The e2e cluster step runs <code>make apply-cert-manager</code>, which is <code>cmd/gmc/Makefile:100:kubectl apply -f $(_CERTMANAGER_URL)</code> in that module …</td>
+<td><strong>Event:</strong> the e2e cluster step's <code>make apply-cert-manager</code> fails on <code>main</code> or in the merge queue, either fetching the cert-manager release …</td>
 </tr>
 <tr>
 <td><a href="Q1041/">Q1041</a></td>
@@ -3956,6 +3964,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>check-release-pins.sh</code> asserts that every release-version literal on the five pin-bearing pages names the current release, so a …</td>
+</tr>
+<tr>
+<td><a href="Q1138/">Q1138</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">metrics-server image cache has been dead since the 2026-06-19 tar rename</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>metrics-server-images-${METRICSSERVER_VERSION}</code> restores an entry the pre-pull script cannot use, so every e2e run in both lanes …</td>
 </tr>
 </tbody>
 </table>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1125/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1133/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>e2e setup fetches cert-manager's manifest live and unretried - GitHub Actions Gateway</title>
+        <title>Retry cannot span a release-CDN incident on the cert-manager manifest - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#e2e-setup-fetches-cert-managers-manifest-live-and-unretried" class="md-skip">
+        <a href="#retry-cannot-span-a-release-cdn-incident-on-the-cert-manager-manifest" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              e2e setup fetches cert-manager's manifest live and unretried
+              Retry cannot span a release-CDN incident on the cert-manager manifest
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-shipped" class="md-nav__link">
+  <a href="#measured-2026-09-10" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What shipped
+        Measured 2026-09-10
       
     </span>
   </a>
@@ -2597,10 +2597,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-defect" class="md-nav__link">
+  <a href="#the-same-asset-failed-twice-in-six-days-on-two-different-lines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The defect
+        The same asset failed twice in six days, on two different lines
       
     </span>
   </a>
@@ -2608,10 +2608,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#measured-2026-09-17" class="md-nav__link">
+  <a href="#the-fetch-is-not-occasional-it-runs-every-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measured 2026-09-17
+        The fetch is not occasional; it runs every time
       
     </span>
   </a>
@@ -2619,10 +2619,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-two-candidate-siblings-both-settled" class="md-nav__link">
+  <a href="#retry-bought-nothing-on-the-occurrence-it-was-there-for" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The two candidate siblings, both settled
+        Retry bought nothing on the occurrence it was there for
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-errimagepull-sibling-is-not-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ErrImagePull sibling is not one
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
       
     </span>
   </a>
@@ -2649,37 +2671,43 @@
   
 
 
-<h1 id="e2e-setup-fetches-cert-managers-manifest-live-and-unretried">e2e setup fetches cert-manager's manifest live and unretried<a class="headerlink" href="#e2e-setup-fetches-cert-managers-manifest-live-and-unretried" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the e2e cluster step's <code>make apply-cert-manager</code> fails on <code>main</code> or in the merge queue, either fetching the cert-manager release URL again or finding no <code>/tmp/cert-manager-images/manifest.yaml</code> to read. → top of Queue, escalated.</p>
-<h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
-<p><code>scripts/fetch/prepull-manifest-images.sh</code> persists the manifest it fetched beside the image tar it already caches, and the cluster step applies from that copy through a <code>CERTMANAGER_MANIFEST</code> variable on <code>make apply-cert-manager</code>.
-A warm run now makes no manifest fetch at all; a cold run makes one, retried.
-The cert-manager <code>actions/cache</code> key carries an <code>-m2</code> generation, because an entry is immutable once written and the pre-change entry would otherwise keep hitting with no manifest in it.
-That entry was already unusable, so the bump retires it rather than only adding a manifest to it: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/319">#319</a> renamed the tar to <code>images.tar</code> on 2026-06-19 and bumped no key, so every run since has restored the entry, failed the hit predicate and re-fetched.</p>
-<h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
-<p>The e2e cluster step ran <code>make apply-cert-manager</code>, which was <code>kubectl apply -f</code> against the pinned release URL on github.com with no retry, on the critical path of every e2e run in both CNI lanes.
-The step caches the images and discards the manifest it parsed them out of, so the apply had to fetch the same URL a second time.
-<strong>The warm path that describes has never once run.</strong> Measured 2026-09-24 on run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a>, both lanes: <code>actions/cache</code> logs <code>Cache hit for: cert-manager-images-v1.20.2</code> and <code>Cache restored</code>, and the script then rejects the restored directory, re-fetches the manifest and re-pulls all three images.
-The tar rename above is why, and it has held since 2026-06-19.
-Calico is unaffected and takes its cache branch in that same run.
-Its key never moved either, but its entry was created 2026-08-28, ten weeks after the rename, so the skewed one was evicted and the current script rewrote it; the two dead entries are hit by every run and so never go unused long enough for that (measured 2026-09-24 on the repository cache listing, and see Q1138).</p>
-<p>The two paths also disagreed about retry.
-<code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> fetches the same URL on a cache miss and fetches it properly; the apply then fetched it again with no retry at all.
-So the repo already knew the URL was worth retrying, in the script that reads it first.</p>
-<h2 id="measured-2026-09-17">Measured 2026-09-17<a class="headerlink" href="#measured-2026-09-17" title="Permanent link">&para;</a></h2>
-<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34856925669">34856925669</a>, <code>e2e (calico)</code> on <code>push main</code> at 2026-09-14 14:45Z, went red on exactly that:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>error: unable to read URL "https://github.com/cert-manager/cert-manager/releases/download/v1.20.2/cert-manager.yaml", server reported 504 Gateway Timeout, status code=504
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make[1]: *** [Makefile:100: apply-cert-manager] Error 1
+<h1 id="retry-cannot-span-a-release-cdn-incident-on-the-cert-manager-manifest">Retry cannot span a release-CDN incident on the cert-manager manifest<a class="headerlink" href="#retry-cannot-span-a-release-cdn-incident-on-the-cert-manager-manifest" title="Permanent link">&para;</a></h1>
+<p><code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> is the only fetch of the pinned cert-manager release manifest left on the e2e critical path, and its retry window is about 13 seconds.
+A cache miss that lands inside a github.com release-CDN incident kills the lane before the cluster exists, and has.</p>
+<h2 id="measured-2026-09-10">Measured 2026-09-10<a class="headerlink" href="#measured-2026-09-10" title="Permanent link">&para;</a></h2>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34539304371">34539304371</a>, <code>e2e (calico)</code> on <code>push main</code>, died in the <code>Pre-pull cert-manager images</code> step:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl: (22) The requested URL returned error: 500   (x6, 22:52:03.5 -&gt; 22:52:16.2)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>##[error]Process completed with exit code 22.
 </code></pre></div>
-<p>The lane had already stood a three-node cluster up and preloaded cert-manager's controller, webhook and cainjector images, so the run was almost entirely spent before the fetch that killed it.</p>
-<h2 id="the-two-candidate-siblings-both-settled">The two candidate siblings, both settled<a class="headerlink" href="#the-two-candidate-siblings-both-settled" title="Permanent link">&para;</a></h2>
+<p>Six responses of 500 on <code>https://github.com/cert-manager/cert-manager/releases/download/v1.20.2/cert-manager.yaml</code>, one attempt plus five retries all inside 12.7s, then exit 22.
+Calico's pre-pull in the same run logged <code>==&gt; loading calico images from cache</code>, so the cert-manager fetch was the only manifest fetch that ran, and it was the one that failed.</p>
+<h2 id="the-same-asset-failed-twice-in-six-days-on-two-different-lines">The same asset failed twice in six days, on two different lines<a class="headerlink" href="#the-same-asset-failed-twice-in-six-days-on-two-different-lines" title="Permanent link">&para;</a></h2>
+<p>2026-09-10 is a 500 on the retried fetch above; 2026-09-14 (run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34856925669">34856925669</a>) is a 504 on the unretried <code>kubectl apply -f &lt;url&gt;</code> in <code>make apply-cert-manager</code>.
+Same release asset, same CDN, two calico-lane runs killed.</p>
+<p><a href="../Q1125/">Q1125</a> removed the unretried one, by caching the manifest beside the images and applying from the cached copy.
+That is the right fix for what it names, and it concentrates this exposure rather than removing it: the cold-path fetch above is now the only one left, and a warm run has none.</p>
+<h2 id="the-fetch-is-not-occasional-it-runs-every-time">The fetch is not occasional; it runs every time<a class="headerlink" href="#the-fetch-is-not-occasional-it-runs-every-time" title="Permanent link">&para;</a></h2>
+<p><strong>Measured 2026-09-24.</strong> The cert-manager <code>actions/cache</code> entry has been dead since 2026-06-19: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/319">#319</a> renamed the tar it writes to <code>images.tar</code> without bumping <code>cert-manager-images-${CERTMANAGER_VERSION}</code>, so the entry restores, fails the script's hit predicate and is re-fetched.
+Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a> shows it in both lanes: <code>Cache hit</code>, <code>Cache restored</code>, then the fetch and three image pulls.
+So this exposure is not a cold-start edge; every e2e run in both lanes has fetched this asset live, which is the unremarkable reason it failed twice in six days.</p>
+<p><a href="../Q1125/">Q1125</a>'s <code>-m2</code> bump retires that entry, so after it merges the first run is cold and the rest are warm, and this residual shrinks to cold runs alone.
+That lowers the rate and changes nothing about the window below.</p>
+<h2 id="retry-bought-nothing-on-the-occurrence-it-was-there-for">Retry bought nothing on the occurrence it was there for<a class="headerlink" href="#retry-bought-nothing-on-the-occurrence-it-was-there-for" title="Permanent link">&para;</a></h2>
+<p><code>--retry 5 --retry-all-errors --retry-delay 2</code> is six attempts across roughly 13 seconds.
+That spans a single bad response and not a CDN incident, which is the failure the two measurements above actually show.
+Widening it is one of three candidates and not obviously the right one; none is settled:</p>
 <ul>
-<li><strong>Six <code>curl: (22)</code> responses of 500 before exit 22</strong> (<code>push main</code>, 2026-09-10 22:52Z) is the same class and the same URL, on the <em>other</em> line: <code>prepull-manifest-images.sh cert-manager</code> took them on its retried fetch and gave up.
-  <a href="../Q1133/">Q1133</a> owns that residual, which this fix concentrates rather than removes.</li>
-<li><strong><code>ErrImagePull</code> in <code>E2E_V2_TwoGatewaysCoexist</code>'s <code>BeforeAll</code></strong> (merge group, 2026-09-16 19:11Z) is not this class and is not a fetch failure.
-  Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a> died on a conversion-webhook POST to <code>webhook-service.gmc-system.svc</code>, and the <code>ErrImagePull</code> in its log is <code>registry.invalid/preempt-probe-runner:none</code>, a deliberately unresolvable image in an unrelated preemption-probe fixture.</li>
+<li><strong>A longer, backed-off retry window.</strong> Cheapest, and it still assumes the incident is short.</li>
+<li><strong>Vendor the pinned manifest into the repo.</strong> Removes the fetch outright and puts manifest bytes under <code>updatecli</code>'s version bump rather than under a URL, so the bump becomes a diff someone reads.</li>
+<li><strong>Seed it from an artifact or the local registry</strong>, the way first-party images already reach the nodes.</li>
 </ul>
-<p>The proxy 502s are a separate class and are <a href="../Q1119/">Q1119</a>.</p>
+<h2 id="the-errimagepull-sibling-is-not-one">The <code>ErrImagePull</code> sibling is not one<a class="headerlink" href="#the-errimagepull-sibling-is-not-one" title="Permanent link">&para;</a></h2>
+<p><a href="../Q1125/">Q1125</a> listed an <code>ErrImagePull</code> in <code>E2E_V2_TwoGatewaysCoexist</code>'s <code>BeforeAll</code> (merge group, 2026-09-16 19:11Z) as a possible member of this class, unestablished.
+It is not: run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a> died on <code>conversion webhook for actions-gateway.com/v2alpha1, Kind=RunnerSet failed: Post "https://webhook-service.gmc-system.svc:443...</code>, which is in-cluster and fetches nothing.
+The <code>ErrImagePull</code> in that log is <code>registry.invalid/preempt-probe-runner:none</code>, a deliberately unresolvable image in an unrelated preemption-probe fixture, and expected output.
+Nothing further is owed on it.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first</a>.</strong> The outside-service exemption there covers a flake that <em>hasn't recurred</em>; this asset has failed twice in six days, so the exemption does not reach it.</p>
 
 
 

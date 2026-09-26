@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1125/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1138/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>e2e setup fetches cert-manager's manifest live and unretried - GitHub Actions Gateway</title>
+        <title>metrics-server image cache has been dead since the 2026-06-19 tar rename - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#e2e-setup-fetches-cert-managers-manifest-live-and-unretried" class="md-skip">
+        <a href="#metrics-server-image-cache-has-been-dead-since-the-2026-06-19-tar-rename" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              e2e setup fetches cert-manager's manifest live and unretried
+              metrics-server image cache has been dead since the 2026-06-19 tar rename
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-shipped" class="md-nav__link">
+  <a href="#measured-2026-09-24" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What shipped
+        Measured 2026-09-24
       
     </span>
   </a>
@@ -2597,32 +2597,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-defect" class="md-nav__link">
+  <a href="#scope-and-what-is-not-known" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The defect
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#measured-2026-09-17" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Measured 2026-09-17
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-two-candidate-siblings-both-settled" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The two candidate siblings, both settled
+        Scope, and what is not known
       
     </span>
   </a>
@@ -2649,37 +2627,32 @@
   
 
 
-<h1 id="e2e-setup-fetches-cert-managers-manifest-live-and-unretried">e2e setup fetches cert-manager's manifest live and unretried<a class="headerlink" href="#e2e-setup-fetches-cert-managers-manifest-live-and-unretried" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the e2e cluster step's <code>make apply-cert-manager</code> fails on <code>main</code> or in the merge queue, either fetching the cert-manager release URL again or finding no <code>/tmp/cert-manager-images/manifest.yaml</code> to read. → top of Queue, escalated.</p>
-<h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
-<p><code>scripts/fetch/prepull-manifest-images.sh</code> persists the manifest it fetched beside the image tar it already caches, and the cluster step applies from that copy through a <code>CERTMANAGER_MANIFEST</code> variable on <code>make apply-cert-manager</code>.
-A warm run now makes no manifest fetch at all; a cold run makes one, retried.
-The cert-manager <code>actions/cache</code> key carries an <code>-m2</code> generation, because an entry is immutable once written and the pre-change entry would otherwise keep hitting with no manifest in it.
-That entry was already unusable, so the bump retires it rather than only adding a manifest to it: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/319">#319</a> renamed the tar to <code>images.tar</code> on 2026-06-19 and bumped no key, so every run since has restored the entry, failed the hit predicate and re-fetched.</p>
-<h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
-<p>The e2e cluster step ran <code>make apply-cert-manager</code>, which was <code>kubectl apply -f</code> against the pinned release URL on github.com with no retry, on the critical path of every e2e run in both CNI lanes.
-The step caches the images and discards the manifest it parsed them out of, so the apply had to fetch the same URL a second time.
-<strong>The warm path that describes has never once run.</strong> Measured 2026-09-24 on run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a>, both lanes: <code>actions/cache</code> logs <code>Cache hit for: cert-manager-images-v1.20.2</code> and <code>Cache restored</code>, and the script then rejects the restored directory, re-fetches the manifest and re-pulls all three images.
-The tar rename above is why, and it has held since 2026-06-19.
-Calico is unaffected and takes its cache branch in that same run.
-Its key never moved either, but its entry was created 2026-08-28, ten weeks after the rename, so the skewed one was evicted and the current script rewrote it; the two dead entries are hit by every run and so never go unused long enough for that (measured 2026-09-24 on the repository cache listing, and see Q1138).</p>
-<p>The two paths also disagreed about retry.
-<code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> fetches the same URL on a cache miss and fetches it properly; the apply then fetched it again with no retry at all.
-So the repo already knew the URL was worth retrying, in the script that reads it first.</p>
-<h2 id="measured-2026-09-17">Measured 2026-09-17<a class="headerlink" href="#measured-2026-09-17" title="Permanent link">&para;</a></h2>
-<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/34856925669">34856925669</a>, <code>e2e (calico)</code> on <code>push main</code> at 2026-09-14 14:45Z, went red on exactly that:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>error: unable to read URL "https://github.com/cert-manager/cert-manager/releases/download/v1.20.2/cert-manager.yaml", server reported 504 Gateway Timeout, status code=504
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make[1]: *** [Makefile:100: apply-cert-manager] Error 1
+<h1 id="metrics-server-image-cache-has-been-dead-since-the-2026-06-19-tar-rename">metrics-server image cache has been dead since the 2026-06-19 tar rename<a class="headerlink" href="#metrics-server-image-cache-has-been-dead-since-the-2026-06-19-tar-rename" title="Permanent link">&para;</a></h1>
+<p><code>metrics-server-images-${METRICSSERVER_VERSION}</code> restores an entry the pre-pull script cannot use, so every e2e run in both lanes re-fetches the manifest and re-pulls the image.
+Bumping the key generation retires it, the same one-token change that Q1125 made for cert-manager.</p>
+<h2 id="measured-2026-09-24">Measured 2026-09-24<a class="headerlink" href="#measured-2026-09-24" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/316">#316</a> wrote the tar as <code>metrics-server.tar</code> on 2026-06-19.
+<a href="https://github.com/actions-gateway/github-actions-gateway/pull/319">#319</a> renamed it to <code>images.tar</code> hours later, for all three pre-pulled manifests at once, and bumped no cache key.
+<code>METRICSSERVER_VERSION</code> has not moved since, so the key has not either and the stale entry still hits.</p>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a> shows the full sequence in both lanes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Cache hit for: metrics-server-images-v0.8.1
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Cache restored from key: metrics-server-images-v0.8.1
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>metrics-server images: registry.k8s.io/metrics-server/metrics-server:v0.8.1
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>v0.8.1: Pulling from metrics-server/metrics-server
 </code></pre></div>
-<p>The lane had already stood a three-node cluster up and preloaded cert-manager's controller, webhook and cainjector images, so the run was almost entirely spent before the fetch that killed it.</p>
-<h2 id="the-two-candidate-siblings-both-settled">The two candidate siblings, both settled<a class="headerlink" href="#the-two-candidate-siblings-both-settled" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Six <code>curl: (22)</code> responses of 500 before exit 22</strong> (<code>push main</code>, 2026-09-10 22:52Z) is the same class and the same URL, on the <em>other</em> line: <code>prepull-manifest-images.sh cert-manager</code> took them on its retried fetch and gave up.
-  <a href="../Q1133/">Q1133</a> owns that residual, which this fix concentrates rather than removes.</li>
-<li><strong><code>ErrImagePull</code> in <code>E2E_V2_TwoGatewaysCoexist</code>'s <code>BeforeAll</code></strong> (merge group, 2026-09-16 19:11Z) is not this class and is not a fetch failure.
-  Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a> died on a conversion-webhook POST to <code>webhook-service.gmc-system.svc</code>, and the <code>ErrImagePull</code> in its log is <code>registry.invalid/preempt-probe-runner:none</code>, a deliberately unresolvable image in an unrelated preemption-probe fixture.</li>
-</ul>
-<p>The proxy 502s are a separate class and are <a href="../Q1119/">Q1119</a>.</p>
+<p>The restore succeeds at the <code>actions/cache</code> layer and the script's hit predicate (<code>images.tar</code> and <code>images.txt</code> both present) then fails, so it takes the miss branch.</p>
+<h2 id="scope-and-what-is-not-known">Scope, and what is not known<a class="headerlink" href="#scope-and-what-is-not-known" title="Permanent link">&para;</a></h2>
+<p>cert-manager had the identical defect and Q1125 fixed it as a side effect of needing a new generation anyway.
+This row is the same fix on a different key, with nothing else attached: one cold run, then warm.</p>
+<p><strong>Calico is not affected, and the reason rules out any repair but this one.</strong> <code>gh api repos/actions-gateway/github-actions-gateway/actions/caches</code>, measured 2026-09-24: <code>calico-images-v3.31.5</code> was created 2026-08-28T01:42:48Z, ten weeks after the rename, while <code>cert-manager-images-v1.20.2</code> dates from 2026-06-19T16:58:12Z and <code>metrics-server-images-v0.8.1</code> from 2026-06-20T06:30:55Z.
+No calico key ever moved, so the only way a fresh entry lands under the same string is the old one being gone first: calico's skewed entry was evicted and the current script rewrote it.</p>
+<p>That path is closed for these two.
+An entry is repaired only by eviction followed by a rewrite, GitHub evicts on non-access, and both dead entries were last accessed at 21:00Z on the day of measurement by every e2e run in both lanes.
+They are stuck precisely because they hit.
+Calico's lane is per-PR on NetworkPolicy and proxy paths, so it can go quiet long enough to be evicted, and did.
+The key bump is therefore the only repair available, not one option among several.</p>
+<p>Eviction on inactivity is GitHub's documented policy rather than something measured here, and which eviction took calico's June entry, inactivity or LRU against the repository cache-size limit (264 entries at measurement), is not established and does not change the conclusion.</p>
+<p>Raised in independent review of the cert-manager PR, which found the dead entry while checking that its own generation bump was necessary.</p>
 
 
 
