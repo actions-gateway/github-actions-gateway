@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1119/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1137/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes - GitHub Actions Gateway</title>
+        <title>Preflight BLOCKED asserts in-cluster egress is refused too, unmeasured - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes" class="md-skip">
+        <a href="#preflight-blocked-asserts-in-cluster-egress-is-refused-too-unmeasured" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes
+              Preflight BLOCKED asserts in-cluster egress is refused too, unmeasured
             
           </span>
         </div>
@@ -2586,54 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#measured-2026-09-16" class="md-nav__link">
+  <a href="#scope" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measured 2026-09-16
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#it-recurred-the-same-day-on-main-in-the-other-cni-lane" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        It recurred the same day, on main, in the other CNI lane
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-diagnostic-measured-and-shipped" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The diagnostic, measured and shipped
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#why-it-is-parked-rather-than-closed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why it is parked rather than closed
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
+        Scope
       
     </span>
   </a>
@@ -2660,61 +2616,21 @@
   
 
 
-<h1 id="both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes<a class="headerlink" href="#both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> either proxy-CONNECT spec fails again on <code>curl: (56) CONNECT tunnel failed, response 502</code>, in either CNI lane, on a PR, a merge-group entry or a push to <code>main</code>.
-Read the <code>EGRESSPROXY CONNECT ATTRIBUTION</code> banner in that run's failure output first: it names the refusing hop, which is the fact the three occurrences below could not supply and which both remaining answers need.</p>
-<p><code>E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy</code> (<code>[real-github-egress]</code>) failed in the merge group and the queue evicted the PR.
-It is the e2e lane's only failure: <code>70 Passed | 1 Failed | 0 Pending | 7 Skipped</code>.</p>
-<h2 id="measured-2026-09-16">Measured 2026-09-16<a class="headerlink" href="#measured-2026-09-16" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/1877">#1877</a> was enqueued at 16:56:07Z, its <code>e2e (calico)</code> merge-group run failed at 17:07, and <code>github-merge-queue[bot]</code> removed it at 17:13:38Z.
-<code>cmd/gmc/test/e2e/v2_multigateway_test.go</code> asserted <code>Succeeded</code> and got <code>Failed</code>, after eight identical attempts:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl: (56) CONNECT tunnel failed, response 502
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>HTTP_CODE=000
-</code></pre></div>
-<p>The base is not broken: the other six <code>e2e (calico)</code> merge-group runs in the window all succeeded, <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1943">#1943</a> among them, nine minutes earlier on the commit #1877 was queued on top of.</p>
-<p>The PR's own diff cannot plausibly reach this assertion: it bumps <code>github.com/prometheus/client_model</code> 0.6.2 to 0.6.3 and the <code>google.golang.org/protobuf</code> vendor files under it.
-That is a generated metric-type schema, and the failing path is an HTTP CONNECT tunnel to GitHub.
-<strong>Settled by rerun 2026-09-16 23:03Z.</strong> The same test on the same PR passed in the merge group after the branch was replayed onto current <code>main</code>, with no change to the assertion or to the code under it, and #1877 merged.
-A test that passes on rerun with no code change is a flake by the repo's own definition, so the 502 was environmental and the bump was never implicated.</p>
-<h2 id="it-recurred-the-same-day-on-main-in-the-other-cni-lane">It recurred the same day, on main, in the other CNI lane<a class="headerlink" href="#it-recurred-the-same-day-on-main-in-the-other-cni-lane" title="Permanent link">&para;</a></h2>
-<p><strong>Measured 2026-09-17 by sweeping both lanes rather than one.</strong> The reading above is scoped to <code>e2e (calico)</code> merge-group runs, which structurally cannot see a kindnet lane or a push to <code>main</code>, and both happened five hours later.
-Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35156765438">35156765438</a>, the <code>e2e / e2e</code> kindnet lane on <code>push main</code> at 2026-09-16 22:24Z, failed <em>two</em> <code>[real-github-egress]</code> specs at once on the same signature, over 27 attempts of <code>CONNECT tunnel failed, response 502</code> reporting <code>HTTP_CODE=000</code>:</p>
-<ul>
-<li><code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> (<code>cmd/gmc/test/e2e/provisioning_test.go</code>), the v1 proxy path</li>
-<li><code>E2E_V2_ProxyConnectWorks</code> (<code>cmd/gmc/test/e2e/v2_multigateway_test.go</code>), this row's own spec</li>
-</ul>
-<p>That is 38 minutes before the 23:03Z rerun the section above reads as a settle, so the rerun establishes that the branch is clean and establishes nothing about the rate.</p>
-<p><strong>It is not the first pair either.</strong> <a href="../../plan/q300-gmc-kindnet-e2e-flake/">q300-gmc-kindnet-e2e-flake.md</a> triaged the identical two-spec 502 on 2026-07-14 and assigned it a class at <code>docs/plan/q300-gmc-kindnet-e2e-flake.md:256:502s to real GitHub are the external-egress class, not the dataplane class</code> on that page.
-Its triage row closes <code>docs/plan/q300-gmc-kindnet-e2e-flake.md:21:watch for recurrence before filing separately</code> there, so this row is that separate filing and the recurrence it waited for, rather than a first sighting.</p>
-<h2 id="the-diagnostic-measured-and-shipped">The diagnostic, measured and shipped<a class="headerlink" href="#the-diagnostic-measured-and-shipped" title="Permanent link">&para;</a></h2>
-<p><strong>The row's asserted gap was half real.</strong> It reads as though neither spec captured anything proxy-side.
-Reading the 2026-09-16 job log directly (<code>gh run view --job 104998010114 --log</code>) says otherwise: the v1 spec's <code>DumpProvisioningDiagnostics</code> dumps every pod in the namespace, so it caught <strong>nine</strong> <code>upstream dial failed</code> lines across both proxy replicas, every one reading <code>dial tcp 172.182.252.137:443: i/o timeout</code>.
-The v2 spec caught none, since it dumps its AGC Deployments alone.
-So the capture was missing for v2 and already present for v1, and the v1 evidence answers the row's own question outright: the proxy accepted the destination and its TCP dial did not complete, which is not a refusal by the proxy.</p>
-<p><strong>What kept it from being read that way is a second mechanism giving the wrong answer confidently.</strong> The runner-host GitHub preflight (Q352) scored the two identical failures in that one run in opposite directions: <code>BLOCKED (HTTP 403; x-ratelimit-remaining=0)</code> on the v1 failure and <code>REACHABLE (HTTP 200 in 164ms)</code> on the v2 failure minutes later.
-<code>BLOCKED</code> prints <em>infrastructure, not a product regression.
-Re-run the job.</em>, which is what made this look settled.
-Neither verdict is wrong about the question that probe asks; neither can answer this one, because a 403 arrives through a completed TCP connection and the failure is a dial that never completed.
-Q1126 owned that defect and has shipped: <code>GitHubEgressGuidance</code> now emits a different <code>BLOCKED</code> string when a response arrived, saying outright that the completed connection argues against a dial-level cause and routing the reader here.
-It was a different mechanism in a different file, and no one fix closed both; the link is dropped because that row is gone.</p>
-<p><strong>What shipped.</strong> <code>DumpEgressProxyDiagnostics</code> runs from both specs' <code>AfterEach</code>, gated on a failure and the <code>real-github-egress</code> label, reads each proxy replica's log individually, and stamps an <code>EGRESSPROXY CONNECT ATTRIBUTION</code> banner with one of four verdicts: <code>NO-EVIDENCE</code>, <code>PROXY-NOT-REACHED</code>, <code>PROXY-REFUSED</code>, <code>UPSTREAM-DIAL-FAILED</code>.
-Its pod selector is read off the Deployment's own <code>.spec.selector.matchLabels</code> rather than assumed: v1 selects <code>app: actions-gateway-proxy</code> and a v2 <code>EgressProxy</code> selects <code>actions-gateway.com/egress-proxy: &lt;name&gt;</code> with no bare <code>app</code> key at all (Q582), so a hardcoded label finds nothing on the other version and scores <code>NO-EVIDENCE</code>.
-Scoring is a pure function over log text, so every verdict is driven by a unit test, including the two that say the banner attributes nothing.
-A classifier returning one verdict always reddens four of the seven arms.
-The rule is in <a href="../../development/testing/#egressproxy-connect-attribution-q1119">testing.md § EgressProxy CONNECT attribution</a>.</p>
-<h2 id="why-it-is-parked-rather-than-closed">Why it is parked rather than closed<a class="headerlink" href="#why-it-is-parked-rather-than-closed" title="Permanent link">&para;</a></h2>
-<p>A merge-group-only test that fails on external network reachability spends a full queue cycle per occurrence and evicts a PR whose own gates were all green, and <code>[real-github-egress]</code> says the dependency is real GitHub rather than the fake.
-Three occurrences have now spent a queue cycle, a <code>main</code> build and a second <code>main</code> spec between them.</p>
-<p>The two answers left both need the same fact, and the diagnostic is what produces it rather than what settles it.
-Eight attempts already happen inside the test and all eight failed the same way inside the window, so a retry budget is a wider race rather than a fix.
-The row ruled that out and it stays ruled out.
-Demotion out of the merge-group gate is the expensive answer: <code>[real-github-egress]</code> says the dependency is real GitHub, which is exactly the coverage a merge-group gate is there to hold, so it is worth paying only against evidence that the refusing hop is one this repo does not own.
-The next occurrence carries that evidence in its banner.</p>
-<p><strong>Corrected 2026-09-17.</strong> An earlier revision argued demotion down on the ground that one eviction does not buy it, which read the occurrence as isolated.
-The count is three across both CNI lanes and both trigger events, and the July pair was already triaged in the tree.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p><code>i/o timeout</code> on a dial to a GitHub address is where the existing evidence stops, and it is consistent with the SYN being dropped before it left the node and with it being lost past the node.
-<code>UPSTREAM-DIAL-FAILED</code> names that as the open question rather than answering it; separating the two needs something outside the proxy's egress NetworkPolicy reaching the same address in the same window, which nothing captures today.</p>
+<h1 id="preflight-blocked-asserts-in-cluster-egress-is-refused-too-unmeasured">Preflight <code>BLOCKED</code> asserts in-cluster egress is refused too, unmeasured<a class="headerlink" href="#preflight-blocked-asserts-in-cluster-egress-is-refused-too-unmeasured" title="Permanent link">&para;</a></h1>
+<p>Both <code>BLOCKED</code> arms of <code>GitHubEgressGuidance</code> tell the operator that the in-cluster path "NATs through the same address, so it is refused too", and conclude the spec's failure is attributable to runner egress.
+The NAT half is a property of the cluster and is not in question.
+The inference drawn from it is: that a refusal of the <em>runner host</em> predicts a refusal of <em>in-cluster</em> traffic to GitHub.</p>
+<p><strong>The mechanism is unverified, and this row asserts no defect.</strong> The probe fetches <code>https://api.github.com/zen</code> unauthenticated, and the refusal that drove Q1126's own evidence was <code>API rate limit exceeded for 52.160.165.208</code>, GitHub's unauthenticated per-IP bucket.
+In-cluster traffic from a runner is authenticated with a GitHub App or runner token.
+If GitHub buckets authenticated requests separately from the unauthenticated per-IP pool, a 403 on the probe says nothing about whether the in-cluster path is refused, and the banner would be sending an operator to re-run a job whose failure is real.
+If it does not, the sentence is correct as written and this row closes with a citation.</p>
+<p>Nobody has measured GitHub's bucketing here, on either side.
+That is the whole task: establish whether an unauthenticated per-IP 429/403 predicts refusal for an authenticated request from the same source address, then either cite it in the godoc or narrow the sentence to what the probe actually establishes.</p>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<p>The clause predates the layer split and was carried through it unchanged, so it is not a regression.
+The layer split settled <em>which layer</em> a <code>BLOCKED</code> verdict speaks at; this row asks whether the verdict's claim about the in-cluster path holds at all.</p>
+<p>Raised in independent review of the preflight-layer PR, which deliberately left it alone rather than edit an operator instruction on an unmeasured hunch.
+Any change here moves a string two unit tests pin, so it lands with its own test update.</p>
 
 
 

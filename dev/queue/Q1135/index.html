@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1126/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1135/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>The runner-host preflight scores an HTTP answer for a dial failure - GitHub Actions Gateway</title>
+        <title>Nothing keeps the shell egress banner in step with the Go one - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-runner-host-preflight-scores-an-http-answer-for-a-dial-failure" class="md-skip">
+        <a href="#nothing-keeps-the-shell-egress-banner-in-step-with-the-go-one" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The runner-host preflight scores an HTTP answer for a dial failure
+              Nothing keeps the shell egress banner in step with the Go one
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-defect-is-the-layer-not-the-scoring-table" class="md-nav__link">
+  <a href="#why-the-untested-copy-is-the-one-that-matters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The defect is the layer, not the scoring table
+        Why the untested copy is the one that matters
       
     </span>
   </a>
@@ -2597,10 +2597,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-to-change" class="md-nav__link">
+  <a href="#the-class-has-already-cost-something-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What to change
+        The class has already cost something here
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-candidates-neither-settled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two candidates, neither settled
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
       
     </span>
   </a>
@@ -2627,36 +2649,30 @@
   
 
 
-<h1 id="the-runner-host-preflight-scores-an-http-answer-for-a-dial-failure">The runner-host preflight scores an HTTP answer for a dial failure<a class="headerlink" href="#the-runner-host-preflight-scores-an-http-answer-for-a-dial-failure" title="Permanent link">&para;</a></h1>
-<p>The Q352 attribution banner scored two identical spec failures in one run in opposite directions, and the one it got most confidently wrong is the one a reader acted on.</p>
-<p><strong>Measured 2026-09-17</strong> from the 2026-09-16 kindnet e2e job log (<code>gh run view --job 104998010114 --log</code>, run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35156765438">35156765438</a>).
-Both <code>[real-github-egress]</code> proxy-CONNECT specs failed on <code>curl: (56) CONNECT tunnel failed, response 502</code>, minutes apart, on the same signature.
-The failure-time <code>AfterEach</code> stamped:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>=== RUNNER-HOST GITHUB PREFLIGHT: BLOCKED (HTTP 403 in 71ms; x-ratelimit-remaining=0; body: {"message":"API rate limit exceeded for 52.160.165.208. …
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>=== RUNNER-HOST GITHUB PREFLIGHT: REACHABLE (HTTP 200 in 164ms) ===
-</code></pre></div>
-<p><code>BLOCKED</code> prints <em>this spec's failure is attributable to runner-&gt;GitHub egress: infrastructure, not a product regression (Q352).
-Re-run the job.</em> <code>REACHABLE</code> prints <em>treat this failure as real and inspect the in-cluster path.</em> Same run, same signature, opposite instructions.</p>
-<h2 id="the-defect-is-the-layer-not-the-scoring-table">The defect is the layer, not the scoring table<a class="headerlink" href="#the-defect-is-the-layer-not-the-scoring-table" title="Permanent link">&para;</a></h2>
-<p><code>ScoreGitHubEgress</code>'s 403 → <code>BLOCKED</code> rule is Q648's fix and it is correct for the question that probe asks: <code>/zen</code> needs no credentials, so a refusal is about the source address, and the in-cluster path NATs through it.
-The defect is that every row of that table describes a response GitHub <strong>sent</strong>, which means the TCP connection and the TLS handshake both completed.
-The failure being attributed is a <code>net.DialTimeout</code> that never got that far.
-The proxy's own logs on that run recorded nine <code>dial tcp 172.182.252.137:443: i/o timeout</code> across both replicas, spanning the whole window in which the probe returned 403 and then 200.
-A rate limit cannot produce a dial timeout, so <code>BLOCKED</code> was not an explanation of that failure; it was a true statement about a different layer, delivered as a verdict on this one.</p>
-<p>The banner does not say so, which is what makes it expensive: it is the strongest-looking signal on the page, it names the spec that failed, and its guidance ends in an instruction.</p>
-<h2 id="what-to-change">What to change<a class="headerlink" href="#what-to-change" title="Permanent link">&para;</a></h2>
-<p>The probe's own reading is sound and worth keeping; what it needs is a scope sentence rather than a narrower table.
-Two candidates, and they are not exclusive:</p>
+<h1 id="nothing-keeps-the-shell-egress-banner-in-step-with-the-go-one">Nothing keeps the shell egress banner in step with the Go one<a class="headerlink" href="#nothing-keeps-the-shell-egress-banner-in-step-with-the-go-one" title="Permanent link">&para;</a></h1>
+<p>The runner-host GitHub egress verdict is implemented twice, and only one copy is tested.
+<code>cmd/gmc/test/utils.GitHubEgressGuidance</code> is a pure function with a table test; the <code>Collect diagnostic info on failure</code> step in <code>e2e-reusable.yml</code> re-implements the same decision in a <code>case</code> over <code>$gh_code</code>, and no test drives it.
+What holds them together is a godoc sentence saying to change both together.</p>
+<h2 id="why-the-untested-copy-is-the-one-that-matters">Why the untested copy is the one that matters<a class="headerlink" href="#why-the-untested-copy-is-the-one-that-matters" title="Permanent link">&para;</a></h2>
+<p>The shell mirror exists precisely for the case where the suite process died before its <code>AfterEach</code> could run.
+So when the two disagree, the shell copy is the only banner in the log, and its wrong advice is the whole of what the operator reads.
+The Go copy's test cannot see that.</p>
+<h2 id="the-class-has-already-cost-something-here">The class has already cost something here<a class="headerlink" href="#the-class-has-already-cost-something-here" title="Permanent link">&para;</a></h2>
+<p>Q1126 shipped the layer caveat into both copies: an HTTP refusal arrives over a completed TCP connection, so it is evidence against a dial-level cause rather than for one.
+The Go side now has a test that fails if the two <code>BLOCKED</code> arms collapse back into one, and the shell side has the same sentences with nothing asserting they stay.
+A future edit to either can drift the pair silently, which is the state Q1126 was filed out of.</p>
+<h2 id="two-candidates-neither-settled">Two candidates, neither settled<a class="headerlink" href="#two-candidates-neither-settled" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>State the layer in the guidance.</strong> A non-2xx verdict already proves the runner completed a TCP connection to GitHub, so <code>BLOCKED</code> on a 403/429 could say that outright instead of only <em>re-run</em>.
-  It is evidence <em>against</em> a dial-level cause, which is the opposite of how it currently reads.</li>
-<li><strong>Add a layer-matched probe.</strong> A bare <code>net.DialTimeout</code> to <code>api.github.com:443</code> from the test process answers the hop a CONNECT 502 failed at, and costs no credentials and no HTTP request.
-  Where the TCP dial succeeds from the runner and the proxy's dial times out in the same window, the divergence is in-cluster; where both fail, it is the segment.</li>
+<li><strong>Extend the workflow-step harness.</strong> <code>scripts/ci/workflow-step-body.sh</code> already extracts a step's body and <code>workflow-acting-steps-test.sh</code> drives one with stubs on <code>PATH</code>.
+  Its header derives its subject deliberately as the steps that <strong>act</strong> rather than report, on proportionality grounds, and this step reports.
+  So adopting it here means widening that derivation, and the argument for widening is that a reporting step's decision was wrong and cost a triage.
+  Note the step runs under <code>set +e</code> and dumps a dozen <code>kubectl</code> commands, so a case needs stubs for all of them.</li>
+<li><strong>Assert the text instead.</strong> A gate that requires the distinctive sentences of each <code>GitHubEgressGuidance</code> arm to appear in the workflow's matching arm is far smaller than driving the body, and catches drift rather than behaviour.
+  It buys less and costs a fraction; whether that trade is right is the question this row is for.</li>
 </ul>
-<p><a href="../Q1119/">Q1119</a> shipped the proxy-side half of this, an <code>EGRESSPROXY CONNECT ATTRIBUTION</code> banner that names the refusing hop from the proxy's own logs, and is parked on its next occurrence.
-That banner's <code>UPSTREAM-DIAL-FAILED</code> guidance already carries one sentence saying an HTTP-layer verdict cannot explain a dial-level failure, so the two banners no longer contradict each other silently; this row is the other side of the same reading, in the mechanism that produced the wrong instruction.</p>
-<p><code>.github/workflows/e2e-reusable.yml</code> mirrors the scoring table in shell for the case where the suite process dies before its <code>AfterEach</code> runs (<a href="../../development/testing/#runnergithub-egress-attribution-q352">testing.md § Runner→GitHub egress attribution</a> says so, and <code>github_egress.go</code>'s godoc says to change both together).
-Whatever lands here lands there too.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>Not a flake: no run has failed on this, and the defect is a silent divergence rather than a failure.
+The measurement behind the class is on the 2026-09-16 kindnet run (job 104998010114), recorded in <a href="../../development/testing/#runnergithub-egress-attribution-q352">testing.md</a>.</p>
 
 
 

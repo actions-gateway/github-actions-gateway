@@ -2734,14 +2734,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> either proxy-CONNECT spec fails again on <code>curl: (56) CONNECT tunnel failed, response 502</code>, in either CNI lane, on a PR, a …</td>
 </tr>
 <tr>
-<td><a href="Q1126/">Q1126</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/github_egress_preflight_test.go">The runner-host preflight scores an HTTP answer for a dial failure</a></td>
-<td><code>ci</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The Q352 attribution banner scored two identical spec failures in one run in opposite directions, and the one it got most confidently wrong …</td>
-</tr>
-<tr>
 <td><a href="Q1106/">Q1106</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-uses-pinned-test.sh">A test probe lands in the live workflows dir and races concurrent gates</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3958,12 +3950,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Reading a workflow job's log to confirm a gate actually ran is the instrument …</td>
 </tr>
 <tr>
+<td><a href="Q1135/">Q1135</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Nothing keeps the shell egress banner in step with the Go one</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The runner-host GitHub egress verdict is implemented twice, and only one copy is tested.</td>
+</tr>
+<tr>
 <td><a href="Q1139/">Q1139</a></td>
 <td>Let a pin-bearing page cite a measured kubectl version</td>
 <td><code>debt</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>check-release-pins.sh</code> asserts that every release-version literal on the five pin-bearing pages names the current release, so a …</td>
+</tr>
+<tr>
+<td><a href="Q1137/">Q1137</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/github_egress.go">Preflight <code>BLOCKED</code> asserts in-cluster egress is refused too, unmeasured</a></td>
+<td><code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Both <code>BLOCKED</code> arms of <code>GitHubEgressGuidance</code> tell the operator that the in-cluster path "NATs through the same address, so it is refused …</td>
 </tr>
 <tr>
 <td><a href="Q1138/">Q1138</a></td>
