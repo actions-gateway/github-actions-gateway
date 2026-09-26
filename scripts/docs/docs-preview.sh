@@ -5,6 +5,7 @@
 # Usage:
 #   scripts/docs/docs-preview.sh serve   # live-reload preview at http://localhost:8000
 #   scripts/docs/docs-preview.sh build   # strict build of both scopes: site/, site-dev/
+#   scripts/docs/docs-preview.sh export  # offline release-scope site, zipped, in site-export/
 #
 # The venv lives in .venv-docs/ (gitignored) and is reused across runs; it is
 # (re)provisioned only when requirements-docs.txt changes, so the toolchain
@@ -20,6 +21,8 @@ readonly repo_root
 readonly venv_dir="${repo_root}/.venv-docs"
 readonly requirements="${repo_root}/requirements-docs.txt"
 readonly stamp="${venv_dir}/.requirements.sha256"
+readonly export_dir="${repo_root}/site-export"
+readonly export_name="actions-gateway-site"
 
 die() {
   printf 'docs-preview: %s\n' "$*" >&2
@@ -59,8 +62,8 @@ main() {
   [[ -f "${requirements}" ]] || die "missing ${requirements}"
 
   case "${cmd}" in
-    serve | build) ;;
-    *) die "unknown command '${cmd}' (expected: serve | build)" ;;
+    serve | build | export) ;;
+    *) die "unknown command '${cmd}' (expected: serve | build | export)" ;;
   esac
 
   ensure_venv
@@ -71,6 +74,19 @@ main() {
   # make editing unusable.
   if [[ "${cmd}" == "serve" ]]; then
     exec "${venv_dir}/bin/mkdocs" serve --dev-addr "127.0.0.1:${PORT:-8000}"
+  fi
+
+  # The zip's top-level entry is ${export_name}/, so unzipping never scatters
+  # pages into the current directory.
+  if [[ "${cmd}" == "export" ]]; then
+    rm -rf "${export_dir}"
+    "${venv_dir}/bin/mkdocs" build --strict -f "${repo_root}/mkdocs-offline.yml" \
+      --site-dir "${export_dir}/${export_name}"
+    python3 -c 'import shutil,sys; shutil.make_archive(sys.argv[1], "zip", sys.argv[2], sys.argv[3])' \
+      "${export_dir}/${export_name}" "${export_dir}" "${export_name}"
+    printf 'docs-preview: open %s/%s/index.html, or share %s/%s.zip\n' \
+      "${export_dir}" "${export_name}" "${export_dir}" "${export_name}"
+    return 0
   fi
 
   # --strict fails on the link/anchor warnings mkdocs.yml's `validation` block

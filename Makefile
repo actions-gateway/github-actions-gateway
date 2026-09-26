@@ -701,6 +701,12 @@ docs-serve: ## Live-reload the docs/marketing site at http://localhost:8000 (iso
 docs-build: ## Build + strict-validate both docs site scopes (site/, site-dev/)
 	scripts/docs/docs-preview.sh build
 
+# A self-contained copy of the release-scope site for reading without a server
+# or network: relative .html links and an inlined search index (mkdocs-offline.yml).
+.PHONY: docs-export
+docs-export: ## Export the docs site for offline viewing: site-export/actions-gateway-site/ + .zip
+	scripts/docs/docs-preview.sh export
+
 # The heavy phases (test: one workspace-wide `go test`; lint: a per-module
 # loop) live in scripts/go/go-test.sh and
 # scripts/go/go-lint.sh, which apply the local auto-throttle themselves

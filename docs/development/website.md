@@ -587,6 +587,7 @@ Convert against 20px, or measure, before filing a size finding.
 ```sh
 make docs-serve   # live-reload preview at http://localhost:8000/
 make docs-build   # strict build of both scopes into site/ and site-dev/
+make docs-export  # offline copy of the release scope, plus a zip, in site-export/
 ```
 
 Both targets provision an **isolated venv** (`.venv-docs/`, gitignored) from the pinned `requirements-docs.txt` and reuse it across runs, so the docs toolchain never touches the host Python — `python3` is the only host prerequisite (`scripts/ci/check-tools.sh`, extended tier).
@@ -597,6 +598,15 @@ The toolchain is pinned **exactly** — MkDocs 2.0 is incompatible with Material
 **`make check` does not run `make docs-build`.** The fast gate covers `doc-links`, which resolves links and anchors against the Markdown; MkDocs' own strict validation runs in CI (`pages.yml`) and locally only when you invoke it.
 A change that alters rendering is therefore not verified by a green `make check` alone.
 Run `make docs-build` too, and for the card grids or a wide table, serve the site and look.
+
+### Offline export
+
+`make docs-export` builds the release scope into `site-export/actions-gateway-site/` and zips it to `site-export/actions-gateway-site.zip`, for reading the site with no server and no network.
+Unzip it and open `index.html`.
+
+It builds from `mkdocs-offline.yml`, which inherits `mkdocs.yml` and adds Material's `offline` plugin.
+That plugin rewrites every link to a relative `.html` path and inlines the search index, so navigation and search work from disk; fonts, CSS, and JavaScript are already self-hosted.
+Three things still need the live site: the version selector (it reads mike's `versions.json`), the outbound GitHub links, and the announce bar, which is frozen at the newest tag in your checkout.
 
 ## The two link gates
 

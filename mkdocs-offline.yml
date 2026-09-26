@@ -1,0 +1,9 @@
+# Offline export of the site (`make docs-export`): the release scope of
+# mkdocs.yml, plus Material's `offline` plugin, which switches every link to a
+# relative `.html` path and inlines the search index so the pages work opened
+# straight from disk. `plugins` replaces rather than merges under INHERIT, so
+# `search` is restated. See docs/development/website.md § Offline export.
+INHERIT: mkdocs.yml
+plugins:
+  - search
+  - offline

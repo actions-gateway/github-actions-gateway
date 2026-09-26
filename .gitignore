@@ -32,6 +32,8 @@ CLAUDE.local.md
 /site-dev/
 /_site/
 /_site-dev/
+# `make docs-export` output: the offline site and its zip
+/site-export/
 # Local-build of the fakegithub helper (`make` at repo root drops it here);
 # root-anchored so it doesn't shadow the test/fakegithub/ source directory.
 /fakegithub
