@@ -47,7 +47,9 @@
 #      plan, and a plan with no ledger all fail rather than pass unread.
 #   5. Every row a scope ledger marks as gating carries that label, and a ledger
 #      marks only its own rung's label. A closed row has no item file and is
-#      skipped, since the ledger keeps its Q-ID once it ships.
+#      skipped, since the ledger keeps its Q-ID once it ships. A cell naming a
+#      gate with anything else in it fails, since read loosely it would drop a
+#      gating row out of this check.
 # "Names as gating" is the ledger's `Gates?` column, which every release plan
 # already carries by convention; the rest of a plan mentions many rows.
 #
@@ -292,15 +294,29 @@ done < <(awk '
 	}
 ' "$PAGE")
 
-# The `X.Y-gate` labels one item's frontmatter carries, one per line.
+# The `X.Y-gate` labels one item's frontmatter carries, one per line. Both YAML
+# list forms queue-lint accepts are read, quoted or bare: a block list, and an
+# inline `labels: [a, "b"]`. Reading only the block form passes a gate label
+# written the other way unbound.
 item_gate_labels() {
-	awk '
+	awk -v sq="'" '
+		function emit(v) {
+			gsub(/["]/, "", v)
+			gsub(sq, "", v)
+			gsub(/^[ \t]+|[ \t]+$/, "", v)
+			if (v ~ /^[0-9]+\.[0-9]+-gate$/) print v
+		}
 		NR == 1 && /^---$/ { in_fm = 1; next }
 		in_fm && /^---$/ { exit }
-		in_fm && /^[a-z]/ { in_labels = ($0 ~ /^labels:/) ; next }
-		in_fm && in_labels && /^[ \t]*-[ \t]*[0-9]+\.[0-9]+-gate[ \t]*$/ {
-			sub(/^[ \t]*-[ \t]*/, ""); sub(/[ \t]*$/, ""); print
+		in_fm && /^[a-z]/ {
+			in_labels = ($0 ~ /^labels:/)
+			if (in_labels && match($0, /\[.*\]/)) {
+				n = split(substr($0, RSTART + 1, RLENGTH - 2), item, ",")
+				for (i = 1; i <= n; i++) emit(item[i])
+			}
+			next
 		}
+		in_fm && in_labels && /^[ \t]*-/ { v = $0; sub(/^[ \t]*-/, "", v); emit(v) }
 	' "$1"
 }
 
@@ -350,6 +366,11 @@ for version in "${!rung_plan[@]}"; do
 	while IFS=$'\t' read -r id cell; do
 		[[ -n "$id" ]] || continue
 		ledger_cell["$version/$id"]="$cell"
+		if [[ "$cell" == *-gate* && ! "$cell" =~ ^[0-9]+\.[0-9]+-gate$ ]]; then
+			fail "$plan's scope ledger marks $id as '$cell', which names a gate but is not one label
+       a Gates? cell holds exactly one X.Y-gate label, 'rides' or 'gates'; put any qualifier in the Status cell"
+			continue
+		fi
 		[[ "$cell" =~ ^[0-9]+\.[0-9]+-gate$ ]] || continue
 		((ledger_gating_n++)) || true
 		# 5. A row the ledger names as gating carries that label.

@@ -271,6 +271,43 @@ expect label-no-ledger 1 'a gate label whose rung'"'"'s plan has no scope ledger
 	"$(write_ladder noledger)" \
 	"$(write_labelled_store noledger Q1:bug,2.0-gate Q4:milestone,1.9-gate)"
 
+# queue-lint accepts a quoted item and an inline list, so both must read as
+# labels. Each fixture adds a row the ledger does not name: read, it fails.
+write_plan inline 19 "$LEDGER_19"
+write_plan inline ga "$LEDGER_GA"
+INLINE_STORE="$(write_labelled_store inline Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- '---\nid: Q7\nlabels: [ci, "2.0-gate"]\nstatus: ready\n---\n\n# Q7\n' > "$INLINE_STORE/Q7.md"
+expect label-inline 1 'an inline-list gate label its ledger does not name fails' \
+	"$(write_ladder inline)" "$INLINE_STORE"
+
+write_plan quoted 19 "$LEDGER_19"
+write_plan quoted ga "$LEDGER_GA"
+QUOTED_STORE="$(write_labelled_store quoted Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\n\n# Q8\n" > "$QUOTED_STORE/Q8.md"
+expect label-quoted 1 'a quoted block-list gate label its ledger does not name fails' \
+	"$(write_ladder quoted)" "$QUOTED_STORE"
+
+# The control: the same two forms, named by the ledger, pass, so the red above is
+# the ledger check reading them and not a parse failure.
+write_plan forms 19 "$LEDGER_19"
+write_plan forms ga "$LEDGER_GA
+| Q7 | Inline | \`2.0-gate\` | 🔲 |
+| Q8 | Quoted | \`2.0-gate\` | 🔲 |"
+FORMS_STORE="$(write_labelled_store forms Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- '---\nid: Q7\nlabels: [ci, "2.0-gate"]\nstatus: ready\n---\n\n# Q7\n' > "$FORMS_STORE/Q7.md"
+printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\n\n# Q8\n" > "$FORMS_STORE/Q8.md"
+expect label-forms-named 0 'inline and quoted gate labels the ledger names pass' \
+	"$(write_ladder forms)" "$FORMS_STORE"
+
+# A qualifier in the Gates? cell must not turn a gating row into a non-gating
+# one: read loosely, Q5 below is unlabelled and nothing would say so.
+write_plan qual 19 "$LEDGER_19"
+write_plan qual ga "$LEDGER_GA
+| Q5 | Qualified | \`2.0-gate\` (from 1.9) | 🔲 |"
+expect gates-cell-qualified 1 'a Gates? cell naming a gate with extra text fails' \
+	"$(write_ladder qual)" \
+	"$(write_labelled_store qual Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
+
 NOCOL_PLAN="$FIXTURE_DIR/plan.nocol.ga.md"
 write_plan nocol 19 "$LEDGER_19"
 printf '# Plan\n\n## Scope ledger\n\n| Q-ID | Item | Status |\n|---|---|---|\n| Q1 | The removal | 🔲 |\n' > "$NOCOL_PLAN"
