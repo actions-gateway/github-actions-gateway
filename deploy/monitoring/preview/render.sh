@@ -31,6 +31,7 @@
 # Prerequisites: docker, kind, helm, kubectl, curl on PATH.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MON_DIR="$(dirname "$SCRIPT_DIR")"

@@ -66,9 +66,12 @@ mkdir -p "$SELECT_DIR/adir.sh" # a directory, not a script
 
 # A throwaway repo covering every state the gate has to classify: tracked,
 # tracked-in-a-subdir, untracked-and-not-ignored, untracked-but-gitignored,
-# deleted-but-tracked, plus non-.sh and non-scripts/ paths that must not match.
+# deleted-but-tracked, scripts outside scripts/ that must match (Q1088), plus
+# non-.sh, vendored and testdata paths that must not.
 GIT_DIR_FIXTURE="$FIXTURE_DIR/repo"
-mkdir -p "$GIT_DIR_FIXTURE/scripts/lib"
+mkdir -p "$GIT_DIR_FIXTURE/scripts/lib" "$GIT_DIR_FIXTURE/docs/examples" \
+	"$GIT_DIR_FIXTURE/vendor/x" "$GIT_DIR_FIXTURE/tools/vendor/y" \
+	"$GIT_DIR_FIXTURE/cmd/a/testdata"
 (
 	cd "$GIT_DIR_FIXTURE"
 	git init -q -b main .
@@ -80,16 +83,21 @@ mkdir -p "$GIT_DIR_FIXTURE/scripts/lib"
 	: >scripts/lib/nested.sh
 	: >scripts/notes.txt
 	: >toplevel.sh
+	: >docs/examples/operator.sh
+	: >vendor/x/vendored.sh
+	: >tools/vendor/y/nested-vendored.sh
+	: >cmd/a/testdata/fixture.sh
 	git add -A >/dev/null
 	git -c user.name=test -c user.email=test@example.com commit -qm init --no-verify
 	rm scripts/deleted.sh # tracked in HEAD, absent from the worktree
 	: >scripts/untracked.sh
 	: >scripts/scratch.sh # untracked AND gitignored
 	: >scripts/lib/untracked-nested.sh
+	: >docs/examples/untracked-operator.sh
 )
 
 got="$( (cd "$GIT_DIR_FIXTURE" && script_candidates | select_present_files | LC_ALL=C sort) )"
-want=$'scripts/lib/nested.sh\nscripts/lib/untracked-nested.sh\nscripts/tracked.sh\nscripts/untracked.sh'
+want=$'docs/examples/operator.sh\ndocs/examples/untracked-operator.sh\nscripts/lib/nested.sh\nscripts/lib/untracked-nested.sh\nscripts/tracked.sh\nscripts/untracked.sh\ntoplevel.sh'
 expect git-repo-selection "$want" "$got"
 
 # --- the real worktree: every tracked script stays covered ------------------

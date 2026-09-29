@@ -110,7 +110,8 @@ A module in the workspace therefore drags every change to it through an image ba
 
 It cannot live under `scripts/` either.
 A Go module brings a `vendor/` tree, and vendored dependencies ship shell scripts (41 across the current `vendor/` and `tools/vendor/` — `zap/checklicense.sh`, `kubebuilder/test_e2e.sh`, and others).
-[`scripts/ci/shellcheck-scripts.sh`](../../scripts/ci/shellcheck-scripts.sh) lints `scripts/**/*.sh` recursively, so third-party shell would land in the shellcheck gate.
+[`make script-modes-check`](../../scripts/ci/check-script-modes.sh) reads every `scripts/**/*.sh` recursively, so third-party shell would land in a gate that asserts this repo's executable-bit conventions.
+The shellcheck and errexit-prologue gates read every `*.sh` in the tree but exclude `vendor/` by pattern (Q1088), so they are not the obstacle.
 
 ### Wiring a new first-party module
 

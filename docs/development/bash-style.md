@@ -49,7 +49,7 @@ Measured on bash 5.3, with a builder whose first two steps fail:
 | `build` called directly, no substitution | 1 | 0 |
 
 `shopt -s inherit_errexit` is the remedy to reach for: one line at the top of the file covers every *plain* substitution in it, where the other two working forms have to be repeated per call site.
-It is required in every executable script under `scripts/`, and [`make errexit-prologue-check`](../../scripts/ci/check-errexit-prologue.sh) enforces that.
+It is required in every shell script in the tree outside `vendor/` and `testdata/`, and [`make errexit-prologue-check`](../../scripts/ci/check-errexit-prologue.sh) enforces that.
 Sourced `lib/` files are exempt and must not declare it: they run under the caller's shell options, a caller's shopt already covers the functions they define, and declaring it in a sourced file would switch the option on for every caller instead.
 
 **It does not cover a declaration builtin.** The last-but-one row above is the trap: `local`, `declare`, `export` and `readonly` return their *own* status, which replaces the substitution's, so `local repo="$(build)"` stays exit 0 even with the shopt set.

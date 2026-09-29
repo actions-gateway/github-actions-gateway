@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Shellcheck every shell script present under scripts/. The git pathspec
-# 'scripts/*.sh' matches recursively (git's default '*' spans '/'), so it covers
-# every scripts/<group>/*.sh — and any group added later — without re-touching
-# the gate.
+# Shellcheck every shell script in the tree outside the vendored trees and test
+# fixtures — the selection is shell_candidates in scripts/lib/common.sh. Its
+# pathspec matches recursively (git's default '*' spans '/'), so a script added
+# anywhere later is covered without re-touching the gate.
 #
 # The file set is `git ls-files --cached --others --exclude-standard`: tracked
 # files PLUS untracked ones that are not gitignored. `--cached` alone made a
@@ -24,13 +24,11 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 # --- file selection (asserted by shellcheck-scripts-test.sh) -----------------
 
-# script_candidates — the git-known candidate paths under scripts/. The query
-# and the existence/de-dupe filter it feeds are git_candidates and
-# select_present_files in scripts/lib/common.sh, shared with the doc-link,
-# conflict-marker and plan-ref gates (Q619); this wrapper just pins the
-# pathspec.
+# script_candidates — the git-known candidate scripts. The query and the
+# existence/de-dupe filter it feeds are shell_candidates and select_present_files
+# in scripts/lib/common.sh, shared with the errexit-prologue gate (Q1088).
 script_candidates() {
-	git_candidates 'scripts/*.sh'
+	shell_candidates
 }
 
 main() {
@@ -50,7 +48,7 @@ main() {
 		echo "no scripts to shellcheck"
 		return 0
 	fi
-	echo "==> shellcheck ${#files[@]} script(s) under scripts/"
+	echo "==> shellcheck ${#files[@]} script(s)"
 	shellcheck "${files[@]}"
 }
 

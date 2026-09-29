@@ -22,6 +22,7 @@
 # Requires: yq (https://github.com/mikefarah/yq) for the structured manifest
 # edit — it cannot corrupt the YAML the way a text substitution could.
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 

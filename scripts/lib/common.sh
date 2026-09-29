@@ -75,6 +75,15 @@ git_candidates() {
 	git -c core.quotePath=false ls-files --cached --others --exclude-standard -- "$@"
 }
 
+# shell_candidates — the git-known shell scripts the shell gates read: every
+# `*.sh` in the tree, less the vendored trees and test fixtures, which this repo
+# may not reformat. Exclusion rather than an allowlist of roots, so a script
+# written somewhere new is covered unless somebody opts it out (Q1088). Shared
+# by the shellcheck and errexit-prologue gates; same contract as git_candidates.
+shell_candidates() {
+	git_candidates '*.sh' ':(exclude,glob)**/vendor/**' ':(exclude,glob)**/testdata/**'
+}
+
 # select_present_files — read candidate paths on stdin, emit the ones a reader
 # can actually open, in input order. Two classes have to go:
 #   * a deleted-but-tracked path — `--cached` still lists a file removed from

@@ -13,7 +13,7 @@
 # understands only these lists.
 
 # The one-command pre-review gate. Run this before requesting review or opening a
-# PR: gofmt + golangci-lint, the backlog store rules, shellcheck over scripts/, and
+# PR: gofmt + golangci-lint, the backlog store rules, shellcheck over every script, and
 # the (plain) unit tests — the fast local loop. The CI `unit-test` job runs the
 # same unit tests but under the race detector (`make test-race`); that heavier
 # run stays out of `check` so the dev gate doesn't become an unthrottled `-race`

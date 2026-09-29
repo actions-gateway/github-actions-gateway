@@ -140,7 +140,7 @@ STUB'
 #
 # Reading the pathspec predicts coverage; planting a script measures it.
 SELECT_REPO="$FIXTURE_DIR/repo"
-mkdir -p "$SELECT_REPO/scripts/ci"
+mkdir -p "$SELECT_REPO/scripts/ci" "$SELECT_REPO/docs" "$SELECT_REPO/vendor" "$SELECT_REPO/cmd/testdata"
 (
 	cd "$SELECT_REPO"
 	git init -q -b main .
@@ -179,6 +179,18 @@ set -euo pipefail
 echo hi'
 # Gitignoring is the documented opt-out for scratch scripts, and must still work.
 selection_case gitignored-skipped 0 scripts/ignored.sh '#!/usr/bin/env bash
+set -euo pipefail
+echo hi'
+# Q1088: the selection is every script in the tree, not only scripts/ — an
+# operator example missing the shopt fails — while the vendored trees and test
+# fixtures, which this repo may not rewrite, stay out.
+selection_case outside-scripts-scanned 1 docs/bad.sh '#!/usr/bin/env bash
+set -euo pipefail
+echo hi'
+selection_case vendor-skipped 0 vendor/bad.sh '#!/usr/bin/env bash
+set -euo pipefail
+echo hi'
+selection_case testdata-skipped 0 cmd/testdata/bad.sh '#!/usr/bin/env bash
 set -euo pipefail
 echo hi'
 

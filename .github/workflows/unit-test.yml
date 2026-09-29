@@ -133,6 +133,10 @@ jobs:
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
+              # shellcheck and the errexit-prologue gate read every *.sh in the
+              # tree, not only scripts/ (Q1088), so a script edited anywhere
+              # must start the job that reads it.
+              - '**/*.sh'
               # The shipped runner template library and the dogfood e2e overlays
               # that consume it (Q554). Neither is shell, so shellcheck skips
               # both — but this job's `make template-library-check` reconciles
