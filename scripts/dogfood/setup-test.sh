@@ -116,6 +116,14 @@ kubectl() {
 	config\ current-context) echo "${CONTEXT}" ;;
 	get\ crd*) echo "${CRD_STRATEGY}" ;;
 	get\ secret\ webhook-server-cert*) echo "${CA_BUNDLE}" ;;
+	# The keychain-free path reads back the two ids, never the key.
+	get\ secret\ github-app-v1*)
+		[[ "${APP_SECRET_PRESENT}" == 1 ]] || return 1
+		case "$*" in
+		*appId*) printf '%s' "${APP_SECRET_APP}" | base64 ;;
+		*installationId*) printf '%s' "${APP_SECRET_INST}" | base64 ;;
+		esac
+		;;
 	# The conversion probe names a version in the resource, which is what tells
 	# it apart from apply_cr's existing-image read below — that pattern would
 	# otherwise swallow the runnertemplate one. CONVERSION_GET_RC is how a test
@@ -164,7 +172,10 @@ tar() { cat >/dev/null; }
 # The keychain read and its hex decode. `security` is macOS-only and `xxd` is
 # not on every runner, so both are stubbed rather than required — this suite
 # asserts what is done with the key, never that the host can produce one.
-security() { printf '%s' "${KEY_HEX}"; }
+security() {
+	printf 'security %s\n' "$*" >>"${CALL_LOG}"
+	printf '%s' "${KEY_HEX}"
+}
 xxd() { cat; }
 
 require_cmd() { :; }
@@ -195,6 +206,10 @@ reset_stubs() {
 	ASSUME_YES=1
 	CONVERSION_GET_RC=0
 	CONVERSION_PROBE_VERSION=v2alpha1
+	GAG_APP_KEY_FROM_CLUSTER=""
+	APP_SECRET_PRESENT=1
+	APP_SECRET_APP="${APP_ID}"
+	APP_SECRET_INST="${INSTALLATION_ID}"
 }
 
 # run_main — run main() in a subshell and record its status in MAIN_RC and its
@@ -510,6 +525,41 @@ check_not_contains "never puts key material on a command line" \
 pem_file="$(printf '%s\n' "${secret_call}" | sed -n 's/.*--from-file=privateKey=\([^ ]*\).*/\1/p')"
 check_contains "names the key file it created the Secret from" "/" "${pem_file}"
 check "cleans up the key temp file" "" "$(ls "${pem_file}" 2>/dev/null || true)"
+
+# --- the App key without a keychain (Q880): CI reuses the cluster's Secret ----
+
+reset_stubs
+run_main
+check_contains "the default path still reads the keychain" \
+	"security find-generic-password" "$(cat "${CALL_LOG}")"
+
+reset_stubs
+GAG_APP_KEY_FROM_CLUSTER=1
+run_main
+check "reuses a matching in-cluster Secret" 0 "${MAIN_RC}"
+check_not_contains "never touches the keychain when reusing" \
+	"security " "$(cat "${CALL_LOG}")"
+check_not_contains "never rebuilds the Secret when reusing" \
+	"create secret" "$(cat "${CALL_LOG}")"
+
+reset_stubs
+GAG_APP_KEY_FROM_CLUSTER=1
+APP_SECRET_PRESENT=0
+run_main
+check "fails when there is no Secret to reuse" 1 "${MAIN_RC}"
+check_contains "says how to create the Secret" \
+	"No github-app-v1 Secret in gag-dogfood to reuse" "${MAIN_OUT}"
+
+reset_stubs
+GAG_APP_KEY_FROM_CLUSTER=1
+APP_SECRET_INST=11111111
+run_main
+check "fails when the Secret names another installation" 1 "${MAIN_RC}"
+check_contains "names both installations" \
+	"names App 3752347 installation 11111111,
+but this run was given App 3752347 installation 99887766" "${MAIN_OUT}"
+check_not_contains "never rebuilds a mismatched Secret" \
+	"create secret" "$(cat "${CALL_LOG}")"
 
 # --- the runner image, whose default is a footgun ----------------------------
 
