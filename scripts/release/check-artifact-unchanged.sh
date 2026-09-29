@@ -6,10 +6,17 @@
 # validation covers the tree it was cut from, and anything that moves an artifact
 # after it makes the verdict cover something other than what ships.
 #
-#   scripts/release/check-artifact-unchanged.sh <validated-ref> [to-ref]
+#   scripts/release/check-artifact-unchanged.sh [--lane <workflow.yml>] <validated-ref> [to-ref]
 #
 # Exit 0 when nothing on the released surface changed, 1 when something did (the
 # files are listed), 2 on a usage or git error.
+#
+# --lane scopes the answer to one path-skipped gate, for the pre-flight step that
+# relies on that gate's last full run (Q1103). A released-surface change the lane's
+# `filters:` patterns do not match could not have run it, so it does not void that
+# run's verdict: the lane's own filter already says so. Without --lane every change
+# counts, which is what the freeze callers want. The patterns are read at both ends
+# of the window and unioned, so a filter narrowed inside it cannot hide a change.
 #
 # "Doc-only" is NOT the same question, which is why this reads the surface rather
 # than the diff's file extensions: `charts/actions-gateway/README.md` is a
@@ -33,14 +40,21 @@ DEVTOOLS_DIR="$SCRIPT_DIR/../../devtools"
 
 usage() {
 	cat >&2 <<-EOF
-		usage: $(basename "$0") <validated-ref> [to-ref]
+		usage: $(basename "$0") [--lane <workflow.yml>] <validated-ref> [to-ref]
 
+		  --lane         count only changes this path-gated workflow's filters match
 		  validated-ref  the commit the candidate was validated at (tag or SHA)
 		  to-ref         default: origin/main if it resolves, else HEAD
 	EOF
 	exit 2
 }
 
+lane=""
+if [[ "${1:-}" == --lane ]]; then
+	[[ $# -ge 2 && -n "$2" ]] || usage
+	lane="${2##*/}"
+	shift 2
+fi
 [[ $# -ge 1 && $# -le 2 ]] || usage
 [[ "$1" == -h || "$1" == --help ]] && usage
 
@@ -89,18 +103,64 @@ if [[ -n "$changed" ]]; then
 	fi
 fi
 
+# Narrow to the lane with pathfilters, which reads the workflow's `filters:` blocks
+# the way check-path-filters.sh does. Any failure is exit 2 for the reason above.
+outside=""
+if [[ -n "$lane" && -n "$shipped" ]]; then
+	pf="$(dirname "$bin")/pathfilters"
+	pf_rc=0
+	(cd "$DEVTOOLS_DIR" && GOWORK=off go build -o "$pf" ./ci/pathfilters) || pf_rc=$?
+	if [[ "$pf_rc" -ne 0 ]]; then
+		echo "check-artifact-unchanged: could not build pathfilters (exit ${pf_rc})" >&2
+		exit 2
+	fi
+	in_lane=""
+	for ref in "$from" "$to"; do
+		wf="$(dirname "$bin")/lane.yml"
+		if ! git show "${ref}:.github/workflows/${lane}" >"$wf" 2>/dev/null; then
+			echo "check-artifact-unchanged: no .github/workflows/${lane} at ${ref}" >&2
+			exit 2
+		fi
+		match_rc=0
+		matched="$(printf '%s\n' "$shipped" | "$pf" match "$wf")" || match_rc=$?
+		if [[ "$match_rc" -ne 0 ]]; then
+			echo "check-artifact-unchanged: pathfilters match ${lane} at ${ref} failed (exit ${match_rc})" >&2
+			exit 2
+		fi
+		in_lane="$(printf '%s\n%s\n' "$in_lane" "$matched" | grep -v '^$' | sort -u || true)"
+	done
+	outside="$(comm -23 <(printf '%s\n' "$shipped" | sort -u) <(printf '%s' "${in_lane:+$in_lane$'\n'}"))"
+	shipped="$in_lane"
+fi
+
 from_short="$(git rev-parse --short "${from}^{commit}")"
 to_short="$(git rev-parse --short "${to}^{commit}")"
 
+if [[ -z "$shipped" && -n "$outside" ]]; then
+	printf 'check-artifact-unchanged: ok (%s..%s, %d file(s) on the released surface changed, none in %s'"'"'s filters):\n' \
+		"$from_short" "$to_short" "$(printf '%s\n' "$outside" | wc -l | tr -d ' ')" "$lane"
+	while IFS= read -r f; do printf '  %s\n' "$f"; done <<<"$outside"
+	exit 0
+fi
 if [[ -z "$shipped" ]]; then
 	printf 'check-artifact-unchanged: ok (%s..%s, %d file(s) changed, none on the released surface)\n' \
 		"$from_short" "$to_short" "$(printf '%s\n' "$changed" | grep -c . || true)"
 	exit 0
 fi
 
-printf 'check-artifact-unchanged: %d file(s) on the released surface changed between %s and %s:\n' \
-	"$(printf '%s\n' "$shipped" | wc -l | tr -d ' ')" "$from_short" "$to_short" >&2
+scope=""
+[[ -n "$lane" ]] && scope=" and in ${lane}'s filters"
+printf 'check-artifact-unchanged: %d file(s) on the released surface%s changed between %s and %s:\n' \
+	"$(printf '%s\n' "$shipped" | wc -l | tr -d ' ')" "$scope" "$from_short" "$to_short" >&2
 while IFS= read -r f; do printf '  %s\n' "$f" >&2; done <<<"$shipped"
+if [[ -n "$lane" ]]; then
+	cat >&2 <<-EOF
+
+		${lane}'s run at ${from_short} no longer covers what would ship.
+		Dispatch that workflow on the target and rely on that run instead.
+	EOF
+	exit 1
+fi
 cat >&2 <<-EOF
 
 	The candidate validated at ${from_short} no longer covers what would ship.

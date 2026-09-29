@@ -168,6 +168,15 @@ The point of doing it here rather than at the tag is that the answers are free b
   scripts/release/check-artifact-unchanged.sh <last-fully-validated-sha> origin/main
   ```
 
+  When only some lanes skipped, prove each against its own last full run and pass the workflow name `check-gates-green.sh` printed:
+
+  ```bash
+  scripts/release/check-artifact-unchanged.sh --lane e2e-calico.yml <lane-last-full-run-sha> origin/main
+  ```
+
+  `--lane` counts only the changes that lane's own path filter matches, because the lane could not have run for any other change.
+  Without it, an unrelated change fails the proof: `v1.8.0-rc.1` failed it on a `cmd/agc` comment, a path the Calico lane never runs for.
+
   A `NOT GREEN` line is the different answer: a lane failed, or none reported at all.
   That one blocks the tag.
   Run `make check` locally as a final gate, from a branch cut from `origin/main` so the tree matches the target.

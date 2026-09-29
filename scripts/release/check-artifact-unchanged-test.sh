@@ -138,5 +138,73 @@ else
 fi
 rm -rf "$(dirname "$stub_bin")"
 
+# --lane (Q1103). Each window is one synthetic commit on top of HEAD, written to a
+# private object directory with the repository's own as an alternate, so the cases
+# run on CI's depth-1 clone and leave nothing behind in .git. The subject reads
+# publish.yml from the real working tree and the lane's workflow from each ref.
+objs="$(mktemp -d)"
+export GIT_OBJECT_DIRECTORY="$objs"
+GIT_ALTERNATE_OBJECT_DIRECTORIES="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)/objects"
+export GIT_ALTERNATE_OBJECT_DIRECTORIES
+export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
+export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
+
+# synth_commit PATH... — a commit on HEAD whose only change is a new line appended
+# to each PATH. Prints its SHA.
+synth_commit() {
+	local index="$objs/index" p blob tree
+	GIT_INDEX_FILE="$index" git -C "$REPO_ROOT" read-tree HEAD
+	for p in "$@"; do
+		blob="$({ git -C "$REPO_ROOT" show "HEAD:$p"; echo '// q1103'; } | git -C "$REPO_ROOT" hash-object -w --stdin)"
+		GIT_INDEX_FILE="$index" git -C "$REPO_ROOT" update-index --cacheinfo "100644,$blob,$p"
+	done
+	tree="$(GIT_INDEX_FILE="$index" git -C "$REPO_ROOT" write-tree)"
+	git -C "$REPO_ROOT" commit-tree "$tree" -p HEAD -m q1103
+}
+
+# run_lane_case DESC WANT FROM TO [ARG...] — run_case with arguments ahead of the refs.
+run_lane_case() {
+	local desc="$1" want="$2" from="$3" to="$4" out rc
+	shift 4
+	out="$(cd "$REPO_ROOT" && "$SUBJECT" "$@" "$from" "$to" 2>&1)" && rc=0 || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
+	if [[ "$rc" == "$want" ]]; then
+		ok "$desc"
+	else
+		bad "$desc (want exit $want, got $rc)"
+		printf '       %s\n' "$out" >&2
+	fi
+}
+
+agc_file="cmd/agc/internal/provisioner/admission.go"
+gmc_file="cmd/gmc/api/v1alpha1/conditions.go"
+agc_commit="$(synth_commit "$agc_file")"
+gmc_commit="$(synth_commit "$gmc_file")"
+
+# The release that filed Q1103: an AGC change, which the Calico lane never runs for.
+run_lane_case "no --lane: an AGC change moves the surface" 1 "$head_sha" "$agc_commit"
+run_lane_case "--lane e2e-calico.yml: an AGC change is outside it" 0 "$head_sha" "$agc_commit" --lane e2e-calico.yml
+run_lane_case "--lane e2e-test.yml: an AGC change is inside it" 1 "$head_sha" "$agc_commit" --lane e2e-test.yml
+run_lane_case "--lane e2e-calico.yml: a GMC change is inside it" 1 "$head_sha" "$gmc_commit" --lane e2e-calico.yml
+run_lane_case "--lane accepts a workflow path" 1 "$head_sha" "$gmc_commit" --lane .github/workflows/e2e-calico.yml
+run_lane_case "--lane naming no workflow is exit 2" 2 "$head_sha" "$agc_commit" --lane no-such-lane.yml
+run_lane_case "--lane with no value is a usage error" 2 "$head_sha" "$agc_commit" --lane ""
+
+# A filter narrowed inside the window must not hide the change: the lane's patterns
+# are read at both ends. The `to` side drops cmd/gmc from the Calico filter.
+narrowed_blob="$(git -C "$REPO_ROOT" show HEAD:.github/workflows/e2e-calico.yml |
+	awk -v pat="'cmd/gmc/**'" 'index($0, pat) == 0' | git -C "$REPO_ROOT" hash-object -w --stdin)"
+GIT_INDEX_FILE="$objs/index" git -C "$REPO_ROOT" read-tree "$gmc_commit"
+GIT_INDEX_FILE="$objs/index" git -C "$REPO_ROOT" update-index --cacheinfo "100644,$narrowed_blob,.github/workflows/e2e-calico.yml"
+narrowed_commit="$(git -C "$REPO_ROOT" commit-tree "$(GIT_INDEX_FILE="$objs/index" git -C "$REPO_ROOT" write-tree)" -p HEAD -m q1103)"
+if git -C "$REPO_ROOT" show "$narrowed_commit:.github/workflows/e2e-calico.yml" | grep -qF "'cmd/gmc/**'"; then
+	bad "fixture: the narrowed filter still names cmd/gmc"
+else
+	run_lane_case "--lane reads the filter at both ends of the window" 1 "$head_sha" "$narrowed_commit" --lane e2e-calico.yml
+fi
+
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+rm -rf "$objs"
+
 printf '[check-artifact-unchanged-test] %d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
