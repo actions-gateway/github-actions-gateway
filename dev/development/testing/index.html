@@ -3018,6 +3018,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-served-api-field-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The served-API-field gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-path-filter-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4829,7 +4840,7 @@ The GAG dogfood runner is unread: it is reachable only by a <code>workflow_dispa
 <code>scripts/lib/merge-driver-common-test.sh</code> holds both halves.</p>
 <p><strong>That is a hazard removed, not Q822 diagnosed.</strong> Q822's sightings report <code>the driver could not be built</code>, which is a build failing; the race above kills an exec after the build succeeded, so it cannot be the same event.
 The relay is what will name the cause: the next occurrence carries <code>go</code>'s own output instead of the bare symptom.</p>
-<p><strong>No suite in the fan-out takes the lock, but only one of the two reasons is structural.</strong> Five scripts call <code>serialize_heavy_build</code>, and in <code>go-lint.sh</code>, <code>go-vet-tags.sh</code> and <code>coverage.sh</code> the call sits inside <code>main()</code>, so sourcing them cannot take it.
+<p><strong>No suite in the fan-out takes the lock, but only one of the two reasons is structural.</strong> Six scripts call <code>serialize_heavy_build</code>, and in <code>go-lint.sh</code>, <code>go-vet-tags.sh</code>, <code>coverage.sh</code> and <code>check-api-fields.sh</code> the call sits inside <code>main()</code>, so sourcing them cannot take it.
 In <code>go-test.sh</code> and <code>go-test-integration.sh</code> it sits at top level, where sourcing takes the lock immediately, and only their suites' <code>GAG_HEAVY_BUILD_LOCK_HELD=1</code> keeps them out.
 So a future suite that sources either of those without the sentinel puts a lock-taker inside the fan-out, which is the thing this paragraph exists to rule out.</p>
 <p><strong>Do not try to count the live suites with <code>pgrep -f</code>.</strong> A forked subshell inherits the parent's full argv, and <code>run-parallel.sh</code>'s argv names every suite path, so a snapshot matches the parent and each live subshell with every path on every line.
@@ -5426,6 +5437,23 @@ If that ever changes, say a tag gaining a <code>!tag</code> counterpart file, th
 </ol>
 <p>Each property is asserted by <code>scripts/go/go-vet-tags-test.sh</code> under <code>make scripts-test</code>: the coverage guard failing on an unlisted tag, a tagged-file break that an untagged vet reports clean, and the lint-sync guard failing in both drift directions as well as on a <code>run.build-tags</code> that is missing or empty.
 That last case is what the fixtures exist for, since a gate comparing two lists passes vacuously the moment both read as empty.</p>
+<h3 id="the-served-api-field-gate">The served-API-field gate<a class="headerlink" href="#the-served-api-field-gate" title="Permanent link">&para;</a></h3>
+<p><code>make api-fields-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-api-fields.sh"><code>scripts/go/check-api-fields.sh</code></a>) fails on a served API field that nothing consumes: a spec field no controller reads, or a status field no controller writes.
+The API server stores such a field whether or not anything acts on it, so an operator can set it and get nothing, silently.
+<code>sharing.allowedNamespaces</code> shipped served and unenforced in v2beta1 and only a manual docs sweep caught it (Q166); v1alpha1's <code>status.activeSessions</code> shipped described and never set (Q526).</p>
+<p>The checking is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/ci/apifields/main.go"><code>devtools/ci/apifields</code></a>, whose package comment carries the rules.
+It type-checks every workspace module, walks each root kind's fields, and classifies every use of each field as a read, a write, or both.
+Uses in <code>zz_generated.*</code> and <code>conversion.go</code> do not count, because those files touch every field by construction.
+The versions of one API group are judged together: conversion is a JSON round-trip, so a v2beta1 field is consumed when the controllers read its v2alpha1 counterpart, which is what they reconcile.</p>
+<p>It is a lower bound on neglect, not a proof of enforcement.
+Four things satisfy it without the field doing anything: a webhook that only checks a field's format, code in the API package itself whether or not anything calls it, and a status field's address passed to a function that only reads it, which includes a read-only method with a pointer receiver such as <code>metav1.Time.IsZero</code> or <code>resource.Quantity.Cmp</code>.
+The fourth is structural: within a version the unit is the Go struct field, not the Kind and JSON path, so a type shared by two kinds is judged once and a reader of either kind credits both.
+<code>RunnerTemplate</code> and <code>ClusterRunnerTemplate</code> share <code>RunnerTemplateSpec</code> that way, and so do the <code>scheduling</code> and <code>…Ref</code> types several kinds embed.</p>
+<p><strong>Adding a field nothing consumes yet means a line in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/unconsumed-fields.txt"><code>api/unconsumed-fields.txt</code></a></strong>, with the reason, and godoc on the field that says it is inert.
+The gate fails on an entry whose field has gained a consumer or no longer exists, so the list cannot rot.
+<strong>Adding an API version means an entry in the script's <code>API_GROUPS</code></strong>; the tool fails on a package declaring a root kind that no entry names, rather than leaving the new version unchecked.</p>
+<p>It is a heavy phase of <code>make check</code> (measured at Q573: 20 s on a dev Mac with the build cached, 3.5 min on the first run in a fresh worktree) and a step in CI's <code>lint</code> job, after <code>build-tags-check</code> so the build it loads is cached.
+Its classification rules are asserted by the package's own tests against a fixture module, under <code>make test</code>.</p>
 <h3 id="the-path-filter-gate">The path-filter gate<a class="headerlink" href="#the-path-filter-gate" title="Permanent link">&para;</a></h3>
 <p><code>make path-filters-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh"><code>scripts/ci/check-path-filters.sh</code></a>) reconciles the hand-maintained <code>dorny/paths-filter</code> lists in <code>.github/workflows/</code> with what the repo actually contains.
 It exists because a filter that omits a directory makes its gate report green <strong>by skipping</strong> — the worst kind of false negative, since nothing is red and <code>main</code> ends up green on evidence it never gathered.

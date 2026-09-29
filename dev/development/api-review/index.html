@@ -3274,6 +3274,9 @@ Changing how one is derived orphans live objects, which is worse than a field re
   Declare them in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions</code></a> and re-export from both version packages; <code>make v2-api-sync-check</code> fails a one-sided add.</li>
 <li>Keep the polarity convention: normal-is-True (<code>Ready</code>), with abnormal-is-True conditions named so they read that way (<code>CredentialUnavailable</code>).</li>
 <li>Carry <code>observedGeneration</code> so a reader can tell a stale status from a current one.</li>
+<li>Ship a field with its consumer.
+  <code>make api-fields-check</code> fails on a status field no controller writes and on a spec field none reads, since the API server stores either and nothing acts on it.
+  A field that is inert on purpose goes in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/unconsumed-fields.txt"><code>api/unconsumed-fields.txt</code></a> with the reason, and its godoc says so (<a href="../testing/#the-served-api-field-gate">the gate</a>).</li>
 </ul>
 <h3 id="design-for-the-values-that-have-not-arrived-yet">Design for the values that have not arrived yet<a class="headerlink" href="#design-for-the-values-that-have-not-arrived-yet" title="Permanent link">&para;</a></h3>
 <p>Check the planned-but-unbuilt work the field already anticipates — the Queue and <a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a>.
