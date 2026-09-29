@@ -2702,6 +2702,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1145/">Q1145</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-ladder-test.sh">check-release-ladder-test revived-missing flakes under make check</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Sighted once, 2026-09-29, in <code>make check</code> on the Q737 branch, whose diff touches neither the checker nor its test: ```text …</td>
+</tr>
+<tr>
+<td><a href="Q1146/">Q1146</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Dogfood gag-ci-e2e workers never receive their job on either lane</a></td>
+<td><code>bug</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>On 2026-09-29 no job dispatched to <code>gag-ci-e2e</code> reached a worker, on the dind overlay or the Kata one, with <code>agc:v1.8.0-rc.2</code> deployed.</td>
+</tr>
+<tr>
 <td><a href="Q541/">Q541</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_egressproxy_fqdn_test.go">EgressProxy watch-isolation test passes with its watch deleted, at times</a></td>
 <td><code>tests</code> <code>flake</code> <code>retro</code></td>
