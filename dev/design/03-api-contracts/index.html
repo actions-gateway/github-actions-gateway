@@ -3344,7 +3344,7 @@ The schemas below remain authoritative for the running <code>v1alpha1</code> API
 <a id="__codelineno-0-519" name="__codelineno-0-519" href="#__codelineno-0-519"></a><span class="w">    </span><span class="c1">// Omitting this field causes the AGC to use its operator-configured default.</span>
 <a id="__codelineno-0-520" name="__codelineno-0-520" href="#__codelineno-0-520"></a><span class="w">    </span><span class="c1">// The compile-time constant DefaultWorkerImage in</span>
 <a id="__codelineno-0-521" name="__codelineno-0-521" href="#__codelineno-0-521"></a><span class="w">    </span><span class="c1">// cmd/agc/internal/provisioner/provisioner.go supplies the baseline value</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522" href="#__codelineno-0-522"></a><span class="w">    </span><span class="c1">// (currently the digest-pinned "ghcr.io/actions/actions-runner:2.335.1@sha256:…",</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522" href="#__codelineno-0-522"></a><span class="w">    </span><span class="c1">// (currently the digest-pinned "ghcr.io/actions/actions-runner:2.337.0@sha256:…",</span>
 <a id="__codelineno-0-523" name="__codelineno-0-523" href="#__codelineno-0-523"></a><span class="w">    </span><span class="c1">// aligned with the ARC gha-runner-scale-set chart default). Its runner</span>
 <a id="__codelineno-0-524" name="__codelineno-0-524" href="#__codelineno-0-524"></a><span class="w">    </span><span class="c1">// version is the single source of truth in cmd/agc/names (RunnerVersion),</span>
 <a id="__codelineno-0-525" name="__codelineno-0-525" href="#__codelineno-0-525"></a><span class="w">    </span><span class="c1">// which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC's</span>

@@ -2953,8 +2953,8 @@ Run this from a host that can reach <em>both</em> registries (a bastion / jump h
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Worker (upstream runner image — has no GAG cosign signature):</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>crane<span class="w"> </span>copy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>ghcr.io/actions/actions-runner:2.335.1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>registry.internal/gag/actions-runner:2.335.1
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>ghcr.io/actions/actions-runner:2.337.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>registry.internal/gag/actions-runner:2.337.0
 </code></pre></div>
 <p><code>crane copy</code> or <code>skopeo copy --all</code> (use <code>--all</code> to carry the full multi-arch OCI index, not just one platform) are equivalent for the copy itself; they do not relocate the cosign signature, so use <code>cosign copy</code> for the signed GAG images if you intend to re-verify provenance from the mirror.</p>
 <p><strong>Verify the digest is preserved</strong> — it must match the release notes:</p>
@@ -3074,7 +3074,7 @@ When onboarding a tenant (see <a href="../tenant-onboarding/">tenant-onboarding.
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerGroup</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="c1"># Mirror of ghcr.io/actions/actions-runner, digest preserved.</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry.internal/gag/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry.internal/gag/actions-runner:2.337.0@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4</span>
 </code></pre></div>
 <p>Keep the <code>@sha256:</code> digest — it must match the upstream image you mirrored in step 1.
 The worker SA patched in step 5 supplies the pull credentials.</p>

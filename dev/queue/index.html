@@ -2721,9 +2721,17 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1146/">Q1146</a></td>
 <td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Dogfood gag-ci-e2e workers never receive their job on either lane</a></td>
 <td><code>bug</code> <code>dogfood</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>M</td>
-<td>On 2026-09-29 no job dispatched to <code>gag-ci-e2e</code> reached a worker, on the dind overlay or the Kata one, with <code>agc:v1.8.0-rc.2</code> deployed.</td>
+<td><strong>Event:</strong> the next dogfood window runs <code>gag-ci-e2e</code> on a worker image built from actions/runner 2.337.0.</td>
+</tr>
+<tr>
+<td><a href="Q1149/">Q1149</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go">Warn before the pinned runner ages out of GitHub's 30-day window</a></td>
+<td><code>ci</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>GitHub stops queueing jobs to a self-hosted runner not updated "within 30 days of a new version being made available" ([runner update …</td>
 </tr>
 <tr>
 <td><a href="Q541/">Q541</a></td>

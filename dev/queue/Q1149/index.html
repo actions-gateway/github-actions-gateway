@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1146/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1149/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Dogfood gag-ci-e2e workers never receive their job on either lane - GitHub Actions Gateway</title>
+        <title>Warn before the pinned runner ages out of GitHub's 30-day window - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dogfood-gag-ci-e2e-workers-never-receive-their-job-on-either-lane" class="md-skip">
+        <a href="#warn-before-the-pinned-runner-ages-out-of-githubs-30-day-window" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dogfood gag-ci-e2e workers never receive their job on either lane
+              Warn before the pinned runner ages out of GitHub's 30-day window
             
           </span>
         </div>
@@ -2597,32 +2597,15 @@
   
 
 
-<h1 id="dogfood-gag-ci-e2e-workers-never-receive-their-job-on-either-lane">Dogfood gag-ci-e2e workers never receive their job on either lane<a class="headerlink" href="#dogfood-gag-ci-e2e-workers-never-receive-their-job-on-either-lane" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the next dogfood window runs <code>gag-ci-e2e</code> on a worker image built from actions/runner 2.337.0.
-If jobs reach a worker, delete this row; if they still sit at <code>queued</code>, the runner-version cause below is refuted and this row returns to <code>ready</code> with that result recorded.</p>
-<p>On 2026-09-29 no job dispatched to <code>gag-ci-e2e</code> reached a worker, on the dind overlay or the Kata one, with <code>agc:v1.8.0-rc.2</code> deployed.
-That same image passed the Kata e2e matrix 3/3 on 2026-09-14 (<a href="../../plan/release-1.8/">release-1.8.md</a>), so something moved in the fifteen days between, and until it is found no dogfood window can validate anything, the next release candidate included.</p>
-<p><strong>What was seen</strong>, two dispatched runs of <code>e2e-test.yml</code> with <code>-f runner='"gag-ci-e2e"'</code>: <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/36598938858">36598938858</a> on the dind overlay, <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/36601766565">36601766565</a> on Kata.
-Both sat at <code>e2e / e2e: queued</code> until cancelled, about 24 and 30 minutes after dispatch.
-On the cluster, each worker pod reached <code>2/2 Running</code>, the runner logged <code>√ Connected to GitHub</code> and <code>Listening for Jobs</code>, and nothing followed; the AGC reaped it as <code>orphaned_running</code> about five minutes later (<code>reaper: deregistered worker runner record</code>, then <code>reaped worker pod</code>), and a new pod came up under a new job ID.
-Six such pods across the two windows, one per re-offer, three distinct job IDs on the dind run alone.
-Each reaped pod first logged a <code>FailedMount</code> for its <code>job-payload</code> volume, <code>secret "job-ss-&lt;jobID&gt;-&lt;hash&gt;" not found</code>, though the secret for the live job ID was present when listed.
-Cancelling the run stopped the reaping: the Kata run's last worker was still <code>2/2 Running</code> 95 minutes after its cancel, so <code>e2e-stop.sh</code> refused to finish (<code>None of the 1 in-flight pod(s) turned over during the wait</code>) and held the AGC and three nodes up until that pod was deleted by hand.
-The dind sidecar is not involved: <code>dockerd</code> 28.5.2 reported <code>Daemon has completed initialization</code> in every pod, and the runner never asks it for anything before receiving a job.</p>
-<p><strong>Candidate cause, unverified: the runner is past GitHub's 30-day update window.</strong> Every worker image here ships actions/runner 2.335.1.
-GitHub's <a href="https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners">runner update policy</a>, read 2026-09-29, says a runner must be updated "within 30 days of a new version being made available" or it is not queued jobs, and nothing in it says the runner is refused a connection.
-An <code>orphaned_running</code> reap means GitHub sent a JobCompleted for the job while its worker listened, which is what a job GitHub will not queue to that runner would look like from the AGC.</p>
-<p>Read literally, the policy is <strong>contradicted</strong> by this repo's own runs, not supported by them.
-<a href="https://github.com/actions/runner/releases/tag/v2.336.0">v2.336.0</a> was published 2026-07-20 (<code>gh release list --repo actions/runner</code>), so 2.335.1 was due by 2026-08-19, and <code>gag-ci-e2e</code> still passed on 2026-08-26 (run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/33018548757">33018548757</a>) and on 2026-09-14.
-The candidate survives only if GitHub counts the window from the <em>newest</em> release, <a href="https://github.com/actions/runner/releases/tag/v2.337.0">v2.337.0</a>, published 2026-08-26, which closes it on 2026-09-25, between the 09-14 pass and the 09-29 failure.
-That reading is untested: no dogfood run fell between 08-19 and 08-26 to tell the two apart.</p>
-<p><strong>A second change landed on the same day.</strong> GitHub's minimum-runner-version enforcement went fully live on 2026-09-25 (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.6.0.md">v1.6.0 release notes</a>), with a registration floor of 2.329.0 that 2.335.1 clears, and the workers did register and connect.
-Nothing measured separates the two, and the event above tests only the first.</p>
-<p>Neither the <code>job-payload</code> race nor GitHub's side of the ScaleSet protocol has been ruled out; they are the next suspects if the event refutes the runner-version candidate.</p>
-<p>The pin went stale because <code>.github/dependabot.yml</code> watched <code>cmd/*/Dockerfile</code> directories that #870 deleted on 2026-07-26 when every image moved into the root <code>Dockerfile</code>, so no base-image bump has been proposed since.
-The PR that parked this row bumps the product pin and the dogfood runner's <code>FROM</code> to 2.337.0 and points Dependabot at the root.</p>
-<p><strong>Running the event</strong> needs two images the parking PR did not publish: <code>scripts/dogfood/runner-build.sh</code> pushes <code>dogfood-runner:2.337.0</code>, and <code>scripts/dogfood/e2e-runner/Dockerfile</code> then builds on it, pushed as a new <code>dogfood-e2e-runner</code> tag and re-pinned in both <code>deploy/dogfood-e2e/overlays/*/kustomization.yaml</code> and <code>deploy/dogfood-migrate/resources.yaml</code>.
-That Dockerfile's header names <code>scripts/dogfood-e2e-runner-build.sh</code> as its build script, and no such script exists in the tree or its history, so the build is a hand-run <code>docker buildx build --platform linux/amd64 --push</code>.</p>
+<h1 id="warn-before-the-pinned-runner-ages-out-of-githubs-30-day-window">Warn before the pinned runner ages out of GitHub's 30-day window<a class="headerlink" href="#warn-before-the-pinned-runner-ages-out-of-githubs-30-day-window" title="Permanent link">&para;</a></h1>
+<p>GitHub stops queueing jobs to a self-hosted runner not updated "within 30 days of a new version being made available" (<a href="https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners">runner update policy</a>, read 2026-09-29), and says nothing about refusing its connection, so a stale pin would show up as every job lapsing rather than as an error.
+Q1146 is a candidate instance, and its runs show the window is not counted from the first newer release; counting from the newest is consistent with them and untested.</p>
+<p>Nothing in the repo reads that window.
+<code>MinRunnerVersion</code> and the <code>RunnerVersionTooOld</code> condition check GitHub's registration floor only, and <code>names.go</code> already says why a compiled-in constant cannot track a rolling floor.
+Dependabot's docker ecosystem proposes the bump, but a proposal is not a merge, and its weekly PR can sit unmerged past the deadline without anything reddening.</p>
+<p><strong>Done when</strong> a scheduled check compares <code>names.RunnerVersion</code> against the actions/runner releases newer than it, counting from the first one's <code>publishedAt</code> (the documented reading, and the stricter one), and goes red with days-remaining well before day 30 (say day 21), so the product default and the dogfood images are bumped while jobs still run.
+It reads GitHub's release API rather than the tree, so it belongs in a scheduled workflow, not in <code>make check</code>.
+The tenant-side analogue, a <code>workerImage</code> older than the window, is a separate question for <code>RunnerVersionTooOld</code> and not in scope here.</p>
 
 
 

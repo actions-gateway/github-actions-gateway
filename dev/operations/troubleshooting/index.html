@@ -6563,12 +6563,17 @@ Treat a <em>sustained</em> or <em>bursty</em> rate as the signal:</p>
 <p><strong>Symptoms.</strong> A <code>Warning</code> Event with reason <code>WorkerPodOrphanedRunning</code> appears on the <code>RunnerSet</code> (<code>kubectl describe runnerset &lt;name&gt; -n &lt;namespace&gt;</code>) and <code>actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}</code> increments.
 Before the reap fires, the shape is a set that looks busy and is not: <code>status.activeJobs</code> sits at some non-zero number, worker pods are <code>Running</code>, but no job is executing — <code>kubectl logs</code> on the pod ends at <code>Listening for Jobs</code>, and GitHub shows nothing in progress for the set.</p>
 <p><strong>What happened.</strong> The pod was still <code>Running</code> five minutes after GitHub reported its job terminal, so the AGC deleted it.
-Two causes produce that:</p>
+Three causes produce that:</p>
 <ul>
 <li><strong>A ScaleSet worker that never received its job</strong> (the common one).
   The ScaleSet tier provisions fire-and-forget: the worker registers and pulls its own job.
   If the assignment lapsed, was cancelled, or completed elsewhere before the runner got to it, the runner waits at <code>Listening for Jobs</code> forever.
   It holds a concurrency slot, a namespace-quota slot, and a node while doing nothing.</li>
+<li><strong>A worker image on an out-of-date runner release</strong>, when <em>every</em> job does this.
+  GitHub's <a href="https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners">runner update policy</a> stops queueing jobs to a runner not updated "within 30 days of a new version being made available", and says nothing about refusing its connection, so such a runner would still log <code>Listening for Jobs</code> with nothing on the cluster naming the cause.
+  Where the 30 days start is not documented precisely: this project's own runs kept receiving jobs well past 30 days after the first newer release (<a href="../../queue/Q1146/">Q1146</a>).
+  Compare the version the worker logs (<code>runner version detected</code>, see <a href="#worker-image-runner-version">Worker Image Runner Version</a>) with the newest <a href="https://github.com/actions/runner/releases">actions/runner release</a> and its date.
+  <code>RunnerVersionTooOld</code> does not catch this: it checks the registration floor, not the 30-day window.</li>
 <li><strong>A container that outlived the runner</strong> — an injected mesh sidecar, or a regular (non-native) build/DinD sidecar.
   See the two runbook sections below for fixing the root cause; on the ScaleSet tier this reap is now the backstop that stops those pods accumulating.</li>
 </ul>
