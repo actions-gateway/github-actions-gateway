@@ -65,6 +65,7 @@ Each has inline ✓ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
+| [q880-ci-release-validation.md](q880-ci-release-validation.md) | Running the release-candidate dogfood gate as a workflow on the candidate tag instead of on a maintainer's machine: keyless CI identity, the gate on Linux, the workflow, and publish reading its verdict | ⚠️ Milestone 1 in review; its one-time bootstrap is the maintainer's ([Q880](../queue/Q880.md)) |
 | [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via [Q264](../queue/Q264.md) P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook; chronological turn-up history split to [archive/gke-dogfood-turnup-findings.md](archive/gke-dogfood-turnup-findings.md) (Q336) |
 
 ## Cross-cutting
