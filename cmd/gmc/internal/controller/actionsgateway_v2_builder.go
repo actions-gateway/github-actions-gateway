@@ -21,6 +21,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -64,10 +65,11 @@ const AGCResourceSuffix = "-agc"
 // name cap so the derived names stay within RFC 1123's 63-char label-value /
 // Service-name ceiling.
 const (
-	agcWorkerSuffix        = "-worker"
-	agcWorkloadNPSuffix    = "-workload"
-	agcMetricsTLSSuffix    = "-agc-metrics-tls"
-	agcMetricsClientSuffix = "-agc-metrics-client"
+	agcWorkerSuffix         = "-worker"
+	agcWorkloadNPSuffix     = "-workload"
+	agcMetricsTLSSuffix     = "-agc-metrics-tls"
+	agcMetricsClientSuffix  = "-agc-metrics-client"
+	agcMetricsMonitorSuffix = "-agc-metrics"
 )
 
 // agcNameV2 is the per-gateway AGC name: the Deployment, ServiceAccount,
@@ -94,6 +96,12 @@ func metricsTLSSecretNameV2(ag *gmcv2alpha1.ActionsGateway) string {
 }
 func metricsClientSecretNameV2(ag *gmcv2alpha1.ActionsGateway) string {
 	return ag.Name + agcMetricsClientSuffix
+}
+
+// agcServiceMonitorNameV2 is the per-gateway AGC ServiceMonitor: "<ag>-agc-metrics"
+// (the AGC Service name plus "-metrics", matching the EgressProxy's "<ep>-proxy-metrics").
+func agcServiceMonitorNameV2(ag *gmcv2alpha1.ActionsGateway) string {
+	return ag.Name + agcMetricsMonitorSuffix
 }
 
 // v2GatewayLabels returns the metadata labels stamped on every AGC control-plane
@@ -172,16 +180,76 @@ func buildAGCRoleBindingV2(ag *gmcv2alpha1.ActionsGateway) *rbacv1.RoleBinding {
 // listener. Mirrors v1's buildAGCService.
 func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
 	name := agcNameV2(ag)
-	labels := v2GatewayLabels(ag)
-	labels["app"] = name
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ag.Namespace, Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ag.Namespace, Labels: agcServiceLabelsV2(ag)},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": name},
 			Ports:    []corev1.ServicePort{{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt32(metricsPort), Protocol: corev1.ProtocolTCP}},
 			Type:     corev1.ServiceTypeClusterIP,
 		},
 	}
+}
+
+// agcServiceLabelsV2 is the AGC metrics Service's label set, which the AGC
+// ServiceMonitor's selector matches: the per-gateway identity labels plus the
+// per-gateway `app`, so the monitor selects this gateway's Service and no sibling's.
+func agcServiceLabelsV2(ag *gmcv2alpha1.ActionsGateway) map[string]string {
+	labels := v2GatewayLabels(ag)
+	labels["app"] = agcNameV2(ag)
+	return labels
+}
+
+// buildAGCServiceMonitorV2 builds the per-gateway ServiceMonitor that scrapes the
+// AGC's mTLS metrics port (Q1101), the v2 counterpart of v1's AGC monitor from
+// buildMetricsServiceMonitor. Like buildEgressProxyServiceMonitor it is unstructured,
+// lives in the gateway's namespace with no namespaceSelector, and presents this
+// gateway's scraper client bundle ("<ag>-agc-metrics-client"). serverName is the
+// "<ag>-agc.<ns>.svc" DNS name, a SAN on the metrics server cert
+// (metricsServerSANsV2), so the scrape verifies without insecureSkipVerify. The AGC
+// stamps its own `namespace` metric label, so no relabeling is needed.
+func buildAGCServiceMonitorV2(ag *gmcv2alpha1.ActionsGateway) *unstructured.Unstructured {
+	clientSecret := metricsClientSecretNameV2(ag)
+	secretRef := func(key string) map[string]interface{} {
+		return map[string]interface{}{
+			"secret": map[string]interface{}{
+				"name": clientSecret,
+				"key":  key,
+			},
+		}
+	}
+
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(serviceMonitorGVK)
+	sm.SetName(agcServiceMonitorNameV2(ag))
+	sm.SetNamespace(ag.Namespace)
+	sm.SetLabels(v2GatewayLabels(ag))
+
+	spec := map[string]interface{}{
+		"selector": map[string]interface{}{
+			"matchLabels": toStringMapIface(agcServiceLabelsV2(ag)),
+		},
+		"endpoints": []interface{}{map[string]interface{}{
+			"port":   "metrics",
+			"path":   "/metrics",
+			"scheme": "https",
+			"tlsConfig": map[string]interface{}{
+				"serverName": fmt.Sprintf("%s.%s.svc", agcNameV2(ag), ag.Namespace),
+				"ca":         secretRef(metricsCACertKey),
+				"cert":       secretRef(corev1.TLSCertKey),
+				// keySecret is a bare SecretKeySelector (no enclosing "secret").
+				"keySecret": map[string]interface{}{
+					"name": clientSecret,
+					"key":  corev1.TLSPrivateKeyKey,
+				},
+			},
+		}},
+	}
+	// unstructured.SetNestedMap deep-copies spec into sm.Object; it only errors on
+	// non-JSON value types, and every value above is a JSON-compatible type.
+	if err := unstructured.SetNestedMap(sm.Object, spec, "spec"); err != nil {
+		panic(fmt.Sprintf("build AGC ServiceMonitor spec: %v", err))
+	}
+	return sm
 }
 
 // buildWorkloadNetworkPolicyV2 is the v2 workload egress lockdown: AGC and worker

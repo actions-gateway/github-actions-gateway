@@ -75,9 +75,7 @@ Three things are wired per tenant so Prometheus can scrape them:
    These exist regardless of the scrape toggle.
 2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`, the GMC creates one `ServiceMonitor` per component in the tenant namespace (`actions-gateway-proxy-metrics`, `actions-gateway-controller-metrics`).
    Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.
-   **This is a v1 path.** A v2 `ActionsGateway` gets no AGC `ServiceMonitor`: the reconciler that applies them runs only for v1, so a v2 tenant's AGC Service is created and never scraped unless you write the monitor yourself.
-   A v2 `EgressProxy` does get one, from its own reconciler.
-   Q1101 tracks whether that gap is intended.
+   Under v2 the monitors are named per resource instead: `<gateway>-agc-metrics` for each `ActionsGateway`'s AGC, and `<ep>-proxy-metrics` for each `EgressProxy`.
 3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the per-tenant scraper client bundle from the `actions-gateway-metrics-client` Secret in the tenant namespace — `tls.crt`/`tls.key` authenticate the scraper to the listener and `ca.crt` verifies the listener's server cert.
    `serverName` is the component's `<service>.<namespace>.svc` DNS name (a SAN on the server cert), so the scrape is verified end-to-end and **not** MITM-able:
 
@@ -102,7 +100,17 @@ Under the **v2 API**, the egress proxy is a standalone `EgressProxy` resource (m
 | `ServiceMonitor` | `actions-gateway-proxy-metrics` | `<ep>-proxy-metrics` |
 
 Each `EgressProxy` owns its **own** metrics CA — distinct from the AGC's and from every other `EgressProxy` — so Prometheus must read that proxy's own `<ep>-metrics-client` bundle, with `serverName: <ep>-proxy.<namespace>.svc`.
-The same toggle (`metrics.serviceMonitor.enabled` → `--enable-tenant-service-monitors`), the same `metrics: enabled` NetworkPolicy prerequisite, and the same graceful `ServiceMonitorCRDMissing` handling apply; the AGC metrics under v2 keep their own per-gateway `<gateway>-agc-metrics-{tls,client}` bundle.
+The same toggle (`metrics.serviceMonitor.enabled` → `--enable-tenant-service-monitors`), the same `metrics: enabled` NetworkPolicy prerequisite, and the same graceful `ServiceMonitorCRDMissing` handling apply.
+
+The v2 AGC follows the same pattern keyed on the gateway name `<gateway>`, with its own CA, distinct from every `EgressProxy`'s:
+
+| Object | Classic/v1 | v2 `ActionsGateway` |
+|---|---|---|
+| AGC `Service` (metrics port `:8443`) | `actions-gateway-controller` | `<gateway>-agc` |
+| Scraper client bundle Secret (published) | `actions-gateway-metrics-client` | `<gateway>-agc-metrics-client` |
+| `ServiceMonitor` | `actions-gateway-controller-metrics` | `<gateway>-agc-metrics` |
+
+Its `serverName` is `<gateway>-agc.<namespace>.svc`.
 
 **Prerequisites:**
 

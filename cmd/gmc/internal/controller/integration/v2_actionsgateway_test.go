@@ -19,7 +19,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -51,6 +53,13 @@ func startActionsGatewayV2Reconciler(t *testing.T) {
 // AGC_EXTRA_* passthrough; nil is the default wiring.
 func startActionsGatewayV2ReconcilerIn(t *testing.T, mgrCtx context.Context, agcExtraEnv []corev1.EnvVar) <-chan struct{} {
 	t.Helper()
+	return startActionsGatewayV2ReconcilerFull(t, mgrCtx, agcExtraEnv, false)
+}
+
+// startActionsGatewayV2ReconcilerFull is the underlying constructor;
+// enableServiceMonitor toggles the per-gateway AGC ServiceMonitor (Q1101).
+func startActionsGatewayV2ReconcilerFull(t *testing.T, mgrCtx context.Context, agcExtraEnv []corev1.EnvVar, enableServiceMonitor bool) <-chan struct{} {
+	t.Helper()
 
 	skipNameValidation := true
 	syncPeriod := 2 * time.Second
@@ -65,12 +74,13 @@ func startActionsGatewayV2ReconcilerIn(t *testing.T, mgrCtx context.Context, agc
 	require.NoError(t, err)
 
 	err = (&controller.ActionsGatewayV2Reconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		AGCImage:    "agc:test",
-		AGCExtraEnv: agcExtraEnv,
-		Recorder:    mgr.GetEventRecorder("actionsgateway-v2-controller"),
-		Reader:      mgr.GetAPIReader(),
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		AGCImage:             "agc:test",
+		AGCExtraEnv:          agcExtraEnv,
+		EnableServiceMonitor: enableServiceMonitor,
+		Recorder:             mgr.GetEventRecorder("actionsgateway-v2-controller"),
+		Reader:               mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 
@@ -289,6 +299,45 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 // (Q171): when set it stamps the tenant's requests/limits on the AGC container
 // (overlaid on the platform default per key); when unset the container carries the
 // documented platform default (2Gi memory request, 2-core CPU limit) unchanged.
+// TestV2_ActionsGateway_ProvisionsServiceMonitor proves that with the tenant
+// ServiceMonitor toggle on, reconciling a v2 ActionsGateway creates the per-gateway
+// AGC ServiceMonitor (Q1101), owned for GC and scraping the AGC Service's metrics
+// port with this gateway's scraper client bundle.
+func TestV2_ActionsGateway_ProvisionsServiceMonitor(t *testing.T) {
+	const ns = "v2-ag-servicemonitor"
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+
+	ag := newV2GatewayWired("gw", ns, "github-app", "")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	mgrCtx, mgrCancel := context.WithCancel(ctx)
+	t.Cleanup(mgrCancel)
+	startActionsGatewayV2ReconcilerFull(t, mgrCtx, nil, true)
+
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(schema.GroupVersionKind{Group: "monitoring.coreos.com", Version: "v1", Kind: "ServiceMonitor"})
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc-metrics"}, sm) == nil
+	}, 10*time.Second, 100*time.Millisecond, "per-gateway AGC ServiceMonitor should be created")
+	assert.True(t, hasGatewayOwnerRef(sm.GetOwnerReferences(), "gw"), "ServiceMonitor must be owned for GC")
+
+	var svc corev1.Service
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &svc))
+	matchLabels, _, err := unstructured.NestedStringMap(sm.Object, "spec", "selector", "matchLabels")
+	require.NoError(t, err)
+	assert.True(t, labels.SelectorFromSet(matchLabels).Matches(labels.Set(svc.Labels)),
+		"the monitor's selector must match the AGC Service the reconciler created")
+
+	endpoints, _, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+	require.NoError(t, err)
+	require.Len(t, endpoints, 1)
+	tlsCfg := endpoints[0].(map[string]interface{})["tlsConfig"].(map[string]interface{})
+	assert.Equal(t, "gw-agc."+ns+".svc", tlsCfg["serverName"])
+	assert.Equal(t, "gw-agc-metrics-client", tlsCfg["keySecret"].(map[string]interface{})["name"])
+}
+
 func TestV2_ActionsGateway_AGCResources(t *testing.T) {
 	const ns = "v2-ag-resources"
 	createNamespace(t, ns)

@@ -103,6 +103,12 @@ type ActionsGatewayV2Reconciler struct {
 	// those policies current as GitHub rotates ranges. nil is tolerated (the direct
 	// NetworkPolicies are created with no GitHub rule and patched on the next refresh).
 	IPCache *IPRangeCache
+	// EnableServiceMonitor gates the per-gateway Prometheus-Operator ServiceMonitor
+	// that scrapes the AGC's mTLS metrics port (Q1101), from the same
+	// --enable-tenant-service-monitors flag as the EgressProxy's. Off by default: the
+	// monitoring.coreos.com CRD exists only once the Prometheus Operator is installed.
+	// When false, any previously-created monitor is pruned.
+	EnableServiceMonitor bool
 	// Recorder emits Kubernetes Events on the ActionsGateway. May be nil in tests.
 	Recorder events.EventRecorder
 	// Reader is an uncached apiserver reader (mgr.GetAPIReader()) for the reads the
@@ -327,6 +333,11 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 		return fmt.Errorf("AGC Service: %w", err)
 	}
 
+	step("AGC ServiceMonitor")
+	if err := r.applyOrPruneServiceMonitor(ctx, ag); err != nil {
+		return fmt.Errorf("AGC ServiceMonitor: %w", err)
+	}
+
 	// Direct egress (proxy == nil) adds the GitHub-CIDR allowlist to the AGC and
 	// workload NetworkPolicies so the AGC and workers reach GitHub directly; the proxied
 	// path leaves them reaching GitHub through the proxy (§H.10). Restriction is
@@ -473,6 +484,41 @@ func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag 
 	r.recordEvent(ag, corev1.EventTypeNormal, "MetricsCertificateIssued", "EnsureMetricsCerts",
 		"%s per-tenant metrics mTLS certificate", transition)
 	return nil
+}
+
+// applyOrPruneServiceMonitor reconciles the per-gateway AGC ServiceMonitor (Q1101)
+// according to EnableServiceMonitor, mirroring the EgressProxy reconciler's: enabled
+// creates/patches it, disabled best-effort deletes it. A NoMatch (CRD not installed)
+// is downgraded to a Warning Event on apply and is success on delete, so a missing
+// optional scrape prerequisite never blocks provisioning.
+func (r *ActionsGatewayV2Reconciler) applyOrPruneServiceMonitor(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
+	if !r.EnableServiceMonitor {
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(serviceMonitorGVK)
+		sm.SetNamespace(ag.Namespace)
+		sm.SetName(agcServiceMonitorNameV2(ag))
+		if err := r.Delete(ctx, sm); err != nil && !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+			return err
+		}
+		return nil
+	}
+
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(serviceMonitorGVK)
+	desired := buildAGCServiceMonitorV2(ag)
+	err := applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
+		spec, _, _ := unstructured.NestedMap(desired.Object, "spec")
+		return unstructured.SetNestedMap(obj.Object, spec, "spec")
+	})
+	if meta.IsNoMatchError(err) {
+		logf.FromContext(ctx).Info("skipping AGC ServiceMonitor: monitoring.coreos.com CRD not installed",
+			"name", agcServiceMonitorNameV2(ag))
+		r.recordEvent(ag, corev1.EventTypeWarning, "ServiceMonitorCRDMissing", "ApplyServiceMonitor",
+			"ServiceMonitor scraping is enabled but the monitoring.coreos.com ServiceMonitor CRD is not installed; install the Prometheus Operator to enable AGC metrics scraping. Skipping %q.",
+			agcServiceMonitorNameV2(ag))
+		return nil
+	}
+	return err
 }
 
 // recordEvent emits a Kubernetes Event on the ActionsGateway when a Recorder is
@@ -1042,7 +1088,9 @@ func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag
 // The ClusterRunnerTemplate ClusterRoleBinding is cluster-scoped and cannot carry
 // an owner ref to a namespaced object, so this explicit delete is its ONLY
 // cleanup. The metrics mTLS Secrets are left to owner-ref GC — the GMC
-// deliberately holds no delete verb on secrets (mirrors v1's proxy TLS Secret).
+// deliberately holds no delete verb on secrets (mirrors v1's proxy TLS Secret) —
+// and so is the optional AGC ServiceMonitor, whose CRD may be absent (mirrors the
+// EgressProxy's monitor).
 // RunnerSets reference the gateway but are not owned by it, so they are not
 // deleted — they degrade to Ready=False/GatewayNotFound via their own watch. Their
 // worker pods do have to go, though, and only the AGC can reap them: teardown holds
