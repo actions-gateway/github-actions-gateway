@@ -3758,14 +3758,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>shrinkRetryPacing(t, 50*time.Millisecond, time.Millisecond)</code> gives the retry loop a 50ms wall-clock budget, and the test then asserts …</td>
 </tr>
 <tr>
-<td><a href="Q1103/">Q1103</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">check-artifact-unchanged.sh has no lane scope, so a skip never clears</a></td>
-<td><code>debt</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><a href="../operations/release/#when-to-cut">release.md § When to cut</a> discharges a path-skipped required gate by proving the released surface …</td>
-</tr>
-<tr>
 <td><a href="Q1016/">Q1016</a></td>
 <td><a href="../operations/troubleshooting/">Bring-up races GKE konnectivity, so the first v2 apply fails</a></td>
 <td><code>debt</code> <code>dogfood</code></td>
