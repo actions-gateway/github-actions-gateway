@@ -91,7 +91,7 @@ patches:
       # pins). Nothing asserts this today; Q980 carries it.
       - op: replace
         path: /spec/workerImage
-        value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+        value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.337.0-1
       # The e2e pool: c2-standard-8 spot with nested virtualisation, tainted so
       # nothing else lands on it (scripts/dogfood/e2e-setup.sh).
       - op: add

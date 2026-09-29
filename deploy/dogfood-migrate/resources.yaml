@@ -83,7 +83,7 @@ spec:
     - runnerLabels: ["gag-migrate-v1"]
       maxListeners: 2
       maxWorkers: 1
-      workerImage: &runnerImage ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+      workerImage: &runnerImage ghcr.io/actions-gateway/dogfood-e2e-runner:2.337.0-1
       podTemplate:
         spec:
           nodeSelector:
