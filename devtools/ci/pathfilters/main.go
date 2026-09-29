@@ -1,7 +1,7 @@
-// Command pathfilters extracts the two path lists that
-// scripts/ci/check-path-filters.sh reconciles against go.work and the repo
-// tree: the dorny/paths-filter `filters:` blocks, and a workflow's
-// `on.push.paths` list.
+// Command pathfilters extracts the path lists that
+// scripts/ci/check-path-filters.sh reconciles against go.work, the repo tree,
+// and each other: the dorny/paths-filter `filters:` blocks, and a workflow's
+// `on.push.paths` and `on.pull_request.paths` lists.
 //
 // A `filters:` value is a YAML string whose contents are themselves YAML, so
 // it is parsed twice. Reading it with a real parser rather than by indentation
@@ -13,6 +13,7 @@
 //
 //	pathfilters filters <workflow.yml>     # one "<filter>\t<pattern>" per line
 //	pathfilters push-paths <workflow.yml>  # one path per line
+//	pathfilters pr-paths <workflow.yml>    # one path per line
 //	pathfilters jobs <workflow.yml>        # one "<job id>\t<needs entry>" per line
 //
 // Output is in document order, which is what the caller's `sort` and its
@@ -29,7 +30,7 @@ import (
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintf(os.Stderr, "usage: %s filters|push-paths <workflow.yml>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s filters|push-paths|pr-paths|jobs <workflow.yml>\n", os.Args[0])
 		os.Exit(2)
 	}
 	mode, path := os.Args[1], os.Args[2]
@@ -45,7 +46,9 @@ func main() {
 	case "filters":
 		err = writeFilters(out, root)
 	case "push-paths":
-		err = writePushPaths(out, root)
+		err = writeTriggerPaths(out, root, "push")
+	case "pr-paths":
+		err = writeTriggerPaths(out, root, "pull_request")
 	case "jobs":
 		err = writeJobs(out, root)
 	default:
@@ -103,8 +106,13 @@ func mapValue(n *yaml.Node, key string) *yaml.Node {
 }
 
 // scalars flattens a node to its string values: a sequence yields each entry, a
-// lone scalar yields itself. dorny/paths-filter accepts both spellings for a
-// filter's pattern list.
+// lone scalar yields itself, an alias yields whatever its anchor holds, and a
+// nested sequence is flattened in place. dorny/paths-filter accepts all four in
+// a filter's pattern list: it loads the block with js-yaml, which resolves
+// aliases, and flattens nested arrays recursively (src/filter.ts
+// parseFilterItemYaml at v4.0.3, ceb8a2b8), which is what makes its documented
+// `- *shared` spelling work. Dropping an alias here would hide its patterns
+// from every assertion that reads them.
 func scalars(n *yaml.Node) []string {
 	if n == nil {
 		return nil
@@ -112,12 +120,12 @@ func scalars(n *yaml.Node) []string {
 	switch n.Kind {
 	case yaml.ScalarNode:
 		return []string{n.Value}
+	case yaml.AliasNode:
+		return scalars(n.Alias)
 	case yaml.SequenceNode:
 		var out []string
 		for _, c := range n.Content {
-			if c.Kind == yaml.ScalarNode {
-				out = append(out, c.Value)
-			}
+			out = append(out, scalars(c)...)
 		}
 		return out
 	default:
@@ -199,13 +207,13 @@ func writeFilters(out *bufio.Writer, root *yaml.Node) error {
 	return nil
 }
 
-// writePushPaths prints the `on.push.paths` entries, one per line.
+// writeTriggerPaths prints the `on.<event>.paths` entries, one per line.
 //
 // The `on` key stays a string: gopkg.in/yaml.v3 resolves only true/True/TRUE
 // as booleans, not the YAML 1.1 `on`/`yes` spellings that would turn this
 // lookup into a miss.
-func writePushPaths(out *bufio.Writer, root *yaml.Node) error {
-	for _, p := range scalars(mapValue(mapValue(mapValue(root, "on"), "push"), "paths")) {
+func writeTriggerPaths(out *bufio.Writer, root *yaml.Node, event string) error {
+	for _, p := range scalars(mapValue(mapValue(mapValue(root, "on"), event), "paths")) {
 		if _, err := fmt.Fprintln(out, p); err != nil {
 			return err
 		}

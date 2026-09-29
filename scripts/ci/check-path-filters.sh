@@ -25,17 +25,15 @@
 #   3. Live paths. Every pattern's literal prefix still exists on disk. A renamed
 #      or deleted script leaves a pattern matching nothing, which silently
 #      narrows its gate the same way a missing module does.
-#   4. Shared-lane agreement. Two filters gating the same reusable workflow list
-#      the same scripts/ patterns. e2e-test.yml and e2e-calico.yml both call
-#      e2e-reusable.yml, yet disagreed by ~60× about which scripts it runs —
-#      calico named 2 of the ≥6, so a free-runner-disk.sh change skipped the lane
-#      that exercises it (Q571).
-#   5. Push-trigger agreement. A workflow that scopes its post-merge leg with
-#      `on.push.paths` lists the same paths as its `changes` filter. The two are
-#      one decision written twice (no YAML anchors in Actions), and drift is
-#      invisible on a PR — `pull_request` carries no path filter, so only the
-#      post-merge leg silently stops running. Q571's own regrouping did exactly
-#      this to e2e-calico.yml and merged green.
+#   4. Twice-written agreement. Every pair in TWICE_WRITTEN lists the same
+#      paths. Each pair is one scoping decision written in two places — a push
+#      trigger and a `changes` filter, a pull_request trigger and a push trigger,
+#      or two lanes' filters over one reusable workflow — and drift between the
+#      two is invisible on a PR, because only one leg silently stops running.
+#      Q571 shipped both of the shapes then gated, and merged green each time.
+#   5. Twice-written completeness. A workflow scoping a trigger with a path list
+#      beside any other path list registers that trigger list in TWICE_WRITTEN,
+#      so a new duplicate fails here instead of shipping unchecked (Q574).
 #   6. Globstar placement. Every `filters:` pattern spells `**` somewhere
 #      picomatch still reads as recursive. `cmd/**.go` reads as every Go file
 #      under cmd/ and matches nothing, so it gates on nothing — and assertion 3
@@ -99,28 +97,36 @@ NARROW_FILTERS=(
 	'plan-hygiene.yml:plan'           # the whole docs/plan/ tree plus any .go file (for plan-ref scanning)
 	'autoscaler-drift.yml:autoscaler' # the CA/kwok pins, the kwok manifests, and the matcher under test
 	'autoscaler-drift.yml:karpenter'  # the Karpenter pins/recipe and its live test (Q479)
+	'autoscaler-drift.yml:drift_shared' # the anchor both arms splice in; no job reads its output
 )
 
-# Filter pairs that gate the SAME reusable workflow and must therefore agree on
-# which scripts/ groups feed it, as "<workflow>:<filter>|<workflow>:<filter>".
-# Only the scripts/ patterns are compared — the rest of each filter is what makes
-# the two lanes different (the calico lane is scoped to NetworkPolicy/proxy code).
-SHARED_LANE_FILTERS=(
-	'e2e-test.yml:e2e|e2e-calico.yml:calico' # both call .github/workflows/e2e-reusable.yml
-)
-
-# Workflows that scope their post-merge leg with an `on.push.paths` list AND
-# classify PRs with a `changes` filter, as "<workflow>:<filter>". The two lists
-# are the same decision expressed twice — GitHub Actions does not resolve YAML
-# anchors, so they are duplicated rather than shared — and nothing but this
-# assertion keeps them in step. Drift is invisible on a PR (`pull_request` has no
-# path filter, so the PR leg always classifies correctly) and only shows up as a
-# post-merge leg that silently did not run.
-PUSH_TRIGGER_FILTERS=(
-	'doc-links.yml:docs'
-	'e2e-calico.yml:calico'
-	'plan-hygiene.yml:plan'
-	'status-lint.yml:status'
+# Every path list the workflows write twice, as "<side>|<side>[|<scope>]". A side
+# is one of:
+#
+#   filter:<workflow>:<name>  a dorny/paths-filter filter
+#   push:<workflow>           the workflow's on.push.paths
+#   pr:<workflow>             the workflow's on.pull_request.paths
+#
+# A scope, when given, compares only the patterns under that prefix on both
+# sides. Within one `filters:` block, share with a YAML anchor instead
+# (autoscaler-drift.yml does), which removes the pair rather than gating it;
+# docs/development/testing.md § A path list written twice says which of the
+# shapes below could do the same, and which cannot.
+TWICE_WRITTEN=(
+	# Two lanes over e2e-reusable.yml must run on the same scripts/ groups; the
+	# rest of each filter is what makes the calico lane narrower.
+	'filter:e2e-test.yml:e2e|filter:e2e-calico.yml:calico|scripts/'
+	# PR leg on the `changes` filter, post-merge leg on on.push.paths.
+	'push:doc-links.yml|filter:doc-links.yml:docs'
+	'push:e2e-calico.yml|filter:e2e-calico.yml:calico'
+	'push:plan-hygiene.yml|filter:plan-hygiene.yml:plan'
+	'push:status-lint.yml|filter:status-lint.yml:status'
+	# Both legs scoped by their own trigger list.
+	'pr:dockerfile-lint.yml|push:dockerfile-lint.yml'
+	'pr:endpoint-parity.yml|push:endpoint-parity.yml'
+	'pr:metric-tiers.yml|push:metric-tiers.yml'
+	'pr:reason-tiers.yml|push:reason-tiers.yml'
+	'pr:rung-order.yml|push:rung-order.yml'
 )
 
 # The `filters:` value is a YAML string whose contents are themselves YAML, and
@@ -162,6 +168,13 @@ parse_filters() {
 parse_push_paths() {
 	ensure_pathfilters
 	"$PATHFILTERS_BIN" push-paths "$1"
+}
+
+# parse_pr_paths WORKFLOW_PATH — the `on.pull_request.paths` entries, one per
+# line. Empty when the workflow declares none.
+parse_pr_paths() {
+	ensure_pathfilters
+	"$PATHFILTERS_BIN" pr-paths "$1"
 }
 
 # pattern_covers_dir PATTERN DIR — true when PATTERN matches every file under DIR.
@@ -323,54 +336,123 @@ assert_paths_live() {
 	done
 }
 
-# scripts_patterns WORKFLOW FILTER — print FILTER's scripts/ patterns, sorted, one
-# per line. Sorted so the comparison is order-insensitive: the two lanes may list
-# the groups in whatever order reads best next to their own comments.
-scripts_patterns() {
-	local workflow="$1" filter="$2" name pattern
-	while IFS=$'\t' read -r name pattern; do
-		[[ "$name" == "$filter" ]] || continue
-		[[ "$pattern" == scripts/* ]] || continue
-		printf '%s\n' "$pattern"
-	done < <(parse_filters "$WORKFLOW_DIR/$workflow") | LC_ALL=C sort
+# side_paths SIDE — print the paths SIDE lists, one per line, in document order.
+# SIDE is a TWICE_WRITTEN side: filter:<workflow>:<name>, push:<workflow>, or
+# pr:<workflow>.
+side_paths() {
+	local side="$1" kind rest
+	kind="${side%%:*}"
+	rest="${side#*:}"
+	case "$kind" in
+	filter)
+		parse_filters "$WORKFLOW_DIR/${rest%%:*}" |
+			awk -F'\t' -v f="${rest#*:}" '$1==f{print $2}'
+		;;
+	push) parse_push_paths "$WORKFLOW_DIR/$rest" ;;
+	pr) parse_pr_paths "$WORKFLOW_DIR/$rest" ;;
+	*) die "TWICE_WRITTEN side '$side' is not filter:<workflow>:<name>, push:<workflow> or pr:<workflow>" ;;
+	esac
 }
 
-# assert_shared_lanes_agree — paired filters gating one reusable workflow name the
-# same scripts/ groups. A diff either way is a bug: the shorter list skips a lane
-# on a change that lane runs, the longer one runs a lane on a change it does not.
-assert_shared_lanes_agree() {
-	local pair left right left_patterns right_patterns
-	for pair in "${SHARED_LANE_FILTERS[@]}"; do
-		left="${pair%%|*}"
-		right="${pair#*|}"
-		left_patterns="$(scripts_patterns "${left%%:*}" "${left#*:}")"
-		right_patterns="$(scripts_patterns "${right%%:*}" "${right#*:}")"
-		[[ "$left_patterns" == "$right_patterns" ]] && continue
-		fail "$WORKFLOW_DIR/${left%%:*} filter '${left#*:}' and $WORKFLOW_DIR/${right%%:*} filter
-  '${right#*:}' gate the same reusable workflow but list different scripts/ patterns:
-$(diff <(printf '%s\n' "$left_patterns") <(printf '%s\n' "$right_patterns") | sed 's/^/    /')
-  '<' is ${left%%:*} only, '>' is ${right%%:*} only. Whichever lane is missing a
-  pattern skips on a change it actually runs (Q571). Make the two sets identical."
+# side_label SIDE — SIDE as a reader finds it in the workflow file.
+side_label() {
+	local side="$1" rest="${1#*:}"
+	case "${side%%:*}" in
+	filter) printf "%s filter '%s'" "$WORKFLOW_DIR/${rest%%:*}" "${rest#*:}" ;;
+	push) printf '%s on.push.paths' "$WORKFLOW_DIR/$rest" ;;
+	pr) printf '%s on.pull_request.paths' "$WORKFLOW_DIR/$rest" ;;
+	esac
+}
+
+# scoped_sorted SCOPE — stdin's lines under SCOPE (all of them when empty),
+# sorted. Sorted so the comparison is order-insensitive: each list is kept in
+# whatever order reads best beside its own comments.
+scoped_sorted() {
+	local scope="$1" line
+	while IFS= read -r line; do
+		if [[ -z "$scope" || "$line" == "$scope"* ]]; then
+			printf '%s\n' "$line"
+		fi
+	done | LC_ALL=C sort
+}
+
+# assert_twice_written_agree — each TWICE_WRITTEN pair lists the same paths as a
+# set. A diff either way is a bug: the shorter list skips its leg on a change the
+# other runs, the longer one runs its leg on a change the other never classified.
+# A side listing nothing fails too, since that is a stale entry — a renamed filter
+# or a trigger list that was removed — and comparing it would report every path
+# on the other side as a drift.
+assert_twice_written_agree() {
+	local entry left right scope rest left_raw right_raw left_paths right_paths empty
+	for entry in "${TWICE_WRITTEN[@]}"; do
+		left="${entry%%|*}"
+		rest="${entry#*|}"
+		right="${rest%%|*}"
+		scope=''
+		[[ "$rest" == *'|'* ]] && scope="${rest#*|}"
+		# A read that fails is reported as one, not as an empty list: where
+		# errexit is off (a caller testing this function's status), an empty
+		# result would otherwise pass for the stale-entry case below.
+		if ! left_raw="$(side_paths "$left")" || ! right_raw="$(side_paths "$right")"; then
+			fail "could not read $(side_label "$left") or $(side_label "$right")."
+			continue
+		fi
+		if [[ -z "$left_raw" || -z "$right_raw" ]]; then
+			empty="$right"
+			[[ -z "$left_raw" ]] && empty="$left"
+			fail "TWICE_WRITTEN pairs $(side_label "$left") with $(side_label "$right"),
+  but $(side_label "$empty") lists no paths.
+  Drop the stale entry from scripts/ci/check-path-filters.sh, or fix the side if the
+  list was renamed or moved."
+			continue
+		fi
+		left_paths="$(scoped_sorted "$scope" <<<"$left_raw")"
+		right_paths="$(scoped_sorted "$scope" <<<"$right_raw")"
+		[[ "$left_paths" == "$right_paths" ]] && continue
+		fail "$(side_label "$left") and $(side_label "$right")
+  are one scoping decision written twice, but list different ${scope:+$scope }paths:
+$(diff <(printf '%s\n' "$left_paths") <(printf '%s\n' "$right_paths") | sed 's/^/    /')
+  '<' is only in the first, '>' only in the second. Whichever side lacks a path
+  silently skips its leg on a change the other side runs, and nothing on the PR
+  shows it (Q571). Make the two sets identical."
 	done
 }
 
-# assert_push_paths_match_filter — each registered workflow's `on.push.paths`
-# list equals its `changes` filter. Compared as sorted sets: the two lists are
-# maintained by hand in two places and their order need not agree.
-assert_push_paths_match_filter() {
-	local key workflow filter push_paths filter_paths
-	for key in "${PUSH_TRIGGER_FILTERS[@]}"; do
-		workflow="${key%%:*}"
-		filter="${key#*:}"
-		push_paths="$(parse_push_paths "$WORKFLOW_DIR/$workflow" | LC_ALL=C sort)"
-		filter_paths="$(parse_filters "$WORKFLOW_DIR/$workflow" |
-			awk -F'\t' -v f="$filter" '$1==f{print $2}' | LC_ALL=C sort)"
-		[[ "$push_paths" == "$filter_paths" ]] && continue
-		fail "$WORKFLOW_DIR/$workflow scopes its push leg with paths that differ from filter '$filter':
-$(diff <(printf '%s\n' "$push_paths") <(printf '%s\n' "$filter_paths") | sed 's/^/    /')
-  '<' is push-only, '>' is filter-only. The PR leg classifies off the filter and
-  the post-merge leg off the push list, so a filter-only entry means merging that
-  change silently skips this workflow on main (Q571). Make the two sets identical."
+# assert_twice_written_registered — every workflow that scopes a trigger with a
+# path list beside another path list registers that trigger list. One list on
+# its own has nothing to drift from (the q*-probe workflows scope their push leg
+# to their own file and nothing else), so only a second list makes a pair.
+# Pairs across two workflows cannot be discovered this way and are registered by
+# hand; the shared-lane entry is one.
+assert_twice_written_registered() {
+	local workflow base side lists registered=() entry rest pr push filters
+	for entry in "${TWICE_WRITTEN[@]}"; do
+		rest="${entry#*|}"
+		registered+=("${entry%%|*}" "${rest%%|*}")
+	done
+	for workflow in "$WORKFLOW_DIR"/*.yml; do
+		base="$(basename "$workflow")"
+		# Each read is checked, as in assert_twice_written_agree: an unchecked
+		# failure reads as an empty list and skips the workflow silently.
+		if ! pr="$(parse_pr_paths "$workflow")" ||
+			! push="$(parse_push_paths "$workflow")" ||
+			! filters="$(parse_filters "$workflow")"; then
+			fail "could not read the path lists in $workflow."
+			continue
+		fi
+		lists=0
+		[[ -n "$pr" ]] && lists=$((lists + 1))
+		[[ -n "$push" ]] && lists=$((lists + 1))
+		[[ -n "$filters" ]] && lists=$((lists + 1))
+		((lists >= 2)) || continue
+		for side in "pr:$base" "push:$base"; do
+			[[ "$side" == pr:* && -z "$pr" ]] && continue
+			[[ "$side" == push:* && -z "$push" ]] && continue
+			contains "$side" "${registered[@]}" && continue
+			fail "$(side_label "$side") duplicates a path list the same workflow
+  writes elsewhere, and nothing checks that the two agree. Add a pair naming it to
+  TWICE_WRITTEN in scripts/ci/check-path-filters.sh (Q574)."
+		done
 	done
 }
 
@@ -423,8 +505,8 @@ main() {
 	assert_registry_complete "${found[@]}"
 	assert_module_coverage "${modules[@]}"
 	assert_paths_live "${found[@]}"
-	assert_shared_lanes_agree
-	assert_push_paths_match_filter
+	assert_twice_written_agree
+	assert_twice_written_registered
 	assert_globstar_placement "${found[@]}"
 
 	if ((failures > 0)); then

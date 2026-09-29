@@ -1165,12 +1165,10 @@ Six assertions, cheapest first:
    Failures name the module, the workflow, and the exact pattern to add, one per gap.
 3. **Live paths.** Every pattern's literal prefix still exists on disk.
    A pattern left behind by a rename matches nothing, which narrows its gate as silently as a missing module does.
-4. **Shared-lane agreement.** Two filters gating the same reusable workflow list the same `scripts/` patterns.
-   `SHARED_LANE_FILTERS` pairs them; the failure prints a diff of the two sets.
-   `e2e-test.yml` and `e2e-calico.yml` both call `e2e-reusable.yml` yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a `free-runner-disk.sh` change skipped the lane that exercises it (Q571).
-5. **Push-trigger agreement.** A workflow that scopes its post-merge leg with `on.push.paths` lists the same paths as its `changes` filter.
-   `PUSH_TRIGGER_FILTERS` registers the pairs.
-   See below for why this one is easy to miss.
+4. **Twice-written agreement.** Every pair in the `TWICE_WRITTEN` registry lists the same paths, compared as sets, and the failure prints a diff.
+   A pair is one scoping decision written in two places; the three shapes, and why drift between them is invisible, are [below](#a-path-list-written-twice).
+5. **Twice-written completeness.** A workflow that scopes a trigger with a path list beside any other path list registers that trigger list in `TWICE_WRITTEN`, so a new duplicate fails instead of shipping unchecked.
+   A lone trigger list, such as a `q*-probe` workflow scoping its push leg to its own file, has nothing to drift from and is left alone.
 6. **Globstar placement.** Every `filters:` pattern spells `**` where picomatch still expands it.
    `cmd/**.go` reads as every Go file under `cmd/` and matches nothing, and assertion 3 passes it because the literal prefix `cmd` exists.
    Scoped to `filters:` blocks only; see below.
@@ -1206,27 +1204,37 @@ So `cmd/**/*.go`, `**/*.go` and `**.go` all pass, and `cmd/**.go` fails with the
 That leading exception is load-bearing rather than pedantic: `plan-hygiene.yml`'s `plan` filter is `'**.go'` today, so a rule phrased as "`**` must always be its own segment" would fail the tracked tree on arrival.
 
 **It scans `filters:` blocks only.** Those are what `dorny/paths-filter` matches with picomatch; `on.push.paths` and `pull_request.paths` are matched by GitHub's own trigger matcher, which reads the same pattern differently, so applying this rule there could reject a pattern that works.
-The two matchers are the distinction the table above measures, and assertion 5 already holds the three duplicated lists in step.
+The two matchers are the distinction the table above measures, and assertion 4 already holds the duplicated lists in step.
 
 Its own tests pin the boundary from both sides, since a false positive fails the tracked tree: the sound shapes must **not** be flagged, and the degraded one must be.
 The assertion was verified by injecting `'cmd/**.go'` into a real filter and requiring red.
 
-#### A path list written twice: the trigger and the filter
+#### A path list written twice
 
-Four workflows — `doc-links.yml`, `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml` — express the same scoping decision **twice**, because the two legs are gated by different mechanisms:
+Some workflows express one scoping decision **twice**, in two places that do not share one list today.
+**Drift between the two is invisible on a PR**: one side keeps classifying correctly, the other silently stops running its leg, and a leg that does not run leaves nothing red to notice.
+Every pair lives in one registry, `TWICE_WRITTEN` in `check-path-filters.sh`, and assertion 4 compares each as sorted sets.
+Three shapes are registered today:
 
-- **The PR leg** triggers on every `pull_request` with no path filter (so its `gate` job always reports its required check) and is scoped by the internal `changes` filter.
-- **The post-merge leg** triggers on `push` to `main` and is scoped by `on.push.paths` — a plain GitHub Actions trigger filter, not a `dorny/paths-filter` block.
+- **A push trigger and a `changes` filter** — `doc-links.yml`, `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml`.
+  The PR leg triggers on every `pull_request` with no path filter, so its `gate` job always reports its required check, and is scoped by the `changes` filter; the post-merge leg is scoped by `on.push.paths`.
+  Q571 shipped this regression and merged green: it rewrote `e2e-calico.yml`'s filter to `scripts/{e2e,fetch,lib}/**` and left the push list naming the two now-moved files it had always enumerated.
+- **A `pull_request` trigger and a push trigger** — `dockerfile-lint.yml`, `endpoint-parity.yml`, `metric-tiers.yml`, `reason-tiers.yml`, `rung-order.yml`.
+  Both legs are scoped by their own `paths:` list.
+  Ungated until Q574, by which time the shape had grown from one workflow to five; all five pairs agreed when the gate landed.
+- **Two lanes over one reusable workflow** — `e2e-test.yml`'s `e2e` filter and `e2e-calico.yml`'s `calico`, compared only under `scripts/`, since the rest of each filter is what makes the Calico lane narrower.
+  Both call `e2e-reusable.yml`, yet they disagreed by roughly 60× about which scripts it runs: the Calico lane named two of the six the reusable workflow invokes directly, so a `free-runner-disk.sh` change skipped the lane that exercises it (Q571).
+  This is the one pair assertion 5 cannot discover, because it spans two workflows, so it is registered by hand.
 
-GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated rather than shared.
-**Drift between the two is invisible on a PR.** Every PR classifies correctly off the filter; only the post-merge leg silently stops running, and a leg that does not run leaves nothing red to notice.
+**Within one `filters:` block, share the list with a YAML anchor instead of registering a pair.** `dorny/paths-filter` loads the block with js-yaml, which resolves aliases, and flattens nested lists, so its documented `- *shared` spelling splices an anchored list into another filter (read from `src/filter.ts` at the pinned v4.0.3).
+`autoscaler-drift.yml` does this: its `drift_shared` filter holds the paths both arms run on, and `autoscaler` and `karpenter` each open with `- *drift_shared`.
+The anchor removes the duplicate rather than gating it, which is why that workflow has no `TWICE_WRITTEN` entry.
+The key it adds is itself a filter, registered in `NARROW_FILTERS`, and no job reads its output.
+`devtools/ci/pathfilters` resolves the alias the same way, so every assertion sees each arm's full list.
 
-Q571 shipped exactly that regression and merged green: it rewrote `e2e-calico.yml`'s filter to `scripts/{e2e,fetch,lib}/**` and left the push list naming the two now-moved files it had always enumerated.
-Assertion 5 is the recurrence guard — it compares the two as sorted sets and prints a diff of the difference.
-
-One workflow (`dockerfile-lint.yml`) duplicates a list across `pull_request.paths` and `push.paths` instead.
-That is the same hazard in a different shape and is **not** yet gated; both lists agree today (Q572).
-`doc-links.yml` was the second until Q743 moved it onto the trigger-and-filter shape above, which brought it under assertion 5.
+The trigger-and-filter shape cannot use one, because the filter is a string inside the workflow and the trigger list is not, and two workflows share nothing.
+A `pull_request` and a push list are both workflow YAML, so an anchor there turns on GitHub's own workflow parser accepting one.
+GitHub's changelog says it does from 2025-09-18, but no run here has exercised it, so those pairs stay duplicated and gated until [Q1148](../queue/Q1148.md) measures it.
 
 #### `scripts/` is grouped by blast radius
 

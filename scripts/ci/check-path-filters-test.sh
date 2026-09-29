@@ -17,11 +17,13 @@
 #   4. The assertions fail on a module a workspace-covering filter omits, on an
 #      unregistered filter, and on a pattern whose path no longer exists — each
 #      naming what to fix.
-#   5. Two filters gating one reusable workflow are held to the same scripts/
-#      patterns, comparing only those and ignoring order (Q571).
-#   6. parse_push_paths reads `on.push.paths` out of real YAML, and a workflow's
-#      push list is held equal to its changes filter — the drift Q571 itself
-#      shipped, which no assertion then covered.
+#   5. Every TWICE_WRITTEN pair is held to one set of paths, in each of its three
+#      shapes: two lanes' filters compared under a scope (Q571), a push list
+#      against its changes filter (the drift Q571 itself shipped), and a
+#      pull_request list against a push list (Q574). A stale side fails too.
+#   6. The trigger-list parsers read `on.push.paths` and `on.pull_request.paths`
+#      out of real YAML, and every trigger list that shares a workflow with
+#      another list must be registered — a single list must not be (Q574).
 #   7. A `**` sits where picomatch still expands it. Both sides are pinned: the
 #      sound shapes must not be flagged (a false positive fails the tracked
 #      tree, which carries '**.go') and the degraded one must be (Q659).
@@ -38,6 +40,10 @@ cd "$REPO_ROOT"
 # guard there keeps main() from running against the tracked tree on source.
 # shellcheck source=scripts/ci/check-path-filters.sh
 source "$REPO_ROOT/scripts/ci/check-path-filters.sh"
+# Build the parser once, here. Every helper below runs inside a command
+# substitution, where ensure_pathfilters' built flag never reaches this shell,
+# so without this each call re-links and rewrites the binary in place.
+ensure_pathfilters
 
 FIXTURE_ROOT="$REPO_ROOT/tmp/check-path-filters-test.$$"
 trap 'rm -rf "$FIXTURE_ROOT"' EXIT INT TERM
@@ -224,7 +230,7 @@ expect_assertion paths-fails-on-dead-path 1 'does not exist' assert_paths_live '
 # 'api/**' and 'go.work' both resolve in this repo.
 expect_assertion paths-passes-on-live-paths 0 '' assert_paths_live 'gate.yml:code'
 
-# --- 5. shared lanes must list the same scripts/ patterns ---------------------
+# --- 5. twice-written lists must agree ----------------------------------------
 
 # Two lanes over one reusable workflow. `kindnet` names three script groups, and
 # each `calico-*` fixture differs from it in exactly one way.
@@ -250,23 +256,57 @@ jobs:
               - 'scripts/e2e/**'
 YAML
 
-SHARED_LANE_FILTERS=('lanes.yml:kindnet|lanes.yml:calico-same')
+TWICE_WRITTEN=('filter:lanes.yml:kindnet|filter:lanes.yml:calico-same|scripts/')
 # Agreement is on the scripts/ patterns as a SET: listing order differs above,
 # and the non-scripts patterns differ deliberately — that is what makes the
 # calico lane narrower than the kindnet one everywhere but scripts/.
-expect_assertion lanes-pass-when-sets-match 0 '' assert_shared_lanes_agree
+expect_assertion lanes-pass-when-sets-match 0 '' assert_twice_written_agree
+# Without the scope the same pair fails on the cmd/ patterns, which is what the
+# scope exists to set aside.
+TWICE_WRITTEN=('filter:lanes.yml:kindnet|filter:lanes.yml:calico-same')
+expect_assertion lanes-unscoped-compares-everything 1 'cmd/gmc/\*\*' assert_twice_written_agree
 
 # The Q571 shape: the second lane names a subset, so a scripts/fetch/ change runs
 # one lane and skips the other.
-SHARED_LANE_FILTERS=('lanes.yml:kindnet|lanes.yml:calico-short')
-expect_assertion lanes-fail-on-subset 1 'different scripts/ patterns' assert_shared_lanes_agree
-expect_assertion lanes-name-the-missing-pattern 1 'scripts/fetch/\*\*' assert_shared_lanes_agree
+TWICE_WRITTEN=('filter:lanes.yml:kindnet|filter:lanes.yml:calico-short|scripts/')
+expect_assertion lanes-fail-on-subset 1 'different scripts/ paths' assert_twice_written_agree
+expect_assertion lanes-name-the-missing-pattern 1 'scripts/fetch/\*\*' assert_twice_written_agree
 # Asymmetry is a failure in both directions — an extra pattern runs a lane on a
 # change it does not exercise, which is how the two lists drift apart again.
-SHARED_LANE_FILTERS=('lanes.yml:calico-short|lanes.yml:kindnet')
-expect_assertion lanes-fail-on-superset 1 'different scripts/ patterns' assert_shared_lanes_agree
+TWICE_WRITTEN=('filter:lanes.yml:calico-short|filter:lanes.yml:kindnet|scripts/')
+expect_assertion lanes-fail-on-superset 1 'different scripts/ paths' assert_twice_written_agree
 
-# --- 6. push-trigger paths must match the changes filter ----------------------
+# A side that lists nothing is a stale entry, reported as one rather than as a
+# drift naming every path on the other side.
+TWICE_WRITTEN=('filter:lanes.yml:kindnet|filter:lanes.yml:renamed')
+expect_assertion twice-fails-on-stale-side 1 "filter 'renamed' lists no paths" assert_twice_written_agree
+# A side that cannot be read at all is not a stale entry, and must not be
+# reported as one: this harness calls the assertion with errexit off, which is
+# where a failed parse would otherwise come back as an empty list.
+TWICE_WRITTEN=('filter:lanes.yml:kindnet|filter:no-such-workflow.yml:calico')
+expect_assertion twice-fails-on-unreadable-side 1 'could not read' assert_twice_written_agree
+
+# The shape Q533 found in autoscaler-drift.yml, now spelled with an anchor so the
+# shared patterns are written once. The parser must splice the alias into each
+# arm, or every assertion over those arms would miss the shared patterns.
+cat >"$FIXTURE_ROOT/workflows/anchor.yml" <<'YAML'
+jobs:
+  changes:
+    steps:
+      - uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            shared: &shared
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
+            left:
+              - *shared
+              - 'test/left/**'
+YAML
+expect_eq parse-splices-an-anchor "scripts/fetch/** scripts/lib/** test/left/**" \
+	"$(side_paths 'filter:anchor.yml:left' | tr '\n' ' ' | sed 's/ $//')"
+
+# --- 6. trigger path lists: parsing, agreement, and registration --------------
 
 # The real shape: `pull_request:` bare (so `gate` always reports), a push leg
 # scoped by paths, and a `changes` filter classifying PRs. `on.push.paths` is
@@ -314,19 +354,99 @@ expect_eq push-paths-count 2 \
 expect_eq push-paths-absent '' "$(parse_push_paths "$FIXTURE_ROOT/workflows/parse.yml")"
 
 WORKFLOW_DIR="$FIXTURE_ROOT/workflows"
-PUSH_TRIGGER_FILTERS=('push.yml:same')
+TWICE_WRITTEN=('push:push.yml|filter:push.yml:same')
 # Order need not agree — the filter lists the same two paths reversed.
-expect_assertion push-passes-when-sets-match 0 '' assert_push_paths_match_filter
+expect_assertion push-passes-when-sets-match 0 '' assert_twice_written_agree
 
 # The Q571 regression itself: the filter gained paths the push list did not, so
 # merging one of them skips the post-merge leg while every PR looked correct.
-PUSH_TRIGGER_FILTERS=('push.yml:extra')
-expect_assertion push-fails-on-filter-only 1 'differ from filter' assert_push_paths_match_filter
-expect_assertion push-names-the-missing-path 1 'scripts/fetch/\*\*' assert_push_paths_match_filter
+TWICE_WRITTEN=('push:push.yml|filter:push.yml:extra')
+expect_assertion push-fails-on-filter-only 1 'one scoping decision written twice' assert_twice_written_agree
+expect_assertion push-names-the-missing-path 1 'scripts/fetch/\*\*' assert_twice_written_agree
 # And the mirror: a push-only path runs the post-merge leg on a change the PR
 # leg never classified as relevant.
-PUSH_TRIGGER_FILTERS=('push.yml:short')
-expect_assertion push-fails-on-push-only 1 'differ from filter' assert_push_paths_match_filter
+TWICE_WRITTEN=('push:push.yml|filter:push.yml:short')
+expect_assertion push-fails-on-push-only 1 'one scoping decision written twice' assert_twice_written_agree
+
+# The shape Q572 left ungated: both legs scoped by their own trigger list, the
+# way dockerfile-lint.yml and the four docs-tier workflows are. `drifted` is the
+# same workflow with one path added to its PR leg only.
+cat >"$FIXTURE_ROOT/workflows/prpush.yml" <<'YAML'
+on:
+  pull_request:
+    paths:
+      - '**/Dockerfile'
+      - '.hadolint.yaml'
+  merge_group:
+  push:
+    branches: [main]
+    paths:
+      - '.hadolint.yaml'
+      - '**/Dockerfile'
+YAML
+cat >"$FIXTURE_ROOT/workflows/drifted.yml" <<'YAML'
+on:
+  pull_request:
+    paths:
+      - '**/Dockerfile'
+      - '.hadolint.yaml'
+      - 'scripts/lib/**'
+  push:
+    branches: [main]
+    paths:
+      - '**/Dockerfile'
+      - '.hadolint.yaml'
+YAML
+
+expect_eq pr-paths-parsed "**/Dockerfile .hadolint.yaml" \
+	"$(parse_pr_paths "$FIXTURE_ROOT/workflows/prpush.yml" | tr '\n' ' ' | sed 's/ $//')"
+# push.yml's `pull_request:` is bare, so it has no PR list to report.
+expect_eq pr-paths-absent '' "$(parse_pr_paths "$FIXTURE_ROOT/workflows/push.yml")"
+
+TWICE_WRITTEN=('pr:prpush.yml|push:prpush.yml')
+expect_assertion prpush-passes-when-sets-match 0 '' assert_twice_written_agree
+TWICE_WRITTEN=('pr:drifted.yml|push:drifted.yml')
+expect_assertion prpush-fails-on-pr-only 1 'scripts/lib/\*\*' assert_twice_written_agree
+
+# Registration. Each fixture directory holds exactly the workflows a case needs,
+# since the assertion walks every workflow in WORKFLOW_DIR.
+mkdir -p "$FIXTURE_ROOT/reg-pair" "$FIXTURE_ROOT/reg-single"
+cp "$FIXTURE_ROOT/workflows/prpush.yml" "$FIXTURE_ROOT/workflows/push.yml" "$FIXTURE_ROOT/reg-pair/"
+WORKFLOW_DIR="$FIXTURE_ROOT/reg-pair"
+# prpush.yml's two trigger lists and push.yml's push list, all unregistered.
+TWICE_WRITTEN=()
+expect_assertion registered-fails-on-every-unlisted-side 3 'Add a pair naming it' \
+	assert_twice_written_registered
+TWICE_WRITTEN=('pr:prpush.yml|push:prpush.yml' 'push:push.yml|filter:push.yml:same')
+expect_assertion registered-passes-when-listed 0 '' assert_twice_written_registered
+# Registering one side of a pair is not enough: the other is still unchecked.
+TWICE_WRITTEN=('push:push.yml|filter:push.yml:same')
+expect_assertion registered-names-the-missing-side 2 'prpush.yml on.pull_request.paths' \
+	assert_twice_written_registered
+
+# A lone trigger list has nothing to drift from — the q*-probe workflows scope
+# their push leg to their own file — so demanding a pair for it would be noise.
+cat >"$FIXTURE_ROOT/reg-single/probe.yml" <<'YAML'
+on:
+  push:
+    paths: [".github/workflows/probe.yml"]
+YAML
+WORKFLOW_DIR="$FIXTURE_ROOT/reg-single"
+TWICE_WRITTEN=()
+expect_assertion registered-ignores-a-single-list 0 '' assert_twice_written_registered
+
+# A parser that dies must fail the workflow, not skip it: read unchecked, a kill
+# is an empty list, and an empty list is "nothing to register". The stub exits
+# the way a SIGKILLed process does.
+printf '#!/usr/bin/env bash\nexit 137\n' >"$FIXTURE_ROOT/dead-parser"
+chmod +x "$FIXTURE_ROOT/dead-parser"
+WORKFLOW_DIR="$FIXTURE_ROOT/reg-pair"
+with_dead_parser() {
+	local PATHFILTERS_BIN="$FIXTURE_ROOT/dead-parser"
+	"$@"
+}
+expect_assertion registered-fails-closed-on-a-dead-parser 2 'could not read' \
+	with_dead_parser assert_twice_written_registered
 
 # --- 7. `**` must sit where picomatch still expands it ------------------------
 
