@@ -97,9 +97,9 @@ EOF
 )"
 
 # spec.conversion block injected under `spec:` for the v2 CRDs only (Q74). The v2
-# kinds are multi-version — v2beta1 is served + storage/hub, v2alpha1 the served
-# spoke — so the apiserver must call the GMC-hosted /convert webhook to serve or
-# admit either version. controller-gen emits no conversion stanza (the authoritative
+# kinds are multi-version — v2beta1 is served + storage/hub, v2alpha1 and v2 the
+# served spokes — so the apiserver must call the GMC-hosted /convert webhook to serve
+# or admit any version. controller-gen emits no conversion stanza (the authoritative
 # api/config/crd output stays deployment-agnostic and conversion-free), so this
 # deployment wiring is injected here, mirroring how sync-chart-webhook.sh re-injects
 # the validating webhook's Helm wiring. The clientConfig points at the GMC webhook
@@ -158,7 +158,8 @@ add_crd "$SRC_RUNNERGROUP" \
 #  2. It ships in the chart-root crds/ dir, not templates/crds/, because the same
 #     release also renders a PriorityClassAllowlist CR. See the block above.
 #
-# Single-version (v2beta1 only), so no conversion block.
+# Served at v2beta1 (storage) and v2 with identical schemas, so no conversion block:
+# the apiserver's default None strategy rewrites apiVersion alone.
 add_crd "api/config/crd/actions-gateway.com_priorityclassallowlists.yaml" \
 	"charts/actions-gateway/crds/priorityclassallowlist-crd.yaml" \
 	"$PRIORITYCLASSALLOWLIST_BLOCK"

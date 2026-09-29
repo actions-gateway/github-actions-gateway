@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/go/check-v2-api-sync.sh (Q374): a body divergence in any shared
+# Unit tests for scripts/go/check-v2-api-sync.sh (Q374, Q413): a body divergence in any shared
 # file fails, the entitled differences (the package clause, a
 # +kubebuilder:storageversion marker, a +kubebuilder:deprecatedversion marker) do not,
 # an exempt file may diverge freely, a stale exemption fails, and a file present in one
@@ -124,6 +124,23 @@ printf 'package v2alpha1\n\n// alpha-only helper test\n' >"$root/v2alpha1/extra_
 expect unpaired-file-passes 0 "$root"
 expect_output unpaired-file-reported 'extra_test.go'
 
+# The GA package clause is `package v2`, with nothing after the digit, and must
+# normalise like the pre-release ones (Q413). The pair runs directly because
+# expect() fixes the v2alpha1/v2beta1 layout.
+root="$FIXTURE_ROOT/ga-package-clause"
+mkdir -p "$root/v2beta1" "$root/v2"
+printf 'package v2beta1\n\nconst Shared = "x"\n' >"$root/v2beta1/shared_types.go"
+printf 'package v2\n\nconst Shared = "x"\n' >"$root/v2/shared_types.go"
+ga_rc=0
+LAST_OUT="$("$CHECKER" "$root/v2beta1" "$root/v2" 2>&1)" || ga_rc=$?
+die_if_killed ga-package-clause "$ga_rc" 0
+if ((ga_rc == 0)); then
+    printf 'ok   %-34s rc=%s\n' ga-package-clause "$ga_rc"
+else
+    printf 'FAIL %-34s want rc=0 got rc=%s\n%s\n' ga-package-clause "$ga_rc" "$LAST_OUT" >&2
+    fails=$((fails + 1))
+fi
+
 # A missing directory is a usage error (rc 2), distinct from a divergence (rc 1).
 root="$(fixture missing-dir)"
 rm -rf "$root/v2beta1"
@@ -154,7 +171,7 @@ tree_rc=0
 tree_out="$("$CHECKER" 2>&1)" || tree_rc=$?
 die_if_killed tree-in-sync "$tree_rc"
 if ((tree_rc == 0)); then
-    printf 'ok   %-34s tracked api/v2alpha1 vs api/v2beta1\n' tree-in-sync
+    printf 'ok   %-34s tracked api/v2alpha1, api/v2beta1, api/v2\n' tree-in-sync
 else
     if ((tree_rc == 1)); then
         printf 'FAIL %-34s tracked v2 API packages diverge; run %s\n' tree-in-sync "$CHECKER" >&2
@@ -164,6 +181,12 @@ else
     printf '%s\n' "$tree_out" >&2
     fails=$((fails + 1))
 fi
+
+# The real run checks both pairs. A PAIRS edit that dropped one would still exit 0,
+# so the summary line of each is asserted by name.
+LAST_OUT="$tree_out"
+expect_output tree-checks-alpha-beta 'in sync across api/v2alpha1 and api/v2beta1'
+expect_output tree-checks-beta-ga 'in sync across api/v2beta1 and api/v2$'
 
 if ((fails > 0)); then
     printf '\ncheck-v2-api-sync-test: %d assertion(s) failed\n' "$fails" >&2

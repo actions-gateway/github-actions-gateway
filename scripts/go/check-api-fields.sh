@@ -30,7 +30,7 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 MOD="github.com/actions-gateway/github-actions-gateway"
 API_GROUPS=(
-	"$MOD/api/v2alpha1,$MOD/api/v2beta1"
+	"$MOD/api/v2,$MOD/api/v2alpha1,$MOD/api/v2beta1"
 	"$MOD/gmc/api/v1alpha1"
 	"$MOD/agc/api/v1alpha1"
 )

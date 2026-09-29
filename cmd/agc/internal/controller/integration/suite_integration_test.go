@@ -19,6 +19,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/broker/brokertest"
@@ -59,6 +60,9 @@ func TestMain(m *testing.M) {
 	// this suite starts below. The v2 CRDs are now multi-version with v2beta1 as
 	// storage, so a v2alpha1 create is only lossless if conversion is wired.
 	_ = agcv2beta1.AddToScheme(testScheme)
+	// The GA v2 spoke (Q413): with it absent, envtest would still route the CRDs'
+	// conversion here, and every v2 read would fail as an unknown version.
+	_ = agcv2.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{

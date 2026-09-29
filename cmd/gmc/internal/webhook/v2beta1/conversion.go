@@ -17,10 +17,10 @@ import (
 // every Convertible/Hub type in the manager's scheme, so each
 // NewWebhookManagedBy(...).Complete() call registers that same handler idempotently
 // (the builder's isAlreadyHandled guard). The five explicit calls assert, at wiring
-// time, that each hub kind is genuinely convertible in the scheme — i.e. both its
-// v2beta1 hub and its v2alpha1 spoke are registered — rather than silently serving a
-// half-wired /convert. The manager's scheme must already include both api/v2alpha1
-// and api/v2beta1 (the GMC registers both at startup).
+// time, that each hub kind is genuinely convertible in the scheme — i.e. its v2beta1
+// hub and its v2alpha1 and v2 spokes are registered — rather than silently serving a
+// half-wired /convert. The manager's scheme must already include api/v2alpha1,
+// api/v2beta1 and api/v2 (the GMC registers all three at startup).
 func SetupConversionWebhooksWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewWebhookManagedBy(mgr, &apiv2beta1.ActionsGateway{}).Complete(); err != nil {
 		return fmt.Errorf("register ActionsGateway conversion webhook: %w", err)

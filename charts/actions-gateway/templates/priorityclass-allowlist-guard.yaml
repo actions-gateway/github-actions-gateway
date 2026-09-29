@@ -38,11 +38,11 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["runnergroups"]
       # Q323: the v2 carriers of the same two PriorityClass routes (runnersets:
-      # priorityTiers; runnertemplates: podTemplate.spec.priorityClassName). Both
-      # versions share identical field paths. ClusterRunnerTemplate is exempt —
+      # priorityTiers; runnertemplates: podTemplate.spec.priorityClassName). Every
+      # served version shares identical field paths. ClusterRunnerTemplate is exempt —
       # cluster-scoped and platform-authored, matching its webhook exemptions.
       - apiGroups: ["actions-gateway.com"]
-        apiVersions: ["v2alpha1", "v2beta1"]
+        apiVersions: ["v2alpha1", "v2beta1", "v2"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnersets", "runnertemplates"]
   matchConditions:

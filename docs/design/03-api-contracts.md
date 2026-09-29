@@ -24,6 +24,7 @@ The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.
 
 > **v2 API (`v2beta1`, group `actions-gateway.com`).** A decomposed v2 API is served side by side with this `v1alpha1` (`actions-gateway.github.com`) surface during the coexistence window.
 > It is **fully shipped** (milestones M1–M5): the five kinds and their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built. v2 has since graduated: **`v2beta1`** is the storage and hub version and the shape new tenants onboard on, while `v2alpha1` stays served as the migration on-ramp.
+> The GA **`v2`** is served beside both as a second conversion spoke, with storage unmoved until `v2.0.0` ([v2-ga.md](../plan/v2-ga.md#phase-2--the-graduation-hop)).
 > Every `v2alpha1` kind carries `+kubebuilder:deprecatedversion`, so the apiserver warns on any `v2alpha1` read or write; the version stays served either way, and the conversion webhook still round-trips it.
 > Both `v1alpha1` kinds carry the same marker (Q633), naming the v2 kind that replaces each and `gag-migrate` as the move — the v1 monolith fans out, so the replacement is a different kind rather than the same kind at a newer version.
 > Tenants migrate on their own schedule via the migration tool, and nothing in the `v1alpha1` surface below changes until it is removed.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/onsi/gomega"
@@ -351,7 +352,7 @@ func guardedV2RS(ns, name, tierClass string) *agcv2alpha1.RunnerSet {
 
 // runV2GuardSubtests verifies the Q323 extension of the VAP backstop to the v2
 // kinds: runnersets (priorityTiers route) and runnertemplates (podTemplate.spec
-// route) — both across v2alpha1 and v2beta1. Unlike v1 runnergroups, the v2 kinds
+// route) — across v2alpha1, v2beta1 and v2. Unlike v1 runnergroups, the v2 kinds
 // DO have failurePolicy=fail webhooks, so here the policy is defense-in-depth: it
 // must answer before the webhooks (VAPs run first in the validation phase), deny
 // off-allowlist classes from any writer, and admit class-free objects untouched.
@@ -450,6 +451,34 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 			return strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard")
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
 			return fmt.Sprintf("a v2beta1 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
+		})
+	})
+
+	t.Run("v2: GA v2 writes are matched too", func(t *testing.T) {
+		// This pins the outcome, not the rule's explicit "v2" entry: with it removed
+		// the default matchPolicy Equivalent still converts the write to a listed
+		// version, and this subtest stays green (measured for Q413).
+		setGuardAllowlist(t)
+		attempt := 0
+		var lastErr error
+		gomega.NewWithT(t).Eventually(func() bool {
+			attempt++
+			rs := &agcv2.RunnerSet{
+				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("ga-tier-%d", attempt)},
+				Spec: agcv2.RunnerSetSpec{
+					GatewayRef:    agcv2.ObjectRef{Name: "gateway"},
+					RunnerLabels:  []string{fmt.Sprintf("ga-tier-%d", attempt)},
+					PriorityTiers: []agcv2.PriorityTier{{PriorityClassName: "high", Threshold: 5}},
+				},
+			}
+			lastErr = k8sClient.Create(ctx, rs)
+			if lastErr == nil {
+				_ = k8sClient.Delete(ctx, rs)
+				return false
+			}
+			return strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard")
+		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
+			return fmt.Sprintf("a v2 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
 		})
 	})
 
