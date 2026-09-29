@@ -90,43 +90,38 @@ jobs:
         continue-on-error: true
         with:
           filters: |
-            # Both arms share four surfaces — the matcher, its recorded unit
-            # table, the shared live-test plumbing, and this workflow (so a kind
-            # bump via updatecli's KIND_VERSION rewrite, or any job edit, re-runs
-            # both arms). They are listed in both filters verbatim because the
-            # path-filter checker's parser reads this block positionally and
-            # does not resolve YAML anchors — keep the two copies in sync.
+            # What both arms run on, written once and spliced into each arm with
+            # `- *drift_shared` (paths-filter resolves the alias and flattens the
+            # nested list). No job reads this filter's own output.
+            drift_shared: &drift_shared
+              # The verified kind download both arms run before bring-up.
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
+              # The matcher under test, its recorded unit table, and the shared
+              # live-test plumbing. A matcher edit that stays consistent with the
+              # unit table can still be wrong against a live autoscaler; that is
+              # the case this catches and the unit tier cannot.
+              - 'cmd/agc/internal/controller/autoscaler_verdict.go'
+              - 'cmd/agc/internal/controller/autoscaler_verdict_test.go'
+              - 'cmd/agc/internal/controller/live_harness_test.go'
+              # This workflow, so a kind bump via updatecli's KIND_VERSION
+              # rewrite, or any job edit, re-runs both arms.
+              - '.github/workflows/autoscaler-drift.yml'
             autoscaler:
+              - *drift_shared
               # The version pins and the cluster recipe. Also the reason the
               # weekly cluster-autoscaler patch bump reaches this job: updatecli
               # rewrites CA_VERSION in this file (updatecli.d/cluster-autoscaler.yaml).
               - 'scripts/e2e/autoscaler-cluster.sh'
-              # The verified kind download both arms run before bring-up.
-              - 'scripts/fetch/**'
-              - 'scripts/lib/**'
               - 'test/autoscaler/**'
-              # The matcher under test and its test files. A matcher edit that
-              # stays consistent with the recorded unit table can still be wrong
-              # against a live autoscaler; that is the case this catches and the
-              # unit tier cannot.
-              - 'cmd/agc/internal/controller/autoscaler_verdict.go'
-              - 'cmd/agc/internal/controller/autoscaler_verdict_test.go'
-              - 'cmd/agc/internal/controller/live_harness_test.go'
               - 'cmd/agc/internal/controller/autoscaler_verdict_live_test.go'
-              - '.github/workflows/autoscaler-drift.yml'
             karpenter:
+              - *drift_shared
               # The Karpenter arm's pins and recipe (KARPENTER_VERSION lives in
-              # the script), plus the same four shared surfaces as above.
+              # the script).
               - 'scripts/e2e/karpenter-cluster.sh'
-              # The verified kind download both arms run before bring-up.
-              - 'scripts/fetch/**'
-              - 'scripts/lib/**'
               - 'test/karpenter/**'
-              - 'cmd/agc/internal/controller/autoscaler_verdict.go'
-              - 'cmd/agc/internal/controller/autoscaler_verdict_test.go'
-              - 'cmd/agc/internal/controller/live_harness_test.go'
               - 'cmd/agc/internal/controller/karpenter_verdict_live_test.go'
-              - '.github/workflows/autoscaler-drift.yml'
       - name: warn when change detection failed
         if: steps.filter.outcome == 'failure'
         run: echo "::warning::paths-filter could not classify the diff; assuming the autoscaler filter matched so the drift gate runs"

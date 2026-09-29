@@ -32,10 +32,15 @@ func filters(t *testing.T, src string) string {
 
 func pushPaths(t *testing.T, src string) string {
 	t.Helper()
+	return triggerPaths(t, src, "push")
+}
+
+func triggerPaths(t *testing.T, src, event string) string {
+	t.Helper()
 	var sb strings.Builder
 	w := bufio.NewWriter(&sb)
-	if err := writePushPaths(w, rootOf(t, src)); err != nil {
-		t.Fatalf("writePushPaths: %v", err)
+	if err := writeTriggerPaths(w, rootOf(t, src), event); err != nil {
+		t.Fatalf("writeTriggerPaths: %v", err)
 	}
 	if err := w.Flush(); err != nil {
 		t.Fatalf("flush: %v", err)
@@ -149,6 +154,48 @@ jobs:
 	}
 }
 
+// dorny/paths-filter's documented way to share patterns between filters: an
+// anchored list spliced into another as `- *shared`. The action flattens the
+// nested array; a reader that dropped the alias would report `src` as `src/**`
+// alone, and every assertion over it would miss the shared patterns.
+func TestFiltersResolvesAnAliasedSequence(t *testing.T) {
+	src := `
+jobs:
+  changes:
+    steps:
+      - with:
+          filters: |
+            shared: &shared
+              - 'common/**'
+              - 'config/**'
+            src:
+              - *shared
+              - 'src/**'
+`
+	want := "shared\tcommon/**\nshared\tconfig/**\nsrc\tcommon/**\nsrc\tconfig/**\nsrc\tsrc/**\n"
+	if got := filters(t, src); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFiltersResolvesAnAliasedScalar(t *testing.T) {
+	src := `
+jobs:
+  changes:
+    steps:
+      - with:
+          filters: |
+            a:
+              - &verdict 'cmd/verdict.go'
+            b:
+              - *verdict
+`
+	want := "a\tcmd/verdict.go\nb\tcmd/verdict.go\n"
+	if got := filters(t, src); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestFiltersIsEmptyWhenTheWorkflowHasNone(t *testing.T) {
 	if got := filters(t, "jobs:\n  a:\n    steps:\n      - run: true\n"); got != "" {
 		t.Errorf("got %q, want empty", got)
@@ -195,6 +242,27 @@ jobs:
 `
 	if got := pushPaths(t, src); got != "" {
 		t.Errorf("got %q, want empty", got)
+	}
+}
+
+// The mirror of the case above, and the reason a second mode exists: a workflow
+// scoping both legs carries two lists, and each mode must read only its own.
+func TestPRPathsReadsOnlyThePullRequestList(t *testing.T) {
+	src := `
+on:
+  pull_request:
+    paths:
+      - 'pr/only/**'
+  push:
+    branches: [main]
+    paths:
+      - 'push/only/**'
+`
+	if got, want := triggerPaths(t, src, "pull_request"), "pr/only/**\n"; got != want {
+		t.Errorf("pull_request: got %q, want %q", got, want)
+	}
+	if got, want := triggerPaths(t, src, "push"), "push/only/**\n"; got != want {
+		t.Errorf("push: got %q, want %q", got, want)
 	}
 }
 
