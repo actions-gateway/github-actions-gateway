@@ -44,9 +44,9 @@ var NeverSchedulesNodeSelector = map[string]string{"q154.actions-gateway/never-s
 
 // DinDSidecarImage is the Docker-in-Docker daemon image the DinD fixture runs. It
 // matches the image the dogfood e2e tenant runs in production
-// (deploy/dogfood-e2e/overlays/dind/resources.yaml), so the fixture migrates the same
-// shape a real tenant would.
-const DinDSidecarImage = "docker:27-dind"
+// (deploy/templates/privileged-dind, which deploy/dogfood-e2e/overlays/dind consumes),
+// so the fixture migrates the same shape a real tenant would.
+const DinDSidecarImage = "docker:28-dind"
 
 // RunnerGroupFixture describes one v1 RunnerGroup inside a TenantFixture. The zero
 // value is not useful on its own — build it through a TenantFixture preset and adjust.

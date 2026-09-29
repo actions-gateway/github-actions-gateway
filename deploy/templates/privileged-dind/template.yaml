@@ -46,7 +46,7 @@ spec:
       # exits.
       initContainers:
         - name: dind
-          image: docker:27-dind
+          image: docker:28-dind
           restartPolicy: Always
           args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
           env:
