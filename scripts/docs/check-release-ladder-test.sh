@@ -166,6 +166,164 @@ expect verbless 2 'a sentence with no verb at all still refuses' \
 	"$(write_page vb "$ONE_ROW" one "$VERBLESS_BACK")" \
 	"$(write_store vb Q565:deferred Q408:ready)"
 
+# Q1087: a gate label and its rung's scope ledger, each direction of the other.
+# The ladder links each rung to a plan file beside the page, and the 2.0 rung's
+# plan is deliberately not named for 2.0, so a filename template would miss it.
+# write_ladder NAME — a page whose punted half is valid, with a two-rung ladder.
+write_ladder() {
+	local out="$FIXTURE_DIR/ladder.$1.md"
+	{
+		printf '# Release ladder\n\n## The ladder\n\n| Release | Carries | Gate |\n|---|---|---|\n'
+		printf '| **1.9** | The overlap | [plan.%s.19.md](plan.%s.19.md) |\n' "$1" "$1"
+		printf '| **2.0** | v2 GA | [plan.%s.ga.md](plan.%s.ga.md#phase-3) |\n\n' "$1" "$1"
+		printf '## What is punted past `v2.0.0`\n\n| Waiting on | Items |\n|---|---|\n%s\n\n%s\n\n' "$ONE_ROW" "$SINGULAR_BACK"
+		printf '## What this does not decide\n\nThe items moved to Deferred (one of them still is).\n'
+	} > "$out"
+	printf '%s\n' "$out"
+}
+
+# write_plan NAME RUNG LEDGER_ROWS — a plan with a scope ledger; an empty
+# LEDGER_ROWS of "-" writes a plan with no ledger at all.
+write_plan() {
+	local out="$FIXTURE_DIR/plan.$1.$2.md"
+	{
+		printf '# Plan\n\n## Status\n\n| Phase | Status |\n|---|---|\n| 1 | [Q9](../queue/Q9.md) open |\n\n'
+		if [[ "$3" != "-" ]]; then
+			printf '## Scope ledger\n\n| Q-ID | Item | Gates? | Status |\n|---|---|---|---|\n%s\n' "$3"
+			printf '| — | RC validated on dogfood | gates | 🔲 |\n\n'
+		fi
+		printf '## Definition of done\n\n1. Done.\n'
+	} > "$out"
+}
+
+# write_labelled_store NAME "ID:label,label" ... — every item is ready, and the
+# punted and revived items the ladder names are present in the right states.
+# Each body also carries a `labels:` list naming 2.0-gate: a label in prose is
+# not frontmatter, and gate-bound fails if the reader takes Q3's for one.
+write_labelled_store() {
+	local dir="$FIXTURE_DIR/store.$1" spec id labels l
+	shift
+	mkdir -p "$dir"
+	printf -- '---\nid: Q565\nlabels:\n    - debt\nstatus: deferred\n---\n\n# Q565\n' > "$dir/Q565.md"
+	printf -- '---\nid: Q408\nstatus: ready\n---\n\n# Q408\n' > "$dir/Q408.md"
+	for spec in "$@"; do
+		id="${spec%%:*}"
+		labels="${spec#*:}"
+		{
+			printf -- '---\nid: %s\nlabels:\n' "$id"
+			for l in ${labels//,/ }; do printf '    - %s\n' "$l"; done
+			printf 'status: ready\n---\n\n# %s\n\nlabels:\n    - 2.0-gate\n' "$id"
+		} > "$dir/$id.md"
+	done
+	printf '%s\n' "$dir"
+}
+
+LEDGER_GA='| [Q1](../queue/Q1.md) | The removal | `2.0-gate` | 🔲 |
+| Q2 | Closed already | `2.0-gate` | ✅ shipped |
+| [Q3](../queue/Q3.md) | Rides along | rides | 🔲 |'
+LEDGER_19='| [Q4](../queue/Q4.md) | Serve v2 | `1.9-gate` | 🔲 |'
+
+write_plan bound 19 "$LEDGER_19"
+write_plan bound ga "$LEDGER_GA"
+expect gate-bound 0 'labels and ledgers that agree pass, and a closed ledger row is skipped' \
+	"$(write_ladder bound)" \
+	"$(write_labelled_store bound Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+
+# The row's first inversion: a label no plan names as gating.
+write_plan unnamed 19 "$LEDGER_19"
+write_plan unnamed ga "$LEDGER_GA"
+expect label-unnamed 1 'a gate-labelled row its ledger does not name fails' \
+	"$(write_ladder unnamed)" \
+	"$(write_labelled_store unnamed Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci,2.0-gate)"
+
+# The second inversion: a row the ledger calls gating that carries no label.
+# Q264 and Q273 stood this way until 2026-09-08.
+write_plan unlabelled 19 "$LEDGER_19"
+write_plan unlabelled ga "$LEDGER_GA"
+expect ledger-unlabelled 1 'a ledger gating row whose item lacks the label fails' \
+	"$(write_ladder unlabelled)" \
+	"$(write_labelled_store unlabelled Q1:debt Q3:debt Q4:milestone,1.9-gate)"
+
+# A label on a row the ledger lists as riding is the two claims disagreeing.
+write_plan rides 19 "$LEDGER_19"
+write_plan rides ga "$LEDGER_GA"
+expect label-rides 1 'a gate-labelled row its ledger marks as riding fails' \
+	"$(write_ladder rides)" \
+	"$(write_labelled_store rides Q1:bug,2.0-gate Q3:debt,2.0-gate Q4:milestone,1.9-gate)"
+
+# The audit's third gap: one release's plan owing a row another's label names.
+write_plan cross 19 "$LEDGER_19
+| [Q1](../queue/Q1.md) | The removal | \`2.0-gate\` | 🔲 |"
+write_plan cross ga "$LEDGER_GA"
+expect cross-rung 1 'a ledger marking another rung'"'"'s label fails' \
+	"$(write_ladder cross)" \
+	"$(write_labelled_store cross Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+
+write_plan norung 19 "$LEDGER_19"
+write_plan norung ga "$LEDGER_GA"
+expect label-no-rung 1 'a gate label whose version is no ladder rung fails' \
+	"$(write_ladder norung)" \
+	"$(write_labelled_store norung Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q6:ci,3.0-gate)"
+
+write_plan noledger 19 "$LEDGER_19"
+write_plan noledger ga -
+expect label-no-ledger 1 'a gate label whose rung'"'"'s plan has no scope ledger fails' \
+	"$(write_ladder noledger)" \
+	"$(write_labelled_store noledger Q1:bug,2.0-gate Q4:milestone,1.9-gate)"
+
+# queue-lint accepts a quoted item and an inline list, so both must read as
+# labels. Each fixture adds a row the ledger does not name: read, it fails.
+write_plan inline 19 "$LEDGER_19"
+write_plan inline ga "$LEDGER_GA"
+INLINE_STORE="$(write_labelled_store inline Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- '---\nid: Q7\nlabels: [ci, "2.0-gate"]\nstatus: ready\n---\n\n# Q7\n' > "$INLINE_STORE/Q7.md"
+expect label-inline 1 'an inline-list gate label its ledger does not name fails' \
+	"$(write_ladder inline)" "$INLINE_STORE"
+
+write_plan quoted 19 "$LEDGER_19"
+write_plan quoted ga "$LEDGER_GA"
+QUOTED_STORE="$(write_labelled_store quoted Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\n\n# Q8\n" > "$QUOTED_STORE/Q8.md"
+expect label-quoted 1 'a quoted block-list gate label its ledger does not name fails' \
+	"$(write_ladder quoted)" "$QUOTED_STORE"
+
+write_plan scalar 19 "$LEDGER_19"
+write_plan scalar ga "$LEDGER_GA"
+SCALAR_STORE="$(write_labelled_store scalar Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- '---\nid: Q9\nlabels: 2.0-gate\nstatus: ready\n---\n\n# Q9\n' > "$SCALAR_STORE/Q9.md"
+expect label-scalar 1 'a scalar gate label its ledger does not name fails' \
+	"$(write_ladder scalar)" "$SCALAR_STORE"
+
+# The control: the same forms, named by the ledger, pass, so the red above is
+# the ledger check reading them and not a parse failure.
+write_plan forms 19 "$LEDGER_19"
+write_plan forms ga "$LEDGER_GA
+| Q7 | Inline | \`2.0-gate\` | 🔲 |
+| Q8 | Quoted | \`2.0-gate\` | 🔲 |
+| Q9 | Scalar | \`2.0-gate\` | 🔲 |"
+FORMS_STORE="$(write_labelled_store forms Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- '---\nid: Q7\nlabels: [ci, "2.0-gate"]\nstatus: ready\n---\n\n# Q7\n' > "$FORMS_STORE/Q7.md"
+printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\n\n# Q8\n" > "$FORMS_STORE/Q8.md"
+printf -- '---\nid: Q9\nlabels: 2.0-gate\nstatus: ready\n---\n\n# Q9\n' > "$FORMS_STORE/Q9.md"
+expect label-forms-named 0 'inline, quoted and scalar gate labels the ledger names pass' \
+	"$(write_ladder forms)" "$FORMS_STORE"
+
+# A qualifier in the Gates? cell must not turn a gating row into a non-gating
+# one: read loosely, Q5 below is unlabelled and nothing would say so.
+write_plan qual 19 "$LEDGER_19"
+write_plan qual ga "$LEDGER_GA
+| Q5 | Qualified | \`2.0-gate\` (from 1.9) | 🔲 |"
+expect gates-cell-qualified 1 'a Gates? cell naming a gate with extra text fails' \
+	"$(write_ladder qual)" \
+	"$(write_labelled_store qual Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
+
+NOCOL_PLAN="$FIXTURE_DIR/plan.nocol.ga.md"
+write_plan nocol 19 "$LEDGER_19"
+printf '# Plan\n\n## Scope ledger\n\n| Q-ID | Item | Status |\n|---|---|---|\n| Q1 | The removal | 🔲 |\n' > "$NOCOL_PLAN"
+expect ledger-no-gates-column 2 'a scope ledger with no Gates? column refuses' \
+	"$(write_ladder nocol)" \
+	"$(write_labelled_store nocol Q1:bug,2.0-gate Q4:milestone,1.9-gate)"
+
 # Refusals: a page whose shape moved must not report every claim in it verified.
 expect no-punted 2 'a page whose punted table names no item refuses' \
 	"$(write_page np '| Waiting on | nothing yet |' three "$BACK")" \

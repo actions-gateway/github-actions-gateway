@@ -76,10 +76,11 @@ jobs:
         run: scripts/docs/check-plan-index.sh
       - name: Go code does not reference plan-doc paths
         run: scripts/docs/check-no-plan-refs-in-code.sh
-      - name: release ladder's punted split matches the backlog
+      - name: release ladder's punted split and gate labels match the backlog
         # The status half of check-plan-index above: that gate binds a cell to a
         # row existing, never to its status, so release-ladder.md's punted table
-        # went on calling two revived items Deferred for five days (Q932).
+        # went on calling two revived items Deferred for five days (Q932). It also
+        # binds each X.Y-gate label to its rung plan's scope ledger (Q1087).
         run: scripts/docs/check-release-ladder.sh
 
   # Aggregate required-status gate. Mark THIS job's check context

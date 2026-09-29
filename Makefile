@@ -846,7 +846,7 @@ plan-index-check: ## Assert every open-marked plan in docs/plan/README.md is bac
 # row's status says, so a revived item stayed in the punted table for five days
 # (Q932).
 .PHONY: release-ladder-check
-release-ladder-check: ## Assert release-ladder.md's punted/revived split matches the store (Q932)
+release-ladder-check: ## Assert release-ladder.md's punted/revived split and each rung's gate labels match the store (Q932, Q1087)
 	scripts/docs/check-release-ladder.sh
 
 # Keeps plan archival a docs-only operation: code that path-links a plan would

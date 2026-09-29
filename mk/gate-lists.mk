@@ -88,7 +88,8 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 #   em-dash-check         an item's notes pushed the file over its baseline ceiling
 #   md-reflow-check       an item body written as one paragraph rather than one sentence per line
 #   page-density-check    an admonition run, or a stat tile repeated across pages
-#   release-ladder-check  an item revived or re-parked while release-ladder.md still sorts it the old way
+#   release-ladder-check  an item revived or re-parked while release-ladder.md still sorts it the old way,
+#                         or a gate label added or dropped without its release plan's scope ledger
 # Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
 # check` and never a second opinion. Completeness is the half that had no
 # enforcement: em-dash-check scans `*.md` and page-density-check `docs/*.md`, both
@@ -137,7 +138,7 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check row-commits-check
 #   row-commits-check    a row deleted by a branch with no commit recording the closure
 #   dashboard-tables-check the dashboard doc's panel tables drifted from the shipped dashboard JSON
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
-#   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
+#   release-ladder-check an edit to release-ladder.md's punted table or its stated counts, or a scope ledger's Gates? cell
 #   roadmap-check        a roadmap or features.md bullet over its word cap, or naming an item that moved
 #   comparison-stamps-check an ARC-column verdict in why-gag.md left without a version and date
 #   promql-check         an alert renamed in observability-alerting.md or the runbook but not in the rule

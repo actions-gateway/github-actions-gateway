@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # check-release-ladder.sh — bind the release ladder's punted table to the
-# backlog status of the items it names (Q932). The page is
+# backlog status of the items it names (Q932), and each rung's scope ledger to
+# the `X.Y-gate` labels (Q1087). The page is
 # docs/plan/release-ladder.md  no-plan-refs: it is this gate's subject, so naming it is the point
 #
 # The page partitions seven items: a table of what is punted past `v2.0.0`,
@@ -39,10 +40,24 @@
 # Assertion 1 alone would pass a tree where every punted row is correctly
 # deferred and the revived paragraph still named one of them.
 #
+# Two more bind each rung's plan to the `X.Y-gate` labels (Q1087), again each
+# the other's direction:
+#   4. An item labelled `X.Y-gate` is marked `X.Y-gate` in the scope ledger of
+#      the plan the ladder's X.Y rung links. A label with no rung, a rung with no
+#      plan, and a plan with no ledger all fail rather than pass unread.
+#   5. Every row a scope ledger marks as gating carries that label, and a ledger
+#      marks only its own rung's label. A closed row has no item file and is
+#      skipped, since the ledger keeps its Q-ID once it ships. A cell naming a
+#      gate with anything else in it fails, since read loosely it would drop a
+#      gating row out of this check.
+# "Names as gating" is the ledger's `Gates?` column, which every release plan
+# already carries by convention; the rest of a plan mentions many rows.
+#
 # Usage:
 #   check-release-ladder.sh [--page PATH] [--store PATH]
 #
-# Exits 1 on a finding, and 2 when a section it reads is absent or empty — a
+# Exits 1 on a finding, and 2 when a section it reads is absent, empty, or a
+# scope ledger lacks its `Gates?` column — a
 # page whose shape moved must not report every claim in it verified.
 # File-wide: the patterns below are awk source and markdown text, so a `$` in
 # one is a literal the page or the parser owns, not a shell expansion.
@@ -261,11 +276,162 @@ if ((${#punted[@]} + ${#revived[@]} != total_n)); then
 	fail "$PAGE says the original set was $total_word, but its two sections hold $((${#punted[@]} + ${#revived[@]})) items between them"
 fi
 
+# 4 and 5. A gate label and its release plan's scope ledger, each direction of the
+# other (Q1087). The rung-to-plan mapping is read off the ladder table's links,
+# never templated from the version: the 2.0 rung's plan is not named for 2.0, and
+# a template passes every release whose plan is named the way it guesses.
+declare -A rung_plan=()
+while IFS=$'\t' read -r version link; do
+	rung_plan["$version"]="$link"
+done < <(awk '
+	/^\| \*\*[0-9]+\.[0-9]+\*\* \|/ {
+		n = split($0, cell, "|")
+		version = cell[2]
+		gsub(/[* \t]/, "", version)
+		link = ""
+		if (match(cell[n - 1], /\]\([^)#]+/)) link = substr(cell[n - 1], RSTART + 2, RLENGTH - 2)
+		printf "%s\t%s\n", version, link
+	}
+' "$PAGE")
+
+# The `X.Y-gate` labels one item's frontmatter carries, one per line. Every
+# form queue-lint accepts is read, quoted or bare: a block list, an inline
+# `labels: [a, "b"]`, and a scalar `labels: a`, which it takes as a one-item
+# list. A form left unread passes a gate label written that way unbound.
+item_gate_labels() {
+	awk -v sq="'" '
+		function emit(v) {
+			gsub(/["]/, "", v)
+			gsub(sq, "", v)
+			gsub(/^[ \t]+|[ \t]+$/, "", v)
+			if (v ~ /^[0-9]+\.[0-9]+-gate$/) print v
+		}
+		NR == 1 && /^---$/ { in_fm = 1; next }
+		in_fm && /^---$/ { exit }
+		in_fm && /^[a-z]/ {
+			in_labels = ($0 ~ /^labels:/)
+			if (in_labels && match($0, /\[.*\]/)) {
+				n = split(substr($0, RSTART + 1, RLENGTH - 2), item, ",")
+				for (i = 1; i <= n; i++) emit(item[i])
+			} else if (in_labels) {
+				v = $0
+				sub(/^labels:/, "", v)
+				emit(v)
+			}
+			next
+		}
+		in_fm && in_labels && /^[ \t]*-/ { v = $0; sub(/^[ \t]*-/, "", v); emit(v) }
+	' "$1"
+}
+
+# "ID<TAB>gates-cell" for each Q-ID row of a plan's scope ledger. The Gates?
+# column is found by its header rather than by position, so a ledger that grows a
+# column still reads. Exits 3 when the section exists but no header names it.
+ledger_rows() {
+	awk '
+		/^## Scope ledger/ { in_section = 1; next }
+		in_section && /^## / { exit }
+		in_section && /^\|/ {
+			n = split($0, cell, "|")
+			if (!col) {
+				for (i = 2; i < n; i++) if (cell[i] ~ /Gates\?/) col = i
+				next
+			}
+			if (!match(cell[2], /Q[0-9]+/)) next
+			id = substr(cell[2], RSTART, RLENGTH)
+			g = cell[col]
+			gsub(/[`* \t]/, "", g)
+			printf "%s\t%s\n", id, g
+		}
+		END { if (in_section && !col) exit 3 }
+	' "$1"
+}
+
+# The plan file a rung links to, resolved against the ladder page's directory.
+rung_plan_path() {
+	local link="${rung_plan[$1]-}"
+	[[ -n "$link" ]] || return 1
+	printf '%s/%s\n' "$(dirname "$PAGE")" "$link"
+}
+
+# rung version -> "ID=cell ..." for every ledger row, and the gating subset.
+declare -A ledger_cell=()
+ledger_gating_n=0
+for version in "${!rung_plan[@]}"; do
+	plan="$(rung_plan_path "$version")" || continue
+	[[ -f "$plan" ]] || continue
+	grep -q '^## Scope ledger' "$plan" || continue
+	rows_rc=0
+	rows="$(ledger_rows "$plan")" || rows_rc=$?
+	if ((rows_rc != 0)); then
+		printf 'release-ladder: %s has a scope ledger with no "Gates?" column, so nothing in it can be read as gating\n' "$plan" >&2
+		exit 2
+	fi
+	while IFS=$'\t' read -r id cell; do
+		[[ -n "$id" ]] || continue
+		ledger_cell["$version/$id"]="$cell"
+		if [[ "$cell" == *-gate* && ! "$cell" =~ ^[0-9]+\.[0-9]+-gate$ ]]; then
+			fail "$plan's scope ledger marks $id as '$cell', which names a gate but is not one label
+       a Gates? cell holds exactly one X.Y-gate label, 'rides' or 'gates'; put any qualifier in the Status cell"
+			continue
+		fi
+		[[ "$cell" =~ ^[0-9]+\.[0-9]+-gate$ ]] || continue
+		((ledger_gating_n++)) || true
+		# 5. A row the ledger names as gating carries that label.
+		if [[ "$cell" != "$version-gate" ]]; then
+			fail "$plan's scope ledger marks $id as '$cell', but that ledger is the $version rung's
+       a ledger can only say what gates its own release; name $id in the $cell plan instead"
+			continue
+		fi
+		f="$STORE/$id.md"
+		# A closed row has no file; the ledger keeps its Q-ID with a ✅.
+		[[ -f "$f" ]] || continue
+		if ! item_gate_labels "$f" | grep -qx -- "$version-gate"; then
+			fail "$plan's scope ledger says $id gates $version, but $f does not carry the $version-gate label
+       add the label, or mark the ledger row 'rides' if the tag does not wait for it (Q1087)"
+		fi
+	done <<<"$rows"
+done
+
+# 4. A gate-labelled row is named as gating by its release's ledger.
+labelled_n=0
+for f in "$STORE"/Q*.md; do
+	[[ -f "$f" ]] || continue
+	id="$(basename "$f" .md)"
+	while IFS= read -r label; do
+		[[ -n "$label" ]] || continue
+		((labelled_n++)) || true
+		version="${label%-gate}"
+		if [[ -z "${rung_plan[$version]+set}" ]]; then
+			fail "$id carries $label, but $PAGE's ladder has no $version rung
+       a gate label needs a rung whose plan says what the release waits for"
+			continue
+		fi
+		plan="$(rung_plan_path "$version")" || {
+			fail "$id carries $label, but the $version rung in $PAGE links no plan"
+			continue
+		}
+		if [[ ! -f "$plan" ]] || ! grep -q '^## Scope ledger' "$plan"; then
+			fail "$id carries $label, but $plan has no '## Scope ledger', so nothing states what $version waits for"
+			continue
+		fi
+		cell="${ledger_cell["$version/$id"]-}"
+		if [[ -z "$cell" ]]; then
+			fail "$id carries $label, but $plan's scope ledger does not name it
+       add a ledger row marking it '$label', or drop the label if the tag does not wait for it (Q1087)"
+		elif [[ "$cell" != "$label" ]]; then
+			fail "$id carries $label, but $plan's scope ledger marks it '$cell'"
+		fi
+	done < <(item_gate_labels "$f")
+done
+
 if ((errors > 0)); then
-	printf '\n%d release-ladder check(s) failed. The punted table and the revived paragraph are\n' "$errors" >&2
-	printf 'claims about `status:` in %s; nothing else reads them.\n' "$STORE" >&2
+	printf '\n%d release-ladder check(s) failed. The punted table, the revived paragraph and each\n' "$errors" >&2
+	printf 'rung'"'"'s scope ledger are claims about %s; nothing else reads them.\n' "$STORE" >&2
 	exit 1
 fi
 
 printf 'release ladder: %d punted item(s) deferred, %d revived item(s) live, counts agree\n' \
 	"${#punted[@]}" "${#revived[@]}"
+printf 'release ladder: %d gate-labelled item(s) and %d ledger gating row(s) agree across %d rung(s)\n' \
+	"$labelled_n" "$ledger_gating_n" "${#rung_plan[@]}"
