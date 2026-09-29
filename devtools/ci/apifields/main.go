@@ -50,7 +50,9 @@
 //   - a webhook that only validates a field's format
 //   - a reader of another kind that shares the field's Go type (above)
 //   - a function in the API package itself, whether or not anything calls it
-//   - a status field whose address is passed to a function that only reads it
+//   - a status field whose address is passed to a function that only reads it,
+//     including a read-only method with a pointer receiver, such as
+//     metav1.Time.IsZero or resource.Quantity.Cmp
 //
 // Usage:
 //

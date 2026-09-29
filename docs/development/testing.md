@@ -1161,7 +1161,7 @@ Uses in `zz_generated.*` and `conversion.go` do not count, because those files t
 The versions of one API group are judged together: conversion is a JSON round-trip, so a v2beta1 field is consumed when the controllers read its v2alpha1 counterpart, which is what they reconcile.
 
 It is a lower bound on neglect, not a proof of enforcement.
-Four things satisfy it without the field doing anything: a webhook that only checks a field's format, code in the API package itself whether or not anything calls it, and a status field's address passed to a function that only reads it.
+Four things satisfy it without the field doing anything: a webhook that only checks a field's format, code in the API package itself whether or not anything calls it, and a status field's address passed to a function that only reads it, which includes a read-only method with a pointer receiver such as `metav1.Time.IsZero` or `resource.Quantity.Cmp`.
 The fourth is structural: within a version the unit is the Go struct field, not the Kind and JSON path, so a type shared by two kinds is judged once and a reader of either kind credits both.
 `RunnerTemplate` and `ClusterRunnerTemplate` share `RunnerTemplateSpec` that way, and so do the `scheduling` and `…Ref` types several kinds embed.
 
