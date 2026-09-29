@@ -17,7 +17,7 @@ v1alpha1 ActionsGateway.status.activeSessions
 # declared for the uniform v2 status contract (design §H.7) and never populated.
 # RunnerTemplateStatus is one type shared by both kinds, so its fields are named
 # once, under ClusterRunnerTemplate, the kind the walk meets first.
-v2alpha1,v2beta1 ClusterRunnerTemplate.status
-v2alpha1,v2beta1 ClusterRunnerTemplate.status.conditions
-v2alpha1,v2beta1 ClusterRunnerTemplate.status.observedGeneration
-v2alpha1,v2beta1 RunnerTemplate.status
+v2,v2alpha1,v2beta1 ClusterRunnerTemplate.status
+v2,v2alpha1,v2beta1 ClusterRunnerTemplate.status.conditions
+v2,v2alpha1,v2beta1 ClusterRunnerTemplate.status.observedGeneration
+v2,v2alpha1,v2beta1 RunnerTemplate.status
