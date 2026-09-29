@@ -2630,8 +2630,18 @@ What it actually is has not been measured.
 A selector cannot match such an address, and neither can this census, which resolves every client against the pod list and the node list and has nothing else to try.
 So the blind spot is not novel: the policy layer met this class, named it, and handles it with an <code>ipBlock</code> because no selector can.
 The census met the same class and reports it as a timing accident.</p>
-<p>So the work has moved rather than shrunk: the step exists and fires, and what is now missing is a census that can either grade a non-pod client or say why it is out of scope.
-Grading every address as pod-or-node is the assumption that broke, and a refusal is the right default for an address the script cannot explain -- but a refusal that is permanent for a structural reason is not a reading waiting on better timing, it is a census that cannot complete on this cluster.</p>
+<p><strong>The leading candidate is the kubelet, and the census now checks for it rather than assuming it.</strong> The registry container's <code>/v2/</code> probes on 5000 traverse the deny proxy every 10 s and 20 s, <code>option httplog</code> logs them, and the window saw no node address at all, so the probe source had to be one of the two addresses; the worker pod is not a candidate.
+Outside this repo, a GKE Autopilot Dataplane V2 probe found the node's kubelet answering at <code>https://169.254.4.6:10250</code> (<a href="https://github.com/jayminwest/warren/pull/1294">jayminwest/warren#1294</a>).
+That is not a measurement on this cluster.</p>
+<p><strong>Whether the narrowing could cut such a source off does not depend on it being the kubelet.</strong> The mirror's ingress policy (<code>registry-mirror-worker-access</code>, applied by <code>e2e-start.sh</code> every window) admits 5000 only from a namespace selector for <code>gag-dogfood-e2e</code>, and <code>169.254.4.6</code> still reached the proxy's log; the live policy was not read on 2026-09-14.
+The stronger reading holds every window: <code>e2e-start.sh</code> applies that policy and then waits for the mirrors to be <code>Available</code>, which only the kubelet's probes on 5000 can satisfy, so whatever address those probes come from, a namespace selector does not govern it on this cluster.
+The narrowing ANDs a pod label into that same selector, which a host source matches neither before nor after, so its fate is unchanged: admitted where the dataplane leaves host traffic unpoliced, as here, and already dropped where it does not.
+<a href="https://github.com/cilium/cilium/issues/17839">cilium/cilium#17839</a> is that counter-case, GKE kubelet probes from a <code>169.254.x</code> address classed as world and dropped.
+<code>catalog-deny.cfg</code> now captures the User-Agent (measured on the pinned <code>haproxy:3.2.23-alpine</code>: logged as <code>{kube-probe/1.33}</code> before the request line, <code>{}</code> when absent, and <code>monitor-uri</code> requests not logged at all), and the census exempts an address that resolves to no pod or node only when every request it made was a <code>GET /v2/</code> carrying <code>kube-probe/</code>, the registry container's configured probe.
+A link-local address that did anything else still refuses, now saying it was never a pod address instead of blaming a deleted worker.</p>
+<p>So the next window answers the question either way: a graded verdict with <code>169.254.4.6</code> exempt as a probe, or a refusal that shows the address made non-probe requests, which would make it a real client no selector can match and a finding for the shared topology.
+Either closes the unknown; only the first closes this row.
+No manual step is needed for the capture to be live: <code>e2e-start.sh</code> re-applies the mirror overlay every window, and the ConfigMap hash rolls the Deployments (leaving the superseded ConfigMap behind, since <code>kubectl apply -k</code> does not prune).</p>
 <p><strong>Done when</strong> one window has produced a graded verdict from the script, pass or finding, and this row records which one.
 An exit 2 is a reading that was not taken, so it does not close this.</p>
 

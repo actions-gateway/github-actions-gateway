@@ -3573,12 +3573,15 @@ The mirror is trusted for tag-to-digest resolution, exactly as the upstream regi
    <code>kubectl apply -k</code> does not prune, so a policy whose manifest you deleted is still standing.</li>
 </ol>
 <h3 id="confirming-it-holds">Confirming it holds<a class="headerlink" href="#confirming-it-holds" title="Permanent link">&para;</a></h3>
-<p>Three readings, and none of them substitutes for another:</p>
+<p>Four readings, and none of them substitutes for another:</p>
 <ul>
 <li><strong>The mirrors serve, and refuse what they must.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-validate.sh"><code>e2e-mirror-validate.sh</code></a> checks each instance for readiness, <code>GET /v2/</code>, a real upstream manifest, an upload refused with 405, <code>GET /v2/_catalog</code> refused with 403, and no debug listener.
   The catalog check is graded beside the manifest fetch on purpose: a deny that also swallowed pulls would pass the first on its own.</li>
 <li><strong>The job's pulls ride them.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-hits.sh"><code>e2e-mirror-hits.sh</code></a> reads each mirror's access log, which is the one place a pull that went upstream instead cannot appear.
   Take a baseline first: a count means nothing without one.</li>
+<li><strong>Every client carries the workload label.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-clients.sh"><code>e2e-mirror-clients.sh</code></a> resolves each address in the mirrors' proxy logs to a pod or a node, which is what the shared topology's narrowed ingress peer would admit or cut off.
+  Run it while the workers are still up: a deleted worker's address resolves to nothing, and that refuses rather than passes.
+  The kubelet's probes are exempt whether they arrive from a node address or from a host address no pod or node lists, such as a link-local one; the second kind is recognised by a <code>kube-probe/</code> User-Agent on the probe's own <code>GET /v2/</code>, which the mirror's proxy logs.</li>
 <li><strong>Nothing else is reachable.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/egress-negatives.sh"><code>egress-negatives.sh</code></a> probes from inside the job, on the worker whose posture is being claimed, because a plain pod cannot answer whether policy still binds at the end of a path that leaves a micro-VM guest through a bridge NAT.
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/mirror-timing.sh"><code>mirror-timing.sh</code></a> runs there too, for the same reason and to a different end: it reports what the cache's own timing gives away from that position, and grades nothing.</li>
 </ul>
