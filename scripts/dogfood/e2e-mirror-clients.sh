@@ -29,8 +29,10 @@
 # A probe from a node address resolves to that node. On the dogfood cluster
 # (GKE Dataplane V2) the 2026-09-14 window saw no node address at all, only a
 # workload pod and `169.254.4.6`, which no pod or node lists. That it is the
-# kubelet is unconfirmed (Q1048); it did pass the mirror's ingress policy,
-# whose only peer is a namespace selector, so selectors do not govern it here.
+# kubelet is unconfirmed (Q1048). Whatever the kubelet's probe source is, it
+# passes the mirror's ingress policy, whose only peer is a namespace selector:
+# e2e-start.sh applies that policy and then waits for Available, which needs
+# those probes. So selectors do not govern it here.
 # So a probe is also recognised by what it says it is: the proxy logs the
 # User-Agent, and an unresolved address whose every request was a
 # `kube-probe/` `GET /v2/` is exempt. Both
