@@ -62,6 +62,19 @@ func TestWriteMatchesUnionsFilters(t *testing.T) {
 	}
 }
 
+// autoscaler-drift.yml splices a shared list with `- *shared`; dorny resolves the
+// alias and flattens it, so the lane covers the anchored patterns too.
+func TestWriteMatchesFollowsAliases(t *testing.T) {
+	src := "jobs:\n  c:\n    with:\n      filters: |\n        shared: &shared\n          - 'scripts/fetch/**'\n        a:\n          - *shared\n          - 'test/a/**'\n"
+	got, err := matches(t, src, "scripts/fetch/kind.sh\ntest/a/x.go\ncmd/agc/x.go\n")
+	if err != nil {
+		t.Fatalf("writeMatches: %v", err)
+	}
+	if want := "scripts/fetch/kind.sh\ntest/a/x.go\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 // Every refusal guards against a narrower lane than the workflow's, which would
 // let a covered path read as uncovered.
 func TestWriteMatchesRefuses(t *testing.T) {

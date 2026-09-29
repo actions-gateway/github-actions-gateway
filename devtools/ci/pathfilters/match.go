@@ -35,19 +35,16 @@ func lanePatterns(root *yaml.Node) ([]string, error) {
 			return nil, fmt.Errorf("a filters: value is not an inline mapping (dorny reads a one-line value as a file path), which match cannot evaluate")
 		}
 		for i := 0; i+1 < len(m.Content); i += 2 {
-			name, v := m.Content[i].Value, m.Content[i+1]
-			entries := []*yaml.Node{v}
-			if v.Kind == yaml.SequenceNode {
-				entries = v.Content
+			name := m.Content[i].Value
+			patterns, err := patternList(m.Content[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("filter %q: %w", name, err)
 			}
-			for _, e := range entries {
-				if e.Kind != yaml.ScalarNode {
-					return nil, fmt.Errorf("filter %q has a non-string entry (a change-type rule?), which match cannot evaluate", name)
-				}
-				if err := checkSupported(e.Value); err != nil {
+			for _, p := range patterns {
+				if err := checkSupported(p); err != nil {
 					return nil, fmt.Errorf("filter %q: %w", name, err)
 				}
-				out = append(out, e.Value)
+				out = append(out, p)
 			}
 		}
 	}
@@ -55,6 +52,30 @@ func lanePatterns(root *yaml.Node) ([]string, error) {
 		return nil, fmt.Errorf("no filters: patterns, so the lane is not path-gated")
 	}
 	return out, nil
+}
+
+// patternList flattens a filter's value the way scalars does, resolving aliases
+// and nested sequences, but refuses a mapping entry (a change-type rule) where
+// scalars drops it.
+func patternList(n *yaml.Node) ([]string, error) {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		return []string{n.Value}, nil
+	case yaml.AliasNode:
+		return patternList(n.Alias)
+	case yaml.SequenceNode:
+		var out []string
+		for _, c := range n.Content {
+			ps, err := patternList(c)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, ps...)
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("a non-string entry (a change-type rule?), which match cannot evaluate")
+	}
 }
 
 // checkSupported rejects the picomatch syntax matchPattern does not implement
