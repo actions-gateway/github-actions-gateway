@@ -416,12 +416,15 @@ The mirror is trusted for tag-to-digest resolution, exactly as the upstream regi
 
 ### Confirming it holds
 
-Three readings, and none of them substitutes for another:
+Four readings, and none of them substitutes for another:
 
 - **The mirrors serve, and refuse what they must.** [`e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh) checks each instance for readiness, `GET /v2/`, a real upstream manifest, an upload refused with 405, `GET /v2/_catalog` refused with 403, and no debug listener.
   The catalog check is graded beside the manifest fetch on purpose: a deny that also swallowed pulls would pass the first on its own.
 - **The job's pulls ride them.** [`e2e-mirror-hits.sh`](../../scripts/dogfood/e2e-mirror-hits.sh) reads each mirror's access log, which is the one place a pull that went upstream instead cannot appear.
   Take a baseline first: a count means nothing without one.
+- **Every client carries the workload label.** [`e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh) resolves each address in the mirrors' proxy logs to a pod or a node, which is what the shared topology's narrowed ingress peer would admit or cut off.
+  Run it while the workers are still up: a deleted worker's address resolves to nothing, and that refuses rather than passes.
+  The kubelet's probes are exempt whether they arrive from a node address or from a host address no pod or node lists, such as a link-local one; the second kind is recognised by its `kube-probe/` User-Agent, which the mirror's proxy logs.
 - **Nothing else is reachable.** [`egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) probes from inside the job, on the worker whose posture is being claimed, because a plain pod cannot answer whether policy still binds at the end of a path that leaves a micro-VM guest through a bridge NAT.
   [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) runs there too, for the same reason and to a different end: it reports what the cache's own timing gives away from that position, and grades nothing.
 

@@ -25,10 +25,15 @@
 # measured. So an unresolved address is a refusal (exit 2), not a pass: run this
 # while the workers are still up, or accept that the reading was not taken.
 #
-# The kubelet's readiness and liveness probes reach 5000 from the NODE address on
-# GKE Dataplane V2, so node addresses are expected and exempt. They are resolved
-# rather than pattern-matched: an address assumed to be a node is an address not
-# checked.
+# The kubelet's readiness and liveness probes reach 5000 too, and are exempt.
+# A probe from a node address resolves to that node. On the dogfood cluster
+# (GKE Dataplane V2) the 2026-09-14 window saw no node address at all, only a
+# workload pod and `169.254.4.6`, which no pod or node lists; GKE Dataplane V2
+# is reported to bind a node-local kubelet address there (Q1048). So a probe is
+# also recognised by what it says it is: the proxy logs the User-Agent, and an
+# unresolved address whose every request carried `kube-probe/` is exempt. Both
+# are resolved from evidence rather than pattern-matched on the address: an
+# address assumed to be a host is an address not checked.
 #
 # Required env vars (export before running):
 #   PROJECT   GCP project ID
@@ -38,7 +43,7 @@
 # Optional:
 #   MIRROR_NAMESPACE  namespace holding the instances (default: gag-registry-mirror)
 #
-# Exit: 0 every client that connected is a workload-labelled pod (or the kubelet),
+# Exit: 0 every client that connected is a workload-labelled pod or the kubelet,
 # 1 at least one is not, 2 a reading that could not be taken — including an
 # address that resolves to nothing, and a window in which no client connected at
 # all, which grades nothing and must not read as safe.
@@ -95,6 +100,37 @@ client_addresses() {
 		}' | sort -u
 }
 
+# probe_addresses — read a HAProxy log on stdin, print each client address whose
+# EVERY logged request carried a `kube-probe/` User-Agent. The proxy captures
+# that header into the first `{…}` field (catalog-deny.cfg):
+#
+#   169.254.4.6:40112 [14/Sep/2026:…] mirror registry/local … 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
+#
+# One request without it disqualifies the address, and so does a log written
+# before the capture existed, which has no `{…}` field: both fall through to the
+# pod-or-node grade rather than being exempted on the evidence of the others.
+probe_addresses() {
+	awk '
+		$1 ~ /^\[?[0-9a-fA-F.:]+\]?:[0-9]+$/ {
+			addr = $1
+			sub(/:[0-9]+$/, "", addr)
+			gsub(/^\[|\]$/, "", addr)
+			if (match($0, /\{[^}]*\}/) && substr($0, RSTART, 12) == "{kube-probe/") {
+				probe[addr] = 1
+			} else {
+				other[addr] = 1
+			}
+		}
+		END { for (a in probe) if (!(a in other)) print a }' | sort -u
+}
+
+# is_link_local — whether an address is in 169.254.0.0/16 or fe80::/10. Used
+# only to word a refusal, never to grade: an address assumed to be a host is an
+# address not checked.
+is_link_local() {
+	[[ "$1" == 169.254.* || "${1,,}" =~ ^fe[89ab][0-9a-f]: ]]
+}
+
 # grade_clients — read `<address> <kind> <detail>` on stdin and print one verdict
 # line per address, in the order given. Sets no state; the caller reads the exit
 # status.
@@ -102,6 +138,8 @@ client_addresses() {
 #   pod-workload   <ns>/<name>   the narrowing keeps this client
 #   pod-unlabelled <ns>/<name>   the narrowing CUTS THIS CLIENT OFF
 #   node           <name>        the kubelet's probes, exempt
+#   probe          -             no pod or node, but every request was a kubelet
+#                                probe (probe_addresses), exempt
 #   unresolved     -             cannot be graded either way
 #
 # Exit 1 when any client is unlabelled, 2 when any is unresolved or nothing was
@@ -123,12 +161,19 @@ grade_clients() {
 		node)
 			echo "EXEMPT  ${addr} node/${detail} — the kubelet's probes, which no pod selector governs"
 			;;
+		probe)
+			echo "EXEMPT  ${addr} resolves to no pod and no node, but every request it made carried kube-probe/ — the kubelet's probes from a host address, which no pod selector governs"
+			;;
 		ambiguous)
 			echo "REFUSE  ${addr} ${detail} — a hostNetwork pod shares this node's address, so whether the narrowing keeps this client is not decidable from here"
 			unresolved=1
 			;;
 		*)
-			echo "REFUSE  ${addr} resolves to no pod and no node — most likely a worker that has already been deleted, so this client cannot be graded"
+			if is_link_local "${addr}"; then
+				echo "REFUSE  ${addr} is link-local, so it was never a pod address, and not every request it made carried kube-probe/ — no pod or node list can resolve it, so this client cannot be graded"
+			else
+				echo "REFUSE  ${addr} resolves to no pod and no node — most likely a worker that has already been deleted, so this client cannot be graded"
+			fi
 			unresolved=1
 			;;
 		esac
@@ -147,7 +192,10 @@ grade_clients() {
 # collect_client_addresses — emit two record kinds, one line each:
 #
 #   read   <instance> ok|failed   whether that instance's proxy log was readable
-#   client <instance> <address>   one per distinct address that instance saw
+#   client <instance> <address> probe|other
+#                                 one per distinct address that instance saw;
+#                                 `probe` when every request it made there was
+#                                 a kubelet probe (probe_addresses)
 #
 # The `read` record is the whole point, and keying it on `kubectl logs`' EXIT
 # STATUS rather than on an empty address list is what makes it usable. An
@@ -158,7 +206,7 @@ grade_clients() {
 # `sort -u`, so one unreadable log left no trace whatever and a four-of-five
 # read produced byte-identical output to a five-of-five one.
 collect_client_addresses() {
-	local instance logs rc addr
+	local instance logs rc addr probes class
 	for instance in "${MIRROR_INSTANCES[@]}"; do
 		set +e
 		logs="$(kubectl logs "deployment/${instance}" --namespace "${MIRROR_NAMESPACE}" \
@@ -170,9 +218,12 @@ collect_client_addresses() {
 			continue
 		fi
 		printf 'read %s ok\n' "${instance}"
+		probes="$(probe_addresses <<<"${logs}")"
 		while read -r addr; do
 			[[ -n "${addr}" ]] || continue
-			printf 'client %s %s\n' "${instance}" "${addr}"
+			class=other
+			grep -qxF -- "${addr}" <<<"${probes}" && class=probe
+			printf 'client %s %s %s\n' "${instance}" "${addr}" "${class}"
 		done < <(client_addresses <<<"${logs}")
 	done
 }
@@ -210,7 +261,17 @@ grade_instance_reads() {
 	return 0
 }
 
-# resolve_addresses — read addresses on stdin, print `<address> <kind> <detail>`.
+# client_classes — read collect_client_addresses' records and print one
+# `<address> probe|other` per distinct client. An address is `probe` only when
+# every instance that saw it saw nothing but probes: a pull through one mirror
+# is a pull, whatever the address did at the other four.
+client_classes() {
+	awk '$1 == "client" { if ($4 != "probe") other[$3] = 1; seen[$3] = 1 }
+		END { for (a in seen) print a, ((a in other) ? "other" : "probe") }' | sort
+}
+
+# resolve_addresses — read `<address> probe|other` on stdin, print
+# `<address> <kind> <detail>`.
 # Two cluster reads, both taken once: every pod IP with its component label, and
 # every node address. A pod whose label is absent renders as an empty third
 # field, which is what distinguishes pod-unlabelled from pod-workload.
@@ -224,13 +285,16 @@ grade_instance_reads() {
 # pod holds that address, which on a Dataplane V2 cluster is routine. Whichever
 # way it were ordered the wrong answer would be silent, so the collision is its
 # own kind and a human settles it.
+#
+# The probe class is consulted only for an address neither lookup resolves, so
+# a pod sending a kube-probe User-Agent is still graded on its label.
 resolve_addresses() {
-	local pods nodes addr pod_line node_line
+	local pods nodes addr class pod_line node_line
 	pods="$(kubectl get pods --all-namespaces \
 		-o 'jsonpath={range .items[*]}{.status.podIP}{" "}{.metadata.namespace}/{.metadata.name}{" "}{.metadata.labels.actions-gateway\/component}{"\n"}{end}' 2>/dev/null || true)"
 	nodes="$(kubectl get nodes \
 		-o 'jsonpath={range .items[*]}{range .status.addresses[*]}{.address}{" "}{end}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
-	while read -r addr; do
+	while read -r addr class; do
 		[[ -n "${addr}" ]] || continue
 		pod_line="$(awk -v a="${addr}" '$1 == a { print $2 " " $3; exit }' <<<"${pods}")"
 		node_line="$(awk -v a="${addr}" '{ for (i = 1; i < NF; i++) if ($i == a) { print $NF; exit } }' <<<"${nodes}")"
@@ -246,6 +310,8 @@ resolve_addresses() {
 			fi
 		elif [[ -n "${node_line}" ]]; then
 			printf '%s node %s\n' "${addr}" "${node_line}"
+		elif [[ "${class}" == "probe" ]]; then
+			printf '%s probe -\n' "${addr}"
 		else
 			printf '%s unresolved -\n' "${addr}"
 		fi
@@ -275,7 +341,7 @@ main() {
 
 	step "Clients that reached the mirrors (${PROXY_CONTAINER} logs)"
 	local addresses resolved
-	addresses="$(awk '$1 == "client" { print $3 }' <<<"${records}" | sort -u)"
+	addresses="$(client_classes <<<"${records}")"
 	resolved="$(resolve_addresses <<<"${addresses}")"
 	grade_clients <<<"${resolved}" || client_rc=$?
 

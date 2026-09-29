@@ -99,6 +99,49 @@ check "each address is reported once, however many requests it made" \
 check "the proxy's own log lines are not clients" "" \
 	"$(client_addresses <<<'[NOTICE]   (1) : Loading success.')"
 
+# --- the kubelet's probes, recognised by User-Agent (Q1048) ------------------
+#
+# The shape the pinned haproxy writes once catalog-deny.cfg captures the header,
+# measured on haproxy:3.2.23-alpine: `{<agent>}` before the request line, `{}`
+# when the header is absent. On the 2026-09-14 window the probes' source was
+# 169.254.4.6, which no pod or node lists.
+UA_LOG='169.254.4.6:40112 [14/Sep/2026:07:02:22.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
+169.254.4.6:40118 [14/Sep/2026:07:02:32.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
+10.36.10.5:51240 [14/Sep/2026:07:02:28.113] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {docker/27.3.1 go/go1.22 os/linux} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"
+169.254.9.9:40200 [14/Sep/2026:07:02:40.000] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
+169.254.9.9:40201 [14/Sep/2026:07:02:41.000] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"'
+
+check "an address whose every request is a kube-probe is a probe, and only that one" \
+	"169.254.4.6" "$(probe_addresses <<<"${UA_LOG}")"
+
+# A log written before the capture has no `{…}` field. Exempting on it would
+# grade the kubelet from nothing, so no address in it is a probe.
+check "a log without the captured header yields no probe" "" \
+	"$(probe_addresses <<<"${A_PROXY_LOG}")"
+
+# The census's own records carry the class per instance, and one pull anywhere
+# makes the address a client rather than a probe.
+check "a probe at one mirror and a pull at another is not a probe" \
+	"10.36.10.5 other
+169.254.4.6 probe
+169.254.9.9 other" "$(client_classes <<<'client mirror-docker-io 169.254.4.6 probe
+client mirror-gcr-io 169.254.4.6 probe
+client mirror-docker-io 10.36.10.5 other
+client mirror-docker-io 169.254.9.9 probe
+client mirror-gcr-io 169.254.9.9 other')"
+
+grade "10.36.10.5 pod-workload gag-dogfood-e2e/runner-abc
+169.254.4.6 probe -"
+check "a workload pod and an unresolved kubelet probe pass" 0 "${GRADE_RC}"
+check_contains "the probe is named as exempt" "EXEMPT  169.254.4.6 resolves to no pod and no node, but every request" "${GRADE_OUT}"
+
+# A link-local address that did more than probe is still a refusal, but it must
+# not be blamed on a deleted worker: it was never a pod address.
+grade "169.254.9.9 unresolved -"
+check "a link-local address that pulled refuses" 2 "${GRADE_RC}"
+check_contains "and says it was never a pod address" "is link-local, so it was never a pod address" "${GRADE_OUT}"
+check "and does not blame a deleted worker" 0 "$(grep -c 'already been deleted' <<<"${GRADE_OUT}")"
+
 # --- the verdict, in both directions ----------------------------------------
 
 grade "10.4.2.17 pod-workload gag-dogfood-e2e/runner-abc
@@ -193,6 +236,11 @@ kubectl() {
 UNREADABLE="" SILENT_OK="" records="$(collect_client_addresses)"
 check "a full read reports five ok" 5 "$(grep -c '^read .* ok$' <<<"${records}")"
 check "and one client record per instance" 5 "$(grep -c '^client ' <<<"${records}")"
+check "a line without the captured header is classed other" 5 "$(grep -c '^client .* other$' <<<"${records}")"
+
+LINE='169.254.4.6:40112 [14/Sep/2026:07:02:22.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"'
+UNREADABLE="" SILENT_OK="" records="$(collect_client_addresses)"
+check "a kube-probe line is classed probe" 5 "$(grep -c '^client .* 169.254.4.6 probe$' <<<"${records}")"
 
 UNREADABLE="mirror-gcr-io" SILENT_OK="" records="$(collect_client_addresses)"
 check "an unreadable instance is recorded as failed" 1 "$(grep -c '^read mirror-gcr-io failed$' <<<"${records}")"
@@ -202,6 +250,23 @@ check "and contributes no client record" 0 "$(grep -c '^client mirror-gcr-io ' <
 UNREADABLE="" SILENT_OK=1 records="$(collect_client_addresses)"
 check "an idle-but-readable fleet reports five ok" 5 "$(grep -c '^read .* ok$' <<<"${records}")"
 check "and no failed record" 0 "$(grep -c 'failed$' <<<"${records}")"
+
+# --- the resolver consults the probe class only when nothing resolves --------
+#
+# A pod sending a kube-probe User-Agent is still a pod, graded on its label; the
+# class exempts only an address neither lookup can place.
+kubectl() {
+	case "$*" in
+	*"get pods"*) printf '10.36.10.7 tenant-b/spoof \n' ;;
+	*"get nodes"*) printf '10.142.0.3 gke-pool-1\n' ;;
+	esac
+}
+RESOLVED="$(resolve_addresses <<<'169.254.4.6 probe
+169.254.9.9 other
+10.36.10.7 probe')"
+check "an unresolved probe resolves as probe" 1 "$(grep -cx '169.254.4.6 probe -' <<<"${RESOLVED}")"
+check "an unresolved non-probe stays unresolved" 1 "$(grep -cx '169.254.9.9 unresolved -' <<<"${RESOLVED}")"
+check "a pod claiming kube-probe is graded on its label" 1 "$(grep -cx '10.36.10.7 pod-unlabelled tenant-b/spoof' <<<"${RESOLVED}")"
 
 # --- a hostNetwork pod sharing a node address is not silently resolved -------
 #
