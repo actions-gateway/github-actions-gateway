@@ -61,5 +61,5 @@ That is a reading rather than a decision: whether anything *should* ride is scop
 
 ## What waits for `v2.0.0`
 
-The storage advance and migration ([Q1086](../../queue/Q1086.md)), the four removals ([Q273](../../queue/Q273.md), [Q264](../../queue/Q264.md), and `v2beta1` itself), and the validating webhook rules that un-match when `v2alpha1` goes ([Q1068](../../queue/Q1068.md)).
+The storage advance and migration ([Q1086](../../queue/Q1086.md)), the four removals ([Q273](../../queue/Q273.md), [Q264](../../queue/Q264.md), and `v2beta1` itself), and the validating webhook rules that un-match when `v2alpha1` goes (Q1068, closed by `make webhook-versions-check`; the retype onto `v2` is Q1150).
 [v2-ga.md](../v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals) Phase 3 owns the ordering.
