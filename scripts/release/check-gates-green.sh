@@ -210,6 +210,8 @@ fi
 			THIS commit. Prove the released surface is unchanged since a commit that did
 			run in full, and rely on that commit's verdict:
 			  scripts/release/check-artifact-unchanged.sh <that-commit> ${ref}
+			To rely on one skipped lane's own last full run, scope the proof to it:
+			  scripts/release/check-artifact-unchanged.sh --lane <workflow.yml> <that-commit> ${ref}
 			Say which commit you are relying on.
 		EOF
 	fi

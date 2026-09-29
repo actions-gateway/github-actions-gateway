@@ -15,6 +15,7 @@
 //	pathfilters push-paths <workflow.yml>  # one path per line
 //	pathfilters pr-paths <workflow.yml>    # one path per line
 //	pathfilters jobs <workflow.yml>        # one "<job id>\t<needs entry>" per line
+//	pathfilters match <workflow.yml>       # the stdin paths any `filters:` pattern matches
 //
 // Output is in document order, which is what the caller's `sort` and its
 // set comparisons expect.
@@ -30,7 +31,7 @@ import (
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintf(os.Stderr, "usage: %s filters|push-paths|pr-paths|jobs <workflow.yml>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s filters|push-paths|pr-paths|jobs|match <workflow.yml>\n", os.Args[0])
 		os.Exit(2)
 	}
 	mode, path := os.Args[1], os.Args[2]
@@ -51,6 +52,8 @@ func main() {
 		err = writeTriggerPaths(out, root, "pull_request")
 	case "jobs":
 		err = writeJobs(out, root)
+	case "match":
+		err = writeMatches(out, os.Stdin, root)
 	default:
 		fmt.Fprintf(os.Stderr, "pathfilters: unknown mode %q\n", mode)
 		os.Exit(2)
