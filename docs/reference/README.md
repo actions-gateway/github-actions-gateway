@@ -1,6 +1,6 @@
 # Reference
 
-> **Audience:** Platform engineer / tenant operator
+> **Audience:** Platform engineer, Tenant operator
 
 Field-level reference for the GitHub Actions Gateway (GAG) custom resources, generated from the API source rather than written by hand.
 

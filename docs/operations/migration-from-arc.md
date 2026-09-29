@@ -1,8 +1,9 @@
 # Migrating from Actions Runner Controller (ARC) to GitHub Actions Gateway (GAG)
 
-> **Audience:** Platform engineer running [Actions Runner Controller (ARC)](https://github.com/actions/actions-runner-controller) scale-set mode on a shared, multi-tenant Kubernetes cluster and evaluating GitHub Actions Gateway (GAG) as a replacement.
+> **Audience:** Platform engineer
 
-This guide maps ARC scale-set concepts onto GAG, calls out the behavioral differences you will actually hit, and walks one runner group from ARC to GAG end to end.
+This guide is for a platform engineer running [ARC](https://github.com/actions/actions-runner-controller) scale-set mode on a shared, multi-tenant Kubernetes cluster and evaluating GAG as a replacement.
+It maps ARC scale-set concepts onto GAG, calls out the behavioral differences you will actually hit, and walks one runner group from ARC to GAG end to end.
 It assumes you already run ARC's `gha-runner-scale-set` chart; if you are new to GAG, read [Why GAG](../why-gag.md) and [Getting Started](../getting-started.md) first, then come back here.
 
 The good news up front: GAG was designed to make this migration cheap.

@@ -1,6 +1,6 @@
 # Deprecation and removal notice: `v1alpha1`, `v2alpha1`, `v2beta1`, and Classic
 
-> **Audience:** Platform engineer / tenant operator
+> **Audience:** Platform engineer, Tenant operator
 
 !!! warning "Four deprecations, one removal release: `v2.0.0`"
     Onboard new tenants on the **v2 API** at `actions-gateway.com/v2beta1` (see [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)), and author them as single-label `ScaleSet` runner sets.

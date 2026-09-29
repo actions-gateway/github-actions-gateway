@@ -1,6 +1,6 @@
 # Migrating a tenant from the v1alpha1 to the v2alpha1 API
 
-> **Audience:** Platform engineer / tenant operator
+> **Audience:** Platform engineer, Tenant operator
 
 The v2 API (`actions-gateway.com`) replaces the monolithic `v1alpha1` `ActionsGateway` + `RunnerGroup` shape with a decomposed set of kinds — `ActionsGateway`, `EgressProxy`, `RunnerTemplate`/`ClusterRunnerTemplate`, and `RunnerSet`.
 The two API groups are **served side by side**: nothing forces a tenant onto v2, and v1 keeps working until you migrate it.
