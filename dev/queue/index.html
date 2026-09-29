@@ -3726,14 +3726,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or …</td>
 </tr>
 <tr>
-<td><a href="Q1101/">Q1101</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">A v2 ActionsGateway gets no AGC ServiceMonitor</a></td>
-<td><code>bug</code> <code>docs</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>applyOrPruneServiceMonitors</code> builds the two per-tenant <code>ServiceMonitor</code>s that let Prometheus scrape a tenant's AGC and proxy over mTLS.</td>
-</tr>
-<tr>
 <td><a href="Q996/">Q996</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/monitoring/promqlcheck/main.go">promql-check and dashboard-render-check guard less than they read as</a></td>
 <td><code>debt</code> <code>tests</code></td>
