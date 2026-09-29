@@ -92,14 +92,14 @@ updates:
   # golang builder, distroless runtime, and the upstream actions-runner that the
   # worker image inherits its CVEs from — get automated bump PRs. The worker
   # trivy leg is report-only precisely because these are upstream; this is the
-  # channel that keeps them current (Q70).
+  # channel that keeps them current (Q70). It is also what keeps the worker
+  # inside GitHub's 30-day window, past which a runner stays connected and is
+  # never queued a job (Q1146). Every product image builds from the root
+  # Dockerfile; the dogfood runner pins the same actions-runner base.
   - package-ecosystem: "docker"
     directories:
-      - "/cmd/gmc"
-      - "/cmd/agc"
-      - "/cmd/proxy"
-      - "/cmd/worker"
-      - "/test/fakegithub"
+      - "/"
+      - "/scripts/dogfood/runner"
     schedule:
       interval: "weekly"
     groups:
