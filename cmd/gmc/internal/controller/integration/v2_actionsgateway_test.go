@@ -295,14 +295,11 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	}, 15*time.Second, 100*time.Millisecond, "status should be Ready=False/AGCNotReady (no kubelet), AGCAvailable=False/AGCNotReady, Degraded=False, CredentialUnavailable=False, observedGeneration set")
 }
 
-// TestV2_ActionsGateway_AGCResources proves the additive spec.agcResources field
-// (Q171): when set it stamps the tenant's requests/limits on the AGC container
-// (overlaid on the platform default per key); when unset the container carries the
-// documented platform default (2Gi memory request, 2-core CPU limit) unchanged.
 // TestV2_ActionsGateway_ProvisionsServiceMonitor proves that with the tenant
 // ServiceMonitor toggle on, reconciling a v2 ActionsGateway creates the per-gateway
 // AGC ServiceMonitor (Q1101), owned for GC and scraping the AGC Service's metrics
-// port with this gateway's scraper client bundle.
+// port with this gateway's scraper client bundle — and that deleting the gateway
+// deletes it. envtest runs no garbage collector, so only the explicit teardown can.
 func TestV2_ActionsGateway_ProvisionsServiceMonitor(t *testing.T) {
 	const ns = "v2-ag-servicemonitor"
 	createNamespace(t, ns)
@@ -336,8 +333,20 @@ func TestV2_ActionsGateway_ProvisionsServiceMonitor(t *testing.T) {
 	tlsCfg := endpoints[0].(map[string]interface{})["tlsConfig"].(map[string]interface{})
 	assert.Equal(t, "gw-agc."+ns+".svc", tlsCfg["serverName"])
 	assert.Equal(t, "gw-agc-metrics-client", tlsCfg["keySecret"].(map[string]interface{})["name"])
+
+	require.NoError(t, k8sClient.Delete(ctx, ag))
+	require.Eventually(t, func() bool {
+		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc-metrics"}, sm))
+	}, 15*time.Second, 100*time.Millisecond, "teardown should delete the AGC ServiceMonitor")
+	require.Eventually(t, func() bool {
+		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &v2alpha1.ActionsGateway{}))
+	}, 15*time.Second, 100*time.Millisecond, "the gateway should finalize away once teardown is clean")
 }
 
+// TestV2_ActionsGateway_AGCResources proves the additive spec.agcResources field
+// (Q171): when set it stamps the tenant's requests/limits on the AGC container
+// (overlaid on the platform default per key); when unset the container carries the
+// documented platform default (2Gi memory request, 2-core CPU limit) unchanged.
 func TestV2_ActionsGateway_AGCResources(t *testing.T) {
 	const ns = "v2-ag-resources"
 	createNamespace(t, ns)

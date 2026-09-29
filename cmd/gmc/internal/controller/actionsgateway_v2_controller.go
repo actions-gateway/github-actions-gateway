@@ -1088,9 +1088,7 @@ func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag
 // The ClusterRunnerTemplate ClusterRoleBinding is cluster-scoped and cannot carry
 // an owner ref to a namespaced object, so this explicit delete is its ONLY
 // cleanup. The metrics mTLS Secrets are left to owner-ref GC — the GMC
-// deliberately holds no delete verb on secrets (mirrors v1's proxy TLS Secret) —
-// and so is the optional AGC ServiceMonitor, whose CRD may be absent (mirrors the
-// EgressProxy's monitor).
+// deliberately holds no delete verb on secrets (mirrors v1's proxy TLS Secret).
 // RunnerSets reference the gateway but are not owned by it, so they are not
 // deleted — they degrade to Ready=False/GatewayNotFound via their own watch. Their
 // worker pods do have to go, though, and only the AGC can reap them: teardown holds
@@ -1156,6 +1154,14 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 		vpa := &unstructured.Unstructured{}
 		vpa.SetGroupVersionKind(verticalPodAutoscalerGVK)
 		del(vpa, "VerticalPodAutoscaler", ns, agcVPAName(ag))
+	}
+	// The AGC ServiceMonitor (Q1101) is optional the same way, and probed the same way.
+	if installed, probeErr := r.crdInstalled(serviceMonitorGVK); probeErr != nil {
+		errs = append(errs, fmt.Errorf("ServiceMonitor %s: %w", agcServiceMonitorNameV2(ag), probeErr))
+	} else if installed {
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(serviceMonitorGVK)
+		del(sm, "ServiceMonitor", ns, agcServiceMonitorNameV2(ag))
 	}
 	del(&rbacv1.ClusterRoleBinding{}, "ClusterRoleBinding", "", clusterRunnerTemplateReaderBindingName(ag))
 	del(&appsv1.Deployment{}, "Deployment", ns, agcNameV2(ag))
