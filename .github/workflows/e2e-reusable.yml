@@ -537,13 +537,18 @@ jobs:
         # the HPA specs. Keyed on METRICSSERVER_VERSION so a bump invalidates it.
         # The cached dir holds the image tar and the image list, so a hit needs
         # no manifest fetch.
+        #
+        # The `-m2` generation retires the entry written before the tar was
+        # renamed to images.tar: an entry is immutable once written and every
+        # run hit it, so it restored, failed the script's hit predicate and
+        # re-pulled on every run (Q1138).
         # Hosted-only — see the kind node cache step (Q408).
         if: runner.environment == 'github-hosted'
         id: metrics-server-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/metrics-server-images
-          key: metrics-server-images-${{ env.METRICSSERVER_VERSION }}
+          key: metrics-server-images-m2-${{ env.METRICSSERVER_VERSION }}
 
       - name: Pre-pull metrics-server image
         # Both CNIs. The e2e suite applies the pinned metrics-server
