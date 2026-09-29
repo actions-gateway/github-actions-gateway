@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
@@ -50,6 +51,9 @@ func init() {
 	// in the scheme for the GMC-hosted conversion webhook to resolve each kind as
 	// convertible and serve /convert.
 	utilruntime.Must(v2beta1.AddToScheme(scheme))
+	// Register the GA v2 kinds (Q413): served beside v2beta1 as a second conversion
+	// spoke, so the conversion webhook needs them in the scheme to decode a v2 request.
+	utilruntime.Must(v2.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

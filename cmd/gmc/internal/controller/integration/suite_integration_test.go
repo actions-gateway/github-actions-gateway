@@ -16,6 +16,7 @@ import (
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
@@ -113,6 +114,9 @@ func TestMain(m *testing.M) {
 	// five v2 kinds as convertible and redirects their CRD conversion to the local
 	// webhook server (Q74). Both spoke and hub must be in the scheme for conversion.
 	_ = v2beta1.AddToScheme(testScheme)
+	// The GA v2 spoke (Q413): with it absent, envtest would still route the CRDs'
+	// conversion here, and every v2 read would fail as an unknown version.
+	_ = v2.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{

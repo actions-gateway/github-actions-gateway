@@ -67,11 +67,11 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnergroups"]
-      # Q323: the v2 carriers of the same two PriorityClass routes. Both versions
-      # are listed explicitly (they share identical field paths), so the rule does
-      # not depend on matchPolicy version equivalence.
+      # Q323: the v2 carriers of the same two PriorityClass routes. Every served
+      # version is listed explicitly (they share identical field paths), so the rule
+      # does not depend on matchPolicy version equivalence.
       - apiGroups: ["actions-gateway.com"]
-        apiVersions: ["v2alpha1", "v2beta1"]
+        apiVersions: ["v2alpha1", "v2beta1", "v2"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnersets", "runnertemplates"]
   matchConditions:

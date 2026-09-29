@@ -4,16 +4,17 @@ import "github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 
 // The v2 condition/reason vocabulary is declared once, version-neutrally, in
 // api/apiconditions — a condition type or reason is a runtime .status.conditions[]
-// value, not schema, and the storage/hub conversion contract requires both served
-// versions to name the same states identically (§H.7). This file re-exports that
+// value, not schema, and the storage/hub conversion contract requires every served
+// version to name the same states identically (§H.7). This file re-exports that
 // vocabulary under this package so every `v2alpha1.ConditionX` / `v2alpha1.ReasonX`
-// call site keeps compiling; api/v2beta1/conditions.go carries the identical block.
+// call site keeps compiling; the conditions.go of every v2 version (v2alpha1,
+// v2beta1, v2) carries the identical block.
 //
 // Read apiconditions for what each name means and when a reconciler sets it — the
 // doc comments live there, with the values, so they cannot diverge between versions.
 //
 // Adding a condition or reason: declare it in apiconditions, then add the one-line
-// re-export HERE and in api/v2beta1/conditions.go. The two files must stay
+// re-export HERE and in every other v2 version's conditions.go. The files must stay
 // byte-identical except the package clause; scripts/go/check-v2-api-sync.sh fails the
 // build on a one-sided add (Q345, widened in Q374).
 const (

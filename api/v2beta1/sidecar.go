@@ -6,11 +6,11 @@ import "github.com/actions-gateway/github-actions-gateway/api/apisidecar"
 // api/apisidecar: none of it is schema (the annotation key is metadata, and the
 // heuristic reads the corev1.PodSpec that every version's RunnerTemplateSpec embeds
 // unchanged). This file re-exports the two constants and wraps the heuristic in this
-// version's RunnerTemplateSpec so existing call sites are unaffected;
-// api/v2beta1/sidecar.go carries the identical block.
+// version's RunnerTemplateSpec so existing call sites are unaffected; the
+// sidecar.go of every v2 version (v2alpha1, v2beta1, v2) carries the identical block.
 //
 // Read apisidecar for what the annotation means and why the heuristic only ever
-// warns. The two files must stay byte-identical except the package clause;
+// warns. The files must stay byte-identical except the package clause;
 // scripts/go/check-v2-api-sync.sh fails the build on a one-sided edit (Q374).
 const (
 	RunnerContainerName           = apisidecar.RunnerContainerName
