@@ -1274,9 +1274,18 @@ Tag a patch from the released line instead:
 `publish.yml`'s `validated-candidate` job asks the same question of `v1.2.1` that it asks of `v2.0.0`, so a patch tag with no `v1.2.1-rc.*` marker fails before anything is pushed.
 Budget the dogfood run into the patch, or the tag fails at the end instead of the start.
 
-One thing a patch line's run does not inherit: the e2e leg dispatches `e2e-test.yml` from `main` unless `E2E_DISPATCH_REF` says otherwise, so the workflow and its test code come from `main` while the runners come from the candidate.
-That is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.
-On a patch cut off an older tag `main` can be several releases ahead of what you are validating; for a minor cut from `main`'s head the two nearly coincide, which is why this has not bitten before.
+**The e2e leg dispatches `e2e-test.yml` from `main` on every cut, patches included, and that is deliberate.** `E2E_DISPATCH_REF` overrides it; leave it alone for a release.
+The leg does two jobs, and they want different trees:
+
+- **It exercises the candidate.** The matrix's jobs land on the candidate's runners, and the gate reads NodeShare sizing, the admission ladder and the mirror-client census off them.
+  The mirror probes that run inside the job (the mirror-only egress proof and the cache timing) exist only from `v1.7.0`, so dispatching at an older line's tag would drop them silently.
+  This is the half only the dogfood gate can observe, and it wants `main`'s newest instruments.
+- **It tests whatever source it was dispatched on.** The job builds every image from `github.sha` into kind and runs the suite, the chart checks and the released-chart upgrade check against that build, so on a patch this half tests `main`, not the patch.
+
+That second half leaves a gap: `e2e-test.yml` runs on push only for `main`, so a patch line's own source goes through e2e nowhere.
+Dispatching the gate at the tag instead is not the fix: besides losing the probes above, the released-chart check upgrades from the highest stable tag, which on a patch below the newest minor is a downgrade.
+Closing the gap is [Q1143](../queue/Q1143.md), a separate e2e run on the patch's source; until it lands, a patch's e2e evidence is about its runners, not its code.
+This dispatched workflow is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.
 
 Note the asymmetry with `announce-bar`, the other pre-publish gate, which *does* exempt a backport: the banner advertises the newest release, so a `v1.2.5` cut after `v1.3.0` correctly renders `v1.3.0`.
 That is a question about what the docs site says.

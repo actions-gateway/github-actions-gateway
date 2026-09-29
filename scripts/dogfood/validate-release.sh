@@ -75,7 +75,8 @@
 #   E2E_WORKFLOW     e2e workflow to dispatch for the matrix (default
 #                    e2e-test.yml). Must have the `runner` workflow_dispatch
 #                    input on E2E_DISPATCH_REF.
-#   E2E_DISPATCH_REF Ref to dispatch the workflow on (default main).
+#   E2E_DISPATCH_REF Ref to dispatch the workflow on (default main, patch
+#                    lines included: release.md § Patch releases and backports).
 #   E2E_WAIT_TIMEOUT Seconds to wait for an in-flight run of E2E_WORKFLOW to
 #                    finish before dispatching, before any billable work
 #                    (default 1800; 0 = fail immediately instead of waiting).
