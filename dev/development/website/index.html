@@ -4047,6 +4047,7 @@ The same rule means Deferred and Flake watch, which have no <code>St</code> colu
 <li>that doc's own <code>&gt; **Audience:** …</code> blockquote — drives the per-doc pill.</li>
 </ol>
 <p>When you retag a doc, <strong>update both</strong>; they should agree.
+The blockquote is a comma-separated list of those tags and never a sentence: the pills split it on commas, so a sentence's own commas cut it into fragment chips, and any qualifier belongs in the page's opening paragraph instead.
 There is no CI check — it's two lines kept in sync by hand (deliberately not worth automating).</p>
 <p>The per-doc pills also <strong>deep-link</strong> to <code>operations/?persona=&lt;persona&gt;</code>, and the index reads that query param on load to pre-apply the matching chip.
 The link is generated from the blockquote, so keeping (1) and (2) in agreement is enough — just don't rename a persona in only one place.</p>

@@ -3078,9 +3078,10 @@
 
 <h1 id="migrating-from-actions-runner-controller-arc-to-github-actions-gateway-gag">Migrating from Actions Runner Controller (ARC) to GitHub Actions Gateway (GAG)<a class="headerlink" href="#migrating-from-actions-runner-controller-arc-to-github-actions-gateway-gag" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer running <a href="https://github.com/actions/actions-runner-controller">Actions Runner Controller (ARC)</a> scale-set mode on a shared, multi-tenant Kubernetes cluster and evaluating GitHub Actions Gateway (GAG) as a replacement.</p>
+<p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>This guide maps ARC scale-set concepts onto GAG, calls out the behavioral differences you will actually hit, and walks one runner group from ARC to GAG end to end.
+<p>This guide is for a platform engineer running <a href="https://github.com/actions/actions-runner-controller">ARC</a> scale-set mode on a shared, multi-tenant Kubernetes cluster and evaluating GAG as a replacement.
+It maps ARC scale-set concepts onto GAG, calls out the behavioral differences you will actually hit, and walks one runner group from ARC to GAG end to end.
 It assumes you already run ARC's <code>gha-runner-scale-set</code> chart; if you are new to GAG, read <a href="../../why-gag/">Why GAG</a> and <a href="../../getting-started/">Getting Started</a> first, then come back here.</p>
 <p>The good news up front: GAG was designed to make this migration cheap.
 The worker pod template is the <strong>same Kubernetes type</strong> ARC uses, so your pod spec transfers with no schema translation; job routing is the <strong>same single-name model</strong> ARC scale sets use, so your <code>runs-on</code> lines need no edit; and ARC and GAG can run <strong>side by side</strong> on the same cluster, so you migrate one scale set at a time and roll back by pointing <code>runs-on</code> back at the old name.</p>

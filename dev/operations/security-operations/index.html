@@ -4296,7 +4296,8 @@ The <a href="../examples/kind-cluster-audit.yaml"><code>examples/kind-cluster-au
 <a href="../examples/install-apiserver-audit-policy.sh"><code>examples/install-apiserver-audit-policy.sh</code></a> automates exactly that — run it <strong>once per control-plane node, as root, on the node</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>sudo<span class="w"> </span>./install-apiserver-audit-policy.sh<span class="w">        </span><span class="c1"># --dry-run to preview first</span>
 </code></pre></div>
-<p>It validates the policy, installs it to <code>/etc/kubernetes/audit/policy.yaml</code>, and idempotently patches <code>/etc/kubernetes/manifests/kube-apiserver.yaml</code> (timestamped backup; <code>yq</code> for the structured edit so the manifest cannot be corrupted).
+<p>It needs bash 4.4 or later on the node (an older bash exits before the script changes anything) and <a href="https://github.com/mikefarah/yq"><code>yq</code></a>.
+It validates the policy, installs it to <code>/etc/kubernetes/audit/policy.yaml</code>, and idempotently patches <code>/etc/kubernetes/manifests/kube-apiserver.yaml</code> (timestamped backup; <code>yq</code> for the structured edit so the manifest cannot be corrupted).
 The kubelet restarts the API server automatically.
 To do it by hand instead, add the <code>--audit-policy-file</code> / <code>--audit-log-*</code> flags and the <code>audit-policy</code> + <code>audit-log</code> <code>volumeMounts</code>/<code>volumes</code> to the manifest — the script's <a href="../examples/kind-cluster-audit.yaml">kind config</a> shows the exact shape.
 Use <code>--audit-log-path=-</code> to emit to stdout (e.g. to ship via a log agent) instead of a file.

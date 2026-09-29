@@ -4652,9 +4652,18 @@ Tag a patch from the released line instead:</p>
 <p><strong>The candidate is not optional on a patch line, and this is the one place that surprises people.</strong> A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: six signed images and a chart.
 <code>publish.yml</code>'s <code>validated-candidate</code> job asks the same question of <code>v1.2.1</code> that it asks of <code>v2.0.0</code>, so a patch tag with no <code>v1.2.1-rc.*</code> marker fails before anything is pushed.
 Budget the dogfood run into the patch, or the tag fails at the end instead of the start.</p>
-<p>One thing a patch line's run does not inherit: the e2e leg dispatches <code>e2e-test.yml</code> from <code>main</code> unless <code>E2E_DISPATCH_REF</code> says otherwise, so the workflow and its test code come from <code>main</code> while the runners come from the candidate.
-That is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.
-On a patch cut off an older tag <code>main</code> can be several releases ahead of what you are validating; for a minor cut from <code>main</code>'s head the two nearly coincide, which is why this has not bitten before.</p>
+<p><strong>The e2e leg dispatches <code>e2e-test.yml</code> from <code>main</code> on every cut, patches included, and that is deliberate.</strong> <code>E2E_DISPATCH_REF</code> overrides it; leave it alone for a release.
+The leg does two jobs, and they want different trees:</p>
+<ul>
+<li><strong>It exercises the candidate.</strong> The matrix's jobs land on the candidate's runners, and the gate reads NodeShare sizing, the admission ladder and the mirror-client census off them.
+  The mirror probes that run inside the job (the mirror-only egress proof and the cache timing) exist only from <code>v1.7.0</code>, so dispatching at an older line's tag would drop them silently.
+  This is the half only the dogfood gate can observe, and it wants <code>main</code>'s newest instruments.</li>
+<li><strong>It tests whatever source it was dispatched on.</strong> The job builds every image from <code>github.sha</code> into kind and runs the suite, the chart checks and the released-chart upgrade check against that build, so on a patch this half tests <code>main</code>, not the patch.</li>
+</ul>
+<p>That second half leaves a gap: the e2e job runs only on a push to <code>main</code>, the merge queue (which only <code>main</code> has) and a dispatch, so a patch line's own source goes through e2e nowhere.
+Dispatching the gate at the tag instead is not the fix: besides losing the probes above, the released-chart check upgrades from the highest stable tag, which on a patch below the newest minor is a downgrade.
+Closing the gap is <a href="../../queue/Q1143/">Q1143</a>, a separate e2e run on the patch's source; until it lands, a patch's e2e evidence is about its runners, not its code.
+This dispatched workflow is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.</p>
 <p>Note the asymmetry with <code>announce-bar</code>, the other pre-publish gate, which <em>does</em> exempt a backport: the banner advertises the newest release, so a <code>v1.2.5</code> cut after <code>v1.3.0</code> correctly renders <code>v1.3.0</code>.
 That is a question about what the docs site says.
 Whether the images were validated is a question about the artifact, and every artifact gets asked.</p>

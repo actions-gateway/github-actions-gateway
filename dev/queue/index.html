@@ -3126,12 +3126,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker a maintainer's local gate writes today.</td>
 </tr>
 <tr>
-<td><a href="Q1027/">Q1027</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">A patch line's e2e leg dispatches from main, not the candidate</a></td>
-<td><code>ci</code> <code>dogfood</code> <code>open-question</code></td>
+<td><a href="Q1143/">Q1143</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">Run a patch line's own source through e2e before its candidate is tagged</a></td>
+<td><code>ci</code> <code>dogfood</code></td>
 <td>🔲</td>
-<td>S</td>
-<td><code>dispatch_e2e_run</code> defaults <code>E2E_DISPATCH_REF</code> to <code>main</code> (scripts/dogfood/validate-release.sh:510), so the e2e matrix leg runs <code>main</code>'s …</td>
+<td>M</td>
+<td>A patch line's source goes through e2e nowhere today.</td>
 </tr>
 <tr>
 <td><a href="Q888/">Q888</a></td>
@@ -3846,14 +3846,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> …</td>
 </tr>
 <tr>
-<td><a href="Q1088/">Q1088</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-errexit-prologue.sh">Shell gates skip every script outside <code>scripts/</code></a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>shellcheck</code>, <code>errexit-prologue-check</code> and <code>script-modes-check</code> all select their files with the same expression, `git_candidates …</td>
-</tr>
-<tr>
 <td><a href="Q1025/">Q1025</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate cannot drive the placeability rung on real infra</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
@@ -3884,14 +3876,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>RunnerSetCustomValidator</code> now runs two cross-object guards that each build their own cluster-wide inventory on the uncached API reader …</td>
-</tr>
-<tr>
-<td><a href="Q1109/">Q1109</a></td>
-<td>Audience pills split a sentence on its commas into fragments</td>
-<td><code>docs</code> <code>bug</code></td>
-<td>🔲</td>
-<td>XS</td>
-<td><code>docs/javascripts/extra.js</code> turns a page's leading <code>&gt; **Audience:**</code> blockquote into pills by splitting the text on commas, which assumes …</td>
 </tr>
 <tr>
 <td><a href="Q1114/">Q1114</a></td>
@@ -3932,6 +3916,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>slow.commands</code> holds seven patterns and only the two <code>scripts/dogfood/*.sh</code> ones carry a command anchor.</td>
+</tr>
+<tr>
+<td><a href="Q1141/">Q1141</a></td>
+<td>Audience pill links go to the site root on pages outside operations/</td>
+<td><code>docs</code> <code>bug</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>docs/javascripts/extra.js</code> links each audience pill to <code>../?persona=&lt;tag&gt;</code>, a path relative to the page, which reaches the operations …</td>
 </tr>
 <tr>
 <td><a href="Q1124/">Q1124</a></td>

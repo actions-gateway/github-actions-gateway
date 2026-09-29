@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1109/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1143/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Audience pills split a sentence on its commas into fragments - GitHub Actions Gateway</title>
+        <title>Run a patch line's own source through e2e before its candidate is tagged - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#audience-pills-split-a-sentence-on-its-commas-into-fragments" class="md-skip">
+        <a href="#run-a-patch-lines-own-source-through-e2e-before-its-candidate-is-tagged" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Audience pills split a sentence on its commas into fragments
+              Run a patch line's own source through e2e before its candidate is tagged
             
           </span>
         </div>
@@ -2597,20 +2597,25 @@
   
 
 
-<h1 id="audience-pills-split-a-sentence-on-its-commas-into-fragments">Audience pills split a sentence on its commas into fragments<a class="headerlink" href="#audience-pills-split-a-sentence-on-its-commas-into-fragments" title="Permanent link">&para;</a></h1>
-<p><code>docs/javascripts/extra.js</code> turns a page's leading <code>&gt; **Audience:**</code> blockquote into pills by splitting the text on commas, which assumes the line is a list.
-Most pages write one ("Platform engineer, Tenant operator") and render correctly.
-Two do not, and their commas are sentence punctuation rather than separators.</p>
-<p>On <a href="../../operations/migration-from-arc/">migration-from-arc.md</a> the line is one sentence, so it renders as two pills reading "Platform engineer running Actions Runner Controller (ARC) scale-set mode on a shared" and "multi-tenant Kubernetes cluster and evaluating GitHub Actions Gateway (GAG) as a replacement." — a noun phrase cut in half across two chips.
-<a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a> has the same shape at line 747.</p>
-<p>This was invisible until 2026-09-14, because the pills overflowed the page and the text ran off-screen rather than wrapping where a reader could see it.
-Fixing the overflow (<code>.persona-pills-top .persona-pill { white-space: normal }</code>) made the copy legible and the fragments obvious.
-So this is a pre-existing defect the fix exposed, not one it caused.</p>
-<p><strong>Two candidate fixes, and the choice is the work.</strong> Rewrite both audience lines as actual comma-separated lists, which keeps the pill component honest and is XS.
-Or stop splitting when the text reads as prose rather than a list, which is a guess the JavaScript has to make and will get wrong somewhere else.
-Prefer the first unless a third page turns up.</p>
-<p>A pill is a scanning surface like the card bullets, so the same argument applies as in <a href="../../development/website/#card-bullets-fit-on-one-line">website.md</a>: the copy is written to the component rather than the component stretched to the copy.</p>
-<p><strong>Done when</strong> no published page renders an audience pill that is a sentence fragment.</p>
+<h1 id="run-a-patch-lines-own-source-through-e2e-before-its-candidate-is-tagged">Run a patch line's own source through e2e before its candidate is tagged<a class="headerlink" href="#run-a-patch-lines-own-source-through-e2e-before-its-candidate-is-tagged" title="Permanent link">&para;</a></h1>
+<p>A patch line's source goes through e2e nowhere today.
+<code>e2e-test.yml</code> triggers on <code>pull_request</code> too, but its <code>e2e</code> job's <code>if</code> admits only <code>merge_group</code>, <code>push</code> (to <code>main</code>) and <code>workflow_dispatch</code> (<code>.github/workflows/e2e-test.yml:125:if: (needs.changes.outputs.e2e == 'true' &amp;&amp; github.event_name == 'merge_group')</code>), and only <code>main</code> has a merge queue (the <code>default-protect</code> ruleset, <code>~DEFAULT_BRANCH</code>, read 2026-09-29).
+So the fix is that job condition or a dispatch, not a new trigger.
+The release gate dispatches the workflow at <code>main</code> on purpose (decided in Q1027, 2026-09-29), so on a patch the suite, the chart checks and the released-chart upgrade check all test <code>main</code>'s build, not the patch.
+<a href="../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a> records the split and why the gate keeps <code>main</code>.</p>
+<p><strong>Why not just dispatch the gate at the candidate tag.</strong> The e2e leg does two jobs.
+The candidate-side half (runners carrying the matrix, NodeShare sizing, the admission ladder, the Q1048 mirror-client census, and the in-job mirror probes) wants <code>main</code>'s newest instruments, and <code>v1.4.0</code>–<code>v1.6.0</code> carry none of the three mirror steps (<code>Configure buildkit registry mirrors</code>, <code>Prove the worker's egress is mirror-only</code>, Q1020's timing), read off each tag's <code>e2e-reusable.yml</code> on 2026-09-29.
+The source-side half is what a patch needs from its own tree.
+One ref cannot serve both.</p>
+<p><strong>What the run needs, none of it tried end to end since no patch has ever been cut here:</strong></p>
+<ul>
+<li>Dispatch <code>e2e-test.yml</code> at the release branch or the candidate tag, routed off the dogfood tenant.
+  Every stable tag from <code>v1.4.0</code> carries the <code>runner</code> dispatch input; what an empty <code>runner</code> resolves to depends on <code>vars.GAG_E2E_RUNNER</code>, which was not read.</li>
+<li>Keep the released-chart upgrade check on the patch's own line.
+  <code>scripts/e2e/chart-released-upgrade-check.sh</code> discovers the highest stable <code>vX.Y.Z</code> on the remote, so for <code>v1.7.1</code> it would install <code>v1.8.0</code> and "upgrade" to 1.7.1's chart.
+  The script already honours <code>RELEASED_TAG</code>; the workflow has no dispatch input to pass it, and an older tag's copy of the workflow would not gain one without a cherry-pick.</li>
+<li>Decide where it sits: a step the maintainer runs before tagging <code>-rc.1</code> (release.md's patch recipe), or a leg of <code>validate-release.sh</code> that runs only when the candidate is a patch.</li>
+</ul>
 
 
 

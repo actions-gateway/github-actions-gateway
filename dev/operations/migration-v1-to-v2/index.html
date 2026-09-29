@@ -3080,7 +3080,7 @@
 
 <h1 id="migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api">Migrating a tenant from the v1alpha1 to the v2alpha1 API<a class="headerlink" href="#migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer / tenant operator</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
 <p>The v2 API (<code>actions-gateway.com</code>) replaces the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> shape with a decomposed set of kinds — <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code>, and <code>RunnerSet</code>.
 The two API groups are <strong>served side by side</strong>: nothing forces a tenant onto v2, and v1 keeps working until you migrate it.

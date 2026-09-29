@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1088/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1141/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Shell gates skip every script outside scripts/ - GitHub Actions Gateway</title>
+        <title>Audience pill links go to the site root on pages outside operations/ - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#shell-gates-skip-every-script-outside-scripts" class="md-skip">
+        <a href="#audience-pill-links-go-to-the-site-root-on-pages-outside-operations" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Shell gates skip every script outside scripts/
+              Audience pill links go to the site root on pages outside operations/
             
           </span>
         </div>
@@ -2597,51 +2597,19 @@
   
 
 
-<h1 id="shell-gates-skip-every-script-outside-scripts">Shell gates skip every script outside <code>scripts/</code><a class="headerlink" href="#shell-gates-skip-every-script-outside-scripts" title="Permanent link">&para;</a></h1>
-<p><code>shellcheck</code>, <code>errexit-prologue-check</code> and <code>script-modes-check</code> all select their files with the same expression, <code>git_candidates 'scripts/*.sh'</code> (<code>scripts/ci/shellcheck-scripts.sh:33:git_candidates 'scripts/*.sh'</code>, <code>scripts/ci/check-errexit-prologue.sh:57:git_candidates 'scripts/*.sh'</code>, <code>scripts/ci/check-script-modes.sh:99:git_candidates 'scripts/*.sh' | select_present_files</code>).
-The rationale each states is about shell, not about a directory: <code>check-errexit-prologue.sh</code> exists because <code>set -e</code> does not reach inside a command substitution (Q733), which is true of any bash file in the tree.</p>
-<p><strong>Measured 2026-09-09.</strong> Four non-vendored, non-testdata scripts sit outside that selection, and every one of them declares <code>set -euo pipefail</code> without <code>shopt -s inherit_errexit</code>, which is the exact state <code>errexit-prologue-check</code> exists to reject:</p>
-<table>
-<thead>
-<tr>
-<th>Script</th>
-<th>Reader</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh"><code>deploy/monitoring/preview/render.sh</code></a></td>
-<td>the dashboard preview harness</td>
-</tr>
-<tr>
-<td><a href="../../operations/examples/install-apiserver-audit-policy.sh"><code>docs/operations/examples/install-apiserver-audit-policy.sh</code></a></td>
-<td><strong>operators</strong>, who copy and run it</td>
-</tr>
-<tr>
-<td><a href="../../assets/render-wormhole-animation.sh"><code>docs/assets/render-wormhole-animation.sh</code></a></td>
-<td>the website asset build</td>
-</tr>
-<tr>
-<td><code>cmd/gmc/.devcontainer/post-install.sh</code></td>
-<td>devcontainer setup</td>
-</tr>
-</tbody>
-</table>
-<p>All four are shellcheck-clean today, which is what makes this worth adding rather than urgent, and also why "it passes" proves nothing on its own: assert a seeded fault fails.
-The operator example is the one with a reader outside this repo.</p>
-<p><strong>What it already cost.</strong> Q1072 added a lock to <code>render.sh</code> and had to hand-run <code>shellcheck</code> to get any verdict on it at all, because no target in the tree would read the file.
-A hand-run check is not a gate: it holds for exactly the session that remembered.</p>
-<p><strong>The gap has a second layer, and CI measured it on that PR.</strong> The file selection above is what the gate reads once it runs; whether it runs at all is a path filter, and that filter misses the same tree.
-<code>.github/workflows/unit-test.yml:135:- 'scripts/**'</code> sits under a <code>scripts:</code> filter listing <code>scripts/**</code> plus <code>deploy/templates/**</code>, <code>deploy/dogfood-e2e/**</code> and the MkDocs hooks, but not <code>deploy/monitoring/preview/**</code>.
-Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1887">#1887</a> at head <code>13bf50b2e</code>, whose largest single-file change is 90 inserted lines of bash in <code>render.sh</code>: <code>gh pr checks</code> reported 40 pass and 26 skipping, and <code>shellcheck</code> was one of the 26.
-So a PR can be entirely a shell change and still show a green check set in which no shellcheck ran: the <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">skipped-is-not-passed</a> shape, reached through the filter rather than the gate.
-Widening one half without the other fixes nothing: the filter decides whether the job starts, the pathspec decides what it then reads.</p>
-<p><strong>The selection, settled 2026-09-17: every tracked <code>*.sh</code>, less <code>vendor/</code>, <code>tools/vendor/</code> and <code>testdata/</code> by pattern.</strong> Widening the pathspec pulls in ~50 vendored scripts and the two fixtures, none of which this repo may reformat, so an exclusion is needed either way.
-The three candidates were that, enumerating the non-vendored roots, and a registry file the way <code>mk/gate-lists.mk</code> does for gates.
-<strong>The registry loses on the defect's own shape.</strong> This row exists because four scripts sat outside a selection nobody widened, so the selection has to be fail-closed: a new script is covered unless somebody excludes it.
-A registry is opt-in, so the next script written outside <code>scripts/</code> and left unregistered reproduces this exact row, and a root enumeration has the same failure one directory up.
-<code>mk/gate-lists.mk</code> is the right precedent for gates, where an unregistered gate is loud because it does not run at all; an unregistered <em>subject</em> is silent, which is the inversion.</p>
-<p><code>script-modes-check</code> keeps its narrower selection rather than widening with the other two: a <code>docs/operations/examples/</code> script an operator copies has different mode expectations than an entry point under <code>scripts/</code>, and this row does not settle what those should be.</p>
+<h1 id="audience-pill-links-go-to-the-site-root-on-pages-outside-operations">Audience pill links go to the site root on pages outside operations/<a class="headerlink" href="#audience-pill-links-go-to-the-site-root-on-pages-outside-operations" title="Permanent link">&para;</a></h1>
+<p><code>docs/javascripts/extra.js</code> links each audience pill to <code>../?persona=&lt;tag&gt;</code>, a path relative to the page, which reaches the operations index only from a page one level under <code>operations/</code>.
+On <a href="../../reference/">reference/README.md</a> the same href resolves to the site root, which has no persona chips, so clicking "Platform engineer" lands on the landing page unfiltered.
+Measured 2026-09-29 on a local <code>make docs-build</code> of the dev scope: the pills on <code>/reference/</code> carry <code>href="../?persona=Platform%20engineer"</code>.</p>
+<p>On the hosted site every other page carrying a single-line <code>&gt; **Audience:**</code> blockquote sits under <code>operations/</code>, so <code>reference/</code> is the one live instance there.
+<strong>The offline export (<code>make docs-export</code>) breaks it on every page.</strong> <code>mkdocs-offline.yml</code> enables Material's <code>offline</code> plugin, which turns directory URLs off, so a page is <code>operations/install.html</code> and <code>../?persona=</code> resolves to the export root rather than to <code>operations/index.html</code>.
+<code>hooks/offline_links.py</code> repoints raw-HTML directory links at their <code>.html</code> file, but this href is built by JavaScript after load and never reaches it.
+Found in review of the PR that filed this row: the export was built and its hrefs resolved with <code>urljoin</code>, and no browser rendered them, because <code>file://</code> pages render here without JavaScript.
+<code>docs/design/github-protocol-dependencies.md</code> carries an audience line too, but it is a two-line blockquote, and the pill regex (<code>^Audience:\s*(.+)$</code>, no multiline flag) matches only a one-line one, so it stays a blockquote and makes no link.</p>
+<p>The fix is to build the href from the site root rather than from the page, for instance from the <code>base</code> field of the <code>__config</code> JSON that MkDocs Material writes into every page (<code>"base": ".."</code> on <code>/reference/</code>), so the link is right wherever the page lives and in both publication scopes.
+<code>base</code> alone still fails the export: it resolves to the <code>operations/</code> directory, which <code>file://</code> does not map to <code>index.html</code>, so with directory URLs off the href also needs an explicit <code>index.html</code>.
+That second half is a proposal nobody has measured, so drive it in the export before shipping it.</p>
+<p><strong>Done when</strong> an audience pill on any published page, and on any page of the offline export, opens the operations index filtered to that persona.</p>
 
 
 

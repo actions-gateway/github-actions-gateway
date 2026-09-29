@@ -2800,7 +2800,7 @@ Measured on bash 5.3, with a builder whose first two steps fail:</p>
 </tbody>
 </table>
 <p><code>shopt -s inherit_errexit</code> is the remedy to reach for: one line at the top of the file covers every <em>plain</em> substitution in it, where the other two working forms have to be repeated per call site.
-It is required in every executable script under <code>scripts/</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-errexit-prologue.sh"><code>make errexit-prologue-check</code></a> enforces that.
+It is required in every shell script in the tree outside <code>vendor/</code> and <code>testdata/</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-errexit-prologue.sh"><code>make errexit-prologue-check</code></a> enforces that.
 Sourced <code>lib/</code> files are exempt and must not declare it: they run under the caller's shell options, a caller's shopt already covers the functions they define, and declaring it in a sourced file would switch the option on for every caller instead.</p>
 <p><strong>It does not cover a declaration builtin.</strong> The last-but-one row above is the trap: <code>local</code>, <code>declare</code>, <code>export</code> and <code>readonly</code> return their <em>own</em> status, which replaces the substitution's, so <code>local repo="$(build)"</code> stays exit 0 even with the shopt set.
 The shopt still stops the builder at its first failure, which makes this the worst of the three states: a value truncated <em>and</em> a clean exit.
