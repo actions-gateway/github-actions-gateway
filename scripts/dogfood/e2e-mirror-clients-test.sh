@@ -103,15 +103,18 @@ check "the proxy's own log lines are not clients" "" \
 #
 # The shape the pinned haproxy writes once catalog-deny.cfg captures the header,
 # measured on haproxy:3.2.23-alpine: `{<agent>}` before the request line, `{}`
-# when the header is absent. On the 2026-09-14 window the probes' source was
-# 169.254.4.6, which no pod or node lists.
+# when the header is absent. 169.254.4.6 is the address the 2026-09-14 window
+# could not resolve; that it is the kubelet is unconfirmed (Q1048).
 UA_LOG='169.254.4.6:40112 [14/Sep/2026:07:02:22.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
 169.254.4.6:40118 [14/Sep/2026:07:02:32.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
 10.36.10.5:51240 [14/Sep/2026:07:02:28.113] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {docker/27.3.1 go/go1.22 os/linux} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"
 169.254.9.9:40200 [14/Sep/2026:07:02:40.000] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
-169.254.9.9:40201 [14/Sep/2026:07:02:41.000] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"'
+169.254.9.9:40201 [14/Sep/2026:07:02:41.000] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"
+169.254.7.7:40300 [14/Sep/2026:07:02:50.000] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"'
 
-check "an address whose every request is a kube-probe is a probe, and only that one" \
+# 169.254.7.7 sends the probe's agent but pulls a manifest: the agent is a string
+# any client can choose, so the probe's own request line is required too.
+check "an address whose every request is a kube-probe GET /v2/ is a probe, and only that one" \
 	"169.254.4.6" "$(probe_addresses <<<"${UA_LOG}")"
 
 # A log written before the capture has no `{…}` field. Exempting on it would

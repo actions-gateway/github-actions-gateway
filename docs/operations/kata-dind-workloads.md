@@ -424,7 +424,7 @@ Four readings, and none of them substitutes for another:
   Take a baseline first: a count means nothing without one.
 - **Every client carries the workload label.** [`e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh) resolves each address in the mirrors' proxy logs to a pod or a node, which is what the shared topology's narrowed ingress peer would admit or cut off.
   Run it while the workers are still up: a deleted worker's address resolves to nothing, and that refuses rather than passes.
-  The kubelet's probes are exempt whether they arrive from a node address or from a host address no pod or node lists, such as a link-local one; the second kind is recognised by its `kube-probe/` User-Agent, which the mirror's proxy logs.
+  The kubelet's probes are exempt whether they arrive from a node address or from a host address no pod or node lists, such as a link-local one; the second kind is recognised by a `kube-probe/` User-Agent on the probe's own `GET /v2/`, which the mirror's proxy logs.
 - **Nothing else is reachable.** [`egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) probes from inside the job, on the worker whose posture is being claimed, because a plain pod cannot answer whether policy still binds at the end of a path that leaves a micro-VM guest through a bridge NAT.
   [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) runs there too, for the same reason and to a different end: it reports what the cache's own timing gives away from that position, and grades nothing.
 

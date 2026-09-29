@@ -28,10 +28,12 @@
 # The kubelet's readiness and liveness probes reach 5000 too, and are exempt.
 # A probe from a node address resolves to that node. On the dogfood cluster
 # (GKE Dataplane V2) the 2026-09-14 window saw no node address at all, only a
-# workload pod and `169.254.4.6`, which no pod or node lists; GKE Dataplane V2
-# is reported to bind a node-local kubelet address there (Q1048). So a probe is
-# also recognised by what it says it is: the proxy logs the User-Agent, and an
-# unresolved address whose every request carried `kube-probe/` is exempt. Both
+# workload pod and `169.254.4.6`, which no pod or node lists. That it is the
+# kubelet is unconfirmed (Q1048); it did pass the mirror's ingress policy,
+# whose only peer is a namespace selector, so selectors do not govern it here.
+# So a probe is also recognised by what it says it is: the proxy logs the
+# User-Agent, and an unresolved address whose every request was a
+# `kube-probe/` `GET /v2/` is exempt. Both
 # are resolved from evidence rather than pattern-matched on the address: an
 # address assumed to be a host is an address not checked.
 #
@@ -101,21 +103,26 @@ client_addresses() {
 }
 
 # probe_addresses — read a HAProxy log on stdin, print each client address whose
-# EVERY logged request carried a `kube-probe/` User-Agent. The proxy captures
-# that header into the first `{…}` field (catalog-deny.cfg):
+# EVERY logged request was a kubelet probe: a `kube-probe/` User-Agent AND the
+# registry container's probe request, `GET /v2/`. The agent alone is a string a
+# client chooses; the path is the one the probe is configured with, so a pull
+# sent under that agent still disqualifies the address. The proxy captures the
+# header into the first `{…}` field (catalog-deny.cfg):
 #
 #   169.254.4.6:40112 [14/Sep/2026:…] mirror registry/local … 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
 #
-# One request without it disqualifies the address, and so does a log written
-# before the capture existed, which has no `{…}` field: both fall through to the
-# pod-or-node grade rather than being exempted on the evidence of the others.
+# One request that is not a probe disqualifies the address, and so does a log
+# written before the capture existed, which has no `{…}` field: both fall
+# through to the pod-or-node grade rather than being exempted on the evidence
+# of the others.
 probe_addresses() {
 	awk '
 		$1 ~ /^\[?[0-9a-fA-F.:]+\]?:[0-9]+$/ {
 			addr = $1
 			sub(/:[0-9]+$/, "", addr)
 			gsub(/^\[|\]$/, "", addr)
-			if (match($0, /\{[^}]*\}/) && substr($0, RSTART, 12) == "{kube-probe/") {
+			if (match($0, /\{[^}]*\}/) && substr($0, RSTART, 12) == "{kube-probe/" &&
+				$0 ~ /"GET \/v2\/ HTTP\/[0-9.]+"$/) {
 				probe[addr] = 1
 			} else {
 				other[addr] = 1
@@ -139,7 +146,12 @@ is_link_local() {
 #   pod-unlabelled <ns>/<name>   the narrowing CUTS THIS CLIENT OFF
 #   node           <name>        the kubelet's probes, exempt
 #   probe          -             no pod or node, but every request was a kubelet
-#                                probe (probe_addresses), exempt
+#                                probe (probe_addresses), exempt: the narrowing
+#                                ANDs a pod label into a selector a host source
+#                                never matched, so its fate is unchanged either
+#                                way -- admitted where the dataplane leaves host
+#                                traffic unpoliced, already dropped where it
+#                                does (cilium/cilium#17839)
 #   unresolved     -             cannot be graded either way
 #
 # Exit 1 when any client is unlabelled, 2 when any is unresolved or nothing was
@@ -162,7 +174,7 @@ grade_clients() {
 			echo "EXEMPT  ${addr} node/${detail} — the kubelet's probes, which no pod selector governs"
 			;;
 		probe)
-			echo "EXEMPT  ${addr} resolves to no pod and no node, but every request it made carried kube-probe/ — the kubelet's probes from a host address, which no pod selector governs"
+			echo "EXEMPT  ${addr} resolves to no pod and no node, but every request it made was a kube-probe/ GET /v2/ — a host-sourced probe matches no namespace or pod selector before the narrowing or after it, so the narrowing cannot change whether it arrives"
 			;;
 		ambiguous)
 			echo "REFUSE  ${addr} ${detail} — a hostNetwork pod shares this node's address, so whether the narrowing keeps this client is not decidable from here"
