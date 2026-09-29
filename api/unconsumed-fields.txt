@@ -1,0 +1,23 @@
+# Served API fields with no consumer, read by `make api-fields-check` (Q573).
+#
+# A spec field listed here is one no controller reads; a status field is one no
+# controller writes. The API server accepts and stores both regardless, so every
+# entry is surface an operator can set, or alert on, to no effect. An entry needs
+# a reason, and the godoc on the field must say it is inert.
+#
+# The gate fails on an entry whose field has gained a consumer or no longer
+# exists, so delete the line when either happens. Format: the finding as the
+# gate prints it, up to the colon.
+
+# Inert since v1alpha1 shipped; its godoc says so (Q526). Leaves with v1alpha1
+# at v2.0.0, and v2beta1's ActionsGatewayStatus has no such field.
+v1alpha1 ActionsGateway.status.activeSessions
+
+# (Cluster)RunnerTemplate is pure data with no reconciler: the status fields are
+# declared for the uniform v2 status contract (design §H.7) and never populated.
+# RunnerTemplateStatus is one type shared by both kinds, so its fields are named
+# once, under ClusterRunnerTemplate, the kind the walk meets first.
+v2alpha1,v2beta1 ClusterRunnerTemplate.status
+v2alpha1,v2beta1 ClusterRunnerTemplate.status.conditions
+v2alpha1,v2beta1 ClusterRunnerTemplate.status.observedGeneration
+v2alpha1,v2beta1 RunnerTemplate.status

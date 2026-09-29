@@ -232,6 +232,9 @@ Changing how one is derived orphans live objects, which is worse than a field re
   Declare them in [`api/apiconditions`](../../api/apiconditions/conditions.go) and re-export from both version packages; `make v2-api-sync-check` fails a one-sided add.
 - Keep the polarity convention: normal-is-True (`Ready`), with abnormal-is-True conditions named so they read that way (`CredentialUnavailable`).
 - Carry `observedGeneration` so a reader can tell a stale status from a current one.
+- Ship a field with its consumer.
+  `make api-fields-check` fails on a status field no controller writes and on a spec field none reads, since the API server stores either and nothing acts on it.
+  A field that is inert on purpose goes in [`api/unconsumed-fields.txt`](../../api/unconsumed-fields.txt) with the reason, and its godoc says so ([the gate](testing.md#the-served-api-field-gate)).
 
 ### Design for the values that have not arrived yet
 

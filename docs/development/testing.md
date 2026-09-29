@@ -454,7 +454,7 @@ The GAG dogfood runner is unread: it is reachable only by a `workflow_dispatch` 
 **That is a hazard removed, not Q822 diagnosed.** Q822's sightings report `the driver could not be built`, which is a build failing; the race above kills an exec after the build succeeded, so it cannot be the same event.
 The relay is what will name the cause: the next occurrence carries `go`'s own output instead of the bare symptom.
 
-**No suite in the fan-out takes the lock, but only one of the two reasons is structural.** Five scripts call `serialize_heavy_build`, and in `go-lint.sh`, `go-vet-tags.sh` and `coverage.sh` the call sits inside `main()`, so sourcing them cannot take it.
+**No suite in the fan-out takes the lock, but only one of the two reasons is structural.** Six scripts call `serialize_heavy_build`, and in `go-lint.sh`, `go-vet-tags.sh`, `coverage.sh` and `check-api-fields.sh` the call sits inside `main()`, so sourcing them cannot take it.
 In `go-test.sh` and `go-test-integration.sh` it sits at top level, where sourcing takes the lock immediately, and only their suites' `GAG_HEAVY_BUILD_LOCK_HELD=1` keeps them out.
 So a future suite that sources either of those without the sentinel puts a lock-taker inside the fan-out, which is the thing this paragraph exists to rule out.
 
@@ -1149,6 +1149,29 @@ If that ever changes, say a tag gaining a `!tag` counterpart file, the one-shot 
 
 Each property is asserted by `scripts/go/go-vet-tags-test.sh` under `make scripts-test`: the coverage guard failing on an unlisted tag, a tagged-file break that an untagged vet reports clean, and the lint-sync guard failing in both drift directions as well as on a `run.build-tags` that is missing or empty.
 That last case is what the fixtures exist for, since a gate comparing two lists passes vacuously the moment both read as empty.
+
+### The served-API-field gate
+
+`make api-fields-check` ([`scripts/go/check-api-fields.sh`](../../scripts/go/check-api-fields.sh)) fails on a served API field that nothing consumes: a spec field no controller reads, or a status field no controller writes.
+The API server stores such a field whether or not anything acts on it, so an operator can set it and get nothing, silently.
+`sharing.allowedNamespaces` shipped served and unenforced in v2beta1 and only a manual docs sweep caught it (Q166); v1alpha1's `status.activeSessions` shipped described and never set (Q526).
+
+The checking is [`devtools/ci/apifields`](../../devtools/ci/apifields/main.go), whose package comment carries the rules.
+It type-checks every workspace module, walks each root kind's fields, and classifies every use of each field as a read, a write, or both.
+Uses in `zz_generated.*` and `conversion.go` do not count, because those files touch every field by construction.
+The versions of one API group are judged together: conversion is a JSON round-trip, so a v2beta1 field is consumed when the controllers read its v2alpha1 counterpart, which is what they reconcile.
+
+It is a lower bound on neglect, not a proof of enforcement.
+Four things satisfy it without the field doing anything: a webhook that only checks a field's format, code in the API package itself whether or not anything calls it, and a status field's address passed to a function that only reads it, which includes a read-only method with a pointer receiver such as `metav1.Time.IsZero` or `resource.Quantity.Cmp`.
+The fourth is structural: within a version the unit is the Go struct field, not the Kind and JSON path, so a type shared by two kinds is judged once and a reader of either kind credits both.
+`RunnerTemplate` and `ClusterRunnerTemplate` share `RunnerTemplateSpec` that way, and so do the `scheduling` and `…Ref` types several kinds embed.
+
+**Adding a field nothing consumes yet means a line in [`api/unconsumed-fields.txt`](../../api/unconsumed-fields.txt)**, with the reason, and godoc on the field that says it is inert.
+The gate fails on an entry whose field has gained a consumer or no longer exists, so the list cannot rot.
+**Adding an API version means an entry in the script's `API_GROUPS`**; the tool fails on a package declaring a root kind that no entry names, rather than leaving the new version unchecked.
+
+It is a heavy phase of `make check` (measured at Q573: 20 s on a dev Mac with the build cached, 3.5 min on the first run in a fresh worktree) and a step in CI's `lint` job, after `build-tags-check` so the build it loads is cached.
+Its classification rules are asserted by the package's own tests against a fixture module, under `make test`.
 
 ### The path-filter gate
 

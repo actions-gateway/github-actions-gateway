@@ -75,7 +75,7 @@ CHECK_FAST_GATES := roadmap-check \
                     registry-mirror-catalog-deny-check \
                     gate-needs-check
 
-CHECK_HEAVY_GATES := build-tags-check lint cover-check
+CHECK_HEAVY_GATES := build-tags-check api-fields-check lint cover-check
 
 # The complete set of gates a docs/queue/-only change can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:

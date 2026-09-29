@@ -103,6 +103,7 @@ export RUN_PARALLEL_JOBS
 check: ## Fast pre-review gate — `make list-gates` names every gate it runs and what each covers
 	scripts/ci/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
+	$(MAKE) api-fields-check
 	$(MAKE) lint
 	$(MAKE) cover-check
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
@@ -514,6 +515,16 @@ test-cache-inputs-check: ## Fail if a cached test reads a file outside its modul
 .PHONY: build-tags-check
 build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does not compile or vet clean
 	scripts/go/go-vet-tags.sh
+
+# Fail on a served API field with no consumer: a spec field no controller reads,
+# or a status field none writes (Q573). The API server stores either way, so the
+# field is accepted and ignored; allowedNamespaces shipped like that (Q166).
+# Type-checks the workspace, so it is a heavy phase and runs after
+# build-tags-check, whose vet leaves the build cache warm. Known exceptions:
+# api/unconsumed-fields.txt.
+.PHONY: api-fields-check
+api-fields-check: ## Fail if a served API spec field is never read, or a status field never written (baseline: api/unconsumed-fields.txt)
+	scripts/go/check-api-fields.sh
 
 # Reconcile CI's hand-maintained `dorny/paths-filter` lists with `go.work` and
 # with the paths they name (Q429). A filter that omits a directory makes its gate
