@@ -137,8 +137,14 @@ kubeconform $kubeconform_flags $standalone_manifests
 
 echo "==> helm lint + kubeconform: actions-gateway-crds-v2 (opt-in v2 CRD chart)"
 helm lint "$crds_v2_chart"
+# Validated from a file, not stdin: kubeconform v0.8.0 reading this ~4.7 MB
+# render from stdin with its default 4 workers corrupts a ~1.9 MB CRD and fails
+# at a different line each run, while the same bytes pass read from a file (Q413).
+crds_v2_render_dir="$(mktemp -d)"
+trap 'rm -rf "$crds_v2_render_dir"' EXIT
+helm template ag-crds-v2 "$crds_v2_chart" >"$crds_v2_render_dir/crds-v2.yaml"
 # shellcheck disable=SC2086
-helm template ag-crds-v2 "$crds_v2_chart" | kubeconform $kubeconform_flags
+kubeconform $kubeconform_flags "$crds_v2_render_dir/crds-v2.yaml"
 
 echo "==> helm lint (digest-pinned: default values must not render — checked next)"
 helm lint "$chart" "${RENDER_DIGEST_ARGS[@]}"
