@@ -187,7 +187,13 @@ type agcAutoscalerState struct {
 // discovery failure and is returned so the reconcile retries with backoff rather than
 // silently reporting the opt-in as unsatisfiable.
 func (r *ActionsGatewayV2Reconciler) vpaCRDInstalled() (bool, error) {
-	if _, err := r.RESTMapper().RESTMapping(verticalPodAutoscalerGVK.GroupKind(), verticalPodAutoscalerGVK.Version); err != nil {
+	return r.crdInstalled(verticalPodAutoscalerGVK)
+}
+
+// crdInstalled is vpaCRDInstalled for any optional kind; teardown also uses it for
+// the AGC ServiceMonitor (Q1101).
+func (r *ActionsGatewayV2Reconciler) crdInstalled(gvk schema.GroupVersionKind) (bool, error) {
+	if _, err := r.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 		if meta.IsNoMatchError(err) {
 			return false, nil
 		}

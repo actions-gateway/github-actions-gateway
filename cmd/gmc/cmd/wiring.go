@@ -152,14 +152,15 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
 		// plane and wires its egress through the EgressProxy named by defaultProxyRef.
 		if err := (&controller.ActionsGatewayV2Reconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			AGCImage:       img.agcImage,
-			AGCExtraEnv:    img.agcExtraEnv,
-			APIServerCIDRs: parsedAPIServerCIDRs,
-			IPCache:        ipCache,
-			Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
-			Reader:         mgr.GetAPIReader(),
+			Client:               mgr.GetClient(),
+			Scheme:               mgr.GetScheme(),
+			AGCImage:             img.agcImage,
+			AGCExtraEnv:          img.agcExtraEnv,
+			APIServerCIDRs:       parsedAPIServerCIDRs,
+			IPCache:              ipCache,
+			EnableServiceMonitor: cfg.enableTenantServiceMonitors,
+			Recorder:             mgr.GetEventRecorder("actionsgateway-v2-controller"),
+			Reader:               mgr.GetAPIReader(),
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create actionsgateway-v2 controller: %w", err)
 		}

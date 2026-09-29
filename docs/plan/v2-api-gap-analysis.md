@@ -78,9 +78,9 @@ Events are a strict v2 superset (the two PSA events moved to `NamespacePSAReconc
 Both halves are now ported: the v2 `reconcileDelete` deletes every child explicitly *and verifies each is gone* (a delete error or a child lingering under a foreign finalizer retains the finalizer + emits `TeardownIncomplete`; metrics Secrets stay owner-ref-GC'd since the GMC holds no delete verb on Secrets), and the v2 builder sets `MaxConcurrentReconciles: 1`.
 Design note: [appendix-h §H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion); operator doc: [troubleshooting](../operations/troubleshooting.md#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete).
 
-**Gap — ServiceMonitors (part of Q324, FIXED).** As found, v1 optionally provisions per-tenant proxy + AGC ServiceMonitors (`applyOrPruneServiceMonitors`, `EnableTenantServiceMonitors` flag, graceful missing-CRD handling) while the v2 reconciler created the AGC metrics Service but no ServiceMonitor and had no flag equivalent.
+**Gap — ServiceMonitors (Q324 and Q1101, FIXED).** As found, v1 optionally provisions per-tenant proxy + AGC ServiceMonitors (`applyOrPruneServiceMonitors`, `EnableTenantServiceMonitors` flag, graceful missing-CRD handling) while the v2 reconciler created the AGC metrics Service but no ServiceMonitor and had no flag equivalent.
 Fixed for the proxy: the v2 `EgressProxy` reconciler now provisions a `<ep>-proxy-metrics` ServiceMonitor gated by the same `--enable-tenant-service-monitors` flag (`EnableServiceMonitor`), with the same missing-CRD downgrade (Warning event, never blocks provisioning) and owner-ref GC.
-The AGC-side v2 ServiceMonitor remains out of scope here (Q324 is the proxy metrics parity item).
+The AGC side was left out of Q324, which was the proxy parity item, and closed later: the v2 `ActionsGateway` reconciler now provisions a `<ag>-agc-metrics` ServiceMonitor behind the same flag, with the same missing-CRD downgrade.
 
 **Intentional:** `spec.runnerGroups` bootstrapping dropped (RunnerSets are independent, gatewayRef-referencing CRs); PSA stamping relocated to `NamespacePSAReconciler` keyed on the namespace `security-profile` label (both directions covered; downgrade protection in the VAP).
 
