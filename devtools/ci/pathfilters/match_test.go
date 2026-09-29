@@ -31,6 +31,7 @@ func TestMatchPattern(t *testing.T) {
 		{"deploy/monitoring/grafana-dashboard-*.json", "deploy/monitoring/rules.yaml", false},
 		{".github/workflows/**", ".github/workflows/e2e-calico.yml", true},
 		{"**", ".github/workflows/e2e-calico.yml", true},
+		{"./cmd/gmc/**", "cmd/gmc/main.go", true},
 	}
 	for _, c := range cases {
 		if got := matchPattern(c.pattern, c.file); got != c.want {
@@ -69,6 +70,8 @@ func TestWriteMatchesRefuses(t *testing.T) {
 		"negation":    "jobs:\n  c:\n    with:\n      filters: |\n        a:\n          - '!docs/**'\n",
 		"braces":      "jobs:\n  c:\n    with:\n      filters: |\n        a:\n          - 'cmd/{agc,gmc}/**'\n",
 		"bad class":   "jobs:\n  c:\n    with:\n      filters: |\n        a:\n          - 'cmd/[agc/**'\n",
+		"posix class": "jobs:\n  c:\n    with:\n      filters: |\n        a:\n          - 'deploy/[[:alpha:]]*/**'\n",
+		"file path":   "jobs:\n  c:\n    with:\n      filters: .github/filters.yaml\n  d:\n    with:\n      filters: |\n        b:\n          - 'docs/**'\n",
 		"change type": "jobs:\n  c:\n    with:\n      filters: |\n        a:\n          - added: 'cmd/**'\n",
 	} {
 		if _, err := matches(t, src, "cmd/agc/x.go\n"); err == nil {

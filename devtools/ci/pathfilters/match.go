@@ -28,8 +28,11 @@ func lanePatterns(root *yaml.Node) ([]string, error) {
 			return nil, fmt.Errorf("filters block is not valid YAML: %w", err)
 		}
 		m := contentRoot(&inner)
-		if m == nil || m.Kind != yaml.MappingNode {
+		if m == nil {
 			continue
+		}
+		if m.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("a filters: value is not an inline mapping (dorny reads a one-line value as a file path), which match cannot evaluate")
 		}
 		for i := 0; i+1 < len(m.Content); i += 2 {
 			name, v := m.Content[i].Value, m.Content[i+1]
@@ -55,11 +58,15 @@ func lanePatterns(root *yaml.Node) ([]string, error) {
 }
 
 // checkSupported rejects the picomatch syntax matchPattern does not implement
-// (negation, extglobs, brace expansion) and any segment path.Match cannot
-// parse, which it would otherwise report as a silent non-match.
+// (negation, extglobs, brace expansion, POSIX classes) and any segment
+// path.Match cannot parse, which it would otherwise report as a silent
+// non-match.
 func checkSupported(pattern string) error {
 	if strings.HasPrefix(pattern, "!") || strings.ContainsAny(pattern, "{}()") {
 		return fmt.Errorf("pattern %q uses negation, an extglob, or braces, which match does not implement", pattern)
+	}
+	if strings.Contains(pattern, "[:") {
+		return fmt.Errorf("pattern %q uses a POSIX character class, which match does not implement", pattern)
 	}
 	for _, s := range strings.Split(pattern, "/") {
 		if _, err := path.Match(s, ""); err != nil {
@@ -76,10 +83,10 @@ func checkSupported(pattern string) error {
 // as a globstar too. A `**` anywhere else degrades to `*`, as picomatch does
 // (docs/development/testing.md § Where a globstar works in a filter glob).
 //
-// Wildcards here also match dot-prefixed names. That can only match more paths
-// than picomatch would, which is the conservative direction for the caller.
+// Wildcards also match dot-prefixed names, as dorny/paths-filter's `dot: true`
+// makes picomatch do, and a leading `./` is dropped, as picomatch drops it.
 func matchPattern(pattern, file string) bool {
-	segs := strings.Split(pattern, "/")
+	segs := strings.Split(strings.TrimPrefix(pattern, "./"), "/")
 	if s := segs[0]; strings.HasPrefix(s, "**") && s != "**" {
 		segs = append([]string{"**", "*" + strings.TrimLeft(s, "*")}, segs[1:]...)
 	}
