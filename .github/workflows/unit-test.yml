@@ -312,6 +312,11 @@ jobs:
       # touching code, without envtest assets or a cluster.
       - name: build-tagged files compile + vet (make build-tags-check)
         run: make build-tags-check
+      # Fail on a served API field nothing consumes: a spec field no controller
+      # reads or a status field none writes (Q573). After build-tags-check so the
+      # workspace build it loads is already cached.
+      - name: served API fields have a consumer (make api-fields-check)
+        run: make api-fields-check
       # Assert every committed CRD/RBAC/webhook manifest still matches what
       # controller-gen generates from today's Go types (Q440). It belongs in this
       # job, not manifest-validate.yml: the drift is caused by a GO TYPE change,
