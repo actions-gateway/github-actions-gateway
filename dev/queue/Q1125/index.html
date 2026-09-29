@@ -2662,7 +2662,7 @@ The step caches the images and discards the manifest it parsed them out of, so t
 <strong>The warm path that describes has never once run.</strong> Measured 2026-09-24 on run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/35139093856">35139093856</a>, both lanes: <code>actions/cache</code> logs <code>Cache hit for: cert-manager-images-v1.20.2</code> and <code>Cache restored</code>, and the script then rejects the restored directory, re-fetches the manifest and re-pulls all three images.
 The tar rename above is why, and it has held since 2026-06-19.
 Calico is unaffected and takes its cache branch in that same run.
-Its key never moved either, but its entry was created 2026-08-28, ten weeks after the rename, so the skewed one was evicted and the current script rewrote it; the two dead entries are hit by every run and so never go unused long enough for that (measured 2026-09-24 on the repository cache listing, and see Q1138).</p>
+Its key never moved either, but its entry was created 2026-08-28, ten weeks after the rename, so the skewed one was evicted and the current script rewrote it; the two dead entries are hit by every run and so never go unused long enough for that (measured 2026-09-24 on the repository cache listing; metrics-server's dead entry was then retired by an <code>-m2</code> key generation of its own).</p>
 <p>The two paths also disagreed about retry.
 <code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> fetches the same URL on a cache miss and fetches it properly; the apply then fetched it again with no retry at all.
 So the repo already knew the URL was worth retrying, in the script that reads it first.</p>

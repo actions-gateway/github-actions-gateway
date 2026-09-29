@@ -2742,14 +2742,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The suite prints <code>FAIL</code>, prints <code>all workflow acting-step tests passed</code>, and exits 0.</td>
 </tr>
 <tr>
-<td><a href="Q1138/">Q1138</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">metrics-server image cache has been dead since the 2026-06-19 tar rename</a></td>
-<td><code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>metrics-server-images-${METRICSSERVER_VERSION}</code> restores an entry the pre-pull script cannot use, so every e2e run in both lanes …</td>
-</tr>
-<tr>
 <td><a href="Q1119/">Q1119</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>

@@ -2644,7 +2644,7 @@ Two of the three pre-pulled manifests sat in that state for three months and not
 <h2 id="the-class-and-why-the-two-fixes-do-not-close-it">The class, and why the two fixes do not close it<a class="headerlink" href="#the-class-and-why-the-two-fixes-do-not-close-it" title="Permanent link">&para;</a></h2>
 <p><code>actions/cache</code> reports a hit for the key; the script then checks whether <code>images.tar</code> and <code>images.txt</code> are both present and, finding them absent, re-fetches.
 That degradation is correct behaviour and it is also unobservable: a run that never warms reads exactly like a run whose key legitimately moved.</p>
-<p>Q1125 fixed cert-manager's entry and <a href="../Q1138/">Q1138</a> fixes metrics-server's, both by bumping a key generation.
+<p>The cert-manager and metrics-server entries are both repaired by an <code>-m2</code> key generation, cert-manager's under Q1125.
 Those retire the two known instances.
 Neither stops a third entry skewing the same way the next time a tar is renamed without a key bump, which is precisely how both of these arose -- <a href="https://github.com/actions-gateway/github-actions-gateway/pull/319">#319</a> renamed the tar for all three manifests at once and bumped no key.</p>
 <h2 id="what-a-guard-would-be-and-why-this-is-not-yet-a-task">What a guard would be, and why this is not yet a task<a class="headerlink" href="#what-a-guard-would-be-and-why-this-is-not-yet-a-task" title="Permanent link">&para;</a></h2>
