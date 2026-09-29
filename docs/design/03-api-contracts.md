@@ -553,7 +553,7 @@ type RunnerGroupSpec struct {
     // Omitting this field causes the AGC to use its operator-configured default.
     // The compile-time constant DefaultWorkerImage in
     // cmd/agc/internal/provisioner/provisioner.go supplies the baseline value
-    // (currently the digest-pinned "ghcr.io/actions/actions-runner:2.335.1@sha256:…",
+    // (currently the digest-pinned "ghcr.io/actions/actions-runner:2.337.0@sha256:…",
     // aligned with the ARC gha-runner-scale-set chart default). Its runner
     // version is the single source of truth in cmd/agc/names (RunnerVersion),
     // which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC's

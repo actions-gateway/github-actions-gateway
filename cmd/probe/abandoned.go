@@ -57,7 +57,7 @@
 //	                                 the measurement; canonical use is with
 //	                                 result=none (default off).
 //	PROBE_ABANDONED_WORKFLOW       - Fixture workflow file (default q645-abandoned-probe.yml).
-//	PROBE_ABANDONED_RUNNER_VERSION - Advertised runner version (default 2.335.1,
+//	PROBE_ABANDONED_RUNNER_VERSION - Advertised runner version (default 2.337.0,
 //	                                 the version cmd/agc/names pins).
 //	PROBE_ABANDONED_TIMEOUT        - Wait for the fixture delivery (default 5m).
 //	PROBE_ABANDONED_WINDOW         - Post-completion observation window (default 20m,
@@ -179,7 +179,7 @@ func parseAbandonedConfig(getenv func(string) string) (abandonedConfig, error) {
 	}
 	cfg.RunnerVersion = getenv("PROBE_ABANDONED_RUNNER_VERSION")
 	if cfg.RunnerVersion == "" {
-		cfg.RunnerVersion = "2.335.1"
+		cfg.RunnerVersion = "2.337.0"
 	}
 	if cfg.Timeout, err = parseDurationEnv(getenv, "PROBE_ABANDONED_TIMEOUT", 5*time.Minute); err != nil {
 		return abandonedConfig{}, err

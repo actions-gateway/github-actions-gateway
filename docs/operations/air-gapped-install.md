@@ -59,8 +59,8 @@ done
 
 # Worker (upstream runner image — has no GAG cosign signature):
 crane copy \
-  ghcr.io/actions/actions-runner:2.335.1 \
-  registry.internal/gag/actions-runner:2.335.1
+  ghcr.io/actions/actions-runner:2.337.0 \
+  registry.internal/gag/actions-runner:2.337.0
 ```
 
 `crane copy` or `skopeo copy --all` (use `--all` to carry the full multi-arch OCI index, not just one platform) are equivalent for the copy itself; they do not relocate the cosign signature, so use `cosign copy` for the signed GAG images if you intend to re-verify provenance from the mirror.
@@ -212,7 +212,7 @@ apiVersion: actions-gateway.github.com/v1alpha1
 kind: RunnerGroup
 spec:
   # Mirror of ghcr.io/actions/actions-runner, digest preserved.
-  workerImage: registry.internal/gag/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
+  workerImage: registry.internal/gag/actions-runner:2.337.0@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4
 ```
 
 Keep the `@sha256:` digest — it must match the upstream image you mirrored in step 1.

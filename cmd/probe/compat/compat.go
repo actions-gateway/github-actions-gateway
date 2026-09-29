@@ -50,7 +50,7 @@ import (
 
 // runnerVersion is the version string the suite registers sessions with. Any
 // value above GitHub's enforced minimum works against the in-process model.
-const runnerVersion = "2.335.1"
+const runnerVersion = "2.337.0"
 
 // Check is one broker-compatibility assertion. ID is a stable identifier used
 // in the report and as the subtest name; Contract names the design-doc section

@@ -231,7 +231,7 @@ ENTRYPOINT ["/proxy"]
 ##      automatically).
 ##   4. Update any hardcoded prior runner-version string in
 ##      cmd/agc/internal/agentpool tests so the registered runnerVersion matches.
-FROM ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29 AS worker
+FROM ghcr.io/actions/actions-runner:2.337.0@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4 AS worker
 ENV PATH=/home/runner/bin:$PATH
 ARG REVISION="unknown"
 ARG VERSION="dev"
