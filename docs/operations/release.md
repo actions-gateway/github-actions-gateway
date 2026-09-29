@@ -1282,7 +1282,7 @@ The leg does two jobs, and they want different trees:
   This is the half only the dogfood gate can observe, and it wants `main`'s newest instruments.
 - **It tests whatever source it was dispatched on.** The job builds every image from `github.sha` into kind and runs the suite, the chart checks and the released-chart upgrade check against that build, so on a patch this half tests `main`, not the patch.
 
-That second half leaves a gap: `e2e-test.yml` runs on push only for `main`, so a patch line's own source goes through e2e nowhere.
+That second half leaves a gap: the e2e job runs only on a push to `main`, the merge queue (which only `main` has) and a dispatch, so a patch line's own source goes through e2e nowhere.
 Dispatching the gate at the tag instead is not the fix: besides losing the probes above, the released-chart check upgrades from the highest stable tag, which on a patch below the newest minor is a downgrade.
 Closing the gap is [Q1143](../queue/Q1143.md), a separate e2e run on the patch's source; until it lands, a patch's e2e evidence is about its runners, not its code.
 This dispatched workflow is a third tree, neither your checkout nor the tag, so the harness-against-artifact split below does not cover it.
