@@ -860,7 +860,7 @@ no-plan-refs-check: ## Assert Go code and shell/workflow comments don't referenc
 # target below covers only the inline workflow `run:` blocks. Glob, version pin,
 # and rationale live in the script header.
 .PHONY: shellcheck
-shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-and-not-gitignored (recursive; matches the CI shellcheck gate)
+shellcheck: ## Shellcheck every present *.sh outside vendor/ and testdata/ — tracked or untracked-and-not-gitignored (matches the CI shellcheck gate)
 	scripts/ci/shellcheck-scripts.sh
 
 # `set -e` does not reach inside a command substitution, so `x="$$(f)"` runs f
@@ -870,7 +870,7 @@ shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-an
 # covers only the `local x="$$(f)"` half. Rationale and the exemption for
 # sourced lib/ files live in the script header.
 .PHONY: errexit-prologue-check
-errexit-prologue-check: ## Fail if a scripts/ script declares `set -euo pipefail` without `shopt -s inherit_errexit` (Q733)
+errexit-prologue-check: ## Fail if a script outside vendor/ and testdata/ declares `set -euo pipefail` without `shopt -s inherit_errexit` (Q733)
 	scripts/ci/check-errexit-prologue.sh
 
 # The workflow-side half of the shellcheck gate above (Q579). Three docs credited

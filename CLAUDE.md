@@ -123,7 +123,7 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
 ### Bash
 
 Any new or edited shell script must follow `docs/development/bash-style.md` — `set -euo pipefail`, `local` in functions, `[[ ]]`/`(( ))`, quoted expansions, cleanup `trap`s, `awk` over `sed` for variable substitutions, subshell-wrapped pipelines when capturing exit codes via `wait`.
-Scripts under `scripts/` are shellcheck-gated by `make check`.
+Every `*.sh` outside `vendor/` and `testdata/` is shellcheck- and errexit-prologue-gated by `make check`.
 **A new script goes in a `scripts/<group>/` directory named for the gate that runs it — never at the top level** (`scripts/README.md` maps them; a `*-test.sh` sits beside its subject, a cross-gate helper in `fetch/` or `lib/`).
 
 ## Hooks: minimizing approval prompts

@@ -669,8 +669,9 @@ All run under `make scripts-test`.
 
 ### The shellcheck gate
 
-`make shellcheck` runs `shellcheck` over every shell script present under `scripts/` and is wired into `make check`, so the local pre-review gate matches CI.
-The dedicated `shellcheck` job in `.github/workflows/unit-test.yml` runs the same `make shellcheck` target, gated on a `scripts` paths-filter (`scripts/**`, the `Makefile`, and the workflow itself) so a scripts-only change doesn't also trigger the full Go lint.
+`make shellcheck` runs `shellcheck` over every shell script present in the tree, less the vendored trees and `testdata/` fixtures, and is wired into `make check`, so the local pre-review gate matches CI.
+The selection is fail-closed: a script written outside `scripts/`, such as an operator example under `docs/` or a harness under `deploy/`, is covered unless it sits under an excluded path (Q1088).
+The dedicated `shellcheck` job in `.github/workflows/unit-test.yml` runs the same `make shellcheck` target, gated on a `scripts` paths-filter (`scripts/**`, `**/*.sh`, the `Makefile`, and the workflow itself) so a scripts-only change doesn't also trigger the full Go lint.
 
 **The CI job pins shellcheck** (`SHELLCHECK_VERSION` in [`unit-test.yml`](../../.github/workflows/unit-test.yml) is the source of truth) rather than using `ubuntu-latest`'s preinstalled copy — that version drifts with the runner image, and shellcheck's heuristics (e.g. when SC2015 fires on `A && B || true`) differ between releases, so an unpinned gate gives a different verdict locally vs. CI.
 Install the **same** version locally so `make shellcheck` matches the gate: see <https://github.com/koalaman/shellcheck#installing> (the target prints this hint if shellcheck is missing).

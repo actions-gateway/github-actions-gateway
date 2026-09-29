@@ -316,6 +316,7 @@ For a cluster already running, the policy file must be placed on each control-pl
 sudo ./install-apiserver-audit-policy.sh        # --dry-run to preview first
 ```
 
+It needs bash 4.4 or later on the node (an older bash exits before the script changes anything) and [`yq`](https://github.com/mikefarah/yq).
 It validates the policy, installs it to `/etc/kubernetes/audit/policy.yaml`, and idempotently patches `/etc/kubernetes/manifests/kube-apiserver.yaml` (timestamped backup; `yq` for the structured edit so the manifest cannot be corrupted).
 The kubelet restarts the API server automatically.
 To do it by hand instead, add the `--audit-policy-file` / `--audit-log-*` flags and the `audit-policy` + `audit-log` `volumeMounts`/`volumes` to the manifest — the script's [kind config](examples/kind-cluster-audit.yaml) shows the exact shape.

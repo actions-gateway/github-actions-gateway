@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Require the full errexit prologue — `set -euo pipefail` followed by
-# `shopt -s inherit_errexit` — in every executable script under scripts/.
+# `shopt -s inherit_errexit` — in every shell script outside the vendored trees
+# and test fixtures (shell_candidates in scripts/lib/common.sh).
 #
 # `set -e` does not reach inside a command substitution: `modules="$(f)"` runs f
 # past its own failure and takes the status of f's *last* command, so a builder
@@ -26,7 +27,7 @@
 # it, and `make shellcheck` runs in the same `make check`.
 #
 # Backs `make errexit-prologue-check`. Takes explicit paths for testing;
-# with no arguments it checks the whole scripts/ tree.
+# with no arguments it checks every script shell_candidates selects.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -50,11 +51,11 @@ SHOPT_LINE_FAILOPEN='shopt -s inherit_errexit 2>/dev/null || true'
 
 # --- file selection (asserted by check-errexit-prologue-test.sh) -------------
 
-# script_candidates — the git-known candidate paths under scripts/. Untracked
-# files count as long as they are not gitignored, so a brand-new script is
-# covered by its own first `make check` rather than only once committed (Q432).
+# script_candidates — the git-known candidate scripts. Untracked files count as
+# long as they are not gitignored, so a brand-new script is covered by its own
+# first `make check` rather than only once committed (Q432).
 script_candidates() {
-	git_candidates 'scripts/*.sh'
+	shell_candidates
 }
 
 # prologue_verdict FILE — print one of ok / missing-shopt / missing-prologue /
@@ -113,7 +114,7 @@ main() {
 		# A gate that reports success over an empty file set is the very defect
 		# this one exists to catch.
 		if (( ${#files[@]} == 0 )); then
-			echo "check-errexit-prologue: no scripts found under scripts/ — the selection is broken" >&2
+			echo "check-errexit-prologue: no scripts found — the selection is broken" >&2
 			return 1
 		fi
 	fi
@@ -146,7 +147,7 @@ main() {
 		echo "See docs/development/bash-style.md#set--e-stops-at-a-command-substitution" >&2
 		return 1
 	fi
-	echo "==> errexit prologue ok in ${#files[@]} script(s) under scripts/"
+	echo "==> errexit prologue ok in ${#files[@]} script(s)"
 }
 
 # Run main only when executed directly, so the test can source this file and
