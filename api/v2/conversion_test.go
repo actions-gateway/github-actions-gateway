@@ -191,26 +191,101 @@ func TestEgressProxyConversion_ModeRoundTrip(t *testing.T) {
 	}
 }
 
-// TestEgressProxyConversion_RefusesAlias pins that a stored alias is refused rather
-// than collapsed to FQDN, and that the error names the object and the migration.
-func TestEgressProxyConversion_RefusesAlias(t *testing.T) {
+// annEgressPolicyMode mirrors the unexported conversion annotation in conversion.go.
+const annEgressPolicyMode = "conversion.actions-gateway.com/egress-policy-mode"
+
+// aliasHub is a stored EgressProxy naming a deprecated alias, beside an unrelated
+// annotation the conversion must leave alone.
+func aliasHub(mode v2beta1.EgressPolicyMode) *v2beta1.EgressProxy {
+	return &v2beta1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "legacy", Namespace: "tenant-a", Annotations: map[string]string{"team": "infra"}},
+		Spec: v2beta1.EgressProxySpec{
+			EgressPolicyMode: mode,
+			DestinationFQDNs: []string{"proxy.golang.org"},
+		},
+	}
+}
+
+// TestEgressProxyConversion_CarriesAlias pins that a stored alias reads at v2 as FQDN
+// with the alias in the conversion annotation, and that writing the view back
+// unchanged restores the stored object exactly.
+func TestEgressProxyConversion_CarriesAlias(t *testing.T) {
 	for _, mode := range []v2beta1.EgressPolicyMode{v2beta1.EgressPolicyModeCiliumFQDN, v2beta1.EgressPolicyModeCalicoFQDN} {
 		t.Run(string(mode), func(t *testing.T) {
-			hub := &v2beta1.EgressProxy{
-				ObjectMeta: metav1.ObjectMeta{Name: "legacy", Namespace: "tenant-a"},
-				Spec:       v2beta1.EgressProxySpec{EgressPolicyMode: mode},
-			}
+			hub := aliasHub(mode)
+			want := hub.DeepCopy()
 			var spoke v2.EgressProxy
-			err := spoke.ConvertFrom(hub)
-			if err == nil {
-				t.Fatalf("ConvertFrom admitted alias %q into v2, which does not define it (got mode %q)", mode, spoke.Spec.EgressPolicyMode)
+			if err := spoke.ConvertFrom(hub); err != nil {
+				t.Fatalf("ConvertFrom: %v", err)
 			}
-			for _, want := range []string{"tenant-a/legacy", string(mode), "egressPolicyMode: FQDN", "--fqdn-policy-backend"} {
-				if !strings.Contains(err.Error(), want) {
-					t.Errorf("error %q does not name %q", err, want)
-				}
+			if spoke.Spec.EgressPolicyMode != v2.EgressPolicyModeFQDN {
+				t.Errorf("v2 view mode = %q, want FQDN", spoke.Spec.EgressPolicyMode)
+			}
+			if got := spoke.Annotations[annEgressPolicyMode]; got != string(mode) {
+				t.Errorf("v2 view annotation %s = %q, want %q", annEgressPolicyMode, got, mode)
+			}
+			var back v2beta1.EgressProxy
+			if err := spoke.ConvertTo(&back); err != nil {
+				t.Fatalf("ConvertTo: %v", err)
+			}
+			assertDeepEqual(t, "EgressProxy alias "+string(mode), want, &back)
+		})
+	}
+}
+
+// TestEgressProxyConversion_AliasDroppedByV2Edit pins the two v2 edits that move a
+// pool off its alias: setting another mode, and deleting the annotation.
+func TestEgressProxyConversion_AliasDroppedByV2Edit(t *testing.T) {
+	for name, tc := range map[string]struct {
+		edit func(*v2.EgressProxy)
+		want v2beta1.EgressPolicyMode
+	}{
+		"mode set to CIDR": {
+			edit: func(p *v2.EgressProxy) {
+				p.Spec.EgressPolicyMode = v2.EgressPolicyModeCIDR
+				p.Spec.DestinationFQDNs = nil
+			},
+			want: v2beta1.EgressPolicyModeCIDR,
+		},
+		"annotation deleted": {
+			edit: func(p *v2.EgressProxy) { delete(p.Annotations, annEgressPolicyMode) },
+			want: v2beta1.EgressPolicyModeFQDN,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var spoke v2.EgressProxy
+			if err := spoke.ConvertFrom(aliasHub(v2beta1.EgressPolicyModeCalicoFQDN)); err != nil {
+				t.Fatalf("ConvertFrom: %v", err)
+			}
+			tc.edit(&spoke)
+			var back v2beta1.EgressProxy
+			if err := spoke.ConvertTo(&back); err != nil {
+				t.Fatalf("ConvertTo: %v", err)
+			}
+			if back.Spec.EgressPolicyMode != tc.want {
+				t.Errorf("stored mode = %q, want %q", back.Spec.EgressPolicyMode, tc.want)
+			}
+			if _, ok := back.Annotations[annEgressPolicyMode]; ok {
+				t.Errorf("conversion annotation reached the hub: %v", back.Annotations)
+			}
+			if back.Annotations["team"] != "infra" {
+				t.Errorf("unrelated annotation lost: %v", back.Annotations)
 			}
 		})
+	}
+}
+
+// TestEgressProxyConversion_RejectsUnknownAnnotation pins that a v2 write carrying a
+// conversion annotation that names no alias fails rather than being ignored.
+func TestEgressProxyConversion_RejectsUnknownAnnotation(t *testing.T) {
+	spoke := v2.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "tenant-a", Annotations: map[string]string{annEgressPolicyMode: "FQDN"}},
+		Spec:       v2.EgressProxySpec{EgressPolicyMode: v2.EgressPolicyModeFQDN},
+	}
+	var back v2beta1.EgressProxy
+	err := spoke.ConvertTo(&back)
+	if err == nil || !strings.Contains(err.Error(), annEgressPolicyMode) {
+		t.Fatalf("ConvertTo error = %v, want one naming %s", err, annEgressPolicyMode)
 	}
 }
 

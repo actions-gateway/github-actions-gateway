@@ -26,7 +26,7 @@ Full reasoning: [release-ladder.md](release-ladder.md#why-19-exists-the-storage-
 That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
 [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it was part of Q413, not a follow-up.
 
-The hub stays at `v2beta1`, though nothing ties it to the storage version: a `v2` hub would route every conversion of a stored alias object through a type that cannot hold it, which breaks `v2alpha1` reads and Q1085's own guard ([why](v2-ga.md#the-hub-stays-at-v2beta1)).
+The hub stays at `v2beta1`, though nothing ties it to the storage version: moving it buys nothing before `v2.0.0` leaves one served version, and it would put the alias conversion annotation on every `v2alpha1` and `v2beta1` conversion ([why](v2-ga.md#the-hub-stays-at-v2beta1)).
 
 ## Scope ledger
 

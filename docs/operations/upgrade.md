@@ -94,7 +94,7 @@ kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -
 ### Before upgrading to `v2.0.0`: no `EgressProxy` still names a deprecated FQDN alias
 
 `v2.0.0` removes the deprecated `CiliumFQDN` and `CalicoFQDN` values of `EgressProxy.spec.egressPolicyMode`, along with every API version that defines them ([why](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock)).
-A stored object still naming one cannot be represented in `v2`, and a conversion failure fails the whole request it is served in, so one unmigrated `EgressProxy` anywhere in the cluster empties `kubectl get egressproxies -A` for everyone.
+`v2` cannot represent one, so `v2.0.0` stores an unmigrated pool as plain `FQDN`, enforced by whatever `--fqdn-policy-backend` names rather than the backend its alias pinned.
 
 Run this against the version that can still represent the aliases, and expect **no output**:
 
@@ -107,8 +107,8 @@ The enforced policy is identical either way, so this is a re-label rather than a
 
 Two details the command depends on:
 
-- **Pin the version.** `kubectl get egressproxies` resolves to the preferred served version, which becomes `v2`, the version that cannot hold an alias.
-  The unpinned form is therefore the one that stops working exactly when you need it.
+- **Pin the version.** `kubectl get egressproxies` resolves to the preferred served version, which becomes `v2` in 1.9, and `v2` shows a stored alias as `FQDN`.
+  The unpinned form therefore prints nothing on a cluster that still has pools to migrate.
 - **Two `range` blocks, not one filter.** `kubectl`'s JSONPath has no `||` in a filter expression, so a single combined filter fails to parse rather than matching nothing.
   Measured 2026-09-24 on the `kubectl` 1.36 client, which rejects the combined form with `unrecognized character in action: U+007C '|'`.
 
@@ -125,13 +125,16 @@ Also check the release notes for the new version before upgrading, particularly:
 **Who is affected:** anyone with the v2 CRDs installed.
 
 **What changed.** Every `actions-gateway.com` kind is now also served at `v2`, the General Availability (GA) version: the five kinds in `actions-gateway-crds-v2`, and `PriorityClassAllowlist` in the main chart.
-`v2beta1` stays the storage version, so no stored object is rewritten, and the GMC's conversion webhook converts between `v2` and the other two versions.
+`v2beta1` stays the storage version, so no stored object is rewritten.
+The GMC's conversion webhook converts the five chart kinds between `v2` and the other two versions; `PriorityClassAllowlist` has no webhook, and the apiserver converts it by rewriting `apiVersion` alone.
 `v2` is identical to `v2beta1` except that `EgressProxy.spec.egressPolicyMode` accepts only `CIDR` and `FQDN`.
 
 **What you will see.** The apiserver prefers a GA version, so `kubectl get <kind>` and `kubectl get <kind> -o yaml` without a version now return `apiVersion: actions-gateway.com/v2`.
-An `EgressProxy` that still names `CiliumFQDN` or `CalicoFQDN` cannot be read at `v2`, so one such object makes an unpinned `kubectl get egressproxies -A` fail for the whole cluster.
-Reads pinned to `v2beta1` or `v2alpha1`, and the controllers, are unaffected.
-Find any that remain with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias), which is pinned to `v2beta1` for this reason.
+An `EgressProxy` that still names `CiliumFQDN` or `CalicoFQDN` reads at `v2` as `egressPolicyMode: FQDN`, with the alias in the annotation `conversion.actions-gateway.com/egress-policy-mode`.
+The stored object keeps the alias, and so does the pool: writing the `v2` view back with the annotation in place restores it.
+Deleting the annotation, or setting another mode, at `v2` migrates the pool off the alias.
+Don't set the annotation yourself: admission rejects a write that would introduce an alias this way, as it does any other.
+Find any pools still on an alias with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias), which is pinned to `v2beta1` because an unpinned read shows `FQDN`.
 
 **What to do.** Re-apply both charts' CRDs as every upgrade already does: the `actions-gateway-crds-v2` render, and `helm show crds` for the main chart's `PriorityClassAllowlist`.
 Nothing else is required, and manifests can stay on `v2beta1`.
@@ -158,8 +161,8 @@ A create is always a new write.
 An update is one only when it changes the value, so re-applying an unmigrated pool, editing the rest of its spec, and migrating it off the alias are all still admitted; switching one alias for the other is not.
 The warning stays for the unchanged case.
 
-**Why now rather than at `v2.0.0`.** `v2` does not define the aliases, so a stored object naming one cannot be represented once `v2` is served, and a failed conversion fails the whole request it is served in, and one such object empties `kubectl get egressproxies -A` for the cluster.
-This release is the first in which that conversion can be asked for at all, so the reject is what stops the population growing while there is still time to drain it.
+**Why now rather than at `v2.0.0`.** `v2` does not define the aliases, and `v2.0.0` removes every version that does, so a pool still on one is rewritten as plain `FQDN` then and falls to whatever `--fqdn-policy-backend` names.
+The reject is what stops the population growing while there is still time to drain it.
 Find any that remain with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias).
 
 **What to do.** Set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the matching GMC `--fqdn-policy-backend` (`cilium` or `calico`).

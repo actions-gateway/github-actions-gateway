@@ -12,8 +12,8 @@
 // v2 is a conversion **spoke** of the v2beta1 hub (see conversion.go), like
 // v2alpha1. The shape is identical to v2beta1 with one exception: EgressProxy's
 // egressPolicyMode enum is CIDR;FQDN, without the deprecated CiliumFQDN/CalicoFQDN
-// aliases (Q452). Keeping the hub at v2beta1, which can still hold an alias, is what
-// keeps a v2alpha1 read of a stored alias object working while v2 is served.
+// aliases (Q452); a stored alias reads at v2 as FQDN with the alias carried in a
+// conversion annotation (see conversion.go).
 // PriorityClassAllowlist has no conversion webhook: its schema is identical at
 // every version, so the apiserver converts it by rewriting apiVersion alone.
 //

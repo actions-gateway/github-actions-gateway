@@ -1112,7 +1112,7 @@ so an existing pool keeps working until you migrate it
 A pool that was already running on the alias is unaffected, so this shows up on a **new** pool, on a pool being switched onto an alias, or on a GitOps apply that recreates a deleted one from a manifest nobody has updated.
 
 **Cause.** The two per-CNI `spec.egressPolicyMode` values are on the `v2.0.0` removal clock, and `v2` does not define them.
-A stored object naming one cannot be converted to `v2`, and a failed conversion fails the whole request it is served in, so one unmigrated `EgressProxy` empties `kubectl get egressproxies -A` for the cluster.
+A `v2` read shows a stored alias as `FQDN` with the alias in a conversion annotation, and `v2.0.0` removes every version that can store it, so an unmigrated pool is rewritten as plain `FQDN` then.
 Admission stops the population growing while it can still be drained; it deliberately leaves an already-stored value alone so an operator mid-migration is not locked out of their own object.
 
 **Recovery.** Replace the alias with the intent plus the operator-selected backend.

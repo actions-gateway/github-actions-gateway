@@ -125,16 +125,16 @@ It has no conversion webhook: its schema is identical at both versions, so the a
 ### The hub stays at `v2beta1`
 
 This plan said the hub moves to `v2` and was free to, on the reasoning that nothing ties the hub to the storage version.
-That half is true, and moving it is still wrong: controller-runtime routes a spoke-to-spoke conversion through the hub, and `v2` cannot hold a `CiliumFQDN`/`CalicoFQDN` alias ([decided below](#decided-v2-omits-ciliumfqdncalicofqdn)).
-With a `v2` hub, every conversion of a stored alias object would fail, not only a read at `v2`.
+That half is true, and moving it buys nothing: `v2.0.0` drops every other served version, leaving nothing to convert between, so a hub moved in 1.9 would be torn down one release later.
 
-That reaches further than reads.
-The validating webhooks are registered at `v2alpha1` with `matchPolicy: Equivalent`, so a `v2beta1` write is converted to `v2alpha1` before the webhook sees it.
-Q413 drove that case against envtest with a `v2` hub simulated for `EgressProxy`, and Q1085's own guard stopped working: a `v2beta1` create naming an alias came back as a conversion `Internal error` rather than the guard's rejection.
-That is the same path that admits re-applying a stored alias unchanged, so an operator midway through migrating off one would be locked out of the object.
+Keeping it also keeps the one lossy value off the shared path.
+`v2` cannot hold a `CiliumFQDN`/`CalicoFQDN` alias ([decided below](#decided-v2-omits-ciliumfqdncalicofqdn)), so a `v2` read carries it in the conversion annotation `conversion.actions-gateway.com/egress-policy-mode`, shows `FQDN`, and a `v2` write restores it. controller-runtime routes a spoke-to-spoke conversion through the hub, so a `v2` hub would put that annotation on every `v2alpha1` and `v2beta1` conversion of a stored alias, including the `v2alpha1` conversion the validating webhooks see: they are registered at `v2alpha1` with `matchPolicy: Equivalent`, which is how Q1085's guard sees a `v2beta1` write.
+With the hub at `v2beta1`, only a request that names `v2` meets the annotation.
 
-With the hub at `v2beta1`, only a request that names `v2` meets the alias, which is the population Q1085's reject and pre-upgrade check already cover.
-The hub never has to move afterwards either: `v2.0.0` drops every other served version, leaving nothing to convert between.
+**Why a `v2` read carries the alias rather than refusing it.** Q413 first refused it, failing the conversion.
+Its review measured, in envtest, that a refusal fails every `v2` `LIST` holding the object, the metadata-client `LIST` and `DELETECOLLECTION` included.
+Those are the calls the namespace deleter makes, and it and the garbage collector list at the group's preferred version, which serving `v2` makes `v2` (read from kube-controller-manager source, not observed on a control plane).
+One stored alias would leave its namespace `Terminating` and every `EgressProxy` untracked by the collector.
 
 Two project-specific constraints carry over from the last hop and should be read before starting: shared version-neutral code lives in `api/apiconditions` with one-line re-exports per version, and `check-v2-api-sync.sh` gates every shared v2 file.
 Getting this wrong is the most likely way to break the hop.
@@ -155,11 +155,11 @@ The GA enum is `CIDR;FQDN`.
 **The aliases are no longer on their own clock.** [Q428](../operations/v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock) had them removable no earlier than `v3.0.0`, derived from the survival premise above.
 They now ride the same `v2.0.0` clock as `v1alpha1`, `v2alpha1` and classic acquisition, and the operator instruction changes with it: migrating stops being optional and becomes part of the `v1`→`v2` migration.
 
-**What this obliges, and it is the whole cost.** The storage migration in step 3 must not meet a stored `EgressProxy` naming an alias, because `v2` cannot represent one and the conversion contract cannot report a single object as absent.
+**What this obliges, and it is the whole cost.** The storage migration in step 3 must not meet a stored `EgressProxy` naming an alias, because `v2` cannot represent one: the migration would store the `FQDN` view, and once `v2beta1` is gone nothing restores the pinned backend from the conversion annotation.
+A refusing conversion would be worse, because the conversion contract cannot report a single object as absent.
 Read from the vendored [`apiextensions/v1` types](../../vendor/k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1/types.go) on 2026-09-07: `convertedObjects` "must also have the same size as the input list with the same objects in the same order", so the webhook cannot omit one; `ConversionResponse.Result` is a single `metav1.Status` for the whole request, so it cannot fail one; and on failure `convertedObjects` is "otherwise empty", so the failure takes the whole batch.
-`ConversionRequest.Objects` is a list, so one unrepresentable object breaks `kubectl get egressproxies` at `v2` for the cluster rather than for itself.
-That is what makes the pre-upgrade check load-bearing rather than a courtesy, and it is tracked as Q1085 alongside the deprecation notice and the admission change that precede it.
-The contract quotes are measured; that a `LIST` batches into one `ConversionRequest` follows from the field being a list and was not driven against an apiserver.
+`ConversionRequest.Objects` is a list, so one refused object would break `kubectl get egressproxies` at `v2` for the cluster rather than for itself; Q413's review measured exactly that in envtest, for typed and metadata-client `LIST`s alike.
+Carrying the alias avoids the failure while `v2beta1` is served and cannot outlive it, which is what makes the pre-upgrade check load-bearing rather than a courtesy; it is tracked as Q1085 alongside the deprecation notice and the admission change that precede it.
 
 **Why the migration is expected to be a no-op in practice.** No chart, overlay or e2e manifest in the tree sets an alias, measured 2026-09-07, and [Q245](q245-fqdn-intent-backend-split.md#migration--compatibility) recorded the only known consumers as tests and docs.
 That is a floor rather than a rate, since an external adopter is unknowable for a public project, which is why the check runs rather than being reasoned away.
@@ -167,7 +167,7 @@ That is a floor rather than a rate, since an external adopter is unknowable for 
 ## Phase 3 — the storage advance and the coupled removals
 
 **`v2.0.0` opens by marking `v2` the storage version and migrating stored objects**, which 1.9 deliberately did not do.
-That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in Q1085 load-bearing: the migration is the moment an object naming a value `v2` cannot represent stops being readable.
+That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in Q1085 load-bearing: the migration is the moment a pool's pinned backend stops being recoverable from the conversion annotation.
 
 `v2.0.0` then executes all three removals announced by [release-1.3.md](archive/release-1.3.md), plus a fourth decided later:
 

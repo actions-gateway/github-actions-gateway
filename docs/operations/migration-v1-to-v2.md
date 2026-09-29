@@ -33,7 +33,7 @@ Migrate a tenant when one of these is worth that trade-off.
   Opt-in, recommendation-only by default, and it composes with `agcResources` rather than overriding it. v1 has no equivalent field ([tenant-onboarding](tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)).
 - **DNS-aware egress policy.** `EgressProxy.egressPolicyMode` adds an `FQDN` intent (default `CIDR`) to allowlist GitHub by hostname; the operator picks the enforcement mechanism with the GMC `--fqdn-policy-backend` flag (`none`|`cilium`|`calico`|`gke`).
   The earlier per-CNI `CiliumFQDN` / `CalicoFQDN` values are accepted-but-deprecated (Q245) and **are** removed by `v2.0.0`, along with both versions that define them ([why](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock)).
-  Migrate any `EgressProxy` naming one before upgrading: the GA `v2` version cannot represent it.
+  Migrate any `EgressProxy` naming one before upgrading to `v2.0.0`: the GA `v2` version cannot represent it, so `v2.0.0` stores it as plain `FQDN`.
 
 **Quality-of-life and hardening — batched into the one schema break:**
 

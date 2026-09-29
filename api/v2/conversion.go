@@ -11,9 +11,11 @@ package v2
 //
 // Every kind is an identity conversion, deep-copying ObjectMeta and round-tripping
 // Spec/Status through JSON for the reasons api/v2alpha1/conversion.go gives. The one
-// value v2 cannot represent is an alias in EgressProxy.spec.egressPolicyMode, and
-// ConvertFrom refuses it rather than collapsing it to FQDN: the alias pins a backend
-// that FQDN leaves to the operator, so the collapse would be lossy on the way back.
+// value v2 cannot represent is an alias in EgressProxy.spec.egressPolicyMode.
+// ConvertFrom surfaces it as FQDN and carries the alias in annEgressPolicyMode, and
+// ConvertTo restores it, so a v2 read-modify-write leaves the stored alias intact.
+// Refusing instead would fail every v2 LIST holding the object, and the namespace
+// deleter and garbage collector list at the preferred version, which is v2.
 
 import (
 	"encoding/json"
@@ -23,6 +25,11 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 )
+
+// annEgressPolicyMode carries a stored EgressProxy's deprecated egressPolicyMode
+// alias (CiliumFQDN or CalicoFQDN) on its v2 view, which shows FQDN. It is a
+// conversion artifact, never stored: ConvertTo strips it from the hub object.
+const annEgressPolicyMode = "conversion.actions-gateway.com/egress-policy-mode"
 
 // Compile-time proof that every converted v2 root kind is a conversion spoke.
 var (
@@ -75,26 +82,53 @@ func (r *ActionsGateway) ConvertFrom(srcRaw conversion.Hub) error {
 }
 
 // ConvertTo converts this v2 EgressProxy to the v2beta1 hub. The v2 enum is a subset
-// of the hub's, so every v2 value is representable there.
+// of the hub's, so every v2 value is representable there. An alias carried in
+// annEgressPolicyMode is restored while the mode is still FQDN; setting any other
+// mode at v2 drops it, and so does deleting the annotation, which is a migration
+// off the alias.
 func (r *EgressProxy) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*v2beta1.EgressProxy)
 	r.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
-	return convertSpecStatus(&r.Spec, &r.Status, &dst.Spec, &dst.Status)
+	if err := convertSpecStatus(&r.Spec, &r.Status, &dst.Spec, &dst.Status); err != nil {
+		return err
+	}
+	alias, ok := dst.Annotations[annEgressPolicyMode]
+	if !ok {
+		return nil
+	}
+	delete(dst.Annotations, annEgressPolicyMode)
+	if len(dst.Annotations) == 0 {
+		dst.Annotations = nil
+	}
+	switch mode := v2beta1.EgressPolicyMode(alias); mode {
+	case v2beta1.EgressPolicyModeCiliumFQDN, v2beta1.EgressPolicyModeCalicoFQDN:
+		if r.Spec.EgressPolicyMode == EgressPolicyModeFQDN {
+			dst.Spec.EgressPolicyMode = mode
+		}
+		return nil
+	default:
+		return fmt.Errorf("EgressProxy %s/%s: annotation %s=%q is not CiliumFQDN or CalicoFQDN",
+			r.Namespace, r.Name, annEgressPolicyMode, alias)
+	}
 }
 
-// ConvertFrom populates this v2 EgressProxy from the v2beta1 hub. It refuses a hub
-// object naming a deprecated alias, which v2 does not define.
+// ConvertFrom populates this v2 EgressProxy from the v2beta1 hub. A deprecated alias,
+// which v2 does not define, is surfaced as FQDN with the alias in annEgressPolicyMode.
 func (r *EgressProxy) ConvertFrom(srcRaw conversion.Hub) error {
 	src := srcRaw.(*v2beta1.EgressProxy)
+	src.ObjectMeta.DeepCopyInto(&r.ObjectMeta)
+	if err := convertSpecStatus(&src.Spec, &src.Status, &r.Spec, &r.Status); err != nil {
+		return err
+	}
 	switch mode := src.Spec.EgressPolicyMode; mode {
 	case v2beta1.EgressPolicyModeCiliumFQDN, v2beta1.EgressPolicyModeCalicoFQDN:
-		return fmt.Errorf("EgressProxy %s/%s: egressPolicyMode %q is a deprecated alias that "+
-			"actions-gateway.com/v2 does not define; set egressPolicyMode: FQDN and choose the "+
-			"backend with the GMC --fqdn-policy-backend flag, then read it at v2",
-			src.Namespace, src.Name, mode)
+		r.Spec.EgressPolicyMode = EgressPolicyModeFQDN
+		if r.Annotations == nil {
+			r.Annotations = map[string]string{}
+		}
+		r.Annotations[annEgressPolicyMode] = string(mode)
 	}
-	src.ObjectMeta.DeepCopyInto(&r.ObjectMeta)
-	return convertSpecStatus(&src.Spec, &src.Status, &r.Spec, &r.Status)
+	return nil
 }
 
 // ConvertTo converts this v2 RunnerSet to the v2beta1 hub.

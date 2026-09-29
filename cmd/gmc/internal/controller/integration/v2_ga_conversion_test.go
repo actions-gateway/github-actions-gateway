@@ -15,8 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/metadata"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// egressPolicyModeAnnotation mirrors the unexported conversion annotation in
+// api/v2/conversion.go that carries a stored alias on a v2 view.
+const egressPolicyModeAnnotation = "conversion.actions-gateway.com/egress-policy-mode"
 
 // These tests cover the GA v2 version served beside v2beta1 (Q413) against the real
 // apiserver: v2 is a second conversion spoke of the v2beta1 hub, v2beta1 stays the
@@ -233,12 +238,12 @@ func TestV2GA_EgressProxy_AliasRejectedBySchema(t *testing.T) {
 	assert.Contains(t, err.Error(), "Unsupported value")
 }
 
-// TestV2GA_StoredAliasFailsOnlyAtV2 plants a stored alias EgressProxy and reads it at
-// every served version. v2 refuses it with the migration in the error, while
-// v2alpha1 and v2beta1 keep serving it, which is what keeping the conversion hub at
-// v2beta1 buys: a hub at v2 would route the v2alpha1 read through a type that cannot
-// hold the alias, and that read would fail too.
-func TestV2GA_StoredAliasFailsOnlyAtV2(t *testing.T) {
+// TestV2GA_StoredAliasReadsAtV2 plants a stored CalicoFQDN EgressProxy and reads and
+// writes it at v2, which does not define the alias. The metadata-client LIST and
+// DELETECOLLECTION at v2 are the calls the namespace deleter makes, and the garbage
+// collector lists at the same preferred version, so a v2 read failing here would
+// leave a namespace Terminating and every EgressProxy untracked by the collector.
+func TestV2GA_StoredAliasReadsAtV2(t *testing.T) {
 	const ns = "v2-ga-stored-alias"
 	createNamespace(t, ns)
 
@@ -248,24 +253,68 @@ func TestV2GA_StoredAliasFailsOnlyAtV2(t *testing.T) {
 	}
 	createStoredAliasProxy(t, stored)
 	key := client.ObjectKeyFromObject(stored)
+	gvr := schema.GroupVersionResource{Group: "actions-gateway.com", Version: "v2", Resource: "egressproxies"}
+	meta, err := metadata.NewForConfig(testEnv.Config)
+	require.NoError(t, err)
+
+	storedMode := func() v2beta1.EgressPolicyMode {
+		t.Helper()
+		var hub v2beta1.EgressProxy
+		require.NoError(t, k8sClient.Get(ctx, key, &hub))
+		assert.NotContains(t, hub.Annotations, egressPolicyModeAnnotation, "the conversion annotation must never be stored")
+		return hub.Spec.EgressPolicyMode
+	}
 
 	var ga v2.EgressProxy
-	err := k8sClient.Get(ctx, key, &ga)
-	require.Error(t, err, "v2 does not define CalicoFQDN, so a read at v2 must fail")
-	assert.Contains(t, err.Error(), "egressPolicyMode: FQDN", "the failure must name the migration")
+	require.NoError(t, k8sClient.Get(ctx, key, &ga), "a stored alias must read at v2")
+	assert.Equal(t, v2.EgressPolicyModeFQDN, ga.Spec.EgressPolicyMode)
+	assert.Equal(t, "CalicoFQDN", ga.Annotations[egressPolicyModeAnnotation])
 
 	var list v2.EgressProxyList
-	require.Error(t, k8sClient.List(ctx, &list, client.InNamespace(ns)), "a v2 LIST holding the alias object must fail")
+	require.NoError(t, k8sClient.List(ctx, &list, client.InNamespace(ns)))
+	_, err = meta.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
+	require.NoError(t, err, "the namespace deleter's metadata LIST at v2")
 
 	var alpha v2alpha1.EgressProxy
-	require.NoError(t, k8sClient.Get(ctx, key, &alpha), "a v2alpha1 read of a stored alias must keep working while v2 is served")
-	assert.Equal(t, v2alpha1.EgressPolicyModeCalicoFQDN, alpha.Spec.EgressPolicyMode)
-	var alphaList v2alpha1.EgressProxyList
-	require.NoError(t, k8sClient.List(ctx, &alphaList, client.InNamespace(ns)))
+	require.NoError(t, k8sClient.Get(ctx, key, &alpha))
+	assert.Equal(t, v2alpha1.EgressPolicyModeCalicoFQDN, alpha.Spec.EgressPolicyMode, "v2alpha1 still shows the alias itself")
 
-	var hub v2beta1.EgressProxy
-	require.NoError(t, k8sClient.Get(ctx, key, &hub))
-	assert.Equal(t, v2beta1.EgressPolicyModeCalicoFQDN, hub.Spec.EgressPolicyMode)
+	t.Run("v2 update leaves the stored alias", func(t *testing.T) {
+		require.NoError(t, k8sClient.Get(ctx, key, &ga))
+		ga.Labels = map[string]string{"edited-at": "v2"}
+		require.NoError(t, k8sClient.Update(ctx, &ga))
+		assert.Equal(t, v2beta1.EgressPolicyModeCalicoFQDN, storedMode())
+	})
+
+	t.Run("v2 create cannot introduce an alias through the annotation", func(t *testing.T) {
+		smuggled := &v2.EgressProxy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "smuggled", Namespace: ns,
+				Annotations: map[string]string{egressPolicyModeAnnotation: "CiliumFQDN"},
+			},
+			Spec: v2.EgressProxySpec{EgressPolicyMode: v2.EgressPolicyModeFQDN},
+		}
+		err := k8sClient.Create(ctx, smuggled)
+		require.Error(t, err, "the Q1085 guard must reject a create that stores an alias")
+		assert.Contains(t, err.Error(), "may no longer be introduced")
+	})
+
+	t.Run("deleting the annotation at v2 migrates the pool", func(t *testing.T) {
+		require.NoError(t, k8sClient.Get(ctx, key, &ga))
+		delete(ga.Annotations, egressPolicyModeAnnotation)
+		require.NoError(t, k8sClient.Update(ctx, &ga))
+		assert.Equal(t, v2beta1.EgressPolicyModeFQDN, storedMode())
+	})
+
+	t.Run("metadata DELETECOLLECTION at v2", func(t *testing.T) {
+		second := &v2alpha1.EgressProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-2", Namespace: ns},
+			Spec:       v2alpha1.EgressProxySpec{EgressPolicyMode: v2alpha1.EgressPolicyModeCiliumFQDN},
+		}
+		createStoredAliasProxy(t, second)
+		require.NoError(t, meta.Resource(gvr).Namespace(ns).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{}),
+			"the namespace deleter's DELETECOLLECTION at v2 must get past a stored alias")
+	})
 }
 
 // TestV2GA_PriorityClassAllowlist_ServedAtV2 creates a PriorityClassAllowlist at the

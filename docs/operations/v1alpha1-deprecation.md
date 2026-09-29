@@ -52,10 +52,9 @@ Set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator
 The enforced policy is identical either way — each alias pins its namesake backend, and `FQDN` plus the matching selector resolves to the same emitter — so this is a re-label, not a change in what is enforced.
 
 This is no longer optional, and the reason is mechanical rather than procedural.
-`v2` cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
-One unmigrated `EgressProxy` therefore breaks `kubectl get egressproxies` at `v2` for the entire cluster, not just for itself.
-A single `kubectl get` of one healthy pool still works, which is what makes the failure diagnosable but does not make it survivable: `kubectl get egressproxies -A` is what everything from a dashboard to a GitOps reconcile issues.
-Measured 2026-09-21 against a real apiserver, on the one conversion failure the current tree can produce: with one unconvertible object stored beside two healthy ones, both the namespaced and the cluster-wide `LIST` returned zero items and an error, while a targeted `GET` of each healthy neighbour succeeded.
+While `v2beta1` is served, a `v2` read shows a stored alias as `FQDN` and carries the alias in the annotation `conversion.actions-gateway.com/egress-policy-mode`, so the pool keeps its pinned backend.
+`v2.0.0` removes every version that can store the alias, so an unmigrated pool is rewritten as plain `FQDN` and enforced by whatever `--fqdn-policy-backend` names, which may not be the backend its alias pinned.
+Migrating first makes that choice explicit instead of leaving it to the upgrade.
 
 **Find them with the [pre-upgrade alias check](upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)** in the Pre-Upgrade Validation Checklist, which prints one line per pool to migrate and nothing when the cluster is clean.
 
