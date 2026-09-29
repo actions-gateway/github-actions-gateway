@@ -5,7 +5,7 @@ The last rung of the graduation ladder defined in [v2-api.md § API maturity & g
 This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
 
-> **Status: Phase 1 is done and Phase 2 is startable.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), which makes [Q413](../queue/Q413.md) ready: Phase 2 adds `v2` beside `v2beta1` and ships in 1.9.
+> **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > Phase 3's storage advance and coupled removals wait on [Q1086](../queue/Q1086.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md) and [Q1068](../queue/Q1068.md); Phase 4's docs and the tag are [Q1107](../queue/Q1107.md); the Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The `✅` on this plan's [index row](README.md) means *no open item remains*, not that the graduation has happened — deferred residuals [don't count](../development/maintaining-backlog.md#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count).
 > The phase table below is the real state.
@@ -16,7 +16,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 |---|---|---|---|
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
-| 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ❌ Open, ready ([Q413](../queue/Q413.md)) |
+| 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ✅ Done in Q413: `v2` is a second conversion spoke and the hub stays at `v2beta1` ([why](#the-hub-stays-at-v2beta1)) |
 | 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
@@ -113,12 +113,28 @@ Per [v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), each 
 
 1. Add the `v2` version to each of the five kinds and mark it `+kubebuilder:storageversion`.
 2. Extend the existing `Hub`/`Convertible` conversion webhook to round-trip the new served set.
-   The hub moves to `v2`.
 3. Storage-migrate stored objects, then drop the superseded served version.
 
 **This hop is split across two releases, which the previous two hops were not.** Step 1's storage marker and all of step 3 move to Phase 3 and the `v2.0.0` tag; 1.9 ships step 1 without the marker, plus step 2.
 Rule #4b requires a release serving both versions before storage advances, and what that buys is a rollback destination for the largest upgrade this project asks anyone to make ([release-ladder.md](release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2)).
-The hub is free to move in 1.9 regardless: `convertViaHub` routes spoke to hub to spoke and nothing ties the hub to the storage version.
+
+`PriorityClassAllowlist` gained `v2` too, a sixth kind the five-kind list predates (Q492 added it at `v2beta1` only).
+Left at `v2beta1` alone, it would reach `v2.0.0` with no successor version to store at, and it would owe that release the same Rule #4b overlap.
+It has no conversion webhook: its schema is identical at both versions, so the apiserver's `None` strategy rewrites `apiVersion` alone.
+
+### The hub stays at `v2beta1`
+
+This plan said the hub moves to `v2` and was free to, on the reasoning that nothing ties the hub to the storage version.
+That half is true, and moving it is still wrong: controller-runtime routes a spoke-to-spoke conversion through the hub, and `v2` cannot hold a `CiliumFQDN`/`CalicoFQDN` alias ([decided below](#decided-v2-omits-ciliumfqdncalicofqdn)).
+With a `v2` hub, every conversion of a stored alias object would fail, not only a read at `v2`.
+
+That reaches further than reads.
+The validating webhooks are registered at `v2alpha1` with `matchPolicy: Equivalent`, so a `v2beta1` write is converted to `v2alpha1` before the webhook sees it.
+Q413 drove that case against envtest with a `v2` hub simulated for `EgressProxy`, and Q1085's own guard stopped working: a `v2beta1` create naming an alias came back as a conversion `Internal error` rather than the guard's rejection.
+That is the same path that admits re-applying a stored alias unchanged, so an operator midway through migrating off one would be locked out of the object.
+
+With the hub at `v2beta1`, only a request that names `v2` meets the alias, which is the population Q1085's reject and pre-upgrade check already cover.
+The hub never has to move afterwards either: `v2.0.0` drops every other served version, leaving nothing to convert between.
 
 Two project-specific constraints carry over from the last hop and should be read before starting: shared version-neutral code lives in `api/apiconditions` with one-line re-exports per version, and `check-v2-api-sync.sh` gates every shared v2 file.
 Getting this wrong is the most likely way to break the hop.

@@ -5,6 +5,7 @@
 !!! tip "New tenants: start on `v2beta1`"
     The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2beta1`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
     `v2beta1` is the graduated, ScaleSet-only storage and hub version, v2's first stability contract, and where new capabilities land.
+    The GA **`v2`** is served beside it with the same shape and becomes the storage version at `v2.0.0`; stay on `v2beta1` until then if you may roll back to a release that does not serve `v2`.
     `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
     The older single-custom-resource (CR) **`v1alpha1`** API is still fully served but **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you have a specific reason to, and see the [legacy v1 path](#legacy-the-v1alpha1-api-deprecated).
     `v1alpha1`, `v2alpha1`, and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md); `v2beta1` is not.
@@ -65,7 +66,7 @@ helm template actions-gateway-crds-v2 \
   | kubectl apply --server-side -f -
 ```
 
-Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the storage/hub version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds) for signature verification and the full options).
+Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the storage/hub version), `v2` and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds) for signature verification and the full options).
 The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`).

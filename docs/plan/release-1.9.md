@@ -24,9 +24,9 @@ Full reasoning: [release-ladder.md](release-ladder.md#why-19-exists-the-storage-
 
 **It must not mark `v2` the storage version**, and must not migrate stored objects.
 That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
-[v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it is part of [Q413](../queue/Q413.md), not a follow-up.
+[v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it was part of Q413, not a follow-up.
 
-The hub *may* move to `v2` here: `convertViaHub` routes spoke to hub to spoke, and nothing ties the hub to the storage version.
+The hub stays at `v2beta1`, though nothing ties it to the storage version: a `v2` hub would route every conversion of a stored alias object through a type that cannot hold it, which breaks `v2alpha1` reads and Q1085's own guard ([why](v2-ga.md#the-hub-stays-at-v2beta1)).
 
 ## Scope ledger
 
@@ -35,7 +35,7 @@ Two gating rows and the candidate validation, in the order they land.
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
 | Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
-| [Q413](../queue/Q413.md) | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | 🔲 ready: the soak read clean 2026-09-14 |
+| Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.** Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when `v2` first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
@@ -50,7 +50,7 @@ That is a reading rather than a decision: whether anything *should* ride is scop
 
 ## Definition of Done
 
-1. **[Q413](../queue/Q413.md)'s Phase 2 has landed** with `v2` served on all five kinds and `v2beta1` still the storage version, verified by reading `storage: true` off each shipped CustomResourceDefinition rather than off the markers.
+1. **Q413's Phase 2 has landed** with `v2` served on all five kinds and `v2beta1` still the storage version, verified by reading `storage: true` off each shipped CustomResourceDefinition rather than off the markers.
 2. **The conversion round-trips both directions** across `v2beta1` ↔ `v2` on real objects, not only in unit tests.
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.
 3. **Q1085's items 2 and 3 have landed**, and landed before Q413.

@@ -14,6 +14,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
   - [Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap](#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap)
   - [Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job](#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job)
@@ -118,6 +119,26 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: `v2` is served beside `v2beta1`, and an unpinned read now returns `v2`
+
+**Who is affected:** anyone with the v2 CRDs installed.
+
+**What changed.** Every `actions-gateway.com` kind is now also served at `v2`, the General Availability (GA) version: the five kinds in `actions-gateway-crds-v2`, and `PriorityClassAllowlist` in the main chart.
+`v2beta1` stays the storage version, so no stored object is rewritten, and the GMC's conversion webhook converts between `v2` and the other two versions.
+`v2` is identical to `v2beta1` except that `EgressProxy.spec.egressPolicyMode` accepts only `CIDR` and `FQDN`.
+
+**What you will see.** The apiserver prefers a GA version, so `kubectl get <kind>` and `kubectl get <kind> -o yaml` without a version now return `apiVersion: actions-gateway.com/v2`.
+An `EgressProxy` that still names `CiliumFQDN` or `CalicoFQDN` cannot be read at `v2`, so one such object makes an unpinned `kubectl get egressproxies -A` fail for the whole cluster.
+Reads pinned to `v2beta1` or `v2alpha1`, and the controllers, are unaffected.
+Find any that remain with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias), which is pinned to `v2beta1` for this reason.
+
+**What to do.** Re-apply both charts' CRDs as every upgrade already does: the `actions-gateway-crds-v2` render, and `helm show crds` for the main chart's `PriorityClassAllowlist`.
+Nothing else is required, and manifests can stay on `v2beta1`.
+Move them to `v2` before `v2.0.0`, which removes `v2beta1`; until then, a manifest on `v2beta1` is the one that still applies after a rollback.
+
+**Rolling back** to a release that does not serve `v2` is safe for stored objects, because they are stored at `v2beta1`.
+A manifest written at `apiVersion: actions-gateway.com/v2` fails to apply there.
 
 ### A new `CiliumFQDN` / `CalicoFQDN` `EgressProxy` is now rejected at admission
 
