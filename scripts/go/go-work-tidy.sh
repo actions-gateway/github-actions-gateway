@@ -3,11 +3,10 @@
 # go-work-tidy.sh - Tidy every Go module in the repo sequentially.
 #
 # Description:
-#   Parses the local 'go.work' file to extract active Go modules, resolves
-#   their internal dependency graph, and executes 'go mod tidy' on each
-#   module in strict dependency order. Then tidies every module go.work does
-#   NOT list (devtools/, tools/, and whichever comes next) with GOWORK=off,
-#   discovered via nonworkspace_modules() rather than named here.
+#   Runs 'go mod tidy' on each go.work member in go.work order, then on every
+#   module go.work does NOT list (devtools/, tools/, and whichever comes next)
+#   with GOWORK=off, discovered via nonworkspace_modules() rather than named
+#   here.
 #
 #   Deriving the whole list from go.work is what disarmed tidy-check in Q667:
 #   the gate diffs '**/go.mod' across the repo, so it covered devtools/ and
@@ -61,7 +60,7 @@ if [[ ! -f "go.work" ]]; then
     exit 1
 fi
 
-for cmd in awk git grep go jq realpath sed; do
+for cmd in git go jq; do
     if ! command -v "$cmd" &> /dev/null; then
         log_error "Required system command '$cmd' is missing from your PATH."
         exit 1
@@ -72,63 +71,13 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "$REPO_ROOT/scripts/lib/common.sh"
 
-log_info "Extracting active modules from go.work..."
+# 1. Tidy the go.work Members
+#
+# In go.work order; nothing sorts them by dependency.
+log_info "Tidying workspace modules:"
 
-# 1. Parse go.work for Active Modules (Ignoring Comments and Vendor)
-mapfile -t raw_modules < <(awk '
-    { sub(/\/\/.*$/, "") } 
-    /^[ \t]*$/ { next }    
-    
-    /^use \(/ { in_use=1; next }
-    /^\)/     { in_use=0 }
-    in_use    { gsub(/[ \t\r]/, ""); if ($0 != "") print $0 }
-    /^use [^\(]/ { print $2 }
-' go.work | grep -v "/vendor/")
-
-if [[ ${#raw_modules[@]} -eq 0 ]]; then
-    log_info "No valid active modules found in go.work."
-    exit 0
-fi
-
-log_info "Calculating module dependency order..."
-
-# 2. Determine Structural Ordering Using 'go list'
-mapfile -t ordered_modules < <(go list -f '{{if not .Main}}{{.Dir}}{{end}}' -m all 2>/dev/null || true)
-
-# 3. Intersect Data Arrays Safely
-final_list=()
-
-for mod_dir in "${ordered_modules[@]}"; do
-    [[ -z "$mod_dir" ]] && continue
-    rel_mod_dir=$(realpath --relative-to="." "$mod_dir")
-    
-    for raw_mod in "${raw_modules[@]}"; do
-        clean_raw="${raw_mod#./}"
-        if [[ "$clean_raw" == "$rel_mod_dir" ]]; then
-            final_list+=("$rel_mod_dir")
-            break
-        fi
-    done
-done
-
-for raw_mod in "${raw_modules[@]}"; do
-    clean_raw="${raw_mod#./}"
-    match_found=false
-    for final_mod in "${final_list[@]}"; do
-        if [[ "$final_mod" == "$clean_raw" ]]; then
-            match_found=true
-            break
-        fi
-    done
-    if [[ "$match_found" == false ]]; then
-        final_list+=("$clean_raw")
-    fi
-done
-
-# 4. Execute Go Mod Tidy Sequentially
-log_info "Tidying workspace modules in dependency order:"
-
-for mod in "${final_list[@]}"; do
+while IFS= read -r mod; do
+    [[ -z "$mod" ]] && continue
     if [[ -d "$mod" ]]; then
         log_info "  -> $mod"
         # Mute stdout of go mod tidy, but allow stderr to pass through if it errors
@@ -136,9 +85,9 @@ for mod in "${final_list[@]}"; do
     else
         log_warn "Directory '$mod' listed in go.work does not exist. Skipping."
     fi
-done
+done < <(workspace_modules)
 
-# 5. Tidy the Modules go.work Does Not List
+# 2. Tidy the Modules go.work Does Not List
 #
 # GOWORK=off so each resolves against its own module graph instead of the
 # workspace build list it is not a member of. They carry no replace edges into
