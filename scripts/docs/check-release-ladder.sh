@@ -294,10 +294,10 @@ done < <(awk '
 	}
 ' "$PAGE")
 
-# The `X.Y-gate` labels one item's frontmatter carries, one per line. Both YAML
-# list forms queue-lint accepts are read, quoted or bare: a block list, and an
-# inline `labels: [a, "b"]`. Reading only the block form passes a gate label
-# written the other way unbound.
+# The `X.Y-gate` labels one item's frontmatter carries, one per line. Every
+# form queue-lint accepts is read, quoted or bare: a block list, an inline
+# `labels: [a, "b"]`, and a scalar `labels: a`, which it takes as a one-item
+# list. A form left unread passes a gate label written that way unbound.
 item_gate_labels() {
 	awk -v sq="'" '
 		function emit(v) {
@@ -313,6 +313,10 @@ item_gate_labels() {
 			if (in_labels && match($0, /\[.*\]/)) {
 				n = split(substr($0, RSTART + 1, RLENGTH - 2), item, ",")
 				for (i = 1; i <= n; i++) emit(item[i])
+			} else if (in_labels) {
+				v = $0
+				sub(/^labels:/, "", v)
+				emit(v)
 			}
 			next
 		}

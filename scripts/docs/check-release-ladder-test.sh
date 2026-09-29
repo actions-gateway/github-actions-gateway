@@ -287,16 +287,25 @@ printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\
 expect label-quoted 1 'a quoted block-list gate label its ledger does not name fails' \
 	"$(write_ladder quoted)" "$QUOTED_STORE"
 
-# The control: the same two forms, named by the ledger, pass, so the red above is
+write_plan scalar 19 "$LEDGER_19"
+write_plan scalar ga "$LEDGER_GA"
+SCALAR_STORE="$(write_labelled_store scalar Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+printf -- '---\nid: Q9\nlabels: 2.0-gate\nstatus: ready\n---\n\n# Q9\n' > "$SCALAR_STORE/Q9.md"
+expect label-scalar 1 'a scalar gate label its ledger does not name fails' \
+	"$(write_ladder scalar)" "$SCALAR_STORE"
+
+# The control: the same forms, named by the ledger, pass, so the red above is
 # the ledger check reading them and not a parse failure.
 write_plan forms 19 "$LEDGER_19"
 write_plan forms ga "$LEDGER_GA
 | Q7 | Inline | \`2.0-gate\` | 🔲 |
-| Q8 | Quoted | \`2.0-gate\` | 🔲 |"
+| Q8 | Quoted | \`2.0-gate\` | 🔲 |
+| Q9 | Scalar | \`2.0-gate\` | 🔲 |"
 FORMS_STORE="$(write_labelled_store forms Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
 printf -- '---\nid: Q7\nlabels: [ci, "2.0-gate"]\nstatus: ready\n---\n\n# Q7\n' > "$FORMS_STORE/Q7.md"
 printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\n\n# Q8\n" > "$FORMS_STORE/Q8.md"
-expect label-forms-named 0 'inline and quoted gate labels the ledger names pass' \
+printf -- '---\nid: Q9\nlabels: 2.0-gate\nstatus: ready\n---\n\n# Q9\n' > "$FORMS_STORE/Q9.md"
+expect label-forms-named 0 'inline, quoted and scalar gate labels the ledger names pass' \
 	"$(write_ladder forms)" "$FORMS_STORE"
 
 # A qualifier in the Gates? cell must not turn a gating row into a non-gating
