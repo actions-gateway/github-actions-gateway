@@ -861,6 +861,10 @@ Link each ID to its item page while it is open; a shipped or punted item's link 
 
 **Delivered is a tick, not a narrative.** A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.
 
+**The `Gates?` column and the labels are held to each other.** `make release-ladder-check` reads each rung's plan off the [release ladder](../plan/release-ladder.md) table and fails in both directions: an `X.Y-gate` row the rung's ledger does not mark `X.Y-gate`, and a ledger gating row whose item lacks the label (Q1087).
+So adding or dropping a gate label is an edit to the ledger too, and a rung gets a ledger before its first label.
+A closed row has no item file, so its ✅ ledger row is skipped rather than failed.
+
 **The cut condition is one grep:** no `-gate` item for this release remains open (`grep -l '1.3-gate' docs/queue/Q*.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
 
 **That validation still gets a ledger row** — Q-ID `—`, since it has none:

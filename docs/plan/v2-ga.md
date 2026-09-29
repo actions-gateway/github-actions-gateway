@@ -20,6 +20,21 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
+## Scope ledger
+
+What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
+Phase 2 is not here: [Q413](../queue/Q413.md) gates 1.9, and [release-1.9.md](release-1.9.md#scope-ledger) carries it.
+`make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
+
+| Q-ID | Item | Gates? | Status |
+|---|---|---|---|
+| [Q1086](../queue/Q1086.md) | Storage-migrate stored objects to `v2` before the removals (Phase 3) | `2.0-gate` | 🔲 deferred |
+| [Q273](../queue/Q273.md) | Remove `v1alpha1` (Phase 3) | `2.0-gate` | 🔲 deferred |
+| [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🔲 deferred |
+| [Q1068](../queue/Q1068.md) | Validating webhook rules un-match when `v2alpha1` goes (Phase 3) | `2.0-gate` | 🔲 ready |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🔲 deferred |
+| - | RC validated on dogfood | gates | 🔲 no candidate cut |
+
 ## Why this is gated on a soak, not a date
 
 The graduation ladder in [v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2) sets the contract at each level:
