@@ -1,6 +1,6 @@
 # GitOps install (Argo CD / Flux)
 
-> **Audience:** Platform engineer running a GitOps-managed cluster
+> **Audience:** Platform engineer
 
 This page shows how to install the Gateway Manager Controller (GMC) **declaratively** from a Git repository using either [Argo CD](https://argo-cd.readthedocs.io) or [Flux](https://fluxcd.io), instead of running `helm install` by hand.
 It builds on the imperative [install.md](install.md) reference — the prerequisites, the required image-digest pinning, and the healthy-install verification all apply unchanged here.

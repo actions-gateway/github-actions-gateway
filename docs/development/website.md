@@ -877,6 +877,7 @@ A doc's audience is recorded twice, by design:
 2. that doc's own `> **Audience:** …` blockquote — drives the per-doc pill.
 
 When you retag a doc, **update both**; they should agree.
+The blockquote is a comma-separated list of those tags and never a sentence: the pills split it on commas, so a sentence's own commas cut it into fragment chips, and any qualifier belongs in the page's opening paragraph instead.
 There is no CI check — it's two lines kept in sync by hand (deliberately not worth automating).
 
 The per-doc pills also **deep-link** to `operations/?persona=<persona>`, and the index reads that query param on load to pre-apply the matching chip.
