@@ -1687,8 +1687,9 @@ Three causes produce that:
   The ScaleSet tier provisions fire-and-forget: the worker registers and pulls its own job.
   If the assignment lapsed, was cancelled, or completed elsewhere before the runner got to it, the runner waits at `Listening for Jobs` forever.
   It holds a concurrency slot, a namespace-quota slot, and a node while doing nothing.
-- **A worker image more than 30 days behind the newest runner release**, when *every* job does this.
-  GitHub's [runner update policy](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners) stops queueing jobs to such a runner, and the runner still connects and logs `Listening for Jobs`, so nothing on the cluster names the cause.
+- **A worker image on an out-of-date runner release**, when *every* job does this.
+  GitHub's [runner update policy](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners) stops queueing jobs to a runner not updated "within 30 days of a new version being made available", and says nothing about refusing its connection, so such a runner would still log `Listening for Jobs` with nothing on the cluster naming the cause.
+  Where the 30 days start is not documented precisely: this project's own runs kept receiving jobs well past 30 days after the first newer release ([Q1146](../queue/Q1146.md)).
   Compare the version the worker logs (`runner version detected`, see [Worker Image Runner Version](#worker-image-runner-version)) with the newest [actions/runner release](https://github.com/actions/runner/releases) and its date.
   `RunnerVersionTooOld` does not catch this: it checks the registration floor, not the 30-day window.
 - **A container that outlived the runner** — an injected mesh sidecar, or a regular (non-native) build/DinD sidecar.

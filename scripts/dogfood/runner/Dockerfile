@@ -36,7 +36,7 @@
 # proxy (Q244), not here.
 #
 # Pinned to the same runner version + multi-arch index digest as
-# cmd/worker/Dockerfile and cmd/agc/names (RunnerVersion / WorkerImageDigest) so
+# the root Dockerfile's worker stage and cmd/agc/names (RunnerVersion / WorkerImageDigest) so
 # the dogfood runs the same runner the AGC would otherwise gap-fill. Bump it in
 # lockstep with those when the runner version moves.
 FROM ghcr.io/actions/actions-runner:2.337.0@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4
