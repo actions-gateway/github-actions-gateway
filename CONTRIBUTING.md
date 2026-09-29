@@ -198,7 +198,7 @@ make e2e-clean  # tear down the cluster when done
 
 When you change any module's `go.mod`:
 
-1. Run `scripts/go/go-work-tidy.sh` to tidy all modules in dependency order.
+1. Run `scripts/go/go-work-tidy.sh` to tidy every module.
 2. Run `go work sync` to sync the workspace build list.
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
 4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit.

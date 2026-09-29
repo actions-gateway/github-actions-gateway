@@ -47,7 +47,7 @@ proxy, worker   (standalone — no internal deps)
 The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the `api` leaf exists precisely so the AGC can read the GMC-group v2 kinds without an `agc → gmc` back-edge that would close a cycle.
 **Keep edges pointing toward the leaves:** a new import that makes `githubapp`, `broker`, or `api` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead.
 Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review.
-`scripts/go/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
+`scripts/go/go-work-tidy.sh` does not follow this order: it tidies the members in `go.work` order.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git.
 Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
@@ -141,7 +141,7 @@ It does still *run* those tests, unmeasured, because `make check` calls `cover-c
 
 When you change any module's `go.mod` (add, upgrade, or remove a dep):
 
-1. Run `scripts/go/go-work-tidy.sh` to tidy all modules in dependency order.
+1. Run `scripts/go/go-work-tidy.sh` to tidy every module.
 2. Run `go work sync` to sync the workspace build list.
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
 4. Regenerate everything derived from a dependency: `make generate`, then `make chart-crds`, then `make api-reference`.
@@ -157,7 +157,7 @@ Skipping it leaves `codegen-check`, `chart-crds-check`, and `api-reference-check
 If the change **added, removed, or re-pointed an inter-module `replace` edge** (or added/deleted a workspace module), also update the module table's **Internal deps** column and the **Dependency direction** graph in [Workspace layout](#workspace-layout) above — those are maintained by hand and will otherwise drift.
 
 Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor.
-`scripts/go/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
+`scripts/go/go-work-tidy.sh` tidies every module from the repo root instead.
 
 ### Module-file tidiness is gated in CI
 

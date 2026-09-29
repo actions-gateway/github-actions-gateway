@@ -4,7 +4,7 @@
 #
 # Runs the full "Changing dependencies" remedy flow (docs/development/
 # go-workspaces.md § Changing dependencies) in one shot, in dependency order:
-#   1. scripts/go/go-work-tidy.sh    - tidy every workspace module leaf-first
+#   1. scripts/go/go-work-tidy.sh    - tidy every module
 #   2. go work sync               - push the resolved build list into each module
 #   3. go work vendor             - rebuild the shared repo-root vendor/ from go.sum
 #   4. (cd tools; go mod vendor)    - rebuild the tools module's own vendor/ (GOWORK=off)

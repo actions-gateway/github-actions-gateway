@@ -31,8 +31,9 @@ shopt -s inherit_errexit
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-# Re-run the documented tidy flow (go-work-tidy.sh tidies every workspace module
-# leaf-first; `go work sync` pushes the resolved build list back into each module).
+# Re-run the documented tidy flow (go-work-tidy.sh tidies every module, the
+# workspace members in go.work order; `go work sync` pushes the resolved build
+# list back into each module).
 # Both touch only go.mod/go.sum/go.work.sum — never the vendored source.
 echo "tidying workspace modules (scripts/go/go-work-tidy.sh)..."
 scripts/go/go-work-tidy.sh
