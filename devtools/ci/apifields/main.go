@@ -11,9 +11,13 @@
 //
 // Each argument names one API group as a comma-separated list of the packages
 // serving its versions. Versions convert through a JSON round-trip, so they are
-// judged together: a field is consumed when the field at the same Kind and JSON
-// path in any version of its group is. That is what lets the controllers
-// reconcile v2alpha1 objects while v2beta1 is the storage version.
+// judged together: a field is consumed when the field at the same path in any
+// version of its group is. That is what lets the controllers reconcile v2alpha1
+// objects while v2beta1 is the storage version.
+//
+// Within a version the unit is the Go struct field, not the Kind and JSON path:
+// a type shared by two kinds is recorded once, under the first path the walk
+// meets, so a reader of either kind's copy credits both.
 //
 // Within a package, every struct field reachable from a root kind's top-level
 // fields is classified by the side it is on:
@@ -28,7 +32,8 @@
 //	write   the selector (or any selector it is the base of) is an assignment
 //	        or inc/dec target, or the field is a composite-literal key
 //	read    anything else, which includes being passed to a function
-//	both    its address is taken, or it is the receiver of a method call
+//	both    its address is taken, or it is the receiver of a pointer-receiver
+//	        method call
 //
 // Uses in generated and conversion code do not count: `zz_generated.*` copies
 // every field and `conversion.go` moves every field between versions, so both
@@ -36,10 +41,16 @@
 // are not loaded, for the same reason.
 //
 // A field with no qualifying use is a finding unless the baseline file lists
-// it, in the form the finding prints; a baseline entry whose field now has a use, or no longer exists, is
-// a finding too, so the list cannot rot. The check is a lower bound on neglect,
-// not a proof of enforcement: a webhook that only validates a field's format
-// counts as a read.
+// it, in the form the finding prints; a baseline entry whose field now has a
+// use, or no longer exists, is a finding too, so the list cannot rot.
+//
+// The check is a lower bound on neglect, not a proof of enforcement. Each of
+// these satisfies it without the field doing anything:
+//
+//   - a webhook that only validates a field's format
+//   - a reader of another kind that shares the field's Go type (above)
+//   - a function in the API package itself, whether or not anything calls it
+//   - a status field whose address is passed to a function that only reads it
 //
 // Usage:
 //
@@ -419,7 +430,9 @@ func classifyUses(p *packages.Package, fs fields) {
 					markChain(n.X, both)
 				}
 			case *ast.CallExpr:
-				if sel, ok := ast.Unparen(n.Fun).(*ast.SelectorExpr); ok {
+				// Only a pointer receiver can write the value it is called on;
+				// a value receiver gets a copy.
+				if sel, ok := ast.Unparen(n.Fun).(*ast.SelectorExpr); ok && pointerRecv(p.TypesInfo.Selections[sel]) {
 					markChain(sel.X, both)
 				}
 			case *ast.CompositeLit:
@@ -468,6 +481,19 @@ func classifyUses(p *packages.Package, fs fields) {
 			return true
 		})
 	}
+}
+
+// pointerRecv reports whether s selects a method with a pointer receiver.
+func pointerRecv(s *types.Selection) bool {
+	if s == nil || s.Kind() != types.MethodVal {
+		return false
+	}
+	sig, ok := s.Obj().Type().(*types.Signature)
+	if !ok || sig.Recv() == nil {
+		return false
+	}
+	_, ok = sig.Recv().Type().(*types.Pointer)
+	return ok
 }
 
 // markChain marks e and every selector it is built from: in `a.B.C = x` the

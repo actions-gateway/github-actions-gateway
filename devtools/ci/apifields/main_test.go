@@ -47,7 +47,19 @@ type WidgetStatus struct {
 	Conds     []int ` + "`json:\"conds\"`" + `
 	OnlyRead  int   ` + "`json:\"onlyRead\"`" + `
 	Literal   int   ` + "`json:\"literal\"`" + `
+	Stamp     Stamp   ` + "`json:\"stamp\"`" + `
+	Count     Counter ` + "`json:\"count\"`" + `
 }
+
+// Stamp's value receiver cannot write the field it is called on.
+type Stamp int
+
+func (s Stamp) IsZero() bool { return s == 0 }
+
+// Counter's pointer receiver can.
+type Counter int
+
+func (c *Counter) Inc() { *c++ }
 `,
 	"v2/types.go": `package v2
 
@@ -79,6 +91,8 @@ func Reconcile(w *v1.Widget, x *v2.Widget) int {
 	w.Status.Seen++
 	appendTo(&w.Status.Conds)
 	w.Status = v1.WidgetStatus{Literal: 1, Ready: w.Status.Ready}
+	_ = w.Status.Stamp.IsZero()
+	w.Status.Count.Inc()
 	return w.Status.OnlyRead + x.Spec.Shared
 }
 `,
@@ -136,6 +150,7 @@ func TestRun(t *testing.T) {
 				"v1 Widget.spec.onlySet: spec field nothing reads",
 				"v1 Widget.spec.shared: spec field nothing reads",
 				"v1 Widget.status.onlyRead: status field nothing writes",
+				"v1 Widget.status.stamp: status field nothing writes",
 				"v2 Widget.spec.new: spec field nothing reads",
 				"v2 Widget.spec.size: spec field nothing reads",
 			},
@@ -149,6 +164,7 @@ func TestRun(t *testing.T) {
 				"v1 Widget.spec.onlyConv: spec field nothing reads",
 				"v1 Widget.spec.onlySet: spec field nothing reads",
 				"v1 Widget.status.onlyRead: status field nothing writes",
+				"v1 Widget.status.stamp: status field nothing writes",
 				"v2 Widget.spec.new: spec field nothing reads",
 			},
 		},
@@ -159,6 +175,7 @@ func TestRun(t *testing.T) {
 				"v1 Widget.spec.onlyConv  # kept for the migration\n" +
 				"v1 Widget.spec.onlySet\n" +
 				"v1 Widget.status.onlyRead\n" +
+				"v1 Widget.status.stamp\n" +
 				"v2 Widget.spec.new\n" +
 				"v1,v2 Widget.spec.size\n" +
 				"v1 Widget.spec.gone\n",
