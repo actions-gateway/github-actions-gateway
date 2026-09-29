@@ -49,14 +49,41 @@ WORK="$REPO_ROOT/tmp/workflow-acting-steps.$$"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
+# The verdicts are counted in files, not in a variable, because most cases below
+# run their first assertion inside `dir="$(run_… )"`. A command substitution is a
+# subshell, so a `fails=$((fails + 1))` there increments a copy the parent never
+# sees: the FAIL line prints to stderr, the case's remaining assertions are
+# skipped, and the suite exits 0 reporting that everything passed. An append
+# from a subshell reaches the parent, so the ledger counts what the variable
+# could not.
+#
+# REPORTS carries every verdict, pass or fail. Each case reports exactly once, so
+# a case that vanished — deleted, or skipped because its `$dir` came back empty —
+# shows up as a count one short rather than as one fewer line in a log nobody
+# diffs.
+FAILURES="$WORK/failures"
+REPORTS="$WORK/reports"
+: >"$FAILURES"
+: >"$REPORTS"
 fails=0
+
+# The 19 cases plus registry-complete. Bump it with the case you add.
+EXPECTED_REPORTS=20
 
 fail() {
 	printf 'FAIL %-34s %s\n' "$1" "$2" >&2
-	fails=$((fails + 1))
+	printf '%s\n' "$1" >>"$FAILURES"
+	printf '%s\n' "$1" >>"$REPORTS"
 }
 
-pass() { printf 'ok   %-34s %s\n' "$1" "$2"; }
+pass() {
+	printf 'ok   %-34s %s\n' "$1" "$2"
+	printf '%s\n' "$1" >>"$REPORTS"
+}
+
+# count_fails — read the ledger back into $fails. Called wherever the count is
+# about to decide something, never assumed to be current.
+count_fails() { fails="$(grep -c . "$FAILURES" || true)"; }
 
 # refuse MESSAGE — exit 2 for anything that would leave this suite driving
 # nothing. A body that failed to extract runs clean, and every case built on it
@@ -604,6 +631,8 @@ workflow_acts() {
 	' "$1"
 }
 
+count_fails
+registry_fails_before=$fails
 registry_names="$(acting_registry | cut -d'|' -f1)"
 for wf in .github/workflows/*.yml; do
 	base="${wf##*/}"
@@ -619,7 +648,36 @@ while IFS='|' read -r base disposition _; do
 		fail "registry:$base" 'acting_registry() classifies a workflow that no longer runs an acting command — drop the line'
 	fi
 done < <(acting_registry)
-((fails)) || pass registry-complete 'every workflow that acts is driven or classified'
+count_fails
+if ((fails == registry_fails_before)); then
+	pass registry-complete 'every workflow that acts is driven or classified'
+else
+	# Reported rather than silent. Keying this line on the GLOBAL count would
+	# skip it whenever any earlier case failed, and a reader of a red run could
+	# not then tell "the registry assertion passed" from "it never reported".
+	fail registry-complete 'the registry is out of step with the workflows, see the registry: lines above'
+fi
+
+# A case that vanished reports neither ok nor FAIL, so the log shrinks by one
+# line and nothing else notices.
+#
+# Checked only on an otherwise-green run, which defers the finding rather than
+# making it: a run red for an unrelated reason and also short a case reports the
+# unrelated failure and says nothing about the count. The run already exits
+# non-zero, and the next green one is green-with-19, which this catches.
+#
+# The gate is here rather than unconditional because the registry block above
+# emits a variable number of verdicts: one per registry finding (an
+# unclassified workflow, an entry naming a missing workflow, or an entry for a
+# workflow that no longer acts) plus the summary line.
+count_fails
+if ((fails == 0)); then
+	reports="$(grep -c . "$REPORTS" || true)"
+	if ((reports != EXPECTED_REPORTS)); then
+		fail report-count "the suite reported $reports verdicts, expected $EXPECTED_REPORTS — a case was added or lost without updating EXPECTED_REPORTS"
+		count_fails
+	fi
+fi
 
 if ((fails)); then
 	printf '\n%d test(s) failed\n' "$fails" >&2
