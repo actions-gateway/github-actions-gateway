@@ -1681,12 +1681,16 @@ The thirty-second grace is a fixed constant, not a CRD field: the pod has not st
 Before the reap fires, the shape is a set that looks busy and is not: `status.activeJobs` sits at some non-zero number, worker pods are `Running`, but no job is executing — `kubectl logs` on the pod ends at `Listening for Jobs`, and GitHub shows nothing in progress for the set.
 
 **What happened.** The pod was still `Running` five minutes after GitHub reported its job terminal, so the AGC deleted it.
-Two causes produce that:
+Three causes produce that:
 
 - **A ScaleSet worker that never received its job** (the common one).
   The ScaleSet tier provisions fire-and-forget: the worker registers and pulls its own job.
   If the assignment lapsed, was cancelled, or completed elsewhere before the runner got to it, the runner waits at `Listening for Jobs` forever.
   It holds a concurrency slot, a namespace-quota slot, and a node while doing nothing.
+- **A worker image more than 30 days behind the newest runner release**, when *every* job does this.
+  GitHub's [runner update policy](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners) stops queueing jobs to such a runner, and the runner still connects and logs `Listening for Jobs`, so nothing on the cluster names the cause.
+  Compare the version the worker logs (`runner version detected`, see [Worker Image Runner Version](#worker-image-runner-version)) with the newest [actions/runner release](https://github.com/actions/runner/releases) and its date.
+  `RunnerVersionTooOld` does not catch this: it checks the registration floor, not the 30-day window.
 - **A container that outlived the runner** — an injected mesh sidecar, or a regular (non-native) build/DinD sidecar.
   See the two runbook sections below for fixing the root cause; on the ScaleSet tier this reap is now the backstop that stops those pods accumulating.
 

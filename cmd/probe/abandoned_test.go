@@ -51,8 +51,8 @@ func TestParseAbandonedConfig_Defaults(t *testing.T) {
 	if cfg.WorkflowFile != "q645-abandoned-probe.yml" {
 		t.Errorf("WorkflowFile = %q, want q645-abandoned-probe.yml", cfg.WorkflowFile)
 	}
-	if cfg.RunnerVersion != "2.335.1" {
-		t.Errorf("RunnerVersion = %q, want 2.335.1", cfg.RunnerVersion)
+	if cfg.RunnerVersion != "2.337.0" {
+		t.Errorf("RunnerVersion = %q, want 2.337.0", cfg.RunnerVersion)
 	}
 	if cfg.Result != broker.TaskResultAbandoned {
 		t.Errorf("Result = %q, want abandoned", cfg.Result)
