@@ -584,8 +584,9 @@ census_mirror_clients() {
 		;;
 	2)
 		echo "  census: NOT TAKEN — an address resolves to nothing, or nothing connected."
-		echo "          Workers are reaped on a TTL after their job, so a slow run can lose"
-		echo "          them before this point. Not a pass: the reading simply did not happen."
+		echo "          An unresolved pod-range address is usually a worker reaped on its TTL"
+		echo "          after its job; a link-local one was never a pod. Each REFUSE line"
+		echo "          above says which. Not a pass: the reading simply did not happen."
 		progress_reading Q1048 "mirror-client-census" not-taken \
 			"the census refused: an address resolved to no pod and no node, or nothing connected"
 		;;
