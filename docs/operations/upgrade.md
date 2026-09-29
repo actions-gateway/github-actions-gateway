@@ -133,6 +133,7 @@ The GMC's conversion webhook converts the five chart kinds between `v2` and the 
 An `EgressProxy` that still names `CiliumFQDN` or `CalicoFQDN` reads at `v2` as `egressPolicyMode: FQDN`, with the alias in the annotation `conversion.actions-gateway.com/egress-policy-mode`.
 The stored object keeps the alias, and so does the pool: writing the `v2` view back with the annotation in place restores it.
 Deleting the annotation, or setting another mode, at `v2` migrates the pool off the alias.
+So does replacing the whole object with a `v2` manifest that lacks the annotation, as `kubectl replace` or a GitOps tool that replaces objects does, with no warning; migrate such a pool deliberately first.
 Don't set the annotation yourself: admission rejects a write that would introduce an alias this way, as it does any other.
 Find any pools still on an alias with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias), which is pinned to `v2beta1` because an unpinned read shows `FQDN`.
 
