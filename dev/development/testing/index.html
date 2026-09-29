@@ -3041,10 +3041,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-path-list-written-twice-the-trigger-and-the-filter" class="md-nav__link">
+  <a href="#a-path-list-written-twice" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A path list written twice: the trigger and the filter
+        A path list written twice
       
     </span>
   </a>
@@ -5440,12 +5440,10 @@ That is not hypothetical: <code>api/</code> and <code>scaleset/</code> were abse
    Failures name the module, the workflow, and the exact pattern to add, one per gap.</li>
 <li><strong>Live paths.</strong> Every pattern's literal prefix still exists on disk.
    A pattern left behind by a rename matches nothing, which narrows its gate as silently as a missing module does.</li>
-<li><strong>Shared-lane agreement.</strong> Two filters gating the same reusable workflow list the same <code>scripts/</code> patterns.
-   <code>SHARED_LANE_FILTERS</code> pairs them; the failure prints a diff of the two sets.
-   <code>e2e-test.yml</code> and <code>e2e-calico.yml</code> both call <code>e2e-reusable.yml</code> yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a <code>free-runner-disk.sh</code> change skipped the lane that exercises it (Q571).</li>
-<li><strong>Push-trigger agreement.</strong> A workflow that scopes its post-merge leg with <code>on.push.paths</code> lists the same paths as its <code>changes</code> filter.
-   <code>PUSH_TRIGGER_FILTERS</code> registers the pairs.
-   See below for why this one is easy to miss.</li>
+<li><strong>Twice-written agreement.</strong> Every pair in the <code>TWICE_WRITTEN</code> registry lists the same paths, compared as sets, and the failure prints a diff.
+   A pair is one scoping decision written in two places; the three shapes, and why drift between them is invisible, are <a href="#a-path-list-written-twice">below</a>.</li>
+<li><strong>Twice-written completeness.</strong> A workflow that scopes a trigger with a path list beside any other path list registers that trigger list in <code>TWICE_WRITTEN</code>, so a new duplicate fails instead of shipping unchecked.
+   A lone trigger list, such as a <code>q*-probe</code> workflow scoping its push leg to its own file, has nothing to drift from and is left alone.</li>
 <li><strong>Globstar placement.</strong> Every <code>filters:</code> pattern spells <code>**</code> where picomatch still expands it.
    <code>cmd/**.go</code> reads as every Go file under <code>cmd/</code> and matches nothing, and assertion 3 passes it because the literal prefix <code>cmd</code> exists.
    Scoped to <code>filters:</code> blocks only; see below.</li>
@@ -5499,22 +5497,33 @@ The tree carries no instance of the broken shape today; <strong>assertion 6 is t
 So <code>cmd/**/*.go</code>, <code>**/*.go</code> and <code>**.go</code> all pass, and <code>cmd/**.go</code> fails with the rewrite named.
 That leading exception is load-bearing rather than pedantic: <code>plan-hygiene.yml</code>'s <code>plan</code> filter is <code>'**.go'</code> today, so a rule phrased as "<code>**</code> must always be its own segment" would fail the tracked tree on arrival.</p>
 <p><strong>It scans <code>filters:</code> blocks only.</strong> Those are what <code>dorny/paths-filter</code> matches with picomatch; <code>on.push.paths</code> and <code>pull_request.paths</code> are matched by GitHub's own trigger matcher, which reads the same pattern differently, so applying this rule there could reject a pattern that works.
-The two matchers are the distinction the table above measures, and assertion 5 already holds the three duplicated lists in step.</p>
+The two matchers are the distinction the table above measures, and assertion 4 already holds the duplicated lists in step.</p>
 <p>Its own tests pin the boundary from both sides, since a false positive fails the tracked tree: the sound shapes must <strong>not</strong> be flagged, and the degraded one must be.
 The assertion was verified by injecting <code>'cmd/**.go'</code> into a real filter and requiring red.</p>
-<h4 id="a-path-list-written-twice-the-trigger-and-the-filter">A path list written twice: the trigger and the filter<a class="headerlink" href="#a-path-list-written-twice-the-trigger-and-the-filter" title="Permanent link">&para;</a></h4>
-<p>Four workflows — <code>doc-links.yml</code>, <code>e2e-calico.yml</code>, <code>plan-hygiene.yml</code>, <code>status-lint.yml</code> — express the same scoping decision <strong>twice</strong>, because the two legs are gated by different mechanisms:</p>
+<h4 id="a-path-list-written-twice">A path list written twice<a class="headerlink" href="#a-path-list-written-twice" title="Permanent link">&para;</a></h4>
+<p>Some workflows express one scoping decision <strong>twice</strong>, in two places that do not share one list today.
+<strong>Drift between the two is invisible on a PR</strong>: one side keeps classifying correctly, the other silently stops running its leg, and a leg that does not run leaves nothing red to notice.
+Every pair lives in one registry, <code>TWICE_WRITTEN</code> in <code>check-path-filters.sh</code>, and assertion 4 compares each as sorted sets.
+Three shapes are registered today:</p>
 <ul>
-<li><strong>The PR leg</strong> triggers on every <code>pull_request</code> with no path filter (so its <code>gate</code> job always reports its required check) and is scoped by the internal <code>changes</code> filter.</li>
-<li><strong>The post-merge leg</strong> triggers on <code>push</code> to <code>main</code> and is scoped by <code>on.push.paths</code> — a plain GitHub Actions trigger filter, not a <code>dorny/paths-filter</code> block.</li>
+<li><strong>A push trigger and a <code>changes</code> filter</strong> — <code>doc-links.yml</code>, <code>e2e-calico.yml</code>, <code>plan-hygiene.yml</code>, <code>status-lint.yml</code>.
+  The PR leg triggers on every <code>pull_request</code> with no path filter, so its <code>gate</code> job always reports its required check, and is scoped by the <code>changes</code> filter; the post-merge leg is scoped by <code>on.push.paths</code>.
+  Q571 shipped this regression and merged green: it rewrote <code>e2e-calico.yml</code>'s filter to <code>scripts/{e2e,fetch,lib}/**</code> and left the push list naming the two now-moved files it had always enumerated.</li>
+<li><strong>A <code>pull_request</code> trigger and a push trigger</strong> — <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code>, <code>metric-tiers.yml</code>, <code>reason-tiers.yml</code>, <code>rung-order.yml</code>.
+  Both legs are scoped by their own <code>paths:</code> list.
+  Ungated until Q574, by which time the shape had grown from one workflow to five; all five pairs agreed when the gate landed.</li>
+<li><strong>Two lanes over one reusable workflow</strong> — <code>e2e-test.yml</code>'s <code>e2e</code> filter and <code>e2e-calico.yml</code>'s <code>calico</code>, compared only under <code>scripts/</code>, since the rest of each filter is what makes the Calico lane narrower.
+  Both call <code>e2e-reusable.yml</code>, yet they disagreed by roughly 60× about which scripts it runs: the Calico lane named two of the six the reusable workflow invokes directly, so a <code>free-runner-disk.sh</code> change skipped the lane that exercises it (Q571).
+  This is the one pair assertion 5 cannot discover, because it spans two workflows, so it is registered by hand.</li>
 </ul>
-<p>GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated rather than shared.
-<strong>Drift between the two is invisible on a PR.</strong> Every PR classifies correctly off the filter; only the post-merge leg silently stops running, and a leg that does not run leaves nothing red to notice.</p>
-<p>Q571 shipped exactly that regression and merged green: it rewrote <code>e2e-calico.yml</code>'s filter to <code>scripts/{e2e,fetch,lib}/**</code> and left the push list naming the two now-moved files it had always enumerated.
-Assertion 5 is the recurrence guard — it compares the two as sorted sets and prints a diff of the difference.</p>
-<p>One workflow (<code>dockerfile-lint.yml</code>) duplicates a list across <code>pull_request.paths</code> and <code>push.paths</code> instead.
-That is the same hazard in a different shape and is <strong>not</strong> yet gated; both lists agree today (Q572).
-<code>doc-links.yml</code> was the second until Q743 moved it onto the trigger-and-filter shape above, which brought it under assertion 5.</p>
+<p><strong>Within one <code>filters:</code> block, share the list with a YAML anchor instead of registering a pair.</strong> <code>dorny/paths-filter</code> loads the block with js-yaml, which resolves aliases, and flattens nested lists, so its documented <code>- *shared</code> spelling splices an anchored list into another filter (read from <code>src/filter.ts</code> at the pinned v4.0.3).
+<code>autoscaler-drift.yml</code> does this: its <code>drift_shared</code> filter holds the paths both arms run on, and <code>autoscaler</code> and <code>karpenter</code> each open with <code>- *drift_shared</code>.
+The anchor removes the duplicate rather than gating it, which is why that workflow has no <code>TWICE_WRITTEN</code> entry.
+The key it adds is itself a filter, registered in <code>NARROW_FILTERS</code>, and no job reads its output.
+<code>devtools/ci/pathfilters</code> resolves the alias the same way, so every assertion sees each arm's full list.</p>
+<p>The trigger-and-filter shape cannot use one, because the filter is a string inside the workflow and the trigger list is not, and two workflows share nothing.
+A <code>pull_request</code> and a push list are both workflow YAML, so an anchor there turns on GitHub's own workflow parser accepting one.
+GitHub's changelog says it does from 2025-09-18, but no run here has exercised it, so those pairs stay duplicated and gated until <a href="../../queue/Q1148/">Q1148</a> measures it.</p>
 <h4 id="scripts-is-grouped-by-blast-radius"><code>scripts/</code> is grouped by blast radius<a class="headerlink" href="#scripts-is-grouped-by-blast-radius" title="Permanent link">&para;</a></h4>
 <p>The other half of keeping these filters honest is where a script lives.
 <code>scripts/</code> has no top-level files: every script sits in a subdirectory named for the gate that consumes it — <code>e2e/</code>, <code>go/</code>, <code>docs/</code>, <code>security/</code>, <code>manifest/</code>, <code>release/</code>, <code>ci/</code>, <code>fetch/</code>, <code>agent/</code>, <code>dev/</code>, plus the pre-existing <code>dogfood/</code>, <code>lib/</code> and <code>updatecli/</code>.

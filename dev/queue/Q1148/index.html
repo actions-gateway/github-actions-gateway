@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q574/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1148/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>One gate for every path list the workflows write twice - GitHub Actions Gateway</title>
+        <title>Share pull_request and push path lists with a YAML anchor - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#one-gate-for-every-path-list-the-workflows-write-twice" class="md-skip">
+        <a href="#share-pull_request-and-push-path-lists-with-a-yaml-anchor" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              One gate for every path list the workflows write twice
+              Share pull_request and push path lists with a YAML anchor
             
           </span>
         </div>
@@ -2597,9 +2597,20 @@
   
 
 
-<h1 id="one-gate-for-every-path-list-the-workflows-write-twice">One gate for every path list the workflows write twice<a class="headerlink" href="#one-gate-for-every-path-list-the-workflows-write-twice" title="Permanent link">&para;</a></h1>
-<p>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> vs <code>push.paths</code> (ungated).
-One registry replaces all three, over Q584's <code>devtools/ci/pathfilters</code> parser.</p>
+<h1 id="share-pull_request-and-push-path-lists-with-a-yaml-anchor">Share pull_request and push path lists with a YAML anchor<a class="headerlink" href="#share-pull_request-and-push-path-lists-with-a-yaml-anchor" title="Permanent link">&para;</a></h1>
+<p>Five workflows scope both legs with identical <code>paths:</code> lists written twice: <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code>, <code>metric-tiers.yml</code>, <code>reason-tiers.yml</code> and <code>rung-order.yml</code>.
+Q574 put each pair in <code>TWICE_WRITTEN</code> (<code>scripts/ci/check-path-filters.sh</code>), so drift now fails the gate, but the duplicate itself remains.
+Anchoring the first list (<code>paths: &amp;paths</code>) and aliasing it in the second (<code>paths: *paths</code>) would remove the pair rather than gate it, the way <code>autoscaler-drift.yml</code>'s <code>drift_shared</code> anchor already does inside a <code>filters:</code> block.</p>
+<p><strong>Documented, not measured.</strong> GitHub's changelog of 2025-09-18 says "GitHub Actions now supports YAML anchors", enabled for all repositories, and states no limitation on where one may appear (https://github.blog/changelog/2025-09-18-actions-yaml-anchors-and-non-public-workflow-templates/, read 2026-09-29).
+No workflow in this repo uses one in its triggers, so nothing has exercised it on <code>on.&lt;event&gt;.paths</code> specifically.
+The measurement that settles it is one real run: anchor one workflow's two lists, then confirm both a PR touching a listed path and a push to <code>main</code> still trigger it, and that a PR touching nothing listed does not.</p>
+<p>What the change would owe beyond that run:</p>
+<ul>
+<li><code>devtools/ci/pathfilters</code> already resolves aliases, so <code>pr-paths</code> and <code>push-paths</code> would both read the full list and assertion 4 would keep passing on the anchored pair.
+  The pair's <code>TWICE_WRITTEN</code> entry then guards a list that cannot drift, so it goes; assertion 5 would still ask for it, because both trigger lists are non-empty, so assertion 5 needs to recognise a pair whose two sides are one node.</li>
+<li><code>actionlint</code> (in the <code>actionlint</code> job and <code>make check</code>) must accept the anchor; that is also unmeasured.</li>
+<li>The doc section in <code>target:</code> says those pairs stay duplicated until this row measures it, and that sentence changes with the answer either way.</li>
+</ul>
 
 
 

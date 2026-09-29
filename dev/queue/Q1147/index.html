@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1067/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1147/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>go-work-tidy.sh needs GNU realpath, which no tool check lists - GitHub Actions Gateway</title>
+        <title>go-work-tidy.sh exits 0 having tidied nothing if workspace_modules fails - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#go-work-tidysh-needs-gnu-realpath-which-no-tool-check-lists" class="md-skip">
+        <a href="#go-work-tidysh-exits-0-having-tidied-nothing-if-workspace_modules-fails" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              go-work-tidy.sh needs GNU realpath, which no tool check lists
+              go-work-tidy.sh exits 0 having tidied nothing if workspace_modules fails
             
           </span>
         </div>
@@ -2597,16 +2597,19 @@
   
 
 
-<h1 id="go-work-tidysh-needs-gnu-realpath-which-no-tool-check-lists">go-work-tidy.sh needs GNU realpath, which no tool check lists<a class="headerlink" href="#go-work-tidysh-needs-gnu-realpath-which-no-tool-check-lists" title="Permanent link">&para;</a></h1>
-<p><code>go-work-tidy.sh</code> line 103 runs <code>realpath --relative-to="." "$mod_dir"</code> for every module <code>go list -m all</code> returns. macOS ships a BSD <code>realpath</code> at <code>/bin/realpath</code> that rejects the flag (<code>realpath: illegal option -- -</code>), and <code>scripts/ci/check-tools.sh</code> does not list <code>realpath</code> at all, so <code>make doctor</code> cannot warn.
-Measured 2026-09-07 on two Macs reviewing #1858, isolated runs on both: <code>make tidy-check</code> passes and its log carries no realpath line, because line 95's producer, <code>go list -f '{{if not .Main}}{{.Dir}}{{end}}' -m all</code>, exits 1 on a vendored workspace with <code>go: can't compute 'all' using the vendor directory</code> (also under <code>GOWORK=off</code> and <code>-mod=mod</code>), its stderr goes to <code>/dev/null</code> behind <code>|| true</code>, and the empty result means the loop never reaches line 103.
-So on macOS the dependency-ordering step is silently dead rather than passing, and the GNU-only flag would fail the script the first time that step ran.
-One reviewer run did fail at line 103 with <code>realpath: illegal option -- -</code>; it ran concurrently with <code>make vendor-check</code>, whose <code>go work vendor</code> re-vendors the tree mid-run, and it did not recur in isolation, so it is recorded here as an unreproduced sighting rather than a host difference.
-The same review also saw one isolated <code>make tidy-check</code> on the PR head report <code>go.work.sum</code> drift (58 <code>/go.mod h1:</code> lines wanted) with the repeat on the same head clean and CI green; unreproduced, recorded so a later sighting reads as a second one.
-CI runs the script on <code>ubuntu-latest</code>, where <code>go list</code> succeeds and <code>realpath</code> is GNU, so the gate is sound there and its ordering step is exercised only there.</p>
-<p>Two fixes, either sufficient: replace the call with a <code>--relative-to</code>-free form (<a href="../../development/bash-style/">bash-style.md</a> prefers portable builtins), or add <code>realpath</code> to <code>check-tools.sh</code> with a GNU-flag probe the way it probes other tools' modes.
-Doing the first makes the second unnecessary.
-Found in review of #1858 (Q929); the PR did not touch <code>scripts/</code>.</p>
+<h1 id="go-work-tidysh-exits-0-having-tidied-nothing-if-workspace_modules-fails">go-work-tidy.sh exits 0 having tidied nothing if workspace_modules fails<a class="headerlink" href="#go-work-tidysh-exits-0-having-tidied-nothing-if-workspace_modules-fails" title="Permanent link">&para;</a></h1>
+<p><code>go-work-tidy.sh</code> reads the go.work members with <code>done &lt; &lt;(workspace_modules)</code>, and a process substitution's exit status is lost under <code>set -euo pipefail</code>.
+So if <code>go work edit -json</code> or <code>jq</code> fails inside the helper, the loop tidies nothing and the script carries on to exit 0.
+<code>tidy-check</code> then diffs an untouched tree and reports it tidy, so the gate goes vacuously green.
+Measured 2026-09-29 on bash 5 with the repo prologue: a helper that runs <code>go work edit -json -nosuchflag | jq ...</code> printed the usage error, the loop ran 0 times, and the script reached its end with <code>rc=0</code>.
+<code>nonworkspace_modules</code> has the same <code>&lt; &lt;(...)</code> shape at the end of the script.
+Q1067 (PR #1996) replaced a go.work parse that had the same shape, so this is not a regression.
+Q1067 was about the dead ordering step and its GNU <code>realpath</code> call; this row is about a lost exit status.
+A reviewer of that PR raised it as a note.
+<code>go-work-tidy-test.sh</code> catches it only on the test's own run, where its count assertion needs every module tidied.
+A production run has no such check.</p>
+<p>Fix: capture each list first (<code>mods=$(workspace_modules)</code>), then fail if the workspace list comes back empty.
+Measured the same day, the capture form stops the script: the same failing helper exited <code>rc=2</code> before the next line ran.</p>
 
 
 

@@ -2702,6 +2702,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1144/">Q1144</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters-test.sh">check-path-filters-test read a fixture filter as empty, 1 run in 4</a></td>
+<td><code>ci</code> <code>flake</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>check-path-filters-test.sh</code> reports a pair as listing no paths, or <code>could not read</code> a side, on a fixture that plainly holds …</td>
+</tr>
+<tr>
 <td><a href="Q1145/">Q1145</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-ladder-test.sh">check-release-ladder-test revived-missing flakes under make check</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3068,14 +3076,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08: only 2 of 106 served v2beta1 fields were unread (<code>Sharing</code>, <code>allowedNamespaces</code>), both Q166's, and Q166 has landed, so …</td>
-</tr>
-<tr>
-<td><a href="Q574/">Q574</a></td>
-<td><a href="../development/testing/#a-path-list-written-twice-the-trigger-and-the-filter">One gate for every path list the workflows write twice</a></td>
-<td><code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> …</td>
 </tr>
 <tr>
 <td><a href="Q650/">Q650</a></td>
@@ -3654,14 +3654,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The Q956 re-vendor brought <code>CITATION_WINDOW</code> and <code>--citation-window</code>, the <code>exhibit:</code> prefix, the citation fragment and line-range checks …</td>
 </tr>
 <tr>
-<td><a href="Q1067/">Q1067</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-work-tidy.sh">go-work-tidy.sh needs GNU realpath, which no tool check lists</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>go-work-tidy.sh</code> line 103 runs <code>realpath --relative-to="." "$mod_dir"</code> for every module <code>go list -m all</code> returns.</td>
-</tr>
-<tr>
 <td><a href="Q966/">Q966</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh">Is 2 heavy slots at 16 jobs on 18 cores the right point?</a></td>
 <td><code>ci</code> <code>speed</code> <code>debt</code></td>
@@ -3972,6 +3964,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A restored cache entry whose contents no longer match what the script expects takes the miss branch silently, so the only symptom is a cold …</td>
+</tr>
+<tr>
+<td><a href="Q1147/">Q1147</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-work-tidy.sh">go-work-tidy.sh exits 0 having tidied nothing if workspace_modules fails</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>go-work-tidy.sh</code> reads the go.work members with <code>done &lt; &lt;(workspace_modules)</code>, and a process substitution's exit status is lost under `set …</td>
+</tr>
+<tr>
+<td><a href="Q1148/">Q1148</a></td>
+<td><a href="../development/testing/#a-path-list-written-twice">Share pull_request and push path lists with a YAML anchor</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Five workflows scope both legs with identical <code>paths:</code> lists written twice: <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code> …</td>
 </tr>
 </tbody>
 </table>
