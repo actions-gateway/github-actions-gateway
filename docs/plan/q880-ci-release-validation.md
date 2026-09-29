@@ -19,14 +19,22 @@ CI has no access to the dogfood project, and a service-account key is the wrong 
 So the job proves who it is with its own GitHub OIDC token, exchanged through Workload Identity Federation for a short-lived token of one service account.
 
 [`ci-identity-setup.sh`](../../scripts/dogfood/ci-identity-setup.sh) sets it up, and a maintainer runs it once.
-It is idempotent, and it draws the trust boundary as a GitHub environment, `dogfood-validation`:
+It is idempotent, and it draws the trust boundary on the GCP side, where no repository setting can loosen it:
 
-- The pool's provider accepts a token only when it carries this repository's numeric id, its owner's numeric id, and `environment: dogfood-validation`.
+- The pool's provider accepts a token only when it carries this repository's numeric id, its owner's numeric id, `environment: dogfood-validation`, and a `job_workflow_ref` naming the probe workflow on `main`.
   Ids rather than the `owner/name` slug, so a renamed or re-created repository is a different principal.
+  The workflow ref pins both the file and the branch, so another workflow on `main`, or a `v*-rc.*` tag cut from any commit, gets no token until milestone 3 names the gate's workflow.
 - Only principals carrying that environment claim may impersonate the service account.
-- The environment admits `main` and tags matching `v*-rc.*`, and every job entering it waits for a named reviewer.
 
-A fork, a pull request, or a job outside the environment gets no token at all.
+A fork, a pull request, or any other workflow gets no token at all.
+
+The `dogfood-validation` GitHub environment is a second layer.
+It admits `main` and tags matching `v*-rc.*`, and its jobs wait for a named reviewer.
+The script creates it before any GCP write, because a workflow that names a missing environment creates it with no protection rules, and it fails on any ref policy beyond those two.
+
+**The reviewer is a click, not a second person.** The reviewer named in the command below is `karlkfi`, the script allows self-review so a lone reviewer can approve their own dispatch, and every agent session on the maintainer's machine runs `gh` as that account.
+Whether that token can approve a pending deployment through the API is unmeasured.
+This matters little in milestone 1, whose grant is read-only; it is milestone 3's risk, when the grant can scale and redeploy the cluster, and the workflow pin above is what bounds it rather than the approval.
 
 **Service-account impersonation rather than direct resource access.** Federated principals can hold IAM roles directly, without a service account in between.
 Whether `kubectl` authenticates to GKE as such a principal is unmeasured here, and the impersonation path is the one `google-github-actions/auth` and `get-gke-credentials` document together, so milestone 1 takes it.
@@ -47,7 +55,7 @@ REPO=actions-gateway/github-actions-gateway REVIEWERS=karlkfi \
 gh workflow run dogfood-identity-probe.yml --repo actions-gateway/github-actions-gateway --ref main
 ```
 
-The run waits for the reviewer's approval, then must go green.
+The run waits for the environment's reviewer, then must go green.
 
 ## 2. The gate on a Linux runner
 

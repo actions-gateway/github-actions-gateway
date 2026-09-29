@@ -4,9 +4,9 @@
 # The identity is set up once by scripts/dogfood/ci-identity-setup.sh: the job's
 # own OIDC token is exchanged through Workload Identity Federation for a
 # short-lived token of the release-validator service account. The provider only
-# accepts this repository's tokens from inside the `dogfood-validation`
-# environment, and that environment waits for a named reviewer — so every run of
-# this job, and of the gate that follows it, is approved by a person first.
+# accepts this repository's tokens from THIS workflow on `main`, inside the
+# `dogfood-validation` environment. The environment also waits for its reviewer,
+# which is the account `gh` authenticates as — a click, not a second person.
 #
 # Deliberately workflow_dispatch ONLY: it is the acceptance check for a one-time
 # setup and gates nothing. Milestone 3 widens the service account's roles for the

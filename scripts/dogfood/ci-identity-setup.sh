@@ -9,13 +9,18 @@
 # Federation for a short-lived token of one service account. Nothing long-lived
 # is stored anywhere.
 #
-# The trust boundary is a GitHub environment, not a branch or a tag:
-#   * the provider accepts only this repository's tokens (matched by numeric id,
-#     which survives a rename) that carry the `environment` claim below;
-#   * only that environment's principals may impersonate the service account;
-#   * the environment admits only `main` and `v*-rc.*` tags, and every job
-#     entering it waits for a named reviewer.
-# A fork, a pull request, or any job outside the environment gets no token.
+# The trust boundary is enforced on the GCP side, where no repository setting can
+# loosen it:
+#   * the provider accepts a token only when it carries this repository's and its
+#     owner's numeric ids (which survive a rename), the `environment` claim below,
+#     and a job_workflow_ref naming WORKFLOW on `main` — so no other workflow, and
+#     no other branch or tag, can exchange a token;
+#   * only that environment's principals may impersonate the service account.
+# The GitHub environment is a second layer: it admits only `main` and `v*-rc.*`
+# tags, and its jobs wait for a named reviewer. That reviewer is the same account
+# `gh` authenticates as, so it is a click, not a second person. It is created
+# before any GCP write, because a workflow naming a missing environment creates
+# it with no protection rules at all.
 #
 # Grants follow the milestone, not the gate. Milestone 1 grants ROLES (default
 # roles/container.viewer) — enough for .github/workflows/dogfood-identity-probe.yml
@@ -35,10 +40,12 @@
 #                (default roles/container.viewer).
 #   ASSUME_YES=1 Skip the one interactive confirmation.
 #
-# Idempotent: every create is guarded by a describe, the provider's condition is
-# converged when it drifts, and IAM bindings and environment settings are
-# declarative. It removes nothing — a role dropped from ROLES stays bound until
-# removed by hand.
+# Idempotent: every create is guarded by a describe, an existing provider's
+# condition and mapping are rewritten on every run, and IAM bindings and
+# environment settings are declarative. A ref policy the environment carries
+# beyond the two above fails the run rather than being left to admit more. It
+# removes nothing else — a role dropped from ROLES stays bound until removed by
+# hand.
 #
 # Exit 0 converged, 1 a step failed, 2 usage.
 set -euo pipefail
@@ -54,6 +61,8 @@ PROVIDER="${PROVIDER:-github-oidc}"
 SA_NAME="${SA_NAME:-gag-release-validator}"
 ROLES="${ROLES:-roles/container.viewer}"
 ISSUER="https://token.actions.githubusercontent.com"
+# The one workflow the provider accepts, on `main`. Milestone 3 adds the gate's.
+WORKFLOW="dogfood-identity-probe.yml"
 
 # The refs the environment admits: `main` for the probe, candidate tags for the gate.
 BRANCH_POLICY="main"
@@ -66,10 +75,11 @@ usage() {
 
 # attribute_condition REPO_ID OWNER_ID — the CEL the provider evaluates on every
 # token exchange. Ids rather than names, so a renamed or re-created repository
-# with the same slug is a different principal.
+# with the same slug is a different principal; the workflow ref pins both the
+# file and the branch, which the environment's own ref policy cannot.
 attribute_condition() {
-	printf "assertion.repository_id == '%s' && assertion.repository_owner_id == '%s' && assertion.environment == '%s'" \
-		"$1" "$2" "${ENVIRONMENT}"
+	printf "assertion.repository_id == '%s' && assertion.repository_owner_id == '%s' && assertion.environment == '%s' && assertion.job_workflow_ref == '%s/.github/workflows/%s@refs/heads/main'" \
+		"$1" "$2" "${ENVIRONMENT}" "${REPO}" "${WORKFLOW}"
 }
 
 ensure_pool() {
@@ -84,19 +94,15 @@ ensure_pool() {
 		--display-name="GitHub Actions"
 }
 
+# ensure_provider — an existing provider is rewritten every run rather than
+# compared, so a drifted mapping converges as well as a drifted condition.
 ensure_provider() {
-	local want="$1" have mapping
+	local want="$1" mapping
 	mapping="google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.environment=assertion.environment"
-	if have="$(gcloud iam workload-identity-pools providers describe "${PROVIDER}" \
+	if gcloud iam workload-identity-pools providers describe "${PROVIDER}" \
 		--project="${PROJECT}" --location=global --workload-identity-pool="${POOL}" \
-		--format='value(attributeCondition)' 2>/dev/null)"; then
-		if [[ "${have}" == "${want}" ]]; then
-			echo "Provider ${PROVIDER} already exists with the expected condition."
-			return
-		fi
-		echo "Provider ${PROVIDER} condition drifted; converging it."
-		echo "  have: ${have}"
-		echo "  want: ${want}"
+		>/dev/null 2>&1; then
+		echo "Converging provider ${PROVIDER}..."
 		gcloud iam workload-identity-pools providers update-oidc "${PROVIDER}" \
 			--project="${PROJECT}" --location=global --workload-identity-pool="${POOL}" \
 			--issuer-uri="${ISSUER}" \
@@ -142,7 +148,7 @@ bind_iam() {
 
 # ensure_environment — required reviewers plus a custom ref policy. PUT is a full
 # replace of the protection rules, so it converges on every run; the ref policies
-# are separate resources and are only added when missing.
+# are separate resources, added when missing, and any extra one fails the run.
 ensure_environment() {
 	local reviewers_json="$1" have
 	echo "Configuring environment ${ENVIRONMENT} on ${REPO}..."
@@ -155,6 +161,13 @@ ensure_environment() {
 	EOF
 	have="$(gh api "repos/${REPO}/environments/${ENVIRONMENT}/deployment-branch-policies" \
 		--jq '.branch_policies[] | .type + " " + .name')"
+	local extra
+	extra="$(grep -vxF -e "branch ${BRANCH_POLICY}" -e "tag ${TAG_POLICY}" <<<"${have}" || true)"
+	if [[ -n "${extra//[[:space:]]/}" ]]; then
+		echo "Environment ${ENVIRONMENT} admits refs beyond ${BRANCH_POLICY} and ${TAG_POLICY}:" >&2
+		printf '  %s\n' "${extra}" >&2
+		die "remove them in the repository's environment settings, then re-run"
+	fi
 	add_ref_policy "${have}" branch "${BRANCH_POLICY}"
 	add_ref_policy "${have}" tag "${TAG_POLICY}"
 }
@@ -218,10 +231,16 @@ main() {
 	email="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 	provider_name="projects/${number}/locations/global/workloadIdentityPools/${POOL}/providers/${PROVIDER}"
 
-	confirm_or_exit "$(printf 'About to configure keyless CI access to the dogfood project:\n  Project:     %s (%s)\n  Repo:        %s (id %s, owner id %s)\n  Environment: %s — reviewers %s, refs %s and tags %s\n  Pool:        %s / provider %s\n  SA:          %s\n  Roles:       %s\nThis writes IAM on the project and protection rules on the repository.' \
+	confirm_or_exit "$(printf 'About to configure keyless CI access to the dogfood project:\n  Project:     %s (%s)\n  Repo:        %s (id %s, owner id %s)\n  Environment: %s — reviewers %s, refs %s and tags %s\n  Workflow:    %s on main\n  Pool:        %s / provider %s\n  SA:          %s\n  Roles:       %s\nThis writes IAM on the project and protection rules on the repository.' \
 		"${PROJECT}" "${number}" "${REPO}" "${repo_id}" "${owner_id}" \
-		"${ENVIRONMENT}" "${REVIEWERS}" "${BRANCH_POLICY}" "${TAG_POLICY}" \
+		"${ENVIRONMENT}" "${REVIEWERS}" "${BRANCH_POLICY}" "${TAG_POLICY}" "${WORKFLOW}" \
 		"${POOL}" "${PROVIDER}" "${email}" "${ROLES}")"
+
+	# The environment first: GCP is about to trust its claim, and a workflow that
+	# names a missing environment creates it unprotected.
+	step "GitHub environment"
+	ensure_environment "${reviewers_json}"
+	set_variables "${provider_name}" "${email}"
 
 	step "Enabling the token-exchange APIs"
 	gcloud services enable iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com \
@@ -235,12 +254,8 @@ main() {
 	ensure_service_account "${email}"
 	bind_iam "${email}" "${number}"
 
-	step "GitHub environment"
-	ensure_environment "${reviewers_json}"
-	set_variables "${provider_name}" "${email}"
-
 	echo
-	echo "Done. Prove it end to end (it waits for a reviewer's approval):"
+	echo "Done. Prove it end to end (it waits for the environment's reviewer):"
 	echo "  gh workflow run dogfood-identity-probe.yml --repo ${REPO} --ref main"
 }
 

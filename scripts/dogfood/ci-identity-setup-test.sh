@@ -6,8 +6,10 @@
 # repository, and its whole value is the trust boundary those writes draw. So
 # the boundary is asserted as written — the provider's condition, the principal
 # allowed to impersonate, the refs the environment admits — along with the
-# idempotency that makes a re-run safe: nothing is re-created, and a drifted
-# condition is converged rather than left standing.
+# idempotency that makes a re-run safe: nothing is re-created, and the provider
+# is rewritten rather than trusted. The order is asserted too: the environment is
+# protected before GCP trusts its claim, because a workflow naming a missing
+# environment creates it unprotected.
 #
 # Both CLIs are stubbed on PATH, so the real script runs end to end.
 set -euo pipefail
@@ -37,7 +39,6 @@ export LOG ENV_BODY
 
 mkdir -p "$BIN"
 # STUB_EXISTS      1 => every describe succeeds (a re-run), else 404
-# STUB_CONDITION   the provider's current attributeCondition on a re-run
 # STUB_POLICIES    "type name" lines the environment already carries
 # STUB_UID         the id `gh api users/<login>` answers
 cat >"$BIN/gcloud" <<'STUB_BODY'
@@ -46,10 +47,6 @@ set -uo pipefail
 printf 'gcloud %s\n' "$*" >>"${LOG}"
 case "$*" in
 "projects describe"*) echo 424242 ;;
-*"providers describe"*)
-	[[ "${STUB_EXISTS:-}" == 1 ]] || exit 1
-	printf '%s\n' "${STUB_CONDITION}"
-	;;
 *" describe "*) [[ "${STUB_EXISTS:-}" == 1 ]] || exit 1 ;;
 esac
 exit 0
@@ -77,7 +74,7 @@ run_case() {
 	set +e
 	OUT="$(env PATH="$BIN:$PATH" PROJECT=dogfood-proj CLUSTER=gag-dogfood ZONE=us-east1-b \
 		REPO=octo/repo REVIEWERS=alice ASSUME_YES=1 STUB_UID=7 STUB_EXISTS= \
-		STUB_CONDITION= STUB_POLICIES= "$@" "$SUBJECT" 2>&1 </dev/null)"
+		STUB_POLICIES= "$@" "$SUBJECT" 2>&1 </dev/null)"
 	RC=$?
 	set -e
 }
@@ -95,11 +92,17 @@ want_out() {
 	if [[ "$OUT" == *"$2"* ]]; then ok "$1"; else bad "$1: output lacks: $2"; fi
 }
 # want_body NAME NEEDLE — the environment body the subject PUT.
+# first_line NEEDLE — 1-based line of the first logged call containing NEEDLE, 0 if none.
+first_line() {
+	local n
+	n="$(grep -nF -- "$1" "$LOG" | head -1 | cut -d: -f1)"
+	echo "${n:-0}"
+}
 want_body() {
 	if grep -qF -- "$2" "$ENV_BODY"; then ok "$1"; else bad "$1: $(cat "$ENV_BODY")"; fi
 }
 
-CONDITION="assertion.repository_id == '111' && assertion.repository_owner_id == '222' && assertion.environment == 'dogfood-validation'"
+CONDITION="assertion.repository_id == '111' && assertion.repository_owner_id == '222' && assertion.environment == 'dogfood-validation' && assertion.job_workflow_ref == 'octo/repo/.github/workflows/dogfood-identity-probe.yml@refs/heads/main'"
 PRINCIPAL="principalSet://iam.googleapis.com/projects/424242/locations/global/workloadIdentityPools/github-actions/attribute.environment/dogfood-validation"
 
 # --- a first run creates the whole boundary ----------------------------------
@@ -108,7 +111,7 @@ want_rc "a first run converges" 0
 want_call "creates the pool" "workload-identity-pools create github-actions"
 want_call "creates the provider" "providers create-oidc github-oidc"
 want_call "the provider trusts only GitHub's issuer" "--issuer-uri=https://token.actions.githubusercontent.com"
-want_call "the provider accepts only this repo, by id, inside the environment" "--attribute-condition=${CONDITION}"
+want_call "the provider accepts only the probe on main, in this repo by id, inside the environment" "--attribute-condition=${CONDITION}"
 want_call "maps the environment claim the principal set keys on" "attribute.environment=assertion.environment"
 want_call "creates the service account" "service-accounts create gag-release-validator"
 want_call "only the environment's principals may impersonate" "--member=${PRINCIPAL}"
@@ -120,21 +123,30 @@ want_call "admits main" "-f name=main -f type=branch"
 want_call "admits candidate tags" "-f name=v*-rc.* -f type=tag"
 want_call "publishes the provider name" "variable set GCP_WORKLOAD_IDENTITY_PROVIDER --env dogfood-validation --repo octo/repo --body projects/424242/locations/global/workloadIdentityPools/github-actions/providers/github-oidc"
 want_call "publishes the service account" "--body gag-release-validator@dogfood-proj.iam.gserviceaccount.com"
+put="$(first_line "-X PUT")"
+enable="$(first_line "services enable")"
+if ((put > 0 && enable > 0 && put < enable)); then
+	ok "protects the environment before any GCP write"
+else
+	bad "protects the environment before any GCP write: PUT at ${put}, first GCP write at ${enable}"
+fi
 
-# --- a re-run creates nothing ------------------------------------------------
-run_case STUB_EXISTS=1 "STUB_CONDITION=${CONDITION}" $'STUB_POLICIES=branch main\ntag v*-rc.*'
+# --- a re-run creates nothing, and rewrites the provider --------------------
+run_case STUB_EXISTS=1 $'STUB_POLICIES=branch main\ntag v*-rc.*'
 want_rc "a re-run converges" 0
 no_call "does not re-create the pool" "workload-identity-pools create"
 no_call "does not re-create the provider" "create-oidc"
-no_call "leaves a matching condition alone" "update-oidc"
 no_call "does not re-create the service account" "service-accounts create"
 no_call "does not re-add ref policies" "-X POST"
+want_call "rewrites an existing provider" "update-oidc github-oidc"
+want_call "rewrites its condition" "--attribute-condition=${CONDITION}"
+want_call "rewrites its mapping too" "--attribute-mapping=google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.environment=assertion.environment"
 
-# --- a drifted condition is converged ----------------------------------------
-run_case STUB_EXISTS=1 "STUB_CONDITION=assertion.repository_owner == 'octo'"
-want_rc "a drifted provider converges" 0
-want_call "rewrites a drifted condition" "update-oidc github-oidc"
-want_call "rewrites it to the id-keyed one" "--attribute-condition=${CONDITION}"
+# --- an environment admitting more refs is refused, before GCP is touched ----
+run_case STUB_EXISTS=1 $'STUB_POLICIES=branch main\ntag v*-rc.*\nbranch *'
+want_rc "an extra ref policy fails the run" 1
+want_out "names the extra policy" "branch *"
+no_call "writes nothing to GCP when the environment admits too much" "services enable"
 
 # --- nothing is written before the inputs resolve ----------------------------
 run_case STUB_UID=
