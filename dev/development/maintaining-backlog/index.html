@@ -3558,6 +3558,9 @@ Everything from that decision to the tag is a backlog question, and this is its 
 </table>
 <p>Link each ID to its item page while it is open; a shipped or punted item's link goes stale when the file is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.</p>
 <p><strong>Delivered is a tick, not a narrative.</strong> A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.</p>
+<p><strong>The <code>Gates?</code> column and the labels are held to each other.</strong> <code>make release-ladder-check</code> reads each rung's plan off the <a href="../../plan/release-ladder/">release ladder</a> table and fails in both directions: an <code>X.Y-gate</code> row the rung's ledger does not mark <code>X.Y-gate</code>, and a ledger gating row whose item lacks the label (Q1087).
+So adding or dropping a gate label is an edit to the ledger too, and a rung gets a ledger before its first label.
+A closed row has no item file, so its ✅ ledger row is skipped rather than failed.</p>
 <p><strong>The cut condition is one grep:</strong> no <code>-gate</code> item for this release remains open (<code>grep -l '1.3-gate' docs/queue/Q*.md</code>), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.</p>
 <p><strong>That validation still gets a ledger row</strong> — Q-ID <code>—</code>, since it has none:</p>
 <p>| — | RC validated on dogfood | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |</p>

@@ -2597,6 +2597,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#scope-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope ledger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-this-is-gated-on-a-soak-not-a-date" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2805,6 +2816,58 @@ The phase table below is the real state.</p>
 <td>Operator docs, migration guide, and the <code>v2.0.0</code> cut</td>
 <td>S</td>
 <td>❌ Open (<a href="../../queue/Q1107/">Q1107</a>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
+<p>What the <code>v2.0.0</code> tag waits for, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.
+Phase 2 is not here: <a href="../../queue/Q413/">Q413</a> gates 1.9, and <a href="../release-1.9/#scope-ledger">release-1.9.md</a> carries it.
+<code>make release-ladder-check</code> holds the <code>Gates?</code> column to each row's labels in both directions.</p>
+<table>
+<thead>
+<tr>
+<th>Q-ID</th>
+<th>Item</th>
+<th>Gates?</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../../queue/Q1086/">Q1086</a></td>
+<td>Storage-migrate stored objects to <code>v2</code> before the removals (Phase 3)</td>
+<td><code>2.0-gate</code></td>
+<td>🔲 deferred</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q273/">Q273</a></td>
+<td>Remove <code>v1alpha1</code> (Phase 3)</td>
+<td><code>2.0-gate</code></td>
+<td>🔲 deferred</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q264/">Q264</a></td>
+<td>Remove the classic acquisition machinery (Phase 3)</td>
+<td><code>2.0-gate</code></td>
+<td>🔲 deferred</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1068/">Q1068</a></td>
+<td>Validating webhook rules un-match when <code>v2alpha1</code> goes (Phase 3)</td>
+<td><code>2.0-gate</code></td>
+<td>🔲 ready</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1107/">Q1107</a></td>
+<td>Operator docs, migration guide, and the cut (Phase 4)</td>
+<td><code>2.0-gate</code></td>
+<td>🔲 deferred</td>
+</tr>
+<tr>
+<td>-</td>
+<td>RC validated on dogfood</td>
+<td>gates</td>
+<td>🔲 no candidate cut</td>
 </tr>
 </tbody>
 </table>
