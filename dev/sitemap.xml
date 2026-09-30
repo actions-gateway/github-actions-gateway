@@ -461,6 +461,10 @@
          <lastmod>2026-09-30</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/plan/release-1.9/</loc>
+         <lastmod>2026-09-30</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/plan/release-ladder/</loc>
          <lastmod>2026-09-30</lastmod>
     </url>
@@ -953,10 +957,6 @@
          <lastmod>2026-09-30</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/archive/release-1.9/</loc>
-         <lastmod>2026-09-30</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/archive/release-decision-support/</loc>
          <lastmod>2026-09-30</lastmod>
     </url>
@@ -1145,10 +1145,6 @@
          <lastmod>2026-09-30</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q1068/</loc>
-         <lastmod>2026-09-30</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1069/</loc>
          <lastmod>2026-09-30</lastmod>
     </url>
@@ -1330,6 +1326,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q1149/</loc>
+         <lastmod>2026-09-30</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1150/</loc>
          <lastmod>2026-09-30</lastmod>
     </url>
     <url>

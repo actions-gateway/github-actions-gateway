@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1068/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.9/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>v2.0.0 removing v2alpha1 un-matches every validating webhook rule - GitHub Actions Gateway</title>
+        <title>Release 1.9 Milestone Definition - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v200-removing-v2alpha1-un-matches-every-validating-webhook-rule" class="md-skip">
+        <a href="#release-19-milestone-definition" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v2.0.0 removing v2alpha1 un-matches every validating webhook rule
+              Release 1.9 Milestone Definition
             
           </span>
         </div>
@@ -2579,6 +2579,69 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-release-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this release exists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-release-must-not-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this release must NOT do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope ledger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-of-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition of Done
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-waits-for-v200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What waits for v2.0.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,33 +2660,97 @@
   
 
 
-<h1 id="v200-removing-v2alpha1-un-matches-every-validating-webhook-rule"><code>v2.0.0</code> removing <code>v2alpha1</code> un-matches every validating webhook rule<a class="headerlink" href="#v200-removing-v2alpha1-un-matches-every-validating-webhook-rule" title="Permanent link">&para;</a></h1>
-<p>All five <code>actions-gateway.com</code> kinds are validated by rules that name <code>apiVersions: [v2alpha1]</code> and nothing else, and no rule sets <code>matchPolicy</code>, so they reach <code>v2beta1</code> writes only through the apiserver default <code>Equivalent</code> (<a href="../../plan/archive/q74-v2beta1-conversion-webhook/">q74</a> records the same routing).
-Measured 2026-09-07 over <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/webhook.yaml"><code>webhook.yaml</code></a>: <code>vactionsgateway</code>, <code>vclusterrunnertemplate</code>, <code>vegressproxy</code>, <code>vrunnerset</code> and <code>vrunnertemplate</code> are each <code>v2alpha1</code>-only, with zero occurrences of <code>matchPolicy</code> in the file.</p>
-<p><code>Equivalent</code> converts a request into a version the rule names, so a rule whose only version has been removed matches nothing.
-<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 removes <code>v2alpha1</code> <strong>and <code>v2beta1</code></strong> at <code>v2.0.0</code>, leaving <code>v2</code> as the only served version, so every rule's version list is empty of anything that still exists.
-That drops admission validation for every <code>v2</code> write at once, silently, since an unmatched rule is not a <code>failurePolicy: Fail</code> rejection.
-Surfaced while deciding Q452, through the <code>CiliumFQDN</code>/<code>CalicoFQDN</code> deprecation warning, which rides the same routing; the aliases are themselves removed at <code>v2.0.0</code>, so that warning is not what is at risk here.
-The other four kinds' validators are.</p>
-<p><strong>The obvious fix is a trap, and it inverts the failure rather than removing it.</strong> Adding the surviving versions to each rule's <code>versions=</code> list means the apiserver has no conversion to do and sends the object at its own version, so a <code>v2beta1</code> write reaches a handler typed <code>*agcv2alpha1.EgressProxy</code>.
-Admission decoding goes through <code>runtime.DecodeInto</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/sigs.k8s.io/controller-runtime/pkg/webhook/admission/decode.go"><code>decode.go</code></a>), which fails when the decoded type differs from the target (<code>unable to decode %s into %v</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/k8s.io/apimachinery/pkg/runtime/codec.go"><code>codec.go</code></a>).
-Under <code>failurePolicy: Fail</code> that turns a silent loss of validation into every write being rejected.
-The repo's own shape agrees: <code>v1alpha1</code> has its own rule, path and handler rather than sharing one.</p>
-<p>So the fix needs a per-version path and handler for each kind, or one version-agnostic handler, which is why this is <code>M</code> rather than the <code>S</code> it first looks like.
-The decoding half is measured in the vendored tree; the apiserver half, that a rule naming the request's own version suppresses conversion, is documented upstream behaviour this row has <strong>not</strong> measured.
-An envtest with a multi-version rule settles it, and that same test is the inversion the fix needs: it must go red when a rule names only <code>v2alpha1</code> and the version is gone.</p>
-<p>It gates the <code>v2.0.0</code> tag rather than gating <a href="../Q273/">Q273</a>/<a href="../Q264/">Q264</a>: those rows can land whenever, and the tag cannot ship without this.
-Ships beside them if it has not landed sooner.</p>
-<p>Raised in review of #1867, which is also where the original single-line fix was refuted.</p>
+<h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status: two of three gates landed (Q1085, then Q413); <a href="../../queue/Q1150/">Q1150</a> is open, and not yet tagged.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
+The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
+The version is no longer provisional.
+It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
+Nothing here is a commitment to a date.</p>
+</blockquote>
+<h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
+<p><code>v2.0.0</code> advances the storage version to <code>v2</code> and drops <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code> and classic acquisition.
+It cannot also be the release that <em>introduces</em> <code>v2</code>: Kubernetes' <a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">deprecation policy</a> rule #4b says the storage version "may not advance until after a release has been made that supports both the new version and the previous version".</p>
+<p>The rule is a convention rather than something the apiserver enforces, so what it buys here is the argument, and it is <strong>rollback</strong>.
+Once stored objects are rewritten as <code>v2</code>, a cluster cannot return to a release whose CustomResourceDefinitions do not define <code>v2</code>.
+Without this rung that destination is <code>v1.8.0</code>, which would make <code>v2.0.0</code> the one upgrade with no way back.
+It is already the largest this project asks anyone to make, carrying the <code>v1</code>→<code>v2</code> migration and four removals.</p>
+<p>It is also the only place the <code>v2beta1</code> ↔ <code>v2</code> conversion edge runs before it is mandatory.
+<a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">v2-ga.md</a>'s Phase 1 soak validates <code>v2beta1</code>'s shape and says nothing about a conversion that does not exist yet.</p>
+<p>Full reasoning: <a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">release-ladder.md</a>.</p>
+<h2 id="what-this-release-must-not-do">What this release must NOT do<a class="headerlink" href="#what-this-release-must-not-do" title="Permanent link">&para;</a></h2>
+<p><strong>It must not mark <code>v2</code> the storage version</strong>, and must not migrate stored objects.
+That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
+<a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2's step 1 carries a <code>+kubebuilder:storageversion</code> marker that belongs to Phase 3 and <code>v2.0.0</code>; moving it was part of Q413, not a follow-up.</p>
+<p>The hub stays at <code>v2beta1</code>, though nothing ties it to the storage version: moving it buys nothing before <code>v2.0.0</code> leaves one served version, and it would put the alias conversion annotation on every <code>v2alpha1</code> and <code>v2beta1</code> conversion (<a href="../v2-ga/#the-hub-stays-at-v2beta1">why</a>).</p>
+<h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
+<p>Three gating rows and the candidate validation, in the order they land.</p>
+<table>
+<thead>
+<tr>
+<th>Q-ID</th>
+<th>Item</th>
+<th>Gates?</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1085</td>
+<td>Admission rejects new <code>CiliumFQDN</code>/<code>CalicoFQDN</code> writes, and the pre-upgrade alias check joins the checklist</td>
+<td><code>1.9-gate</code></td>
+<td>✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the <a href="../../operations/upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">Pre-Upgrade Validation Checklist</a></td>
+</tr>
+<tr>
+<td>Q413</td>
+<td><a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2: add <code>v2</code> to all five kinds, serve it beside <code>v2beta1</code>, extend conversion coverage. Storage marker withheld</td>
+<td><code>1.9-gate</code></td>
+<td>✅ landed: <code>v2</code> served on all six kinds (<code>PriorityClassAllowlist</code> included), <code>v2beta1</code> the storage version on each, conversion round-trips proven in envtest</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1150/">Q1150</a></td>
+<td>Retype the five validating webhooks onto <code>v2</code>, so the <code>v2</code>-typed validators run through this release before <code>v2.0.0</code> deletes <code>api/v2alpha1</code></td>
+<td><code>1.9-gate</code></td>
+<td>🔲 ready: added 2026-09-30 by maintainer decision, after Q413 had landed</td>
+</tr>
+<tr>
+<td>—</td>
+<td>RC validated on dogfood</td>
+<td>gates</td>
+<td>🔲 no candidate cut</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
+<code>v1.8.0</code> tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
+Inside one release the sequencing recovers what it can, which is less than a tag's worth.
+The reject and the pre-upgrade check are in the tree before <code>v2</code> is served, so <code>main</code>, the dogfood cluster and the review order all meet the guard before the hazard.
+An operator does not: both halves arrive under the same tag, so for them the clean-population <em>window</em> an earlier tag would have given is gone rather than narrowed.</p>
+<p><strong>Nothing rides.</strong> <code>scripts/release/semver-floor.sh v1.8.0</code> read <code>FLOOR: NONE</code> on 2026-09-17 over the 26 commits since the tag: six carry a <code>feat</code> or <code>fix</code> type and none touches a released artifact, so nothing user-visible has accumulated and a tag today would publish no change.
+1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did (<a href="../release-ladder/#why-16-exists-rather-than-folding-into-15">release-ladder.md</a>).
+That is a reading rather than a decision: whether anything <em>should</em> ride is scope the maintainer sets, and the ledger takes a row for each item that does.</p>
+<h2 id="definition-of-done">Definition of Done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Q413's Phase 2 has landed</strong> with <code>v2</code> served on all five kinds and <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers.</li>
+<li><strong>The conversion round-trips both directions</strong> across <code>v2beta1</code> ↔ <code>v2</code> on real objects, not only in unit tests.
+   This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.</li>
+<li><strong>Q1085's items 2 and 3 have landed</strong>, and landed before Q413.
+   1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
+<li><strong><a href="../../queue/Q1150/">Q1150</a> has landed</strong>: every <code>actions-gateway.com</code> validating webhook rule names <code>v2</code> and its handler is typed on <code>api/v2</code>.
+   This is what gives the <code>v2</code>-typed validators a release of real traffic before <code>v2.0.0</code> leaves them the only ones, which is the soak Q1150 was pulled forward for.</li>
+<li><strong>The published tag serves both versions</strong>, which is the Rule #4b evidence <code>v2.0.0</code> depends on.
+   Record it here, since <code>v2.0.0</code>'s own pre-flight cannot re-derive that a <em>previous</em> release served both.</li>
+</ol>
+<h2 id="what-waits-for-v200">What waits for <code>v2.0.0</code><a class="headerlink" href="#what-waits-for-v200" title="Permanent link">&para;</a></h2>
+<p>The storage advance and migration (<a href="../../queue/Q1086/">Q1086</a>) and the four removals (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>, and <code>v2beta1</code> itself).
+The validating webhook rules cannot silently un-match through those removals: <code>make webhook-versions-check</code> (Q1068) fails any rule naming only versions no CRD serves.
+<a href="../v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 owns the ordering.</p>
 
 
 
 
 
 
-
-  
-  
 
 
 

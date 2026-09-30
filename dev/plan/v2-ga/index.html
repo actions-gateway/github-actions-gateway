@@ -2783,7 +2783,7 @@
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.</p>
 <blockquote>
 <p><strong>Status: Phases 1 and 2 are done.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), and Q413 then shipped Phase 2 for 1.9: <code>v2</code> served beside <code>v2beta1</code> on every kind, storage unmoved.
-Phase 3's storage advance and coupled removals wait on <a href="../../queue/Q1086/">Q1086</a>, <a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a> and <a href="../../queue/Q1068/">Q1068</a>; Phase 4's docs and the tag are <a href="../../queue/Q1107/">Q1107</a>; the Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
+Phase 3's storage advance and coupled removals wait on <a href="../../queue/Q1086/">Q1086</a>, <a href="../../queue/Q273/">Q273</a>, and <a href="../../queue/Q264/">Q264</a>; Phase 4's docs and the tag are <a href="../../queue/Q1107/">Q1107</a>; the Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The <code>✅</code> on this plan's <a href="../">index row</a> means <em>no open item remains</em>, not that the graduation has happened — deferred residuals <a href="../../development/maintaining-backlog/#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count">don't count</a>.
 The phase table below is the real state.</p>
 </blockquote>
@@ -2832,7 +2832,7 @@ The phase table below is the real state.</p>
 </table>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <p>What the <code>v2.0.0</code> tag waits for, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.
-Phase 2 is not here: Q413 gated 1.9, and <a href="../archive/release-1.9/#scope-ledger">release-1.9.md</a> carries it.
+Phase 2 is not here: Q413 gated 1.9, and <a href="../release-1.9/#scope-ledger">release-1.9.md</a> carries it, as it does <a href="../../queue/Q1150/">Q1150</a>, the validators' retype onto <code>v2</code>.
 <code>make release-ladder-check</code> holds the <code>Gates?</code> column to each row's labels in both directions.</p>
 <table>
 <thead>
@@ -2861,12 +2861,6 @@ Phase 2 is not here: Q413 gated 1.9, and <a href="../archive/release-1.9/#scope-
 <td>Remove the classic acquisition machinery (Phase 3)</td>
 <td><code>2.0-gate</code></td>
 <td>🔲 deferred</td>
-</tr>
-<tr>
-<td><a href="../../queue/Q1068/">Q1068</a></td>
-<td>Validating webhook rules un-match when <code>v2alpha1</code> goes (Phase 3)</td>
-<td><code>2.0-gate</code></td>
-<td>🔲 ready</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1107/">Q1107</a></td>
@@ -3067,7 +3061,8 @@ That ordering is the whole reason 1.9 exists, and it is also what makes the alia
 <p><code>v2beta1</code> is the one removal Rule 4b constrains, and 1.9 is the release that satisfies it: it serves <code>v2beta1</code> and <code>v2</code> side by side without moving storage, so this tag is free to advance.</p>
 <p>They are one bundle because <code>v2beta1</code> is already ScaleSet-only: classic acquisition exists solely to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when <code>v1alpha1</code> is removed.
-Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the <code>ValidatingAdmissionPolicy</code> objects and the validating webhook.</p>
+Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the <code>ValidatingAdmissionPolicy</code> objects and the validating webhook.
+Dropping a served version cannot silently un-match a validating webhook: <code>make webhook-versions-check</code> fails any rule naming only versions no CRD serves (Q1068), and <a href="../../queue/Q1150/">Q1150</a> retypes the validators onto <code>v2</code> in 1.9, ahead of the removal.</p>
 <h3 id="capability-parity-is-a-precondition-of-the-removal">Capability parity is a precondition of the removal<a class="headerlink" href="#capability-parity-is-a-precondition-of-the-removal" title="Permanent link">&para;</a></h3>
 <p>Removing classic must not delete a capability along with it.
 Dropping a served API version is a contract change operators can plan for; silently losing a behaviour they rely on is not, and it is exactly what the deprecation policy exists to prevent.</p>

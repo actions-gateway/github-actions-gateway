@@ -3348,7 +3348,7 @@ Ask before the PR lands, while the alternative is still a design choice; afterwa
 <tr>
 <td>Remove or rename an enum value</td>
 <td><strong>Yes</strong></td>
-<td>Only by incrementing the version. See the removal floor below.</td>
+<td>Only by incrementing the version, and stored objects naming the value then need a carrier in the new one. See the removal floor below.</td>
 </tr>
 <tr>
 <td>Tighten validation</td>
@@ -3398,9 +3398,11 @@ The rule survived; only its input changed.
 State the floor <em>and</em> what it is derived from, so the next reader can tell which half a change invalidates.
 A bare "no earlier than <code>v3.0.0</code>" gives them no way to know the sentence is load-bearing on something else.</p>
 <h3 id="a-new-version-must-round-trip-losslessly">A new version must round-trip losslessly<a class="headerlink" href="#a-new-version-must-round-trip-losslessly" title="Permanent link">&para;</a></h3>
-<p><code>v2alpha1</code> is a spoke and <code>v2beta1</code> is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
-If a new version drops a field the old one has, the object must still round-trip: <code>RunnerSet</code> conversion stashes the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in <code>conversion.actions-gateway.com/*</code> annotations and restores them on the way back, so a coexistence-era object is never silently re-protocol'd.
+<p><code>v2alpha1</code> and <code>v2</code> are spokes and <code>v2beta1</code> is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
+If a new version drops something the old one can store, a field or an enum value, the object must still round-trip: <code>RunnerSet</code> conversion stashes the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in <code>conversion.actions-gateway.com/*</code> annotations, and <code>v2</code>'s <code>EgressProxy</code> carries a stored <code>CiliumFQDN</code>/<code>CalicoFQDN</code> alias the same way while showing <code>FQDN</code>.
 Any such carrier needs a round-trip test — see <code>TestRunnerSetConversion_RoundTrip</code> and friends in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/conversion_test.go"><code>api/v2alpha1/conversion_test.go</code></a>.</p>
+<p><strong>Never make a conversion fail on a stored object.</strong> A failed conversion fails the whole request, so one object breaks every <code>LIST</code> at that version, and a GA version is the group's preferred one: kube-controller-manager's namespace deleter and garbage collector list at it.
+Q413 first refused the alias, and its review measured the metadata-client <code>LIST</code> and <code>DELETECOLLECTION</code> failing, which leaves a namespace <code>Terminating</code> and the collector unable to track the kind.</p>
 <p>Two supporting habits: mark the outgoing version with <code>+kubebuilder:deprecatedversion:warning=…</code> naming the replacement <em>and</em> the release that removes it, so the apiserver warns at apply time; and keep the two version packages byte-identical except for the entitled differences, which <code>make v2-api-sync-check</code> enforces.</p>
 <h2 id="the-pre-release-review">The pre-release review<a class="headerlink" href="#the-pre-release-review" title="Permanent link">&para;</a></h2>
 <p>Run this in <a href="../../operations/release/#1-pre-flight">release pre-flight</a>, before tagging any release — including a prerelease that will become a stable line.</p>

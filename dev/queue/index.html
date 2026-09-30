@@ -3350,12 +3350,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>actions/scaleset</code> reaches GA/v1.0 or the auto-assign contract (<code>actions/scaleset#107</code>) is documented.</td>
 </tr>
 <tr>
-<td><a href="Q1068/">Q1068</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/webhook.yaml"><code>v2.0.0</code> removing <code>v2alpha1</code> un-matches every validating webhook rule</a></td>
-<td><code>bug</code> <code>2.0-gate</code></td>
+<td><a href="Q1150/">Q1150</a></td>
+<td><a href="../plan/release-1.9/#scope-ledger">Retype the <code>actions-gateway.com</code> validating webhooks onto <code>v2</code></a></td>
+<td><code>bug</code> <code>1.9-gate</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>All five <code>actions-gateway.com</code> kinds are validated by rules that name <code>apiVersions: [v2alpha1]</code> and nothing else, and no rule sets …</td>
+<td>The five validators in <code>cmd/gmc/internal/webhook/v2alpha1/</code> are typed on <code>api/v2alpha1</code>, and their <code>+kubebuilder:webhook</code> markers name …</td>
 </tr>
 <tr>
 <td><a href="Q273/">Q273</a></td>
