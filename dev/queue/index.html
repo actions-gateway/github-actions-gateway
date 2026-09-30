@@ -2718,6 +2718,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Sighted once, 2026-09-29, in <code>make check</code> on the Q737 branch, whose diff touches neither the checker nor its test: ```text …</td>
 </tr>
 <tr>
+<td><a href="Q1151/">Q1151</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">AGC reaps a worker mid-job as orphaned_running after a sibling job ends</a></td>
+<td><code>bug</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>On 2026-09-30 the <code>gag-dogfood</code> tenant (<code>agc:v1.8.0-rc.2</code>, worker <code>dogfood-runner:2.337.0</code>) deleted two workers while their jobs were still …</td>
+</tr>
+<tr>
 <td><a href="Q1146/">Q1146</a></td>
 <td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Dogfood gag-ci-e2e workers never receive their job on either lane</a></td>
 <td><code>bug</code> <code>dogfood</code></td>
