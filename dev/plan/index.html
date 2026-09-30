@@ -2728,14 +2728,9 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Shipped as <code>v1.8.0</code> on 2026-09-14, validated on <code>rc.2</code>. Q1029 closed 2026-09-07, recovery running off the worker-pod watch; Q1108 was added as a second gating row on 2026-09-13 and closed that day, moving the at-most-once claim into its own ConfigMap so it outlives the pod. Q1059 and Q1060 rode and closed positive on 2026-09-14, and Q452's alias decision closed 2026-09-08. Two candidates: <code>rc.1</code> was cut and validated and then stopped covering what ships, because Q1108 landed on the released surface, and <code>rc.2</code> validated at <code>86fbb6061</code>. Q1085's removal notice rode with its docs half shipped; its items 2 and 3 did not make the tag, so both are 1.9's and the clean-population window they wanted is spent</td>
 </tr>
 <tr>
-<td><a href="release-1.9/">release-1.9.md</a></td>
-<td>The Rule #4b overlap rung: <code>v2</code> served beside <code>v2beta1</code> with the storage version unmoved, so <code>v2.0.0</code> has a rollback destination and the new conversion edge runs once before it is mandatory</td>
-<td>⚠️ Scoped 2026-09-17, both conditions the shape was held behind discharged: the soak read clean on 2026-09-14 and <code>v1.8.0</code> tagged the same day, so the version is no longer provisional. Two gating rows, ordered: Q1085's reject and pre-upgrade check first, then <a href="../queue/Q413/">Q413</a>'s Phase 2, because 1.8 shipped without that pair and the guard now has to precede the hazard inside one release. Nothing rides: <code>semver-floor.sh v1.8.0</code> read <code>FLOOR: NONE</code> on 2026-09-17 over 26 commits, so the rung is forced by its own content alone. No candidate cut, and no date</td>
-</tr>
-<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 now ships in 1.9 (<a href="release-1.9/">release-1.9.md</a>) with the storage marker held back to Phase 3. <a href="../queue/Q413/">Q413</a> is now scoped to Phase 2 alone and ready; Phase 3 rides <a href="../queue/Q1086/">Q1086</a>, <a href="../queue/Q273/">Q273</a>, <a href="../queue/Q264/">Q264</a> and <a href="../queue/Q1068/">Q1068</a>, and Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a></td>
+<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Phase 3 rides <a href="../queue/Q1086/">Q1086</a>, <a href="../queue/Q273/">Q273</a>, <a href="../queue/Q264/">Q264</a> and <a href="../queue/Q1068/">Q1068</a>, and Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a></td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
@@ -3000,6 +2995,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/milestone-1/">archive/milestone-1.md</a></td>
 <td>Wire-protocol probe; broker + githubapp packages</td>
 <td>Archived 2026-09-12, Q894. Work fully landed; no live backlog item references it.</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.9/">archive/release-1.9.md</a></td>
+<td>The Rule #4b overlap rung: <code>v2</code> served beside <code>v2beta1</code> with the storage version unmoved, so <code>v2.0.0</code> has a rollback destination and the new conversion edge runs once before it is mandatory</td>
+<td>Archived 2026-09-29, Q413. Both gates landed (Q1085, then Q413); no live backlog item references it. Not yet tagged.</td>
 </tr>
 <tr>
 <td><a href="archive/milestone-2/">archive/milestone-2.md</a></td>

@@ -2598,7 +2598,7 @@
 
 
 <h1 id="storage-migrate-stored-objects-to-v2-before-the-v200-removals">Storage-migrate stored objects to <code>v2</code> before the <code>v2.0.0</code> removals<a class="headerlink" href="#storage-migrate-stored-objects-to-v2-before-the-v200-removals" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <a href="../Q413/">Q413</a> lands and 1.9 ships <code>v2</code> served beside <code>v2beta1</code>.
+<p><strong>Event:</strong> Q413 lands and 1.9 ships <code>v2</code> served beside <code>v2beta1</code>.
 The migration cannot run before <code>v2</code> exists, and must complete before <code>v2beta1</code> is dropped.</p>
 <p><a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 opens by marking <code>v2</code> the storage version and rewriting stored objects, and Phase 4 cuts the tag on top of that.
 Both assume a migration mechanism this repo does not have: <code>StorageVersionMigration</code> and <code>storedVersions</code> appear nowhere outside <code>vendor/</code>, measured 2026-09-08 across the whole tree.

@@ -1691,6 +1691,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3411,6 +3422,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4105,6 +4127,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2</a></li>
 <li><a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission">A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission</a></li>
 <li><a href="#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap">Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap</a></li>
 <li><a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job</a></li>
@@ -4179,7 +4202,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 </code></pre></div>
 <h3 id="before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">Before upgrading to <code>v2.0.0</code>: no <code>EgressProxy</code> still names a deprecated FQDN alias<a class="headerlink" href="#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias" title="Permanent link">&para;</a></h3>
 <p><code>v2.0.0</code> removes the deprecated <code>CiliumFQDN</code> and <code>CalicoFQDN</code> values of <code>EgressProxy.spec.egressPolicyMode</code>, along with every API version that defines them (<a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).
-A stored object still naming one cannot be represented in <code>v2</code>, and a conversion failure fails the whole request it is served in, so one unmigrated <code>EgressProxy</code> anywhere in the cluster empties <code>kubectl get egressproxies -A</code> for everyone.</p>
+<code>v2</code> cannot represent one, so <code>v2.0.0</code> stores an unmigrated pool as plain <code>FQDN</code>, enforced by whatever <code>--fqdn-policy-backend</code> names rather than the backend its alias pinned.</p>
 <p>Run this against the version that can still represent the aliases, and expect <strong>no output</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>egressproxies.v2beta1.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[?(@.spec.egressPolicyMode=="CiliumFQDN")]}{.metadata.namespace}/{.metadata.name}{"\t"}{.spec.egressPolicyMode}{"\n"}{end}{range .items[?(@.spec.egressPolicyMode=="CalicoFQDN")]}{.metadata.namespace}/{.metadata.name}{"\t"}{.spec.egressPolicyMode}{"\n"}{end}'</span>
 </code></pre></div>
@@ -4187,8 +4210,8 @@ A stored object still naming one cannot be represented in <code>v2</code>, and a
 The enforced policy is identical either way, so this is a re-label rather than a change in what is enforced.</p>
 <p>Two details the command depends on:</p>
 <ul>
-<li><strong>Pin the version.</strong> <code>kubectl get egressproxies</code> resolves to the preferred served version, which becomes <code>v2</code>, the version that cannot hold an alias.
-  The unpinned form is therefore the one that stops working exactly when you need it.</li>
+<li><strong>Pin the version.</strong> <code>kubectl get egressproxies</code> resolves to the preferred served version, which becomes <code>v2</code> in 1.9, and <code>v2</code> shows a stored alias as <code>FQDN</code>.
+  The unpinned form therefore prints nothing on a cluster that still has pools to migrate.</li>
 <li><strong>Two <code>range</code> blocks, not one filter.</strong> <code>kubectl</code>'s JSONPath has no <code>||</code> in a filter expression, so a single combined filter fails to parse rather than matching nothing.
   Measured 2026-09-24 on the <code>kubectl</code> 1.36 client, which rejects the combined form with <code>unrecognized character in action: U+007C '|'</code>.</li>
 </ul>
@@ -4197,6 +4220,24 @@ The enforced policy is identical either way, so this is a re-label rather than a
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: <code>v2</code> is served beside <code>v2beta1</code>, and an unpinned read now returns <code>v2</code><a class="headerlink" href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone with the v2 CRDs installed.</p>
+<p><strong>What changed.</strong> Every <code>actions-gateway.com</code> kind is now also served at <code>v2</code>, the General Availability (GA) version: the five kinds in <code>actions-gateway-crds-v2</code>, and <code>PriorityClassAllowlist</code> in the main chart.
+<code>v2beta1</code> stays the storage version, so no stored object is rewritten.
+The GMC's conversion webhook converts the five chart kinds between <code>v2</code> and the other two versions; <code>PriorityClassAllowlist</code> has no webhook, and the apiserver converts it by rewriting <code>apiVersion</code> alone.
+<code>v2</code> is identical to <code>v2beta1</code> except that <code>EgressProxy.spec.egressPolicyMode</code> accepts only <code>CIDR</code> and <code>FQDN</code>.</p>
+<p><strong>What you will see.</strong> The apiserver prefers a GA version, so <code>kubectl get &lt;kind&gt;</code> and <code>kubectl get &lt;kind&gt; -o yaml</code> without a version now return <code>apiVersion: actions-gateway.com/v2</code>.
+An <code>EgressProxy</code> that still names <code>CiliumFQDN</code> or <code>CalicoFQDN</code> reads at <code>v2</code> as <code>egressPolicyMode: FQDN</code>, with the alias in the annotation <code>conversion.actions-gateway.com/egress-policy-mode</code>.
+The stored object keeps the alias, and so does the pool: writing the <code>v2</code> view back with the annotation in place restores it.
+Deleting the annotation, or setting another mode, at <code>v2</code> migrates the pool off the alias.
+So does replacing the whole object with a <code>v2</code> manifest that lacks the annotation, as <code>kubectl replace</code> or a GitOps tool that replaces objects does, with no warning; migrate such a pool deliberately first.
+Don't set the annotation yourself: admission rejects a write that would introduce an alias this way, as it does any other.
+Find any pools still on an alias with the <a href="#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">pre-upgrade check</a>, which is pinned to <code>v2beta1</code> because an unpinned read shows <code>FQDN</code>.</p>
+<p><strong>What to do.</strong> Re-apply both charts' CRDs as every upgrade already does: the <code>actions-gateway-crds-v2</code> render, and <code>helm show crds</code> for the main chart's <code>PriorityClassAllowlist</code>.
+Nothing else is required, and manifests can stay on <code>v2beta1</code>.
+Move them to <code>v2</code> before <code>v2.0.0</code>, which removes <code>v2beta1</code>; until then, a manifest on <code>v2beta1</code> is the one that still applies after a rollback.</p>
+<p><strong>Rolling back</strong> to a release that does not serve <code>v2</code> is safe for stored objects, because they are stored at <code>v2beta1</code>.
+A manifest written at <code>apiVersion: actions-gateway.com/v2</code> fails to apply there.</p>
 <h3 id="a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission">A new <code>CiliumFQDN</code> / <code>CalicoFQDN</code> <code>EgressProxy</code> is now rejected at admission<a class="headerlink" href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone who still creates an <code>EgressProxy</code> naming one of the two deprecated per-CNI <code>spec.egressPolicyMode</code> values, or switches an existing pool onto one.
 A pool that already stores one is unaffected and keeps running.</p>
@@ -4209,8 +4250,8 @@ A pool that already stores one is unaffected and keeps running.</p>
 <p>A create is always a new write.
 An update is one only when it changes the value, so re-applying an unmigrated pool, editing the rest of its spec, and migrating it off the alias are all still admitted; switching one alias for the other is not.
 The warning stays for the unchanged case.</p>
-<p><strong>Why now rather than at <code>v2.0.0</code>.</strong> <code>v2</code> does not define the aliases, so a stored object naming one cannot be represented once <code>v2</code> is served, and a failed conversion fails the whole request it is served in, and one such object empties <code>kubectl get egressproxies -A</code> for the cluster.
-This release is the first in which that conversion can be asked for at all, so the reject is what stops the population growing while there is still time to drain it.
+<p><strong>Why now rather than at <code>v2.0.0</code>.</strong> <code>v2</code> does not define the aliases, and <code>v2.0.0</code> removes every version that does, so a pool still on one is rewritten as plain <code>FQDN</code> then and falls to whatever <code>--fqdn-policy-backend</code> names.
+The reject is what stops the population growing while there is still time to drain it.
 Find any that remain with the <a href="#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">pre-upgrade check</a>.</p>
 <p><strong>What to do.</strong> Set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code> (<code>cilium</code> or <code>calico</code>).
 Each alias pins its namesake backend and <code>FQDN</code> plus the matching selector resolves to the same emitter, so the policy enforced on the wire does not change.</p>

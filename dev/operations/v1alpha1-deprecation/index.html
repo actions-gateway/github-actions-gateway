@@ -2961,10 +2961,9 @@ Both versions carrying the aliases are removed at <code>v2.0.0</code>, and the G
 Set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code> (<code>cilium</code> or <code>calico</code>).
 The enforced policy is identical either way — each alias pins its namesake backend, and <code>FQDN</code> plus the matching selector resolves to the same emitter — so this is a re-label, not a change in what is enforced.</p>
 <p>This is no longer optional, and the reason is mechanical rather than procedural.
-<code>v2</code> cannot represent an object naming an alias, and the conversion webhook cannot report one object as absent: a failed conversion fails the whole request it is batched into.
-One unmigrated <code>EgressProxy</code> therefore breaks <code>kubectl get egressproxies</code> at <code>v2</code> for the entire cluster, not just for itself.
-A single <code>kubectl get</code> of one healthy pool still works, which is what makes the failure diagnosable but does not make it survivable: <code>kubectl get egressproxies -A</code> is what everything from a dashboard to a GitOps reconcile issues.
-Measured 2026-09-21 against a real apiserver, on the one conversion failure the current tree can produce: with one unconvertible object stored beside two healthy ones, both the namespaced and the cluster-wide <code>LIST</code> returned zero items and an error, while a targeted <code>GET</code> of each healthy neighbour succeeded.</p>
+While <code>v2beta1</code> is served, a <code>v2</code> read shows a stored alias as <code>FQDN</code> and carries the alias in the annotation <code>conversion.actions-gateway.com/egress-policy-mode</code>, so the pool keeps its pinned backend.
+<code>v2.0.0</code> removes every version that can store the alias, so an unmigrated pool is rewritten as plain <code>FQDN</code> and enforced by whatever <code>--fqdn-policy-backend</code> names, which may not be the backend its alias pinned.
+Migrating first makes that choice explicit instead of leaving it to the upgrade.</p>
 <p><strong>Find them with the <a href="../upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">pre-upgrade alias check</a></strong> in the Pre-Upgrade Validation Checklist, which prints one line per pool to migrate and nothing when the cluster is clean.</p>
 <p>The admission webhook <strong>rejects</strong> a write that introduces a deprecated value (a create, or an update that switches onto one), and the rejection names the removal release and the replacement.
 A pool that already stores one is admitted unchanged, with the warning, so an operator mid-migration can still re-apply it and edit the rest of its spec.</p>
