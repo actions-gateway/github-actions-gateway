@@ -6,7 +6,7 @@ This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
 
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
-> Phase 3's storage advance and coupled removals wait on [Q1086](../queue/Q1086.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md) and [Q1068](../queue/Q1068.md); Phase 4's docs and the tag are [Q1107](../queue/Q1107.md); the Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
+> Phase 3's storage advance and coupled removals wait on [Q1086](../queue/Q1086.md), [Q273](../queue/Q273.md), and [Q264](../queue/Q264.md); Phase 4's docs and the tag are [Q1107](../queue/Q1107.md); the Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The `✅` on this plan's [index row](README.md) means *no open item remains*, not that the graduation has happened — deferred residuals [don't count](../development/maintaining-backlog.md#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count).
 > The phase table below is the real state.
 
@@ -23,7 +23,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 ## Scope ledger
 
 What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
-Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](archive/release-1.9.md#scope-ledger) carries it.
+Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](release-1.9.md#scope-ledger) carries it, as it does [Q1150](../queue/Q1150.md), the validators' retype onto `v2`.
 `make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
 
 | Q-ID | Item | Gates? | Status |
@@ -31,7 +31,6 @@ Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](archive/release-1.9.md
 | [Q1086](../queue/Q1086.md) | Storage-migrate stored objects to `v2` before the removals (Phase 3) | `2.0-gate` | 🔲 deferred |
 | [Q273](../queue/Q273.md) | Remove `v1alpha1` (Phase 3) | `2.0-gate` | 🔲 deferred |
 | [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🔲 deferred |
-| [Q1068](../queue/Q1068.md) | Validating webhook rules un-match when `v2alpha1` goes (Phase 3) | `2.0-gate` | 🔲 ready |
 | [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🔲 deferred |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
@@ -181,6 +180,7 @@ That ordering is the whole reason 1.9 exists, and it is also what makes the alia
 They are one bundle because `v2beta1` is already ScaleSet-only: classic acquisition exists solely to serve `v1alpha1` and `v2alpha1` objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when `v1alpha1` is removed.
 Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the `ValidatingAdmissionPolicy` objects and the validating webhook.
+Dropping a served version cannot silently un-match a validating webhook: `make webhook-versions-check` fails any rule naming only versions no CRD serves (Q1068), and [Q1150](../queue/Q1150.md) retypes the validators onto `v2` in 1.9, ahead of the removal.
 
 ### Capability parity is a precondition of the removal
 

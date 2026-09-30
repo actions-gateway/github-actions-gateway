@@ -290,6 +290,14 @@ dashboard-tables-check: ## Fail when the dashboard doc's panel tables have drift
 registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tenant's wiring to them name different endpoints
 	scripts/manifest/check-registry-mirror-wiring.sh
 
+# A webhook rule naming only versions no CRD serves matches no request, so its
+# validation stops without an error anywhere (Q1068). The rule versions come from
+# +kubebuilder:webhook markers nothing ties to the CRDs' served set, which is how
+# v2.0.0 removing v2alpha1 would silently un-match every actions-gateway.com rule.
+.PHONY: webhook-versions-check
+webhook-versions-check: ## Fail when an admission webhook rule names only API versions no CRD serves
+	scripts/manifest/check-webhook-versions.sh
+
 # Distribution serves /v2/_catalog unconditionally and offers no setting that
 # closes it while leaving anonymous pulls working, so each mirror pod fronts its
 # registry with a deny proxy and binds the registry to loopback (Q1022). Six

@@ -230,6 +230,12 @@ jobs:
       # already, and the check needs only python3.
       - name: every mirror is fronted by the catalog deny (make registry-mirror-catalog-deny-check)
         run: make registry-mirror-catalog-deny-check
+      # Every admission webhook rule names a version its CRD serves (Q1068). A
+      # step here because this job already reads cmd/*/config/** and
+      # api/config/**, the two generated outputs the check holds to each other,
+      # and it needs only python3.
+      - name: webhook rules name a served version (make webhook-versions-check)
+        run: make webhook-versions-check
       # The same tree's third question, and the one only a render can answer
       # (Q1024): nothing rendered the four `kubectl apply -k` targets, so a
       # kustomization.yaml that does not build reached the operator's cluster
