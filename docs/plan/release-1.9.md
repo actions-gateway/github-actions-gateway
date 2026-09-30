@@ -31,7 +31,7 @@ The hub stays at `v2beta1`, though nothing ties it to the storage version: movin
 
 ## Scope ledger
 
-Three gating rows and the candidate validation, in the order they land.
+Three gating rows and the candidate validation, in the order they land, then the merged work that rides.
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
@@ -39,6 +39,9 @@ Three gating rows and the candidate validation, in the order they land.
 | Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
 | [Q1150](../queue/Q1150.md) | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | 🔲 ready: added 2026-09-30 by maintainer decision, after Q413 had landed |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
+| Q1101 | GMC provisions the AGC ServiceMonitor for `v2` ActionsGateways (#1991) | rides | ✅ landed |
+| Q1151 | AGC reclaims the scale-set worker whose runner held the job (#2011) | rides | ✅ landed |
+| Q1146 | Worker image bumps `actions/runner` to 2.337.0 (#2005) | rides | ✅ landed |
 
 **Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.** Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when `v2` first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 `v1.8.0` tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
@@ -46,9 +49,10 @@ Inside one release the sequencing recovers what it can, which is less than a tag
 The reject and the pre-upgrade check are in the tree before `v2` is served, so `main`, the dogfood cluster and the review order all meet the guard before the hazard.
 An operator does not: both halves arrive under the same tag, so for them the clean-population *window* an earlier tag would have given is gone rather than narrowed.
 
-**Nothing rides.** `scripts/release/semver-floor.sh v1.8.0` read `FLOOR: NONE` on 2026-09-17 over the 26 commits since the tag: six carry a `feat` or `fix` type and none touches a released artifact, so nothing user-visible has accumulated and a tag today would publish no change.
-1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](release-ladder.md#why-16-exists-rather-than-folding-into-15)).
-That is a reading rather than a decision: whether anything *should* ride is scope the maintainer sets, and the ledger takes a row for each item that does.
+**Three items ride, none of them gating.** `scripts/release/semver-floor.sh v1.8.0` read `FLOOR: MINOR` on 2026-09-30 over the 73 commits since the tag, with five touching a released artifact: the two gates above, and Q1101, Q1151 and Q1146, which merged on their own merits and ship in the tag whether or not the release waits for them.
+On 2026-09-17 it read `FLOOR: NONE` over 26 commits, so the riders accumulated during the cycle rather than being scoped into it.
+The gates still set the scope, the way 1.8's did: the tag waits for them and not for any rider, unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](release-ladder.md#why-16-exists-rather-than-folding-into-15)).
+The riders belong in the release notes, and the ledger takes a row for each further item that merges onto the released surface before the tag.
 
 ## Definition of Done
 
