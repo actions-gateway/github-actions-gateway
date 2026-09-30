@@ -166,13 +166,13 @@ func TestCleanupScaleSetJob_ReclaimsAndIsIdempotent(t *testing.T) {
 	require.True(t, secretExists(ctx, t, fc, "team-a", "job-done"),
 		"the Secret must outlive provisioning — the worker pod mounts it")
 
-	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done"))
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done", ""))
 	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-done"),
 		"a terminally completed job's Secret must be reclaimed")
 
-	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done"),
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done", ""),
 		"a replayed completion must be a no-op, not an error")
-	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-never-existed"),
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-never-existed", ""),
 		"a completion for a job this process never provisioned must be a no-op")
 }
 
@@ -197,19 +197,19 @@ func TestCleanupScaleSetJob_StampsJobCompletion(t *testing.T) {
 	assert.NotContains(t, pod.Annotations, AnnotationJobCompletedAt,
 		"a freshly provisioned worker has no completion stamp — its job is still assigned")
 
-	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done"))
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done", ""))
 	require.NoError(t, fc.Get(ctx, podKey, &pod))
 	assert.Equal(t, completedAt.Format(time.RFC3339), pod.Annotations[AnnotationJobCompletedAt],
 		"the terminal completion must stamp the worker pod with the time the job ended")
 
 	// A replay lands later; the original stamp must survive it.
 	p.now = func() time.Time { return completedAt.Add(time.Hour) }
-	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done"))
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done", ""))
 	require.NoError(t, fc.Get(ctx, podKey, &pod))
 	assert.Equal(t, completedAt.Format(time.RFC3339), pod.Annotations[AnnotationJobCompletedAt],
 		"a replayed completion must not push the reap deadline back")
 
-	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-with-no-pod"),
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-with-no-pod", ""),
 		"a completion for a job whose pod was never created must be a no-op")
 }
 
@@ -227,7 +227,7 @@ func TestCleanupScaleSetJob_SurfacesStampErrors(t *testing.T) {
 		}).Build()
 	p := NewProvisioner(fc, nil, nil)
 
-	require.Error(t, p.CleanupScaleSetJob(ctx, scaleSetSecretTestTarget(&ResolvedSpec{}), "job-x"))
+	require.Error(t, p.CleanupScaleSetJob(ctx, scaleSetSecretTestTarget(&ResolvedSpec{}), "job-x", ""))
 }
 
 // TestCleanupScaleSetJob_SurfacesDeleteErrors pins that a genuine API failure is
@@ -243,5 +243,137 @@ func TestCleanupScaleSetJob_SurfacesDeleteErrors(t *testing.T) {
 		}).Build()
 	p := NewProvisioner(fc, nil, nil)
 
-	require.Error(t, p.CleanupScaleSetJob(ctx, scaleSetSecretTestTarget(&ResolvedSpec{}), "job-x"))
+	require.Error(t, p.CleanupScaleSetJob(ctx, scaleSetSecretTestTarget(&ResolvedSpec{}), "job-x", ""))
+}
+
+// provisionHolder provisions a scale-set worker for jobID whose runner is registered as
+// "gpu-<jobID>", the way the listener names it, and returns that pod's key.
+func provisionHolder(ctx context.Context, t *testing.T, p *Provisioner, target Target, jobID string) client.ObjectKey {
+	t.Helper()
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target,
+		ScaleSetJob{JobID: jobID, JITConfig: "eyJ4IjoxfQ==", RunnerName: "gpu-" + jobID}))
+	return client.ObjectKey{Namespace: "team-a", Name: scaleSetPodName("gpu", jobID)}
+}
+
+// setPhase moves a worker pod to phase, as the kubelet would.
+func setPhase(ctx context.Context, t *testing.T, c client.Client, key client.ObjectKey, phase corev1.PodPhase) {
+	t.Helper()
+	var pod corev1.Pod
+	require.NoError(t, c.Get(ctx, key, &pod))
+	pod.Status.Phase = phase
+	require.NoError(t, c.Status().Update(ctx, &pod))
+}
+
+func podAnnotations(ctx context.Context, t *testing.T, c client.Client, key client.ObjectKey) map[string]string {
+	t.Helper()
+	var pod corev1.Pod
+	require.NoError(t, c.Get(ctx, key, &pod))
+	return pod.Annotations
+}
+
+// TestCleanupScaleSetJob_ReclaimsTheRunnerThatHeldTheJob is the Q1151 defect as
+// measured on dogfood: job-a's worker is running job-b, and job-a finished on job-b's
+// worker. The completion names that runner, so it is job-b's worker that is stamped and
+// loses its Secret, while job-a's worker — mid job — is left with neither.
+func TestCleanupScaleSetJob_ReclaimsTheRunnerThatHeldTheJob(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	mintedForA := provisionHolder(ctx, t, p, target, "job-a")
+	mintedForB := provisionHolder(ctx, t, p, target, "job-b")
+	setPhase(ctx, t, fc, mintedForA, corev1.PodRunning)
+	setPhase(ctx, t, fc, mintedForB, corev1.PodRunning)
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-a", "gpu-job-b"))
+
+	assert.NotContains(t, podAnnotations(ctx, t, fc, mintedForA), AnnotationJobCompletedAt,
+		"the worker minted for job-a is running another job and must not get a reap deadline")
+	assert.True(t, secretExists(ctx, t, fc, "team-a", "job-a"),
+		"nor may it lose the Secret it mounts")
+	assert.Contains(t, podAnnotations(ctx, t, fc, mintedForB), AnnotationJobCompletedAt,
+		"the worker whose runner held job-a is the one whose job is over")
+	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-b"),
+		"and its Secret is the one to reclaim")
+}
+
+// TestCleanupScaleSetJob_ReclaimsTheMintedSecretWhenTheHolderIsGone covers the
+// ordinary case once the worker has already been collected: the runner is the one
+// minted for the job, no pod carries its name any more, and the Secret must still go.
+func TestCleanupScaleSetJob_ReclaimsTheMintedSecretWhenTheHolderIsGone(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	key := provisionHolder(ctx, t, p, target, "job-a")
+	require.NoError(t, fc.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}))
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-a", "gpu-job-a"))
+	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-a"),
+		"a Secret whose worker is gone has no consumer and must be reclaimed")
+}
+
+// TestCleanupScaleSetJob_RunnerlessCompletionSparesABusyWorker covers a job that ended
+// before any runner took it while the runner minted for it started another job. The
+// JobStarted recorded that, so the completion leaves the busy worker alone.
+func TestCleanupScaleSetJob_RunnerlessCompletionSparesABusyWorker(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	mintedForX := provisionHolder(ctx, t, p, target, "job-x")
+	setPhase(ctx, t, fc, mintedForX, corev1.PodRunning)
+
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	assert.Equal(t, "job-d", podAnnotations(ctx, t, fc, mintedForX)[AnnotationStartedJobID])
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+	assert.NotContains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt,
+		"a worker whose runner is running job-d must not be reaped for job-x")
+	assert.True(t, secretExists(ctx, t, fc, "team-a", "job-x"))
+}
+
+// TestCleanupScaleSetJob_RunnerlessCompletionReclaimsAnIdleWorker is the Q420 arm the
+// fix must keep: a job that ended before any runner took it leaves its minted worker
+// idle at "Listening for Jobs", and that worker is still stamped and loses its Secret.
+func TestCleanupScaleSetJob_RunnerlessCompletionReclaimsAnIdleWorker(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	mintedForX := provisionHolder(ctx, t, p, target, "job-x")
+	setPhase(ctx, t, fc, mintedForX, corev1.PodRunning)
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+	assert.Contains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt,
+		"an idle worker whose job is gone must still get a reap deadline")
+	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-x"))
+}
+
+// TestMarkScaleSetJobStarted_ClearsAStampFromARunnerlessCompletion covers the other
+// order: the runnerless completion stamped an idle worker, and then its runner took a
+// job. The start must lift the deadline, or the reaper kills that job five minutes on.
+func TestMarkScaleSetJobStarted_ClearsAStampFromARunnerlessCompletion(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	mintedForX := provisionHolder(ctx, t, p, target, "job-x")
+	setPhase(ctx, t, fc, mintedForX, corev1.PodRunning)
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+	require.Contains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt)
+
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	ann := podAnnotations(ctx, t, fc, mintedForX)
+	assert.NotContains(t, ann, AnnotationJobCompletedAt,
+		"a worker whose runner started a job must lose a deadline set while it was idle")
+	assert.Equal(t, "job-d", ann[AnnotationStartedJobID])
+
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-no-such-runner"),
+		"a start naming a runner with no worker is not an error")
 }

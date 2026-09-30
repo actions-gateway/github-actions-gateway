@@ -368,8 +368,13 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 			}
 			return err
 		},
-		Cleanup: func(ctx context.Context, jobID string) error {
-			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID)
+		// Keyed by the runner that held the job, which need not be the one minted for it
+		// (Q1151).
+		Cleanup: func(ctx context.Context, jobID, runnerName string) error {
+			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID, runnerName)
+		},
+		Started: func(ctx context.Context, jobID, runnerName string) error {
+			return r.Provisioner.MarkScaleSetJobStarted(ctx, target, jobID, runnerName)
 		},
 		// Per-RunnerSet ConfigMap persisting the concluded-job guards, so a hard-killed
 		// AGC does not replay an assignment it concluded but had not yet deleted (Q606).

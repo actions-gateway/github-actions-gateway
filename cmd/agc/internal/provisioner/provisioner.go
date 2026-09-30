@@ -142,6 +142,9 @@ const (
 	jitConfigKey    = "jitconfig"
 	runnerContainer = WorkerContainerName
 
+	// jobPayloadVolume is the worker pod volume that mounts the per-job Secret.
+	jobPayloadVolume = "job-payload"
+
 	// workerModeEnvVar / workerModeScaleSetValue switch the worker wrapper into the
 	// Q264 scale-set path: instead of the classic pipes handoff to Runner.Worker, the
 	// pod runs the full runner (run.sh --jitconfig) and pulls its own job (§2.4). Set
@@ -893,17 +896,18 @@ func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID
 // this tier truncated the assembled name identically, so the invalid-name defect did
 // not disappear when a tenant migrated to v2 (Q467). Renaming does mean an AGC
 // upgraded mid-job computes a different name for a v1-era in-flight pod than the one
-// that created it; markJobCompleted treats that as NotFound and skips the stamp, so
-// the worker still runs to completion and completedPodTTL still reaps it.
+// that created it; CleanupScaleSetJob then finds no pod and skips the stamp, so the
+// worker still runs to completion and completedPodTTL still reaps it.
 func scaleSetPodName(ownerName, jobID string) string {
 	return workerPodName(ownerName, jobID)
 }
 
-// CleanupScaleSetJob deletes the per-job JIT-config Secret staged for jobID by
-// ProvisionScaleSetWorker. It is the steady-state reclaim point for the scale-set path
-// (Q373): the Secret cannot be deleted when the worker pod is created (the pod mounts
-// it), so the scale-set listener calls this on the terminal JobCompleted for the job,
-// at which point the runner has consumed its JIT config and exited.
+// CleanupScaleSetJob deletes the per-job JIT-config Secret ProvisionScaleSetWorker
+// staged for the worker that held jobID. It is the steady-state reclaim point for the
+// scale-set path (Q373): the Secret cannot be deleted when the worker pod is created
+// (the pod mounts it), so the scale-set listener calls this on the terminal
+// JobCompleted for the job, at which point that worker's runner has consumed its JIT
+// config and exited.
 //
 // It is safe to call for a job whose pod is still terminating: the kubelet has long
 // since materialized the mounted volume and does not tear a running pod down when its
@@ -920,16 +924,137 @@ func scaleSetPodName(ownerName, jobID string) string {
 // It is idempotent (a NotFound is success), so a replayed completion message, or a
 // completion for a job whose Secret a failure path already unstaged, is a no-op.
 //
-// It also stamps AnnotationJobCompletedAt on the job's worker pod, which is what gives
-// a still-Running scale-set worker a reap deadline (Q420) — see markJobCompleted.
-func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, jobID string) error {
+// It also stamps AnnotationJobCompletedAt on the worker pod, which is what gives a
+// still-Running scale-set worker a reap deadline (Q420) — see markJobCompleted.
+//
+// Which worker it reclaims is decided by runnerName, not jobID. GitHub hands a
+// scale-set job to whichever of the set's runners asks first, so the worker minted for
+// jobID can be running a different job while jobID finishes on another runner — and
+// stamping the minted worker then reaps a live job five minutes later (Q1151). The
+// completion names the runner that held the job, and the worker carrying that name in
+// AnnotationRunnerName is the one whose runner has now exited. With no runnerName (the
+// job ended before any runner started it) the minted worker is the surplus one, unless
+// its runner has been seen starting another job (AnnotationStartedJobID).
+func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, jobID, runnerName string) error {
 	key := target.Key()
-	name := scaleSetSecretName(jobID)
-	if err := p.deleteSecret(ctx, key.Namespace, name); err != nil {
-		return fmt.Errorf("provisioner: delete scale-set Secret %s: %w", name, err)
+	minted := scaleSetPodName(key.Name, jobID)
+	var pod *corev1.Pod
+	if runnerName != "" {
+		held, err := p.scaleSetWorkerByRunner(ctx, target, runnerName)
+		if err != nil {
+			return err
+		}
+		pod = held
+	} else {
+		var mp corev1.Pod
+		err := p.Client.Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: minted}, &mp)
+		switch {
+		case apierrors.IsNotFound(err):
+		case err != nil:
+			return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", minted, err)
+		case mp.Annotations[AnnotationStartedJobID] != "" && mp.Annotations[AnnotationStartedJobID] != jobID:
+			p.logForKey(key).Debug("scale-set worker is running another job; not reclaiming it",
+				"pod", minted, "jobID", jobID, "startedJobID", mp.Annotations[AnnotationStartedJobID])
+			return nil
+		default:
+			pod = &mp
+		}
 	}
-	p.logForKey(key).Debug("scale-set job Secret reclaimed", "secret", name, "jobID", jobID)
-	return p.markJobCompleted(ctx, key.Namespace, scaleSetPodName(key.Name, jobID), jobID)
+
+	// The minted worker's Secret goes when that worker is the one reclaimed, or when it
+	// is gone. A minted worker still present that did not hold this job keeps its
+	// Secret: Pending, it cannot start without it, and it may yet serve another job.
+	secretName := ""
+	switch {
+	case pod != nil:
+		secretName = scaleSetPodSecretName(pod)
+	case runnerName != "":
+		var mp corev1.Pod
+		err := p.Client.Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: minted}, &mp)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", minted, err)
+		}
+		if apierrors.IsNotFound(err) {
+			secretName = scaleSetSecretName(jobID)
+		}
+	default:
+		secretName = scaleSetSecretName(jobID)
+	}
+	if secretName != "" {
+		if err := p.deleteSecret(ctx, key.Namespace, secretName); err != nil {
+			return fmt.Errorf("provisioner: delete scale-set Secret %s: %w", secretName, err)
+		}
+		p.logForKey(key).Debug("scale-set job Secret reclaimed", "secret", secretName, "jobID", jobID)
+	}
+	if pod == nil {
+		return nil
+	}
+	return p.markJobCompleted(ctx, pod, jobID)
+}
+
+// MarkScaleSetJobStarted records on the worker whose runner is runnerName that its
+// runner has started jobID (AnnotationStartedJobID), which is what stops a completion
+// that names no runner from reclaiming a worker that is busy (see CleanupScaleSetJob).
+//
+// A completion stamp already on that worker came from such a completion — a stamp for
+// the worker's own job cannot precede its start, since the listener drops a JobStarted
+// for a job it has already seen complete — so it is removed: the runner that was idle
+// is running a job now. A worker that is gone or already terminal is not an error.
+func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target, jobID, runnerName string) error {
+	pod, err := p.scaleSetWorkerByRunner(ctx, target, runnerName)
+	if err != nil || pod == nil {
+		return err
+	}
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
+		return nil
+	}
+	_, stamped := pod.Annotations[AnnotationJobCompletedAt]
+	if pod.Annotations[AnnotationStartedJobID] == jobID && !stamped {
+		return nil
+	}
+	patch := client.MergeFrom(pod.DeepCopy())
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
+	}
+	pod.Annotations[AnnotationStartedJobID] = jobID
+	delete(pod.Annotations, AnnotationJobCompletedAt)
+	if err := p.Client.Patch(ctx, pod, patch); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("provisioner: record job start on worker pod %s: %w", pod.Name, err)
+	}
+	p.logFor().Debug("recorded job start on worker pod", "pod", pod.Name, "jobID", jobID, "clearedStamp", stamped)
+	return nil
+}
+
+// scaleSetWorkerByRunner returns the target's worker pod whose AnnotationRunnerName is
+// runnerName, or nil when none is (the pod is already gone, or predates the annotation).
+func (p *Provisioner) scaleSetWorkerByRunner(ctx context.Context, target Target, runnerName string) (*corev1.Pod, error) {
+	var pods corev1.PodList
+	if err := p.Client.List(ctx, &pods, client.InNamespace(target.Key().Namespace),
+		client.MatchingLabels(target.PodOwnerLabels())); err != nil {
+		return nil, fmt.Errorf("provisioner: list scale-set worker pods: %w", err)
+	}
+	for i := range pods.Items {
+		if pods.Items[i].Annotations[AnnotationRunnerName] == runnerName {
+			return &pods.Items[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// scaleSetPodSecretName is the JIT-config Secret a scale-set worker pod mounts. It is
+// read off the pod rather than derived, because the worker that held a job is not
+// necessarily the one minted for it.
+func scaleSetPodSecretName(pod *corev1.Pod) string {
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == jobPayloadVolume && v.Secret != nil {
+			return v.Secret.SecretName
+		}
+	}
+	return ""
 }
 
 // markJobCompleted stamps AnnotationJobCompletedAt on a scale-set worker pod, recording
@@ -945,9 +1070,8 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 // process-scoped state a fire-and-forget provisioner has no way to keep.
 //
 // It is set-once: a replayed completion (a re-created session polls from cursor 0) must
-// not push the deadline back, so an already-stamped pod is left alone. A pod that does
-// not exist is not an error — a job cancelled before its worker was created has nothing
-// to stamp, and the listener will not build one for it afterwards (Q575).
+// not push the deadline back, so an already-stamped pod is left alone. A pod deleted
+// since it was read is not an error.
 //
 // A Pending pod is stamped as well as a Running one, and the reaper reads the stamp in
 // both arms: Pending means the pod never mounted its now-reclaimed Secret and can only
@@ -956,14 +1080,7 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 // A pod that has already reached a terminal phase — the ordinary case, where the runner
 // ran the job and exited — is left unstamped: completedPodTTL already owns it, so the
 // stamp would buy nothing and cost one write per job.
-func (p *Provisioner) markJobCompleted(ctx context.Context, namespace, podName, jobID string) error {
-	var pod corev1.Pod
-	if err := p.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", podName, err)
-	}
+func (p *Provisioner) markJobCompleted(ctx context.Context, pod *corev1.Pod, jobID string) error {
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 		return nil
@@ -976,13 +1093,13 @@ func (p *Provisioner) markJobCompleted(ctx context.Context, namespace, podName, 
 		pod.Annotations = map[string]string{}
 	}
 	pod.Annotations[AnnotationJobCompletedAt] = p.nowFn().UTC().Format(time.RFC3339)
-	if err := p.Client.Patch(ctx, &pod, patch); err != nil {
+	if err := p.Client.Patch(ctx, pod, patch); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("provisioner: stamp job completion on worker pod %s: %w", podName, err)
+		return fmt.Errorf("provisioner: stamp job completion on worker pod %s: %w", pod.Name, err)
 	}
-	p.logFor().Debug("stamped job completion on worker pod", "pod", podName, "jobID", jobID)
+	p.logFor().Debug("stamped job completion on worker pod", "pod", pod.Name, "jobID", jobID)
 	return nil
 }
 

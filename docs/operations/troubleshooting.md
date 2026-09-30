@@ -1680,7 +1680,9 @@ The thirty-second grace is a fixed constant, not a CRD field: the pod has not st
 **Symptoms.** A `Warning` Event with reason `WorkerPodOrphanedRunning` appears on the `RunnerSet` (`kubectl describe runnerset <name> -n <namespace>`) and `actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}` increments.
 Before the reap fires, the shape is a set that looks busy and is not: `status.activeJobs` sits at some non-zero number, worker pods are `Running`, but no job is executing — `kubectl logs` on the pod ends at `Listening for Jobs`, and GitHub shows nothing in progress for the set.
 
-**What happened.** The pod was still `Running` five minutes after GitHub reported its job terminal, so the AGC deleted it.
+**What happened.** The pod was still `Running` five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
+For a job that ended before any runner started it, the pod the AGC created for that job is the one on the clock, unless its runner has since started a different job.
+GitHub gives a ScaleSet job to whichever of the set's runners asks first, so a worker often runs a job other than the one it was created for; the AGC follows the runner GitHub names, not the job ID in the pod name.
 Three causes produce that:
 
 - **A ScaleSet worker that never received its job** (the common one).
@@ -1697,15 +1699,20 @@ Three causes produce that:
 
 Classic-protocol worker pods are never affected: their provisioning goroutine owns the pod through to a terminal phase, so a Running classic pod always has a live job behind it and is never given this deadline.
 
+**On AGC `v1.3.0` through `v1.8.0` there is a fourth cause, and it kills a live job.** Those releases stamp the pod *created for* a job when that job completes, whichever runner ran it, so a worker running a different job is reaped five minutes after its own job's namesake finished (Q1151).
+The job fails at GitHub with `The runner has received a shutdown signal`, and a `FailedMount` for the pod's `job-ss-*` Secret precedes the reap by about a minute.
+Upgrade; nothing on those releases prevents it.
+
 **Diagnostics.**
 
 ```sh
 # The reap event names the deleted pod and the grace that elapsed
 kubectl get events -n <namespace> --field-selector reason=WorkerPodOrphanedRunning
 
-# Which Running workers already have a completion stamp (they are on the clock)
+# Which Running workers already have a completion stamp (they are on the clock),
+# and which job each one's runner actually started
 kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
-  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at'
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id'
 
 # Rate of orphan reaps per set
 # PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])
