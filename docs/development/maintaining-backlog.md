@@ -787,6 +787,7 @@ Two gates hold it, from opposite directions.
 It fires only on that deletion, never on a steady-state scan — plenty of open items merely *cite* a completed plan as evidence, and treating those as active work would make the rule cry wolf.
 `check-plan-index.sh` invariant 1 asks the mirror question on every run: a row claiming open work must be backed by a live item, either one targeting the plan or one the cell itself links.
 That is what catches a plan whose phases all shipped while its marker never moved, which rule 9 cannot see because no deletion is involved — it found two the day it was written, both reading "all phases shipped" under a ⚠️.
+Both leave a release plan open until its release is tagged ([why](#archiving-completed-plan-docs)).
 
 When you flip a plan to done, add (or update) a **Status** banner at the top of its plan doc naming the deferred IDs carrying its residuals (e.g.
 "Status: Complete — residuals deferred as [Q11](../queue/Q11.md)").
@@ -920,7 +921,7 @@ Two gates (both in `make check`) enforce it so the omission can't ship silently:
 - **`make doc-links`** fails on any broken link the move introduces.
 
 **A release plan is archived when its release is tagged, not when its last row closes.** The last gate usually lands well before the candidate is cut and validated, and that remaining work runs through the candidate steps in [release.md](../operations/release.md) rather than a Queue row, so a `release-X.Y.md` whose rows have all closed is still the open work.
-`make plan-index-check` exempts an untagged release plan from both rules above, and applies them again once the tag resolves: ❌, 🔲 or 🚧 then fails invariant 4, ⚠️ needs a live row behind it again, and a ✅ referenced by nothing is due for the archive.
+`make plan-index-check` exempts an untagged release plan from both rules above, and `check-queue-rules.py` rule 9 from the flip it would otherwise demand when the last gate row closes; both apply again once the tag resolves: ❌, 🔲 or 🚧 then fails invariant 4, ⚠️ needs a live row behind it again, and a ✅ referenced by nothing is due for the archive.
 Closing a release's last gate row therefore updates its README row and Status banner, and archives nothing.
 Don't file a Queue row for the release itself to back the plan instead: once its gates landed it would read as ready work, and an orchestrator could dispatch it, while a release pauses other work and runs with a human in the loop.
 
