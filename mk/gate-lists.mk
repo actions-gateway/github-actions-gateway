@@ -290,6 +290,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  dogfood/soak-readings-test \
                  dogfood/lease-test \
                  dogfood/record-validated-candidate-test \
+                 dogfood/ci-identity-setup-test \
                  e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \
                  e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \

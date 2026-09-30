@@ -26,6 +26,11 @@
 #
 # Optional env vars:
 #   ASSUME_YES=1     Skip the interactive "proceed?" confirmation (automation).
+#   GAG_APP_KEY_FROM_CLUSTER=1  Keep the github-app-v1 Secret already in the
+#                    cluster instead of rebuilding it from the macOS keychain, and
+#                    fail if it is absent or names a different App or installation.
+#                    For CI, which has no keychain (Q880); rotating the key still
+#                    needs a keychain run.
 #   GAG_IMAGE_TAG    Git ref (SHA, branch, or tag) identifying the GAG control-
 #                    plane build to install (default below). It is used TWICE and
 #                    must resolve BOTH ways: (a) as a published image tag under
@@ -463,6 +468,10 @@ create_namespace() {
 # ---------------------------------------------------------------------------
 
 create_secret() {
+	if [[ "${GAG_APP_KEY_FROM_CLUSTER:-}" == 1 ]]; then
+		reuse_secret
+		return
+	fi
 	local pem_file
 	pem_file="$(mktemp)"
 	trap 'rm -f "${pem_file:-}"' EXIT
@@ -490,6 +499,32 @@ create_secret() {
 
 	rm -f "${pem_file}"
 	trap - EXIT
+}
+
+# reuse_secret — the keychain-free path. The Secret survives the gate's scale to
+# zero nodes, so a runner with no keychain can use it as long as it still names
+# the App and installation this run was given. Only the two ids are read back;
+# the key never leaves the cluster.
+reuse_secret() {
+	local have_app have_inst
+	echo "Reusing the GitHub App secret already in gag-dogfood (GAG_APP_KEY_FROM_CLUSTER=1)..."
+	if ! have_app="$(kubectl get secret github-app-v1 --namespace=gag-dogfood \
+		-o jsonpath='{.data.appId}' 2>/dev/null)"; then
+		echo "No github-app-v1 Secret in gag-dogfood to reuse. Run once from a machine" >&2
+		echo "with the keychain entry, without GAG_APP_KEY_FROM_CLUSTER, to create it." >&2
+		exit 1
+	fi
+	have_inst="$(kubectl get secret github-app-v1 --namespace=gag-dogfood \
+		-o jsonpath='{.data.installationId}')"
+	have_app="$(base64 -d <<<"${have_app}")"
+	have_inst="$(base64 -d <<<"${have_inst}")"
+	if [[ "${have_app}" != "${APP_ID}" || "${have_inst}" != "${INSTALLATION_ID}" ]]; then
+		echo "The github-app-v1 Secret names App ${have_app} installation ${have_inst}," >&2
+		echo "but this run was given App ${APP_ID} installation ${INSTALLATION_ID}." >&2
+		echo "Recreate it from the keychain rather than reusing a mismatched key." >&2
+		exit 1
+	fi
+	echo "Secret names App ${have_app} installation ${have_inst}; keeping it."
 }
 
 # ---------------------------------------------------------------------------
@@ -800,8 +835,10 @@ main() {
 	require_cmd gke-gcloud-auth-plugin \
 		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
 	require_cmd helm "https://helm.sh/docs/intro/install/"
-	require_cmd security "built-in macOS tool — macOS required to read keychain"
-	require_cmd xxd "built-in macOS/Linux tool"
+	if [[ "${GAG_APP_KEY_FROM_CLUSTER:-}" != 1 ]]; then
+		require_cmd security "built-in macOS tool — macOS required to read keychain"
+		require_cmd xxd "built-in macOS/Linux tool"
+	fi
 
 	confirm_target
 
