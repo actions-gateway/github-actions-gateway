@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: both gates landed (Q1085, then Q413); not yet tagged.** Scoped 2026-09-17.
+> **Status: two of three gates landed (Q1085, then Q413); [Q1150](../queue/Q1150.md) is open, and not yet tagged.** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -17,26 +17,27 @@ Without this rung that destination is `v1.8.0`, which would make `v2.0.0` the on
 It is already the largest this project asks anyone to make, carrying the `v1`→`v2` migration and four removals.
 
 It is also the only place the `v2beta1` ↔ `v2` conversion edge runs before it is mandatory.
-[v2-ga.md](../v2-ga.md#phase-1--the-soak-what-well-validated-means)'s Phase 1 soak validates `v2beta1`'s shape and says nothing about a conversion that does not exist yet.
+[v2-ga.md](v2-ga.md#phase-1--the-soak-what-well-validated-means)'s Phase 1 soak validates `v2beta1`'s shape and says nothing about a conversion that does not exist yet.
 
-Full reasoning: [release-ladder.md](../release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2).
+Full reasoning: [release-ladder.md](release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2).
 
 ## What this release must NOT do
 
 **It must not mark `v2` the storage version**, and must not migrate stored objects.
 That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
-[v2-ga.md](../v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it was part of Q413, not a follow-up.
+[v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it was part of Q413, not a follow-up.
 
-The hub stays at `v2beta1`, though nothing ties it to the storage version: moving it buys nothing before `v2.0.0` leaves one served version, and it would put the alias conversion annotation on every `v2alpha1` and `v2beta1` conversion ([why](../v2-ga.md#the-hub-stays-at-v2beta1)).
+The hub stays at `v2beta1`, though nothing ties it to the storage version: moving it buys nothing before `v2.0.0` leaves one served version, and it would put the alias conversion annotation on every `v2alpha1` and `v2beta1` conversion ([why](v2-ga.md#the-hub-stays-at-v2beta1)).
 
 ## Scope ledger
 
-Two gating rows and the candidate validation, in the order they land.
+Three gating rows and the candidate validation, in the order they land.
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
-| Q413 | [v2-ga.md](../v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
+| Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
+| Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
+| [Q1150](../queue/Q1150.md) | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | 🔲 ready: added 2026-09-30 by maintainer decision, after Q413 had landed |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.** Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when `v2` first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
@@ -46,7 +47,7 @@ The reject and the pre-upgrade check are in the tree before `v2` is served, so `
 An operator does not: both halves arrive under the same tag, so for them the clean-population *window* an earlier tag would have given is gone rather than narrowed.
 
 **Nothing rides.** `scripts/release/semver-floor.sh v1.8.0` read `FLOOR: NONE` on 2026-09-17 over the 26 commits since the tag: six carry a `feat` or `fix` type and none touches a released artifact, so nothing user-visible has accumulated and a tag today would publish no change.
-1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](../release-ladder.md#why-16-exists-rather-than-folding-into-15)).
+1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](release-ladder.md#why-16-exists-rather-than-folding-into-15)).
 That is a reading rather than a decision: whether anything *should* ride is scope the maintainer sets, and the ledger takes a row for each item that does.
 
 ## Definition of Done
@@ -56,10 +57,13 @@ That is a reading rather than a decision: whether anything *should* ride is scop
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.
 3. **Q1085's items 2 and 3 have landed**, and landed before Q413.
    1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: `v2` is served, so an unrepresentable object can be requested.
-4. **The published tag serves both versions**, which is the Rule #4b evidence `v2.0.0` depends on.
+4. **[Q1150](../queue/Q1150.md) has landed**: every `actions-gateway.com` validating webhook rule names `v2` and its handler is typed on `api/v2`.
+   This is what gives the `v2`-typed validators a release of real traffic before `v2.0.0` leaves them the only ones, which is the soak Q1150 was pulled forward for.
+5. **The published tag serves both versions**, which is the Rule #4b evidence `v2.0.0` depends on.
    Record it here, since `v2.0.0`'s own pre-flight cannot re-derive that a *previous* release served both.
 
 ## What waits for `v2.0.0`
 
-The storage advance and migration ([Q1086](../../queue/Q1086.md)), the four removals ([Q273](../../queue/Q273.md), [Q264](../../queue/Q264.md), and `v2beta1` itself), and the validating webhook rules that un-match when `v2alpha1` goes (Q1068, closed by `make webhook-versions-check`; the retype onto `v2` is Q1150).
-[v2-ga.md](../v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals) Phase 3 owns the ordering.
+The storage advance and migration ([Q1086](../queue/Q1086.md)) and the four removals ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md), and `v2beta1` itself).
+The validating webhook rules cannot silently un-match through those removals: `make webhook-versions-check` (Q1068) fails any rule naming only versions no CRD serves.
+[v2-ga.md](v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals) Phase 3 owns the ordering.
