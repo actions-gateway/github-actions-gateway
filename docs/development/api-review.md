@@ -305,7 +305,7 @@ Ask before the PR lands, while the alternative is still a design choice; afterwa
 | Add an optional field with a safe default | No | The ordinary case. |
 | Add a required field | **Yes** | Existing manifests stop applying. New version only. |
 | Add an enum value | Practically no | Upstream calls it incompatible because a client switching exhaustively can break. Safe here when the value is opt-in and the default is unchanged; say so in the review rather than assuming it. |
-| Remove or rename an enum value | **Yes** | Only by incrementing the version. See the removal floor below. |
+| Remove or rename an enum value | **Yes** | Only by incrementing the version, and stored objects naming the value then need a carrier in the new one. See the removal floor below. |
 | Tighten validation | **Yes** | Stored objects stop re-applying. Ratcheting narrows the blast radius; it does not remove it (Q398). |
 | Relax validation | No for clients | But a newly storable value may have no representation in an older served version — check the conversion. |
 | Change a default | **Yes** | Existing objects keep the old value, new ones get the new one. Two populations, silently. |
@@ -330,9 +330,12 @@ A bare "no earlier than `v3.0.0`" gives them no way to know the sentence is load
 
 ### A new version must round-trip losslessly
 
-`v2alpha1` is a spoke and `v2beta1` is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
-If a new version drops a field the old one has, the object must still round-trip: `RunnerSet` conversion stashes the dropped `acquisitionProtocol` and `maxListeners` in `conversion.actions-gateway.com/*` annotations and restores them on the way back, so a coexistence-era object is never silently re-protocol'd.
+`v2alpha1` and `v2` are spokes and `v2beta1` is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
+If a new version drops something the old one can store, a field or an enum value, the object must still round-trip: `RunnerSet` conversion stashes the dropped `acquisitionProtocol` and `maxListeners` in `conversion.actions-gateway.com/*` annotations, and `v2`'s `EgressProxy` carries a stored `CiliumFQDN`/`CalicoFQDN` alias the same way while showing `FQDN`.
 Any such carrier needs a round-trip test — see `TestRunnerSetConversion_RoundTrip` and friends in [`api/v2alpha1/conversion_test.go`](../../api/v2alpha1/conversion_test.go).
+
+**Never make a conversion fail on a stored object.** A failed conversion fails the whole request, so one object breaks every `LIST` at that version, and a GA version is the group's preferred one: kube-controller-manager's namespace deleter and garbage collector list at it.
+Q413 first refused the alias, and its review measured the metadata-client `LIST` and `DELETECOLLECTION` failing, which leaves a namespace `Terminating` and the collector unable to track the kind.
 
 Two supporting habits: mark the outgoing version with `+kubebuilder:deprecatedversion:warning=…` naming the replacement *and* the release that removes it, so the apiserver warns at apply time; and keep the two version packages byte-identical except for the entitled differences, which `make v2-api-sync-check` enforces.
 
