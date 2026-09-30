@@ -377,3 +377,71 @@ func TestMarkScaleSetJobStarted_ClearsAStampFromARunnerlessCompletion(t *testing
 	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-no-such-runner"),
 		"a start naming a runner with no worker is not an error")
 }
+
+// laggingCache returns a client that writes to fc but serves every Get and List from a
+// snapshot of fc's pods taken now, the way the manager's informer cache serves a read
+// issued microseconds after a patch it has not yet observed.
+func laggingCache(ctx context.Context, t *testing.T, fc client.WithWatch) client.Client {
+	t.Helper()
+	var pods corev1.PodList
+	require.NoError(t, fc.List(ctx, &pods))
+	objs := make([]client.Object, 0, len(pods.Items))
+	for i := range pods.Items {
+		objs = append(objs, pods.Items[i].DeepCopy())
+	}
+	snap := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithObjects(objs...).Build()
+	return interceptor.NewClient(fc, interceptor.Funcs{
+		Get: func(ctx context.Context, _ client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			return snap.Get(ctx, key, obj, opts...)
+		},
+		List: func(ctx context.Context, _ client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+			return snap.List(ctx, list, opts...)
+		},
+	})
+}
+
+// TestCleanupScaleSetJob_RunnerlessCompletionReadsPastALaggingCache covers the batch
+// the listener handles start-first: the start's patch has not reached the informer
+// cache when the runnerless completion reads the minted worker microseconds later.
+// Pods are cached (only Secrets are not, main.go), so the decision must be taken on an
+// uncached read or the busy worker is stamped and its job reaped.
+func TestCleanupScaleSetJob_RunnerlessCompletionReadsPastALaggingCache(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	mintedForX := provisionHolder(ctx, t, p, target, "job-x")
+	setPhase(ctx, t, fc, mintedForX, corev1.PodRunning)
+	p.Client = laggingCache(ctx, t, fc)
+	p.APIReader = fc
+
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+
+	assert.NotContains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt,
+		"a cache that has not seen the start must not get the busy worker stamped")
+	assert.True(t, secretExists(ctx, t, fc, "team-a", "job-x"))
+}
+
+// TestMarkScaleSetJobStarted_ClearsAStampTheCacheHasNotSeen is the mirror order: the
+// runnerless completion stamped an idle worker, the cache has not caught up, and the
+// runner then starts a job. A decision taken on the cached pod sees no stamp to clear.
+func TestMarkScaleSetJobStarted_ClearsAStampTheCacheHasNotSeen(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	mintedForX := provisionHolder(ctx, t, p, target, "job-x")
+	setPhase(ctx, t, fc, mintedForX, corev1.PodRunning)
+	p.Client = laggingCache(ctx, t, fc)
+	p.APIReader = fc
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+	require.Contains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt)
+
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	assert.NotContains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt,
+		"a start must lift a stamp the cache has not caught up with")
+}

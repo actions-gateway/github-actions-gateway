@@ -250,12 +250,15 @@ func EffectiveMaxWorkerLifetime(rg *v1alpha1.RunnerGroup) time.Duration {
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
 type Provisioner struct {
 	Client client.Client
-	// APIReader is the manager's uncached reader, used for the one read whose ANSWER
-	// IS AN ABSENCE: the orphaned-worker scan re-runs a job precisely because its
-	// worker pod is not there (Q844), so a cache that has not synced would read as a
-	// whole set's workers having been disrupted. Every other read here is served from
-	// the shared informer cache, where an empty answer only costs a deferred action.
-	// Nil falls back to Client (tests).
+	// APIReader is the manager's uncached reader, used for the reads whose answer an
+	// informer cache can get wrong at a cost. One is an ABSENCE: the orphaned-worker
+	// scan re-runs a job precisely because its worker pod is not there (Q844), so a
+	// cache that has not synced would read as a whole set's workers having been
+	// disrupted. The other is a scale-set worker's started-job and completion stamps,
+	// which the listener writes and then reads back within one message batch (Q1151):
+	// a cache that has not seen the start stamps a busy worker, and its job is reaped.
+	// Every other read here is served from the shared informer cache, where a stale
+	// answer only costs a deferred action. Nil falls back to Client (tests).
 	APIReader client.Reader
 	Metrics   *runnercore.Metrics
 	// Events records owner-scoped Kubernetes Events for v1 RunnerGroup provisioning
@@ -947,7 +950,7 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 		pod = held
 	} else {
 		var mp corev1.Pod
-		err := p.Client.Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: minted}, &mp)
+		err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: minted}, &mp)
 		switch {
 		case apierrors.IsNotFound(err):
 		case err != nil:
@@ -970,7 +973,7 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 		secretName = scaleSetPodSecretName(pod)
 	case runnerName != "":
 		var mp corev1.Pod
-		err := p.Client.Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: minted}, &mp)
+		err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: minted}, &mp)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", minted, err)
 		}
@@ -1001,9 +1004,18 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 // for a job it has already seen complete — so it is removed: the runner that was idle
 // is running a job now. A worker that is gone or already terminal is not an error.
 func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target, jobID, runnerName string) error {
-	pod, err := p.scaleSetWorkerByRunner(ctx, target, runnerName)
-	if err != nil || pod == nil {
+	found, err := p.scaleSetWorkerByRunner(ctx, target, runnerName)
+	if err != nil || found == nil {
 		return err
+	}
+	// The cache finds the pod by its creation-time runner name; whether it carries a
+	// stamp to clear is read live.
+	pod := &corev1.Pod{}
+	if err := p.liveReader().Get(ctx, client.ObjectKeyFromObject(found), pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", found.Name, err)
 	}
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
@@ -1027,6 +1039,14 @@ func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target,
 	}
 	p.logFor().Debug("recorded job start on worker pod", "pod", pod.Name, "jobID", jobID, "clearedStamp", stamped)
 	return nil
+}
+
+// liveReader is APIReader, or Client where none is wired.
+func (p *Provisioner) liveReader() client.Reader {
+	if p.APIReader != nil {
+		return p.APIReader
+	}
+	return p.Client
 }
 
 // scaleSetWorkerByRunner returns the target's worker pod whose AnnotationRunnerName is
