@@ -23,7 +23,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 ## Scope ledger
 
 What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
-Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](release-1.9.md#scope-ledger) carries it, as it does [Q1150](../queue/Q1150.md), the validators' retype onto `v2`.
+Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](release-1.9.md#scope-ledger) carries it, as it did Q1150, the validators' retype onto `v2`.
 `make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
 
 | Q-ID | Item | Gates? | Status |
@@ -180,7 +180,7 @@ That ordering is the whole reason 1.9 exists, and it is also what makes the alia
 They are one bundle because `v2beta1` is already ScaleSet-only: classic acquisition exists solely to serve `v1alpha1` and `v2alpha1` objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when `v1alpha1` is removed.
 Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the `ValidatingAdmissionPolicy` objects and the validating webhook.
-Dropping a served version cannot silently un-match a validating webhook: `make webhook-versions-check` fails any rule naming only versions no CRD serves (Q1068), and [Q1150](../queue/Q1150.md) retypes the validators onto `v2` in 1.9, ahead of the removal.
+Dropping a served version cannot silently un-match a validating webhook: `make webhook-versions-check` fails any rule naming only versions no CRD serves (Q1068), and Q1150 retyped the validators onto `v2` in 1.9, ahead of the removal.
 
 ### Capability parity is a precondition of the removal
 
