@@ -3,9 +3,9 @@
 # These live in their own file because they are a registry: every PR that adds
 # a gate or a suite appends one entry, so two such PRs collide on adjacent
 # lines by construction. .gitattributes routes this file to the `gatelists`
-# merge driver, which merges the entries as a set rather than by line position
-# (scripts/ci/git-merge-gate-lists.sh, installed per clone by `make
-# merge-driver`).
+# merge driver, which merges the entries one by one rather than by line
+# position, keeping CHECK_HEAVY_GATES in order (scripts/ci/git-merge-gate-lists.sh,
+# installed per clone by `make merge-driver`).
 #
 # Routing is per file, so the routed file has to be one that is wholly
 # driver-owned. Keeping these lists in the Makefile would have routed the whole

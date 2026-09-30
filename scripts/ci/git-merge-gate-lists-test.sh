@@ -117,11 +117,27 @@ else
 		"mk/gate-lists.mk assigns ${unmanaged[*]}, which the driver omits; appends to those still conflict by line position"
 fi
 
+# The list whose order gate-lists-check compares against the `check:` recipe.
+# Taken from the driver for the same reason MANAGED is.
+mapfile -t ORDERED < <("$DRIVER" --ordered-vars)
+if ((${#ORDERED[@]} == 0)) || ! contains "${ORDERED[0]}" "${ASSIGNED[@]}"; then
+	echo "FAIL the driver reports an ordered list that mk/gate-lists.mk assigns"
+	echo "     $DRIVER --ordered-vars produced [${ORDERED[*]}]"
+	exit 1
+fi
+ORDERED_VAR="${ORDERED[0]}"
+if [[ "$ORDERED_VAR" == "$SUBJECT_VAR" || "$ORDERED_VAR" == "$WRAPPED_VAR" ]]; then
+	echo "FAIL the ordered list plays no other fixture role"
+	echo "     $ORDERED_VAR is also \$SUBJECT_VAR or \$WRAPPED_VAR; the fixture roles need re-picking"
+	exit 1
+fi
+
 # --- fixtures ---------------------------------------------------------------
 
-# makefile ENTRIES — a makefile assigning every variable mk/gate-lists.mk
-# assigns, with ENTRIES as $SUBJECT_VAR's list. $WRAPPED_VAR is written over a
-# continuation so the churn case has wrapped lines to compare.
+# makefile ENTRIES [ORDERED_ENTRIES] — a makefile assigning every variable
+# mk/gate-lists.mk assigns, with ENTRIES as $SUBJECT_VAR's list and
+# ORDERED_ENTRIES, when given, as $ORDERED_VAR's. $WRAPPED_VAR is written over
+# a continuation so the churn case has wrapped lines to compare.
 makefile() {
 	local v
 	echo "# leading prose"
@@ -129,6 +145,7 @@ makefile() {
 		echo
 		case "$v" in
 		"$SUBJECT_VAR") printf '%s := %s\n' "$v" "$1" ;;
+		"$ORDERED_VAR") printf '%s := %s\n' "$v" "${2:-filler-a filler-b}" ;;
 		"$WRAPPED_VAR") printf '%s := filler-a filler-b \\\n                    filler-c\n' "$v" ;;
 		*) printf '%s := filler-a filler-b\n' "$v" ;;
 		esac
@@ -186,12 +203,18 @@ run_merge() {
 # stdout, whose words land in the entry list and fail every set comparison. It
 # passed locally at top level and failed on CI for exactly that reason.
 entries_of() {
+	entries_seq "$@" | sort
+}
+
+# entries_seq FILE VAR — entries_of in the order make expands them, for a list
+# whose order is asserted.
+entries_seq() {
 	local file="$1" var="$2"
 	# The `$(...)` here is Make's expansion syntax and must reach the generated
 	# makefile literally, so the single quotes are the point.
 	# shellcheck disable=SC2016
 	printf 'include %s\n__l:\n\t@echo $(%s)\n' "$file" "$var" >"$FIXTURE_DIR/wrap.mk"
-	make --no-print-directory -f "$FIXTURE_DIR/wrap.mk" __l 2>"$FIXTURE_DIR/make.err" | tr ' ' '\n' | sed '/^$/d' | sort
+	make --no-print-directory -f "$FIXTURE_DIR/wrap.mk" __l 2>"$FIXTURE_DIR/make.err" | tr ' ' '\n' | sed '/^$/d'
 }
 
 expect_set() {
@@ -215,6 +238,29 @@ expect_set() {
 		return
 	fi
 	want="$(printf '%s\n' "$@" | sort)"
+	if [[ "$got" == "$want" ]]; then
+		ok "$desc"
+	else
+		bad "$desc" "got [$(echo "$got" | tr '\n' ' ')] want [$(echo "$want" | tr '\n' ' ')]"
+	fi
+}
+
+# expect_seq DESC VAR ENTRY... — expect_set, with the order compared too.
+expect_seq() {
+	local desc="$1" var="$2"
+	shift 2
+	die_if_killed "$desc" "$LAST_RC"
+	if ((LAST_RC != 0)); then
+		bad "$desc" "driver reported a conflict: $(head -1 "$FIXTURE_DIR/err")"
+		return
+	fi
+	local got want
+	got="$(entries_seq "$FIXTURE_DIR/out" "$var")" || true
+	if [[ -s "$FIXTURE_DIR/make.err" ]]; then
+		bad "$desc" "make could not parse the merged file: $(head -1 "$FIXTURE_DIR/make.err")"
+		return
+	fi
+	want="$(printf '%s\n' "$@")"
 	if [[ "$got" == "$want" ]]; then
 		ok "$desc"
 	else
@@ -295,6 +341,30 @@ run_merge "$FIXTURE_DIR/base" "$FIXTURE_DIR/ours" "$FIXTURE_DIR/theirs"
 # shellcheck disable=SC2086 # $LONG is a deliberate word-split into arguments
 expect_set "a removal re-renders the block and every line still continues" "$SUBJECT_VAR" \
 	$LONG ours-added
+
+# --- an ordered list keeps the position an entry was inserted at -------------
+#
+# gate-lists-check compares $ORDERED_VAR against the `check:` recipe's sequential
+# phases entry for entry, so a set merge that appends the other side's insertion
+# fails `make check` on a correct merge. Measured 2026-09-30 merging main into a
+# branch that only appended to the subject list, after main inserted a heavy
+# gate second: the driver wrote `build-tags-check lint cover-check
+# api-fields-check` and a plain `git merge-file` wrote main's order.
+makefile "a-test" "build-tags-check lint cover-check" >"$FIXTURE_DIR/base"
+makefile "a-test ours-test" "build-tags-check lint cover-check" >"$FIXTURE_DIR/ours"
+makefile "a-test" "build-tags-check api-fields-check lint cover-check" >"$FIXTURE_DIR/theirs"
+run_merge "$FIXTURE_DIR/base" "$FIXTURE_DIR/ours" "$FIXTURE_DIR/theirs"
+expect_seq "an entry inserted mid-list on one side keeps its position" "$ORDERED_VAR" \
+	build-tags-check api-fields-check lint cover-check
+expect_set "the other side's append to a set list still lands" "$SUBJECT_VAR" \
+	a-test ours-test
+
+makefile "a-test" "gate-a gate-b gate-c" >"$FIXTURE_DIR/base"
+makefile "a-test" "gate-b gate-a gate-c" >"$FIXTURE_DIR/ours"
+makefile "a-test" "gate-a gate-c gate-b" >"$FIXTURE_DIR/theirs"
+run_merge "$FIXTURE_DIR/base" "$FIXTURE_DIR/ours" "$FIXTURE_DIR/theirs"
+expect_fallback "an ordered list reordered on both sides is refused" \
+	"reordered on both sides"
 
 # --- refuses what it is not ------------------------------------------------
 

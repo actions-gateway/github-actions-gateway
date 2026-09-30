@@ -57,8 +57,8 @@ var drivers = map[string]struct {
 			log:         "merge-gate-lists",
 			defaultPath: "mk/gate-lists.mk",
 		},
-		run:   gateListsDriver{vars: managedVars}.run,
-		flags: gateListsDriver{vars: managedVars}.flags,
+		run:   gateListsDriver{vars: managedVars, ordered: orderedVars}.run,
+		flags: gateListsDriver{vars: managedVars, ordered: orderedVars}.flags,
 	},
 	"planindex": {
 		spec: spec{
