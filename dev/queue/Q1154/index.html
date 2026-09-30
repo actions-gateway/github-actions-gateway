@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1151/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1154/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>AGC reaps a worker mid-job as orphaned_running after a sibling job ends - GitHub Actions Gateway</title>
+        <title>Scale-set JIT Secret outlives a worker reaped before its job completes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#agc-reaps-a-worker-mid-job-as-orphaned_running-after-a-sibling-job-ends" class="md-skip">
+        <a href="#scale-set-jit-secret-outlives-a-worker-reaped-before-its-job-completes" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              AGC reaps a worker mid-job as orphaned_running after a sibling job ends
+              Scale-set JIT Secret outlives a worker reaped before its job completes
             
           </span>
         </div>
@@ -2597,44 +2597,16 @@
   
 
 
-<h1 id="agc-reaps-a-worker-mid-job-as-orphaned_running-after-a-sibling-job-ends">AGC reaps a worker mid-job as orphaned_running after a sibling job ends<a class="headerlink" href="#agc-reaps-a-worker-mid-job-as-orphaned_running-after-a-sibling-job-ends" title="Permanent link">&para;</a></h1>
-<p>On 2026-09-30 the <code>gag-dogfood</code> tenant (<code>agc:v1.8.0-rc.2</code>, worker <code>dogfood-runner:2.337.0</code>) deleted two workers while their jobs were still running, each as <code>orphaned_running</code>, which is meant only for a pod still <code>Running</code> five minutes after GitHub reported its job finished.
-GitHub reported both jobs as running until after the delete, and each job then failed with <code>The runner has received a shutdown signal</code>.</p>
-<table>
-<thead>
-<tr>
-<th>Job (run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/36751334381">36751334381</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/36751338479">36751338479</a>)</th>
-<th>Runner</th>
-<th>GitHub: started → completed</th>
-<th>Reaped <code>orphaned_running</code></th>
-<th>Reap − 5m</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>lint</code></td>
-<td><code>gag-ci-scaleset-ca1cae15-…</code></td>
-<td>17:29:20 → 17:35:15Z</td>
-<td>17:35:12Z</td>
-<td>17:30:12Z</td>
-</tr>
-<tr>
-<td><code>integration-test (agc)</code></td>
-<td><code>gag-ci-scaleset-7d6b7dca-…</code></td>
-<td>17:32:04 → 17:39:30Z</td>
-<td>17:39:27Z</td>
-<td>17:34:27Z</td>
-</tr>
-</tbody>
-</table>
-<p>The last column is when the AGC must have stamped each job complete, and each lines up with a <em>different</em> job on the same RunnerSet actually completing: <code>actionlint</code> and <code>uses-pinned</code> at 17:30:11Z, <code>shellcheck</code> at 17:34:27Z.
-Not every completion does it: <code>cosign-pin</code> completed at 17:32:38Z and <code>integration-test (gmc)</code> ran past 17:37:38Z and passed.
-The pod's <code>WorkerPodOrphanedRunning</code> event reads <code>was still Running 5m0s after its job completed</code>, and a <code>FailedMount</code> for its <code>job-payload</code> secret (<code>job-ss-&lt;jobID&gt;-&lt;hash&gt;" not found</code>) preceded the reap by 50 s, so the AGC had also cleaned up that job's payload secret.</p>
-<p><strong>Mechanism unverified.</strong> The measured shape is a completion for one job being recorded against another job's worker; how is not established.
-Three spot preemptions of <code>workers</code> nodes (GCE <code>compute.instances.preempted</code>, 17:31:03-10Z) killed three other jobs in the same burst and are a separate cause, but they fall between the two stamps, so they are not obviously the trigger.
-The AGC logs nothing at info level for the reaped job IDs before the reap itself.</p>
-<p><strong>Reach.</strong> Any tenant on this build loses a running job whenever this fires, and the operator sees an ordinary <code>orphaned_running</code> reap.
-The runbook reads that as a worker that never got its job, which is the opposite of what happened here.</p>
+<h1 id="scale-set-jit-secret-outlives-a-worker-reaped-before-its-job-completes">Scale-set JIT Secret outlives a worker reaped before its job completes<a class="headerlink" href="#scale-set-jit-secret-outlives-a-worker-reaped-before-its-job-completes" title="Permanent link">&para;</a></h1>
+<p>Since Q1151, a scale-set <code>JobCompleted</code> reclaims the Secret mounted by the worker whose <code>actions-gateway.com/runner-name</code> matches the runner the completion names.
+If that worker is already gone when the completion arrives, the Secret is read off nothing.
+The fallback deletes the Secret named for the completed job only when the worker minted for that job is gone too.
+So when a job ran on another job's worker, that worker was deleted first, and the minted worker is still present, the credential-bearing JIT-config Secret the deleted worker mounted stays until the RunnerSet is deleted (Q373's leak, narrowed).</p>
+<p>The window is small: a completion normally arrives seconds after the runner exits, and <code>completedPodTTL</code> holds a terminal pod for minutes.
+It opens when a completion is delayed past that TTL (a listener down, or a queue replayed after restart) or when an operator deletes the pod by hand.
+Found by the reviewer of the Q1151 fix, from source; the rate is unmeasured.</p>
+<p>This is separate from Q1152 (which run recovery names) and Q1153 (an idle worker not reclaimed); none of the three fixes closes another.</p>
+<p><strong>A likely fix</strong> is to reclaim a worker's Secret when the reaper deletes the worker, reading the name off its <code>job-payload</code> volume, so the Secret's lifetime follows the pod rather than a message that may arrive after it.</p>
 
 
 

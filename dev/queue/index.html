@@ -2718,12 +2718,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Sighted once, 2026-09-29, in <code>make check</code> on the Q737 branch, whose diff touches neither the checker nor its test: ```text …</td>
 </tr>
 <tr>
-<td><a href="Q1151/">Q1151</a></td>
-<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">AGC reaps a worker mid-job as orphaned_running after a sibling job ends</a></td>
+<td><a href="Q1152/">Q1152</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Scale-set recovery ties a job to the worker minted for it, not a runner</a></td>
 <td><code>bug</code> <code>dogfood</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>On 2026-09-30 the <code>gag-dogfood</code> tenant (<code>agc:v1.8.0-rc.2</code>, worker <code>dogfood-runner:2.337.0</code>) deleted two workers while their jobs were still …</td>
+<td>Eviction recovery on the scale-set tier re-runs whatever <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code> say on the …</td>
 </tr>
 <tr>
 <td><a href="Q1146/">Q1146</a></td>
@@ -2924,6 +2924,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</td>
+</tr>
+<tr>
+<td><a href="Q1153/">Q1153</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Idle scale-set worker left by a cancelled job waits out lifetime cap</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>When a scale-set job ends before any runner starts it, one of the set's workers has nothing left to run.</td>
+</tr>
+<tr>
+<td><a href="Q1154/">Q1154</a></td>
+<td>Scale-set JIT Secret outlives a worker reaped before its job completes</td>
+<td><code>bug</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Since Q1151, a scale-set <code>JobCompleted</code> reclaims the Secret mounted by the worker whose <code>actions-gateway.com/runner-name</code> matches the …</td>
 </tr>
 <tr>
 <td><a href="Q1130/">Q1130</a></td>

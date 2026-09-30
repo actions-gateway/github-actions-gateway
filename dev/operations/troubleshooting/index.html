@@ -6562,7 +6562,9 @@ Treat a <em>sustained</em> or <em>bursty</em> rate as the signal:</p>
 <h2 id="worker-pod-reaped-while-running-workerpodorphanedrunning">Worker Pod Reaped While Running (WorkerPodOrphanedRunning)<a class="headerlink" href="#worker-pod-reaped-while-running-workerpodorphanedrunning" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> A <code>Warning</code> Event with reason <code>WorkerPodOrphanedRunning</code> appears on the <code>RunnerSet</code> (<code>kubectl describe runnerset &lt;name&gt; -n &lt;namespace&gt;</code>) and <code>actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}</code> increments.
 Before the reap fires, the shape is a set that looks busy and is not: <code>status.activeJobs</code> sits at some non-zero number, worker pods are <code>Running</code>, but no job is executing — <code>kubectl logs</code> on the pod ends at <code>Listening for Jobs</code>, and GitHub shows nothing in progress for the set.</p>
-<p><strong>What happened.</strong> The pod was still <code>Running</code> five minutes after GitHub reported its job terminal, so the AGC deleted it.
+<p><strong>What happened.</strong> The pod was still <code>Running</code> five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
+For a job that ended before any runner started it, the pod the AGC created for that job is the one on the clock, unless its runner has since started a different job.
+GitHub gives a ScaleSet job to whichever of the set's runners asks first, so a worker often runs a job other than the one it was created for; the AGC follows the runner GitHub names, not the job ID in the pod name.
 Three causes produce that:</p>
 <ul>
 <li><strong>A ScaleSet worker that never received its job</strong> (the common one).
@@ -6578,16 +6580,20 @@ Three causes produce that:</p>
   See the two runbook sections below for fixing the root cause; on the ScaleSet tier this reap is now the backstop that stops those pods accumulating.</li>
 </ul>
 <p>Classic-protocol worker pods are never affected: their provisioning goroutine owns the pod through to a terminal phase, so a Running classic pod always has a live job behind it and is never given this deadline.</p>
+<p><strong>On AGC <code>v1.3.0</code> through <code>v1.8.0</code> there is a fourth cause, and it kills a live job.</strong> Those releases stamp the pod <em>created for</em> a job when that job completes, whichever runner ran it, so a worker running a different job is reaped five minutes after its own job's namesake finished (Q1151).
+The job fails at GitHub with <code>The runner has received a shutdown signal</code>, and a <code>FailedMount</code> for the pod's <code>job-ss-*</code> Secret precedes the reap by about a minute.
+Upgrade; nothing on those releases prevents it.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a><span class="c1"># The reap event names the deleted pod and the grace that elapsed</span>
 <a id="__codelineno-76-2" name="__codelineno-76-2" href="#__codelineno-76-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>WorkerPodOrphanedRunning
 <a id="__codelineno-76-3" name="__codelineno-76-3" href="#__codelineno-76-3"></a>
-<a id="__codelineno-76-4" name="__codelineno-76-4" href="#__codelineno-76-4"></a><span class="c1"># Which Running workers already have a completion stamp (they are on the clock)</span>
-<a id="__codelineno-76-5" name="__codelineno-76-5" href="#__codelineno-76-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;set&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-76-6" name="__codelineno-76-6" href="#__codelineno-76-6"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at'</span>
-<a id="__codelineno-76-7" name="__codelineno-76-7" href="#__codelineno-76-7"></a>
-<a id="__codelineno-76-8" name="__codelineno-76-8" href="#__codelineno-76-8"></a><span class="c1"># Rate of orphan reaps per set</span>
-<a id="__codelineno-76-9" name="__codelineno-76-9" href="#__codelineno-76-9"></a><span class="c1"># PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])</span>
+<a id="__codelineno-76-4" name="__codelineno-76-4" href="#__codelineno-76-4"></a><span class="c1"># Which Running workers already have a completion stamp (they are on the clock),</span>
+<a id="__codelineno-76-5" name="__codelineno-76-5" href="#__codelineno-76-5"></a><span class="c1"># and which job each one's runner actually started</span>
+<a id="__codelineno-76-6" name="__codelineno-76-6" href="#__codelineno-76-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;set&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-76-7" name="__codelineno-76-7" href="#__codelineno-76-7"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id'</span>
+<a id="__codelineno-76-8" name="__codelineno-76-8" href="#__codelineno-76-8"></a>
+<a id="__codelineno-76-9" name="__codelineno-76-9" href="#__codelineno-76-9"></a><span class="c1"># Rate of orphan reaps per set</span>
+<a id="__codelineno-76-10" name="__codelineno-76-10" href="#__codelineno-76-10"></a><span class="c1"># PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])</span>
 </code></pre></div>
 <p><strong>Resolution.</strong> The reap itself needs no action — it returns the slot and the node.
 Treat a <em>sustained</em> rate as the signal:</p>
