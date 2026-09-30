@@ -169,7 +169,7 @@ Until every GMC pod runs the new release, a write to one of these kinds can fail
 **What to do.** Update anything that matches the old names.
 Nothing else is required.
 
-**Rolling back** restores the old names and paths.
+**Rolling back** restores the old names and paths, and the same error can appear in reverse while it runs: the old configuration can reach a new pod that serves only the `-v2` path.
 
 ### A new `CiliumFQDN` / `CalicoFQDN` `EgressProxy` is now rejected at admission
 

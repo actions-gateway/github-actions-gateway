@@ -257,10 +257,12 @@ func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *ag
 // switching mode on an existing EgressProxy is checked too. The stored mode is passed
 // through so a deprecated alias already on the object is admitted unchanged while a
 // switch onto one is rejected (Q1085). Deletion-only updates — deletionTimestamp set,
-// spec unchanged — are admitted without re-validation (Q518; see
-// validation.DeletionOnlyUpdate).
+// spec and egressPolicyModeOf unchanged — are admitted without re-validation (Q518; see
+// validation.DeletionOnlyUpdate). The mode is compared too because an alias swap
+// changes only the annotation on the v2 view.
 func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.EgressProxy) (admission.Warnings, error) {
-	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) &&
+		egressPolicyModeOf(oldObj) == egressPolicyModeOf(newObj) {
 		return nil, nil
 	}
 	return v.validate(ctx, "update", egressPolicyModeOf(oldObj), newObj)

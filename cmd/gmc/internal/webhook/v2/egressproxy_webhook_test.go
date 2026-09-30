@@ -2,6 +2,7 @@ package v2
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -472,16 +473,25 @@ func TestEgressProxyCustomValidator_RejectsNewDeprecatedMode(t *testing.T) {
 			{"FQDN switched onto an alias", agcv2.EgressPolicyModeFQDN, cal, true},
 			{"one alias swapped for the other", cil, cal, true},
 		}
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				_, err := v.ValidateUpdate(context.Background(), epWithMode(tc.oldMode), epWithMode(tc.newMode))
-				if !tc.wantErr {
-					require.NoError(t, err)
-					return
-				}
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "may no longer be introduced")
-			})
+		// A terminating object takes the Q518 deletion-only path, which must not
+		// admit an alias switch that changes only the annotation on the v2 view.
+		for _, terminating := range []bool{false, true} {
+			for _, tc := range cases {
+				t.Run(fmt.Sprintf("%s/terminating=%t", tc.name, terminating), func(t *testing.T) {
+					oldObj, newObj := epWithMode(tc.oldMode), epWithMode(tc.newMode)
+					if terminating {
+						now := metav1.Now()
+						oldObj.DeletionTimestamp, newObj.DeletionTimestamp = &now, &now
+					}
+					_, err := v.ValidateUpdate(context.Background(), oldObj, newObj)
+					if !tc.wantErr {
+						require.NoError(t, err)
+						return
+					}
+					require.Error(t, err)
+					assert.Contains(t, err.Error(), "may no longer be introduced")
+				})
+			}
 		}
 	})
 }
