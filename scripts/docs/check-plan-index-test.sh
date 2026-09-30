@@ -294,6 +294,44 @@ index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | ❌ Open |'
 expect 'a tagless tree skips the release-row check' 0 'release-row check SKIPPED'
 
 
+# --- a release plan stays active until its tag -------------------------------
+#
+# Invariants 1 and 6 leave an untagged release-X.Y.md alone, since its remaining
+# work (the candidate) is deliberately not a backlog row. Each exempt case has a
+# red twin after the tag, so an exemption that stopped reading the tag, or one
+# that never ran, fails here.
+
+TAG=v1.8.0
+new_repo 'Q10' '' 'release-1.9.md'
+unback
+index '| [release-1.9.md](release-1.9.md) | The 1.9 release gate | ⚠️ Every gate landed; no candidate cut |'
+expect 'an untagged release marked open with no item is kept active' 0
+
+new_repo 'Q10' '' 'release-1.9.md'
+unback
+index '| [release-1.9.md](release-1.9.md) | The 1.9 release gate | ✅ Every gate landed; no candidate cut |'
+expect 'an untagged release marked done with no item is not archive-ready' 0
+
+TAG=v1.9.0
+new_repo 'Q10' '' 'release-1.9.md'
+unback
+index '| [release-1.9.md](release-1.9.md) | The 1.9 release gate | ⚠️ Shipped; nothing tracks the rest |'
+expect 'a tagged release marked open with no item is rejected' 1 'claim open work no backlog item carries'
+
+new_repo 'Q10' '' 'release-1.9.md'
+unback
+index '| [release-1.9.md](release-1.9.md) | The 1.9 release gate | ✅ Shipped |'
+expect 'a tagged release marked done with no item is archive-ready' 1 'referenced by no live item'
+
+# The exemption is for release plans only.
+TAG=v1.8.0
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done — nothing left |'
+expect 'a done non-release plan is still archive-ready while a release is untagged' 1 'referenced by no live item'
+TAG=
+
+
 # --- invariant 5: the plan doc's own Status paragraph (Q893) ----------------
 #
 # 5a is invariant 3's rule one file lower, so its cases mirror that block. 5b

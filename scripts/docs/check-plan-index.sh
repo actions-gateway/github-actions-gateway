@@ -39,6 +39,13 @@
 #      deliberately as a validation record or standing rationale marks its row ⓘ,
 #      which says there is no progress to track and takes it out of this rule.
 #
+#      A release plan is exempt from both 1 and 6 until its release is tagged. Its
+#      last gate usually lands well before the candidate is cut and validated, and
+#      that remaining work runs through release.md's candidate steps rather than
+#      a backlog row, so neither rule has an honest marker to offer it: ⚠️ is unbacked and ✅ forces
+#      the archive while the release is still the open work. Once the tag
+#      resolves, invariant 4 forbids an open marker and invariant 6 archives a ✅.
+#
 #   2. disk ↔ README.  Every plan file on disk must have a row in README, in the
 #      matching section (docs/plan/*.md → an active row; docs/plan/archive/*.md →
 #      an Archive row), and every README row must point at a file that exists.
@@ -221,10 +228,35 @@ contains() {
 
 errors=0
 
+# The current release, and where it was read from — resolve_release_tag in
+# scripts/lib/common.sh, shared with check-release-pins.sh and check-roadmap.sh
+# so every gate means the same thing by "the release an adopter is running".
+IFS=$'\t' read -r release_tag tag_source < <(resolve_release_tag "$repo_root") || true
+release_minor=""
+if [[ -n "${release_tag:-}" ]]; then
+    release_minor="${release_tag#v}"
+    release_minor="${release_minor%.*}"
+fi
+
+# shipped <X.Y> — true when the project has released at or past that line.
+shipped() {
+    [[ -n "$release_minor" ]] &&
+        [[ "$(printf '%s\n%s\n' "$1" "$release_minor" | sort -V | head -1)" == "$1" ]]
+}
+
+# unreleased_release_plan <plan> — true for a release-X.Y.md whose release has
+# not been tagged, which invariants 1 and 6 leave active. A tagless tree counts
+# every release as unreleased.
+unreleased_release_plan() {
+    [[ "$1" =~ ^release-([0-9]+\.[0-9]+)\.md$ ]] || return 1
+    ! shipped "${BASH_REMATCH[1]}"
+}
+
 # Invariant 1: a row claiming open work must be backed by a live item.
 unbacked=()
 for row in ${open_rows+"${open_rows[@]}"}; do
     IFS=$'\t' read -r plan ids <<<"$row"
+    unreleased_release_plan "$plan" && continue
     backed=""
     # An item targeting the plan. Restricted to item files: the store's README
     # is a page about the backlog, and a plan named in its prose would back a
@@ -259,6 +291,7 @@ fi
 unarchived=()
 for row in ${done_rows+"${done_rows[@]}"}; do
     IFS=$'\t' read -r plan ids <<<"$row"
+    unreleased_release_plan "$plan" && continue
     referenced=""
     if grep -rqF --include='Q*.md' "$plan" "$store"; then
         referenced=1
@@ -448,25 +481,17 @@ mapfile -t release_rows < <(awk '
     }
 ' "$readme")
 
-# The current release, and where it was read from — resolve_release_tag in
-# scripts/lib/common.sh, shared with check-release-pins.sh and check-roadmap.sh
-# so every gate means the same thing by "the release an adopter is running".
-IFS=$'\t' read -r release_tag tag_source < <(resolve_release_tag "$repo_root") || true
-
 release_checked=0
 if (( ${#release_rows[@]} > 0 )) && [[ -z "${release_tag:-}" ]]; then
     printf 'check-plan-index: release-row check SKIPPED — no stable vX.Y.Z tag locally or on\n'
     printf '                  origin, so no published release can contradict a cell (fresh fork).\n'
 elif (( ${#release_rows[@]} > 0 )); then
-    release_minor="${release_tag#v}"
-    release_minor="${release_minor%.*}"
     stale_release=()
     for rec in "${release_rows[@]}"; do
         IFS=$'\t' read -r lineno plan marker <<<"$rec"
         minor="${plan#release-}"
         minor="${minor%.md}"
-        # Shipped iff the project has released at or past this line.
-        [[ "$(printf '%s\n%s\n' "$minor" "$release_minor" | sort -V | head -1)" == "$minor" ]] || continue
+        shipped "$minor" || continue
         release_checked=$(( release_checked + 1 ))
         case "$marker" in
         ❌ | 🔲 | 🚧) stale_release+=("$lineno"$'\t'"$plan"$'\t'"$marker") ;;

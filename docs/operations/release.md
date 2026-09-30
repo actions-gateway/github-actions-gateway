@@ -1159,6 +1159,7 @@ make plan-index-check
 
 Once `vX.Y.0` is published, that gate rejects an open marker (❌, 🔲, 🚧) on the `release-X.Y.md` row.
 Mark it ✅, or ⚠️ if a Queue row genuinely remains, and say what shipped.
+A ✅ row that no Queue row references is then due for the archive, since a release plan stays active only until its tag ([archiving](../development/maintaining-backlog.md#archiving-completed-plan-docs)), so move it in the same change.
 This half exists because `v1.3.0` shipped without it too: the 1.3 row read `❌ Open` on `main` for the nine days after the tag, and every rule the gate had at the time was green on it (Q802, Q812).
 
 #### The bump on `main` does not reach the published release
