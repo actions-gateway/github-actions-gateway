@@ -14,7 +14,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
-	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -227,8 +227,8 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 
 	al := allowlist.New([]string{staticClass})
 	v1Validator := webhookv1alpha1.NewActionsGatewayCustomValidatorWithAllowlist("", al)
-	v2Validator := &webhookv2alpha1.RunnerTemplateCustomValidator{PriorityClasses: al}
-	rsValidator := &webhookv2alpha1.RunnerSetCustomValidator{PriorityClasses: al}
+	v2Validator := &webhookv2.RunnerTemplateCustomValidator{PriorityClasses: al}
+	rsValidator := &webhookv2.RunnerSetCustomValidator{PriorityClasses: al}
 
 	startPriorityClassAllowlistReconciler(t, al, pcaName)
 
@@ -238,11 +238,11 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 	require.Error(t, err, "v1 runnerGroups[].podTemplate must not admit %s", escalation)
 	assert.Contains(t, err.Error(), "podTemplate.spec.priorityClassName")
 
-	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-escalate", "team-a", escalation))
+	_, err = v2Validator.ValidateCreate(ctx, v2RunnerTemplateView(t, rtWithPodTemplatePriorityClass("v2-escalate", "team-a", escalation)))
 	require.Error(t, err, "v2 RunnerTemplate.podTemplate must not admit %s", escalation)
 	assert.Contains(t, err.Error(), "podTemplate.spec.priorityClassName")
 
-	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-escalate", "team-a", escalation))
+	_, err = rsValidator.ValidateCreate(ctx, v2RunnerSetView(t, rsWithTierPriorityClass("rs-escalate", "team-a", escalation)))
 	require.Error(t, err, "v2 RunnerSet.priorityTiers must not admit %s", escalation)
 	assert.Contains(t, err.Error(), "priorityTiers[0]")
 
@@ -250,24 +250,24 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 	// not forbid ordinary, unprioritized worker pods.
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-unset", "team-a", ""))
 	require.NoError(t, err)
-	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-unset", "team-a", ""))
+	_, err = v2Validator.ValidateCreate(ctx, v2RunnerTemplateView(t, rtWithPodTemplatePriorityClass("v2-unset", "team-a", "")))
 	require.NoError(t, err)
 
 	// The allowlisted static class is admitted on every surface.
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-static", "team-a", staticClass))
 	require.NoError(t, err)
-	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-static", "team-a", staticClass))
+	_, err = v2Validator.ValidateCreate(ctx, v2RunnerTemplateView(t, rtWithPodTemplatePriorityClass("v2-static", "team-a", staticClass)))
 	require.NoError(t, err)
-	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-static", "team-a", staticClass))
+	_, err = rsValidator.ValidateCreate(ctx, v2RunnerSetView(t, rsWithTierPriorityClass("rs-static", "team-a", staticClass)))
 	require.NoError(t, err)
 
 	// The dynamic class is rejected until the platform admin adds it to the watched
 	// PriorityClassAllowlist — and then admitted on every surface, with no restart.
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-dyn-early", "team-a", dynamicClass))
 	require.Error(t, err)
-	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-dyn-early", "team-a", dynamicClass))
+	_, err = v2Validator.ValidateCreate(ctx, v2RunnerTemplateView(t, rtWithPodTemplatePriorityClass("v2-dyn-early", "team-a", dynamicClass)))
 	require.Error(t, err)
-	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-dyn-early", "team-a", dynamicClass))
+	_, err = rsValidator.ValidateCreate(ctx, v2RunnerSetView(t, rsWithTierPriorityClass("rs-dyn-early", "team-a", dynamicClass)))
 	require.Error(t, err)
 
 	pca := &v2beta1.PriorityClassAllowlist{
@@ -280,14 +280,14 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-dyn", "team-a", dynamicClass))
 	require.NoError(t, err, "the CR-sourced class must reach the v1 podTemplate surface")
-	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-dyn", "team-a", dynamicClass))
+	_, err = v2Validator.ValidateCreate(ctx, v2RunnerTemplateView(t, rtWithPodTemplatePriorityClass("v2-dyn", "team-a", dynamicClass)))
 	require.NoError(t, err, "the CR-sourced class must reach the v2 podTemplate surface")
-	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-dyn", "team-a", dynamicClass))
+	_, err = rsValidator.ValidateCreate(ctx, v2RunnerSetView(t, rsWithTierPriorityClass("rs-dyn", "team-a", dynamicClass)))
 	require.NoError(t, err, "the CR-sourced class must reach the v2 RunnerSet tier surface")
 
 	// A CR widening the allowlist must never reach the escalation class.
-	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-escalate-2", "team-a", escalation))
+	_, err = v2Validator.ValidateCreate(ctx, v2RunnerTemplateView(t, rtWithPodTemplatePriorityClass("v2-escalate-2", "team-a", escalation)))
 	require.Error(t, err, "%s must stay rejected regardless of the dynamic set", escalation)
-	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-escalate-2", "team-a", escalation))
+	_, err = rsValidator.ValidateCreate(ctx, v2RunnerSetView(t, rsWithTierPriorityClass("rs-escalate-2", "team-a", escalation)))
 	require.Error(t, err, "%s must stay rejected regardless of the dynamic set", escalation)
 }

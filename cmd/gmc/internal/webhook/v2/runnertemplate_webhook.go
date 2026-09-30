@@ -1,15 +1,25 @@
-// Package v2alpha1 holds the GMC's validating admission webhooks for the v2alpha1
-// (actions-gateway.com) data kinds. The GMC is the cluster-singleton operator, so
-// it — not the per-tenant AGC — hosts cluster-wide admission for the whole v2 API
-// surface, importing the RunnerTemplate types from the AGC api module.
-package v2alpha1
+// Package v2 holds the GMC's validating admission webhooks for the actions-gateway.com
+// data kinds, typed on api/v2. Their rules name v2 alone, so the apiserver converts a
+// write at any served version to v2 before admission (matchPolicy: Equivalent) and one
+// handler covers every version. The GMC is the cluster-singleton operator, so it — not
+// the per-tenant AGC — hosts cluster-wide admission for the whole v2 API surface.
+//
+// Two values the older versions carry have no v2 field, and the conversion leaves them
+// in annotations the validators read: an EgressProxy's CiliumFQDN/CalicoFQDN alias
+// (egressPolicyModeOf) and a RunnerSet's acquisitionProtocol (acquisitionProtocolOf).
+// Both readers go when v2.0.0 stops serving the versions that can write those values.
+//
+// Only the object under admission is v2. Reads of its siblings stay at v2alpha1, as
+// the scalesetscope and agentidentity inventories do, since the label guard needs the
+// acquisitionProtocol field v2alpha1 still serves; v2.0.0 moves them all at once.
+package v2
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +58,7 @@ var reservedProxyEnvNames = map[string]struct{}{
 //     DinD/sysbox, §H.4/§H.6). Pod Security Admission, stamped per the gateway's
 //     securityProfile, remains the runtime enforcement backstop for both kinds — so
 //     allowing privileged on the cluster-scoped kind is no weaker than v1.
-func validateReservedPodFields(spec *agcv2alpha1.RunnerTemplateSpec, rejectPrivileged bool) error {
+func validateReservedPodFields(spec *agcv2.RunnerTemplateSpec, rejectPrivileged bool) error {
 	check := func(containers []corev1.Container, isInit bool) error {
 		label := "containers"
 		if isInit {
@@ -110,7 +120,7 @@ func isPrivileged(sc *corev1.SecurityContext) bool {
 //
 // This is a webhook check, not a CRD CEL rule, because the allowlist is dynamic
 // platform config a spec-scoped CEL XValidation cannot read.
-func validatePodTemplatePriorityClass(spec *agcv2alpha1.RunnerTemplateSpec, list *allowlist.PriorityClassAllowlist) error {
+func validatePodTemplatePriorityClass(spec *agcv2.RunnerTemplateSpec, list *allowlist.PriorityClassAllowlist) error {
 	name := spec.PodTemplate.Spec.PriorityClassName
 	if list.AllowedPodPriorityClass(name) {
 		return nil
@@ -130,14 +140,14 @@ func validatePodTemplatePriorityClass(spec *agcv2alpha1.RunnerTemplateSpec, list
 // a hard block would punish legitimate self-exiting sidecars. The
 // SelfExitingSidecarsAnnotation opt-out silences it per named sidecar. Returns nil
 // when there is nothing to warn about, so admission proceeds cleanly.
-func reapBlockingSidecarWarnings(spec *agcv2alpha1.RunnerTemplateSpec, annotations map[string]string) admission.Warnings {
-	names := agcv2alpha1.ReapBlockingSidecars(spec, annotations)
+func reapBlockingSidecarWarnings(spec *agcv2.RunnerTemplateSpec, annotations map[string]string) admission.Warnings {
+	names := agcv2.ReapBlockingSidecars(spec, annotations)
 	if len(names) == 0 {
 		return nil
 	}
 	return admission.Warnings{fmt.Sprintf(
 		"worker pod sidecar container(s) %s are regular containers, not native sidecars: a regular container that runs past the job (e.g. a DinD dockerd) keeps the worker pod from reaping, so the runner slot counts against maxWorkers and the pool can strand. Declare them as native sidecars (restartPolicy: Always init containers, Kubernetes >= 1.29) so the pod terminates when the runner exits, or — if they exit cleanly on their own — acknowledge them in the %s annotation to silence this warning.",
-		strings.Join(names, ", "), agcv2alpha1.SelfExitingSidecarsAnnotation)}
+		strings.Join(names, ", "), agcv2.SelfExitingSidecarsAnnotation)}
 }
 
 // logRejection records a server-side audit line whenever an admission request is
@@ -153,7 +163,7 @@ func logRejection(ctx context.Context, kind, op, namespace, name string, err err
 	return err
 }
 
-// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-runnertemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnertemplates,verbs=create;update,versions=v2alpha1,name=vrunnertemplate-v2alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2-runnertemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnertemplates,verbs=create;update,versions=v2,name=vrunnertemplate-v2.kb.io,admissionReviewVersions=v1
 
 // RunnerTemplateCustomValidator validates the namespaced RunnerTemplate data kind.
 // It rejects the reserved per-container pod fields, including privileged containers,
@@ -170,7 +180,7 @@ type RunnerTemplateCustomValidator struct {
 // ValidateCreate rejects a RunnerTemplate carrying reserved pod fields or an
 // off-allowlist priorityClassName, and emits a non-blocking reap-blocking-sidecar
 // warning (Q249).
-func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
+func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.RunnerTemplate) (admission.Warnings, error) {
 	if err := v.validate(&obj.Spec); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
@@ -181,7 +191,7 @@ func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj 
 // cannot be edited to smuggle in a reserved field or an off-allowlist PriorityClass.
 // Deletion-only updates — deletionTimestamp set, spec unchanged — are admitted
 // without re-validation (Q518; see validation.DeletionOnlyUpdate).
-func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
+func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.RunnerTemplate) (admission.Warnings, error) {
 	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
 		return nil, nil
 	}
@@ -192,7 +202,7 @@ func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldO
 }
 
 // validate runs the shared create/update gates for the namespaced kind.
-func (v *RunnerTemplateCustomValidator) validate(spec *agcv2alpha1.RunnerTemplateSpec) error {
+func (v *RunnerTemplateCustomValidator) validate(spec *agcv2.RunnerTemplateSpec) error {
 	if err := validateReservedPodFields(spec, true); err != nil {
 		return err
 	}
@@ -200,11 +210,11 @@ func (v *RunnerTemplateCustomValidator) validate(spec *agcv2alpha1.RunnerTemplat
 }
 
 // ValidateDelete is a no-op.
-func (v *RunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
+func (v *RunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.RunnerTemplate) (admission.Warnings, error) {
 	return nil, nil
 }
 
-// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-clusterrunnertemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=clusterrunnertemplates,verbs=create;update,versions=v2alpha1,name=vclusterrunnertemplate-v2alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2-clusterrunnertemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=clusterrunnertemplates,verbs=create;update,versions=v2,name=vclusterrunnertemplate-v2.kb.io,admissionReviewVersions=v1
 
 // ClusterRunnerTemplateCustomValidator validates the cluster-scoped
 // ClusterRunnerTemplate. It rejects the reserved proxy env vars but ALLOWS
@@ -219,7 +229,7 @@ type ClusterRunnerTemplateCustomValidator struct{}
 
 // ValidateCreate rejects a ClusterRunnerTemplate carrying reserved proxy env vars and
 // emits a non-blocking reap-blocking-sidecar warning (Q249).
-func (v *ClusterRunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.ClusterRunnerTemplate) (admission.Warnings, error) {
+func (v *ClusterRunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.ClusterRunnerTemplate) (admission.Warnings, error) {
 	if err := validateReservedPodFields(&obj.Spec, false); err != nil {
 		return nil, logRejection(ctx, "ClusterRunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
@@ -227,7 +237,7 @@ func (v *ClusterRunnerTemplateCustomValidator) ValidateCreate(ctx context.Contex
 }
 
 // ValidateUpdate applies the same checks and reap-blocking-sidecar warning on update.
-func (v *ClusterRunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.ClusterRunnerTemplate) (admission.Warnings, error) {
+func (v *ClusterRunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2.ClusterRunnerTemplate) (admission.Warnings, error) {
 	if err := validateReservedPodFields(&newObj.Spec, false); err != nil {
 		return nil, logRejection(ctx, "ClusterRunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}
@@ -235,23 +245,23 @@ func (v *ClusterRunnerTemplateCustomValidator) ValidateUpdate(ctx context.Contex
 }
 
 // ValidateDelete is a no-op.
-func (v *ClusterRunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alpha1.ClusterRunnerTemplate) (admission.Warnings, error) {
+func (v *ClusterRunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.ClusterRunnerTemplate) (admission.Warnings, error) {
 	return nil, nil
 }
 
 // SetupRunnerTemplateWebhooksWithManager registers the validating webhooks for both
 // the namespaced RunnerTemplate and the cluster-scoped ClusterRunnerTemplate. The
-// manager's scheme must already include agcv2alpha1 (the GMC registers it at
+// manager's scheme must already include agcv2 (the GMC registers it at
 // startup). priorityClasses is the shared platform PriorityClass allowlist the
 // namespaced kind's podTemplate is gated against (Q289); nil forbids every named
 // class, the secure default.
 func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist) error {
-	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.RunnerTemplate{}).
+	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.RunnerTemplate{}).
 		WithValidator(&RunnerTemplateCustomValidator{PriorityClasses: priorityClasses}).
 		Complete(); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhook: %w", err)
 	}
-	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.ClusterRunnerTemplate{}).
+	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.ClusterRunnerTemplate{}).
 		WithValidator(&ClusterRunnerTemplateCustomValidator{}).
 		Complete(); err != nil {
 		return fmt.Errorf("register ClusterRunnerTemplate webhook: %w", err)

@@ -45,11 +45,11 @@ RATE_LIMITED_SCALESETS = {("team-a", "cpu-standard")}
 # count (Q1061).
 WEBHOOKS = (
     ("/validate-actions-gateway-github-com-v1alpha1-actionsgateway", "vactionsgateway-v1alpha1.kb.io", 0.02, 0.010),
-    ("/validate-actions-gateway-com-v2alpha1-actionsgateway", "vactionsgateway-v2alpha1.kb.io", 0.02, 0.010),
-    ("/validate-actions-gateway-com-v2alpha1-clusterrunnertemplate", "vclusterrunnertemplate-v2alpha1.kb.io", 0.01, 0.010),
-    ("/validate-actions-gateway-com-v2alpha1-egressproxy", "vegressproxy-v2alpha1.kb.io", 0.02, 0.010),
-    ("/validate-actions-gateway-com-v2alpha1-runnerset", "vrunnerset-v2alpha1.kb.io", 0.05, 0.012),
-    ("/validate-actions-gateway-com-v2alpha1-runnertemplate", "vrunnertemplate-v2alpha1.kb.io", 0.01, 0.010),
+    ("/validate-actions-gateway-com-v2-actionsgateway", "vactionsgateway-v2.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2-clusterrunnertemplate", "vclusterrunnertemplate-v2.kb.io", 0.01, 0.010),
+    ("/validate-actions-gateway-com-v2-egressproxy", "vegressproxy-v2.kb.io", 0.02, 0.010),
+    ("/validate-actions-gateway-com-v2-runnerset", "vrunnerset-v2.kb.io", 0.05, 0.012),
+    ("/validate-actions-gateway-com-v2-runnertemplate", "vrunnertemplate-v2.kb.io", 0.01, 0.010),
 )
 
 # Declared worker ceiling per scale set: the total the admission rungs subtract from,

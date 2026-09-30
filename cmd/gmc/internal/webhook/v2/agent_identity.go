@@ -1,10 +1,10 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
 	"fmt"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/agentidentity"
 )
 
@@ -19,7 +19,7 @@ import (
 // tenants its entire agent pool and does not self-heal — the AGC reports
 // `agent identity is owned by another pool` on every reconcile until an operator
 // renames one of the CRs (Q979).
-func (v *RunnerSetCustomValidator) validateAgentIdentityUniqueness(ctx context.Context, rs *agcv2alpha1.RunnerSet) error {
+func (v *RunnerSetCustomValidator) validateAgentIdentityUniqueness(ctx context.Context, rs *agcv2.RunnerSet) error {
 	if v.reader == nil {
 		// No reader wired (direct-construction unit-test path); the integration/e2e
 		// and production paths always wire the uncached API reader.
@@ -31,7 +31,7 @@ func (v *RunnerSetCustomValidator) validateAgentIdentityUniqueness(ctx context.C
 			"cannot verify agent-identity uniqueness for RunnerSet %q in namespace %q: %w",
 			rs.Name, rs.Namespace, err)
 	}
-	self := agentidentity.RunnerSetClaim(rs, inv.V2Scope(rs.Namespace, rs.Spec.GatewayRef.Name))
+	self := agentidentity.RunnerSetClaim(rs.Namespace, rs.Name, inv.V2Scope(rs.Namespace, rs.Spec.GatewayRef.Name))
 	if holder := inv.Collision(self); holder != nil {
 		return agentIdentityConflictError(self, *holder)
 	}

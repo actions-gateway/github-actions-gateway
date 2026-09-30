@@ -113,7 +113,7 @@ Any fix for #1 should collapse all three.
 Both callers add the tenant's GHES host:
 
 - v1 parses `spec.gitHubURL` and appends its hostname ([`actionsgateway_webhook.go:402`](../../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go)).
-- v2 resolves it from every referrer, in both directions, through the uncached API reader ([`noproxy_referrers.go`](../../../cmd/gmc/internal/webhook/v2alpha1/noproxy_referrers.go)) — this was Q322, filed precisely as the GHES residual of the original guard.
+- v2 resolves it from every referrer, in both directions, through the uncached API reader ([`noproxy_referrers.go`](../../../cmd/gmc/internal/webhook/v2/noproxy_referrers.go)) — this was Q322, filed precisely as the GHES residual of the original guard.
 
 The package doc says so explicitly.
 The residual is the opposite of the row's claim: a GHES tenant is *also* barred from listing `github.com` in `noProxyCIDRs`, which is over-strict in the fail-safe direction.

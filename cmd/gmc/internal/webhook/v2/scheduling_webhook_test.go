@@ -1,11 +1,11 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
 	"strings"
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,18 +17,18 @@ func TestValidateSchedulingPriorityClass(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		s       *agcv2alpha1.PodScheduling
+		s       *agcv2.PodScheduling
 		list    *allowlist.PriorityClassAllowlist
 		wantErr bool
 	}{
 		{"nil scheduling passes", nil, list, false},
-		{"empty priorityClassName always passes", &agcv2alpha1.PodScheduling{}, list, false},
-		{"allowlisted class admitted", &agcv2alpha1.PodScheduling{PriorityClassName: "gag-infra-critical"}, list, false},
-		{"off-allowlist class rejected", &agcv2alpha1.PodScheduling{PriorityClassName: "system-cluster-critical"}, list, true},
+		{"empty priorityClassName always passes", &agcv2.PodScheduling{}, list, false},
+		{"allowlisted class admitted", &agcv2.PodScheduling{PriorityClassName: "gag-infra-critical"}, list, false},
+		{"off-allowlist class rejected", &agcv2.PodScheduling{PriorityClassName: "system-cluster-critical"}, list, true},
 		// The secure default: a nil allowlist forbids every named class but still
 		// permits the unset case.
-		{"nil allowlist forbids named class", &agcv2alpha1.PodScheduling{PriorityClassName: "anything"}, nil, true},
-		{"nil allowlist permits empty name", &agcv2alpha1.PodScheduling{}, nil, false},
+		{"nil allowlist forbids named class", &agcv2.PodScheduling{PriorityClassName: "anything"}, nil, true},
+		{"nil allowlist permits empty name", &agcv2.PodScheduling{}, nil, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,15 +44,15 @@ func TestValidateSchedulingPriorityClass(t *testing.T) {
 	}
 }
 
-func newV2Gateway(ns, name, priorityClass string) *agcv2alpha1.ActionsGateway {
-	ag := &agcv2alpha1.ActionsGateway{
+func newV2Gateway(ns, name, priorityClass string) *agcv2.ActionsGateway {
+	ag := &agcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		// gitHubURL is required (CRD MinLength=1) and the webhook now validates it
 		// structurally (Q323), so the helper carries a well-formed value.
-		Spec: agcv2alpha1.ActionsGatewaySpec{GitHubURL: "https://github.com/example-org"},
+		Spec: agcv2.ActionsGatewaySpec{GitHubURL: "https://github.com/example-org"},
 	}
 	if priorityClass != "" {
-		ag.Spec.Scheduling = &agcv2alpha1.PodScheduling{PriorityClassName: priorityClass}
+		ag.Spec.Scheduling = &agcv2.PodScheduling{PriorityClassName: priorityClass}
 	}
 	return ag
 }
@@ -109,7 +109,7 @@ func TestV2GatewayAndEgressProxy_DeletionOnlyUpdateExemption(t *testing.T) {
 
 	t.Run("ActionsGateway", func(t *testing.T) {
 		v := &ActionsGatewayCustomValidator{InfraPriorityClasses: nil} // class since removed
-		deleting := func(finalizers ...string) *agcv2alpha1.ActionsGateway {
+		deleting := func(finalizers ...string) *agcv2.ActionsGateway {
 			ag := newV2Gateway("team-a", "gw", "removed-infra-class")
 			ag.DeletionTimestamp = &now
 			ag.Finalizers = finalizers
@@ -132,10 +132,10 @@ func TestV2GatewayAndEgressProxy_DeletionOnlyUpdateExemption(t *testing.T) {
 
 	t.Run("EgressProxy", func(t *testing.T) {
 		v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
-		deleting := func(finalizers ...string) *agcv2alpha1.EgressProxy {
-			ep := &agcv2alpha1.EgressProxy{
+		deleting := func(finalizers ...string) *agcv2.EgressProxy {
+			ep := &agcv2.EgressProxy{
 				ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
-				Spec:       agcv2alpha1.EgressProxySpec{Scheduling: &agcv2alpha1.PodScheduling{PriorityClassName: "removed-infra-class"}},
+				Spec:       agcv2.EgressProxySpec{Scheduling: &agcv2.PodScheduling{PriorityClassName: "removed-infra-class"}},
 			}
 			ep.DeletionTimestamp = &now
 			ep.Finalizers = finalizers
@@ -174,10 +174,10 @@ func TestEgressProxyCustomValidator_InfraPriorityClass(t *testing.T) {
 		InfraPriorityClasses: allowlist.New([]string{"gag-infra-critical"}),
 	}
 
-	epWithClass := func(class string) *agcv2alpha1.EgressProxy {
-		return &agcv2alpha1.EgressProxy{
+	epWithClass := func(class string) *agcv2.EgressProxy {
+		return &agcv2.EgressProxy{
 			ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
-			Spec:       agcv2alpha1.EgressProxySpec{Scheduling: &agcv2alpha1.PodScheduling{PriorityClassName: class}},
+			Spec:       agcv2.EgressProxySpec{Scheduling: &agcv2.PodScheduling{PriorityClassName: class}},
 		}
 	}
 

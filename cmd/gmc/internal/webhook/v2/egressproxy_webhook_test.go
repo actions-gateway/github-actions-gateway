@@ -1,4 +1,4 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
@@ -23,10 +23,10 @@ func mustCIDR(t *testing.T, s string) *net.IPNet {
 	return n
 }
 
-func newEgressProxy(namespace, name string, fqdns, cidrs []string) *agcv2alpha1.EgressProxy {
-	return &agcv2alpha1.EgressProxy{
+func newEgressProxy(namespace, name string, fqdns, cidrs []string) *agcv2.EgressProxy {
+	return &agcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: agcv2alpha1.EgressProxySpec{
+		Spec: agcv2.EgressProxySpec{
 			DestinationFQDNs: fqdns,
 			DestinationCIDRs: cidrs,
 		},
@@ -41,50 +41,50 @@ func TestValidateEgressDestinations(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		spec            *agcv2alpha1.EgressProxySpec
+		spec            *agcv2.EgressProxySpec
 		list            *allowlist.EgressDestinationAllowlist
 		wantErr         bool
 		wantErrContains string
 	}{
 		{
 			name: "no extra destinations admitted",
-			spec: &agcv2alpha1.EgressProxySpec{},
+			spec: &agcv2.EgressProxySpec{},
 			list: list,
 		},
 		{
 			name: "allowlisted FQDN admitted",
-			spec: &agcv2alpha1.EgressProxySpec{DestinationFQDNs: []string{"proxy.golang.org"}},
+			spec: &agcv2.EgressProxySpec{DestinationFQDNs: []string{"proxy.golang.org"}},
 			list: list,
 		},
 		{
 			name:            "off-allowlist FQDN rejected",
-			spec:            &agcv2alpha1.EgressProxySpec{DestinationFQDNs: []string{"evil.example.com"}},
+			spec:            &agcv2.EgressProxySpec{DestinationFQDNs: []string{"evil.example.com"}},
 			list:            list,
 			wantErr:         true,
 			wantErrContains: "destinationFQDNs",
 		},
 		{
 			name: "allowlisted CIDR admitted",
-			spec: &agcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{"10.1.0.0/16"}},
+			spec: &agcv2.EgressProxySpec{DestinationCIDRs: []string{"10.1.0.0/16"}},
 			list: list,
 		},
 		{
 			name:            "off-allowlist CIDR rejected",
-			spec:            &agcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{"192.168.0.0/16"}},
+			spec:            &agcv2.EgressProxySpec{DestinationCIDRs: []string{"192.168.0.0/16"}},
 			list:            list,
 			wantErr:         true,
 			wantErrContains: "destinationCIDRs",
 		},
 		{
 			name:            "malformed CIDR rejected as defense in depth",
-			spec:            &agcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{"not-a-cidr"}},
+			spec:            &agcv2.EgressProxySpec{DestinationCIDRs: []string{"not-a-cidr"}},
 			list:            list,
 			wantErr:         true,
 			wantErrContains: "not a valid CIDR",
 		},
 		{
 			name:            "nil allowlist denies everything (secure default)",
-			spec:            &agcv2alpha1.EgressProxySpec{DestinationFQDNs: []string{"golang.org"}},
+			spec:            &agcv2.EgressProxySpec{DestinationFQDNs: []string{"golang.org"}},
 			list:            nil,
 			wantErr:         true,
 			wantErrContains: "destinationFQDNs",
@@ -181,10 +181,10 @@ func TestEgressProxyCustomValidator_ValidateDelete(t *testing.T) {
 
 // epWithNoProxy builds a minimal EgressProxy carrying only noProxyCIDRs, for the
 // GitHub proxy-bypass admission cases.
-func epWithNoProxy(entries ...string) *agcv2alpha1.EgressProxy {
-	return &agcv2alpha1.EgressProxy{
+func epWithNoProxy(entries ...string) *agcv2.EgressProxy {
+	return &agcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
-		Spec:       agcv2alpha1.EgressProxySpec{NoProxyCIDRs: entries},
+		Spec:       agcv2.EgressProxySpec{NoProxyCIDRs: entries},
 	}
 }
 
@@ -258,7 +258,7 @@ func TestEgressProxyCustomValidator_RejectsReferrerGHESHostInNoProxyCIDRs(t *tes
 	t.Run("RunnerSet proxyRef referrer", func(t *testing.T) {
 		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "")
 		rs := classicRS("rs", "team-a", "gw", "linux")
-		rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: "ep"}
+		rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "ep"}
 		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw, rs)}
 		_, err := v.ValidateCreate(ctx, epWithNoProxy("ghes.corp.example"))
 		require.Error(t, err)
@@ -317,12 +317,18 @@ func TestEgressProxyCustomValidator_ReferrerCheckFailsClosed(t *testing.T) {
 }
 
 // epWithMode builds a minimal EgressProxy carrying only an egressPolicyMode, for the
-// Q245 intent/backend admission cases.
-func epWithMode(mode agcv2alpha1.EgressPolicyMode) *agcv2alpha1.EgressProxy {
-	return &agcv2alpha1.EgressProxy{
+// Q245 intent/backend admission cases. A deprecated alias is built as the validator
+// receives it: the v2 view, FQDN with the alias in annEgressPolicyMode.
+func epWithMode(mode agcv2.EgressPolicyMode) *agcv2.EgressProxy {
+	ep := &agcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
-		Spec:       agcv2alpha1.EgressProxySpec{EgressPolicyMode: mode},
+		Spec:       agcv2.EgressProxySpec{EgressPolicyMode: mode},
 	}
+	if mode == egressPolicyModeCiliumFQDN || mode == egressPolicyModeCalicoFQDN {
+		ep.Spec.EgressPolicyMode = agcv2.EgressPolicyModeFQDN
+		ep.Annotations = map[string]string{annEgressPolicyMode: string(mode)}
+	}
+	return ep
 }
 
 // TestEgressProxyCustomValidator_FQDNBackend covers the Q245 intent/backend split at
@@ -334,7 +340,7 @@ func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		mode    agcv2alpha1.EgressPolicyMode
+		mode    agcv2.EgressPolicyMode
 		backend controller.FQDNBackend
 		wantErr bool
 		// stored re-applies the mode as an unchanged update instead of a create. The
@@ -342,13 +348,13 @@ func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
 		// write naming one is rejected outright (Q1085).
 		stored bool
 	}{
-		{name: "FQDN + none rejected", mode: agcv2alpha1.EgressPolicyModeFQDN, backend: controller.FQDNBackendNone, wantErr: true},
-		{name: "FQDN + empty (zero value) rejected", mode: agcv2alpha1.EgressPolicyModeFQDN, backend: "", wantErr: true},
-		{name: "FQDN + cilium admitted", mode: agcv2alpha1.EgressPolicyModeFQDN, backend: controller.FQDNBackendCilium},
-		{name: "FQDN + gke admitted", mode: agcv2alpha1.EgressPolicyModeFQDN, backend: controller.FQDNBackendGKE},
-		{name: "CIDR + none admitted", mode: agcv2alpha1.EgressPolicyModeCIDR, backend: controller.FQDNBackendNone},
-		{name: "stored Cilium + none admitted", mode: agcv2alpha1.EgressPolicyModeCiliumFQDN, backend: controller.FQDNBackendNone, stored: true},
-		{name: "stored Calico + none admitted", mode: agcv2alpha1.EgressPolicyModeCalicoFQDN, backend: controller.FQDNBackendNone, stored: true},
+		{name: "FQDN + none rejected", mode: agcv2.EgressPolicyModeFQDN, backend: controller.FQDNBackendNone, wantErr: true},
+		{name: "FQDN + empty (zero value) rejected", mode: agcv2.EgressPolicyModeFQDN, backend: "", wantErr: true},
+		{name: "FQDN + cilium admitted", mode: agcv2.EgressPolicyModeFQDN, backend: controller.FQDNBackendCilium},
+		{name: "FQDN + gke admitted", mode: agcv2.EgressPolicyModeFQDN, backend: controller.FQDNBackendGKE},
+		{name: "CIDR + none admitted", mode: agcv2.EgressPolicyModeCIDR, backend: controller.FQDNBackendNone},
+		{name: "stored Cilium + none admitted", mode: egressPolicyModeCiliumFQDN, backend: controller.FQDNBackendNone, stored: true},
+		{name: "stored Calico + none admitted", mode: egressPolicyModeCalicoFQDN, backend: controller.FQDNBackendNone, stored: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -381,14 +387,14 @@ func TestEgressProxyCustomValidator_DeprecationWarnings(t *testing.T) {
 	}
 
 	cases := []struct {
-		mode      agcv2alpha1.EgressPolicyMode
+		mode      agcv2.EgressPolicyMode
 		wantWarn  bool
 		wantToken string
 	}{
-		{agcv2alpha1.EgressPolicyModeCiliumFQDN, true, "CiliumFQDN is deprecated"},
-		{agcv2alpha1.EgressPolicyModeCalicoFQDN, true, "CalicoFQDN is deprecated"},
-		{agcv2alpha1.EgressPolicyModeFQDN, false, ""},
-		{agcv2alpha1.EgressPolicyModeCIDR, false, ""},
+		{egressPolicyModeCiliumFQDN, true, "CiliumFQDN is deprecated"},
+		{egressPolicyModeCalicoFQDN, true, "CalicoFQDN is deprecated"},
+		{agcv2.EgressPolicyModeFQDN, false, ""},
+		{agcv2.EgressPolicyModeCIDR, false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.mode), func(t *testing.T) {
@@ -423,18 +429,18 @@ func TestEgressProxyCustomValidator_RejectsNewDeprecatedMode(t *testing.T) {
 		Allowlist:   allowlist.NewEgressDestination(nil, nil),
 		FQDNBackend: controller.FQDNBackendCilium,
 	}
-	const cil = agcv2alpha1.EgressPolicyModeCiliumFQDN
-	const cal = agcv2alpha1.EgressPolicyModeCalicoFQDN
+	const cil = egressPolicyModeCiliumFQDN
+	const cal = egressPolicyModeCalicoFQDN
 
 	t.Run("create", func(t *testing.T) {
 		cases := []struct {
-			mode    agcv2alpha1.EgressPolicyMode
+			mode    agcv2.EgressPolicyMode
 			wantErr bool
 		}{
 			{cil, true},
 			{cal, true},
-			{agcv2alpha1.EgressPolicyModeFQDN, false},
-			{agcv2alpha1.EgressPolicyModeCIDR, false},
+			{agcv2.EgressPolicyModeFQDN, false},
+			{agcv2.EgressPolicyModeCIDR, false},
 		}
 		for _, tc := range cases {
 			t.Run(string(tc.mode), func(t *testing.T) {
@@ -456,14 +462,14 @@ func TestEgressProxyCustomValidator_RejectsNewDeprecatedMode(t *testing.T) {
 	t.Run("update", func(t *testing.T) {
 		cases := []struct {
 			name             string
-			oldMode, newMode agcv2alpha1.EgressPolicyMode
+			oldMode, newMode agcv2.EgressPolicyMode
 			wantErr          bool
 		}{
 			{"stored alias re-applied unchanged", cil, cil, false},
-			{"stored alias migrated to FQDN", cil, agcv2alpha1.EgressPolicyModeFQDN, false},
-			{"stored alias migrated to CIDR", cal, agcv2alpha1.EgressPolicyModeCIDR, false},
-			{"CIDR switched onto an alias", agcv2alpha1.EgressPolicyModeCIDR, cil, true},
-			{"FQDN switched onto an alias", agcv2alpha1.EgressPolicyModeFQDN, cal, true},
+			{"stored alias migrated to FQDN", cil, agcv2.EgressPolicyModeFQDN, false},
+			{"stored alias migrated to CIDR", cal, agcv2.EgressPolicyModeCIDR, false},
+			{"CIDR switched onto an alias", agcv2.EgressPolicyModeCIDR, cil, true},
+			{"FQDN switched onto an alias", agcv2.EgressPolicyModeFQDN, cal, true},
 			{"one alias swapped for the other", cil, cal, true},
 		}
 		for _, tc := range cases {

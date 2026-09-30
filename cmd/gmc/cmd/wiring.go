@@ -19,7 +19,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
-	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 )
 
@@ -250,26 +250,26 @@ func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
 	// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
 	// kinds. Q289: the namespaced kind's podTemplate.spec.priorityClassName is gated
 	// against the same platform PriorityClass allowlist as priorityTiers.
-	if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr, rc.priorityClassAllowlist); err != nil {
+	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, rc.priorityClassAllowlist); err != nil {
 		return fmt.Errorf("create RunnerTemplate webhook: %w", err)
 	}
 	// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs
 	// against the platform egress allowlist. Q245: reject FQDN intent when the
 	// cluster declares no --fqdn-policy-backend. Q284: gate
 	// spec.scheduling.priorityClassName against the infra-only allowlist.
-	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(
+	if err := webhookv2.SetupEgressProxyWebhookWithManager(
 		mgr, rc.egressDestinationAllowlist, rc.fqdnBackend, rc.infraPriorityClassAllowlist); err != nil {
 		return fmt.Errorf("create EgressProxy webhook: %w", err)
 	}
 	// Q284: gate the v2 ActionsGateway spec.scheduling.priorityClassName on the AGC
 	// control-plane pod against the infra-only allowlist.
-	if err := webhookv2alpha1.SetupActionsGatewayWebhookWithManager(mgr, rc.infraPriorityClassAllowlist); err != nil {
+	if err := webhookv2.SetupActionsGatewayWebhookWithManager(mgr, rc.infraPriorityClassAllowlist); err != nil {
 		return fmt.Errorf("create ActionsGateway (v2alpha1) webhook: %w", err)
 	}
 	// Q264 P3: reject two ScaleSet-protocol RunnerSets sharing a runnerLabel under
 	// one gateway. Q289: gate priorityTiers[].priorityClassName against the platform
 	// PriorityClass allowlist.
-	if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr, rc.priorityClassAllowlist); err != nil {
+	if err := webhookv2.SetupRunnerSetWebhookWithManager(mgr, rc.priorityClassAllowlist); err != nil {
 		return fmt.Errorf("create RunnerSet webhook: %w", err)
 	}
 	// Q74: the GMC-hosted conversion webhook (/convert) for the five v2 hub kinds.

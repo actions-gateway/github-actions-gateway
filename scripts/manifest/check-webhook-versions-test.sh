@@ -5,10 +5,10 @@
 #
 # The shipped tree passes, and so would a checker that had stopped reading
 # anything, so every case below breaks a copy of the real files and demands the
-# verdict change. The central one is the v2.0.0 removal itself: stop serving
-# v2alpha1 and all five actions-gateway.com rules must fail, because that is the
-# state in which admission validation for those kinds would otherwise vanish
-# without an error.
+# verdict change. The central one is a removal: stop serving v2, the one version
+# the five actions-gateway.com rules name (Q1150), and all five must fail, because
+# that is the state in which admission validation for those kinds would otherwise
+# vanish without an error. The v2.0.0 removal of v2alpha1 must now pass.
 #
 # Each case mutates a copy of the real files rather than a hand-written fixture,
 # so the shape under test is the one controller-gen actually emits.
@@ -92,15 +92,26 @@ expect 'the shipped tree matches' 0 'webhook rules match a served version: 6 rul
 
 # --- the v2.0.0 removal: v2alpha1 is no longer served ------------------------
 #
-# Q1068's defect. Every actions-gateway.com rule names v2alpha1 alone, so each
-# must be named; the v1alpha1 rule names another group and must not be.
+# Q1068's defect, closed by Q1150's retype: every actions-gateway.com rule names
+# v2, so dropping v2alpha1 leaves each one matching.
 
 root="$(fixture)"
 unserve "${root}" v2alpha1
 run_checker "${root}"
-expect 'unserving v2alpha1 fails the rules that name only it' 1 'at v2alpha1, none of which the CRD serves'
+expect 'unserving v2alpha1 passes, since no rule names it' 0 'match a served version'
+
+# --- a removal the rules still depend on: v2 is no longer served -------------
+#
+# The same defect aimed at the version the rules do name. Each actions-gateway.com
+# rule names v2 alone, so each must be named; the v1alpha1 rule names another group
+# and must not be.
+
+root="$(fixture)"
+unserve "${root}" v2
+run_checker "${root}"
+expect 'unserving v2 fails the rules that name only it' 1 'at v2, none of which the CRD serves'
 for wh in vactionsgateway vclusterrunnertemplate vegressproxy vrunnerset vrunnertemplate; do
-	expect "  and names ${wh}-v2alpha1" 1 "${wh}-v2alpha1.kb.io: names"
+	expect "  and names ${wh}-v2" 1 "${wh}-v2.kb.io: names"
 done
 if [[ "${out}" == *"vactionsgateway-v1alpha1.kb.io"* ]]; then
 	echo "FAIL the v1alpha1 rule was named, though its version is still served" >&2
@@ -111,18 +122,18 @@ fi
 
 # --- the fix: a rule pointed at a version that survives ----------------------
 #
-# The same removal passes once the markers move, which is the state the retype
-# leaves. A rule may still list a removed version beside a served one.
+# The same removal passes once the rules also name a version that survives. A
+# rule may still list a removed version beside a served one.
 
 root="$(fixture)"
-unserve "${root}" v2alpha1
+unserve "${root}" v2
 python3 - "${root}/${WEBHOOKS}" <<'PY'
 import sys
 p = sys.argv[1]
 s = open(p).read()
-t = s.replace("    - v2alpha1\n", "    - v2alpha1\n    - v2beta1\n")
+t = s.replace("    - v2\n", "    - v2\n    - v2beta1\n")
 if t == s:
-    sys.exit("retarget: no v2alpha1 rule to extend")
+    sys.exit("retarget: no v2 rule to extend")
 open(p, "w").write(t)
 PY
 run_checker "${root}"

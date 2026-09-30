@@ -24,7 +24,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/logtest"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
-	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
@@ -225,7 +225,7 @@ func startValidatingWebhook() error {
 	// matching the v1 registration above. Suite templates name no PriorityClass; the
 	// Q289 gate is exercised against a live, ConfigMap-backed allowlist in
 	// priorityclass_allowlist_test.go.
-	if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr, nil); err != nil {
+	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, nil); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhooks: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the EgressProxy webhook
@@ -239,15 +239,15 @@ func startValidatingWebhook() error {
 	// Q284: also gate spec.scheduling.priorityClassName against the infra-only
 	// allowlist. Wired to infraTestAllowlist so the dedicated scheduling admission test
 	// can exercise both allow and deny against a known set.
-	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist, controller.FQDNBackendCilium, infraTestAllowlist); err != nil {
+	if err := webhookv2.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist, controller.FQDNBackendCilium, infraTestAllowlist); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}
 	// Q284: the new v2 ActionsGateway validating webhook. The installed
-	// ValidatingWebhookConfiguration now carries vactionsgateway-v2alpha1.kb.io
+	// ValidatingWebhookConfiguration now carries vactionsgateway-v2.kb.io
 	// (failurePolicy=Fail), so this server MUST serve its path or every v2
 	// ActionsGateway create in the suite would fail closed. Gates
 	// spec.scheduling.priorityClassName against the same infra allowlist.
-	if err := webhookv2alpha1.SetupActionsGatewayWebhookWithManager(mgr, infraTestAllowlist); err != nil {
+	if err := webhookv2.SetupActionsGatewayWebhookWithManager(mgr, infraTestAllowlist); err != nil {
 		return fmt.Errorf("register v2 ActionsGateway webhook: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the RunnerSet webhook
@@ -260,7 +260,7 @@ func startValidatingWebhook() error {
 	// naming it could never have been admitted. The gate's own semantics — including
 	// the nil/secure default — are exercised in priorityclass_allowlist_test.go and
 	// the webhook unit tests.
-	if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr, allowlist.New([]string{"high"})); err != nil {
+	if err := webhookv2.SetupRunnerSetWebhookWithManager(mgr, allowlist.New([]string{"high"})); err != nil {
 		return fmt.Errorf("register RunnerSet webhook: %w", err)
 	}
 	// Q74: serve /convert for the five v2 hub kinds. envtest patches each convertible

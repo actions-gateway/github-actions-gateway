@@ -1,10 +1,11 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
 	"testing"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
@@ -31,31 +32,35 @@ func runnerSetValidatorWith(t *testing.T, existing ...client.Object) *RunnerSetC
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
 	require.NoError(t, gmcv1alpha1.AddToScheme(scheme))
 	return &RunnerSetCustomValidator{
-		reader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing...).Build(),
+		reader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, existing...)...).Build(),
 	}
 }
 
 // scaleSetRS builds a ScaleSet-protocol RunnerSet with a single runnerLabel bound to
 // the named gateway.
-func scaleSetRS(name, namespace, gateway, label string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{
+func scaleSetRS(name, namespace, gateway, label string) *agcv2.RunnerSet {
+	return &agcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:          agcv2alpha1.ObjectRef{Name: gateway},
-			AcquisitionProtocol: agcv2alpha1.AcquisitionProtocolScaleSet,
-			RunnerLabels:        []string{label},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: gateway},
+			RunnerLabels: []string{label},
 		},
 	}
 }
 
-// classicRS builds a Classic-protocol RunnerSet (default) with the given labels.
-func classicRS(name, namespace, gateway string, labels ...string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:          agcv2alpha1.ObjectRef{Name: gateway},
-			AcquisitionProtocol: agcv2alpha1.AcquisitionProtocolClassic,
-			RunnerLabels:        labels,
+// classicRS builds a Classic-protocol RunnerSet with the given labels, as the v2 view
+// of a v2alpha1 write: v2 has no acquisitionProtocol, so the conversion carries it in
+// annAcquisitionProtocol.
+func classicRS(name, namespace, gateway string, labels ...string) *agcv2.RunnerSet {
+	return &agcv2.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: map[string]string{annAcquisitionProtocol: "Classic"},
+		},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: gateway},
+			RunnerLabels: labels,
 		},
 	}
 }
@@ -68,10 +73,10 @@ func classicRS(name, namespace, gateway string, labels ...string) *agcv2alpha1.R
 // admission's job); and read errors fail closed.
 func TestRunnerSetWebhook_ProxyGitHubBypass(t *testing.T) {
 	ctx := context.Background()
-	newRS := func(proxy string) *agcv2alpha1.RunnerSet {
+	newRS := func(proxy string) *agcv2.RunnerSet {
 		rs := classicRS("rs", "team-a", "gw", "linux")
 		if proxy != "" {
-			rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: proxy}
+			rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: proxy}
 		}
 		return rs
 	}
@@ -323,10 +328,10 @@ func TestRunnerSetWebhook_NilReaderSkips(t *testing.T) {
 }
 
 // tieredRS builds a Classic RunnerSet whose priorityTiers name the given classes.
-func tieredRS(name string, classes ...string) *agcv2alpha1.RunnerSet {
+func tieredRS(name string, classes ...string) *agcv2.RunnerSet {
 	rs := classicRS(name, "tenant", "gw", "linux")
 	for i, c := range classes {
-		rs.Spec.PriorityTiers = append(rs.Spec.PriorityTiers, agcv2alpha1.PriorityTier{
+		rs.Spec.PriorityTiers = append(rs.Spec.PriorityTiers, agcv2.PriorityTier{
 			PriorityClassName: c,
 			Threshold:         int32(10 * (i + 1)),
 		})
@@ -386,7 +391,7 @@ func TestRunnerSetWebhook_DeletionOnlyUpdateExemption(t *testing.T) {
 	v := &RunnerSetCustomValidator{PriorityClasses: allowlist.New([]string{"runner-standard"})}
 	now := metav1.Now()
 
-	deleting := func(finalizers ...string) *agcv2alpha1.RunnerSet {
+	deleting := func(finalizers ...string) *agcv2.RunnerSet {
 		rs := tieredRS("self", "removed-class")
 		rs.DeletionTimestamp = &now
 		rs.Finalizers = finalizers

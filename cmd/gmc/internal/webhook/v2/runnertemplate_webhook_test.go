@@ -1,4 +1,4 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
@@ -16,8 +16,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func specWith(containers, initContainers []corev1.Container) *agcv2alpha1.RunnerTemplateSpec {
-	return &agcv2alpha1.RunnerTemplateSpec{
+func specWith(containers, initContainers []corev1.Container) *agcv2.RunnerTemplateSpec {
+	return &agcv2.RunnerTemplateSpec{
 		PodTemplate: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{Containers: containers, InitContainers: initContainers},
 		},
@@ -57,7 +57,7 @@ func TestValidateReservedPodFields(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		spec            *agcv2alpha1.RunnerTemplateSpec
+		spec            *agcv2.RunnerTemplateSpec
 		rejectPriv      bool
 		wantErr         bool
 		wantErrContains string
@@ -87,15 +87,15 @@ func TestValidateReservedPodFields(t *testing.T) {
 	}
 }
 
-func newRunnerTemplate(namespace, name string, containers []corev1.Container) *agcv2alpha1.RunnerTemplate {
-	return &agcv2alpha1.RunnerTemplate{
+func newRunnerTemplate(namespace, name string, containers []corev1.Container) *agcv2.RunnerTemplate {
+	return &agcv2.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 		Spec:       *specWith(containers, nil),
 	}
 }
 
-func newClusterRunnerTemplate(name string, containers []corev1.Container) *agcv2alpha1.ClusterRunnerTemplate {
-	return &agcv2alpha1.ClusterRunnerTemplate{
+func newClusterRunnerTemplate(name string, containers []corev1.Container) *agcv2.ClusterRunnerTemplate {
+	return &agcv2.ClusterRunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec:       *specWith(containers, nil),
 	}
@@ -103,7 +103,7 @@ func newClusterRunnerTemplate(name string, containers []corev1.Container) *agcv2
 
 // rtWithPriorityClass returns a namespaced RunnerTemplate whose podTemplate names the
 // given PriorityClass. An empty name leaves the field unset.
-func rtWithPriorityClass(priorityClassName string) *agcv2alpha1.RunnerTemplate {
+func rtWithPriorityClass(priorityClassName string) *agcv2.RunnerTemplate {
 	rt := newRunnerTemplate("team-a", "rt", []corev1.Container{{Name: "runner"}})
 	rt.Spec.PodTemplate.Spec.PriorityClassName = priorityClassName
 	return rt
@@ -176,7 +176,7 @@ func TestRunnerTemplate_DeletionOnlyUpdateExemption(t *testing.T) {
 	v := &RunnerTemplateCustomValidator{} // nil allowlist: every named class is off-allowlist
 	now := metav1.Now()
 
-	deleting := func(finalizers ...string) *agcv2alpha1.RunnerTemplate {
+	deleting := func(finalizers ...string) *agcv2.RunnerTemplate {
 		rt := rtWithPriorityClass("removed-class")
 		rt.DeletionTimestamp = &now
 		rt.Finalizers = finalizers
@@ -323,8 +323,8 @@ func TestReapBlockingSidecarWarning(t *testing.T) {
 	always := corev1.ContainerRestartPolicyAlways
 	nativeDind := corev1.Container{Name: "dind", RestartPolicy: &always}
 
-	withSidecar := func(annotations map[string]string, containers, initContainers []corev1.Container) *agcv2alpha1.RunnerTemplate {
-		return &agcv2alpha1.RunnerTemplate{
+	withSidecar := func(annotations map[string]string, containers, initContainers []corev1.Container) *agcv2.RunnerTemplate {
+		return &agcv2.RunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "rt", Namespace: "team-a", Annotations: annotations},
 			Spec:       *specWith(containers, initContainers),
 		}
@@ -337,7 +337,7 @@ func TestReapBlockingSidecarWarning(t *testing.T) {
 		require.NoError(t, err, "a reap-blocking sidecar must never block admission")
 		require.Len(t, warnings, 1)
 		assert.Contains(t, warnings[0], "dind")
-		assert.Contains(t, warnings[0], agcv2alpha1.SelfExitingSidecarsAnnotation)
+		assert.Contains(t, warnings[0], agcv2.SelfExitingSidecarsAnnotation)
 	})
 
 	t.Run("native sidecar does not warn", func(t *testing.T) {
@@ -350,7 +350,7 @@ func TestReapBlockingSidecarWarning(t *testing.T) {
 
 	t.Run("opt-out annotation suppresses the warning", func(t *testing.T) {
 		v := &RunnerTemplateCustomValidator{}
-		obj := withSidecar(map[string]string{agcv2alpha1.SelfExitingSidecarsAnnotation: "dind"},
+		obj := withSidecar(map[string]string{agcv2.SelfExitingSidecarsAnnotation: "dind"},
 			[]corev1.Container{runner, dind}, nil)
 		warnings, err := v.ValidateCreate(context.Background(), obj)
 		require.NoError(t, err)
@@ -368,7 +368,7 @@ func TestReapBlockingSidecarWarning(t *testing.T) {
 
 	t.Run("cluster template warns on a regular sidecar without blocking", func(t *testing.T) {
 		v := &ClusterRunnerTemplateCustomValidator{}
-		obj := &agcv2alpha1.ClusterRunnerTemplate{
+		obj := &agcv2.ClusterRunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "dind-golden"},
 			Spec:       *specWith([]corev1.Container{runner, dind}, nil),
 		}

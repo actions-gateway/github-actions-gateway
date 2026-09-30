@@ -15,6 +15,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
 - [Migration Notes](#migration-notes)
   - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
+  - [Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2](#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
   - [Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap](#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap)
   - [Non-breaking: a `spec.scaleUp` token is now charged per worker pod, not per delivered job](#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job)
@@ -143,6 +144,32 @@ Move them to `v2` before `v2.0.0`, which removes `v2beta1`; until then, a manife
 
 **Rolling back** to a release that does not serve `v2` is safe for stored objects, because they are stored at `v2beta1`.
 A manifest written at `apiVersion: actions-gateway.com/v2` fails to apply there.
+
+### Non-breaking: the `actions-gateway.com` validating webhooks now validate `v2`, and their names end in `-v2`
+
+**Who is affected:** anyone who matches GMC admission errors by webhook name, in alerts, log queries or runbooks.
+
+**What changed.** The five GMC validating webhooks for `actions-gateway.com` kinds are renamed, and so are their serving paths:
+
+| Kind | Old name | New name |
+|---|---|---|
+| `ActionsGateway` | `vactionsgateway-v2alpha1.kb.io` | `vactionsgateway-v2.kb.io` |
+| `EgressProxy` | `vegressproxy-v2alpha1.kb.io` | `vegressproxy-v2.kb.io` |
+| `RunnerSet` | `vrunnerset-v2alpha1.kb.io` | `vrunnerset-v2.kb.io` |
+| `RunnerTemplate` | `vrunnertemplate-v2alpha1.kb.io` | `vrunnertemplate-v2.kb.io` |
+| `ClusterRunnerTemplate` | `vclusterrunnertemplate-v2alpha1.kb.io` | `vclusterrunnertemplate-v2.kb.io` |
+
+Each rule now names `v2`, so the apiserver converts a write at `v2alpha1`, `v2beta1` or `v2` to `v2` before the GMC validates it.
+The checks and their messages are unchanged, and so is the version a write can use.
+`v2.0.0` stops serving `v2alpha1` and `v2beta1`, and a rule naming only those would stop matching without an error; this release moves the rules first, so the `v2` validators run for a whole release before `v2.0.0` depends on them.
+
+**What you will see.** An admission rejection names the new webhook, for example `admission webhook "vrunnerset-v2.kb.io" denied the request`.
+Until every GMC pod runs the new release, a write to one of these kinds can fail with an admission webhook call error instead, because the new configuration can reach an old pod that does not serve the new path; retry it once the rollout completes.
+
+**What to do.** Update anything that matches the old names.
+Nothing else is required.
+
+**Rolling back** restores the old names and paths.
 
 ### A new `CiliumFQDN` / `CalicoFQDN` `EgressProxy` is now rejected at admission
 

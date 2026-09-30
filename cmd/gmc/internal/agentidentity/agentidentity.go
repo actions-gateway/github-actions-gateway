@@ -31,7 +31,7 @@
 // "<x>" derives, because Q466's discriminator is an "rs-" prefix rather than an
 // injection. Both writes are guarded, at the object each is actually authored on:
 //
-//   - RunnerSet create/update (cmd/gmc/internal/webhook/v2alpha1) rejects a set whose
+//   - RunnerSet create/update (cmd/gmc/internal/webhook/v2) rejects a set whose
 //     stem is already claimed.
 //   - ActionsGateway v1alpha1 create/update (cmd/gmc/internal/webhook/v1alpha1)
 //     rejects a spec.runnerGroups entry whose DERIVED RunnerGroup name would claim
@@ -208,14 +208,14 @@ func (inv Inventory) Collision(self Claim) *Claim {
 	return nil
 }
 
-// RunnerSetClaim is the claim a v2 RunnerSet makes, resolved against inv's view of
-// its gateway.
-func RunnerSetClaim(rs *agcv2alpha1.RunnerSet, scope string) Claim {
+// RunnerSetClaim is the claim a v2 RunnerSet named name in namespace makes, resolved
+// against inv's view of its gateway.
+func RunnerSetClaim(namespace, name, scope string) Claim {
 	return Claim{
-		Namespace: rs.Namespace,
+		Namespace: namespace,
 		Kind:      KindRunnerSet,
-		Name:      rs.Name,
-		Stem:      apinames.RunnerSetAgentStem(rs.Name),
+		Name:      name,
+		Stem:      apinames.RunnerSetAgentStem(name),
 		Scope:     scope,
 	}
 }

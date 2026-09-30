@@ -13,7 +13,7 @@
 //
 // Two consumers read the inventory, at the two moments a collision can be seen:
 //
-//   - Admission (cmd/gmc/internal/webhook/v2alpha1) rejects a write that would create
+//   - Admission (cmd/gmc/internal/webhook/v2) rejects a write that would create
 //     one. Like the Q322 GitHub-bypass guard, the pair is assembled from two objects —
 //     the label lives on the RunnerSet, the scope on its gateway — so both paths
 //     consult the other side. RunnerSet create/update resolves its own gateway's scope

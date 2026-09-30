@@ -30,14 +30,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-actions-gateway-com-v2alpha1-actionsgateway
+      path: /validate-actions-gateway-com-v2-actionsgateway
   failurePolicy: Fail
-  name: vactionsgateway-v2alpha1.kb.io
+  name: vactionsgateway-v2.kb.io
   rules:
   - apiGroups:
     - actions-gateway.com
     apiVersions:
-    - v2alpha1
+    - v2
     operations:
     - CREATE
     - UPDATE
@@ -50,14 +50,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-actions-gateway-com-v2alpha1-clusterrunnertemplate
+      path: /validate-actions-gateway-com-v2-clusterrunnertemplate
   failurePolicy: Fail
-  name: vclusterrunnertemplate-v2alpha1.kb.io
+  name: vclusterrunnertemplate-v2.kb.io
   rules:
   - apiGroups:
     - actions-gateway.com
     apiVersions:
-    - v2alpha1
+    - v2
     operations:
     - CREATE
     - UPDATE
@@ -70,14 +70,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-actions-gateway-com-v2alpha1-egressproxy
+      path: /validate-actions-gateway-com-v2-egressproxy
   failurePolicy: Fail
-  name: vegressproxy-v2alpha1.kb.io
+  name: vegressproxy-v2.kb.io
   rules:
   - apiGroups:
     - actions-gateway.com
     apiVersions:
-    - v2alpha1
+    - v2
     operations:
     - CREATE
     - UPDATE
@@ -90,14 +90,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-actions-gateway-com-v2alpha1-runnerset
+      path: /validate-actions-gateway-com-v2-runnerset
   failurePolicy: Fail
-  name: vrunnerset-v2alpha1.kb.io
+  name: vrunnerset-v2.kb.io
   rules:
   - apiGroups:
     - actions-gateway.com
     apiVersions:
-    - v2alpha1
+    - v2
     operations:
     - CREATE
     - UPDATE
@@ -110,14 +110,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-actions-gateway-com-v2alpha1-runnertemplate
+      path: /validate-actions-gateway-com-v2-runnertemplate
   failurePolicy: Fail
-  name: vrunnertemplate-v2alpha1.kb.io
+  name: vrunnertemplate-v2.kb.io
   rules:
   - apiGroups:
     - actions-gateway.com
     apiVersions:
-    - v2alpha1
+    - v2
     operations:
     - CREATE
     - UPDATE

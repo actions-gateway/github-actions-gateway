@@ -13,9 +13,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
-	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 )
 
 // dindPodTemplate builds the representative Docker-in-Docker worker pod shape: a
@@ -160,8 +162,8 @@ func TestFanOut_EmittedTemplatesAreAdmissible(t *testing.T) {
 	// A nil PriorityClasses allowlist is the secure default: it forbids every NAMED
 	// PriorityClass while permitting a pod that names none, which is what these
 	// templates do.
-	namespaced := &webhookv2alpha1.RunnerTemplateCustomValidator{}
-	clusterScoped := &webhookv2alpha1.ClusterRunnerTemplateCustomValidator{}
+	namespaced := &webhookv2.RunnerTemplateCustomValidator{}
+	clusterScoped := &webhookv2.ClusterRunnerTemplateCustomValidator{}
 
 	for _, tc := range []struct {
 		name string
@@ -193,15 +195,36 @@ func TestFanOut_EmittedTemplatesAreAdmissible(t *testing.T) {
 			res, err := FanOut(tc.in)
 			require.NoError(t, err)
 			for _, tmpl := range res.Templates {
-				_, err := namespaced.ValidateCreate(ctx, tmpl)
+				_, err := namespaced.ValidateCreate(ctx, toV2RunnerTemplate(t, tmpl))
 				assert.NoError(t, err, "emitted RunnerTemplate %q must be admissible", tmpl.Name)
 			}
 			for _, tmpl := range res.ClusterTemplates {
-				_, err := clusterScoped.ValidateCreate(ctx, tmpl)
+				_, err := clusterScoped.ValidateCreate(ctx, toV2ClusterRunnerTemplate(t, tmpl))
 				assert.NoError(t, err, "emitted ClusterRunnerTemplate %q must be admissible", tmpl.Name)
 			}
 		})
 	}
+}
+
+// toV2RunnerTemplate converts an emitted v2alpha1 template to the v2 view the
+// validator receives, through the v2beta1 hub as the apiserver does.
+func toV2RunnerTemplate(t *testing.T, in *v2alpha1.RunnerTemplate) *v2.RunnerTemplate {
+	t.Helper()
+	hub := &v2beta1.RunnerTemplate{}
+	require.NoError(t, in.ConvertTo(hub))
+	out := &v2.RunnerTemplate{}
+	require.NoError(t, out.ConvertFrom(hub))
+	return out
+}
+
+// toV2ClusterRunnerTemplate is toV2RunnerTemplate for the cluster-scoped kind.
+func toV2ClusterRunnerTemplate(t *testing.T, in *v2alpha1.ClusterRunnerTemplate) *v2.ClusterRunnerTemplate {
+	t.Helper()
+	hub := &v2beta1.ClusterRunnerTemplate{}
+	require.NoError(t, in.ConvertTo(hub))
+	out := &v2.ClusterRunnerTemplate{}
+	require.NoError(t, out.ConvertFrom(hub))
+	return out
 }
 
 // TestFanOut_MixedTenantSplitsByPodShape proves the kind choice is per-group, not

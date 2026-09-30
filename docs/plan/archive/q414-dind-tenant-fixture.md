@@ -11,7 +11,7 @@ Building the fixture surfaced a defect that makes both of those impossible today
 ## Finding — `gag-migrate` cannot migrate a DinD tenant (measured 2026-07-26)
 
 `FanOut` always emits a **namespaced** `RunnerTemplate` for a v1 `RunnerGroup`'s `podTemplate` ([migrate.go](../../../cmd/gmc/internal/migrate/migrate.go)).
-The v2 admission webhook rejects a privileged container on that kind by design — privileged worker shapes belong on the platform-owned, cluster-scoped `ClusterRunnerTemplate` ([§H.6](../../design/appendix-h-v2-api-decomposition.md), [runnertemplate_webhook.go](../../../cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go)).
+The v2 admission webhook rejects a privileged container on that kind by design — privileged worker shapes belong on the platform-owned, cluster-scoped `ClusterRunnerTemplate` ([§H.6](../../design/appendix-h-v2-api-decomposition.md), [runnertemplate_webhook.go](../../../cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go)).
 A DinD tenant's worker pod is privileged by construction (the `dockerd` sidecar), so the two rules collide.
 
 Measured directly by running `FanOut` over a v1 DinD tenant shape and feeding the emitted template to the real `RunnerTemplateCustomValidator`:

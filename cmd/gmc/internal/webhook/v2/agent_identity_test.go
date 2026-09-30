@@ -1,11 +1,11 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
 	"testing"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,10 +19,10 @@ func identityV1Gateway(namespace, name, gitHubURL string) *gmcv1alpha1.ActionsGa
 	}
 }
 
-func identityV2Gateway(namespace, name, gitHubURL string) *agcv2alpha1.ActionsGateway {
-	return &agcv2alpha1.ActionsGateway{
+func identityV2Gateway(namespace, name, gitHubURL string) *agcv2.ActionsGateway {
+	return &agcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec:       agcv2alpha1.ActionsGatewaySpec{GitHubURL: gitHubURL},
+		Spec:       agcv2.ActionsGatewaySpec{GitHubURL: gitHubURL},
 	}
 }
 
