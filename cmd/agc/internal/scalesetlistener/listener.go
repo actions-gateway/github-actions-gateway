@@ -275,12 +275,18 @@ type CapacityCheckFunc func(ctx context.Context) error
 
 // CleanupFunc releases the per-job resources ProvisionFunc staged — the worker's
 // JIT-config Secret — once the job is terminally complete (Q373). It is called with
-// the jobID of every terminal JobCompleted the queue delivers, and must be idempotent:
-// a re-created session replays completions from cursor 0, so the same job may be
-// cleaned up more than once, and a job may complete having never been provisioned by
-// this process. The worker pod itself is NOT this hook's concern — the owning
-// reconciler's reaper collects terminal pods on spec.completedPodTTL.
-type CleanupFunc func(ctx context.Context, jobID string) error
+// the jobID and runnerName of every terminal JobCompleted the queue delivers, and must
+// be idempotent: a re-created session replays completions from cursor 0, so the same
+// job may be cleaned up more than once, and a job may complete having never been
+// provisioned by this process. runnerName is the runner that held the job, which need
+// not be the one minted for jobID (Q1151), and is empty when no runner started it. The
+// worker pod itself is NOT this hook's concern — the owning reconciler's reaper
+// collects terminal pods on spec.completedPodTTL.
+type CleanupFunc func(ctx context.Context, jobID, runnerName string) error
+
+// StartedFunc records that runnerName has started jobID, from a JobStarted. It must be
+// idempotent, since a re-created session replays messages from cursor 0.
+type StartedFunc func(ctx context.Context, jobID, runnerName string) error
 
 // GuardState is the durable half of the replay guards: the jobs this listener has
 // concluded — completed or abandoned — whose queue messages may not all be deleted yet.
@@ -460,6 +466,10 @@ type Config struct {
 	// Secret). Nil disables reclaim, which leaks one Secret per job until the owning
 	// RunnerSet is deleted — so the reconciler always wires it (Q373).
 	Cleanup CleanupFunc
+	// Started records which job a worker's runner took, from each JobStarted. Nil
+	// disables it, so a completion that names no runner cannot tell a busy worker from
+	// an idle one (Q1151) — the reconciler always wires it.
+	Started StartedFunc
 	// Guards persists the concluded-job guards across a process boundary, closing the
 	// hard-kill half of the settle→DELETE gap (Q606). Nil disables persistence, leaving
 	// the guards process-scoped (the pre-Q606 behaviour).
@@ -1337,6 +1347,13 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	// Secret the completion then deletes, stranding the pod Pending on a Secret that no
 	// longer exists (Q575). Handling the completion first lets provisionAssigned ack
 	// past the assignment instead, so no pod is created for a job already over.
+	//
+	// Starts go ahead of both: a batch can carry one runner's JobStarted beside another
+	// job's runnerless JobCompleted, and the start is what keeps that completion off the
+	// busy worker (Q1151).
+	for _, sj := range startedJobs(jobs) {
+		l.startJob(ctx, sj)
+	}
 	cleaned := make(map[string]bool)
 	for _, cj := range completedJobs(jobs) {
 		if l.completeJob(ctx, cj) {
@@ -1937,7 +1954,7 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	// Best-effort: a failed reclaim leaves the Secret to the RunnerSet's cascade-GC
 	// (the pre-Q373 behaviour) rather than holding the cursor, which would redeliver
 	// the whole batch and re-provision nothing useful.
-	if err := l.cfg.Cleanup(ctx, cj.JobID); err != nil {
+	if err := l.cfg.Cleanup(ctx, cj.JobID, cj.RunnerName); err != nil {
 		l.log.Warn("scaleset: reclaim completed job's worker Secret",
 			"scaleSet", l.cfg.ScaleSetName, "jobID", cj.JobID, "err", err)
 		return false
@@ -2432,6 +2449,37 @@ func (l *Listener) metricsIncPollError(reason string) {
 	if l.cfg.PollErrors != nil {
 		l.cfg.PollErrors.IncPollError(reason)
 	}
+}
+
+// startJob records which job a runner took, best-effort: a failure costs only the
+// protection a runnerless completion reads it for, so it neither holds the cursor nor
+// retries. A start for a job already seen complete is a replay, and recording it would
+// mark a finished worker busy.
+func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) {
+	if l.cfg.Started == nil || sj.RunnerName == "" {
+		return
+	}
+	l.mu.Lock()
+	done := l.completed[sj.JobID]
+	l.mu.Unlock()
+	if done {
+		return
+	}
+	if err := l.cfg.Started(ctx, sj.JobID, sj.RunnerName); err != nil {
+		l.log.Warn("scaleset: record job start on its worker",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", sj.JobID, "runner", sj.RunnerName, "err", err)
+	}
+}
+
+// startedJobs returns the JobStarted entries in a batched message body.
+func startedJobs(jobs []scaleset.JobMessage) []scaleset.JobMessage {
+	var out []scaleset.JobMessage
+	for _, j := range jobs {
+		if j.MessageType == scaleset.MessageTypeJobStarted {
+			out = append(out, j)
+		}
+	}
+	return out
 }
 
 // completedJobs returns the JobCompleted entries in a batched message body.

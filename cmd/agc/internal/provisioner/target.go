@@ -18,11 +18,15 @@ import (
 const LabelRunnerSet = "actions-gateway.com/runner-set"
 
 // AnnotationJobCompletedAt is stamped on a scale-set worker pod, with an RFC 3339
-// UTC timestamp as its value, when the scale-set listener observes the terminal
-// JobCompleted for the job that pod was created for (markJobCompleted). It is the
+// UTC timestamp as its value, when the scale-set listener observes a terminal
+// JobCompleted that retires that pod's runner (markJobCompleted): the job its runner
+// held, or — for a job no runner started — the job the pod was created for. It is the
 // reap deadline for a worker that is still Running after its job is over — a worker
 // that registered but never received its job would otherwise hold a concurrency slot
 // and a node forever, because the reaper counts PodRunning as active (Q420).
+//
+// It is not stamped by job ID alone: GitHub gives a scale-set job to whichever runner
+// asks first, so the pod created for a job can be running a different one (Q1151).
 //
 // It is controller-set and informational: never set it by hand and never use it for
 // security enforcement. The classic tier never stamps it (its provision() goroutine
@@ -46,6 +50,16 @@ const AnnotationJobCompletedAt = "actions-gateway.com/job-completed-at"
 // Controller-set and informational: never set it by hand and never use it for security
 // enforcement.
 const AnnotationRunnerName = "actions-gateway.com/runner-name"
+
+// AnnotationStartedJobID is stamped on a scale-set worker pod, with GitHub's job ID as
+// its value, when the scale-set listener observes a JobStarted naming that pod's runner
+// (MarkScaleSetJobStarted). It records which job the runner actually took, which is not
+// necessarily the one the pod was created for (Q1151): a completion that names no runner
+// leaves a worker carrying another job's ID alone, rather than reaping a live job.
+//
+// Controller-set and informational: never set it by hand and never use it for security
+// enforcement.
+const AnnotationStartedJobID = "actions-gateway.com/started-job-id"
 
 // AnnotationSizingProfile is stamped on a worker pod, with the profile name as its
 // value, when an opt-in sizing profile actually derived that pod's cpu/memory ask

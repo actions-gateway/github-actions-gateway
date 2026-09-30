@@ -700,20 +700,29 @@ type atomicInt struct {
 func (a *atomicInt) set(v int) { a.mu.Lock(); a.v = v; a.mu.Unlock() }
 func (a *atomicInt) get() int  { a.mu.Lock(); defer a.mu.Unlock(); return a.v }
 
-// recordingCleanup captures the jobIDs the listener asks to reclaim, and can be made
-// to fail to prove a reclaim error does not wedge the poll loop.
+// recordingCleanup captures the jobIDs the listener asks to reclaim, and the runner
+// named with each, and can be made to fail to prove a reclaim error does not wedge the
+// poll loop.
 type recordingCleanup struct {
-	mu     sync.Mutex
-	jobIDs []string
-	err    error
+	mu      sync.Mutex
+	jobIDs  []string
+	runners []string
+	err     error
 }
 
-func (r *recordingCleanup) cleanup(_ context.Context, jobID string) error {
+func (r *recordingCleanup) cleanup(_ context.Context, jobID, runnerName string) error {
 	r.mu.Lock()
 	r.jobIDs = append(r.jobIDs, jobID)
+	r.runners = append(r.runners, runnerName)
 	err := r.err
 	r.mu.Unlock()
 	return err
+}
+
+func (r *recordingCleanup) seenRunners() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.runners...)
 }
 
 func (r *recordingCleanup) seen() []string {

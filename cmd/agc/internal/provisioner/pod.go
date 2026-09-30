@@ -173,9 +173,8 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	}
 
 	// Inject Secret volume.
-	volumeName := "job-payload"
 	template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
-		Name: volumeName,
+		Name: jobPayloadVolume,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{SecretName: secretName},
 		},
@@ -184,7 +183,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	// Mount into runner container and set env var.
 	c := &template.Spec.Containers[runnerIdx]
 	c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
-		Name:      volumeName,
+		Name:      jobPayloadVolume,
 		MountPath: payloadMountPath,
 		ReadOnly:  true,
 	})

@@ -707,7 +707,15 @@ The ScaleSet tier provisions fire-and-forget — the runner pulls its own job th
 A worker that registers but never receives its job therefore waits at `Listening for Jobs` indefinitely, and because the reaper counts `Running` as active with no deadline, it held a concurrency slot and a node until an operator deleted it by hand (Q420; observed on the dogfood cluster, where eight such pods occupied ten of twelve quota slots and all six worker nodes with zero jobs outstanding).
 
 The fix makes GitHub's own verdict the deadline.
-When the listener sees the terminal `JobCompleted` for a job, it stamps `actions-gateway.com/job-completed-at` on that job's worker pod (the same reclaim point that deletes the job's JIT-config Secret), and the reaper deletes any pod still `Running` five minutes later.
+When the listener sees the terminal `JobCompleted` for a job, it stamps `actions-gateway.com/job-completed-at` on the worker pod whose runner held that job (the same reclaim point that deletes that worker's JIT-config Secret), and the reaper deletes any pod still `Running` five minutes later.
+
+**The worker that held a job is not necessarily the one created for it.** GitHub gives a scale-set job to whichever of the set's runners asks first, so the runner the AGC registered for job A can run job B while A runs elsewhere.
+Measured on dogfood on 2026-09-30: the runner registered for one job ran `lint` until 17:35:15Z, while the job it was registered for completed at 17:30:11Z.
+An AGC that stamped the pod named for the completed job reaped it at 17:35:12Z with `lint` three seconds from done (Q1151).
+So the stamp follows the `runnerName` the `JobCompleted` carries, matched against each pod's `actions-gateway.com/runner-name`.
+A job that ended before any runner started it carries no runner; its completion stamps the pod created for it, unless that pod's runner has since started another job.
+The listener records each `JobStarted` on its runner's pod as `actions-gateway.com/started-job-id`, handling a batch's starts before its completions.
+A start also lifts a deadline set while that runner was idle.
 The grace is a constant, not a tunable: it measures runner shutdown — a runner that actually ran the job reports completion and exits within seconds — and the job is already over at GitHub either way, so the only thing a premature reap costs is the terminal pod's `completedPodTTL` inspection window.
 The stamp is set once, so a completion replayed to a re-created session cannot push the deadline back, and it lives on the pod rather than in AGC memory, so the deadline survives an AGC restart.
 

@@ -679,9 +679,9 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	httpClient := httpx.NewClientWithTimeout(60 * time.Second)
 	prov := provisioner.NewProvisioner(mgr.GetClient(), m,
 		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("provisioner"))))
-	// The one read that must not be served from the informer cache: the orphaned-worker
-	// scan acts on a worker pod's ABSENCE, so an unsynced cache would read as a whole
-	// set's workers having been disrupted (Q844).
+	// For the reads that must not be served from the informer cache: the orphaned-worker
+	// scan acts on a worker pod's ABSENCE (Q844), and the scale-set listener reads back
+	// a worker's start and completion stamps within one message batch (Q1151).
 	prov.APIReader = mgr.GetAPIReader()
 	prov.WorkerSA = cfg.WorkerServiceAccount
 	prov.HTTPProxy = cfg.HTTPProxy
