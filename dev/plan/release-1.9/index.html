@@ -2684,7 +2684,7 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2's step 1 carries a <code>+kubebuilder:storageversion</code> marker that belongs to Phase 3 and <code>v2.0.0</code>; moving it was part of Q413, not a follow-up.</p>
 <p>The hub stays at <code>v2beta1</code>, though nothing ties it to the storage version: moving it buys nothing before <code>v2.0.0</code> leaves one served version, and it would put the alias conversion annotation on every <code>v2alpha1</code> and <code>v2beta1</code> conversion (<a href="../v2-ga/#the-hub-stays-at-v2beta1">why</a>).</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
-<p>Three gating rows and the candidate validation, in the order they land.</p>
+<p>Three gating rows and the candidate validation, in the order they land, then the merged work that rides.</p>
 <table>
 <thead>
 <tr>
@@ -2719,6 +2719,24 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>gates</td>
 <td>🔲 no candidate cut</td>
 </tr>
+<tr>
+<td>Q1101</td>
+<td>GMC provisions the AGC ServiceMonitor for <code>v2</code> ActionsGateways (#1991)</td>
+<td>rides</td>
+<td>✅ landed</td>
+</tr>
+<tr>
+<td>Q1151</td>
+<td>AGC reclaims the scale-set worker whose runner held the job (#2011)</td>
+<td>rides</td>
+<td>✅ landed</td>
+</tr>
+<tr>
+<td>Q1146</td>
+<td>Worker image bumps <code>actions/runner</code> to 2.337.0 (#2005)</td>
+<td>rides</td>
+<td>✅ landed</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
@@ -2726,9 +2744,10 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 Inside one release the sequencing recovers what it can, which is less than a tag's worth.
 The reject and the pre-upgrade check are in the tree before <code>v2</code> is served, so <code>main</code>, the dogfood cluster and the review order all meet the guard before the hazard.
 An operator does not: both halves arrive under the same tag, so for them the clean-population <em>window</em> an earlier tag would have given is gone rather than narrowed.</p>
-<p><strong>Nothing rides.</strong> <code>scripts/release/semver-floor.sh v1.8.0</code> read <code>FLOOR: NONE</code> on 2026-09-17 over the 26 commits since the tag: six carry a <code>feat</code> or <code>fix</code> type and none touches a released artifact, so nothing user-visible has accumulated and a tag today would publish no change.
-1.9 is therefore forced entirely by its own content, the way 1.8 was and unlike 1.6, which nine merged features forced whatever its theme did (<a href="../release-ladder/#why-16-exists-rather-than-folding-into-15">release-ladder.md</a>).
-That is a reading rather than a decision: whether anything <em>should</em> ride is scope the maintainer sets, and the ledger takes a row for each item that does.</p>
+<p><strong>Three items ride, none of them gating.</strong> <code>scripts/release/semver-floor.sh v1.8.0</code> read <code>FLOOR: MINOR</code> on 2026-09-30 over the 73 commits since the tag, with five touching a released artifact: the two gates above, and Q1101, Q1151 and Q1146, which merged on their own merits and ship in the tag whether or not the release waits for them.
+On 2026-09-17 it read <code>FLOOR: NONE</code> over 26 commits, so the riders accumulated during the cycle rather than being scoped into it.
+The gates still set the scope, the way 1.8's did: the tag waits for them and not for any rider, unlike 1.6, which nine merged features forced whatever its theme did (<a href="../release-ladder/#why-16-exists-rather-than-folding-into-15">release-ladder.md</a>).
+The riders belong in the release notes, and the ledger takes a row for each further item that merges onto the released surface before the tag.</p>
 <h2 id="definition-of-done">Definition of Done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Q413's Phase 2 has landed</strong> with <code>v2</code> served on all five kinds and <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers.</li>
