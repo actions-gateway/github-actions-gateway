@@ -24,18 +24,23 @@
 # treated specially — `--managed-vars` prints it. Each side's assignment for
 # such a variable is lifted out and replaced by a one-line sentinel, the rest of
 # the Makefile is merged exactly as git would have merged it, and each lifted
-# list is merged as a set of entries: an entry added on either side is present,
-# an entry removed on either side is absent, and the surviving entries keep
-# base's order with each side's additions appended. The rendered block reuses
-# the assignment operator, the continuation style and the indent already in
-# ours, so the result reads like the file it came from.
+# list is merged entry by entry: an entry added on either side is present, an
+# entry removed on either side is absent. The rendered block reuses the
+# assignment operator, the continuation style and the indent already in ours,
+# so the result reads like the file it came from.
 #
-# The entry set merge is the same devtools/git/keyedrecords the Markdown drivers
-# use, reached with an identity key because an entry here is a bare word. It
-# runs under that package's BaseThenAdditions order: a Makefile list is a set
-# make expands, so nothing reads anything into its order, and the row-order
-# reconstruction the Markdown registries need would refuse a merge over a
-# difference that means nothing here.
+# The entry merge is the same devtools/git/keyedrecords the Markdown drivers
+# use, reached with an identity key because an entry here is a bare word. Order
+# is where the lists differ, and `--ordered-vars` names the ones it matters for.
+# Most are sets make expands, so they run under BaseThenAdditions (base's
+# order, each side's additions appended), because the row-order reconstruction
+# would refuse a merge over a difference that means nothing there.
+# CHECK_HEAVY_GATES is not a set: gate-lists-check requires it to match the
+# `check:` recipe's sequential phases in order, so it runs under Reconstruct,
+# which keeps an entry one side inserted mid-list where that side put it and
+# refuses a reorder on both sides. Measured 2026-09-30: merged as a set, main's
+# `build-tags-check api-fields-check lint cover-check` came out with
+# api-fields-check last, and gate-lists-check failed a correct merge.
 #
 # Confining the clever part to a sentinel is the whole safety argument: a
 # conflict anywhere else in the Makefile never reaches this driver's list logic,
@@ -50,7 +55,8 @@
 # three-way merge and leave its conflict markers, with a one-line reason on
 # stderr. A managed variable missing from a side, assigned twice on a side, or
 # whose sentinel-substituted body still conflicts; an entry listed twice within
-# one side; a rendered block whose entry set does not match the merged set;
+# one side; a rendered block whose entry set, or an ordered list's sequence,
+# does not match the merged one;
 # anything unparseable — all get markers. A marker costs a minute; a wrong
 # silent resolution can drop a test suite from the gate, which is exactly the
 # failure the gate exists to prevent.
@@ -87,9 +93,10 @@
 #     %L conflict-marker size   %P the real pathname
 #     %S %X %Y conflict labels (git >= 2.44; older git is handled)
 #
-#   git-merge-gate-lists.sh --managed-vars
-#     the lists this driver owns, one per line, so a caller reconciles the value
-#     the driver runs on rather than re-deriving it from source.
+#   git-merge-gate-lists.sh --managed-vars | --ordered-vars
+#     the lists this driver owns, or the subset merged in order, one per line,
+#     so a caller reconciles the value the driver runs on rather than
+#     re-deriving it from source.
 set -euo pipefail
 shopt -s inherit_errexit
 

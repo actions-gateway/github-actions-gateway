@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 
 	"github.com/actions-gateway/github-actions-gateway/devtools/git/keyedrecords"
@@ -10,9 +11,8 @@ import (
 )
 
 // managedVars is the set of lists the gate-lists driver owns. Every one is a
-// whitespace-separated, order-insensitive set that PRs append to, and every one
-// is reconciled by gate-lists-check. A variable not named here is merged by git
-// alone.
+// whitespace-separated list that PRs append to, and every one is reconciled by
+// gate-lists-check. A variable not named here is merged by git alone.
 //
 // This slice and the assignments in mk/gate-lists.mk must name the same set.
 // mklists.Lift hard-fails on a name it cannot find, so a list renamed or
@@ -29,29 +29,50 @@ var managedVars = []string{
 	"SCRIPTS_TESTS",
 }
 
+// orderedVars are the managed lists whose order means something:
+// gate-lists-check requires CHECK_HEAVY_GATES to match the `check:` recipe's
+// sequential phases entry for entry. Every other managed list is a set make
+// expands, so nothing reads its order.
+var orderedVars = map[string]bool{
+	"CHECK_HEAVY_GATES": true,
+}
+
 // gateListsDriver merges mk/gate-lists.mk. Only the variables it manages are
 // treated specially: each side's assignment is lifted out behind a sentinel,
 // the rest of the Makefile is merged exactly as git would have merged it, and
-// each lifted list is merged as a set of entries.
+// each lifted list is merged entry by entry.
 //
-// The order carries nothing here — these are sets make expands — so the shared
-// core runs under keyedrecords.BaseThenAdditions. Inferring a reorder, which
-// the Markdown registries need, would refuse a merge over a difference that
-// means nothing in a Makefile.
+// A set list runs under keyedrecords.BaseThenAdditions: inferring a reorder
+// would refuse a merge over a difference that means nothing there. An ordered
+// list runs under keyedrecords.Reconstruct, so an entry one side inserted
+// mid-list stays where that side put it rather than landing at the end, and a
+// reorder on both sides is refused.
 type gateListsDriver struct {
-	vars []string
+	vars    []string
+	ordered map[string]bool
 }
 
 // flags answers the non-merge invocations, before git's placeholders are
-// parsed. --managed-vars prints the list the driver actually runs on, so the
-// suite reconciles that value against mk/gate-lists.mk rather than re-deriving
-// it from source and asserting a shape nobody runs on.
+// parsed. --managed-vars and --ordered-vars print the lists the driver actually
+// runs on, so the suite reconciles and builds fixtures from that value rather
+// than re-deriving it from source and asserting a shape nobody runs on.
 func (d gateListsDriver) flags(args []string) bool {
-	if len(args) == 0 || args[0] != "--managed-vars" {
+	if len(args) == 0 {
 		return false
 	}
-	for _, v := range d.vars {
-		fmt.Println(v)
+	switch args[0] {
+	case "--managed-vars":
+		for _, v := range d.vars {
+			fmt.Println(v)
+		}
+	case "--ordered-vars":
+		for _, v := range d.vars {
+			if d.ordered[v] {
+				fmt.Println(v)
+			}
+		}
+	default:
+		return false
 	}
 	return true
 }
@@ -88,9 +109,13 @@ func (d gateListsDriver) run(in *invocation) {
 
 	blocks := make(map[string][]string, len(d.vars))
 	for _, v := range d.vars {
+		order := keyedrecords.BaseThenAdditions
+		if d.ordered[v] {
+			order = keyedrecords.Reconstruct
+		}
 		merged, err := keyedrecords.MergeOrdered(
 			base.Blocks[v].Entries, ours.Blocks[v].Entries, theirs.Blocks[v].Entries,
-			identityKey, keyedrecords.BaseThenAdditions)
+			identityKey, order)
 		if err != nil {
 			in.fallback("%s: %s", v, err)
 		}
@@ -103,22 +128,24 @@ func (d gateListsDriver) run(in *invocation) {
 			// Nothing changed for this list. Reuse ours byte for byte, so an
 			// untouched variable contributes no diff at all.
 			blocks[v] = ours.Blocks[v].Lines
-		case len(dels) == 0:
+		case len(dels) == 0 && !d.ordered[v]:
 			blocks[v] = mklists.Append(ours.Blocks[v].Lines, adds, style)
 		default:
-			// A removal has to rewrite the wrapped lines, so this is the one
-			// case that re-renders the whole block.
+			// A removal has to rewrite the wrapped lines, and an append to an
+			// ordered list would put an entry the other side inserted mid-list
+			// at the end, so both re-render the whole block.
 			blocks[v] = mklists.Render(v, style, merged)
 		}
 
 		// The render is the one step that could silently corrupt a list, so
 		// read it back and require it to be the same assignment, in two
 		// respects that fail independently. Membership: the entry set it
-		// produces must equal the set that went in — order is not compared.
-		// Shape: it must still be one continued assignment, which membership
-		// cannot see, because a block that lost a backslash reads back with
-		// every entry present and assigns only its first line.
-		if !sameSet(merged, mklists.BlockEntries(blocks[v])) {
+		// produces must equal the set that went in, and for an ordered list the
+		// sequence too. Shape: it must still be one continued assignment, which
+		// membership cannot see, because a block that lost a backslash reads
+		// back with every entry present and assigns only its first line.
+		got := mklists.BlockEntries(blocks[v])
+		if !sameSet(merged, got) || (d.ordered[v] && !slices.Equal(merged, got)) {
 			in.fallback("the rebuilt %s did not round-trip to the entries it was given", v)
 		}
 		if err := mklists.Continued(blocks[v]); err != nil {
