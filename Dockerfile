@@ -29,12 +29,12 @@
 # COPY'd from a pinned docker:<N>-cli, so it compiles nothing of its own.
 
 ########################  deps — the shared compile cache  ####################
-# golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
-# Update with: docker buildx imagetools inspect golang:1.26
+# golang:1.27 — pinned to the multi-arch manifest digest for cache stability.
+# Update with: docker buildx imagetools inspect golang:1.27
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
 # platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
 # toolchain on a multi-platform build.
-FROM --platform=$BUILDPLATFORM golang:1.26@sha256:26326682769ca980f8f1d3b1f52be2dd1c1d25270e3de3fe0c97d6bb65df3556 AS deps
+FROM --platform=$BUILDPLATFORM golang:1.27@sha256:e0174e51e81218523251d85d248a90d24c3d5e81543b4f07a5d66229397db190 AS deps
 WORKDIR /src
 
 # TARGETOS/TARGETARCH are populated by BuildKit from the requested target
@@ -144,7 +144,7 @@ RUN go build -trimpath -o /bin/fakegithub ./test/fakegithub
 ########################  gmc  ################################################
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
-FROM gcr.io/distroless/static:nonroot@sha256:d29e660cc75a5b6b1334e03c5c81ccf9bc0884a002c6000dbf0fb96034814478 AS gmc
+FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS gmc
 # OpenContainers image labels carry provenance for SBOM scanners. REVISION and
 # VERSION arrive as build args (wired from GIT_SHA in docker-bake.hcl); the
 # defaults cover a bare `docker build` with no args. Declared in the final stage
@@ -172,7 +172,7 @@ USER 65532:65532
 ENTRYPOINT ["/manager"]
 
 ########################  agc  ################################################
-FROM gcr.io/distroless/static:nonroot@sha256:d29e660cc75a5b6b1334e03c5c81ccf9bc0884a002c6000dbf0fb96034814478 AS agc
+FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS agc
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -187,7 +187,7 @@ USER 65532:65532
 ENTRYPOINT ["/agc"]
 
 ########################  proxy  ##############################################
-FROM gcr.io/distroless/static:nonroot@sha256:d29e660cc75a5b6b1334e03c5c81ccf9bc0884a002c6000dbf0fb96034814478 AS proxy
+FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS proxy
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -319,7 +319,7 @@ ENTRYPOINT ["/wrapper"]
 ##   docker buildx imagetools inspect docker:29-cli
 ## Re-check the source plugin paths when bumping the major: they are set by
 ## docker-library/docker's own Dockerfile, not by the CLI.
-FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe AS docker-cli
+FROM docker:29-cli@sha256:018edbc908e08fcc9dbf029c812c34251e9b4719e6f71ca0e5eae2a987d014ca AS docker-cli
 
 ## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
 ## the lockstep test over it — is inherited from `worker`, so this image runs
@@ -348,7 +348,7 @@ COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 # published. It intentionally omits the OCI provenance labels and /licenses
 # bundle that the production stages above carry — do NOT copy this as a template
 # for a shipped image.
-FROM gcr.io/distroless/static:nonroot@sha256:d29e660cc75a5b6b1334e03c5c81ccf9bc0884a002c6000dbf0fb96034814478 AS fakegithub
+FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS fakegithub
 COPY --from=build-fakegithub /bin/fakegithub /fakegithub
 USER 65532:65532
 ENTRYPOINT ["/fakegithub"]

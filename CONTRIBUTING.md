@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - **bash 5.1 or newer, ahead of `/bin/bash` on your `PATH`** ([why, and how to get one](#the-bash-floor))
 - Docker (for e2e tests and image builds)
 - [kind](https://kind.sigs.k8s.io/) (for the local e2e cluster)
