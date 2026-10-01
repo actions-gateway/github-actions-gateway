@@ -124,6 +124,23 @@ effective_tolerance() {
 	}'
 }
 
+# coverage_toolchain [GOWORK_FILE] — echo the GOTOOLCHAIN the run uses: the
+# caller's, when set, else the go directive of GOWORK_FILE (default go.work).
+#
+# The statement count is a property of the toolchain as well as the tree: go1.27
+# splits coverage blocks differently, and on unchanged source counted cmd/proxy
+# at 542 statements and 75.5% against go1.26.6's 386 and 80.8% (measured
+# 2026-09-30). Every floor was recorded under the go.work version CI installs,
+# so a newer host Go reads a regression nobody made. A `toolchain` line cannot
+# fix this, since GOTOOLCHAIN=auto only ever switches up.
+coverage_toolchain() {
+	if [[ -n "${GOTOOLCHAIN:-}" ]]; then
+		echo "$GOTOOLCHAIN"
+		return
+	fi
+	awk '$1 == "go" && $2 ~ /^[0-9]+(\.[0-9]+)+$/ { print "go" $2; exit }' "${1:-$REPO_ROOT/go.work}"
+}
+
 # module_import_path DIR — echo the module path declared by DIR/go.mod. The
 # coverage profile identifies packages by import path, so this is what maps a
 # profiled line back to the go.work disk path the baseline is keyed by.
@@ -439,6 +456,13 @@ main() {
 	# the coverage ratchet without a second, unthrottled test pass. No-op on
 	# CI/headless. Must run before anything else: it re-execs this script.
 	serialize_heavy_build "$@"
+
+	# Pin the toolchain the floors were recorded under (see coverage_toolchain).
+	# A host without it downloads it once into the module cache; on CI it is
+	# the toolchain setup-go already installed, so nothing changes there.
+	GOTOOLCHAIN="$(coverage_toolchain)"
+	export GOTOOLCHAIN
+	echo "==> GOTOOLCHAIN=$GOTOOLCHAIN" >&2
 
 	# All coverage temp files live in a per-run directory under the repo-local,
 	# gitignored tmp/ — never the host-wide $TMPDIR (/var/folders on macOS, /tmp

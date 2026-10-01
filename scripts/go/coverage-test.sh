@@ -183,6 +183,29 @@ expect_tol proxy-per-row 772 0.50            # 3 stmt = 0.39pp, so 0.5pp wins
 expect_tol no-statements 0 0.50
 expect_tol non-numeric n/a 0.50
 
+# The run pins the toolchain the floors were recorded under, because a newer Go
+# counts statements differently, and an explicit caller choice wins. The go.work
+# case reads the real file, so a directive coverage_toolchain cannot parse fails
+# here rather than leaving the run on whatever Go the host has.
+expect_toolchain() {
+	local name="$1" preset="$2" want="$3" got
+	got="$(GOTOOLCHAIN="$preset" coverage_toolchain)"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   toolchain %-20s -> %s\n' "$name" "$got"
+	else
+		printf 'FAIL toolchain %-20s want=[%s] got=[%s]\n' "$name" "$want" "$got" >&2
+		fails=$((fails + 1))
+	fi
+}
+expect_toolchain from-go.work "" "go$(awk '$1 == "go" { print $2; exit }' go.work)"
+expect_toolchain caller-wins local local
+if [[ "$(GOTOOLCHAIN='' coverage_toolchain)" =~ ^go[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	printf 'ok   toolchain go.work-parses       -> a full goX.Y.Z version\n'
+else
+	printf 'FAIL toolchain go.work-parses       got=[%s]\n' "$(GOTOOLCHAIN='' coverage_toolchain)" >&2
+	fails=$((fails + 1))
+fi
+
 # Every go.work module must actually declare a module path, or the split would
 # silently attribute its packages to nothing and report a false "n/a".
 while read -r dir; do
