@@ -34,6 +34,9 @@ Bumping the `go` directive (e.g. for a stdlib CVE) is therefore a **three-part c
 3. **`vendor/modules.txt`** — it records the `go` directive of the workspace-replaced modules, so the bump drifts the committed vendor tree.
    Run `make deps-sync` and **commit** the result: CI's `vendor-check` diffs against git HEAD, so a dirty-but-correct working tree still fails.
 
+The bump can also move every module's coverage floor, because the statement count belongs to the toolchain as well as the tree ([why](testing.md#the-floors-belong-to-one-toolchain)).
+`make cover-check` runs under the new `go` directive by itself, so read it after the bump and re-record with `make cover-update` in the same PR if the numbers moved.
+
 A green `make check` does **not** cover parts 2–3 — the vendor/tidy/notices gates are CI-only (see [testing.md](testing.md#the-make-check-pre-review-gate)).
 Local `make vulncheck` genuinely re-verifies a stdlib fix: outside the image, `GOTOOLCHAIN=auto` fetches the newer toolchain, and govulncheck reads that version — confirm you see `No vulnerabilities found.`
 

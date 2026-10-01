@@ -635,6 +635,18 @@ That second condition does not hold today, so the swing reproduces and the flip 
 `profile_statements` counts each distinct block once, which makes the two runs agree on all ten modules.
 The rows themselves are deliberately kept: repeats agree on `NumStmt` but not always on the hit count (2 blocks of 11,031 in that run), so deduping the profile would drop a hit and move the percentage that is currently invariant.
 
+#### The floors belong to one toolchain
+
+The statement count is a property of the Go toolchain as well as the tree, because each Go release decides where a coverage block starts and ends.
+Measured 2026-09-30 on unchanged source: go1.26.6 counted `cmd/proxy` at 386 statements and 80.8%, matching CI, and go1.27.1 counted 542 statements and 75.5%, a `FAIL` against the 80.8% floor.
+`proxy.go` grew 246 → 343 and `main.go` 73 → 132, and the drop comes from `main.go`: its covered count stayed at 18, so every statement it gained is one no test runs.
+
+So [`coverage.sh`](../../scripts/go/coverage.sh) runs under `GOTOOLCHAIN=go<version>` taken from the `go` directive in `go.work`, the same version CI's `setup-go` installs, and prints the line it chose.
+A host on a newer Go downloads that toolchain once into the module cache (about 70 MB for darwin/arm64) and is otherwise unaffected.
+A `toolchain` line in `go.work` cannot do this job, since the default `GOTOOLCHAIN=auto` only ever switches to a newer Go.
+An explicit `GOTOOLCHAIN` in the environment wins, which is how to measure under another toolchain on purpose.
+A Go version bump changes which toolchain the floors are read under, so it is also the moment to re-record them ([building.md](building.md#go-version-bumps-the-gotoolchainlocal-coupling)).
+
 **Updating the floor.** When you intentionally add tests and coverage goes up, run `make cover-update` and commit the new `coverage-baseline.txt` — the ratchet then defends the higher number.
 Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently.
 
