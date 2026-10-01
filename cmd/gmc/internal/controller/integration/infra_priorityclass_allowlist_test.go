@@ -9,7 +9,7 @@ import (
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
-	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,18 +58,18 @@ func TestIntegration_InfraPriorityClassAllowlist_Watch(t *testing.T) {
 	allowlist.Pair(worker, infra)
 	require.Empty(t, allowlist.Intersection(worker, infra), "precondition: the static flags are disjoint")
 
-	gwValidator := &webhookv2alpha1.ActionsGatewayCustomValidator{InfraPriorityClasses: infra}
+	gwValidator := &webhookv2.ActionsGatewayCustomValidator{InfraPriorityClasses: infra}
 	startPriorityClassAllowlistReconcilerPair(t, worker, infra, pcaName)
 
 	// No CR yet: the flag allowlist alone is in force. An unset name still passes —
 	// the secure default forbids named classes, not unprioritized infra pods.
-	_, err := gwValidator.ValidateCreate(ctx, v2GatewayWithScheduling(ns, "flag-ok", infraFlag))
+	_, err := gwValidator.ValidateCreate(ctx, v2GatewayView(t, v2GatewayWithScheduling(ns, "flag-ok", infraFlag)))
 	require.NoError(t, err, "the static infra flag class must be admitted")
-	_, err = gwValidator.ValidateCreate(ctx, v2GatewayWithScheduling(ns, "unset-ok", ""))
+	_, err = gwValidator.ValidateCreate(ctx, v2GatewayView(t, v2GatewayWithScheduling(ns, "unset-ok", "")))
 	require.NoError(t, err, "an unset priorityClassName must stay admissible")
-	_, err = gwValidator.ValidateCreate(ctx, v2GatewayWithScheduling(ns, "dyn-early", infraDyn))
+	_, err = gwValidator.ValidateCreate(ctx, v2GatewayView(t, v2GatewayWithScheduling(ns, "dyn-early", infraDyn)))
 	require.Error(t, err, "no CR must mean no dynamic infra additions")
-	_, err = gwValidator.ValidateCreate(ctx, v2GatewayWithScheduling(ns, "escalate", escalation))
+	_, err = gwValidator.ValidateCreate(ctx, v2GatewayView(t, v2GatewayWithScheduling(ns, "escalate", escalation)))
 	require.Error(t, err, "%s must never be nameable on an infra pod", escalation)
 
 	// Apply the CR: the infra list takes effect with no restart, and the worker list
@@ -85,7 +85,7 @@ func TestIntegration_InfraPriorityClassAllowlist_Watch(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), pca) })
 	waitForAllowed(t, infra, infraDyn, true)
 
-	_, err = gwValidator.ValidateCreate(ctx, v2GatewayWithScheduling(ns, "dyn-ok", infraDyn))
+	_, err = gwValidator.ValidateCreate(ctx, v2GatewayView(t, v2GatewayWithScheduling(ns, "dyn-ok", infraDyn)))
 	require.NoError(t, err, "the CR-sourced infra class must be admitted without a restart")
 	assert.True(t, infra.Allowed(infraFlag), "the static infra flag must survive a dynamic augmentation")
 	assert.False(t, worker.Allowed(infraDyn), "an infra class must not leak onto the worker allowlist")
@@ -115,7 +115,7 @@ func TestIntegration_InfraPriorityClassAllowlist_Watch(t *testing.T) {
 	assert.True(t, worker.Allowed(workerFlag), "the refused pair must fall back to the static flags")
 	assert.True(t, infra.Allowed(infraFlag), "the refused pair must fall back to the static flags")
 
-	_, err = gwValidator.ValidateCreate(ctx, v2GatewayWithScheduling(ns, "collide-rejected", workerFlag))
+	_, err = gwValidator.ValidateCreate(ctx, v2GatewayView(t, v2GatewayWithScheduling(ns, "collide-rejected", workerFlag)))
 	require.Error(t, err, "the colliding class must be rejected at admission, not merely absent from a set")
 
 	// Repair, then delete: enforcement follows the live object back up and fails safe

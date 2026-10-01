@@ -303,6 +303,36 @@ func TestWebhookAdmission_ScaleSetRunnerLabelUniqueness(t *testing.T) {
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), distinct)) })
 }
 
+// TestWebhookAdmission_ClassicSetMayShareAScaleSetName covers the Classic half of the
+// label guard through the real apiserver. A Classic set has no scale-set object, so it
+// may reuse a first label a ScaleSet set already claims. The webhook rule names v2,
+// which has no acquisitionProtocol field: the v2alpha1 write reaches the validator
+// converted through the v2beta1 hub, carrying Classic only in the
+// conversion.actions-gateway.com/acquisition-protocol annotation (Q1150). A validator
+// that ignored it would read the set as ScaleSet and reject it as a collision.
+func TestWebhookAdmission_ClassicSetMayShareAScaleSetName(t *testing.T) {
+	const nsName = "team-webhook-classic-shares"
+	createNamespace(t, nsName)
+
+	scaleSet := newScaleSetRunnerSet("scaleset-set", nsName, "gw", "linux")
+	require.NoError(t, k8sClient.Create(ctx, scaleSet), "the ScaleSet set claiming the name must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), scaleSet)) })
+
+	classic := newScaleSetRunnerSet("classic-set", nsName, "gw", "linux", "amd64")
+	classic.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolClassic
+	require.NoError(t, k8sClient.Create(ctx, classic),
+		"a Classic set sharing a ScaleSet set's first label must be admitted: it registers no scale set")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), classic)) })
+
+	// The control: the same first label on a second ScaleSet set is still refused, so
+	// the admit above is the protocol's doing and not a guard that never ran.
+	dup := newScaleSetRunnerSet("dup-set", nsName, "gw", "linux")
+	err := k8sClient.Create(ctx, dup)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), dup)) })
+	require.Error(t, err, "a second ScaleSet set claiming the same label must still be rejected")
+	assert.Contains(t, err.Error(), "already used by RunnerSet")
+}
+
 // TestWebhookAdmission_ScaleSetUniquenessIsOnTheFirstLabelOnly covers what Q726 moved.
 // Only the FIRST runnerLabel names the scale set at GitHub, so only it has to be
 // unique. Labels after the first are ordinary match targets — "linux" across a dozen

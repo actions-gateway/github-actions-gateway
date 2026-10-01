@@ -1101,7 +1101,7 @@ See [Disjointness is enforced on every edit](security-operations.md#disjointness
 **Symptoms.** Applying an `EgressProxy` fails at admission:
 
 ```text
-admission webhook "vegressproxy-v2alpha1.kb.io" denied the request:
+admission webhook "vegressproxy-v2.kb.io" denied the request:
 spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
 removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
 and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
@@ -3983,11 +3983,11 @@ around the per-tenant egress proxy, defeating egress-IP attribution; remove it
 destinations (CIDRs or domain suffixes), never GitHub
 ```
 
-The v2 `EgressProxy`'s `spec.noProxyCIDRs` is gated by the same guard (webhook `vegressproxy-v2alpha1.kb.io`, field path `spec.noProxyCIDRs[N]`).
+The v2 `EgressProxy`'s `spec.noProxyCIDRs` is gated by the same guard (webhook `vegressproxy-v2.kb.io`, field path `spec.noProxyCIDRs[N]`).
 Because the v2 proxy carries no `gitHubURL` of its own, the v2 guard also runs from the *referrer* side: a v2 `ActionsGateway` (`spec.defaultProxyRef`) or `RunnerSet` (`spec.proxyRef`) write that binds a GitHub host to a proxy whose `noProxyCIDRs` exclude it is rejected too, e.g.:
 
 ```
-admission webhook "vactionsgateway-v2alpha1.kb.io" denied the request:
+admission webhook "vactionsgateway-v2.kb.io" denied the request:
 spec.defaultProxyRef: EgressProxy "corp-proxy" spec.noProxyCIDRs[0]:
 ".corp.example" would route GitHub traffic (ghes.corp.example) around the
 per-tenant egress proxy, ...
@@ -4037,14 +4037,14 @@ Privileged worker containers are permitted **only** under the explicit `security
 **Symptoms.** Creating or updating a `RunnerTemplate` (or `ClusterRunnerTemplate`) is rejected by the GMC validating webhook with one of:
 
 ```
-admission webhook "vrunnertemplate-v2alpha1.kb.io" denied the request:
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
 podTemplate.spec.containers["runner"]: env "HTTP_PROXY" is reserved: the AGC
 injects the egress-proxy variables (HTTP_PROXY/HTTPS_PROXY/NO_PROXY/PROXY_CA_CERT_PATH)
 into worker containers; setting it in a template is overridden and not permitted
 ```
 
 ```
-admission webhook "vrunnertemplate-v2alpha1.kb.io" denied the request:
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
 podTemplate.spec.containers["runner"]: privileged containers are not permitted
 in a namespaced RunnerTemplate; use a platform-owned ClusterRunnerTemplate for
 privileged (DinD/sysbox) worker shapes
@@ -4081,7 +4081,7 @@ protocol
 ```
 
 ```
-admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
+admission webhook "vrunnerset-v2.kb.io" denied the request: ScaleSet
 runnerLabels[0] "linux" is already used by RunnerSet "other-set" registered against
 GitHub scope "github.com/acme"; a ScaleSet set's FIRST runnerLabel is its scale-set
 name at GitHub, so two sets sharing it would drive one scale set. Pick a distinct
@@ -4089,7 +4089,7 @@ first label (later labels may overlap freely)
 ```
 
 ```
-admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
+admission webhook "vrunnerset-v2.kb.io" denied the request: ScaleSet
 runnerLabels[0] "linux" is already claimed by another RunnerSet registered against
 GitHub scope "github.com/acme"; a ScaleSet set's FIRST runnerLabel is its scale-set
 name at GitHub, so two sets sharing it would drive one scale set, each acquiring the
@@ -4119,7 +4119,7 @@ scale-set names that GitHub scope already holds)
   The conflict is then caught when the gateway arrives:
 
   ```
-  admission webhook "vactionsgateway-v2alpha1.kb.io" denied the request:
+  admission webhook "vactionsgateway-v2.kb.io" denied the request:
   spec.githubURL binds GitHub scope "github.com/acme", where RunnerSet "linux-set" in
   this namespace would claim scale-set name "linux" — a name already claimed by another
   RunnerSet registered against that scope
@@ -4141,7 +4141,7 @@ scale-set names that GitHub scope already holds)
 **Symptoms.** A `RunnerSet` create or update is rejected:
 
 ```
-admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: agent-identity stem
+admission webhook "vrunnerset-v2.kb.io" denied the request: agent-identity stem
 "rs-web" is already claimed by RunnerGroup "rs-web" in namespace "team-a"; an agent
 pool derives its agent Secret "agentpool-<stem>-N" and the runner name it registers
 with GitHub "<stem>-N" from that stem, so two owners sharing it each deregister the
@@ -4151,7 +4151,7 @@ other's runner and neither recovers. Rename one of the two CRs
 Or, when the holder is in another namespace:
 
 ```
-admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: agent-identity stem
+admission webhook "vrunnerset-v2.kb.io" denied the request: agent-identity stem
 "rs-web" is already claimed by another runner pool registered against GitHub scope
 "github.com/acme"; ... Pick a distinct name for this RunnerSet (ask your platform
 administrator which runner names that GitHub scope already holds)
@@ -4682,7 +4682,7 @@ admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
 gitHubURL must include an organization, enterprise, or owner/repo path segment (got "https://github.com")
 ```
 
-The v2 `ActionsGateway` (`actions-gateway.com`) enforces the same rules — the CRD-schema errors name that group instead, and the webhook error names `vactionsgateway-v2alpha1.kb.io` (v2beta1 writes route through the same validator).
+The v2 `ActionsGateway` (`actions-gateway.com`) enforces the same rules — the CRD-schema errors name that group instead, and the webhook error names `vactionsgateway-v2.kb.io` (a write at any served version is converted to `v2` and routes through the same validator).
 
 **Likely cause.** `spec.gitHubURL` is a **required** field — the GitHub org, enterprise, or repository URL the gateway's runners register against.
 There is no default: a gateway with no URL has nothing to register against.

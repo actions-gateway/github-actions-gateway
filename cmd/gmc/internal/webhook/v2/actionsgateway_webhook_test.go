@@ -1,4 +1,4 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	"github.com/stretchr/testify/assert"
@@ -15,10 +17,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
 // fakeReader returns a client.Reader preloaded with the given objects, standing in
-// for the manager's uncached API reader in the Q322 referrer-graph guards.
+// for the manager's uncached API reader in the Q322 referrer-graph guards. A v2
+// object is stored as its v2alpha1 view (asV2alpha1), the version the validators
+// read siblings at.
 //
 // It registers every kind the validators read, not only the v2 ones: the
 // agent-identity guard (Q1011) lists v1alpha1 RunnerGroups and v1alpha1
@@ -30,7 +35,41 @@ func fakeReader(t *testing.T, objs ...client.Object) client.Reader {
 	require.NoError(t, agcv1alpha1.AddToScheme(scheme))
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
 	require.NoError(t, gmcv1alpha1.AddToScheme(scheme))
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, objs...)...).Build()
+}
+
+// asV2alpha1 converts each v2 object to v2alpha1 through the v2beta1 hub, as the
+// apiserver serves a stored object to a v2alpha1 read, and passes any other kind
+// through. A fixture can then be both the object under admission and a sibling.
+func asV2alpha1(t *testing.T, objs ...client.Object) []client.Object {
+	t.Helper()
+	out := make([]client.Object, 0, len(objs))
+	for _, o := range objs {
+		var hub conversion.Hub
+		var dst interface {
+			client.Object
+			conversion.Convertible
+		}
+		switch o.(type) {
+		case *agcv2.ActionsGateway:
+			hub, dst = &v2beta1.ActionsGateway{}, &agcv2alpha1.ActionsGateway{}
+		case *agcv2.EgressProxy:
+			hub, dst = &v2beta1.EgressProxy{}, &agcv2alpha1.EgressProxy{}
+		case *agcv2.RunnerSet:
+			hub, dst = &v2beta1.RunnerSet{}, &agcv2alpha1.RunnerSet{}
+		case *agcv2.RunnerTemplate:
+			hub, dst = &v2beta1.RunnerTemplate{}, &agcv2alpha1.RunnerTemplate{}
+		case *agcv2.ClusterRunnerTemplate:
+			hub, dst = &v2beta1.ClusterRunnerTemplate{}, &agcv2alpha1.ClusterRunnerTemplate{}
+		default:
+			out = append(out, o)
+			continue
+		}
+		require.NoError(t, o.(conversion.Convertible).ConvertTo(hub))
+		require.NoError(t, dst.ConvertFrom(hub))
+		out = append(out, dst)
+	}
+	return out
 }
 
 // failingReader errors every read, for the fail-closed paths of the Q322 guards.
@@ -46,22 +85,22 @@ func (failingReader) List(context.Context, client.ObjectList, ...client.ListOpti
 
 // v2Gateway builds a minimal v2 ActionsGateway bound to the given GitHub URL, with
 // an optional defaultProxyRef.
-func v2Gateway(namespace, name, gitHubURL, defaultProxy string) *agcv2alpha1.ActionsGateway {
-	gw := &agcv2alpha1.ActionsGateway{
+func v2Gateway(namespace, name, gitHubURL, defaultProxy string) *agcv2.ActionsGateway {
+	gw := &agcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec:       agcv2alpha1.ActionsGatewaySpec{GitHubURL: gitHubURL},
+		Spec:       agcv2.ActionsGatewaySpec{GitHubURL: gitHubURL},
 	}
 	if defaultProxy != "" {
-		gw.Spec.DefaultProxyRef = &agcv2alpha1.ProxyObjectRef{Name: defaultProxy}
+		gw.Spec.DefaultProxyRef = &agcv2.ProxyObjectRef{Name: defaultProxy}
 	}
 	return gw
 }
 
 // proxyWithNoProxy builds an EgressProxy carrying only noProxyCIDRs.
-func proxyWithNoProxy(namespace, name string, entries ...string) *agcv2alpha1.EgressProxy {
-	return &agcv2alpha1.EgressProxy{
+func proxyWithNoProxy(namespace, name string, entries ...string) *agcv2.EgressProxy {
+	return &agcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec:       agcv2alpha1.EgressProxySpec{NoProxyCIDRs: entries},
+		Spec:       agcv2.EgressProxySpec{NoProxyCIDRs: entries},
 	}
 }
 
@@ -96,7 +135,7 @@ func TestV2ActionsGatewayWebhook_RejectsGHESHostExcludedByDefaultProxy(t *testin
 func TestV2ActionsGatewayWebhook_RejectsGHESHostExcludedByRunnerSetProxy(t *testing.T) {
 	ep := proxyWithNoProxy("team-a", "ep", ".corp.example")
 	rs := classicRS("rs", "team-a", "gw", "linux")
-	rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: "ep"}
+	rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "ep"}
 	v := &ActionsGatewayCustomValidator{reader: fakeReader(t, ep, rs)}
 
 	_, err := v.ValidateCreate(context.Background(), v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", ""))
@@ -136,7 +175,7 @@ func TestV2ActionsGatewayWebhook_AdmitsCompatibleProxyPairs(t *testing.T) {
 	t.Run("RunnerSet under another gateway does not bind this host", func(t *testing.T) {
 		ep := proxyWithNoProxy("team-a", "ep", "ghes.corp.example")
 		rs := classicRS("rs", "team-a", "other-gw", "linux")
-		rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: "ep"}
+		rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "ep"}
 		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, ep, rs)}
 		_, err := v.ValidateCreate(ctx, v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", ""))
 		require.NoError(t, err)

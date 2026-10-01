@@ -1,9 +1,9 @@
-package v2alpha1
+package v2
 
 import (
 	"fmt"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 )
 
@@ -28,7 +28,7 @@ import (
 // permitted, so an unset --allowed-infra-priority-classes forbids every named class
 // without forbidding an ordinary unprioritized infra pod. A nil scheduling block, or a
 // nil allowlist paired with an empty name, both pass.
-func validateSchedulingPriorityClass(s *agcv2alpha1.PodScheduling, list *allowlist.PriorityClassAllowlist) error {
+func validateSchedulingPriorityClass(s *agcv2.PodScheduling, list *allowlist.PriorityClassAllowlist) error {
 	if s == nil {
 		return nil
 	}

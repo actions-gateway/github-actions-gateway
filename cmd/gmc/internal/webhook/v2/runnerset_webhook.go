@@ -1,9 +1,10 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
 	"fmt"
 
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
@@ -14,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-runnerset,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnersets,verbs=create;update,versions=v2alpha1,name=vrunnerset-v2alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2-runnerset,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnersets,verbs=create;update,versions=v2,name=vrunnerset-v2.kb.io,admissionReviewVersions=v1
 
 // The validator lists RunnerSets cluster-wide to enforce ScaleSet label uniqueness
 // within a GitHub scope (Q791), so the GMC ServiceAccount needs read access to them
@@ -72,7 +73,7 @@ type RunnerSetCustomValidator struct {
 // existing ScaleSet sibling under the same gateway, a set whose agent-identity stem
 // is already claimed, or a proxyRef naming an EgressProxy whose noProxyCIDRs would
 // route the gateway's GitHub host around it.
-func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.RunnerSet) (admission.Warnings, error) {
 	if err := v.validatePriorityTiers(obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
@@ -97,7 +98,7 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 // changes the GitHub scope the stem is compared in. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
 // re-validation (Q518; see validation.DeletionOnlyUpdate).
-func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.RunnerSet) (admission.Warnings, error) {
 	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
 		return nil, nil
 	}
@@ -127,7 +128,7 @@ func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, n
 // proxies — to place its own. Mirrors the v1 ActionsGateway webhook's
 // validatePriorityClasses; the tier name is required, so an empty string is itself
 // off-allowlist rather than "unset".
-func (v *RunnerSetCustomValidator) validatePriorityTiers(rs *agcv2alpha1.RunnerSet) error {
+func (v *RunnerSetCustomValidator) validatePriorityTiers(rs *agcv2.RunnerSet) error {
 	for i, tier := range rs.Spec.PriorityTiers {
 		if !v.PriorityClasses.Allowed(tier.PriorityClassName) {
 			return fmt.Errorf(
@@ -141,7 +142,7 @@ func (v *RunnerSetCustomValidator) validatePriorityTiers(rs *agcv2alpha1.RunnerS
 }
 
 // ValidateDelete is a no-op.
-func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.RunnerSet) (admission.Warnings, error) {
 	return nil, nil
 }
 
@@ -165,11 +166,14 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alp
 // collision (Q726). For a single-label set this is the same comparison it has
 // always been.
 //
+// v2 has no acquisitionProtocol field, so a Classic set is recognised by the annotation
+// its v2alpha1 write carries through the conversion (acquisitionProtocolOf).
+//
 // The check is fail-closed: if the List errors, the request is rejected rather than
 // admitted on faith — admitting a possible collision is the failure mode this guards
 // against.
-func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2alpha1.RunnerSet) error {
-	if rs.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet {
+func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2.RunnerSet) error {
+	if acquisitionProtocolOf(rs) != acquisitionProtocolScaleSet {
 		return nil
 	}
 	if len(rs.Spec.RunnerLabels) == 0 {
@@ -215,7 +219,7 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 // explicit proxyRef is checked here. A missing gateway or proxy admits the write
 // (§H.7): the pair is re-checked from the arriving object's side when it is created.
 // Read errors other than NotFound fail closed, like the label-uniqueness guard.
-func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context, rs *agcv2alpha1.RunnerSet) error {
+func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context, rs *agcv2.RunnerSet) error {
 	if v.reader == nil || rs.Spec.ProxyRef == nil {
 		return nil
 	}
@@ -232,14 +236,14 @@ func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context
 }
 
 // SetupRunnerSetWebhookWithManager registers the validating webhook for the
-// namespaced RunnerSet. The manager's scheme must already include agcv2alpha1 (the
+// namespaced RunnerSet. The manager's scheme must already include agcv2 (the
 // GMC registers it at startup). The uncached API reader backs the sibling-uniqueness
 // guard, matching the v1 ActionsGateway singleton webhook. priorityClasses is the
 // shared platform PriorityClass allowlist priorityTiers are gated against
 // (Q132/Q289); nil forbids every named class, the secure default.
 func SetupRunnerSetWebhookWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist) error {
 	v := &RunnerSetCustomValidator{reader: mgr.GetAPIReader(), PriorityClasses: priorityClasses}
-	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.RunnerSet{}).
+	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.RunnerSet{}).
 		WithValidator(v).
 		Complete(); err != nil {
 		return fmt.Errorf("register RunnerSet webhook: %w", err)

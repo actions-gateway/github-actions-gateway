@@ -93,7 +93,7 @@ The webhook coverage is uneven, and this is the part most likely to be mis-scope
 
 | Kind | Validating webhook today | Q284 needs |
 |---|---|---|
-| v2 `EgressProxy` | ✅ `cmd/gmc/internal/webhook/v2alpha1/egressproxy_webhook.go` | extend it |
+| v2 `EgressProxy` | ✅ `cmd/gmc/internal/webhook/v2/egressproxy_webhook.go` | extend it |
 | v2 `ActionsGateway` | ❌ **none** | **a new webhook** |
 | v1alpha1 `ActionsGateway` | ✅ `cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go` | n/a — no `scheduling` field |
 

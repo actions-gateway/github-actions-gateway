@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: two of three gates landed (Q1085, then Q413); [Q1150](../queue/Q1150.md) is open, and not yet tagged.** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); not yet tagged.** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -37,7 +37,7 @@ Three gating rows and the candidate validation, in the order they land, then the
 |---|---|---|---|
 | Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
 | Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
-| [Q1150](../queue/Q1150.md) | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | 🔲 ready: added 2026-09-30 by maintainer decision, after Q413 had landed |
+| Q1150 | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | ✅ landed: all five rules name `v2` and the handlers are typed on `api/v2`; the `EgressProxy` alias and the `RunnerSet` Classic protocol are read from their conversion annotations, pinned by envtest writes at `v2alpha1` |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1101 | GMC provisions the AGC ServiceMonitor for `v2` ActionsGateways (#1991) | rides | ✅ landed |
 | Q1151 | AGC reclaims the scale-set worker whose runner held the job (#2011) | rides | ✅ landed |
@@ -61,7 +61,7 @@ The riders belong in the release notes, and the ledger takes a row for each furt
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.
 3. **Q1085's items 2 and 3 have landed**, and landed before Q413.
    1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: `v2` is served, so an unrepresentable object can be requested.
-4. **[Q1150](../queue/Q1150.md) has landed**: every `actions-gateway.com` validating webhook rule names `v2` and its handler is typed on `api/v2`.
+4. **Q1150 has landed**: every `actions-gateway.com` validating webhook rule names `v2` and its handler is typed on `api/v2`.
    This is what gives the `v2`-typed validators a release of real traffic before `v2.0.0` leaves them the only ones, which is the soak Q1150 was pulled forward for.
 5. **The published tag serves both versions**, which is the Rule #4b evidence `v2.0.0` depends on.
    Record it here, since `v2.0.0`'s own pre-flight cannot re-derive that a *previous* release served both.

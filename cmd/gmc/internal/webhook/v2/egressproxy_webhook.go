@@ -1,4 +1,4 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net"
 	"os"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/noproxy"
@@ -21,15 +21,16 @@ import (
 // the secure default). This is the fail-closed-and-loud contract of the intent/backend
 // split (Q245): the operator learns at apply time, not from a stranded proxy pool that
 // silently goes Degraded. The deprecated CiliumFQDN/CalicoFQDN intents pin their own
-// backend and so are never gated here.
-func validateFQDNBackend(spec *agcv2alpha1.EgressProxySpec, backend controller.FQDNBackend) error {
+// backend and so are never gated here; mode is egressPolicyModeOf's, so a stored alias
+// the v2 view shows as FQDN is recognised as one.
+func validateFQDNBackend(mode agcv2.EgressPolicyMode, backend controller.FQDNBackend) error {
 	// Only an explicitly-configured cilium/calico/gke backend admits FQDN intent; none,
 	// the empty zero value, and any other value all fail closed (main.go normalizes the
 	// flag via ParseFQDNBackend, so only valid values reach production).
 	backendConfigured := backend == controller.FQDNBackendCilium ||
 		backend == controller.FQDNBackendCalico ||
 		backend == controller.FQDNBackendGKE
-	if spec.EgressPolicyMode == agcv2alpha1.EgressPolicyModeFQDN && !backendConfigured {
+	if mode == agcv2.EgressPolicyModeFQDN && !backendConfigured {
 		return fmt.Errorf(
 			"spec.egressPolicyMode: FQDN requires the platform operator to configure an FQDN egress backend (GMC --fqdn-policy-backend=cilium|calico|gke); this cluster has none. Use egressPolicyMode: CIDR, or ask the platform operator to enable an FQDN backend")
 	}
@@ -39,11 +40,11 @@ func validateFQDNBackend(spec *agcv2alpha1.EgressProxySpec, backend controller.F
 // deprecatedModeBackend maps a deprecated CNI-specific egressPolicyMode to the
 // --fqdn-policy-backend value that replaces it. An empty string means the mode is not
 // a deprecated alias.
-func deprecatedModeBackend(mode agcv2alpha1.EgressPolicyMode) string {
+func deprecatedModeBackend(mode agcv2.EgressPolicyMode) string {
 	switch mode {
-	case agcv2alpha1.EgressPolicyModeCiliumFQDN:
+	case egressPolicyModeCiliumFQDN:
 		return "cilium"
-	case agcv2alpha1.EgressPolicyModeCalicoFQDN:
+	case egressPolicyModeCalicoFQDN:
 		return "calico"
 	default:
 		return ""
@@ -61,7 +62,7 @@ func deprecatedModeBackend(mode agcv2alpha1.EgressPolicyMode) string {
 // of which v2.0.0 removes, and the GA v2 version does not define them (Q452, Q1082).
 // The release is load-bearing — an operator plans the migration from it — and it is
 // derived from which versions v2.0.0 drops, so it moves if that set does.
-func deprecatedModeWarning(mode agcv2alpha1.EgressPolicyMode) string {
+func deprecatedModeWarning(mode agcv2.EgressPolicyMode) string {
 	backend := deprecatedModeBackend(mode)
 	if backend == "" {
 		return ""
@@ -84,7 +85,7 @@ func deprecatedModeWarning(mode agcv2alpha1.EgressPolicyMode) string {
 // mid-migration able to re-apply and edit the rest of the spec. A flat reject would
 // fail every re-apply of an object nobody has migrated yet, which is the failure this
 // guard exists to give them time to avoid.
-func rejectNewDeprecatedMode(oldMode, newMode agcv2alpha1.EgressPolicyMode) error {
+func rejectNewDeprecatedMode(oldMode, newMode agcv2.EgressPolicyMode) error {
 	backend := deprecatedModeBackend(newMode)
 	if backend == "" || oldMode == newMode {
 		return nil
@@ -104,7 +105,7 @@ func rejectNewDeprecatedMode(oldMode, newMode agcv2alpha1.EgressPolicyMode) erro
 //
 // The complementary host-suffix-requires-FQDN-mode coupling is enforced by the CRD's
 // CEL XValidation, so it is not re-checked here.
-func validateEgressDestinations(spec *agcv2alpha1.EgressProxySpec, list *allowlist.EgressDestinationAllowlist) error {
+func validateEgressDestinations(spec *agcv2.EgressProxySpec, list *allowlist.EgressDestinationAllowlist) error {
 	for _, fqdn := range spec.DestinationFQDNs {
 		if !list.CoversFQDN(fqdn) {
 			return fmt.Errorf(
@@ -138,7 +139,7 @@ func validateEgressDestinations(spec *agcv2alpha1.EgressProxySpec, list *allowli
 // only when a hostname entry is present — CIDR/IP entries cannot suffix-match a
 // host — and fails closed on read errors. A nil reader skips only the referrer half
 // (direct-construction unit tests); production and envtest always wire one.
-func (v *EgressProxyCustomValidator) validateNoProxyCIDRs(ctx context.Context, ep *agcv2alpha1.EgressProxy) error {
+func (v *EgressProxyCustomValidator) validateNoProxyCIDRs(ctx context.Context, ep *agcv2.EgressProxy) error {
 	if err := noproxy.ValidateEntries("spec.noProxyCIDRs", ep.Spec.NoProxyCIDRs, noproxy.GitHubHosts); err != nil {
 		return err
 	}
@@ -166,7 +167,7 @@ func (v *EgressProxyCustomValidator) validateNoProxyCIDRs(ctx context.Context, e
 	return nil
 }
 
-// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-egressproxy,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=egressproxies,verbs=create;update,versions=v2alpha1,name=vegressproxy-v2alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2-egressproxy,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=egressproxies,verbs=create;update,versions=v2,name=vegressproxy-v2.kb.io,admissionReviewVersions=v1
 
 // EgressProxyCustomValidator validates the namespaced, tenant-authorable EgressProxy
 // data kind, gating its destinationFQDNs/destinationCIDRs against the platform-owned
@@ -213,16 +214,18 @@ type EgressProxyCustomValidator struct {
 // operator backend, gates any extra destinations against the platform allowlist, and
 // rejects noProxyCIDRs entries that would bypass the proxy for GitHub. An unchanged
 // alias is admitted with a non-blocking deprecation warning. oldMode is the stored
-// object's egressPolicyMode, empty on create.
-func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, oldMode agcv2alpha1.EgressPolicyMode, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
-	if err := rejectNewDeprecatedMode(oldMode, obj.Spec.EgressPolicyMode); err != nil {
+// object's egressPolicyModeOf, empty on create. Every mode check reads
+// egressPolicyModeOf rather than spec.egressPolicyMode, which shows an alias as FQDN.
+func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, oldMode agcv2.EgressPolicyMode, obj *agcv2.EgressProxy) (admission.Warnings, error) {
+	mode := egressPolicyModeOf(obj)
+	if err := rejectNewDeprecatedMode(oldMode, mode); err != nil {
 		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	var warnings admission.Warnings
-	if w := deprecatedModeWarning(obj.Spec.EgressPolicyMode); w != "" {
+	if w := deprecatedModeWarning(mode); w != "" {
 		warnings = append(warnings, w)
 	}
-	if err := validateFQDNBackend(&obj.Spec, v.FQDNBackend); err != nil {
+	if err := validateFQDNBackend(mode, v.FQDNBackend); err != nil {
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
@@ -242,7 +245,7 @@ func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, 
 // destination, or carrying an FQDN intent with no operator backend. The
 // reserved-namespace guard is create-only, matching the v1 gateway webhook (namespace
 // is immutable). A create has no stored object, so every alias it names is a new one.
-func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.EgressProxy) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "EgressProxy", "create", obj.Namespace, obj.Name,
 			fmt.Errorf("EgressProxy may not be created in reserved namespace %q", obj.Namespace))
@@ -254,17 +257,19 @@ func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *ag
 // switching mode on an existing EgressProxy is checked too. The stored mode is passed
 // through so a deprecated alias already on the object is admitted unchanged while a
 // switch onto one is rejected (Q1085). Deletion-only updates — deletionTimestamp set,
-// spec unchanged — are admitted without re-validation (Q518; see
-// validation.DeletionOnlyUpdate).
-func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
-	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+// spec and egressPolicyModeOf unchanged — are admitted without re-validation (Q518; see
+// validation.DeletionOnlyUpdate). The mode is compared too because an alias swap
+// changes only the annotation on the v2 view.
+func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.EgressProxy) (admission.Warnings, error) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) &&
+		egressPolicyModeOf(oldObj) == egressPolicyModeOf(newObj) {
 		return nil, nil
 	}
-	return v.validate(ctx, "update", oldObj.Spec.EgressPolicyMode, newObj)
+	return v.validate(ctx, "update", egressPolicyModeOf(oldObj), newObj)
 }
 
 // ValidateDelete is a no-op.
-func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.EgressProxy) (admission.Warnings, error) {
 	return nil, nil
 }
 
@@ -273,7 +278,7 @@ func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2a
 // FQDN egress backend, the infra-only PriorityClass allowlist (Q284), the manager's
 // uncached API reader for the referrer-aware noProxyCIDRs guard (Q322), and the
 // reserved-namespace set (Q323).
-// The manager's scheme must already include agcv2alpha1 (the GMC registers it at
+// The manager's scheme must already include agcv2 (the GMC registers it at
 // startup).
 func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist, backend controller.FQDNBackend, infraPriorityClasses *allowlist.PriorityClassAllowlist) error {
 	v := &EgressProxyCustomValidator{
@@ -286,7 +291,7 @@ func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.Egress
 		// gateway webhook.
 		reservedNamespaces: validation.ReservedNamespaces(os.Getenv("POD_NAMESPACE")),
 	}
-	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.EgressProxy{}).
+	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.EgressProxy{}).
 		WithValidator(v).
 		Complete(); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)

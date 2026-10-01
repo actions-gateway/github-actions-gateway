@@ -150,8 +150,8 @@ func bypassV2Admission(t *testing.T) {
 	t.Helper()
 	const configName = "validating-webhook-configuration"
 	bypassed := map[string]bool{
-		"vactionsgateway-v2alpha1.kb.io": true,
-		"vrunnerset-v2alpha1.kb.io":      true,
+		"vactionsgateway-v2.kb.io": true,
+		"vrunnerset-v2.kb.io":      true,
 	}
 
 	var original admissionv1.ValidatingWebhookConfiguration

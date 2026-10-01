@@ -1,10 +1,11 @@
-package v2alpha1
+package v2
 
 import (
 	"context"
 	"fmt"
 	"os"
 
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
@@ -14,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-actionsgateway,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=actionsgateways,verbs=create;update,versions=v2alpha1,name=vactionsgateway-v2alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2-actionsgateway,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=actionsgateways,verbs=create;update,versions=v2,name=vactionsgateway-v2.kb.io,admissionReviewVersions=v1
 
 // ActionsGatewayCustomValidator validates the v2 (actions-gateway.com) ActionsGateway
 // kind. It gates spec.scheduling.priorityClassName — the priority class the AGC
@@ -65,7 +66,7 @@ type ActionsGatewayCustomValidator struct {
 // object that can see the conflict. gitHubURL itself is immutable (CRD CEL), but
 // defaultProxyRef is not, so updates re-check too. Missing referents admit (§H.7);
 // List errors fail closed.
-func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.Context, gw *agcv2alpha1.ActionsGateway) error {
+func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.Context, gw *agcv2.ActionsGateway) error {
 	if v.reader == nil {
 		return nil
 	}
@@ -110,7 +111,7 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 // reject. gitHubURL is immutable (CRD CEL), so only create can introduce one — update
 // re-checks as version-agnostic defense, matching validateGitHubHostVsProxies. List
 // errors fail closed.
-func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2alpha1.ActionsGateway) error {
+func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2.ActionsGateway) error {
 	if v.reader == nil {
 		return nil
 	}
@@ -152,7 +153,7 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 // not on the infra allowlist, whose gitHubURL host a bound EgressProxy's
 // noProxyCIDRs would route around the proxy, or whose GitHub scope would put two
 // ScaleSet RunnerSets on one scale-set name.
-func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.ActionsGateway) (admission.Warnings, error) {
+func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.ActionsGateway) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name,
 			fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace))
@@ -180,7 +181,7 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 // the CRD's immutability CEL should make it unreachable on update. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
 // re-validation (Q518; see validation.DeletionOnlyUpdate).
-func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.ActionsGateway) (admission.Warnings, error) {
+func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.ActionsGateway) (admission.Warnings, error) {
 	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
 		return nil, nil
 	}
@@ -200,7 +201,7 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 }
 
 // ValidateDelete is a no-op.
-func (v *ActionsGatewayCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alpha1.ActionsGateway) (admission.Warnings, error) {
+func (v *ActionsGatewayCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.ActionsGateway) (admission.Warnings, error) {
 	return nil, nil
 }
 
@@ -209,7 +210,7 @@ func (v *ActionsGatewayCustomValidator) ValidateDelete(_ context.Context, _ *agc
 // manager's uncached API reader for the noProxyCIDRs GitHub-bypass guard (Q322), and
 // the reserved-namespace set (Q323) — the GMC's own install namespace is read from
 // the POD_NAMESPACE env var (populated by the Deployment via the downward API),
-// matching the v1 webhook. The manager's scheme must already include agcv2alpha1
+// matching the v1 webhook. The manager's scheme must already include agcv2
 // (the GMC registers it at startup).
 func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager, infraPriorityClasses *allowlist.PriorityClassAllowlist) error {
 	v := &ActionsGatewayCustomValidator{
@@ -217,7 +218,7 @@ func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager, infraPriorityClasse
 		reader:               mgr.GetAPIReader(),
 		reservedNamespaces:   validation.ReservedNamespaces(os.Getenv("POD_NAMESPACE")),
 	}
-	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.ActionsGateway{}).
+	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.ActionsGateway{}).
 		WithValidator(v).
 		Complete(); err != nil {
 		return fmt.Errorf("register v2 ActionsGateway webhook: %w", err)

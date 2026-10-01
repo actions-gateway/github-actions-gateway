@@ -287,7 +287,7 @@ Sized L overall; phased so each phase is independently shippable, reviewable, an
    Regenerate CRDs/deepcopy per [code-generation.md](../development/code-generation.md) (`make generate manifests`).
 2. `cmd/gmc/cmd/main.go` — register `--fqdn-policy-backend` (default `none`, validated enum), thread it into `EgressProxyReconciler` (same wiring path as the egress allowlist).
 3. `egressproxy_fqdn.go` / `egressproxy_controller.go` — replace the `mode == CiliumFQDN` / `== CalicoFQDN` switch with a `(intent, backend)` resolver; retarget the existing Cilium/Calico builders through it (behavior identical for `cilium`/`calico`).
-4. Admission ([`egressproxy_webhook.go`](../../cmd/gmc/internal/webhook/v2alpha1/egressproxy_webhook.go)): reject intent `FQDN` when backend is `none`.
+4. Admission ([`egressproxy_webhook.go`](../../cmd/gmc/internal/webhook/v2/egressproxy_webhook.go)): reject intent `FQDN` when backend is `none`.
 5. Tests: unit (resolver table, admission), envtest (existing Cilium/Calico emission/GC via the new resolver; the `cni-crds` testdata already exists).
    Update the tests/docs that name `CiliumFQDN`/`CalicoFQDN`.
 

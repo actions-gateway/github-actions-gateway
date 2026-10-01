@@ -233,7 +233,7 @@ func templateRefFor(
 
 // hasPrivilegedContainer reports whether any container or init container in the
 // worker pod shape explicitly requests privileged. It mirrors the predicate the v2
-// RunnerTemplate webhook rejects on (webhook/v2alpha1.validateReservedPodFields), so
+// RunnerTemplate webhook rejects on (webhook/v2.validateReservedPodFields), so
 // the migration's kind choice and admission's verdict cannot disagree. Init containers
 // count: a DinD sidecar is declared as a native sidecar — a restartPolicy: Always init
 // container — and that is where the privileged flag sits.
