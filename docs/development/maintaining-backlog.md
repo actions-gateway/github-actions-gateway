@@ -119,7 +119,7 @@ Work through all four:
 2. **Delete the roadmap bullet, continuation lines included.** A forward-looking bullet exists because the row does ([rule 7](#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)), so it goes when the row does.
    Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap.
    `make roadmap-check` names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.
-3. **Archive the plan doc if this was its last backlog reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
+3. **Archive the plan doc if this was its last backlog reference**, unless it is a release plan whose release is not yet tagged, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
 4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
 
 **A pathspec commit resolves against the tree, not against the commit (Q946).** Closing a row deletes a file, so this is where the shape turns up.
@@ -787,6 +787,7 @@ Two gates hold it, from opposite directions.
 It fires only on that deletion, never on a steady-state scan — plenty of open items merely *cite* a completed plan as evidence, and treating those as active work would make the rule cry wolf.
 `check-plan-index.sh` invariant 1 asks the mirror question on every run: a row claiming open work must be backed by a live item, either one targeting the plan or one the cell itself links.
 That is what catches a plan whose phases all shipped while its marker never moved, which rule 9 cannot see because no deletion is involved — it found two the day it was written, both reading "all phases shipped" under a ⚠️.
+Both leave a release plan open until its release is tagged ([why](#archiving-completed-plan-docs)).
 
 When you flip a plan to done, add (or update) a **Status** banner at the top of its plan doc naming the deferred IDs carrying its residuals (e.g.
 "Status: Complete — residuals deferred as [Q11](../queue/Q11.md)").
@@ -918,6 +919,11 @@ Two gates (both in `make check`) enforce it so the omission can't ship silently:
   Measured 2026-09-12: 39 of 68 active rows carried ✅, 24 of them referenced by nothing, and the gate passed over all 24 and always would have.
   A plan retained deliberately, such as a validation record or standing rationale with no progress to track, marks its row `ⓘ`, the same escape the other invariants respect.
 - **`make doc-links`** fails on any broken link the move introduces.
+
+**A release plan is archived when its release is tagged, not when its last row closes.** The last gate usually lands well before the candidate is cut and validated, and that remaining work runs through the candidate steps in [release.md](../operations/release.md) rather than a Queue row, so a `release-X.Y.md` whose rows have all closed is still the open work.
+`make plan-index-check` exempts an untagged release plan from both rules above, and `check-queue-rules.py` rule 9 from the flip it would otherwise demand when the last gate row closes; both apply again once the tag resolves: ❌, 🔲 or 🚧 then fails invariant 4, ⚠️ needs a live row behind it again, and a ✅ referenced by nothing is due for the archive.
+Closing a release's last gate row therefore updates its README row and Status banner, and archives nothing.
+Don't file a Queue row for the release itself to back the plan instead: once its gates landed it would read as ready work, and an orchestrator could dispatch it, while a release pauses other work and runs with a human in the loop.
 
 The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
 For a `release-X.Y.md` row the text is gated rather than remembered: once that release is published, `make plan-index-check` rejects an open marker (❌, 🔲, 🚧) on it, because the tag settles the question the cell was still arguing (Q812).

@@ -201,6 +201,30 @@ git -C "$R" rm -q docs/queue/Q1.md
 git -C "$R" commit -qm "complete the plan's last item, anchored"
 expect 1 "$R" "rule 9: an anchored last item still obliges the flip" "rule 9: Q1"
 
+# A release plan stays open until its release is tagged, so its last gate item
+# closing obliges no flip before the tag -- and does after it. The tag comes from
+# $GAG_RELEASE_TAG, which resolve_release_tag reads ahead of any real tag.
+release_case() {  # release_case <dir> <tag> -> a repo whose last release-1.9 item just closed
+    local r="$1"
+    newrepo "$r"
+    item "$r" Q1 "ci" "../plan/release-1.9.md"
+    item "$r" Q2 "docs"
+    printf '| [release-1.9.md](release-1.9.md) | The 1.9 rung | ⚠️ Open |\n' >> "$r/docs/plan/README.md"
+    grep -q 'release-1.9.md) | The 1.9 rung | ⚠️ Open' "$r/docs/plan/README.md" || {
+        printf 'FAIL fixture: the release row did not land in %s/docs/plan/README.md\n' "$r" >&2
+        exit 1
+    }
+    seal "$r"
+    git -C "$r" rm -q docs/queue/Q1.md
+    git -C "$r" commit -qm "complete the release's last gate item"
+}
+
+R="$TMP/r9rel"; release_case "$R"
+GAG_RELEASE_TAG=v1.8.0 expect 0 "$R" "rule 9: an untagged release plan stays open after its last item"
+
+R="$TMP/r9relt"; release_case "$R"
+GAG_RELEASE_TAG=v1.9.0 expect 1 "$R" "rule 9: a tagged release plan must flip after its last item" "rule 9: Q1"
+
 # A plan is named all over the index -- another plan's Status cell links it, and
 # so does the Archive table's prose. The rule must read the row the plan is
 # *about*, which is the one whose first cell links it, not whichever line

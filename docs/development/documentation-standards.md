@@ -568,6 +568,7 @@ Keep them current:
   Design-doc updates alone are not enough when a change alters what an operator does, configures, or observes.
 - **Keep each `README.md` index complete.** A new doc gets a row in its directory's `README.md` index in the same change (a goal-2 *findability* failure otherwise).
 - **Archive finished plans.** When a plan's last STATUS reference is removed, update its [`docs/plan/README.md`](../plan/README.md) row and archive the plan in the same change — `make plan-index-check` enforces this.
+  A `release-X.Y.md` plan is the exception: it stays active until `vX.Y.0` is tagged.
   See [maintaining-backlog.md](maintaining-backlog.md#archiving-completed-plan-docs).
 - **A backlog change gets its own commit when the change also touches code.** The item is the *why* and the code the *what*; a reviewer should not have to separate them.
   Queue Notes have a hard 250-char cap (lint-enforced).

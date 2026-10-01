@@ -13,7 +13,8 @@ changed* rather than of what the store holds:
      but the fixing change may retire it directly when the fix already makes
      it obsolete -- what the rule reads is the ledger entry, not who wrote it.
   9. Deleting the last item targeting a plan obliges that plan's index row to
-     stop reading as open work.
+     stop reading as open work -- except a release plan whose release is not yet
+     tagged, which stays open until the tag (check-plan-index.sh says why).
  11. Every label an item wears is declared, so a typo cannot stick silently.
  13. An item this branch files cites any near-duplicate the matcher flagged, so
      a warning that fired is a warning somebody answered.
@@ -227,7 +228,33 @@ def index_row_plan(line):
     return Path(m.group(1)).name if m else ""
 
 
-def rule9(base_items, head_items, index_text, failures):
+RELEASE_PLAN = re.compile(r"^release-(\d+)\.(\d+)\.md$")
+
+
+def released_minor(root):
+    """The (X, Y) of the release the project has shipped, or None without one.
+
+    Read through resolve_release_tag in scripts/lib/common.sh, the definition
+    check-plan-index.sh and the other release gates share, so the two rules
+    that decide whether a release plan may stay open cannot disagree.
+    """
+    lib = Path(__file__).resolve().parent.parent / "lib" / "common.sh"
+    p = subprocess.run(
+        ["bash", "-c", 'source "$1" && resolve_release_tag "$2"', "_", str(lib), str(root)],
+        capture_output=True, text=True)
+    m = re.match(r"^v(\d+)\.(\d+)\.", p.stdout)
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def unreleased_release_plan(name, shipped):
+    """True for a release-X.Y.md whose release has not been tagged."""
+    m = RELEASE_PLAN.match(name)
+    if not m:
+        return False
+    return shipped is None or (int(m.group(1)), int(m.group(2))) > shipped
+
+
+def rule9(base_items, head_items, index_text, shipped, failures):
     """Deleting a plan's last item obliges its index row to stop reading open."""
     excused = allow("QUEUE_ALLOW_PROGRESS_STALE")
     live = {plan_file_of(b) for b in head_items.values() if plan_file_of(b)}
@@ -235,7 +262,7 @@ def rule9(base_items, head_items, index_text, failures):
         name = plan_file_of(body)
         if qid in head_items or not name or name in live:
             continue
-        if name in excused:
+        if name in excused or unreleased_release_plan(name, shipped):
             continue
         for line in index_text.splitlines():
             if index_row_plan(line) != name:
@@ -422,7 +449,7 @@ def main(argv=None):
 
     failures = []
     rule8(base_items, head_items, ledger, failures)
-    rule9(base_items, head_items, index, failures)
+    rule9(base_items, head_items, index, released_minor(root), failures)
     rule11(head_items, vocabulary, failures)
     rule14(head_items, failures)
     # Rule 13 scores against the store as it stood at the base, so a row filed
