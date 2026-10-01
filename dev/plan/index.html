@@ -2730,7 +2730,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.9/">release-1.9.md</a></td>
 <td>The Rule #4b overlap rung: <code>v2</code> served beside <code>v2beta1</code> with the storage version unmoved, so <code>v2.0.0</code> has a rollback destination and the new conversion edge runs once before it is mandatory</td>
-<td>⚠️ Two of three gating rows landed, Q1085's reject and pre-upgrade check and then Q413's Phase 2, and the plan was archived on that reading on 2026-09-29. It came back on 2026-09-30, when the maintainer added <a href="../queue/Q1150/">Q1150</a> as a third gate so the validating webhooks' retype onto <code>v2</code> runs through this release rather than first appearing in <code>v2.0.0</code>. No candidate cut, and no date</td>
+<td>⚠️ All three gating rows landed: Q1085's reject and pre-upgrade check, Q413's Phase 2, then Q1150's retype of the validating webhooks onto <code>v2</code>. What remains is the release itself, which no backlog row tracks: no candidate cut, and no date</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>

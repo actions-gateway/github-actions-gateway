@@ -2721,6 +2721,8 @@ Bumping the <code>go</code> directive (e.g. for a stdlib CVE) is therefore a <st
 <li><strong><code>vendor/modules.txt</code></strong> — it records the <code>go</code> directive of the workspace-replaced modules, so the bump drifts the committed vendor tree.
    Run <code>make deps-sync</code> and <strong>commit</strong> the result: CI's <code>vendor-check</code> diffs against git HEAD, so a dirty-but-correct working tree still fails.</li>
 </ol>
+<p>The bump can also move every module's coverage floor, because the statement count belongs to the toolchain as well as the tree (<a href="../testing/#the-floors-belong-to-one-toolchain">why</a>).
+<code>make cover-check</code> runs under the new <code>go</code> directive by itself, so read it after the bump and re-record with <code>make cover-update</code> in the same PR if the numbers moved.</p>
 <p>A green <code>make check</code> does <strong>not</strong> cover parts 2–3 — the vendor/tidy/notices gates are CI-only (see <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>).
 Local <code>make vulncheck</code> genuinely re-verifies a stdlib fix: outside the image, <code>GOTOOLCHAIN=auto</code> fetches the newer toolchain, and govulncheck reads that version — confirm you see <code>No vulnerabilities found.</code></p>
 <h3 id="multi-arch-linuxamd64--linuxarm64">Multi-arch (linux/amd64 + linux/arm64)<a class="headerlink" href="#multi-arch-linuxamd64--linuxarm64" title="Permanent link">&para;</a></h3>

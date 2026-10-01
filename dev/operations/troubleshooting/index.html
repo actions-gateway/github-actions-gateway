@@ -6135,7 +6135,7 @@ See <a href="../security-operations/#disjointness-is-enforced-on-every-edit-not-
 <hr />
 <h2 id="egressproxy-rejected-ciliumfqdn--calicofqdn-may-no-longer-be-introduced">EgressProxy Rejected: <code>CiliumFQDN</code> / <code>CalicoFQDN</code> "may no longer be introduced"<a class="headerlink" href="#egressproxy-rejected-ciliumfqdn--calicofqdn-may-no-longer-be-introduced" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> Applying an <code>EgressProxy</code> fails at admission:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>admission webhook "vegressproxy-v2alpha1.kb.io" denied the request:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>admission webhook "vegressproxy-v2.kb.io" denied the request:
 <a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
 <a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a>removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
 <a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a>and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
@@ -8642,9 +8642,9 @@ See <a href="#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites
 <a id="__codelineno-156-4" name="__codelineno-156-4" href="#__codelineno-156-4"></a>— GitHub must always traverse the proxy. noProxyCIDRs may exclude internal
 <a id="__codelineno-156-5" name="__codelineno-156-5" href="#__codelineno-156-5"></a>destinations (CIDRs or domain suffixes), never GitHub
 </code></pre></div>
-<p>The v2 <code>EgressProxy</code>'s <code>spec.noProxyCIDRs</code> is gated by the same guard (webhook <code>vegressproxy-v2alpha1.kb.io</code>, field path <code>spec.noProxyCIDRs[N]</code>).
+<p>The v2 <code>EgressProxy</code>'s <code>spec.noProxyCIDRs</code> is gated by the same guard (webhook <code>vegressproxy-v2.kb.io</code>, field path <code>spec.noProxyCIDRs[N]</code>).
 Because the v2 proxy carries no <code>gitHubURL</code> of its own, the v2 guard also runs from the <em>referrer</em> side: a v2 <code>ActionsGateway</code> (<code>spec.defaultProxyRef</code>) or <code>RunnerSet</code> (<code>spec.proxyRef</code>) write that binds a GitHub host to a proxy whose <code>noProxyCIDRs</code> exclude it is rejected too, e.g.:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-157-1" name="__codelineno-157-1" href="#__codelineno-157-1"></a>admission webhook "vactionsgateway-v2alpha1.kb.io" denied the request:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-157-1" name="__codelineno-157-1" href="#__codelineno-157-1"></a>admission webhook "vactionsgateway-v2.kb.io" denied the request:
 <a id="__codelineno-157-2" name="__codelineno-157-2" href="#__codelineno-157-2"></a>spec.defaultProxyRef: EgressProxy "corp-proxy" spec.noProxyCIDRs[0]:
 <a id="__codelineno-157-3" name="__codelineno-157-3" href="#__codelineno-157-3"></a>".corp.example" would route GitHub traffic (ghes.corp.example) around the
 <a id="__codelineno-157-4" name="__codelineno-157-4" href="#__codelineno-157-4"></a>per-tenant egress proxy, ...
@@ -8681,12 +8681,12 @@ A directly-applied <code>RunnerGroup</code> CR bypasses the webhook entirely —
 The <code>v1alpha1</code> path uses the <code>ActionsGateway</code>/<code>RunnerGroup</code> checks above.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> Creating or updating a <code>RunnerTemplate</code> (or <code>ClusterRunnerTemplate</code>) is rejected by the GMC validating webhook with one of:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-159-1" name="__codelineno-159-1" href="#__codelineno-159-1"></a>admission webhook "vrunnertemplate-v2alpha1.kb.io" denied the request:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-159-1" name="__codelineno-159-1" href="#__codelineno-159-1"></a>admission webhook "vrunnertemplate-v2.kb.io" denied the request:
 <a id="__codelineno-159-2" name="__codelineno-159-2" href="#__codelineno-159-2"></a>podTemplate.spec.containers["runner"]: env "HTTP_PROXY" is reserved: the AGC
 <a id="__codelineno-159-3" name="__codelineno-159-3" href="#__codelineno-159-3"></a>injects the egress-proxy variables (HTTP_PROXY/HTTPS_PROXY/NO_PROXY/PROXY_CA_CERT_PATH)
 <a id="__codelineno-159-4" name="__codelineno-159-4" href="#__codelineno-159-4"></a>into worker containers; setting it in a template is overridden and not permitted
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-160-1" name="__codelineno-160-1" href="#__codelineno-160-1"></a>admission webhook "vrunnertemplate-v2alpha1.kb.io" denied the request:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-160-1" name="__codelineno-160-1" href="#__codelineno-160-1"></a>admission webhook "vrunnertemplate-v2.kb.io" denied the request:
 <a id="__codelineno-160-2" name="__codelineno-160-2" href="#__codelineno-160-2"></a>podTemplate.spec.containers["runner"]: privileged containers are not permitted
 <a id="__codelineno-160-3" name="__codelineno-160-3" href="#__codelineno-160-3"></a>in a namespaced RunnerTemplate; use a platform-owned ClusterRunnerTemplate for
 <a id="__codelineno-160-4" name="__codelineno-160-4" href="#__codelineno-160-4"></a>privileged (DinD/sysbox) worker shapes
@@ -8715,13 +8715,13 @@ Both protocols match on the whole <code>runnerLabels</code> set, so a multi-labe
 <a id="__codelineno-161-2" name="__codelineno-161-2" href="#__codelineno-161-2"></a>acquisitionProtocol is immutable; create a new RunnerSet to change the acquisition
 <a id="__codelineno-161-3" name="__codelineno-161-3" href="#__codelineno-161-3"></a>protocol
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-162-1" name="__codelineno-162-1" href="#__codelineno-162-1"></a>admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
+<div class="highlight"><pre><span></span><code><a id="__codelineno-162-1" name="__codelineno-162-1" href="#__codelineno-162-1"></a>admission webhook "vrunnerset-v2.kb.io" denied the request: ScaleSet
 <a id="__codelineno-162-2" name="__codelineno-162-2" href="#__codelineno-162-2"></a>runnerLabels[0] "linux" is already used by RunnerSet "other-set" registered against
 <a id="__codelineno-162-3" name="__codelineno-162-3" href="#__codelineno-162-3"></a>GitHub scope "github.com/acme"; a ScaleSet set's FIRST runnerLabel is its scale-set
 <a id="__codelineno-162-4" name="__codelineno-162-4" href="#__codelineno-162-4"></a>name at GitHub, so two sets sharing it would drive one scale set. Pick a distinct
 <a id="__codelineno-162-5" name="__codelineno-162-5" href="#__codelineno-162-5"></a>first label (later labels may overlap freely)
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-163-1" name="__codelineno-163-1" href="#__codelineno-163-1"></a>admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
+<div class="highlight"><pre><span></span><code><a id="__codelineno-163-1" name="__codelineno-163-1" href="#__codelineno-163-1"></a>admission webhook "vrunnerset-v2.kb.io" denied the request: ScaleSet
 <a id="__codelineno-163-2" name="__codelineno-163-2" href="#__codelineno-163-2"></a>runnerLabels[0] "linux" is already claimed by another RunnerSet registered against
 <a id="__codelineno-163-3" name="__codelineno-163-3" href="#__codelineno-163-3"></a>GitHub scope "github.com/acme"; a ScaleSet set's FIRST runnerLabel is its scale-set
 <a id="__codelineno-163-4" name="__codelineno-163-4" href="#__codelineno-163-4"></a>name at GitHub, so two sets sharing it would drive one scale set, each acquiring the
@@ -8746,7 +8746,7 @@ Both protocols match on the whole <code>runnerLabels</code> set, so a multi-labe
 <li><strong>The rejection can land on the <code>ActionsGateway</code> instead.</strong> If a <code>RunnerSet</code> is applied <em>before</em> its gateway exists, admission has no <code>githubURL</code> to resolve and the set is admitted (references resolve at runtime).
   The conflict is then caught when the gateway arrives:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-165-1" name="__codelineno-165-1" href="#__codelineno-165-1"></a>admission webhook "vactionsgateway-v2alpha1.kb.io" denied the request:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-165-1" name="__codelineno-165-1" href="#__codelineno-165-1"></a>admission webhook "vactionsgateway-v2.kb.io" denied the request:
 <a id="__codelineno-165-2" name="__codelineno-165-2" href="#__codelineno-165-2"></a>spec.githubURL binds GitHub scope "github.com/acme", where RunnerSet "linux-set" in
 <a id="__codelineno-165-3" name="__codelineno-165-3" href="#__codelineno-165-3"></a>this namespace would claim scale-set name "linux" — a name already claimed by another
 <a id="__codelineno-165-4" name="__codelineno-165-4" href="#__codelineno-165-4"></a>RunnerSet registered against that scope
@@ -8763,14 +8763,14 @@ Both protocols match on the whole <code>runnerLabels</code> set, so a multi-labe
 This is the <strong>admission-time</strong> form of <a href="#agent-pool-blocked-another-tenant-owns-the-agent-secret">Agent Pool Blocked: Another Tenant Owns the Agent Secret</a>, which describes the same collision once it is already stored.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> A <code>RunnerSet</code> create or update is rejected:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-166-1" name="__codelineno-166-1" href="#__codelineno-166-1"></a>admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: agent-identity stem
+<div class="highlight"><pre><span></span><code><a id="__codelineno-166-1" name="__codelineno-166-1" href="#__codelineno-166-1"></a>admission webhook "vrunnerset-v2.kb.io" denied the request: agent-identity stem
 <a id="__codelineno-166-2" name="__codelineno-166-2" href="#__codelineno-166-2"></a>"rs-web" is already claimed by RunnerGroup "rs-web" in namespace "team-a"; an agent
 <a id="__codelineno-166-3" name="__codelineno-166-3" href="#__codelineno-166-3"></a>pool derives its agent Secret "agentpool-&lt;stem&gt;-N" and the runner name it registers
 <a id="__codelineno-166-4" name="__codelineno-166-4" href="#__codelineno-166-4"></a>with GitHub "&lt;stem&gt;-N" from that stem, so two owners sharing it each deregister the
 <a id="__codelineno-166-5" name="__codelineno-166-5" href="#__codelineno-166-5"></a>other's runner and neither recovers. Rename one of the two CRs
 </code></pre></div>
 <p>Or, when the holder is in another namespace:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-167-1" name="__codelineno-167-1" href="#__codelineno-167-1"></a>admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: agent-identity stem
+<div class="highlight"><pre><span></span><code><a id="__codelineno-167-1" name="__codelineno-167-1" href="#__codelineno-167-1"></a>admission webhook "vrunnerset-v2.kb.io" denied the request: agent-identity stem
 <a id="__codelineno-167-2" name="__codelineno-167-2" href="#__codelineno-167-2"></a>"rs-web" is already claimed by another runner pool registered against GitHub scope
 <a id="__codelineno-167-3" name="__codelineno-167-3" href="#__codelineno-167-3"></a>"github.com/acme"; ... Pick a distinct name for this RunnerSet (ask your platform
 <a id="__codelineno-167-4" name="__codelineno-167-4" href="#__codelineno-167-4"></a>administrator which runner names that GitHub scope already holds)
@@ -9283,7 +9283,7 @@ A value outside that set — a typo, or one of the SDK's externally-configured s
 <div class="highlight"><pre><span></span><code><a id="__codelineno-190-1" name="__codelineno-190-1" href="#__codelineno-190-1"></a>admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
 <a id="__codelineno-190-2" name="__codelineno-190-2" href="#__codelineno-190-2"></a>gitHubURL must include an organization, enterprise, or owner/repo path segment (got "https://github.com")
 </code></pre></div>
-<p>The v2 <code>ActionsGateway</code> (<code>actions-gateway.com</code>) enforces the same rules — the CRD-schema errors name that group instead, and the webhook error names <code>vactionsgateway-v2alpha1.kb.io</code> (v2beta1 writes route through the same validator).</p>
+<p>The v2 <code>ActionsGateway</code> (<code>actions-gateway.com</code>) enforces the same rules — the CRD-schema errors name that group instead, and the webhook error names <code>vactionsgateway-v2.kb.io</code> (a write at any served version is converted to <code>v2</code> and routes through the same validator).</p>
 <p><strong>Likely cause.</strong> <code>spec.gitHubURL</code> is a <strong>required</strong> field — the GitHub org, enterprise, or repository URL the gateway's runners register against.
 There is no default: a gateway with no URL has nothing to register against.
 The CRD enforces a non-empty <code>https://</code> value; the GMC validating webhook additionally requires a parseable URL with the https scheme, a host, and at least one path segment (the org/enterprise/owner).

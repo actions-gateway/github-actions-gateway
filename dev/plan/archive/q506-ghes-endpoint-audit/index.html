@@ -2911,7 +2911,7 @@ Any fix for #1 should collapse all three.</p>
 Both callers add the tenant's GHES host:</p>
 <ul>
 <li>v1 parses <code>spec.gitHubURL</code> and appends its hostname (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go"><code>actionsgateway_webhook.go:402</code></a>).</li>
-<li>v2 resolves it from every referrer, in both directions, through the uncached API reader (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/noproxy_referrers.go"><code>noproxy_referrers.go</code></a>) — this was Q322, filed precisely as the GHES residual of the original guard.</li>
+<li>v2 resolves it from every referrer, in both directions, through the uncached API reader (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/noproxy_referrers.go"><code>noproxy_referrers.go</code></a>) — this was Q322, filed precisely as the GHES residual of the original guard.</li>
 </ul>
 <p>The package doc says so explicitly.
 The residual is the opposite of the row's claim: a GHES tenant is <em>also</em> barred from listing <code>github.com</code> in <code>noProxyCIDRs</code>, which is over-strict in the fail-safe direction.

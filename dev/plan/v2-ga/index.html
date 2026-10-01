@@ -2832,7 +2832,7 @@ The phase table below is the real state.</p>
 </table>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <p>What the <code>v2.0.0</code> tag waits for, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.
-Phase 2 is not here: Q413 gated 1.9, and <a href="../release-1.9/#scope-ledger">release-1.9.md</a> carries it, as it does <a href="../../queue/Q1150/">Q1150</a>, the validators' retype onto <code>v2</code>.
+Phase 2 is not here: Q413 gated 1.9, and <a href="../release-1.9/#scope-ledger">release-1.9.md</a> carries it, as it did Q1150, the validators' retype onto <code>v2</code>.
 <code>make release-ladder-check</code> holds the <code>Gates?</code> column to each row's labels in both directions.</p>
 <table>
 <thead>
@@ -3062,7 +3062,7 @@ That ordering is the whole reason 1.9 exists, and it is also what makes the alia
 <p>They are one bundle because <code>v2beta1</code> is already ScaleSet-only: classic acquisition exists solely to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when <code>v1alpha1</code> is removed.
 Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the <code>ValidatingAdmissionPolicy</code> objects and the validating webhook.
-Dropping a served version cannot silently un-match a validating webhook: <code>make webhook-versions-check</code> fails any rule naming only versions no CRD serves (Q1068), and <a href="../../queue/Q1150/">Q1150</a> retypes the validators onto <code>v2</code> in 1.9, ahead of the removal.</p>
+Dropping a served version cannot silently un-match a validating webhook: <code>make webhook-versions-check</code> fails any rule naming only versions no CRD serves (Q1068), and Q1150 retyped the validators onto <code>v2</code> in 1.9, ahead of the removal.</p>
 <h3 id="capability-parity-is-a-precondition-of-the-removal">Capability parity is a precondition of the removal<a class="headerlink" href="#capability-parity-is-a-precondition-of-the-removal" title="Permanent link">&para;</a></h3>
 <p>Removing classic must not delete a capability along with it.
 Dropping a served API version is a contract change operators can plan for; silently losing a behaviour they rely on is not, and it is exactly what the deprecation policy exists to prevent.</p>

@@ -3212,7 +3212,7 @@ This is strictly simpler for Q74 than leaving the fragmented enum to be reshaped
    Regenerate CRDs/deepcopy per <a href="../../development/code-generation/">code-generation.md</a> (<code>make generate manifests</code>).</li>
 <li><code>cmd/gmc/cmd/main.go</code> — register <code>--fqdn-policy-backend</code> (default <code>none</code>, validated enum), thread it into <code>EgressProxyReconciler</code> (same wiring path as the egress allowlist).</li>
 <li><code>egressproxy_fqdn.go</code> / <code>egressproxy_controller.go</code> — replace the <code>mode == CiliumFQDN</code> / <code>== CalicoFQDN</code> switch with a <code>(intent, backend)</code> resolver; retarget the existing Cilium/Calico builders through it (behavior identical for <code>cilium</code>/<code>calico</code>).</li>
-<li>Admission (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/egressproxy_webhook.go"><code>egressproxy_webhook.go</code></a>): reject intent <code>FQDN</code> when backend is <code>none</code>.</li>
+<li>Admission (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/egressproxy_webhook.go"><code>egressproxy_webhook.go</code></a>): reject intent <code>FQDN</code> when backend is <code>none</code>.</li>
 <li>Tests: unit (resolver table, admission), envtest (existing Cilium/Calico emission/GC via the new resolver; the <code>cni-crds</code> testdata already exists).
    Update the tests/docs that name <code>CiliumFQDN</code>/<code>CalicoFQDN</code>.</li>
 </ol>

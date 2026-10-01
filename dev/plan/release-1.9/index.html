@@ -2662,7 +2662,7 @@
 
 <h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: two of three gates landed (Q1085, then Q413); <a href="../../queue/Q1150/">Q1150</a> is open, and not yet tagged.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
+<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); not yet tagged.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
 The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
 The version is no longer provisional.
 It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -2708,10 +2708,10 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>✅ landed: <code>v2</code> served on all six kinds (<code>PriorityClassAllowlist</code> included), <code>v2beta1</code> the storage version on each, conversion round-trips proven in envtest</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1150/">Q1150</a></td>
+<td>Q1150</td>
 <td>Retype the five validating webhooks onto <code>v2</code>, so the <code>v2</code>-typed validators run through this release before <code>v2.0.0</code> deletes <code>api/v2alpha1</code></td>
 <td><code>1.9-gate</code></td>
-<td>🔲 ready: added 2026-09-30 by maintainer decision, after Q413 had landed</td>
+<td>✅ landed: all five rules name <code>v2</code> and the handlers are typed on <code>api/v2</code>; the <code>EgressProxy</code> alias and the <code>RunnerSet</code> Classic protocol are read from their conversion annotations, pinned by envtest writes at <code>v2alpha1</code></td>
 </tr>
 <tr>
 <td>—</td>
@@ -2755,7 +2755,7 @@ The riders belong in the release notes, and the ledger takes a row for each furt
    This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.</li>
 <li><strong>Q1085's items 2 and 3 have landed</strong>, and landed before Q413.
    1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
-<li><strong><a href="../../queue/Q1150/">Q1150</a> has landed</strong>: every <code>actions-gateway.com</code> validating webhook rule names <code>v2</code> and its handler is typed on <code>api/v2</code>.
+<li><strong>Q1150 has landed</strong>: every <code>actions-gateway.com</code> validating webhook rule names <code>v2</code> and its handler is typed on <code>api/v2</code>.
    This is what gives the <code>v2</code>-typed validators a release of real traffic before <code>v2.0.0</code> leaves them the only ones, which is the soak Q1150 was pulled forward for.</li>
 <li><strong>The published tag serves both versions</strong>, which is the Rule #4b evidence <code>v2.0.0</code> depends on.
    Record it here, since <code>v2.0.0</code>'s own pre-flight cannot re-derive that a <em>previous</em> release served both.</li>

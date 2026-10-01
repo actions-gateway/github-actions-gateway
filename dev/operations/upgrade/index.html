@@ -1702,6 +1702,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3433,6 +3444,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4128,6 +4150,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2</a></li>
+<li><a href="#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2">Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2</a></li>
 <li><a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission">A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission</a></li>
 <li><a href="#non-breaking-a-drained-workers-recovery-claim-moves-off-the-pod-into-a-second-configmap">Non-breaking: a drained worker's recovery claim moves off the pod into a second ConfigMap</a></li>
 <li><a href="#non-breaking-a-specscaleup-token-is-now-charged-per-worker-pod-not-per-delivered-job">Non-breaking: a <code>spec.scaleUp</code> token is now charged per worker pod, not per delivered job</a></li>
@@ -4238,6 +4261,53 @@ Nothing else is required, and manifests can stay on <code>v2beta1</code>.
 Move them to <code>v2</code> before <code>v2.0.0</code>, which removes <code>v2beta1</code>; until then, a manifest on <code>v2beta1</code> is the one that still applies after a rollback.</p>
 <p><strong>Rolling back</strong> to a release that does not serve <code>v2</code> is safe for stored objects, because they are stored at <code>v2beta1</code>.
 A manifest written at <code>apiVersion: actions-gateway.com/v2</code> fails to apply there.</p>
+<h3 id="non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2">Non-breaking: the <code>actions-gateway.com</code> validating webhooks now validate <code>v2</code>, and their names end in <code>-v2</code><a class="headerlink" href="#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone who matches GMC admission errors by webhook name, in alerts, log queries or runbooks.</p>
+<p><strong>What changed.</strong> The five GMC validating webhooks for <code>actions-gateway.com</code> kinds are renamed, and so are their serving paths:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Old name</th>
+<th>New name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ActionsGateway</code></td>
+<td><code>vactionsgateway-v2alpha1.kb.io</code></td>
+<td><code>vactionsgateway-v2.kb.io</code></td>
+</tr>
+<tr>
+<td><code>EgressProxy</code></td>
+<td><code>vegressproxy-v2alpha1.kb.io</code></td>
+<td><code>vegressproxy-v2.kb.io</code></td>
+</tr>
+<tr>
+<td><code>RunnerSet</code></td>
+<td><code>vrunnerset-v2alpha1.kb.io</code></td>
+<td><code>vrunnerset-v2.kb.io</code></td>
+</tr>
+<tr>
+<td><code>RunnerTemplate</code></td>
+<td><code>vrunnertemplate-v2alpha1.kb.io</code></td>
+<td><code>vrunnertemplate-v2.kb.io</code></td>
+</tr>
+<tr>
+<td><code>ClusterRunnerTemplate</code></td>
+<td><code>vclusterrunnertemplate-v2alpha1.kb.io</code></td>
+<td><code>vclusterrunnertemplate-v2.kb.io</code></td>
+</tr>
+</tbody>
+</table>
+<p>Each rule now names <code>v2</code>, so the apiserver converts a write at <code>v2alpha1</code>, <code>v2beta1</code> or <code>v2</code> to <code>v2</code> before the GMC validates it.
+The checks and their messages are unchanged, and so is the version a write can use.
+<code>v2.0.0</code> stops serving <code>v2alpha1</code> and <code>v2beta1</code>, and a rule naming only those would stop matching without an error; this release moves the rules first, so the <code>v2</code> validators run for a whole release before <code>v2.0.0</code> depends on them.</p>
+<p><strong>What you will see.</strong> An admission rejection names the new webhook, for example <code>admission webhook "vrunnerset-v2.kb.io" denied the request</code>.
+Until every GMC pod runs the new release, a write to one of these kinds can fail with an admission webhook call error instead, because the new configuration can reach an old pod that does not serve the new path; retry it once the rollout completes.</p>
+<p><strong>What to do.</strong> Update anything that matches the old names.
+Nothing else is required.</p>
+<p><strong>Rolling back</strong> restores the old names and paths, and the same error can appear in reverse while it runs: the old configuration can reach a new pod that serves only the <code>-v2</code> path.</p>
 <h3 id="a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission">A new <code>CiliumFQDN</code> / <code>CalicoFQDN</code> <code>EgressProxy</code> is now rejected at admission<a class="headerlink" href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone who still creates an <code>EgressProxy</code> naming one of the two deprecated per-CNI <code>spec.egressPolicyMode</code> values, or switches an existing pool onto one.
 A pool that already stores one is unaffected and keeps running.</p>
