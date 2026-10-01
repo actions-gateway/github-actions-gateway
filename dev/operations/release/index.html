@@ -4558,6 +4558,7 @@ This step exists because <code>v1.3.0</code> shipped without it: <code>README.md
 </code></pre></div>
 <p>Once <code>vX.Y.0</code> is published, that gate rejects an open marker (❌, 🔲, 🚧) on the <code>release-X.Y.md</code> row.
 Mark it ✅, or ⚠️ if a Queue row genuinely remains, and say what shipped.
+A ✅ row that no Queue row references is then due for the archive, since a release plan stays active only until its tag (<a href="../../development/maintaining-backlog/#archiving-completed-plan-docs">archiving</a>), so move it in the same change: until it moves, the gate fails on it, the same red-until-fixed window the tag opens for <code>release-pins-check</code>.
 This half exists because <code>v1.3.0</code> shipped without it too: the 1.3 row read <code>❌ Open</code> on <code>main</code> for the nine days after the tag, and every rule the gate had at the time was green on it (Q802, Q812).</p>
 <h4 id="the-bump-on-main-does-not-reach-the-published-release">The bump on <code>main</code> does not reach the published release<a class="headerlink" href="#the-bump-on-main-does-not-reach-the-published-release" title="Permanent link">&para;</a></h4>
 <p><strong>Bump the pins before the tag and this whole section is a fallback</strong>, which is what <a href="#2-tag-and-push">step 2</a> tells you to do and what <code>v1.8.0</code> was the first release to do.

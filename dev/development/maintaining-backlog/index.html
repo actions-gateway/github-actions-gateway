@@ -2795,7 +2795,7 @@ Every one of these is caught by a gate, and every one is cheaper to do up front 
 <li><strong>Delete the roadmap bullet, continuation lines included.</strong> A forward-looking bullet exists because the row does (<a href="#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">rule 7</a>), so it goes when the row does.
    Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the <strong>previous</strong> bullet, whose word count then breaks the cap.
    <code>make roadmap-check</code> names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.</li>
-<li><strong>Archive the plan doc if this was its last backlog reference</strong>, per <a href="#archiving-completed-plan-docs">the protocol below</a>, whose step 4 is the one most often missed: dropping a level into <code>archive/</code> re-bases <strong>the moved doc's own outbound links</strong>, not just the links pointing at it.</li>
+<li><strong>Archive the plan doc if this was its last backlog reference</strong>, unless it is a release plan whose release is not yet tagged, per <a href="#archiving-completed-plan-docs">the protocol below</a>, whose step 4 is the one most often missed: dropping a level into <code>archive/</code> re-bases <strong>the moved doc's own outbound links</strong>, not just the links pointing at it.</li>
 <li><strong>Update the plan's <code>docs/plan/README.md</code> row</strong> in the same change, moving it to the Archive section.</li>
 </ol>
 <p><strong>A pathspec commit resolves against the tree, not against the commit (Q946).</strong> Closing a row deletes a file, so this is where the shape turns up.
@@ -3440,7 +3440,8 @@ This keeps the index honest — an open marker reads as "active work remains," n
 <code>check-queue-rules.py</code> rule 9 enforces the transition at the moment it becomes owed: deleting the <strong>last</strong> item targeting <code>plan/NAME.md</code> fails while that plan's index row still reads as open, naming the plan and the flip.
 It fires only on that deletion, never on a steady-state scan — plenty of open items merely <em>cite</em> a completed plan as evidence, and treating those as active work would make the rule cry wolf.
 <code>check-plan-index.sh</code> invariant 1 asks the mirror question on every run: a row claiming open work must be backed by a live item, either one targeting the plan or one the cell itself links.
-That is what catches a plan whose phases all shipped while its marker never moved, which rule 9 cannot see because no deletion is involved — it found two the day it was written, both reading "all phases shipped" under a ⚠️.</p>
+That is what catches a plan whose phases all shipped while its marker never moved, which rule 9 cannot see because no deletion is involved — it found two the day it was written, both reading "all phases shipped" under a ⚠️.
+Both leave a release plan open until its release is tagged (<a href="#archiving-completed-plan-docs">why</a>).</p>
 <p>When you flip a plan to done, add (or update) a <strong>Status</strong> banner at the top of its plan doc naming the deferred IDs carrying its residuals (e.g.
 "Status: Complete — residuals deferred as <a href="../../queue/Q11/">Q11</a>").
 The plan doc is <strong>not</strong> archived in this case — the deferred items still reference it.</p>
@@ -3604,6 +3605,10 @@ Two gates (both in <code>make check</code>) enforce it so the omission can't shi
   A plan retained deliberately, such as a validation record or standing rationale with no progress to track, marks its row <code>ⓘ</code>, the same escape the other invariants respect.</li>
 <li><strong><code>make doc-links</code></strong> fails on any broken link the move introduces.</li>
 </ul>
+<p><strong>A release plan is archived when its release is tagged, not when its last row closes.</strong> The last gate usually lands well before the candidate is cut and validated, and that remaining work runs through the candidate steps in <a href="../../operations/release/">release.md</a> rather than a Queue row, so a <code>release-X.Y.md</code> whose rows have all closed is still the open work.
+<code>make plan-index-check</code> exempts an untagged release plan from both rules above, and <code>check-queue-rules.py</code> rule 9 from the flip it would otherwise demand when the last gate row closes; both apply again once the tag resolves: ❌, 🔲 or 🚧 then fails invariant 4, ⚠️ needs a live row behind it again, and a ✅ referenced by nothing is due for the archive.
+Closing a release's last gate row therefore updates its README row and Status banner, and archives nothing.
+Don't file a Queue row for the release itself to back the plan instead: once its gates landed it would read as ready work, and an orchestrator could dispatch it, while a release pauses other work and runs with a human in the loop.</p>
 <p>The same change should also keep the plan's <code>docs/plan/README.md</code> <strong>status text</strong> current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
 For a <code>release-X.Y.md</code> row the text is gated rather than remembered: once that release is published, <code>make plan-index-check</code> rejects an open marker (❌, 🔲, 🚧) on it, because the tag settles the question the cell was still arguing (Q812).</p>
 <p><strong>Keep archival a docs-only operation.</strong> Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a <code>docs/**</code>-only move.
