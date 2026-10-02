@@ -2707,6 +2707,11 @@ This doc is the map of those channels: what is automated, by what, and where the
 <td><strong>Dependabot</strong> (<code>docker</code>, weekly, grouped)</td>
 </tr>
 <tr>
+<td>Python packages (3 files)</td>
+<td><code>requirements-docs.txt</code>, <code>requirements-docs-check.txt</code>, <code>claude-usage/requirements.txt</code></td>
+<td><strong>Dependabot</strong> (<code>pip</code>, weekly, grouped; <code>mkdocs</code> majors ignored because Material 9.x requires <code>mkdocs &lt; 2</code>). A bump to <code>requirements-docs.txt</code> runs the <code>pages</code> site build, and a bump to either docs file runs <code>doc-links</code>, which includes the render-overflow browser check. No CI job installs <code>claude-usage/requirements.txt</code>, so a bump there is unvalidated until someone runs its charts</td>
+</tr>
+<tr>
 <td>kind version + binary checksum (2 files)</td>
 <td><code>KIND_VERSION</code> / <code>KIND_BINARY_SHA256</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> <strong>and</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/autoscaler-drift.yml"><code>autoscaler-drift.yml</code></a></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/kind.yaml"><code>updatecli.d/kind.yaml</code></a>, weekly — rewrites both, so they can't drift. This PR doubles as the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate's</a> trigger: the autoscaler harness pins no node image, so a kind bump that moves the default node image's Kubernetes minor is the moment <code>CA_VERSION</code> must move too)</td>
