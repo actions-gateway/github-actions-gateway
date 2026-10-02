@@ -13344,7 +13344,7 @@ License file: k8s.io/kube-openapi/pkg/validation/strfmt/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/metrics (v0.37.0)
+Module: k8s.io/metrics (v0.37.1)
 License file: k8s.io/metrics/LICENSE
 ================================================================================
 
