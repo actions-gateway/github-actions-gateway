@@ -88,6 +88,22 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Python pins: the docs toolchain (requirements-docs.txt), the render-overflow
+  # browser check (requirements-docs-check.txt), and claude-usage/requirements.txt.
+  # One "/" entry covers all three: Dependabot reads every *requirements*.txt at
+  # the directory and one level of subdirectory below it. mkdocs majors are
+  # ignored because Material 9.x requires mkdocs < 2.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      python:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "mkdocs"
+        update-types: ["version-update:semver-major"]
+
   # Track base-image (FROM) updates for every Dockerfile so the digest pins —
   # golang builder, distroless runtime, and the upstream actions-runner that the
   # worker image inherits its CVEs from — get automated bump PRs. The worker
