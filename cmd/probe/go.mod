@@ -1,16 +1,14 @@
 module github.com/actions-gateway/github-actions-gateway/probe
 
-go 1.26.6
+go 1.27.1
 
 require (
 	github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
 	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
+	github.com/actions-gateway/github-actions-gateway/scaleset v0.0.0-00010101000000-000000000000
 )
 
-require (
-	github.com/actions-gateway/github-actions-gateway/scaleset v0.0.0-00010101000000-000000000000
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
-)
+require github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 
 replace github.com/actions-gateway/github-actions-gateway/broker => ../../broker
 

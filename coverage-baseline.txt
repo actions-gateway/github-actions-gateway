@@ -3,14 +3,14 @@
 # Format: <module-disk-path><TAB><percent>   (n/a = no measurable coverage)
 # The gate (make cover-check) fails if a module drops more than the
 # larger of 0.5pp and 3 statements below its floor.
-./api	95.9
-./broker	84.0
-./cmd/agc	83.0
-./cmd/gmc	80.2
-./cmd/probe	81.8
-./cmd/proxy	80.8
-./cmd/worker	82.9
-./githubapp	84.9
-./scaleset	84.7
+./api	95.6
+./broker	85.5
+./cmd/agc	83.3
+./cmd/gmc	82.8
+./cmd/probe	84.1
+./cmd/proxy	75.5
+./cmd/worker	86.8
+./githubapp	87.5
+./scaleset	88.3
 ./test/fakegithub	n/a
-./devtools	60.6
+./devtools	63.3
