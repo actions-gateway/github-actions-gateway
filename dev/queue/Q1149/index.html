@@ -2599,7 +2599,8 @@
 
 <h1 id="warn-before-the-pinned-runner-ages-out-of-githubs-30-day-window">Warn before the pinned runner ages out of GitHub's 30-day window<a class="headerlink" href="#warn-before-the-pinned-runner-ages-out-of-githubs-30-day-window" title="Permanent link">&para;</a></h1>
 <p>GitHub stops queueing jobs to a self-hosted runner not updated "within 30 days of a new version being made available" (<a href="https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners">runner update policy</a>, read 2026-09-29), and says nothing about refusing its connection, so a stale pin would show up as every job lapsing rather than as an error.
-Q1146 is a candidate instance, and its runs show the window is not counted from the first newer release; counting from the newest is consistent with them and untested.</p>
+It has already happened once: the dogfood e2e tenant received no job on 2026-09-29 on a 2.335.1 worker and ran one the same day on 2.337.0, the worker image being the only difference between the two dind windows.
+Its runs show the window is not counted from the first newer release; counting from the newest is consistent with them, and the exact start is still unmeasured.</p>
 <p>Nothing in the repo reads that window.
 <code>MinRunnerVersion</code> and the <code>RunnerVersionTooOld</code> condition check GitHub's registration floor only, and <code>names.go</code> already says why a compiled-in constant cannot track a rolling floor.
 Dependabot's docker ecosystem proposes the bump, but a proposal is not a merge, and its weekly PR can sit unmerged past the deadline without anything reddening.</p>
