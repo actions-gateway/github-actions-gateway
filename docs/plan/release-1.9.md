@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: all three gates landed (Q1085, Q413, then Q1150); not yet tagged.** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [not yet validated](#v190-rc1).** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -65,6 +65,54 @@ The riders belong in the release notes, and the ledger takes a row for each furt
    This is what gives the `v2`-typed validators a release of real traffic before `v2.0.0` leaves them the only ones, which is the soak Q1150 was pulled forward for.
 5. **The published tag serves both versions**, which is the Rule #4b evidence `v2.0.0` depends on.
    Record it here, since `v2.0.0`'s own pre-flight cannot re-derive that a *previous* release served both.
+
+## Pre-flight verdicts
+
+Each verdict names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../operations/release.md#1-pre-flight)).
+All were taken on 2026-10-02 at `aff5f2268`, the `v1.9.0-rc.1` target.
+
+| Check | Verdict |
+|---|---|
+| Gating rows | **PASS.** No `1.9-gate` row remains in the store. The empty result was trusted only after the same pattern matched Q1150 as it stood before it closed (`583bbc8f8^`), so it can still match the label. |
+| `main` green | **PASS with three path-skipped lanes.** Ten required gates, none not-green. `e2e-calico`, `plan-hygiene` and `status-lint` path-skipped on the target. `ad3106a55`, the Go toolchain bump, ran `e2e-calico` and `status-lint` in full, and `check-artifact-unchanged.sh --lane` exits 0 for each over the one file changed since. `plan-hygiene` last ran in full on `583bbc8f8`, and nothing under `docs/plan/` has changed since. |
+| Semver floor | **MINOR**, over 81 commits, set by six touching the released surface: four `feat`s (Q413, Q1150, Q1085, Q1101) and two patches (Q1151, Q1146). The Go 1.27.1 toolchain and Kubernetes 0.37.1 client bumps rebuild every binary but carry the `build` type, so the floor does not count them. |
+| API surface | **PASS, ship as-is.** `api-surface-since.sh` lists every `v2` field as added, because `v2` is a new package. Diffing `api/v2` against `api/v2beta1` by hand leaves one difference, the deliberate one: `egressPolicyMode` drops `CiliumFQDN` and `CalicoFQDN` and the `destinationFQDNs` rule requires `FQDN` alone, both per Q452, and the storage marker is withheld per this plan. No existing version lost a field, enum value, default or marker; only comments changed in `api/v2alpha1` and `api/v2beta1`. No new condition reasons, Event reasons, metrics, CLI flags or chart values; metric names are the same 74 set as at `v1.8.0`. |
+| `make check` | **PASS**, exit 0, on a branch cut at the target. |
+
+**Reviewed by hand, because the checker missed it:** Q413 publishes a new annotation key, `conversion.actions-gateway.com/egress-policy-mode`, which carries a stored alias into the `v2` view.
+`api-surface-since.sh` reported no new annotation keys, and the key is absent from `api/` at `v1.8.0`.
+It is written and read by the conversion webhook, and admission rejects a write that sets it to introduce an alias; the notes name it under **API and metric surface**.
+
+**The notes are drafted** in [docs/releases/v1.9.0.md](../releases/v1.9.0.md), interrogated against the tree through `verify-claims`.
+That pass corrected four claims in the first draft: the annotation above had been called pre-existing, the Kubernetes bump's starting version was missing, the Go security reading was stated as checked when it was inherited from the bump's commit, and every deprecation notice was credited to `v1.8.0` when the `v1alpha1` and `v2alpha1` ones date from earlier.
+The operator-caveat pass ran into the draft: `operator-caveats-since.sh v1.8.0` reports four new `upgrade.md` sections and one new `troubleshooting.md` section, all carried as a `WARNING` (the unpinned read and the alias), a `NOTE` (the webhook rename) and **Upgrading** entries.
+The landmine question added the custom-`workerImage` entry: the runner bump changes only the default, and `RunnerVersionTooOld` cannot see GitHub's 30-day window.
+`Everything since v1.8.0` reads 81, which `check-release-notes.sh` can verify only once `v1.9.0` is a tag; re-derive it at the cut if anything merges first.
+**Validation** reads *pending* until this candidate's run reports.
+
+**Deferred to the stable tag, deliberately.** The marketing reconciliation, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
+
+## Candidate validation
+
+### `v1.9.0-rc.1`
+
+**Not validated: the gate timed out on its test environment, not on the candidate.** Tagged 2026-10-02 at `aff5f2268`; dogfood run the same evening.
+
+| Step | Verdict |
+|---|---|
+| Tag points at the target | **PASS.** `v1.9.0-rc.1^{commit}` and the verified target both `aff5f22685b9f9c0db5e874930bb8070cb9cbb40`, compared after creation and before the push. `main` had moved to `b004882d6` (Dependabot config), which `check-artifact-unchanged.sh` shows touches nothing released. |
+| Publish pipeline | **PASS.** Run 37079877609 succeeded. |
+| Artifacts and provenance | **PASS.** 9/9 assets, `draft: false`, `immutable: true`, `prerelease: true`; all eight signatures verified. `gmc`'s signer URI ends `publish.yml@refs/tags/v1.9.0-rc.1` and its `sourceRepositoryDigest` is the tagged commit; re-run against `unit-test.yml` as the signer it exits 1. |
+| Deploy | **PASS.** The GMC rolled out and the e2e gateway's AGC reported `Ready`. |
+| e2e matrix | **NOT TAKEN.** Run 37082062554: `changes` passed, and `e2e / e2e` stayed `queued` with no runner for 5400 s. The tenant's worker image is pinned to `dogfood-e2e-runner:2.335.1-2` in `deploy/dogfood-e2e/overlays/kata/kustomization.yaml`; the worker logged `Current runner version: '2.335.1'` and `Listening for Jobs` from 00:38:06Z and was never sent the job. That is Q1146's symptom on the dogfood-only pin, which open PR #2008 moves to `2.337.0-1`. The candidate's own default worker image is 2.337.0. |
+| Sizing legs, CRD smoke | **NOT TAKEN.** The gate stops at the e2e leg. |
+| Dispatched CI load | Informational, not read by the gate. Integration 4/4 on GAG; unit-test's `lint` hit its 10-minute job limit, as the `v1.8.0-rc.2` window's dispatch also failed `lint`. |
+
+**Teardown did not complete, and `--reclaim` could not see it.** Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so `--reclaim` reported nothing to reclaim while three instances billed ([Q1155](../queue/Q1155.md)).
+The e2e run was cancelled and both stop scripts were run by hand with the drain skips; `ops.sh at-rest` reported no instances at 22:01 PDT.
+
+**Next:** re-run `validate-release.sh v1.9.0-rc.1` once #2008 lands.
+No new candidate is needed, because #2008 changes dogfood setup and no released file.
 
 ## What waits for `v2.0.0`
 
