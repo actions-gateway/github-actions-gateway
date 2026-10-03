@@ -1397,6 +1397,20 @@ check "soak: a v2 difference records Q1156 as a finding" "finding" "$(reading_fo
 check_contains "soak: a v2 difference names the object" "actionsgateways gag-dogfood/dogfood: spec DIFFERS" "${out}"
 check "soak: Q1060 is unaffected by a v2 difference" "pass" "$(reading_for Q1060 verdict)"
 
+# The shapes measured on gag-dogfood 2026-10-03: a storage-version read keeps
+# `value: ""` and has no empty metadata, while the webhook's Go types drop the
+# one and add the other. Both decode to the same object, so neither reading may
+# call that a difference -- and a non-empty change still must be (above).
+FAKE_BETA_SPEC='{"podTemplate":{"spec":{"initContainers":[{"env":[{"name":"T","value":""}],"name":"dind"}]}}}'
+FAKE_ALPHA_SPEC='{"podTemplate":{"metadata":{},"spec":{"initContainers":[{"env":[{"name":"T"}],"name":"dind"}]}}}'
+FAKE_V2_SPEC="${FAKE_ALPHA_SPEC}"
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: zero-value serialization is not a Q1156 difference" "pass" "$(reading_for Q1156 verdict)"
+check "soak: zero-value serialization is not a Q1060 difference" "pass" "$(reading_for Q1060 verdict)"
+FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
+unset FAKE_V2_SPEC
+
 # An empty v2 read is the webhook, never an equal object.
 FAKE_V2_SPEC=''
 : >"${RELEASE_READINGS_FILE}"

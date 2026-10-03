@@ -1108,6 +1108,19 @@ preflight_cosign() {
 # against the publish identity, apply it server-side, and assert all five v2 CRDs
 # register — the helm-free install path operators actually use. Consumes the
 # COSIGN_BIN that preflight_cosign resolved before anything billable ran.
+# spec_canon <json> — the spec with empty strings, objects, arrays and nulls
+# dropped, so a read at the storage version (the bytes as written) compares
+# equal to one converted through the webhook's Go types. Those types drop an
+# `omitempty` empty string and always emit an empty struct: `env[].value: ""`
+# disappears and `podTemplate.metadata: {}` appears, and both decode to the same
+# object. Measured on gag-dogfood 2026-10-03, three ClusterRunnerTemplates.
+spec_canon() {
+	jq -cS 'def prune: if type == "object" then
+			with_entries(.value |= prune | select(.value != "" and .value != {} and .value != [] and .value != null))
+		elif type == "array" then map(prune) else . end;
+		prune' <<<"$1" 2>/dev/null || printf '%s' "$1"
+}
+
 # soak_leg — the v2 GA soak readings (Q1059 criterion 2, Q1060 criterion 3) and
 # the v2beta1 <-> v2 round trip (Q1156).
 #
@@ -1225,6 +1238,8 @@ EOF
 		-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
 	alpha="$(kubectl get actionsgateways.v2alpha1.actions-gateway.com "${name}" \
 		-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
+	[[ -z "${beta}" ]] || beta="$(spec_canon "${beta}")"
+	[[ -z "${alpha}" ]] || alpha="$(spec_canon "${alpha}")"
 
 	if [[ -z "${beta}" || -z "${alpha}" ]]; then
 		echo "  Q1060: NOT TAKEN — could not read the object at both served versions."
@@ -1271,6 +1286,8 @@ soak_v2_round_trip() {
 				-o jsonpath='{.spec}' 2>/dev/null || true)"
 			v2="$(kubectl get "${kind}.v2.actions-gateway.com" "${name}" "${ns_args[@]}" \
 				-o jsonpath='{.spec}' 2>/dev/null || true)"
+			[[ -z "${beta}" ]] || beta="$(spec_canon "${beta}")"
+			[[ -z "${v2}" ]] || v2="$(spec_canon "${v2}")"
 			if [[ -z "${beta}" || -z "${v2}" ]]; then
 				echo "  ${kind} ${ns}/${name}: could not be read at both versions"
 				unread=$((unread + 1))
@@ -1304,6 +1321,8 @@ EOF
 			-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
 		v2="$(kubectl get egressproxies.v2.actions-gateway.com soak-reading-v2 \
 			-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
+		[[ -z "${beta}" ]] || beta="$(spec_canon "${beta}")"
+		[[ -z "${v2}" ]] || v2="$(spec_canon "${v2}")"
 		if [[ -z "${beta}" || -z "${v2}" ]]; then
 			echo "  v2-applied EgressProxy: could not be read back at both versions"
 		elif [[ "${beta}" == "${v2}" ]]; then
