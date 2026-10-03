@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [not yet validated](#v190-rc1).** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03; awaiting the promotion decision.** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -96,7 +96,33 @@ The landmine question added the custom-`workerImage` entry: the runner bump chan
 
 ### `v1.9.0-rc.1`
 
-**Not validated: the gate timed out on its test environment, not on the candidate.** Tagged 2026-10-02 at `aff5f2268`; dogfood run the same evening.
+**PASSED, validated 2026-10-03; promotion to `v1.9.0` is the maintainer's call.** `check-artifact-unchanged.sh v1.9.0-rc.1 origin/main` exited 0 at `7fbef71d2` before the re-run (18 files changed since the tag, none released), and the gate records `refs/validated/v1.9.0-rc.1` → `aff5f2268`.
+It took three windows: the first never reached a runner, the second passed without the `v2` reading, and the third took it.
+
+#### Second and third windows, 2026-10-03: PASS
+
+Both ran from `main` after #2008, so the e2e worker logged `Current runner version: '2.337.0'`.
+The third ran `validate-release.sh` from [PR #2024](https://github.com/actions-gateway/github-actions-gateway/pull/2024)'s head `b74be8a87`, which adds the Q1156 reading; the figures below are the third window's.
+
+| Step | Verdict |
+|---|---|
+| e2e matrix | **PASS.** Run 37143257884, 3/3 jobs (the second window's run 37139731208 was also 3/3). |
+| Sizing legs | **PASS.** `NodeShare` active and deriving 1500m where the templates ask 2 and 3; `Throughput` active on 346 samples. |
+| Capacity | **PASS.** The quota rung bound at zero headroom (`withheldCapacity[quota]=2`, `advertisedCapacity=0`) and released when the quota was restored. |
+| CRD smoke | **PASS.** The signed `actions-gateway-crds-v2.yaml` verified against the publish identity, applied server-side, and all five CRDs registered. |
+| Q1059, Q1060 | **PASS.** All five `v2beta1` kinds carried traffic, and the standing `ActionsGateway` spec is identical at `v2alpha1` and `v2beta1`. |
+| Q1156: `v2beta1` ↔ `v2` | **PASS on inspection; the gate recorded `finding`.** 5 of 8 standing objects identical at both versions, and an `EgressProxy` applied *at* `v2` read back identical at both. The three `ClusterRunnerTemplate`s differed only in zero values: `v2` adds an empty `podTemplate.metadata` (and `volumeClaimTemplate.metadata` on the two Kata templates) and drops an `env[].value: ""`. Both decode to the same object: `EnvVar.Value` is `omitempty` and `ObjectMeta` is a struct value Go never omits, so the webhook's Go round trip re-encodes them while a `v2beta1` read returns the stored bytes. Replaying the three logged pairs through the comparison #2024 now uses gives equal specs for all three. |
+| Dispatched CI load | Informational, not read by the gate. |
+
+**Definition of Done #2 is met** by Q1156 above: the read direction over every standing object, and the write direction through a `v2` apply, on the dogfood cluster.
+**Definition of Done #5 is met**, read off the published artifacts rather than the source: every CRD in `actions-gateway-crds-v2.yaml` (sha256 `a0db0b6a…7c244`) serves `v2`, `v2alpha1` and `v2beta1` with `v2beta1` the storage version, and `charts/actions-gateway/crds/priorityclassallowlist-crd.yaml` at the tag serves `v2` and `v2beta1` with `v2beta1` stored.
+That also confirms #1 off the shipped files.
+
+#### First window, 2026-10-02: not taken
+
+
+Not validated: the gate timed out on its test environment, not on the candidate.
+Tagged 2026-10-02 at `aff5f2268`; dogfood run the same evening.
 
 | Step | Verdict |
 |---|---|
@@ -111,8 +137,8 @@ The landmine question added the custom-`workerImage` entry: the runner bump chan
 **Teardown did not complete, and `--reclaim` could not see it.** Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so `--reclaim` reported nothing to reclaim while three instances billed ([Q1155](../queue/Q1155.md)).
 The e2e run was cancelled and both stop scripts were run by hand with the drain skips; `ops.sh at-rest` reported no instances at 22:01 PDT.
 
-**Next:** re-run `validate-release.sh v1.9.0-rc.1` once #2008 lands.
-No new candidate is needed, because #2008 changes dogfood setup and no released file.
+#2008 merged on 2026-10-03 and changes dogfood setup and no released file, so the candidate stood and the gate re-ran against it.
+
 
 ## What waits for `v2.0.0`
 

@@ -1267,14 +1267,34 @@ FAKE_WAIT_RC=0
 FAKE_BETA_SPEC=''
 FAKE_ALPHA_SPEC=''
 FAKE_KINDS_PRESENT=1
+# Q1156 reads the standing objects at v2 too. Unset, the v2 read mirrors the
+# v2beta1 one, so a case about Q1059 or Q1060 sees a clean Q1156 beside it.
+unset FAKE_V2_SPEC
+FAKE_WRITE_BETA='{"maxReplicas":1,"minReplicas":1}'
+FAKE_WRITE_V2='{"maxReplicas":1,"minReplicas":1}'
+FAKE_APPLY_V2_RC=0
 kubectl() {
 	echo "$*" >>"${KLOG}"
 	case "$1" in
-	apply) cat >"${SOAK_TMP}/soak-applied.yaml"; return 0 ;;
+	apply)
+		local manifest
+		manifest="$(cat)"
+		printf '%s\n' "${manifest}" >>"${SOAK_TMP}/soak-applied.yaml"
+		[[ "${manifest}" == *$'apiVersion: actions-gateway.com/v2\n'* ]] && return "${FAKE_APPLY_V2_RC}"
+		return 0
+		;;
 	wait) return "${FAKE_WAIT_RC}" ;;
 	delete) return 0 ;;
 	get)
 		case "$*" in
+		# Q1156's listing: one namespaced gateway and one cluster-scoped template.
+		*actionsgateways.v2beta1.actions-gateway.com\ --all-namespaces\ -o\ jsonpath*) echo "gag-dogfood dogfood" ;;
+		*clusterrunnertemplates.v2beta1.actions-gateway.com\ --all-namespaces\ -o\ jsonpath*) echo " kata-dind" ;;
+		*v2beta1.actions-gateway.com\ --all-namespaces\ -o\ jsonpath*) ;;
+		*clusterrunnertemplates.v2*.actions-gateway.com\ kata-dind*) printf '%s' '{"t":1}' ;;
+		*egressproxies.v2beta1.actions-gateway.com\ soak-reading-v2*) printf '%s' "${FAKE_WRITE_BETA}" ;;
+		*egressproxies.v2.actions-gateway.com\ soak-reading-v2*) printf '%s' "${FAKE_WRITE_V2}" ;;
+		*actionsgateways.v2.actions-gateway.com\ dogfood*) printf '%s' "${FAKE_V2_SPEC-${FAKE_BETA_SPEC}}" ;;
 		*actionsgateways.v2beta1.*\ dogfood*) printf '%s' "${FAKE_BETA_SPEC}" ;;
 		*actionsgateways.v2alpha1.*\ dogfood*) printf '%s' "${FAKE_ALPHA_SPEC}" ;;
 		*egressproxy\ soak-reading*) echo "    Ready=False reason=NoPool stalled" ;;
@@ -1290,12 +1310,24 @@ kubectl() {
 
 : >"${KLOG}"
 : >"${RELEASE_READINGS_FILE}"
+: >"${SOAK_TMP}/soak-applied.yaml"
 FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
 out="$(soak_leg 2>&1)"; rc=$?
 check "soak: a clean run returns 0" "0" "${rc}"
 check "soak: a clean run records Q1059 as a pass" "pass" "$(reading_for Q1059 verdict)"
 check "soak: a clean run records Q1060 as a pass" "pass" "$(reading_for Q1060 verdict)"
-check "soak: one run takes both readings and no more" "2" "$(wc -l <"${RELEASE_READINGS_FILE}" | tr -d ' ')"
+check "soak: a clean run records Q1156 as a pass" "pass" "$(reading_for Q1156 verdict)"
+check "soak: one run takes three readings and no more" "3" "$(wc -l <"${RELEASE_READINGS_FILE}" | tr -d ' ')"
+check_contains "soak: Q1156 counts the two standing objects it compared" "2 standing objects" \
+	"$(reading_for Q1156 detail)"
+check "soak: Q1156 applies an EgressProxy at v2, not only at v2beta1" "1" \
+	"$(grep -c '^apiVersion: actions-gateway.com/v2$' "${SOAK_TMP}/soak-applied.yaml")"
+check_contains "soak: Q1156 reads the standing gateway at v2" \
+	"get actionsgateways.v2.actions-gateway.com dogfood -n gag-dogfood" "$(cat "${KLOG}")"
+check_contains "soak: a cluster-scoped kind is read without a namespace" \
+	"get clusterrunnertemplates.v2.actions-gateway.com kata-dind -o" "$(cat "${KLOG}")"
+check_contains "soak: the v2-applied EgressProxy is deleted again" \
+	"delete egressproxy soak-reading-v2" "$(cat "${KLOG}")"
 check_contains "soak: the manufactured EgressProxy is v2beta1" \
 	"apiVersion: actions-gateway.com/v2beta1" "$(cat "${SOAK_TMP}/soak-applied.yaml")"
 check "soak: it is created in the standing tenant, not the e2e one" "gag-dogfood" \
@@ -1347,6 +1379,62 @@ check "soak: a missing kind does not fail the gate" "0" "${rc}"
 check_contains "soak: a missing kind is named as unmet" "criterion 2 is not met" "${out}"
 check "soak: a missing kind records Q1059 as a finding" "finding" "$(reading_for Q1059 verdict)"
 FAKE_KINDS_PRESENT=1
+
+# Q1060 used to return early on an untaken reading, which would skip Q1156
+# silently. An unreadable v2alpha1 view must still leave Q1156 recorded.
+FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC=''
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: an untaken Q1060 still lets Q1156 run" "pass" "$(reading_for Q1156 verdict)"
+FAKE_ALPHA_SPEC='{"a":1}'
+
+# A standing object that differs at v2 is the reading v2.0.0's migration needs.
+FAKE_V2_SPEC='{"a":2}'
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a v2 difference does not fail the gate" "0" "${rc}"
+check "soak: a v2 difference records Q1156 as a finding" "finding" "$(reading_for Q1156 verdict)"
+check_contains "soak: a v2 difference names the object" "actionsgateways gag-dogfood/dogfood: spec DIFFERS" "${out}"
+check "soak: Q1060 is unaffected by a v2 difference" "pass" "$(reading_for Q1060 verdict)"
+
+# The shapes measured on gag-dogfood 2026-10-03: a storage-version read keeps
+# `value: ""` and has no empty metadata, while the webhook's Go types drop the
+# one and add the other. Both decode to the same object, so neither reading may
+# call that a difference -- and a non-empty change still must be (above).
+FAKE_BETA_SPEC='{"podTemplate":{"spec":{"initContainers":[{"env":[{"name":"T","value":""}],"name":"dind"}]}}}'
+FAKE_ALPHA_SPEC='{"podTemplate":{"metadata":{},"spec":{"initContainers":[{"env":[{"name":"T"}],"name":"dind"}]}}}'
+FAKE_V2_SPEC="${FAKE_ALPHA_SPEC}"
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: zero-value serialization is not a Q1156 difference" "pass" "$(reading_for Q1156 verdict)"
+check "soak: zero-value serialization is not a Q1060 difference" "pass" "$(reading_for Q1060 verdict)"
+FAKE_BETA_SPEC='{"a":1}'; FAKE_ALPHA_SPEC='{"a":1}'
+unset FAKE_V2_SPEC
+
+# An empty v2 read is the webhook, never an equal object.
+FAKE_V2_SPEC=''
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: an unreadable v2 view records Q1156 as not-taken" "not-taken" "$(reading_for Q1156 verdict)"
+check_contains "soak: an unreadable v2 view says NOT TAKEN" "Q1156: NOT TAKEN" "${out}"
+unset FAKE_V2_SPEC
+
+# The write direction on its own: standing objects agree, the v2-applied one does not.
+FAKE_WRITE_V2='{"maxReplicas":1}'
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a lossy v2 write records Q1156 as a finding" "finding" "$(reading_for Q1156 verdict)"
+check_contains "soak: the finding names the v2 write" "v2-applied EgressProxy finding" "$(reading_for Q1156 detail)"
+FAKE_WRITE_V2='{"maxReplicas":1,"minReplicas":1}'
+
+# A refused v2 apply leaves the write direction untaken, never passed.
+FAKE_APPLY_V2_RC=1
+: >"${SOAK_TMP}/soak-applied.yaml"
+: >"${RELEASE_READINGS_FILE}"
+out="$(soak_leg 2>&1)"; rc=$?
+check "soak: a refused v2 apply does not fail the gate" "0" "${rc}"
+check "soak: a refused v2 apply records Q1156 as not-taken" "not-taken" "$(reading_for Q1156 verdict)"
+FAKE_APPLY_V2_RC=0
 
 # The apply is the one path that returns early, so it is the one most likely to
 # leave the window silent about criterion 2 entirely.
