@@ -1108,7 +1108,8 @@ preflight_cosign() {
 # against the publish identity, apply it server-side, and assert all five v2 CRDs
 # register — the helm-free install path operators actually use. Consumes the
 # COSIGN_BIN that preflight_cosign resolved before anything billable ran.
-# soak_leg — the two v2 GA soak readings (Q1059 criterion 2, Q1060 criterion 3).
+# soak_leg — the v2 GA soak readings (Q1059 criterion 2, Q1060 criterion 3) and
+# the v2beta1 <-> v2 round trip (Q1156).
 #
 # These are READINGS, not gates. A criterion closes when evidence exists, and a
 # negative reading is the release working: it names the shape fix v2beta1 still
@@ -1118,9 +1119,9 @@ preflight_cosign() {
 # into the v2 GA plan's Phase 1 criteria table from what this prints; Q1059 and
 # Q1060 name that table and survive the plan being archived.
 #
-# Placed after crd-smoke and before teardown: both readings need the control
-# plane and a live GMC (which serves the conversion webhook) and neither needs
-# workers, so this is the cheapest point in the window at which both are
+# Placed after crd-smoke and before teardown: the readings need the control
+# plane and a live GMC (which serves the conversion webhook) and none needs
+# workers, so this is the cheapest point in the window at which all are
 # available. Q1048's census cannot live here for the opposite reason — it needs
 # workers, which are reaped long before this line.
 soak_leg() {
@@ -1230,10 +1231,7 @@ EOF
 		echo "         An empty read here is the caBundle or the webhook, not an equal object."
 		progress_reading Q1060 "criterion-3-conversion-round-trip" not-taken \
 			"the ActionsGateway could not be read at both served versions"
-		return 0
-	fi
-
-	if [[ "${beta}" == "${alpha}" ]]; then
+	elif [[ "${beta}" == "${alpha}" ]]; then
 		echo "  Q1060: spec identical across v2alpha1 and v2beta1 — round-trip lossless"
 		progress_reading Q1060 "criterion-3-conversion-round-trip" pass \
 			"the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1"
@@ -1244,6 +1242,95 @@ EOF
 		progress_reading Q1060 "criterion-3-conversion-round-trip" finding \
 			"the ActionsGateway spec differs across served versions; a field does not survive the hop"
 		diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${alpha}") || true
+	fi
+
+	soak_v2_round_trip
+}
+
+# soak_v2_round_trip — the Q1156 reading: v2beta1 <-> v2 conversion on real
+# objects, which is release-1.9's Definition of Done #2 and the edge v2.0.0's
+# storage migration depends on. Q1060 never reads v2.
+#
+# Both directions. Reading every standing object of the five kinds at v2beta1 and
+# at v2 converts storage -> v2 on the way out. Applying an EgressProxy AT v2
+# converts v2 -> storage on the way in, and reading it back at both versions
+# closes that loop. The one shape v2 changes, a stored CiliumFQDN/CalicoFQDN
+# alias, cannot be manufactured here because admission rejects a new alias
+# write (Q1085); a stored one would show here as a differing spec.
+soak_v2_round_trip() {
+	echo "Q1156: round-tripping v2beta1 and v2 over real objects..."
+	local kinds=(actionsgateways runnersets runnertemplates clusterrunnertemplates egressproxies)
+	local kind ns name beta v2 compared=0 differs=0 unread=0
+	local -a ns_args
+	for kind in "${kinds[@]}"; do
+		while read -r ns name; do
+			[[ -n "${name}" ]] || continue
+			ns_args=()
+			[[ "${ns}" == "-" ]] || ns_args=(-n "${ns}")
+			beta="$(kubectl get "${kind}.v2beta1.actions-gateway.com" "${name}" "${ns_args[@]}" \
+				-o jsonpath='{.spec}' 2>/dev/null || true)"
+			v2="$(kubectl get "${kind}.v2.actions-gateway.com" "${name}" "${ns_args[@]}" \
+				-o jsonpath='{.spec}' 2>/dev/null || true)"
+			if [[ -z "${beta}" || -z "${v2}" ]]; then
+				echo "  ${kind} ${ns}/${name}: could not be read at both versions"
+				unread=$((unread + 1))
+			elif [[ "${beta}" == "${v2}" ]]; then
+				compared=$((compared + 1))
+			else
+				echo "  ${kind} ${ns}/${name}: spec DIFFERS between v2beta1 and v2:"
+				diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${v2}") || true
+				compared=$((compared + 1))
+				differs=$((differs + 1))
+			fi
+		done < <(kubectl get "${kind}.v2beta1.actions-gateway.com" --all-namespaces \
+			-o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null |
+			awk '{ if (NF == 1) print "- " $1; else print }')
+	done
+
+	# The write direction: stored through the conversion webhook from v2.
+	local written=not-taken
+	echo "  applying an EgressProxy at v2 (v2 -> storage)..."
+	if kubectl apply -f - <<EOF; then
+apiVersion: actions-gateway.com/v2
+kind: EgressProxy
+metadata:
+  name: soak-reading-v2
+  namespace: ${TENANT_NAMESPACE}
+spec:
+  minReplicas: 1
+  maxReplicas: 1
+EOF
+		beta="$(kubectl get egressproxies.v2beta1.actions-gateway.com soak-reading-v2 \
+			-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
+		v2="$(kubectl get egressproxies.v2.actions-gateway.com soak-reading-v2 \
+			-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
+		if [[ -z "${beta}" || -z "${v2}" ]]; then
+			echo "  v2-applied EgressProxy: could not be read back at both versions"
+		elif [[ "${beta}" == "${v2}" ]]; then
+			written=pass
+		else
+			echo "  v2-applied EgressProxy: spec DIFFERS between v2beta1 and v2:"
+			diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${v2}") || true
+			written=finding
+		fi
+		kubectl delete egressproxy soak-reading-v2 -n "${TENANT_NAMESPACE}" --ignore-not-found --wait=false || true
+	else
+		echo "  the v2 EgressProxy apply failed"
+	fi
+
+	if ((differs > 0)) || [[ "${written}" == "finding" ]]; then
+		echo "  Q1156: a spec DIFFERS between v2beta1 and v2 — this is the reading, record it"
+		progress_reading Q1156 "v2-conversion-round-trip" finding \
+			"${differs} of ${compared} standing objects differ between v2beta1 and v2; v2-applied EgressProxy ${written}"
+	elif ((compared == 0 || unread > 0)) || [[ "${written}" != "pass" ]]; then
+		echo "  Q1156: NOT TAKEN — ${compared} object(s) compared, ${unread} unreadable, v2 write ${written}."
+		echo "         An empty read here is the caBundle or the webhook, not an equal object."
+		progress_reading Q1156 "v2-conversion-round-trip" not-taken \
+			"${compared} standing objects compared, ${unread} not readable at both versions; v2-applied EgressProxy ${written}"
+	else
+		echo "  Q1156: ${compared} standing objects and a v2-applied EgressProxy identical at v2beta1 and v2"
+		progress_reading Q1156 "v2-conversion-round-trip" pass \
+			"${compared} standing objects across five kinds identical at v2beta1 and v2; a v2-applied EgressProxy reads back identical at both"
 	fi
 }
 
@@ -1564,7 +1651,7 @@ main() {
 	# Readings, not gates: soak_leg returns 0 whatever it finds, because a
 	# negative reading is evidence the release exists to gather rather than a
 	# reason to reject the candidate. See its own comment for why it sits here.
-	progress_phase soak "Taking the v2 GA soak readings (Q1059, Q1060)"
+	progress_phase soak "Taking the v2 soak readings (Q1059, Q1060, Q1156)"
 	soak_leg
 	progress_event soak "done"
 	# Say where the evidence went while the operator is still here. The window is
