@@ -2734,6 +2734,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>GitHub stops queueing jobs to a self-hosted runner not updated "within 30 days of a new version being made available" ([runner update …</td>
 </tr>
 <tr>
+<td><a href="Q1155/">Q1155</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Gate teardown drops its lease on a failed stop, so reclaim misses nodes</a></td>
+<td><code>bug</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>teardown()</code> in <code>scripts/dogfood/validate-release.sh</code> continues past a failed <code>e2e-stop.sh</code> or <code>stop.sh</code> and then calls <code>lease_release</code> …</td>
+</tr>
+<tr>
 <td><a href="Q541/">Q541</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_egressproxy_fqdn_test.go">EgressProxy watch-isolation test passes with its watch deleted, at times</a></td>
 <td><code>tests</code> <code>flake</code> <code>retro</code></td>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.9/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1155/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Release 1.9 Milestone Definition - GitHub Actions Gateway</title>
+        <title>Gate teardown drops its lease on a failed stop, so reclaim misses nodes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-19-milestone-definition" class="md-skip">
+        <a href="#gate-teardown-drops-its-lease-on-a-failed-stop-so-reclaim-misses-nodes" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release 1.9 Milestone Definition
+              Gate teardown drops its lease on a failed stop, so reclaim misses nodes
             
           </span>
         </div>
@@ -2579,108 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-release-exists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this release exists
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-this-release-must-not-do" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What this release must NOT do
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#scope-ledger" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scope ledger
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Definition of Done
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-flight-verdicts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-flight verdicts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#candidate-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Candidate validation
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Candidate validation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#v190-rc1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v1.9.0-rc.1
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-waits-for-v200" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What waits for v2.0.0
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2699,204 +2597,26 @@
   
 
 
-<h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">not yet validated</a>.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
-The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
-The version is no longer provisional.
-It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
-Nothing here is a commitment to a date.</p>
-</blockquote>
-<h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
-<p><code>v2.0.0</code> advances the storage version to <code>v2</code> and drops <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code> and classic acquisition.
-It cannot also be the release that <em>introduces</em> <code>v2</code>: Kubernetes' <a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">deprecation policy</a> rule #4b says the storage version "may not advance until after a release has been made that supports both the new version and the previous version".</p>
-<p>The rule is a convention rather than something the apiserver enforces, so what it buys here is the argument, and it is <strong>rollback</strong>.
-Once stored objects are rewritten as <code>v2</code>, a cluster cannot return to a release whose CustomResourceDefinitions do not define <code>v2</code>.
-Without this rung that destination is <code>v1.8.0</code>, which would make <code>v2.0.0</code> the one upgrade with no way back.
-It is already the largest this project asks anyone to make, carrying the <code>v1</code>→<code>v2</code> migration and four removals.</p>
-<p>It is also the only place the <code>v2beta1</code> ↔ <code>v2</code> conversion edge runs before it is mandatory.
-<a href="../v2-ga/#phase-1--the-soak-what-well-validated-means">v2-ga.md</a>'s Phase 1 soak validates <code>v2beta1</code>'s shape and says nothing about a conversion that does not exist yet.</p>
-<p>Full reasoning: <a href="../release-ladder/#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2">release-ladder.md</a>.</p>
-<h2 id="what-this-release-must-not-do">What this release must NOT do<a class="headerlink" href="#what-this-release-must-not-do" title="Permanent link">&para;</a></h2>
-<p><strong>It must not mark <code>v2</code> the storage version</strong>, and must not migrate stored objects.
-That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
-<a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2's step 1 carries a <code>+kubebuilder:storageversion</code> marker that belongs to Phase 3 and <code>v2.0.0</code>; moving it was part of Q413, not a follow-up.</p>
-<p>The hub stays at <code>v2beta1</code>, though nothing ties it to the storage version: moving it buys nothing before <code>v2.0.0</code> leaves one served version, and it would put the alias conversion annotation on every <code>v2alpha1</code> and <code>v2beta1</code> conversion (<a href="../v2-ga/#the-hub-stays-at-v2beta1">why</a>).</p>
-<h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
-<p>Three gating rows and the candidate validation, in the order they land, then the merged work that rides.</p>
-<table>
-<thead>
-<tr>
-<th>Q-ID</th>
-<th>Item</th>
-<th>Gates?</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Q1085</td>
-<td>Admission rejects new <code>CiliumFQDN</code>/<code>CalicoFQDN</code> writes, and the pre-upgrade alias check joins the checklist</td>
-<td><code>1.9-gate</code></td>
-<td>✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the <a href="../../operations/upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">Pre-Upgrade Validation Checklist</a></td>
-</tr>
-<tr>
-<td>Q413</td>
-<td><a href="../v2-ga/#phase-2--the-graduation-hop">v2-ga.md</a> Phase 2: add <code>v2</code> to all five kinds, serve it beside <code>v2beta1</code>, extend conversion coverage. Storage marker withheld</td>
-<td><code>1.9-gate</code></td>
-<td>✅ landed: <code>v2</code> served on all six kinds (<code>PriorityClassAllowlist</code> included), <code>v2beta1</code> the storage version on each, conversion round-trips proven in envtest</td>
-</tr>
-<tr>
-<td>Q1150</td>
-<td>Retype the five validating webhooks onto <code>v2</code>, so the <code>v2</code>-typed validators run through this release before <code>v2.0.0</code> deletes <code>api/v2alpha1</code></td>
-<td><code>1.9-gate</code></td>
-<td>✅ landed: all five rules name <code>v2</code> and the handlers are typed on <code>api/v2</code>; the <code>EgressProxy</code> alias and the <code>RunnerSet</code> Classic protocol are read from their conversion annotations, pinned by envtest writes at <code>v2alpha1</code></td>
-</tr>
-<tr>
-<td>—</td>
-<td>RC validated on dogfood</td>
-<td>gates</td>
-<td>🔲 no candidate cut</td>
-</tr>
-<tr>
-<td>Q1101</td>
-<td>GMC provisions the AGC ServiceMonitor for <code>v2</code> ActionsGateways (#1991)</td>
-<td>rides</td>
-<td>✅ landed</td>
-</tr>
-<tr>
-<td>Q1151</td>
-<td>AGC reclaims the scale-set worker whose runner held the job (#2011)</td>
-<td>rides</td>
-<td>✅ landed</td>
-</tr>
-<tr>
-<td>Q1146</td>
-<td>Worker image bumps <code>actions/runner</code> to 2.337.0 (#2005)</td>
-<td>rides</td>
-<td>✅ landed</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
-<code>v1.8.0</code> tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
-Inside one release the sequencing recovers what it can, which is less than a tag's worth.
-The reject and the pre-upgrade check are in the tree before <code>v2</code> is served, so <code>main</code>, the dogfood cluster and the review order all meet the guard before the hazard.
-An operator does not: both halves arrive under the same tag, so for them the clean-population <em>window</em> an earlier tag would have given is gone rather than narrowed.</p>
-<p><strong>Three items ride, none of them gating.</strong> <code>scripts/release/semver-floor.sh v1.8.0</code> read <code>FLOOR: MINOR</code> on 2026-09-30 over the 73 commits since the tag, with five touching a released artifact: the two gates above, and Q1101, Q1151 and Q1146, which merged on their own merits and ship in the tag whether or not the release waits for them.
-On 2026-09-17 it read <code>FLOOR: NONE</code> over 26 commits, so the riders accumulated during the cycle rather than being scoped into it.
-The gates still set the scope, the way 1.8's did: the tag waits for them and not for any rider, unlike 1.6, which nine merged features forced whatever its theme did (<a href="../release-ladder/#why-16-exists-rather-than-folding-into-15">release-ladder.md</a>).
-The riders belong in the release notes, and the ledger takes a row for each further item that merges onto the released surface before the tag.</p>
-<h2 id="definition-of-done">Definition of Done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>Q413's Phase 2 has landed</strong> with <code>v2</code> served on all five kinds and <code>v2beta1</code> still the storage version, verified by reading <code>storage: true</code> off each shipped CustomResourceDefinition rather than off the markers.</li>
-<li><strong>The conversion round-trips both directions</strong> across <code>v2beta1</code> ↔ <code>v2</code> on real objects, not only in unit tests.
-   This is the reading Phase 1's soak could not take, and the reason the rung is worth its cycle.</li>
-<li><strong>Q1085's items 2 and 3 have landed</strong>, and landed before Q413.
-   1.8 shipped without them, so this is the release that carries them, and after this tag they stop being preventive: <code>v2</code> is served, so an unrepresentable object can be requested.</li>
-<li><strong>Q1150 has landed</strong>: every <code>actions-gateway.com</code> validating webhook rule names <code>v2</code> and its handler is typed on <code>api/v2</code>.
-   This is what gives the <code>v2</code>-typed validators a release of real traffic before <code>v2.0.0</code> leaves them the only ones, which is the soak Q1150 was pulled forward for.</li>
-<li><strong>The published tag serves both versions</strong>, which is the Rule #4b evidence <code>v2.0.0</code> depends on.
-   Record it here, since <code>v2.0.0</code>'s own pre-flight cannot re-derive that a <em>previous</em> release served both.</li>
-</ol>
-<h2 id="pre-flight-verdicts">Pre-flight verdicts<a class="headerlink" href="#pre-flight-verdicts" title="Permanent link">&para;</a></h2>
-<p>Each verdict names the commit it was measured at, because a verdict covers that commit and nothing later (<a href="../../operations/release/#1-pre-flight">release.md</a>).
-All were taken on 2026-10-02 at <code>aff5f2268</code>, the <code>v1.9.0-rc.1</code> target.</p>
-<table>
-<thead>
-<tr>
-<th>Check</th>
-<th>Verdict</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Gating rows</td>
-<td><strong>PASS.</strong> No <code>1.9-gate</code> row remains in the store. The empty result was trusted only after the same pattern matched Q1150 as it stood before it closed (<code>583bbc8f8^</code>), so it can still match the label.</td>
-</tr>
-<tr>
-<td><code>main</code> green</td>
-<td><strong>PASS with three path-skipped lanes.</strong> Ten required gates, none not-green. <code>e2e-calico</code>, <code>plan-hygiene</code> and <code>status-lint</code> path-skipped on the target. <code>ad3106a55</code>, the Go toolchain bump, ran <code>e2e-calico</code> and <code>status-lint</code> in full, and <code>check-artifact-unchanged.sh --lane</code> exits 0 for each over the one file changed since. <code>plan-hygiene</code> last ran in full on <code>583bbc8f8</code>, and nothing under <code>docs/plan/</code> has changed since.</td>
-</tr>
-<tr>
-<td>Semver floor</td>
-<td><strong>MINOR</strong>, over 81 commits, set by six touching the released surface: four <code>feat</code>s (Q413, Q1150, Q1085, Q1101) and two patches (Q1151, Q1146). The Go 1.27.1 toolchain and Kubernetes 0.37.1 client bumps rebuild every binary but carry the <code>build</code> type, so the floor does not count them.</td>
-</tr>
-<tr>
-<td>API surface</td>
-<td><strong>PASS, ship as-is.</strong> <code>api-surface-since.sh</code> lists every <code>v2</code> field as added, because <code>v2</code> is a new package. Diffing <code>api/v2</code> against <code>api/v2beta1</code> by hand leaves one difference, the deliberate one: <code>egressPolicyMode</code> drops <code>CiliumFQDN</code> and <code>CalicoFQDN</code> and the <code>destinationFQDNs</code> rule requires <code>FQDN</code> alone, both per Q452, and the storage marker is withheld per this plan. No existing version lost a field, enum value, default or marker; only comments changed in <code>api/v2alpha1</code> and <code>api/v2beta1</code>. No new condition reasons, Event reasons, metrics, CLI flags or chart values; metric names are the same 74 set as at <code>v1.8.0</code>.</td>
-</tr>
-<tr>
-<td><code>make check</code></td>
-<td><strong>PASS</strong>, exit 0, on a branch cut at the target.</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Reviewed by hand, because the checker missed it:</strong> Q413 publishes a new annotation key, <code>conversion.actions-gateway.com/egress-policy-mode</code>, which carries a stored alias into the <code>v2</code> view.
-<code>api-surface-since.sh</code> reported no new annotation keys, and the key is absent from <code>api/</code> at <code>v1.8.0</code>.
-It is written and read by the conversion webhook, and admission rejects a write that sets it to introduce an alias; the notes name it under <strong>API and metric surface</strong>.</p>
-<p><strong>The notes are drafted</strong> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.9.0.md">docs/releases/v1.9.0.md</a>, interrogated against the tree through <code>verify-claims</code>.
-That pass corrected four claims in the first draft: the annotation above had been called pre-existing, the Kubernetes bump's starting version was missing, the Go security reading was stated as checked when it was inherited from the bump's commit, and every deprecation notice was credited to <code>v1.8.0</code> when the <code>v1alpha1</code> and <code>v2alpha1</code> ones date from earlier.
-The operator-caveat pass ran into the draft: <code>operator-caveats-since.sh v1.8.0</code> reports four new <code>upgrade.md</code> sections and one new <code>troubleshooting.md</code> section, all carried as a <code>WARNING</code> (the unpinned read and the alias), a <code>NOTE</code> (the webhook rename) and <strong>Upgrading</strong> entries.
-The landmine question added the custom-<code>workerImage</code> entry: the runner bump changes only the default, and <code>RunnerVersionTooOld</code> cannot see GitHub's 30-day window.
-<code>Everything since v1.8.0</code> reads 81, which <code>check-release-notes.sh</code> can verify only once <code>v1.9.0</code> is a tag; re-derive it at the cut if anything merges first.
-<strong>Validation</strong> reads <em>pending</em> until this candidate's run reports.</p>
-<p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the roadmap and <code>features.md</code> reconciliation, the announce-bar highlight, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
-<h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
-<h3 id="v190-rc1"><code>v1.9.0-rc.1</code><a class="headerlink" href="#v190-rc1" title="Permanent link">&para;</a></h3>
-<p><strong>Not validated: the gate timed out on its test environment, not on the candidate.</strong> Tagged 2026-10-02 at <code>aff5f2268</code>; dogfood run the same evening.</p>
-<table>
-<thead>
-<tr>
-<th>Step</th>
-<th>Verdict</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Tag points at the target</td>
-<td><strong>PASS.</strong> <code>v1.9.0-rc.1^{commit}</code> and the verified target both <code>aff5f22685b9f9c0db5e874930bb8070cb9cbb40</code>, compared after creation and before the push. <code>main</code> had moved to <code>b004882d6</code> (Dependabot config), which <code>check-artifact-unchanged.sh</code> shows touches nothing released.</td>
-</tr>
-<tr>
-<td>Publish pipeline</td>
-<td><strong>PASS.</strong> Run 37079877609 succeeded.</td>
-</tr>
-<tr>
-<td>Artifacts and provenance</td>
-<td><strong>PASS.</strong> 9/9 assets, <code>draft: false</code>, <code>immutable: true</code>, <code>prerelease: true</code>; all eight signatures verified. <code>gmc</code>'s signer URI ends <code>publish.yml@refs/tags/v1.9.0-rc.1</code> and its <code>sourceRepositoryDigest</code> is the tagged commit; re-run against <code>unit-test.yml</code> as the signer it exits 1.</td>
-</tr>
-<tr>
-<td>Deploy</td>
-<td><strong>PASS.</strong> The GMC rolled out and the e2e gateway's AGC reported <code>Ready</code>.</td>
-</tr>
-<tr>
-<td>e2e matrix</td>
-<td><strong>NOT TAKEN.</strong> Run 37082062554: <code>changes</code> passed, and <code>e2e / e2e</code> stayed <code>queued</code> with no runner for 5400 s. The tenant's worker image is pinned to <code>dogfood-e2e-runner:2.335.1-2</code> in <code>deploy/dogfood-e2e/overlays/kata/kustomization.yaml</code>; the worker logged <code>Current runner version: '2.335.1'</code> and <code>Listening for Jobs</code> from 00:38:06Z and was never sent the job. That is Q1146's symptom on the dogfood-only pin, which open PR #2008 moves to <code>2.337.0-1</code>. The candidate's own default worker image is 2.337.0.</td>
-</tr>
-<tr>
-<td>Sizing legs, CRD smoke</td>
-<td><strong>NOT TAKEN.</strong> The gate stops at the e2e leg.</td>
-</tr>
-<tr>
-<td>Dispatched CI load</td>
-<td>Informational, not read by the gate. Integration 4/4 on GAG; unit-test's <code>lint</code> hit its 10-minute job limit, as the <code>v1.8.0-rc.2</code> window's dispatch also failed <code>lint</code>.</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Teardown did not complete, and <code>--reclaim</code> could not see it.</strong> Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so <code>--reclaim</code> reported nothing to reclaim while three instances billed (<a href="../../queue/Q1155/">Q1155</a>).
-The e2e run was cancelled and both stop scripts were run by hand with the drain skips; <code>ops.sh at-rest</code> reported no instances at 22:01 PDT.</p>
-<p><strong>Next:</strong> re-run <code>validate-release.sh v1.9.0-rc.1</code> once #2008 lands.
-No new candidate is needed, because #2008 changes dogfood setup and no released file.</p>
-<h2 id="what-waits-for-v200">What waits for <code>v2.0.0</code><a class="headerlink" href="#what-waits-for-v200" title="Permanent link">&para;</a></h2>
-<p>The storage advance and migration (<a href="../../queue/Q1086/">Q1086</a>) and the four removals (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>, and <code>v2beta1</code> itself).
-The validating webhook rules cannot silently un-match through those removals: <code>make webhook-versions-check</code> (Q1068) fails any rule naming only versions no CRD serves.
-<a href="../v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 owns the ordering.</p>
+<h1 id="gate-teardown-drops-its-lease-on-a-failed-stop-so-reclaim-misses-nodes">Gate teardown drops its lease on a failed stop, so reclaim misses nodes<a class="headerlink" href="#gate-teardown-drops-its-lease-on-a-failed-stop-so-reclaim-misses-nodes" title="Permanent link">&para;</a></h1>
+<p><code>teardown()</code> in <code>scripts/dogfood/validate-release.sh</code> continues past a failed <code>e2e-stop.sh</code> or <code>stop.sh</code> and then calls <code>lease_release</code> unconditionally, so a teardown that <em>returned</em> with nodes still up drops the claim that says this run owns billable state.
+<code>--reclaim</code> keys on that lease alone, so it then reports <code>No release gate holds … — nothing to reclaim</code> while the nodes bill.
+The function's own comment argues for releasing last so a teardown <em>killed</em> mid-drain keeps the lease; a teardown whose stop scripts fail and return is the same state and gets the opposite treatment.</p>
+<p><strong>Measured 2026-10-02 on the <code>v1.9.0-rc.1</code> validation.</strong> The e2e job never reached a runner, so <code>e2e-stop.sh</code> refused on its queued-job drain and <code>stop.sh</code> refused on a non-converging worker drain, and the trap printed <code>Teardown complete (exit 124)</code>.
+<code>ops.sh at-rest</code> then reported three instances running (two <code>e2-standard-2</code>, one <code>n2-standard-8</code>), and <code>validate-release.sh --reclaim</code> reported no lease.
+Reclaiming took running both stop scripts by hand with <code>SKIP_E2E_DRAIN=1 SKIP_DRAIN=1</code>.</p>
+<p><strong>The fix:</strong> keep the lease when either stop script fails, so the documented <code>--reclaim</code> path still finds the run, and say so in the teardown's last line.
+The refusals themselves are correct and stay: they are what stops a scale-down under live work.
+Assert both directions in <code>scripts/dogfood/validate-release-test.sh</code>: a failing stop script leaves the lease held, and a clean teardown still releases it.</p>
+<p>Not Q1025, which shares the target file and is about driving the admission ladder's placeability rung, not about teardown or the lease.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
