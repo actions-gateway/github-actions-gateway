@@ -15,9 +15,11 @@
 # from setup-go; make/git/gcc come from the dogfood-runner base.
 #
 # This is a dev convenience, NOT a signed release artifact (publish.yml signs only
-# the six product images). Built ad hoc by scripts/dogfood-e2e-runner-build.sh,
-# pushed to GHCR, and pinned as the e2e tenant RunnerTemplate workerImage. The
-# Q235 wrapper is still injected on top at provision time.
+# the six product images). Built ad hoc and pushed to GHCR with
+#   docker buildx build --platform linux/amd64 --push \
+#     -t ghcr.io/actions-gateway/dogfood-e2e-runner:<runner-version>-<n> scripts/dogfood/e2e-runner
+# then pinned as the e2e tenant RunnerTemplate workerImage. The Q235 wrapper is
+# still injected on top at provision time.
 #
 # Bump the base tag in lockstep with scripts/dogfood/runner/Dockerfile's runner
 # version when that moves.

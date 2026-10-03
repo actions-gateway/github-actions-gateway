@@ -59,7 +59,7 @@ patches:
       # op gap-fills the default runner, which lacks helm/kubectl/jq.
       - op: replace
         path: /spec/workerImage
-        value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+        value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.337.0-1
       # The e2e pool, shared with ../kata: tainted so nothing else lands on it
       # (scripts/dogfood/e2e-setup.sh). The nested-virt and Workload Identity
       # settings that pool carries are inert for this variant.
