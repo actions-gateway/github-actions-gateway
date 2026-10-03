@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: all three gates landed (Q1085, Q413, then Q1150); not yet tagged.** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [not yet validated](#v190-rc1).** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -91,6 +91,28 @@ The landmine question added the custom-`workerImage` entry: the runner bump chan
 **Validation** reads *pending* until this candidate's run reports.
 
 **Deferred to the stable tag, deliberately.** The marketing reconciliation, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
+
+## Candidate validation
+
+### `v1.9.0-rc.1`
+
+**Not validated: the gate timed out on its test environment, not on the candidate.** Tagged 2026-10-02 at `aff5f2268`; dogfood run the same evening.
+
+| Step | Verdict |
+|---|---|
+| Tag points at the target | **PASS.** `v1.9.0-rc.1^{commit}` and the verified target both `aff5f22685b9f9c0db5e874930bb8070cb9cbb40`, compared after creation and before the push. `main` had moved to `b004882d6` (Dependabot config), which `check-artifact-unchanged.sh` shows touches nothing released. |
+| Publish pipeline | **PASS.** Run 37079877609 succeeded. |
+| Artifacts and provenance | **PASS.** 9/9 assets, `draft: false`, `immutable: true`, `prerelease: true`; all eight signatures verified. `gmc`'s signer URI ends `publish.yml@refs/tags/v1.9.0-rc.1` and its `sourceRepositoryDigest` is the tagged commit; re-run against `unit-test.yml` as the signer it exits 1. |
+| Deploy | **PASS.** The GMC rolled out and the e2e gateway's AGC reported `Ready`. |
+| e2e matrix | **NOT TAKEN.** Run 37082062554: `changes` passed, and `e2e / e2e` stayed `queued` with no runner for 5400 s. The tenant's worker image is pinned to `dogfood-e2e-runner:2.335.1-2` in `deploy/dogfood-e2e/overlays/kata/kustomization.yaml`; the worker logged `Current runner version: '2.335.1'` and `Listening for Jobs` from 00:38:06Z and was never sent the job. That is Q1146's symptom on the dogfood-only pin, which open PR #2008 moves to `2.337.0-1`. The candidate's own default worker image is 2.337.0. |
+| Sizing legs, CRD smoke | **NOT TAKEN.** The gate stops at the e2e leg. |
+| Dispatched CI load | Informational, not read by the gate. Integration 4/4 on GAG; unit-test's `lint` hit its 10-minute job limit, as the `v1.8.0-rc.2` window's dispatch also failed `lint`. |
+
+**Teardown did not complete, and `--reclaim` could not see it.** Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so `--reclaim` reported nothing to reclaim while three instances billed ([Q1155](../queue/Q1155.md)).
+The e2e run was cancelled and both stop scripts were run by hand with the drain skips; `ops.sh at-rest` reported no instances at 22:01 PDT.
+
+**Next:** re-run `validate-release.sh v1.9.0-rc.1` once #2008 lands.
+No new candidate is needed, because #2008 changes dogfood setup and no released file.
 
 ## What waits for `v2.0.0`
 
