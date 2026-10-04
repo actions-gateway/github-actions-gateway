@@ -5,6 +5,7 @@
 #   deploy (setup.sh) -> route CI (start.sh) -> on-demand e2e (e2e-start.sh)
 #   -> dispatch the e2e matrix on GAG runners (gh workflow run, run-scoped
 #   routing) -> sizing-profile assertion -> signed v2 CRD artifact smoke ->
+#   v2 soak readings -> the e2e matrix again on privileged-dind (Q1159) ->
 #   teardown (e2e-stop.sh + stop.sh)
 #
 # It bakes in the env and ordering that the manual runbook
@@ -632,7 +633,12 @@ e2e_leg() {
 	# resolvable client into an exit 2. Before the watch_rc check for
 	# mirror-timing's reason: a red matrix leaves a client set as informative as
 	# a green one's, and the booked window is the scarce resource.
-	census_mirror_clients
+	# Kata only: its tenant is the one whose egress is mirror-only, so on any
+	# other variant nothing reaches a mirror and the census would record a
+	# not-taken that says nothing about the release.
+	if [[ "${E2E_VARIANT:-kata}" == kata ]]; then
+		census_mirror_clients
+	fi
 
 	if ((watch_rc != 0)); then
 		progress_event e2e fail "run ${run_id} did not conclude success"
@@ -642,6 +648,23 @@ e2e_leg() {
 
 	echo "  e2e matrix GREEN"
 	wait "${capture_pid}" || true
+}
+
+# dind_leg — Q1159: the same e2e matrix on the shipped privileged-dind library
+# template. e2e_leg runs Kata, the variant untrusted pull requests need, so
+# without this leg the other shipped DinD template reaches operators with no job
+# ever having run on it (1.9 moved its daemon from docker 27 to 28 that way).
+#
+# The two variants share one namespace, RunnerSet and node pool, so the Kata
+# tenant is taken down first: e2e-stop.sh drains and deletes its gateway, and
+# e2e-start.sh re-applies the dind overlay over it. Last of the legs, because
+# sizing and capacity read the Kata tenant's state and the swap replaces it.
+dind_leg() {
+	echo "Taking the Kata e2e tenant down for the DinD one (e2e-stop.sh)..."
+	bash "${SCRIPT_DIR}/e2e-stop.sh"
+	E2E_VARIANT=dind
+	export E2E_VARIANT
+	e2e_leg
 }
 
 # report_e2e_run <run-id> — render the run's JUnit report into this terminal.
@@ -1696,6 +1719,10 @@ main() {
 	progress_phase soak "Taking the v2 soak readings (Q1059, Q1060, Q1156)"
 	soak_leg
 	progress_event soak "done"
+
+	progress_phase dind "Running the e2e matrix on the privileged-dind template (Q1159)"
+	dind_leg
+	progress_event dind "done"
 	# Say where the evidence went while the operator is still here. The window is
 	# billable and cannot be replayed, so a reading nobody can find afterwards
 	# cost the same as one never taken.
