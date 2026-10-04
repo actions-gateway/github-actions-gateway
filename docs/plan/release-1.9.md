@@ -134,7 +134,7 @@ Tagged 2026-10-02 at `aff5f2268`; dogfood run the same evening.
 | Sizing legs, CRD smoke | **NOT TAKEN.** The gate stops at the e2e leg. |
 | Dispatched CI load | Informational, not read by the gate. Integration 4/4 on GAG; unit-test's `lint` hit its 10-minute job limit, as the `v1.8.0-rc.2` window's dispatch also failed `lint`. |
 
-**Teardown did not complete, and `--reclaim` could not see it.** Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so `--reclaim` reported nothing to reclaim while three instances billed ([Q1155](../queue/Q1155.md)).
+**Teardown did not complete, and `--reclaim` could not see it.** Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so `--reclaim` reported nothing to reclaim while three instances billed (Q1155, since fixed: a refused stop script now keeps the lease).
 The e2e run was cancelled and both stop scripts were run by hand with the drain skips; `ops.sh at-rest` reported no instances at 22:01 PDT.
 
 #2008 merged on 2026-10-03 and changes dogfood setup and no released file, so the candidate stood and the gate re-ran against it.

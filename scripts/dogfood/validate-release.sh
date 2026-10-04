@@ -42,7 +42,8 @@
 # killed parent takes the process group with it, and a teardown killed part-way
 # through stops between the two stop scripts — each leaving billable nodes up
 # with no process left to release them, found twice only by hunting for a live
-# teardown process by hand (Q640). So the gate takes a lease
+# teardown process by hand (Q640). A teardown whose stop scripts refuse and
+# return leaves the same nodes up (Q1155). So the gate takes a lease
 # (lib/lease.sh) for the window in which it owns cluster state, and reclaims an
 # orphaned one — a lease for THIS target whose owning process is gone — before
 # it spends anything. Cluster state is never the trigger: a cluster that merely
@@ -244,9 +245,9 @@ and tears the environment back down on exit. Requires PROJECT, CLUSTER, ZONE,
 and REPO to be exported. See the script header for the optional knobs.
 
 --reclaim runs only the orphaned-run check: if a previous gate against this
-target was killed before its teardown finished, its cluster is torn back down
-to 0 nodes. Spends nothing otherwise, and never acts on a cluster no lease
-claims.
+target did not finish its teardown (killed, or a stop script refused), its
+cluster is torn back down to 0 nodes. Spends nothing otherwise, and never acts
+on a cluster no lease claims.
 USAGE
 }
 
@@ -1422,8 +1423,8 @@ dump_diagnostics() {
 # stop.sh waits for in-flight workers before scaling down and fails rather than
 # stranding them (Q434), so the guard below can leave the system pool up. That
 # is the cheaper failure: two e2-standard-2 nodes still billing beats worker
-# nodes pinned by pods no AGC is left alive to reap. Its error names the
-# remedy — re-run stop.sh once the drain finishes.
+# nodes pinned by pods no AGC is left alive to reap. The lease stays held in
+# that case, so --reclaim retries the stop scripts once the drain can finish.
 teardown() {
 	local rc="$?"
 	echo ""
@@ -1439,14 +1440,29 @@ teardown() {
 	# Before the stop scripts, and unconditionally: a gate that died mid-leg left
 	# the tenant's pods ceiling tightened, and nothing else here puts it back.
 	restore_e2e_quota || echo "restoring the e2e quota failed — continuing teardown" >&2
-	bash "${SCRIPT_DIR}/e2e-stop.sh" || echo "e2e-stop failed — continuing teardown" >&2
-	bash "${SCRIPT_DIR}/stop.sh" || echo "stop failed — continuing teardown" >&2
+	local stopped=1
+	bash "${SCRIPT_DIR}/e2e-stop.sh" || {
+		stopped=0
+		echo "e2e-stop failed — continuing teardown" >&2
+	}
+	bash "${SCRIPT_DIR}/stop.sh" || {
+		stopped=0
+		echo "stop failed — continuing teardown" >&2
+	}
 	restore_cpu_budget || echo "restoring the workers ceiling failed — continuing teardown" >&2
 	[[ -n "${WORKDIR}" ]] && rm -rf "${WORKDIR}"
-	# Release LAST, after the scripts that take the cluster down: the lease is
-	# the claim that this run still owns billable state, so dropping it earlier
-	# would make a teardown killed mid-drain look like a clean exit and leave
-	# the nodes for nobody to reclaim.
+	# Release LAST, and only once both stop scripts succeeded: the lease is the
+	# claim that this run still owns billable state, and --reclaim keys on it
+	# alone. A teardown killed mid-drain and one whose stop scripts refused and
+	# returned both leave nodes up, so both must leave the lease for a reclaim.
+	if ((!stopped)); then
+		progress_event teardown "done" "incomplete; lease kept for --reclaim"
+		echo "=== Teardown INCOMPLETE (exit ${rc}): a stop script refused, so nodes may still bill ===" >&2
+		echo "  The lease is kept, so the next gate or" >&2
+		echo "  PROJECT=${PROJECT} CLUSTER=${CLUSTER} ZONE=${ZONE} REPO=${REPO} scripts/dogfood/validate-release.sh --reclaim" >&2
+		echo "  retries the teardown once the drain the stop scripts reported can converge." >&2
+		return 0
+	fi
 	lease_release "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	progress_event teardown "done"
 	echo "=== Teardown complete (exit ${rc}) ==="
@@ -1501,7 +1517,7 @@ reclaim_orphaned_gate() {
 		;;
 	esac
 
-	echo "An earlier release gate against this target was killed before it finished tearing down:"
+	echo "An earlier release gate against this target did not finish tearing down:"
 	echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 	echo "  Its process is gone; the nodes it scaled up are not. Reclaiming them first."
 	if ((confirm)); then

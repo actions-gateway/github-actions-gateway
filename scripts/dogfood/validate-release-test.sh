@@ -735,7 +735,7 @@ check "an orphaned gate's cluster is torn back down" 0 "${RECLAIM_RC}"
 check "the reclaim runs both stop scripts, e2e first" \
 	"e2e-stop
 stop lease=held" "$(cat "${STOP_LOG}")"
-check_contains "the reclaim says what it found" "killed before it finished tearing down" "${RECLAIM_OUT}"
+check_contains "the reclaim says what it found" "did not finish tearing down" "${RECLAIM_OUT}"
 check "a completed reclaim frees the target" "free" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 
@@ -787,6 +787,39 @@ check "a completed teardown releases its own lease" "free" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 check "the lease is still held while the stop scripts run" \
 	"stop lease=held" "$(grep -F 'stop lease' "${STOP_LOG}")"
+
+# A stop script that refuses and returns leaves nodes up exactly as a kill
+# mid-drain does, so the lease must outlive it: --reclaim keys on nothing else,
+# and dropping it reported "nothing to reclaim" while three instances billed
+# (Q1155). Each stop script is failed on its own, since either refusal strands.
+for failing in RECLAIM_E2E_STOP_RC RECLAIM_STOP_RC; do
+	script="stop.sh"
+	[[ "${failing}" == RECLAIM_E2E_STOP_RC ]] && script="e2e-stop.sh"
+	arm_lease held
+	out="$(
+		set +e
+		WORKDIR=""
+		export "${failing}=1"
+		teardown 2>&1
+	)"
+	check "a teardown whose ${script} fails keeps its lease" "held" \
+		"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	check_contains "a teardown whose ${script} fails says the lease is kept" \
+		"Teardown INCOMPLETE" "${out}"
+	check_contains "a teardown whose ${script} fails names --reclaim" "--reclaim" "${out}"
+	if [[ "${out}" == *"Teardown complete"* ]]; then
+		echo "FAIL a teardown whose ${script} fails must not report complete" >&2
+		fails=$((fails + 1))
+	else
+		echo "ok   a teardown whose ${script} fails does not report complete"
+	fi
+done
+
+# Once the gate process exits, that kept lease reads as orphaned, which is the
+# state --reclaim acts on.
+OWNER_ALIVE=""
+check "a kept lease is reclaimable once the gate exits" "orphaned" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 
 # The loser of a two-gate race exits through the same teardown; it must not
 # clear the winner's lease on its way out.
