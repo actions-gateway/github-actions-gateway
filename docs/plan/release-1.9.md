@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03; promotion approved 2026-10-04, with the [stable-tag passes](#stable-tag-verdicts) landing before the tag.** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, `rc.2`, is the first validated in CI.** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -38,10 +38,16 @@ Three gating rows and the candidate validation, in the order they land, then the
 | Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
 | Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
 | Q1150 | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | ✅ landed: all five rules name `v2` and the handlers are typed on `api/v2`; the `EgressProxy` alias and the `RunnerSet` Classic protocol are read from their conversion annotations, pinned by envtest writes at `v2alpha1` |
-| — | RC validated on dogfood | gates | 🔲 no candidate cut |
+| Q880 | Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each `v*-rc.*` tag, and `publish.yml` reading its verdict | `1.9-gate` | 🔲 milestone 1 merged, its bootstrap not yet run |
+| Q1155 | Gate teardown keeps its lease when a stop script refuses, so `--reclaim` finds stranded nodes | gates, with Q880 | 🔲 in review (#2026) |
+| — | RC validated on dogfood | gates | `rc.1` ✅ through the local gate; `rc.2` 🔲 to be validated in CI once Q880 lands |
 | Q1101 | GMC provisions the AGC ServiceMonitor for `v2` ActionsGateways (#1991) | rides | ✅ landed |
 | Q1151 | AGC reclaims the scale-set worker whose runner held the job (#2011) | rides | ✅ landed |
 | Q1146 | Worker image bumps `actions/runner` to 2.337.0 (#2005) | rides | ✅ landed |
+
+**Q880 was added on 2026-10-04, after `rc.1` validated.** It touches no released file, so `rc.2` ships the same artifacts `rc.1` passed with; the hold buys where the verdict is recorded, a job result on the tag rather than a ref anyone who can push a tag can also push.
+Q1155 gates with it because a CI run is unattended: on a laptop the stranded nodes of a failed teardown were noticed and stopped by hand, and in CI nobody would notice.
+The stable-tag passes below stand, except that the notes' **Validation** section and the commit count are re-derived for `rc.2`.
 
 **Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.** Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when `v2` first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 `v1.8.0` tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
