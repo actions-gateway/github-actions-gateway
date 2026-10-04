@@ -8,7 +8,7 @@ Running the same gate as a workflow on the candidate tag makes the verdict a job
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Keyless CI identity on the dogfood project | ⚠️ Bootstrap run 2026-10-04; the probe read the cluster and was refused pod creation, but reported the refusal as a failure. Fixed in #2028 and re-run before this milestone's probe retires |
+| 1 | Keyless CI identity on the dogfood project | ✅ Bootstrap run 2026-10-04; the probe passed on its second run (37230799055), after #2028 fixed how it read GKE's refusal |
 | 2 | The gate runs on a Linux runner with no keychain | ⚠️ Code in review; unproven until the first CI run |
 | 3 | A workflow runs the gate on each `v*-rc.*` tag | ⚠️ Code in review; needs `ci-identity-setup.sh` re-run for the new pin and grant |
 | 4 | `publish.yml` reads the workflow's verdict instead of `refs/validated/` | ❌ |
