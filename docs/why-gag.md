@@ -295,14 +295,17 @@ Built for shared clusters running other teams' code: the multi-tenant hardening 
 
 ### Sandboxing: testing untrusted code contributions
 
-Both GAG and ARC can run a job in a sandboxed runtime such as Kata Containers, by setting the pod's `runtimeClassName`.
-That alone does not make untrusted code safe to run, and the difference between the two is what surrounds the sandbox.
+Running a stranger's pull request safely takes more than a sandboxed runtime.
+Both GAG and ARC can set a pod's `runtimeClassName` to run a job under Kata Containers, but a sandbox only bounds the kernel.
+Here is what the rest takes, and where GAG provides it:
 
-**Kata bounds the kernel, not the pod network**, so cloud metadata still answers from inside the guest.
-GAG's default-deny NetworkPolicies close that path.
-
-**GAG's own CI runs this way**, building a `kind` cluster inside a worker pod with **zero** `privileged: true` ([how, and what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you)).
-
-**Untrusted pull requests need one more step**, the tight-egress recipe that ships in 1.7: an in-cluster pull-through registry mirror, and your own allow-all egress rule deleted ([how](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)).
+- **A kernel of its own.** Kata runs each worker in a micro-VM, so a kernel escape lands in a throwaway guest rather than on your node.
+  GAG ships it as the [`kata-dind` worker template](operations/runner-template-library.md), on nodes that support nested virtualization.
+- **No privileged containers, even for Docker builds.** GAG's own CI builds a `kind` cluster inside a worker pod with **zero** `privileged: true` ([how, and what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you)).
+- **No path to the node's cloud credentials.** A sandbox does not isolate the pod network, so the cloud metadata server still answers from inside the guest.
+  GAG's default-deny NetworkPolicies close that path, and Workload Identity on GKE keeps the node's credentials off the table either way.
+- **Egress limited to what a build needs.** Under the [tight-egress posture](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture), a worker reaches cluster DNS, GitHub, and in-cluster registry mirrors that each pull from one upstream, and nothing else answers.
+  GAG ships the mirrors as manifests; adopting it means deleting your own allow-all egress rule.
+- **One job per worker.** Every worker is ephemeral and single-use, so nothing one job leaves behind reaches the next.
 
 Threat model and abuse-response playbooks: [Security](design/05-security.md), [Security operations](operations/security-operations.md).
