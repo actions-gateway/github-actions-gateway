@@ -3825,14 +3825,17 @@ The usual cause is that something is still up from earlier work, most often the 
 A ceiling left low throttles everyone's CI, so run it.</p>
 <h5 id="a-killed-gate-is-reclaimed-by-the-next-one">A killed gate is reclaimed by the next one<a class="headerlink" href="#a-killed-gate-is-reclaimed-by-the-next-one" title="Permanent link">&para;</a></h5>
 <p><strong>Self-cleaning covers most endings, not all of them.</strong> Bash runs the teardown trap on Ctrl-C and on an ordinary <code>kill</code>, so those tear the cluster back down.
-<code>kill -9</code>, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).</p>
+<code>kill -9</code>, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
+A teardown whose <code>e2e-stop.sh</code> or <code>stop.sh</code> refuses, usually on a drain that will not converge, leaves the same nodes up, so it keeps its lease too and ends <code>Teardown INCOMPLETE</code> with the <code>--reclaim</code> command to run once the drain can finish (Q1155).</p>
 <p>So the gate takes an ownership lease for exactly the window in which it owns cluster state, and reclaims an <em>orphaned</em> one — a lease for the same target whose owning process is gone — before it spends anything.
 Running the gate again is therefore enough to end a leak the previous run started.
 To do only that, without starting a validation run:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>--reclaim
 </code></pre></div>
 <p>It reports a target nothing claims and exits, or tears an orphaned run's cluster back down to 0 nodes (confirming first, as the gate itself does).
-Run it when a gate was killed and you are not about to start another one.</p>
+Run it when a gate was killed or ended <code>Teardown INCOMPLETE</code> and you are not about to start another one.
+Its stop scripts drain before they delete, as the gate's do, so a drain that still will not converge refuses again and keeps the lease.
+Once you have confirmed nothing live is running, prefix the <code>--reclaim</code> with <code>SKIP_E2E_DRAIN=1 SKIP_DRAIN=1</code>: the stop scripts inherit both and skip their drains, and the reclaim then clears the lease, which running the stop scripts by hand would leave behind.</p>
 <p><strong>The lease is the only thing it acts on</strong>, because the alternative is worse than the leak.
 A cluster that merely has nodes up is what a hand-run <code>setup.sh</code>/<code>start.sh</code> debugging session looks like, so nothing here infers an orphan from cluster state: no lease, no teardown.
 A lease whose process is still alive means another gate is running, and the second gate refuses to start rather than tearing down the first one's environment.
@@ -3843,8 +3846,9 @@ A cluster left up by something <em>other</em> than this gate is not visible to t
 And a killed gate that is never followed by another run or a <code>--reclaim</code> still bills: the state is recorded, but nothing reads it until someone runs one of the two.</p>
 <h5 id="confirming-the-cluster-is-actually-at-rest">Confirming the cluster is actually at rest<a class="headerlink" href="#confirming-the-cluster-is-actually-at-rest" title="Permanent link">&para;</a></h5>
 <p>The teardown reports what it did, not what the cluster is.
-Every step in it is guarded so one failure cannot skip the rest, so <code>Teardown complete</code> prints even for a run whose <code>stop.sh</code> refused to scale down (a drain that will not converge is the usual reason).
-After a failed gate, a killed one, or a <code>--reclaim</code>, ask the cluster separately:</p>
+Every step in it is guarded so one failure cannot skip the rest, and <code>Teardown complete</code> means both stop scripts returned success, not that every node is gone; a refused stop script prints <code>Teardown INCOMPLETE</code> instead.
+After a failed gate, a killed one, one that ended <code>Teardown INCOMPLETE</code>, or a <code>--reclaim</code>, ask the cluster separately.
+A passing gate whose teardown was incomplete still exits 0, so its exit status does not answer this:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/ops.sh<span class="w"> </span>at-rest
 </code></pre></div>
 <p>It exits <strong>0</strong> at rest, <strong>1</strong> with instances still up, which it names, and <strong>2</strong> when the project could not be read.

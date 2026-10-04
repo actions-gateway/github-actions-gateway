@@ -3014,7 +3014,7 @@ Tagged 2026-10-02 at <code>aff5f2268</code>; dogfood run the same evening.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Teardown did not complete, and <code>--reclaim</code> could not see it.</strong> Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so <code>--reclaim</code> reported nothing to reclaim while three instances billed (<a href="../../queue/Q1155/">Q1155</a>).
+<p><strong>Teardown did not complete, and <code>--reclaim</code> could not see it.</strong> Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so <code>--reclaim</code> reported nothing to reclaim while three instances billed (Q1155, since fixed: a refused stop script now keeps the lease).
 The e2e run was cancelled and both stop scripts were run by hand with the drain skips; <code>ops.sh at-rest</code> reported no instances at 22:01 PDT.</p>
 <h1 id="2008-merged-on-2026-10-03-and-changes-dogfood-setup-and-no-released-file-so-the-candidate-stood-and-the-gate-re-ran-against-it">2008 merged on 2026-10-03 and changes dogfood setup and no released file, so the candidate stood and the gate re-ran against it.<a class="headerlink" href="#2008-merged-on-2026-10-03-and-changes-dogfood-setup-and-no-released-file-so-the-candidate-stood-and-the-gate-re-ran-against-it" title="Permanent link">&para;</a></h1>
 <h2 id="what-waits-for-v200">What waits for <code>v2.0.0</code><a class="headerlink" href="#what-waits-for-v200" title="Permanent link">&para;</a></h2>
