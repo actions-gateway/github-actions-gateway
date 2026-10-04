@@ -149,6 +149,19 @@ main() {
 		echo "No registry pull-through cache deployed — nothing to scale down."
 	fi
 
+	# The Dragonfly back end (Q539), present only after an
+	# E2E_MIRROR_BACKEND=dragonfly window: same lifecycle and the same presence
+	# read. Its CA Secret and the mirrors' copy of the certificate stay, so the
+	# next window reuses them rather than minting a new key.
+	local dragonfly
+	dragonfly="$(kubectl get deployment --namespace gag-dragonfly \
+		-l app=dragonfly -o name 2>/dev/null || true)"
+	if [[ -n "${dragonfly}" ]]; then
+		echo "Scaling the Dragonfly back end back to zero..."
+		kubectl scale deployment --namespace gag-dragonfly \
+			-l app=dragonfly --replicas=0
+	fi
+
 	# Restore the system pool to the running size now the e2e window is over
 	# (Q335/Q357) — derived from the deployed always-on ActionsGateways unless
 	# pinned. The e2e gateway was deleted above (and its namespace is excluded

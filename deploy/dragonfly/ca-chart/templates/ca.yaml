@@ -1,0 +1,23 @@
+{{- /*
+ed25519, not genCA's default RSA: genCA emits a PKCS#1 key, which dfdaemon
+v1.5.7 rejects ("Could not parse key pair") before falling back to a CA nothing
+trusts. genPrivateKey "ed25519" emits PKCS#8, measured to load. See
+../../seed-client.yaml.
+
+Only the Secret: e2e-start.sh writes the mirrors' certificate-only ConfigMap
+from it, and creates this with `kubectl create` rather than `apply` so the key
+is not copied into a last-applied-configuration annotation.
+*/ -}}
+{{- $key := genPrivateKey "ed25519" -}}
+{{- $ca := genCAWithKey "gag-dragonfly-proxy-ca" (int .Values.days) $key -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dragonfly-proxy-ca
+  namespace: gag-dragonfly
+type: Opaque
+stringData:
+  ca.crt: |
+{{ $ca.Cert | indent 4 }}
+  ca.key: |
+{{ $ca.Key | indent 4 }}

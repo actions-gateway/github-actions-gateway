@@ -101,6 +101,9 @@ jobs:
               # a security surface — its NetworkPolicies are the untrusted-PR
               # workers' only registry path.
               - 'deploy/registry-mirror/**'
+              # Its Dragonfly back end (Q539), validated the same way, plus
+              # the proxy-CA chart this gate lints and renders.
+              - 'deploy/dragonfly/**'
               # The consumer half of the same posture: the e2e tenant overlays
               # carry the ConfigMap wiring the job's image clients to those
               # mirrors, which `make registry-mirror-wiring-check` reconciles

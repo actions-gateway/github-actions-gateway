@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The Dragonfly back end for the registry mirrors (Q539): a manager-less
+# scheduler and one seed peer. The CA Secret it mounts is not here; ca-chart/
+# mints it, because a key cannot be committed. See README.md.
+resources:
+  - namespace.yaml
+  - scheduler.yaml
+  - seed-client.yaml
+  - networkpolicy.yaml

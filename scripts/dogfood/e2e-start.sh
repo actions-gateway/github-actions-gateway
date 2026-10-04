@@ -39,6 +39,14 @@
 #                pull-through layer caches warm across e2e windows at the cost of
 #                five continuously-billed disks. Default: ephemeral emptyDir
 #                caches. See deploy/registry-mirror/README.md.
+#   E2E_MIRROR_BACKEND
+#                What the registry mirrors fetch through: "distribution" (the
+#                default, each mirror fetches its upstream itself) or "dragonfly"
+#                (Q539: the mirrors send their upstream traffic through a
+#                Dragonfly seed peer, deploy/dragonfly/). Workers reach the same
+#                five mirrors either way. Not combinable with
+#                REGISTRY_MIRROR_PERSISTENT=1. Needs helm, which mints the
+#                seed peer's CA. See deploy/registry-mirror/README.md (Q539).
 #   GMC_ROLLOUT_TIMEOUT
 #                How long to wait for the GMC rollout that serves the v2beta1
 #                conversion webhook (default: 5m).
@@ -61,6 +69,7 @@ source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
 source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 
 E2E_VARIANT="${E2E_VARIANT:-kata}"
+E2E_MIRROR_BACKEND="${E2E_MIRROR_BACKEND:-distribution}"
 
 # System pool sizing for the e2e window (Q335). 2 nodes was live-validated
 # green with both always-on AGCs plus the on-demand e2e AGC (see
@@ -109,13 +118,87 @@ enforce_kata_egress() {
 		--namespace gag-dogfood-e2e --ignore-not-found
 }
 
+mirror_persistent() {
+	[[ "${REGISTRY_MIRROR_PERSISTENT:-0}" == "1" || "${REGISTRY_MIRROR_PERSISTENT:-0}" == "true" ]]
+}
+
+# apply_dragonfly_backend — bring up the Dragonfly seed peer the mirrors fetch
+# through (Q539), before the mirrors themselves: a registry container pings its
+# upstream through the seed peer while starting and exits if it cannot.
+#
+# The CA is minted only when its Secret is absent, because every render of
+# deploy/dragonfly/ca-chart is a new key. It goes from helm to kubectl through a
+# pipe and never touches disk, and through `create` rather than `apply`, which
+# would copy the key into a last-applied-configuration annotation. The
+# certificate-only ConfigMap the mirrors mount is then rewritten from the Secret
+# on every run, so the two cannot disagree.
+#
+# dfdaemon and the registry containers both load their CA at startup, so a mint
+# under running pods (a rotation: delete the Secret, re-run) leaves them on the
+# old key until restarted. Restarting matches nothing on a first window.
+#
+# The waits are `rollout status`, not `wait --for=condition=Available`: a
+# deployment just restarted, or scaled up from e2e-stop.sh's zero, still reports
+# Available from before, so the condition can be read before the new pods exist.
+#
+# dfdaemon fails OPEN when it cannot load proxy.registryMirror.cert: it logs an
+# error and forwards to any upstream unverified (measured: a self-signed host
+# answered 200). Its log is the only signal, so the mirrors are applied only
+# when some seed pod logged success and none logged the failure. Every seed pod
+# is read, not the one `logs deployment/` picks: just after a rollout that can
+# be the old pod, still terminating, which loaded the old image's bundle. A
+# selector read defaults to the last 10 lines, hence --tail=-1. Both strings
+# are v1.5.7's wording: a client bump must re-check them, since a new pod
+# logging neither passes while a terminating old pod still shows success.
+apply_dragonfly_backend() {
+	echo "Applying the Dragonfly back end for the registry mirrors (Q539)..."
+	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly"
+	kubectl apply -f "${REPO_ROOT}/deploy/registry-mirror/base/namespace.yaml"
+	local minted=0
+	if ! kubectl get secret dragonfly-proxy-ca --namespace gag-dragonfly >/dev/null 2>&1; then
+		echo "  Minting the seed peer's CA..."
+		helm template dragonfly-proxy-ca "${REPO_ROOT}/deploy/dragonfly/ca-chart" | kubectl create -f -
+		minted=1
+	fi
+	local cert
+	cert="$(kubectl get secret dragonfly-proxy-ca --namespace gag-dragonfly \
+		-o jsonpath='{.data.ca\.crt}' | base64 --decode)"
+	[[ "${cert}" == *"BEGIN CERTIFICATE"* ]] || {
+		echo "error: secret gag-dragonfly/dragonfly-proxy-ca holds no ca.crt" >&2
+		return 1
+	}
+	# $(...) strips the PEM's final newline; put it back so the two copies match.
+	kubectl create configmap dragonfly-proxy-ca --namespace gag-registry-mirror \
+		--from-literal=ca.crt="${cert}"$'\n' --dry-run=client -o yaml | kubectl apply -f -
+	if ((minted)); then
+		kubectl rollout restart deployment --namespace gag-dragonfly -l app=dragonfly,component=seed-client
+		kubectl rollout restart deployment --namespace gag-registry-mirror -l app=registry-mirror
+	fi
+	echo "  Waiting for the scheduler and seed peer to be ready..."
+	kubectl rollout status --namespace gag-dragonfly \
+		deployment -l app=dragonfly --timeout=180s
+	local seed_log
+	seed_log="$(kubectl logs --namespace gag-dragonfly \
+		-l app=dragonfly,component=seed-client --prefix --tail=-1)"
+	[[ "${seed_log}" == *"load registry cert success"* &&
+		"${seed_log}" != *"load registry cert failed"* ]] || {
+		echo "error: the Dragonfly seed peer did not load proxy.registryMirror.cert, so it is" >&2
+		echo "       not verifying upstream TLS; see deploy/dragonfly/seed-client.yaml" >&2
+		return 1
+	}
+}
+
 apply_registry_mirror() {
 	# Ephemeral caches by default (emptyDir — $0 at rest, cold on the first pull
 	# of each e2e window). Set REGISTRY_MIRROR_PERSISTENT=1 to render the
 	# PVC-backed overlay, which keeps the layer caches warm across windows at the
 	# cost of five continuously-billed disks. See deploy/registry-mirror/README.md.
 	local overlay="${REPO_ROOT}/deploy/registry-mirror"
-	if [[ "${REGISTRY_MIRROR_PERSISTENT:-0}" == "1" || "${REGISTRY_MIRROR_PERSISTENT:-0}" == "true" ]]; then
+	if [[ "${E2E_MIRROR_BACKEND}" == "dragonfly" ]]; then
+		apply_dragonfly_backend
+		overlay="${REPO_ROOT}/deploy/registry-mirror/overlays/dragonfly"
+		echo "Applying the in-cluster registry pull-through cache (ephemeral, Dragonfly back end)..."
+	elif mirror_persistent; then
 		overlay="${REPO_ROOT}/deploy/registry-mirror/overlays/persistent"
 		echo "Applying the in-cluster registry pull-through cache (persistent PVCs)..."
 	else
@@ -123,8 +206,8 @@ apply_registry_mirror() {
 	fi
 	kubectl apply -k "${overlay}"
 	echo "  Waiting for the mirror instances to be ready..."
-	kubectl wait --namespace gag-registry-mirror \
-		--for=condition=Available deployment -l app=registry-mirror --timeout=180s
+	kubectl rollout status --namespace gag-registry-mirror \
+		deployment -l app=registry-mirror --timeout=180s
 }
 
 main() {
@@ -137,6 +220,20 @@ main() {
 		dind|kata) ;;
 		*)
 			echo "error: E2E_VARIANT must be 'dind' or 'kata' (got '${E2E_VARIANT}')" >&2
+			exit 1
+			;;
+	esac
+	case "${E2E_MIRROR_BACKEND}" in
+		distribution) ;;
+		dragonfly)
+			if mirror_persistent; then
+				echo "error: E2E_MIRROR_BACKEND=dragonfly has no persistent overlay; unset REGISTRY_MIRROR_PERSISTENT" >&2
+				exit 1
+			fi
+			require_cmd helm "https://helm.sh/docs/intro/install/"
+			;;
+		*)
+			echo "error: E2E_MIRROR_BACKEND must be 'distribution' or 'dragonfly' (got '${E2E_MIRROR_BACKEND}')" >&2
 			exit 1
 			;;
 	esac

@@ -147,6 +147,7 @@ Open, with rows: [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q5
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.
 Grade the four contract properties **per content class**, not once: a backend that refuses non-GET for images has said nothing about what it does for a cache save.
+Q539 has answered its half ([q539 §5](q539-dragonfly-mirror-backend.md#5-per-content-class)): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class stays Q215's.
 
 ## Gaps with no row yet
 

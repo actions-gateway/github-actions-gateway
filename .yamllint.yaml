@@ -22,6 +22,7 @@ extends: default
 ignore: |
   charts/actions-gateway/templates/
   charts/actions-gateway-crds-v2/templates/
+  deploy/dragonfly/ca-chart/templates/
 
 rules:
   # controller-gen emits CRD `description` lines well over 200 characters

@@ -3,7 +3,7 @@
 # check-registry-mirror-render.sh - Render every shipped registry-mirror
 # kustomize target and assert what each render must contain (Q1024).
 #
-# deploy/registry-mirror/ ships four targets an operator applies with
+# deploy/registry-mirror/ ships five targets an operator applies with
 # `kubectl apply -k`, and until this gate nothing rendered any of them.
 # manifest-validate.sh yamllints the tree and kubeconforms the files named in its
 # standalone_manifests list -- the base plus overlays/persistent/pvc.yaml. A
@@ -35,8 +35,11 @@
 #   5. The five PVCs survive both persistent targets and appear in neither
 #      ephemeral one, which is what tells shared-tenants-persistent apart from
 #      shared-tenants.
+#   6. The Dragonfly target routes every instance through the seed peer (Q539),
+#      each trusting the seed peer's CA alone, and no other target routes any. Its component patches by label, so a
+#      label it no longer matches renders the plain base at exit 0.
 #
-# Rules 2-5 need kubectl, which is e2e-tier in scripts/ci/check-tools.sh, so
+# Rules 2-6 need kubectl, which is e2e-tier in scripts/ci/check-tools.sh, so
 # `make check` cannot require it: without it they degrade to a printed skip, as
 # check-template-library.sh's render half does. --require-render turns that skip
 # into a failure, and the CI step passes it -- a hosted runner that lost kubectl
@@ -60,7 +63,7 @@ REQUIRE_RENDER=0
 # The shipped render targets, relative to TREE. Enumerated, never counted: a
 # count cannot tell a renamed overlay from a new one, and the failure this gate
 # exists for is precisely a target nothing renders.
-RENDER_TARGETS=(. overlays/persistent overlays/shared-tenants overlays/shared-tenants-persistent)
+RENDER_TARGETS=(. overlays/persistent overlays/shared-tenants overlays/shared-tenants-persistent overlays/dragonfly)
 
 # Directories carrying a kustomization.yaml that are NOT render targets, each
 # with the reason it is covered elsewhere rather than skipped.
@@ -72,13 +75,22 @@ RENDER_TARGETS=(. overlays/persistent overlays/shared-tenants overlays/shared-te
 #                               NetworkPolicy...registry-mirror-worker-access",
 #                               because the patch has no base to attach to. It is
 #                               covered through the two overlays that compose it.
-NON_TARGETS=(base components/shared-tenants)
+#   components/dragonfly-backend - a Component, for the same reason; covered
+#                               through overlays/dragonfly.
+NON_TARGETS=(base components/shared-tenants components/dragonfly-backend)
 
 # The two topologies, as subsets of RENDER_TARGETS.
 SHARED_TARGETS=(overlays/shared-tenants overlays/shared-tenants-persistent)
-ISOLATED_TARGETS=(. overlays/persistent)
+ISOLATED_TARGETS=(. overlays/persistent overlays/dragonfly)
 PERSISTENT_TARGETS=(overlays/persistent overlays/shared-tenants-persistent)
-EPHEMERAL_TARGETS=(. overlays/shared-tenants)
+EPHEMERAL_TARGETS=(. overlays/shared-tenants overlays/dragonfly)
+DRAGONFLY_TARGETS=(overlays/dragonfly)
+
+# The env entry components/dragonfly-backend adds to each registry container.
+PROXY_ENV='- name: HTTPS_PROXY'
+# Without it Go also reads the image's /etc/ssl/certs, and the registry trusts
+# every public root as well as the seed peer's CA.
+CERT_DIR_ENV='- name: SSL_CERT_DIR'
 
 # One PVC per mirror instance -- overlays/persistent/pvc.yaml. Named rather than
 # counted for the reason the targets are.
@@ -306,6 +318,28 @@ for target in "${EPHEMERAL_TARGETS[@]}"; do
 	done
 done
 
+# ------------------------------------------------ rule 6: the back end ----
+
+for target in "${RENDER_TARGETS[@]}"; do
+	[[ -n "${RENDERS[$target]:-}" ]] || continue
+	proxied="$(grep -cF -- "$PROXY_ENV" <<<"${RENDERS[$target]}" || true)"
+	if contains "$target" "${DRAGONFLY_TARGETS[@]}"; then
+		pinned="$(grep -cF -- "$CERT_DIR_ENV" <<<"${RENDERS[$target]}" || true)"
+		((pinned == ${#PVCS[@]})) ||
+			fail "$TREE/$target pins the trust store of $pinned of ${#PVCS[@]} mirror instances.
+       An instance without SSL_CERT_DIR also trusts the image's public roots, so
+       it is not held to the seed peer's CA."
+		((proxied == ${#PVCS[@]})) ||
+			fail "$TREE/$target routes $proxied of ${#PVCS[@]} mirror instances through the Dragonfly seed peer.
+       components/dragonfly-backend patches every Deployment labelled
+       app=registry-mirror; an instance it misses fetches upstream directly while
+       the overlay reads as applied."
+	elif ((proxied > 0)); then
+		fail "$TREE/$target routes $proxied mirror instance(s) through a proxy, but only the
+       Dragonfly target may. The back end is opt-in (E2E_MIRROR_BACKEND)."
+	fi
+done
+
 # ---------------------------------------------------------------- verdict ----
 
 if ((fails > 0)); then
@@ -316,5 +350,5 @@ if ((fails > 0)); then
 	exit 1
 fi
 
-printf 'registry-mirror renders: %d targets (%d shared, %d persistent), %d PVCs where persistence is on, base ingress intact under the shared patch\n' \
-	"${#RENDER_TARGETS[@]}" "${#SHARED_TARGETS[@]}" "${#PERSISTENT_TARGETS[@]}" "${#PVCS[@]}"
+printf 'registry-mirror renders: %d targets (%d shared, %d persistent, %d Dragonfly), %d PVCs where persistence is on, base ingress intact under the shared patch\n' \
+	"${#RENDER_TARGETS[@]}" "${#SHARED_TARGETS[@]}" "${#PERSISTENT_TARGETS[@]}" "${#DRAGONFLY_TARGETS[@]}" "${#PVCS[@]}"

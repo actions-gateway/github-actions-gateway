@@ -1,0 +1,4 @@
+# Validity of the CA. Rotating it means deleting the Secret in gag-dragonfly and
+# re-running e2e-start.sh, which mints a fresh one, rewrites the mirrors' copy
+# and restarts both sides onto it.
+days: 365

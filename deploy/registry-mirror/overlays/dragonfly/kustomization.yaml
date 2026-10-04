@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The ephemeral mirrors with Dragonfly as their back end (Q539). Applied by
+# scripts/dogfood/e2e-start.sh when E2E_MIRROR_BACKEND=dragonfly. See
+# ../../components/dragonfly-backend.
+resources:
+  - ../../base
+components:
+  - ../../components/dragonfly-backend

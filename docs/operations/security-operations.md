@@ -798,6 +798,7 @@ Two of those are built here as reference manifests: [`deploy/athens/`](../../dep
 The registry mirror is one [CNCF Distribution](https://github.com/distribution/distribution) instance per upstream, shipped with the NetworkPolicies that make it a worker's only registry path.
 Both are dogfood-shaped; each README names the handful of cluster-specific values to retarget.
 With more than one tenant the registry mirror needs a topology decision as well as retargeting, one shared set or one per tenant: [Choosing a mirror topology](kata-dind-workloads.md#choosing-a-mirror-topology).
+Its opt-in Dragonfly back end shares layers peer to peer at a cost in trust: the mirrors stop verifying upstreams themselves and rely on the seed peer, and on the secrecy of its interception CA's key ([Dragonfly back end](../../deploy/registry-mirror/README.md#dragonfly-back-end)).
 Reserve the destination allowlist for what a mirror genuinely cannot proxy: a *specific* live cloud-provider API (`kms.<region>.amazonaws.com`, a Private-Google-Access CIDR like `199.36.153.8/30`), internal services reachable only by IP, and one-off stable endpoints.
 **Never** a wildcard like `*.googleapis.com` (it covers `storage.googleapis.com/<any-bucket>` and reopens broad exfil), and **not** the metadata/IMDS endpoint.
 
