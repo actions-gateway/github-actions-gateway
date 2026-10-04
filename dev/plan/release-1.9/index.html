@@ -2661,21 +2661,38 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="v1.9.0-rc.1">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#second-and-third-windows-2026-10-03-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Second and third windows, 2026-10-03: PASS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#first-window-2026-10-02-not-taken" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First window, 2026-10-02: not taken
+      
+    </span>
+  </a>
+  
 </li>
         
       </ul>
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#what-waits-for-v200" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What waits for v2.0.0
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2701,7 +2718,7 @@
 
 <h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">not yet validated</a>.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
+<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">validated</a> on 2026-10-03; awaiting the promotion decision.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
 The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
 The version is no longer provisional.
 It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -2844,7 +2861,55 @@ The landmine question added the custom-<code>workerImage</code> entry: the runne
 <p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the roadmap and <code>features.md</code> reconciliation, the announce-bar highlight, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
 <h3 id="v190-rc1"><code>v1.9.0-rc.1</code><a class="headerlink" href="#v190-rc1" title="Permanent link">&para;</a></h3>
-<p><strong>Not validated: the gate timed out on its test environment, not on the candidate.</strong> Tagged 2026-10-02 at <code>aff5f2268</code>; dogfood run the same evening.</p>
+<p><strong>PASSED, validated 2026-10-03; promotion to <code>v1.9.0</code> is the maintainer's call.</strong> <code>check-artifact-unchanged.sh v1.9.0-rc.1 origin/main</code> exited 0 at <code>7fbef71d2</code> before the re-run (18 files changed since the tag, none released), and the gate records <code>refs/validated/v1.9.0-rc.1</code> → <code>aff5f2268</code>.
+It took three windows: the first never reached a runner, the second passed without the <code>v2</code> reading, and the third took it.</p>
+<h4 id="second-and-third-windows-2026-10-03-pass">Second and third windows, 2026-10-03: PASS<a class="headerlink" href="#second-and-third-windows-2026-10-03-pass" title="Permanent link">&para;</a></h4>
+<p>Both ran from <code>main</code> after #2008, so the e2e worker logged <code>Current runner version: '2.337.0'</code>.
+The third ran <code>validate-release.sh</code> from <a href="https://github.com/actions-gateway/github-actions-gateway/pull/2024">PR #2024</a>'s head <code>b74be8a87</code>, which adds the Q1156 reading; the figures below are the third window's.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>e2e matrix</td>
+<td><strong>PASS.</strong> Run 37143257884, 3/3 jobs (the second window's run 37139731208 was also 3/3).</td>
+</tr>
+<tr>
+<td>Sizing legs</td>
+<td><strong>PASS.</strong> <code>NodeShare</code> active and deriving 1500m where the templates ask 2 and 3; <code>Throughput</code> active on 346 samples.</td>
+</tr>
+<tr>
+<td>Capacity</td>
+<td><strong>PASS.</strong> The quota rung bound at zero headroom (<code>withheldCapacity[quota]=2</code>, <code>advertisedCapacity=0</code>) and released when the quota was restored.</td>
+</tr>
+<tr>
+<td>CRD smoke</td>
+<td><strong>PASS.</strong> The signed <code>actions-gateway-crds-v2.yaml</code> verified against the publish identity, applied server-side, and all five CRDs registered.</td>
+</tr>
+<tr>
+<td>Q1059, Q1060</td>
+<td><strong>PASS.</strong> All five <code>v2beta1</code> kinds carried traffic, and the standing <code>ActionsGateway</code> spec is identical at <code>v2alpha1</code> and <code>v2beta1</code>.</td>
+</tr>
+<tr>
+<td>Q1156: <code>v2beta1</code> ↔ <code>v2</code></td>
+<td><strong>PASS on inspection; the gate recorded <code>finding</code>.</strong> 5 of 8 standing objects identical at both versions, and an <code>EgressProxy</code> applied <em>at</em> <code>v2</code> read back identical at both. The three <code>ClusterRunnerTemplate</code>s differed only in zero values: <code>v2</code> adds an empty <code>podTemplate.metadata</code> (and <code>volumeClaimTemplate.metadata</code> on the two Kata templates) and drops an <code>env[].value: ""</code>. Both decode to the same object: <code>EnvVar.Value</code> is <code>omitempty</code> and <code>ObjectMeta</code> is a struct value Go never omits, so the webhook's Go round trip re-encodes them while a <code>v2beta1</code> read returns the stored bytes. Replaying the three logged pairs through the comparison #2024 now uses gives equal specs for all three.</td>
+</tr>
+<tr>
+<td>Dispatched CI load</td>
+<td>Informational, not read by the gate.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Definition of Done #2 is met</strong> by Q1156 above: the read direction over every standing object, and the write direction through a <code>v2</code> apply, on the dogfood cluster.
+<strong>Definition of Done #5 is met</strong>, read off the published artifacts rather than the source: every CRD in <code>actions-gateway-crds-v2.yaml</code> (sha256 <code>a0db0b6a…7c244</code>) serves <code>v2</code>, <code>v2alpha1</code> and <code>v2beta1</code> with <code>v2beta1</code> the storage version, and <code>charts/actions-gateway/crds/priorityclassallowlist-crd.yaml</code> at the tag serves <code>v2</code> and <code>v2beta1</code> with <code>v2beta1</code> stored.
+That also confirms #1 off the shipped files.</p>
+<h4 id="first-window-2026-10-02-not-taken">First window, 2026-10-02: not taken<a class="headerlink" href="#first-window-2026-10-02-not-taken" title="Permanent link">&para;</a></h4>
+<p>Not validated: the gate timed out on its test environment, not on the candidate.
+Tagged 2026-10-02 at <code>aff5f2268</code>; dogfood run the same evening.</p>
 <table>
 <thead>
 <tr>
@@ -2885,8 +2950,7 @@ The landmine question added the custom-<code>workerImage</code> entry: the runne
 </table>
 <p><strong>Teardown did not complete, and <code>--reclaim</code> could not see it.</strong> Both stop scripts refused on drains that the never-served job could not let converge, and the gate released its lease anyway, so <code>--reclaim</code> reported nothing to reclaim while three instances billed (<a href="../../queue/Q1155/">Q1155</a>).
 The e2e run was cancelled and both stop scripts were run by hand with the drain skips; <code>ops.sh at-rest</code> reported no instances at 22:01 PDT.</p>
-<p><strong>Next:</strong> re-run <code>validate-release.sh v1.9.0-rc.1</code> once #2008 lands.
-No new candidate is needed, because #2008 changes dogfood setup and no released file.</p>
+<h1 id="2008-merged-on-2026-10-03-and-changes-dogfood-setup-and-no-released-file-so-the-candidate-stood-and-the-gate-re-ran-against-it">2008 merged on 2026-10-03 and changes dogfood setup and no released file, so the candidate stood and the gate re-ran against it.<a class="headerlink" href="#2008-merged-on-2026-10-03-and-changes-dogfood-setup-and-no-released-file-so-the-candidate-stood-and-the-gate-re-ran-against-it" title="Permanent link">&para;</a></h1>
 <h2 id="what-waits-for-v200">What waits for <code>v2.0.0</code><a class="headerlink" href="#what-waits-for-v200" title="Permanent link">&para;</a></h2>
 <p>The storage advance and migration (<a href="../../queue/Q1086/">Q1086</a>) and the four removals (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>, and <code>v2beta1</code> itself).
 The validating webhook rules cannot silently un-match through those removals: <code>make webhook-versions-check</code> (Q1068) fails any rule naming only versions no CRD serves.
