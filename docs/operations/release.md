@@ -365,7 +365,8 @@ PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh --
 
 It reports a target nothing claims and exits, or tears an orphaned run's cluster back down to 0 nodes (confirming first, as the gate itself does).
 Run it when a gate was killed or ended `Teardown INCOMPLETE` and you are not about to start another one.
-Its stop scripts drain before they delete, as the gate's do, so a drain that still will not converge refuses again and keeps the lease; once you have confirmed nothing live is running, `SKIP_E2E_DRAIN=1` on `e2e-stop.sh` and `SKIP_DRAIN=1` on `stop.sh` skip the drains by hand.
+Its stop scripts drain before they delete, as the gate's do, so a drain that still will not converge refuses again and keeps the lease.
+Once you have confirmed nothing live is running, prefix the `--reclaim` with `SKIP_E2E_DRAIN=1 SKIP_DRAIN=1`: the stop scripts inherit both and skip their drains, and the reclaim then clears the lease, which running the stop scripts by hand would leave behind.
 
 **The lease is the only thing it acts on**, because the alternative is worse than the leak.
 A cluster that merely has nodes up is what a hand-run `setup.sh`/`start.sh` debugging session looks like, so nothing here infers an orphan from cluster state: no lease, no teardown.
@@ -381,7 +382,8 @@ And a killed gate that is never followed by another run or a `--reclaim` still b
 
 The teardown reports what it did, not what the cluster is.
 Every step in it is guarded so one failure cannot skip the rest, and `Teardown complete` means both stop scripts returned success, not that every node is gone; a refused stop script prints `Teardown INCOMPLETE` instead.
-After a failed gate, a killed one, or a `--reclaim`, ask the cluster separately:
+After a failed gate, a killed one, one that ended `Teardown INCOMPLETE`, or a `--reclaim`, ask the cluster separately.
+A passing gate whose teardown was incomplete still exits 0, so its exit status does not answer this:
 
 ```bash
 PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh at-rest
