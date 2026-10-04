@@ -58,7 +58,7 @@ Running `make check` on a stale branch validates the wrong tree and tells you no
 **The gating-row check names the item files explicitly, and that is the point.** A gate label is a frontmatter list entry on a row, so anchoring to that line keeps `docs/queue/README.md`'s label glossary from matching every release at once.
 Naming `docs/queue/Q*.md` also makes a wrong path fail loudly instead of quietly: this check used to read `docs/STATUS.md`, which the item-store migration removed, and `git show` then exited 128 while a `grep -c` over its error text printed `0`.
 Zero is the reassuring answer here, so the check confirmed a clean release from a file that no longer existed.
-Confirm it can still find one before trusting a clean result, e.g. `1.7-gate` matches `Q408.md` today.
+Confirm it can still find one before trusting a clean result: point the same pattern at a gate label some open row carries today and require a match.
 
 ## 2. Re-run any pre-flight verdict whose scope has moved
 
