@@ -383,7 +383,7 @@ And a killed gate that is never followed by another run or a `--reclaim` still b
 The teardown reports what it did, not what the cluster is.
 Every step in it is guarded so one failure cannot skip the rest, and `Teardown complete` means both stop scripts returned success, not that every node is gone; a refused stop script prints `Teardown INCOMPLETE` instead.
 After a failed gate, a killed one, one that ended `Teardown INCOMPLETE`, or a `--reclaim`, ask the cluster separately.
-A passing gate whose teardown was incomplete still exits 0, so its exit status does not answer this:
+A passing gate whose teardown was incomplete exits 1, but an exit 0 inherits `Teardown complete`'s limit, so the exit status does not answer this either:
 
 ```bash
 PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh at-rest
