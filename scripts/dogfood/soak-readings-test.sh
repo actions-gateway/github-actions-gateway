@@ -144,8 +144,9 @@ mixed_rows="$(bash "$RENDER" --file "$mixed")"
 want_contains "finding renders as taken and negative" "⚠️ Taken, negative" "$mixed_rows"
 want_eq "a phase record beside a reading is skipped" 1 "$(wc -l <<<"$mixed_rows" | tr -d ' ')"
 
-# Last record per id wins. A gate re-run inside one window appends a second
-# record for the same reading, and the newest is the one describing the cluster.
+# Last record per id and criterion wins. A gate re-run inside one window
+# appends a second record for the same reading, and the newest is the one
+# describing the cluster.
 dup="${WORK}/dup.jsonl"
 jq -cn '{kind:"reading",t:1757000000,id:"Q1",criterion:"c",verdict:"not-taken",detail:"first",rc:"v1",cluster:"k"}' >"$dup"
 jq -cn '{kind:"reading",t:1757000900,id:"Q1",criterion:"c",verdict:"pass",detail:"second",rc:"v1",cluster:"k"}' >>"$dup"
@@ -153,6 +154,16 @@ dup_rows="$(bash "$RENDER" --file "$dup")"
 want_eq "a re-read collapses to one row" 1 "$(wc -l <<<"$dup_rows" | tr -d ' ')"
 want_contains "the newest record wins" "second" "$dup_rows"
 want_lacks "the superseded record is not rendered" "first" "$dup_rows"
+
+# Two criteria under one id are two readings, not a re-read: Q539 records three,
+# and the census records one per mirror back end. Keyed on the id alone, the
+# newest would hide the rest.
+multi="${WORK}/multi.jsonl"
+jq -cn '{kind:"reading",t:1757000000,id:"Q1",criterion:"a",verdict:"pass",detail:"alpha",rc:"v1",cluster:"k"}' >"$multi"
+jq -cn '{kind:"reading",t:1757000900,id:"Q1",criterion:"b",verdict:"finding",detail:"beta",rc:"v1",cluster:"k"}' >>"$multi"
+multi_rows="$(bash "$RENDER" --file "$multi")"
+want_eq "two criteria under one id render two rows" 2 "$(wc -l <<<"$multi_rows" | tr -d ' ')"
+want_contains "the older criterion is still rendered" "alpha" "$multi_rows"
 
 # An unknown verdict means the writer and the renderer have drifted. It has to
 # be loud: a blank cell reads as a formatting slip and gets pasted into the plan.
@@ -196,7 +207,7 @@ set -e
 
 want_eq "--format json returns the deduped records" "Q1" \
 	"$(bash "$RENDER" --file "$dup" --format json | jq -r '.[0].id')"
-want_eq "--format json returns one record per id" 1 \
+want_eq "--format json returns one record per reading" 1 \
 	"$(bash "$RENDER" --file "$dup" --format json | jq -r 'length')"
 
 set +e
