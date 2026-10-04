@@ -8,7 +8,7 @@ Running the same gate as a workflow on the candidate tag makes the verdict a job
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Keyless CI identity on the dogfood project | ⚠️ Code in review; the one-time bootstrap and the probe run are the maintainer's |
+| 1 | Keyless CI identity on the dogfood project | ⚠️ Bootstrap run 2026-10-04; the probe read the cluster and was refused pod creation, but reported the refusal as a failure, fixed here and to be re-run |
 | 2 | The gate runs on a Linux runner with no keychain | ⚠️ The App-key half is in with milestone 1; the rest is unmeasured |
 | 3 | A workflow runs the gate on each `v*-rc.*` tag | ❌ |
 | 4 | `publish.yml` reads the workflow's verdict instead of `refs/validated/` | ❌ |
@@ -56,6 +56,9 @@ gh workflow run dogfood-identity-probe.yml --repo actions-gateway/github-actions
 ```
 
 The run waits for the environment's reviewer, then must go green.
+
+**GKE words a refusal with its reason attached**, `no - requires one of ["container.pods.create"] permission(s) in Cloud IAM …`, measured on the first probe run on 2026-10-04.
+The probe compared the whole answer to `no`, so a correct refusal failed; it now compares the first word, and anything else, an error included, still fails.
 
 ## 2. The gate on a Linux runner
 

@@ -46,11 +46,14 @@ jobs:
       - name: Read the cluster, and fail if the grant can write to it
         # Reading proves the exchange worked end to end. The write check is the
         # half that proves the grant is the one milestone 1 asked for: a probe
-        # that only reads would pass just as well under cluster-admin.
+        # that only reads would pass just as well under cluster-admin. GKE appends
+        # the missing IAM permission to a refusal ("no - requires one of …"), so
+        # the verdict is the answer's first word; an error is not "no" and fails.
         run: |
           kubectl get namespaces
-          verdict="$(kubectl auth can-i create pods --namespace gag-dogfood || true)"
-          echo "can create pods in gag-dogfood: ${verdict}"
+          answer="$(kubectl auth can-i create pods --namespace gag-dogfood 2>&1 || true)"
+          echo "can create pods in gag-dogfood: ${answer}"
+          verdict="${answer%% *}"
           if [ "${verdict}" != "no" ]; then
             echo "::error::the service account can write to the cluster; milestone 1 grants read-only access"
             exit 1
