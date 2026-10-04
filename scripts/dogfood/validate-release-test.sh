@@ -56,6 +56,10 @@ RELEASE_STATUS_FILE="${REPO_ROOT}/tmp/validate-release-test-status.$$.json"
 export RELEASE_STATUS_FILE
 # shellcheck source=scripts/dogfood/validate-release.sh
 source "${REPO_ROOT}/scripts/dogfood/validate-release.sh"
+# The lease's API primitives, faked: teardown reads the lease, and a real read
+# would fetch cluster credentials.
+# shellcheck source=scripts/dogfood/lib/lease-fake.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/lease-fake.sh"
 
 REPO="octo/repo"
 E2E_POLL_INTERVAL=1 # keep the wait loop fast
@@ -671,7 +675,7 @@ check_contains "a green teardown still stops" "stub stop" "${out}"
 
 PROJECT=p ZONE=z CLUSTER=c
 STOP_LOG="${SCRATCH}/stop.log"
-LEASE_FILE="$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+LEASE_FILE="$(lease_fake_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 export STOP_LOG LEASE_FILE
 cat >"${STUB_DIR}/e2e-stop.sh" <<'STUB'
 printf 'e2e-stop\n' >>"${STOP_LOG}"
@@ -749,16 +753,53 @@ check_contains "the refusal names the other gate" "already owns" "${RECLAIM_OUT}
 check "a refused reclaim leaves the live lease alone" "held" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 
-# A pid from another host cannot be checked at all, so it is reported, never
-# acted on.
-arm_lease orphaned
-awk '{ sub(/^host=.*/, "host=someone-elses-mac"); print }' \
-	"$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" >"${SCRATCH}/foreign"
-cp "${SCRATCH}/foreign" "$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+# remote_lease RENEWED_AGO — another host's record, renewed that long ago.
+remote_lease() {
+	local t=$(($(date +%s) - $1)) iso
+	iso="$(date -u -r "${t}" +%Y-%m-%dT%H:%M:%S.000000Z 2>/dev/null ||
+		date -u -d "@${t}" +%Y-%m-%dT%H:%M:%S.000000Z)"
+	lease_fake_write "${PROJECT}" "${ZONE}" "${CLUSTER}" ci-runner-7/4242 "${iso}" 600 "${iso}" v9.9.9-rc.1
+}
+
+# A gate on another host renewing its lease owns the cluster as surely as one
+# here does: the case Q1158 exists for, a CI run and a local one at once.
+arm_lease free
+remote_lease 30
 run_reclaim
-check "another host's lease is not reclaimed" 1 "${RECLAIM_RC}"
-check "another host's lease sees no teardown" "" "$(cat "${STOP_LOG}")"
+check "another host's live lease is not reclaimed" 1 "${RECLAIM_RC}"
+check "another host's live lease sees no teardown" "" "$(cat "${STOP_LOG}")"
+check_contains "the refusal names the other host's gate" "ci-runner-7/4242" "${RECLAIM_OUT}"
+
+# A runner lost before its own reclaim step ran stops renewing; once the lease
+# lapses, any host reclaims it, and holds it while the stop scripts drain.
+arm_lease free
+remote_lease 3600
+run_reclaim
+check "a vanished runner's lapsed lease is reclaimed" 0 "${RECLAIM_RC}"
+check "the reclaim holds the lease while the stop scripts run" \
+	"e2e-stop
+stop lease=held" "$(cat "${STOP_LOG}")"
+check "a reclaimed runner's lease is released" "free" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# A record that names no host/pid holder cannot be judged at all, so it is
+# reported, never acted on.
+arm_lease free
+lease_fake_write "${PROJECT}" "${ZONE}" "${CLUSTER}" kube-controller-manager "" 600 "" ""
+run_reclaim
+check "an unattributable lease is not reclaimed" 1 "${RECLAIM_RC}"
+check "an unattributable lease sees no teardown" "" "$(cat "${STOP_LOG}")"
 check_contains "the refusal explains why it cannot judge" "cannot judge" "${RECLAIM_OUT}"
+
+# An unreadable lease is not a free one: with bad credentials it may hide a live
+# gate, and a reclaim that read it as free would carry on to scale up over it.
+arm_lease orphaned
+LEASE_FAKE_READ_FAILS=1
+run_reclaim
+unset LEASE_FAKE_READ_FAILS
+check "an unreadable lease fails the gate" 1 "${RECLAIM_RC}"
+check "an unreadable lease sees no teardown" "" "$(cat "${STOP_LOG}")"
+check_contains "the refusal says an unreadable lease is not free" "not a free one" "${RECLAIM_OUT}"
 
 # A reclaim that could not finish must keep the record. Discarding it would
 # leave the nodes up with nothing left that knows they are orphaned — the
@@ -835,12 +876,13 @@ gate_exit() {
 	local rc=0
 	REPO="${REPO}" PROJECT="${PROJECT}" ZONE="${ZONE}" CLUSTER="${CLUSTER}" bash -c '
 		source "$1"
+		source "$4"
 		SCRIPT_DIR="$2" WORKDIR=""
 		gke_get_credentials_and_verify() { return 1; }
 		trap teardown EXIT
 		exit "$3"
 	' gate "${REPO_ROOT}/scripts/dogfood/validate-release.sh" "${STUB_DIR}" "$1" \
-		>/dev/null 2>&1 || rc=$?
+		"${REPO_ROOT}/scripts/dogfood/lib/lease-fake.sh" >/dev/null 2>&1 || rc=$?
 	echo "${rc}"
 }
 
@@ -855,20 +897,36 @@ for failing in RECLAIM_E2E_STOP_RC RECLAIM_STOP_RC; do
 	unset "${failing}"
 done
 
-# The loser of a two-gate race exits through the same teardown; it must not
-# clear the winner's lease on its way out.
+# A gate whose renewals lapsed can find another holder on its lease: a host
+# reclaimed it and may be running its own gate. That teardown must leave the
+# cluster alone and the successor's lease intact, and must not exit 0 (Q1158).
+arm_lease free
+remote_lease 30
+out="$(
+	set +e
+	WORKDIR=""
+	(exit 0)
+	teardown 2>&1
+)" && teardown_rc=0 || teardown_rc=$?
+check "a teardown whose lease another holder took exits 1" 1 "${teardown_rc}"
+check "a teardown whose lease another holder took runs no stop script" "" "$(cat "${STOP_LOG}")"
+check_contains "the skipped teardown says why" "Teardown SKIPPED" "${out}"
+check "a teardown never releases another holder's lease" "held" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# An unreadable lease is not evidence of a successor, so teardown still stops
+# this run's nodes: stranding them is the leak the lease exists to end.
 arm_lease held
-awk '{ sub(/^pid=.*/, "pid=999999"); print }' \
-	"$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" >"${SCRATCH}/other"
-cp "${SCRATCH}/other" "$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
-lease_process_command() { [[ "$1" == "999999" ]] && echo "${GATE_CMD}"; }
+LEASE_FAKE_READ_FAILS=1
 (
 	set +e
 	WORKDIR=""
 	teardown
 ) >/dev/null 2>&1
-check "a teardown never releases another gate's lease" "held" \
-	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+unset LEASE_FAKE_READ_FAILS
+check "a teardown that cannot read its lease still stops the cluster" \
+	"e2e-stop
+stop lease=held" "$(cat "${STOP_LOG}")"
 
 # --- progress_reset_unless_held: a spent stream must not outlive its run ---
 #
@@ -918,6 +976,14 @@ reset_with_lease orphaned
 check "the orphaned case really is orphaned" "orphaned" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 check "an orphaned gate's stream is emptied" "" "$(cat "${STALE_STREAM}")"
+
+# An unreadable lease cannot rule a live owner out, so its stream is left too.
+arm_lease held
+seed_spent_stream
+LEASE_FAKE_READ_FAILS=1
+RELEASE_PROGRESS_FILE="${STALE_STREAM}" RELEASE_STATUS_FILE="" progress_reset_unless_held
+unset LEASE_FAKE_READ_FAILS
+check_contains "an unreadable lease's stream is left alone" "v1.4.0-rc.2" "$(cat "${STALE_STREAM}")"
 
 # --- capacity_leg: the admission ladder is evaluated, and its quota rung binds ---
 #
