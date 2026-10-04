@@ -140,6 +140,11 @@ mirror_persistent() {
 # The waits are `rollout status`, not `wait --for=condition=Available`: a
 # deployment just restarted, or scaled up from e2e-stop.sh's zero, still reports
 # Available from before, so the condition can be read before the new pods exist.
+#
+# dfdaemon fails OPEN when it cannot load proxy.registryMirror.cert: it logs an
+# error and forwards to any upstream unverified (measured: a self-signed host
+# answered 200). Its success line is the only signal, so the mirrors are not
+# applied without it.
 apply_dragonfly_backend() {
 	echo "Applying the Dragonfly back end for the registry mirrors (Q539)..."
 	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly"
@@ -167,6 +172,13 @@ apply_dragonfly_backend() {
 	echo "  Waiting for the scheduler and seed peer to be ready..."
 	kubectl rollout status --namespace gag-dragonfly \
 		deployment -l app=dragonfly --timeout=180s
+	local seed_log
+	seed_log="$(kubectl logs --namespace gag-dragonfly deployment/dragonfly-seed-client)"
+	[[ "${seed_log}" == *"load registry cert success"* ]] || {
+		echo "error: the Dragonfly seed peer did not load proxy.registryMirror.cert, so it is" >&2
+		echo "       not verifying upstream TLS; see deploy/dragonfly/seed-client.yaml" >&2
+		return 1
+	}
 }
 
 apply_registry_mirror() {

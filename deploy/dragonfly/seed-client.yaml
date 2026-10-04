@@ -22,6 +22,11 @@
 # That covers tags and token requests. The P2P path fetches without verifying
 # TLS whatever this says, and is limited by the rules below to digest-addressed
 # content.
+#
+# A bundle it cannot load fails OPEN: dfdaemon logs "load registry cert failed"
+# and goes back to verifying nothing (measured with a missing path), so
+# e2e-start.sh refuses to apply the mirrors unless the seed peer logged
+# "load registry cert success".
 apiVersion: v1
 kind: ConfigMap
 metadata:

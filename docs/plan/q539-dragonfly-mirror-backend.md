@@ -71,6 +71,8 @@ The token itself is not the obstacle: an anonymous Hub token attached by hand pa
 - dfdaemon verifies the upstream only because `proxy.registryMirror.cert` names the image's public bundle (`/etc/ssl/certs/ca-certificates.crt`).
   Left unset, v1.5.7 builds its direct-path client with no certificate verifier at all (`proxy/mod.rs`, whose comment says "native roots"): a `CONNECT` through it to `self-signed.badssl.com` and to `expired.badssl.com` each returned 200.
   Set, both failed, and `registry-1.docker.io/v2/` still answered 401.
+  Set to a path that does not exist, dfdaemon logged `load registry cert failed`, kept running, and answered the self-signed host with 200 again: it fails open.
+  So the start script refuses to apply the mirrors unless the seed peer logged `load registry cert success`.
 - Proxy rules `blobs/sha256.*` and `manifests/sha256.*` send content-addressed `GET`s through the P2P path; everything else, tag lookups and token requests, goes direct.
 
 Measured end to end against Hub, before `registryMirror.cert` and `SSL_CERT_DIR` were added: `library/alpine:3.20`'s index and amd64 manifest returned 200, and its first layer returned 200 at 3,630,321 bytes with a sha256 equal to its digest. dfdaemon's log shows the layer taking the P2P path (one "proxy HTTPS request via dfdaemon by rule config" line) and every other request going direct (twelve "directly to remote server" lines), with `auth.docker.io` named on eight log lines.
@@ -134,7 +136,7 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
 - **Phase 3 — validate on dogfood.
   Not started; needs a booked session.** Held on 2026-10-04 while another session was using the cluster.
   The Q408 Phase-4 sequence with `E2E_MIRROR_BACKEND=dragonfly`: the [§3.7](q408-untrusted-pr-egress.md#37-the-phase-2-validation-battery) battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
-  Two readings this variant adds: blob `GET`s in dfdaemon's log taking the P2P path, and a worker unable to reach the seed peer's proxy port.
+  Three readings this variant adds: blob `GET`s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a `CONNECT` through the seed peer to `self-signed.badssl.com` refused.
 
 ## 8. What this plan does not cover
 

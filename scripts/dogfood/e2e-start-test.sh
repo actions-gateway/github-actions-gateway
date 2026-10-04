@@ -53,11 +53,13 @@ ROLLOUT_EXIT=0
 # The Dragonfly CA Secret: whether it exists, and the base64 ca.crt it holds.
 SECRET_EXISTS=0
 SECRET_CERT_B64=""
+SEED_LOG=""
 
 kubectl() {
 	printf 'kubectl %s\n' "$*" >>"${CALL_LOG}"
 	case "$*" in
 	get\ secret*jsonpath*) printf '%s' "${SECRET_CERT_B64}" ;;
+	logs\ --namespace\ gag-dragonfly*) printf '%s\n' "${SEED_LOG}" ;;
 	get\ secret*) ((SECRET_EXISTS)) || return 1 ;;
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
 	config\ current-context) echo "gke_${PROJECT}_${ZONE}_${CLUSTER}" ;;
@@ -84,6 +86,7 @@ reset_stubs() {
 	E2E_SYSTEM_NODES=2
 	SECRET_EXISTS=0
 	SECRET_CERT_B64="$(printf -- '-----BEGIN CERTIFICATE-----\nx\n' | base64)"
+	SEED_LOG='INFO dragonfly-client/src/proxy/mod.rs:119: load registry cert success'
 	unset E2E_ROUTE_VAR
 	unset REGISTRY_MIRROR_PERSISTENT
 }
@@ -461,6 +464,17 @@ SECRET_CERT_B64=""
 run_main
 check "a CA Secret without a certificate fails the bring-up" 1 "${MAIN_RC}"
 check_not_contains "never applies the mirrors without a certificate" \
+	"deploy/registry-mirror/overlays/dragonfly" "$(cat "${CALL_LOG}")"
+
+# dfdaemon fails open on an unloadable registryMirror.cert: it logs an error and
+# forwards to any upstream unverified, so its success line is the only signal.
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+SECRET_EXISTS=1
+SEED_LOG='ERROR dragonfly-client/src/proxy/mod.rs:123: load registry cert failed: No such file or directory (os error 2)'
+run_main
+check "a seed peer that did not load its upstream CA bundle fails the bring-up" 1 "${MAIN_RC}"
+check_not_contains "never applies the mirrors over an unverifying seed peer" \
 	"deploy/registry-mirror/overlays/dragonfly" "$(cat "${CALL_LOG}")"
 
 reset_stubs gag-dogfood gag-dogfood-ci

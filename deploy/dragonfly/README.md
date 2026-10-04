@@ -7,6 +7,7 @@ No manager, so no MySQL or Redis: the seed peer finds the scheduler through a st
 [`networkpolicy.yaml`](networkpolicy.yaml) admits only pods labelled `app=registry-mirror` in `gag-registry-mirror` to port 4001.
 
 **Keep `proxy.registryMirror.cert` set.** Without it dfdaemon accepts any upstream certificate, self-signed and expired included (measured); with the public bundle it names, it verifies the path that tag lookups and tokens take.
+A path it cannot load fails open, logging `load registry cert failed`, so `e2e-start.sh` requires the seed peer's `load registry cert success` line before it applies the mirrors.
 
 | File | What it holds |
 |---|---|
