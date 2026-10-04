@@ -477,6 +477,18 @@ check "a seed peer that did not load its upstream CA bundle fails the bring-up" 
 check_not_contains "never applies the mirrors over an unverifying seed peer" \
 	"deploy/registry-mirror/overlays/dragonfly" "$(cat "${CALL_LOG}")"
 
+# Just after a rollout the old pod can still be listed, having loaded the old
+# image's bundle: its success must not cover a new pod that failed open.
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+SECRET_EXISTS=1
+SEED_LOG='[pod/dragonfly-seed-client-old/dfdaemon] INFO load registry cert success
+[pod/dragonfly-seed-client-new/dfdaemon] ERROR load registry cert failed: No such file or directory (os error 2)'
+run_main
+check "a new seed pod failing open beside an old one that loaded fails the bring-up" 1 "${MAIN_RC}"
+check_contains "reads every seed pod's whole log" \
+	"logs --namespace gag-dragonfly -l app=dragonfly,component=seed-client --prefix --tail=-1" "$(cat "${CALL_LOG}")"
+
 reset_stubs gag-dogfood gag-dogfood-ci
 E2E_MIRROR_BACKEND=dragonfly
 REGISTRY_MIRROR_PERSISTENT=1

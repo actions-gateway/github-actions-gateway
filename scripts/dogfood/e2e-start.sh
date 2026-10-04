@@ -143,8 +143,11 @@ mirror_persistent() {
 #
 # dfdaemon fails OPEN when it cannot load proxy.registryMirror.cert: it logs an
 # error and forwards to any upstream unverified (measured: a self-signed host
-# answered 200). Its success line is the only signal, so the mirrors are not
-# applied without it.
+# answered 200). Its log is the only signal, so the mirrors are applied only
+# when some seed pod logged success and none logged the failure. Every seed pod
+# is read, not the one `logs deployment/` picks: just after a rollout that can
+# be the old pod, still terminating, which loaded the old image's bundle. A
+# selector read defaults to the last 10 lines, hence --tail=-1.
 apply_dragonfly_backend() {
 	echo "Applying the Dragonfly back end for the registry mirrors (Q539)..."
 	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly"
@@ -173,8 +176,10 @@ apply_dragonfly_backend() {
 	kubectl rollout status --namespace gag-dragonfly \
 		deployment -l app=dragonfly --timeout=180s
 	local seed_log
-	seed_log="$(kubectl logs --namespace gag-dragonfly deployment/dragonfly-seed-client)"
-	[[ "${seed_log}" == *"load registry cert success"* ]] || {
+	seed_log="$(kubectl logs --namespace gag-dragonfly \
+		-l app=dragonfly,component=seed-client --prefix --tail=-1)"
+	[[ "${seed_log}" == *"load registry cert success"* &&
+		"${seed_log}" != *"load registry cert failed"* ]] || {
 		echo "error: the Dragonfly seed peer did not load proxy.registryMirror.cert, so it is" >&2
 		echo "       not verifying upstream TLS; see deploy/dragonfly/seed-client.yaml" >&2
 		return 1
