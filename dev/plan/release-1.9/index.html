@@ -2729,7 +2729,7 @@
 
 <h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">validated</a> on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, <code>rc.2</code>, is the first validated in CI.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
+<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">validated</a> on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, <code>rc.2</code>, is the first validated in CI, and <code>rc.2</code> is held for Q1158 and Q1160.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
 The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
 The version is no longer provisional.
 It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -2784,7 +2784,7 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>Q880</td>
 <td>Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each <code>v*-rc.*</code> tag, and <code>publish.yml</code> reading its verdict</td>
 <td><code>1.9-gate</code></td>
-<td>🔲 milestone 1 ✅ (probe green 2026-10-04); milestones 2–3 in review (#2029); milestone 4 to follow</td>
+<td>🔲 milestone 1 ✅; milestones 2–3 merged (#2029) and set up 2026-10-04, unproven until <code>rc.2</code>'s CI run; milestone 4 to follow</td>
 </tr>
 <tr>
 <td>Q1155</td>
@@ -2796,13 +2796,25 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>Q1159</td>
 <td>The gate runs the e2e matrix a second time on the shipped <code>privileged-dind</code> template, after the Kata legs</td>
 <td>gates</td>
-<td>🔲 in review</td>
+<td>✅ landed (#2031)</td>
+</tr>
+<tr>
+<td>Q1158</td>
+<td>The gate's lease is visible across hosts, so a CI run and a local run cannot overlap on the cluster</td>
+<td>gates <code>rc.2</code></td>
+<td>🔲 in progress</td>
+</tr>
+<tr>
+<td>Q1160</td>
+<td>A third e2e leg, Kata with the Dragonfly mirror back end, and the readings that show Dragonfly carried the pulls</td>
+<td>gates <code>rc.2</code></td>
+<td>🔲 in progress</td>
 </tr>
 <tr>
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td><code>rc.1</code> ✅ through the local gate; <code>rc.2</code> 🔲 to be validated in CI once Q880 lands</td>
+<td><code>rc.1</code> ✅ through the local gate; <code>rc.2</code> 🔲 cut once Q1158 and Q1160 land, then validated in CI</td>
 </tr>
 <tr>
 <td>Q1101</td>
@@ -2828,6 +2840,9 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 Q1155 gates with it because a CI run is unattended: on a laptop the stranded nodes of a failed teardown were noticed and stopped by hand, and in CI nobody would notice.
 The stable-tag passes below stand, except that the notes' <strong>Validation</strong> section and the commit count are re-derived for <code>rc.2</code>.</p>
 <p><strong>Q1159 was added the same day, because 1.9 changed a template no gate ran.</strong> #2004 moved <code>privileged-dind</code>'s daemon from <code>docker:27-dind</code> to <code>docker:28-dind</code>, and the gate ran only the Kata variant, so <code>rc.1</code> validated without a job ever running on the shipped DinD template.</p>
+<p><strong><code>rc.2</code> waits for Q1158 and Q1160 as well, decided on 2026-10-04.</strong> Q539's Dragonfly back end merged after <code>rc.1</code> (#2027) and its operator page publishes with 1.9.0, but no gate run had used it, since nothing set <code>E2E_MIRROR_BACKEND</code>; Q1160 adds the leg that does.
+Q1158 closes the overlap Q880 opened: a CI gate and a local gate each keep their lease on their own host, so neither sees the other.
+Neither changes a released file; both change what the candidate's validation covers.</p>
 <p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 <code>v1.8.0</code> tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
 Inside one release the sequencing recovers what it can, which is less than a tag's worth.
