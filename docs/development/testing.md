@@ -1604,7 +1604,7 @@ Either way the rule is the same: confirm a pass by reading the output, never fro
 So verify by presence, not absence of failure: the log must contain the `ok <package>` line for every package the tier was supposed to cover.
 Zero `ok` lines and zero `FAIL` lines means the suite did not run.
 
-Both rules in this section are enforced mechanically by hooks: foreground-guard prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts.
+Both rules in this section are enforced mechanically by hooks: foreground-guard denies watch/`sleep`-poll forms, backgrounded or not, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts.
 The [launch record](#the-launch-record) guard reads that same registry to require a stop handle once a tier is backgrounded, so keeping it in sync when a tier's runtime or target name changes now serves both.
 
 ### Stopping a run: name the target, never the program
