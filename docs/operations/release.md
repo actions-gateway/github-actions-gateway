@@ -275,7 +275,8 @@ The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which reso
 
 **Pushing a candidate tag also starts the gate in CI.** [`validate-candidate.yml`](../../.github/workflows/validate-candidate.yml) dispatches the gate on `main` for the tag, and the run waits for approval in the `dogfood-validation` environment: open the run, choose **Review deployments**, tick the environment, and approve.
 It runs the same script with the same verdict and marker, from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/q880-ci-release-validation.md).
-Run it locally as below when CI cannot, and never both at once: the two cannot see each other's lease ([Q1158](../queue/Q1158.md)).
+Run it locally as below when CI cannot.
+A local gate and a CI one read the same lease, so whichever starts second refuses rather than resizing the cluster under the first ([why](#a-killed-gate-is-reclaimed-by-the-next-one)).
 
 **One command runs the whole gate**, with nothing to type at it after the first confirmation.
 A green `v1.3.0-rc.4` run took 39 minutes end to end with one e2e leg; the gate now runs three, Kata, then privileged DinD, then Kata on the Dragonfly mirror back end, and a healthy e2e leg takes 25–33 minutes.
@@ -360,7 +361,7 @@ A ceiling left low throttles everyone's CI, so run it.
 `kill -9`, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
 A teardown whose `e2e-stop.sh` or `stop.sh` refuses, usually on a drain that will not converge, leaves the same nodes up, so it keeps its lease too and ends `Teardown INCOMPLETE` with the `--reclaim` command to run once the drain can finish (Q1155).
 
-So the gate takes an ownership lease for exactly the window in which it owns cluster state, and reclaims an *orphaned* one — a lease for the same target whose owning process is gone — before it spends anything.
+So the gate takes an ownership lease for exactly the window in which it owns cluster state, and reclaims an *orphaned* one — a lease for the same target whose owner is gone — before it spends anything.
 Running the gate again is therefore enough to end a leak the previous run started.
 To do only that, without starting a validation run:
 
@@ -375,9 +376,35 @@ Once you have confirmed nothing live is running, prefix the `--reclaim` with `SK
 
 **The lease is the only thing it acts on**, because the alternative is worse than the leak.
 A cluster that merely has nodes up is what a hand-run `setup.sh`/`start.sh` debugging session looks like, so nothing here infers an orphan from cluster state: no lease, no teardown.
-A lease whose process is still alive means another gate is running, and the second gate refuses to start rather than tearing down the first one's environment.
-A lease written by another host is reported and never acted on — a pid means nothing off the host that minted it.
-Leases live in `${XDG_STATE_HOME:-~/.local/state}/github-actions-gateway/`, host-wide rather than per-checkout, so a gate killed in one worktree is visible to a gate started from another.
+A lease whose owner is still alive means another gate is running, and the second gate refuses to start rather than tearing down the first one's environment.
+
+**The lease is a Kubernetes `Lease` in the cluster it guards**, `default/actions-gateway-release-gate`, so a gate on a maintainer's machine and one on a CI runner read the same record (Q1158).
+Inspect it with `kubectl -n default get lease actions-gateway-release-gate -o yaml`: `holderIdentity` is `host/pid`, and the RC is an annotation.
+Whether its owner is alive is judged two ways, because a pid means nothing off the host that wrote it:
+
+- **The same host checks the pid**, as the gate always has: a pid that is gone, or that now runs something other than the gate, is orphaned at once.
+  This is what lets the workflow's last step reclaim a CI run's cluster on its own runner without waiting.
+- **Another host checks renewal.** The gate renews its lease every minute, and one not renewed for ten minutes is orphaned.
+  A runner lost before its reclaim step ran is reclaimed this way by the next gate or `--reclaim` from anywhere.
+
+A reclaim takes the lease over before it tears anything down, so two hosts reclaiming at once cannot both run the stop scripts.
+A lease the gate cannot read is never treated as free: a gate with bad credentials refuses, because the record it cannot see may belong to a live run.
+A record it cannot attribute, one with no `host/pid` holder or no readable renewal, is reported and never acted on; confirm nothing is running, then `kubectl -n default delete lease actions-gateway-release-gate`.
+
+###### Why another host's lease expires
+
+A pid check errs only in the safe direction: a stranger's process that happens to hold the pid reads as alive, and the cost is a refused start.
+Renewal errs the other way.
+A gate that is alive but has stopped renewing (a laptop asleep mid-run, a network outage longer than ten minutes) reads as orphaned to another host, which then tears down a cluster a live run is using.
+The gate accepts that trade because the alternative is the one the lease exists to end: a CI runner that vanishes leaves nothing on any host that could ever be checked, so without expiry its nodes bill until someone notices by hand.
+
+Two things bound the cost.
+The gate **fences itself**: its renewer checks the holder each minute, and on finding another one it stops the gate, whose teardown then sees the lease taken and runs no stop script, resets no quota, and exits 1 with `Teardown SKIPPED`.
+So a gate that wakes after a reclaim never tears down its successor, and its verdict is discarded rather than recorded.
+And the stop scripts drain before they delete, so a reclaim that does reach a live run's cluster refuses while workers are still running.
+
+The store is the cluster rather than a bucket or a file because it is the one record both hosts can already reach with the credentials they already hold: the control plane answers with every node pool at zero, the gate's identity can write it, and deleting the cluster deletes the lease along with everything it could have been billing for.
+The window between the gate reading its lease and deleting it on release is not atomic; a successor could slip into it only by taking over a lease renewed under a minute earlier.
 
 Two gaps remain, both by design.
 A cluster left up by something *other* than this gate is not visible to the reclaim — nothing claims it, so nothing reclaims it; take it down with `scripts/dogfood/stop.sh`.
