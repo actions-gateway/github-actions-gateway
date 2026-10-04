@@ -308,4 +308,9 @@ Here is what the rest takes, and where GAG provides it:
   GAG ships the mirrors as manifests; adopting it means deleting your own allow-all egress rule.
 - **One job per worker.** Every worker is ephemeral and single-use, so nothing one job leaves behind reaches the next.
 
+**This is a paved road, not a trail map.** All five come as one [reference architecture](operations/kata-dind-workloads.md), documented end to end and carrying every Kata end-to-end run on GAG's own dogfood cluster.
+ARC's scale-set chart accepts the same `runtimeClassName` field and documents none of the rest.
+Its only mention of Kata is a comment in its legacy-mode docs suggesting a micro-VM makes `privileged: true` safer (ARC 0.15.0, read 2026-10-04).
+[Why that gap matters](alternatives.md#a-paved-road-is-worth-more-than-a-trail-map).
+
 Threat model and abuse-response playbooks: [Security](design/05-security.md), [Security operations](operations/security-operations.md).
