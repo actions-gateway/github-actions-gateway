@@ -14,7 +14,8 @@
 #   * the provider accepts a token only when it carries this repository's and its
 #     owner's numeric ids (which survive a rename), the `environment` claim below,
 #     and a job_workflow_ref naming WORKFLOW on `main` — so no other workflow, and
-#     no other branch or tag, can exchange a token;
+#     no other branch or tag, can exchange a token. A candidate tag reaches the
+#     gate by dispatching WORKFLOW on `main`, never by running its own copy;
 #   * only that environment's principals may impersonate the service account.
 # The GitHub environment is a second layer: it admits only `main` and `v*-rc.*`
 # tags, and its jobs wait for a named reviewer. That reviewer is the same account
@@ -22,10 +23,10 @@
 # before any GCP write, because a workflow naming a missing environment creates
 # it with no protection rules at all.
 #
-# Grants follow the milestone, not the gate. Milestone 1 grants ROLES (default
-# roles/container.viewer) — enough for .github/workflows/dogfood-identity-probe.yml
-# to read the cluster and to prove it cannot write to it. The gate's own roles
-# land with milestone 3 (Q880).
+# ROLES are the gate's (Q880 milestone 3): it resizes node pools, updates the
+# cluster, writes the GMC's Helm release and the CRDs, and reads the project's
+# CPU quota and managed instance groups. The list is derived from the gcloud and
+# kubectl calls the dogfood scripts make, so the gate's first CI run confirms it.
 #
 # Usage:
 #   PROJECT=… CLUSTER=… ZONE=… REPO=owner/name REVIEWERS=login[,login…] \
@@ -37,7 +38,10 @@
 #   PROVIDER     Pool provider id (default github-oidc).
 #   SA_NAME      Service account id (default gag-release-validator).
 #   ROLES        Space-separated project roles for the service account
-#                (default roles/container.viewer).
+#                (default roles/container.admin roles/compute.viewer).
+#   APP_ID       GitHub App the dogfood gateways authenticate as (default
+#                3752347). Its installation id is resolved here, where `gh`
+#                has org access, and published for the gate, which has none.
 #   ASSUME_YES=1 Skip the one interactive confirmation.
 #
 # Idempotent: every create is guarded by a describe, an existing provider's
@@ -59,10 +63,11 @@ ENVIRONMENT="${ENVIRONMENT:-dogfood-validation}"
 POOL="${POOL:-github-actions}"
 PROVIDER="${PROVIDER:-github-oidc}"
 SA_NAME="${SA_NAME:-gag-release-validator}"
-ROLES="${ROLES:-roles/container.viewer}"
+ROLES="${ROLES:-roles/container.admin roles/compute.viewer}"
+APP_ID="${APP_ID:-3752347}"
 ISSUER="https://token.actions.githubusercontent.com"
-# The one workflow the provider accepts, on `main`. Milestone 3 adds the gate's.
-WORKFLOW="dogfood-identity-probe.yml"
+# The one workflow the provider accepts, on `main`: the release gate's.
+WORKFLOW="validate-candidate.yml"
 
 # The refs the environment admits: `main` for the probe, candidate tags for the gate.
 BRANCH_POLICY="main"
@@ -184,7 +189,7 @@ add_ref_policy() {
 }
 
 set_variables() {
-	local provider_name="$1" email="$2" name value
+	local provider_name="$1" email="$2" installation_id="$3" name value
 	echo "Setting ${ENVIRONMENT} variables (none are secrets)..."
 	while read -r name value; do
 		gh variable set "${name}" --env "${ENVIRONMENT}" --repo "${REPO}" --body "${value}"
@@ -194,6 +199,8 @@ set_variables() {
 		DOGFOOD_PROJECT ${PROJECT}
 		DOGFOOD_CLUSTER ${CLUSTER}
 		DOGFOOD_ZONE ${ZONE}
+		DOGFOOD_APP_ID ${APP_ID}
+		DOGFOOD_APP_INSTALLATION_ID ${installation_id}
 	EOF
 }
 
@@ -227,6 +234,12 @@ main() {
 	done
 	reviewers_json="[${reviewers_json}]"
 
+	local installation_id
+	installation_id="$(gh api "orgs/${REPO%%/*}/installations" \
+		--jq ".installations[] | select(.app_id == ${APP_ID}) | .id")"
+	[[ "${installation_id}" =~ ^[0-9]+$ ]] ||
+		die "could not resolve App ${APP_ID}'s installation on ${REPO%%/*} (got '${installation_id}')"
+
 	condition="$(attribute_condition "${repo_id}" "${owner_id}")"
 	email="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 	provider_name="projects/${number}/locations/global/workloadIdentityPools/${POOL}/providers/${PROVIDER}"
@@ -240,7 +253,7 @@ main() {
 	# names a missing environment creates it unprotected.
 	step "GitHub environment"
 	ensure_environment "${reviewers_json}"
-	set_variables "${provider_name}" "${email}"
+	set_variables "${provider_name}" "${email}" "${installation_id}"
 
 	step "Enabling the token-exchange APIs"
 	gcloud services enable iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com \
@@ -255,8 +268,9 @@ main() {
 	bind_iam "${email}" "${number}"
 
 	echo
-	echo "Done. Prove it end to end (it waits for the environment's reviewer):"
-	echo "  gh workflow run dogfood-identity-probe.yml --repo ${REPO} --ref main"
+	echo "Done. The next release-candidate tag runs the gate in CI; to run it on an"
+	echo "existing one (it waits for the environment's reviewer):"
+	echo "  gh workflow run validate-candidate.yml --repo ${REPO} --ref main -f tag=<vX.Y.Z-rc.N>"
 }
 
 if [[ "${CI_IDENTITY_LIB_ONLY:-}" != 1 ]]; then

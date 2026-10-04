@@ -1,0 +1,116 @@
+# Q880 milestone 3 — run the dogfood release gate (scripts/dogfood/validate-release.sh)
+# in CI on every release-candidate tag, so its verdict is a job result on the
+# tag rather than a ref a maintainer's machine writes.
+#
+# Two jobs, because trust is anchored on `main`. The GCP provider set up by
+# scripts/dogfood/ci-identity-setup.sh exchanges a token only for THIS file on
+# refs/heads/main, inside the `dogfood-validation` environment. A tag push runs
+# the tag's own copy of this file, and a tag can be cut from any commit, so the
+# `dispatch` job holds no cloud access at all: it dispatches `validate` on `main`
+# with the tag as input. The gate then runs main's scripts against the tag's
+# signed artifacts, which is how the local gate has always run.
+#
+# The runner is GitHub-hosted, never dogfood: the gate scales the dogfood cluster
+# from zero and redeploys the gateway its runners depend on.
+# Plan: Q880.
+name: validate-candidate
+
+on:
+  push:
+    tags: ['v*-rc.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-candidate tag to validate, e.g. v1.9.0-rc.2'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch the gate on main
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch validate on main for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh workflow run validate-candidate.yml --repo "${GITHUB_REPOSITORY}" --ref main -f tag="${TAG}"
+
+  validate:
+    name: Validate ${{ inputs.tag }} on dogfood
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # The gate step's own limit is shorter, so the reclaim step below still has
+    # time to run when the gate is killed for overrunning.
+    timeout-minutes: 240
+    environment: dogfood-validation
+    # One gate at a time: every run scales and redeploys the same cluster.
+    concurrency:
+      group: dogfood-release-gate
+      cancel-in-progress: false
+    permissions:
+      # The validated-candidate marker (refs/validated/<tag>) until milestone 4.
+      contents: write
+      # Dispatching e2e-test, unit-test and integration-test, and downloading the
+      # e2e run's report.
+      actions: write
+      id-token: write
+    env:
+      TAG: ${{ inputs.tag }}
+      PROJECT: ${{ vars.DOGFOOD_PROJECT }}
+      CLUSTER: ${{ vars.DOGFOOD_CLUSTER }}
+      ZONE: ${{ vars.DOGFOOD_ZONE }}
+      REPO: ${{ github.repository }}
+      APP_ID: ${{ vars.DOGFOOD_APP_ID }}
+      INSTALLATION_ID: ${{ vars.DOGFOOD_APP_INSTALLATION_ID }}
+      GH_TOKEN: ${{ github.token }}
+      ASSUME_YES: '1'
+      # The App key Secret already in the cluster, since a runner has no keychain.
+      GAG_APP_KEY_FROM_CLUSTER: '1'
+      # GITHUB_TOKEN cannot write repository variables; dispatches route per run.
+      GAG_ROUTE_VARS: '0'
+    steps:
+      - name: Refuse anything but a release-candidate tag
+        run: |
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "::error::'${TAG}' is not a release-candidate tag (vX.Y.Z-rc.N)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate to GCP through Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Install gcloud with kubectl and the GKE auth plugin
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          install_components: kubectl,gke-gcloud-auth-plugin
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Install the pinned cosign
+        run: make cosign
+
+      - name: Run the release gate
+        timeout-minutes: 210
+        run: scripts/dogfood/validate-release.sh "${TAG}"
+
+      # The gate's EXIT trap tears down on failure and on cancellation, but not
+      # when it is killed outright. Its lease lives on this runner, so a reclaim
+      # here, before the VM goes, is the only one that can still see it.
+      - name: Reclaim the cluster if the gate did not tear down
+        if: failure() || cancelled()
+        run: scripts/dogfood/validate-release.sh --reclaim

@@ -41,6 +41,7 @@ mkdir -p "$BIN"
 # STUB_EXISTS      1 => every describe succeeds (a re-run), else 404
 # STUB_POLICIES    "type name" lines the environment already carries
 # STUB_UID         the id `gh api users/<login>` answers
+# STUB_INSTALLATION the id the org's installation lookup answers
 cat >"$BIN/gcloud" <<'STUB_BODY'
 #!/usr/bin/env bash
 set -uo pipefail
@@ -58,6 +59,7 @@ printf 'gh %s\n' "$*" >>"${LOG}"
 case "$*" in
 "api repos/octo/repo --jq"*) echo "111 222" ;;
 "api users/"*) printf '%s\n' "${STUB_UID}" ;;
+"api orgs/octo/installations"*) printf '%s\n' "${STUB_INSTALLATION}" ;;
 "api -X PUT"*) cat >"${ENV_BODY}" ;;
 *"deployment-branch-policies --jq"*) printf '%s\n' "${STUB_POLICIES:-}" ;;
 esac
@@ -73,7 +75,7 @@ run_case() {
 	: >"$ENV_BODY"
 	set +e
 	OUT="$(env PATH="$BIN:$PATH" PROJECT=dogfood-proj CLUSTER=gag-dogfood ZONE=us-east1-b \
-		REPO=octo/repo REVIEWERS=alice ASSUME_YES=1 STUB_UID=7 STUB_EXISTS= \
+		REPO=octo/repo REVIEWERS=alice ASSUME_YES=1 STUB_UID=7 STUB_INSTALLATION=99 STUB_EXISTS= \
 		STUB_POLICIES= "$@" "$SUBJECT" 2>&1 </dev/null)"
 	RC=$?
 	set -e
@@ -102,7 +104,7 @@ want_body() {
 	if grep -qF -- "$2" "$ENV_BODY"; then ok "$1"; else bad "$1: $(cat "$ENV_BODY")"; fi
 }
 
-CONDITION="assertion.repository_id == '111' && assertion.repository_owner_id == '222' && assertion.environment == 'dogfood-validation' && assertion.job_workflow_ref == 'octo/repo/.github/workflows/dogfood-identity-probe.yml@refs/heads/main'"
+CONDITION="assertion.repository_id == '111' && assertion.repository_owner_id == '222' && assertion.environment == 'dogfood-validation' && assertion.job_workflow_ref == 'octo/repo/.github/workflows/validate-candidate.yml@refs/heads/main'"
 PRINCIPAL="principalSet://iam.googleapis.com/projects/424242/locations/global/workloadIdentityPools/github-actions/attribute.environment/dogfood-validation"
 
 # --- a first run creates the whole boundary ----------------------------------
@@ -111,18 +113,22 @@ want_rc "a first run converges" 0
 want_call "creates the pool" "workload-identity-pools create github-actions"
 want_call "creates the provider" "providers create-oidc github-oidc"
 want_call "the provider trusts only GitHub's issuer" "--issuer-uri=https://token.actions.githubusercontent.com"
-want_call "the provider accepts only the probe on main, in this repo by id, inside the environment" "--attribute-condition=${CONDITION}"
+want_call "the provider accepts only the gate's workflow on main, in this repo by id, inside the environment" "--attribute-condition=${CONDITION}"
 want_call "maps the environment claim the principal set keys on" "attribute.environment=assertion.environment"
 want_call "creates the service account" "service-accounts create gag-release-validator"
 want_call "only the environment's principals may impersonate" "--member=${PRINCIPAL}"
-want_call "grants milestone 1's read-only role" "--role=roles/container.viewer --condition=None"
-no_call "grants nothing wider by default" "roles/container.admin"
+want_call "grants the gate its cluster role" "--role=roles/container.admin --condition=None"
+want_call "grants the gate its quota read" "--role=roles/compute.viewer --condition=None"
+no_call "grants no project-wide owner or editor" "roles/owner"
+no_call "grants no project-wide editor" "roles/editor"
 want_body "requires the named reviewer" '"reviewers": [{"type":"User","id":7}]'
 want_body "restricts the refs that may deploy" '"custom_branch_policies": true'
 want_call "admits main" "-f name=main -f type=branch"
 want_call "admits candidate tags" "-f name=v*-rc.* -f type=tag"
 want_call "publishes the provider name" "variable set GCP_WORKLOAD_IDENTITY_PROVIDER --env dogfood-validation --repo octo/repo --body projects/424242/locations/global/workloadIdentityPools/github-actions/providers/github-oidc"
 want_call "publishes the service account" "--body gag-release-validator@dogfood-proj.iam.gserviceaccount.com"
+want_call "publishes the App id" "variable set DOGFOOD_APP_ID --env dogfood-validation --repo octo/repo --body 3752347"
+want_call "publishes the resolved installation id" "variable set DOGFOOD_APP_INSTALLATION_ID --env dogfood-validation --repo octo/repo --body 99"
 put="$(first_line "-X PUT")"
 enable="$(first_line "services enable")"
 if ((put > 0 && enable > 0 && put < enable)); then
@@ -154,6 +160,11 @@ want_rc "an unresolvable reviewer fails" 1
 want_out "names the reviewer it could not resolve" "could not resolve reviewer alice"
 no_call "writes no IAM before the inputs resolve" "add-iam-policy-binding"
 no_call "writes no environment before the inputs resolve" "-X PUT"
+
+run_case STUB_INSTALLATION=
+want_rc "an unresolvable App installation fails" 1
+want_out "names the App it could not resolve" "could not resolve App 3752347's installation on octo"
+no_call "writes no environment before the installation resolves" "-X PUT"
 
 run_case ASSUME_YES=
 want_rc "a declined confirmation aborts" 1
