@@ -293,10 +293,10 @@ Built for shared clusters running other teams' code: the multi-tenant hardening 
 </div>
 </div>
 
-### Sandboxing is not the `runtimeClassName` field
+### Sandboxing: testing untrusted code contributions
 
-Both GAG and ARC can set one.
-The differentiator is the layer underneath.
+Both GAG and ARC can run a job in a sandboxed runtime such as Kata Containers, by setting the pod's `runtimeClassName`.
+That alone does not make untrusted code safe to run, and the difference between the two is what surrounds the sandbox.
 
 **Kata bounds the kernel, not the pod network**, so cloud metadata still answers from inside the guest.
 GAG's default-deny NetworkPolicies close that path.
