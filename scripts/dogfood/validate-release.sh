@@ -1461,6 +1461,13 @@ teardown() {
 		echo "  The lease is kept, so the next gate or" >&2
 		echo "  PROJECT=${PROJECT} CLUSTER=${CLUSTER} ZONE=${ZONE} REPO=${REPO} scripts/dogfood/validate-release.sh --reclaim" >&2
 		echo "  retries the teardown once the drain the stop scripts reported can converge." >&2
+		# A trap that returns keeps the script's status, so a pass would exit 0
+		# with nodes still billing. The verdict stands (`teardown done`, not
+		# `fail`, keeps the stream reading `passed`); only the status changes.
+		if ((rc == 0)); then
+			echo "  The gate PASSED; it exits 1 because the cluster is not at rest." >&2
+			exit 1
+		fi
 		return 0
 	fi
 	lease_release "${PROJECT}" "${ZONE}" "${CLUSTER}"

@@ -801,7 +801,7 @@ for failing in RECLAIM_E2E_STOP_RC RECLAIM_STOP_RC; do
 		WORKDIR=""
 		export "${failing}=1"
 		teardown 2>&1
-	)"
+	)" || true # a pass with a refused stop exits 1; gate_exit below asserts it
 	check "a teardown whose ${script} fails keeps its lease" "held" \
 		"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 	check_contains "a teardown whose ${script} fails says the lease is kept" \
@@ -820,6 +820,40 @@ done
 OWNER_ALIVE=""
 check "a kept lease is reclaimable once the gate exits" "orphaned" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# --- Q1157: a pass whose teardown left nodes up does not exit 0 ---------------
+#
+# The status is the gate's process status after its EXIT trap, which only a child
+# bash can observe: calling teardown in a subshell never fires the trap, and a
+# trap that returns keeps the script's status (measured on bash 5.3.15).
+
+# gate_exit GATE_RC — the exit status of a child gate that ends with GATE_RC and
+# tears down through the real EXIT trap. The failed-pin stub keeps the failure
+# diagnostics off the network. REPO is required: main() sets it before arming the
+# trap, and without it set -u kills the trap and every case reads 1.
+gate_exit() {
+	local rc=0
+	REPO="${REPO}" PROJECT="${PROJECT}" ZONE="${ZONE}" CLUSTER="${CLUSTER}" bash -c '
+		source "$1"
+		SCRIPT_DIR="$2" WORKDIR=""
+		gke_get_credentials_and_verify() { return 1; }
+		trap teardown EXIT
+		exit "$3"
+	' gate "${REPO_ROOT}/scripts/dogfood/validate-release.sh" "${STUB_DIR}" "$1" \
+		>/dev/null 2>&1 || rc=$?
+	echo "${rc}"
+}
+
+arm_lease free
+check "a pass with a complete teardown exits 0" 0 "$(gate_exit 0)"
+for failing in RECLAIM_E2E_STOP_RC RECLAIM_STOP_RC; do
+	script="stop.sh"
+	[[ "${failing}" == RECLAIM_E2E_STOP_RC ]] && script="e2e-stop.sh"
+	export "${failing}=1"
+	check "a pass whose ${script} refuses exits 1" 1 "$(gate_exit 0)"
+	check "a failure whose ${script} refuses keeps its own status" 3 "$(gate_exit 3)"
+	unset "${failing}"
+done
 
 # The loser of a two-gate race exits through the same teardown; it must not
 # clear the winner's lease on its way out.

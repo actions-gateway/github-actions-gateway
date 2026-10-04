@@ -387,7 +387,7 @@ And a killed gate that is never followed by another run or a `--reclaim` still b
 The teardown reports what it did, not what the cluster is.
 Every step in it is guarded so one failure cannot skip the rest, and `Teardown complete` means both stop scripts returned success, not that every node is gone; a refused stop script prints `Teardown INCOMPLETE` instead.
 After a failed gate, a killed one, one that ended `Teardown INCOMPLETE`, or a `--reclaim`, ask the cluster separately.
-A passing gate whose teardown was incomplete still exits 0, so its exit status does not answer this:
+A passing gate whose teardown was incomplete exits 1, but an exit 0 inherits `Teardown complete`'s limit, so the exit status does not answer this either:
 
 ```bash
 PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh at-rest
@@ -428,7 +428,8 @@ Reporting is therefore driven by what the gate does, not by a clock: nothing is 
 Knobs: `RELEASE_SENTINEL_INTERVAL` (poll seconds, default 30 — it bounds how quickly a transition is *noticed*, never how often anything is reported), `RELEASE_SENTINEL_TIMEOUT` (watch budget, default 7200), `RELEASE_SENTINEL_STALL`.
 
 **The sentinel's exit is a wake, never a verdict** — every event exits 0.
-The verdict is the gate's own exit status, and the failure diagnostics are in the gate's log, not in the report.
+The verdict is the stream's `passed` or `failed`, and the failure diagnostics are in the gate's log, not in the report.
+The gate's exit status adds one fact: a gate that reported `passed` and then exits 1 ended `Teardown INCOMPLETE`, so the candidate is valid and the cluster is not at rest; run `ops.sh at-rest`, then `--reclaim`.
 
 **A quiet gate is not on its own a stalled one.** Through the ~25-minute e2e leg the only thing writing to the stream is the relayed spec heartbeat, and that needs a job log GitHub will sometimes not serve — one run answered every log fetch with `BlobNotFound` for its whole 30 minutes and then passed.
 Since the stall threshold is shorter than a healthy leg, quiet alone reported a stall on every poll of that run.

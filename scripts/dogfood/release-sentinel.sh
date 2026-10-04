@@ -240,9 +240,11 @@ report() {
 	case "$event" in
 	passed)
 		echo "The gate reported ${rc:-the RC} VALID. Teardown may still be running;"
-		echo "the gate's own task exits when the cluster is back to 0 nodes at rest."
-		echo "Next action: report the result to the operator. Do NOT relaunch this"
-		echo "watcher — there is nothing left to watch."
+		echo "the gate's own task exits 0 once both stop scripts succeed, and 1 if"
+		echo "one refused (Teardown INCOMPLETE) and nodes may still bill."
+		echo "Next action: report the result to the operator, then the gate task's"
+		echo "exit. On 1 the verdict stands; run ops.sh at-rest, then --reclaim."
+		echo "Do NOT relaunch this watcher — there is nothing left to watch."
 		;;
 	failed)
 		echo "The gate FAILED and is tearing down. Its output carries the failure"
