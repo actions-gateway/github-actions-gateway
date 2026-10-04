@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03; awaiting the promotion decision.** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03; promotion approved 2026-10-04, with the [stable-tag passes](#stable-tag-verdicts) landing before the tag.** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -91,6 +91,20 @@ The landmine question added the custom-`workerImage` entry: the runner bump chan
 **Validation** reads *pending* until this candidate's run reports.
 
 **Deferred to the stable tag, deliberately.** The marketing reconciliation, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the three prose passes (`readability`, `deslop`, `semantic-remediation`) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.
+
+## Stable-tag verdicts
+
+Taken on 2026-10-04 on a branch cut at `8b4b49914`; `check-artifact-unchanged.sh v1.9.0-rc.1 origin/main` exits 0 there, so `rc.1`'s verdict still describes what ships.
+
+| Check | Verdict |
+|---|---|
+| Install pins | **PASS.** 20 pins across five pages bumped to `1.9.0` / `1.9.z`; `make release-pins-check` reads all 20 as `v1.9.0`, prepared. |
+| Marketing reconciliation | **PASS after three edits.** The README's version table said `v2beta1` was unaffected by the `v2.0.0` removals, which it is not, and had no `v2` row; `why-gag.md` said the v2 API "has only just reached beta". `v2` now has a `features.md` entry. |
+| Competitor claims | **PASS after three edits.** All 26 ARC cells re-read against `gha-runner-scale-set-0.15.0` (`1945b42`, released 2026-10-01) and re-stamped. Three clauses had gone wrong: a per-set listener throttle now exists (it still meters API calls, not worker onset); `AutoscalingRunnerSet` status lost its runner counts to metrics; and `Outdated` now reacts to a runner GitHub rejected as deprecated, parking the set rather than warning beforehand. No verdict flipped. |
+| Roadmap and `features.md` | **PASS.** `check-roadmap.sh` passes as is and with `GAG_RELEASE_TAG=v1.9.0`, which expires the two `new in 1.7` chips. |
+| Announce bar | **PASS.** `highlight_for` is `v1.9.0`; a `GAG_DOCS_RELEASE=v1.9.0` build renders `v1.9.0 is here.` with the 1.9 highlight. |
+| Operator caveats | **PASS.** `operator-caveats-since.sh v1.8.0` reports the same four `upgrade.md` and one `troubleshooting.md` sections as at the candidate, plus the runner-version troubleshooting entry; all are in the notes. |
+| Notes | **Validation** names `rc.1` and its three windows. `Everything since v1.8.0` reads 87, the count once this change squash-merges; re-derive it at the tag. The semver floor is unchanged: MINOR, from the same six commits. |
 
 ## Candidate validation
 

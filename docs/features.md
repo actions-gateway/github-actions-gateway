@@ -3,7 +3,7 @@
 Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see [Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
 
-Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the `actions-gateway.com/v2beta1` API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.8</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed `actions-gateway.com` API, at `v2beta1` and, from 1.9, `v2`; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.9</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.
 
 !!! tip "Check the version you're running"
@@ -70,7 +70,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Shared worker storage](operations/worker-shared-storage.md)**: a validated reference architecture for a `ReadWriteMany` volume several jobs mount to pass files, with its `fsGroup` requirement measured.
   The classes it was exercised against are named; a harness validates yours.
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
-- **[Untrusted-PR egress posture](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)** <span class="gag-new-badge">new in 1.7</span>: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
+- **[Untrusted-PR egress posture](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)**: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
   Measured on every run of GAG's own Kata lane.
 - **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right `securityProfile` and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.
@@ -97,7 +97,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
   Advisory: it never gates `Ready`.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
-- **[Which host each job reached](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.7</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.
+- **[Which host each job reached](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.
 
 ## Install and day-2 operations
 
@@ -119,6 +119,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 ## API surface and migration
 
 - **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with `v2beta1` as the graduated storage and hub version.
+- **[`v2`, served beside `v2beta1`](operations/upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.9</span>: every kind is also served at the General Availability (GA) version, with `v2beta1` still stored, so `v2.0.0` has a release to roll back to.
 - **[Reusable runner templates](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one `RunnerTemplate` referenced by many runner sets, or a cluster-wide `ClusterRunnerTemplate` shared across namespaces.
 - **[Multiple gateways per namespace](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.
 - **[GitHub Enterprise Server gateways](operations/troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance)**: a gateway whose `gitHubURL` names a GHES appliance addresses that appliance on every GitHub surface, with a `GitHubEgressIncomplete` condition flagging an incomplete CIDR allow-list.
