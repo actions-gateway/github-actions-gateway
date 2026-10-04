@@ -1,0 +1,156 @@
+# The Dragonfly scheduler, without a manager: the seed client finds it through
+# a static dynconfig rather than through manager-held cluster records, so the
+# deployment needs no MySQL and no Redis. Configs follow chart dragonfly-1.8.5's
+# render with manager.enable=false (Q539).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dragonfly-scheduler
+  namespace: gag-dragonfly
+data:
+  scheduler.yaml: |-
+    server:
+      advertisePort: 8002
+      listenIP: 0.0.0.0
+      logLevel: info
+      port: 8002
+      requestRateLimit: 4000
+    scheduler:
+      algorithm: default
+      backToSourceCount: 200
+      gc:
+        hostGCInterval: 5m
+        hostTTL: 1h
+        peerGCInterval: 5m
+        peerTTL: 720h
+        pieceDownloadTimeout: 30m
+        taskGCInterval: 30m
+      retryBackToSourceLimit: 3
+      retryInterval: 1s
+      retryLimit: 5
+    dynconfig:
+      refreshInterval: 1m
+    manager:
+      schedulerClusterID: 1
+      keepAlive:
+        interval: 5s
+    network:
+      enableIPv6: false
+    metrics:
+      enable: false
+    console: true
+    pprofPort: -1
+  dynconfig.yaml: |-
+    applications: []
+    schedulerClusterClientConfig:
+      loadLimit: 200
+    schedulerClusterConfig:
+      candidateParentLimit: 3
+      filterParentLimit: 15
+    seedPeerClusterConfig:
+      loadLimit: 2000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dragonfly-scheduler
+  namespace: gag-dragonfly
+  labels:
+    app: dragonfly
+    component: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dragonfly
+      component: scheduler
+  template:
+    metadata:
+      labels:
+        app: dragonfly
+        component: scheduler
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: scheduler
+          image: dragonflyoss/scheduler:v2.5.2@sha256:d5dea9e662cdc0ceb8c7c624e06ab714aa803c90a124a26a75da0551411878d5
+          ports:
+            - containerPort: 8002
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # The image declares no user and writes under each of these at
+          # startup; measured non-root with a read-only root filesystem.
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dragonfly
+            - name: work
+              mountPath: /usr/local/dragonfly
+            - name: logs
+              mountPath: /var/log/dragonfly
+            - name: data
+              mountPath: /var/lib/dragonfly
+            - name: cache
+              mountPath: /var/cache/dragonfly
+            - name: run
+              mountPath: /var/run/dragonfly
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            exec:
+              command: ["/bin/grpc_health_probe", "-addr=:8002", "-connect-timeout=3s", "-rpc-timeout=3s"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["/bin/grpc_health_probe", "-addr=:8002", "-connect-timeout=3s", "-rpc-timeout=3s"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+      volumes:
+        - name: config
+          configMap:
+            name: dragonfly-scheduler
+        - name: work
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dragonfly-scheduler
+  namespace: gag-dragonfly
+spec:
+  selector:
+    app: dragonfly
+    component: scheduler
+  ports:
+    - name: grpc
+      port: 8002
+      targetPort: 8002

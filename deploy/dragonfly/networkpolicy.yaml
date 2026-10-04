@@ -1,0 +1,83 @@
+# Ingress to gag-dragonfly is deny-by-default, then admitted per port.
+# Egress is left open, like the mirror pods': the seed peer fetches from the
+# upstream registries on the mirrors' behalf.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dragonfly-default-deny-ingress
+  namespace: gag-dragonfly
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# The open forward proxy (./seed-client.yaml): the Distribution mirror pods and
+# nothing else. Worker pods are not admitted from any namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dragonfly-proxy-from-mirrors
+  namespace: gag-dragonfly
+spec:
+  podSelector:
+    matchLabels:
+      app: dragonfly
+      component: seed-client
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gag-registry-mirror
+          podSelector:
+            matchLabels:
+              app: registry-mirror
+      ports:
+        - protocol: TCP
+          port: 4001
+---
+# Peer traffic: the scheduler triggers seed downloads on 4000, and seed peers
+# fetch pieces from each other on 4000, 4005 and 4006.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dragonfly-seed-peers
+  namespace: gag-dragonfly
+spec:
+  podSelector:
+    matchLabels:
+      app: dragonfly
+      component: seed-client
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: dragonfly
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 4005
+        - protocol: UDP
+          port: 4006
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dragonfly-scheduler-from-seeds
+  namespace: gag-dragonfly
+spec:
+  podSelector:
+    matchLabels:
+      app: dragonfly
+      component: scheduler
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: dragonfly
+              component: seed-client
+      ports:
+        - protocol: TCP
+          port: 8002

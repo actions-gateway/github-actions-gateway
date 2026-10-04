@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Dragonfly as the mirrors' back end (Q539), as a component so it composes with
+# either storage variant. ../../overlays/dragonfly renders it over the ephemeral
+# base.
+#
+# WHAT IT CHANGES. Each registry container sends its upstream traffic, token
+# requests included, through the Dragonfly seed peer as an HTTPS proxy, and
+# trusts the CA that peer intercepts TLS with (and only that CA). Workers are
+# untouched: they still reach Distribution on 5000, which keeps the mirror
+# contract by construction. REGISTRY_PROXY_REMOTEURL stays the real upstream on
+# purpose -- Distribution 3.1.1 discards a bearer challenge whose realm is not on
+# the remote's own registrable domain, so a remote naming the Dragonfly Service
+# could never fetch a Docker Hub token (measured for Q539).
+#
+# PREREQUISITES. ../../../dragonfly applied, and the dragonfly-proxy-ca
+# ConfigMap in this namespace, which ../../../dragonfly/ca-chart renders beside
+# the seed peer's Secret. Without the ConfigMap the mirror pods do not start.
+#
+# STARTUP ORDER. Distribution pings its remote while starting and exits if the
+# ping fails, so a mirror pod scheduled before the seed peer is ready restarts
+# until it is.
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: app=registry-mirror
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: registry-mirror
+      spec:
+        template:
+          spec:
+            containers:
+              - name: registry
+                env:
+                  - name: HTTPS_PROXY
+                    value: http://dragonfly-seed-client.gag-dragonfly.svc.cluster.local:4001
+                  - name: SSL_CERT_FILE
+                    value: /etc/dragonfly-proxy-ca/ca.crt
+                volumeMounts:
+                  - name: dragonfly-proxy-ca
+                    mountPath: /etc/dragonfly-proxy-ca
+                    readOnly: true
+            volumes:
+              - name: dragonfly-proxy-ca
+                configMap:
+                  name: dragonfly-proxy-ca

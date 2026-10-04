@@ -1,0 +1,10 @@
+# Mints the CA dfdaemon signs its CONNECT certificates with, the way the GAG
+# chart mints its webhook CA without cert-manager: Helm's genCA family, at
+# render time. Rendered by scripts/dogfood/e2e-start.sh straight into
+# `kubectl apply`, and only when the Secret does not exist yet, since every
+# render mints a new key.
+apiVersion: v2
+name: dragonfly-proxy-ca
+description: The CA the Dragonfly seed peer intercepts the registry mirrors' upstream TLS with
+type: application
+version: 0.1.0

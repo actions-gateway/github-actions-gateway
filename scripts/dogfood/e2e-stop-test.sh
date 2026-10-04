@@ -64,6 +64,7 @@ PODS_FILE="${WORKDIR}/pods"
 RUNS_FILE="${WORKDIR}/runs"
 GATEWAYS_FILE="${WORKDIR}/gateways"
 MIRRORS_FILE="${WORKDIR}/mirrors"
+DRAGONFLY_FILE="${WORKDIR}/dragonfly"
 POD_READ_OK=1
 QUEUED_PER_RUN=0
 GH_RUN_LIST_OK=1
@@ -78,6 +79,7 @@ kubectl() {
 		cat "${PODS_FILE}"
 		;;
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
+	get\ deployment\ --namespace\ gag-dragonfly*) cat "${DRAGONFLY_FILE}" ;;
 	get\ deployment*) cat "${MIRRORS_FILE}" ;;
 	esac
 	return 0
@@ -111,6 +113,7 @@ reset_stubs() {
 	: >"${PODS_FILE}"
 	: >"${RUNS_FILE}"
 	: >"${MIRRORS_FILE}"
+	: >"${DRAGONFLY_FILE}"
 	POD_READ_OK=1
 	QUEUED_PER_RUN=0
 	GH_RUN_LIST_OK=1
@@ -402,6 +405,26 @@ run_main
 check "a cluster with no mirror still tears down cleanly" 0 "${MAIN_RC}"
 check_not_contains "never scales a mirror that is not deployed" \
 	"kubectl scale" "$(cat "${CALL_LOG}")"
+
+# --- the Dragonfly back end goes down with the mirrors (Q539) ----------------
+
+reset_stubs gag-dogfood gag-dogfood-ci
+mirror_deployed
+printf 'deployment.apps/dragonfly-%s\n' scheduler seed-client >"${DRAGONFLY_FILE}"
+run_main
+df_scale="$(call_line 'kubectl scale deployment --namespace gag-dragonfly')"
+check_contains "scales the Dragonfly back end to zero" "--replicas=0" "${df_scale}"
+check_contains "selects the Dragonfly deployments by label" "-l app=dragonfly" "${df_scale}"
+# The CA Secret has to survive the window: a new one is a new key, which the
+# mirrors' copy of the certificate would no longer match.
+check_not_contains "never deletes the Dragonfly CA" \
+	"delete secret" "$(cat "${CALL_LOG}")"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+mirror_deployed
+run_main
+check_not_contains "never scales a Dragonfly back end that is not deployed" \
+	"scale deployment --namespace gag-dragonfly" "$(cat "${CALL_LOG}")"
 
 # --- a mismatched context aborts before anything is deleted ------------------
 

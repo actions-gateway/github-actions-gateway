@@ -1,0 +1,181 @@
+# The Dragonfly seed peer: the back end the Distribution mirrors send their
+# upstream traffic through, as an HTTPS proxy (HTTPS_PROXY on each registry
+# container, ../registry-mirror/components/dragonfly-backend).
+#
+# ITS PROXY IS AN OPEN FORWARD PROXY. dfdaemon v1.5.7 forwards a request to any
+# host it names, answers CONNECT to any host, takes a mirror request's upstream
+# from the client (X-Dragonfly-Registry, then `ns`), and forwards every non-GET.
+# Nothing in its config restricts that, so it must never be on a worker's path:
+# ./networkpolicy.yaml admits only the mirror pods to 4001, and the workers keep
+# talking to Distribution, which holds the mirror contract (measured for Q539).
+#
+# THE CA MUST BE PKCS#8. dfdaemon terminates each CONNECT with a certificate it
+# signs from caCert/caKey. It rejects a PKCS#1 RSA key ("Could not parse key
+# pair") and then keeps running on a self-generated CA the mirrors do not trust,
+# so every upstream fetch fails TLS. ./ca-chart mints an ed25519 key, which is
+# PKCS#8 and was measured to load.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dragonfly-seed-client
+  namespace: gag-dragonfly
+data:
+  dfdaemon.yaml: |-
+    host:
+      schedulerClusterID: 1
+    download:
+      server:
+        socketPath: /var/run/dragonfly/dfdaemon.sock
+    upload:
+      server:
+        port: 4000
+    scheduler:
+      announceInterval: 1m
+    seedPeer:
+      enable: true
+      type: super
+    storage:
+      dir: /var/lib/dragonfly/
+      keep: true
+      server:
+        tcpPort: 4005
+        quicPort: 4006
+    proxy:
+      server:
+        port: 4001
+        requestRateLimit: 400
+        caCert: /etc/dragonfly-ca/ca.crt
+        caKey: /etc/dragonfly-ca/ca.key
+      # Only digest-addressed content takes the P2P path: it is immutable, so a
+      # cached copy cannot go stale. Tags, token requests and everything else
+      # pass straight through.
+      rules:
+        - regex: blobs/sha256.*
+        - regex: manifests/sha256.*
+    health:
+      server:
+        port: 4003
+    metrics:
+      server:
+        port: 4002
+    stats:
+      server:
+        port: 4004
+  dynconfig.yaml: |-
+    scheduler:
+      addr: dragonfly-scheduler.gag-dragonfly.svc.cluster.local:8002
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dragonfly-seed-client
+  namespace: gag-dragonfly
+  labels:
+    app: dragonfly
+    component: seed-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dragonfly
+      component: seed-client
+  template:
+    metadata:
+      labels:
+        app: dragonfly
+        component: seed-client
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed-client
+          image: dragonflyoss/client:v1.5.7@sha256:e5a4479c3e9c57c2b34ac21db346827a2d833be2eacbad474e45b337decc904d
+          command: ["dfdaemon"]
+          args: ["--log-level=info", "--console"]
+          ports:
+            - containerPort: 4001
+            - containerPort: 4000
+            - containerPort: 4005
+            - containerPort: 4006
+              protocol: UDP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dragonfly
+            - name: ca
+              mountPath: /etc/dragonfly-ca
+              readOnly: true
+            - name: storage
+              mountPath: /var/lib/dragonfly
+            - name: logs
+              mountPath: /var/log/dragonfly
+            - name: run
+              mountPath: /var/run/dragonfly
+            - name: cache
+              mountPath: /var/cache/dragonfly
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          readinessProbe:
+            exec:
+              command: ["/bin/grpc_health_probe", "-addr=unix:///var/run/dragonfly/dfdaemon.sock", "-connect-timeout=3s", "-rpc-timeout=3s"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["/bin/grpc_health_probe", "-addr=unix:///var/run/dragonfly/dfdaemon.sock", "-connect-timeout=3s", "-rpc-timeout=3s"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+      volumes:
+        - name: config
+          configMap:
+            name: dragonfly-seed-client
+        - name: ca
+          secret:
+            secretName: dragonfly-proxy-ca
+        # Ephemeral like the mirrors' own caches: cold after e2e-stop.sh.
+        - name: storage
+          emptyDir:
+            sizeLimit: 20Gi
+        - name: logs
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+# The proxy port alone. The peer ports (4000, 4005, 4006) are reached by pod IP
+# through the scheduler, never through a Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dragonfly-seed-client
+  namespace: gag-dragonfly
+spec:
+  selector:
+    app: dragonfly
+    component: seed-client
+  ports:
+    - name: proxy
+      port: 4001
+      targetPort: 4001

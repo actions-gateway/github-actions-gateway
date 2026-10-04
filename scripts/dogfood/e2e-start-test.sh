@@ -50,10 +50,15 @@ CALL_LOG="${WORKDIR}/calls.log"
 GATEWAYS_FILE="${WORKDIR}/gateways"
 WAIT_EXIT=0
 ROLLOUT_EXIT=0
+# The Dragonfly CA Secret: whether it exists, and the base64 ca.crt it holds.
+SECRET_EXISTS=0
+SECRET_CERT_B64=""
 
 kubectl() {
 	printf 'kubectl %s\n' "$*" >>"${CALL_LOG}"
 	case "$*" in
+	get\ secret*jsonpath*) printf '%s' "${SECRET_CERT_B64}" ;;
+	get\ secret*) ((SECRET_EXISTS)) || return 1 ;;
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
 	config\ current-context) echo "gke_${PROJECT}_${ZONE}_${CLUSTER}" ;;
 	wait*) return "${WAIT_EXIT}" ;;
@@ -64,6 +69,7 @@ kubectl() {
 
 gcloud() { printf 'gcloud %s\n' "$*" >>"${CALL_LOG}"; }
 gh() { printf 'gh %s\n' "$*" >>"${CALL_LOG}"; }
+helm() { printf 'helm %s\n' "$*" >>"${CALL_LOG}"; }
 require_cmd() { :; }
 
 # reset_stubs NAMESPACE... — arm the gateway listing with the given namespaces
@@ -74,7 +80,10 @@ reset_stubs() {
 	WAIT_EXIT=0
 	ROLLOUT_EXIT=0
 	E2E_VARIANT=kata
+	E2E_MIRROR_BACKEND=distribution
 	E2E_SYSTEM_NODES=2
+	SECRET_EXISTS=0
+	SECRET_CERT_B64="$(printf -- '-----BEGIN CERTIFICATE-----\nx\n' | base64)"
 	unset E2E_ROUTE_VAR
 	unset REGISTRY_MIRROR_PERSISTENT
 }
@@ -384,6 +393,81 @@ run_main
 check "the dind bring-up succeeds" 0 "${MAIN_RC}"
 check_not_contains "never deletes the dind lane's own egress policy" \
 	"delete networkpolicy" "$(cat "${CALL_LOG}")"
+
+# --- the Dragonfly back end is opt-in, and comes up before the mirrors (Q539) --
+
+reset_stubs gag-dogfood gag-dogfood-ci
+run_main
+check_not_contains "the default backend never applies Dragonfly" \
+	"deploy/dragonfly" "$(cat "${CALL_LOG}")"
+check_not_contains "the default backend never mints a CA" \
+	"helm " "$(cat "${CALL_LOG}")"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+run_main
+check "the dragonfly bring-up succeeds" 0 "${MAIN_RC}"
+check_contains "applies the Dragonfly back end" \
+	"apply -k ${REPO_ROOT}/deploy/dragonfly" "$(cat "${CALL_LOG}")"
+check_contains "renders the mirrors with the Dragonfly component" \
+	"deploy/registry-mirror/overlays/dragonfly" "$(call_line 'apply -k '"${REPO_ROOT}"'/deploy/registry-mirror')"
+# A registry container pings its upstream through the seed peer while starting
+# and exits when it cannot, so the seed peer has to be serving first.
+check_before "waits for Dragonfly before applying the mirrors" \
+	"--namespace gag-dragonfly --for=condition=Available" "deploy/registry-mirror/overlays/dragonfly"
+check_contains "mints the CA when its Secret is absent" \
+	"helm template dragonfly-proxy-ca" "$(cat "${CALL_LOG}")"
+check_contains "gives the mirrors the certificate as a ConfigMap" \
+	"create configmap dragonfly-proxy-ca --namespace gag-registry-mirror" "$(cat "${CALL_LOG}")"
+check_not_contains "never hands the mirrors the key" \
+	"ca.key" "$(call_line 'create configmap dragonfly-proxy-ca')"
+# Both sides load the CA at startup, so a fresh one means restarting both.
+check_contains "restarts the seed peer onto a new CA" \
+	"rollout restart deployment --namespace gag-dragonfly" "$(cat "${CALL_LOG}")"
+check_contains "restarts the mirrors onto a new CA" \
+	"rollout restart deployment --namespace gag-registry-mirror" "$(cat "${CALL_LOG}")"
+
+# Every render is a new key, so re-running a window must not rotate the CA
+# under a seed peer and mirrors already trusting the old one.
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+SECRET_EXISTS=1
+run_main
+check "a re-run with the CA present succeeds" 0 "${MAIN_RC}"
+check_not_contains "never re-mints an existing CA" \
+	"helm template" "$(cat "${CALL_LOG}")"
+check_contains "still re-syncs the mirrors' certificate from the Secret" \
+	"create configmap dragonfly-proxy-ca" "$(cat "${CALL_LOG}")"
+check_not_contains "never restarts anything when the CA is unchanged" \
+	"rollout restart" "$(cat "${CALL_LOG}")"
+
+# A Secret with no certificate would hand the mirrors an empty trust store,
+# and every upstream fetch would then fail TLS long after this script reported
+# success.
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+SECRET_EXISTS=1
+SECRET_CERT_B64=""
+run_main
+check "a CA Secret without a certificate fails the bring-up" 1 "${MAIN_RC}"
+check_not_contains "never applies the mirrors without a certificate" \
+	"deploy/registry-mirror/overlays/dragonfly" "$(cat "${CALL_LOG}")"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+REGISTRY_MIRROR_PERSISTENT=1
+run_main
+check "rejects dragonfly with the persistent overlay" 1 "${MAIN_RC}"
+check_not_contains "rejects that combination before any cluster mutation" \
+	"clusters resize" "$(cat "${CALL_LOG}")"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=bogus
+run_main
+check "rejects an unknown mirror backend" 1 "${MAIN_RC}"
+check_contains "names the rejected backend" "bogus" "${MAIN_OUT}"
+check_not_contains "rejects the backend before any cluster mutation" \
+	"clusters resize" "$(cat "${CALL_LOG}")"
 
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2
