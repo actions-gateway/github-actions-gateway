@@ -29,7 +29,7 @@ Each team self-serves a fully isolated gateway from a single `ActionsGateway` cu
 | **0** | Idle GPU pods between jobs. Workers exist only while a job runs |
 | **20** | Alert rules shipped as code, with a tenant dashboard and a platform dashboard beside them |
 
-ARC-side claims were re-read on 2026-08-12, against the `gha-runner-scale-set` chart at ARC 0.14.2, commit [`9bb16ae`](https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8).
+ARC-side claims were re-read on 2026-10-04, against the `gha-runner-scale-set` chart at ARC 0.15.0, commit [`1945b42`](https://github.com/actions/actions-runner-controller/tree/1945b42820760eb50893c8da77fdfc42cf8dad45).
 [Capability by capability](docs/why-gag.md) names the chart version, stamps every competitor cell with the version and date it was read at, and fails our own build if one of them is missing.
 
 ## Is this for you?
@@ -218,12 +218,12 @@ GAG ships as the **`actions-gateway` Helm chart**, which installs the Gateway Ma
 The GMC then provisions per-tenant gateways at runtime from each `ActionsGateway` CR.
 
 The chart is published to the GHCR OCI registry and signed with cosign.
-The current release is **`1.8.0`** (GA; charts carry no leading `v`, images are tagged `v1.8.0`).
+The current release is **`1.9.0`** (GA; charts carry no leading `v`, images are tagged `v1.9.0`).
 Install it straight from the registry:
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.8.0 \
+  --version 1.9.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -231,7 +231,7 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.8.0) and verify the signatures before installing.
+Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0) and verify the signatures before installing.
 The [Installation guide](docs/operations/install.md) covers prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall; the [chart README](charts/actions-gateway/README.md) is the full values reference.
 
 > [!IMPORTANT]
@@ -250,7 +250,8 @@ It is v2's first stability contract and where new capability lands.
 
 | API version | Status |
 | --- | --- |
-| `v2beta1` | **Start here.** Stability contract, unaffected by the removals below |
+| `v2beta1` | **Start here.** Stability contract and the storage version. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md), superseded by `v2`; moving is a re-apply |
+| `v2` | The GA version, served beside `v2beta1` since 1.9. Becomes the storage version at `v2.0.0` |
 | `v2alpha1` | Deprecated, apiserver warns on every apply. Stays served as the `gag-migrate` on-ramp so a migrating v1 tenant can keep Classic until it no longer needs it. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | `v1alpha1` | Deprecated single-CR API, still served. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | Classic protocol | Deprecated. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |

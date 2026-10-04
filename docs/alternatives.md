@@ -67,7 +67,7 @@ Measured 2026-08-06 against ARC 0.14.2 and `master`.
 
 | | GAG | ARC |
 |---|---|---|
-| Sandboxed workers | [500-line guide](operations/kata-dind-workloads.md), default in GAG's own end-to-end CI, validated on named kernels, no privileged container | same `runtimeClassName` field; no doc covers it, absent from chart values, two closed issues ever |
+| Sandboxed workers | [500-line guide](operations/kata-dind-workloads.md), validated end to end on GAG's own cluster before every release, validated on named kernels, no privileged container | same `runtimeClassName` field; no doc covers it, absent from chart values, two closed issues ever |
 | Observability | [20 alert rules](operations/observability-alerting.md), [two dashboards for two audiences](operations/observability-dashboards.md), [per-tenant metrics](operations/observability-metrics.md), [redaction before any log line](operations/observability-logging.md) | one per-scale-set sample dashboard, no alert rules, metrics opt-in; [dashboard request open since 2025-01-13](https://github.com/actions/actions-runner-controller/issues/3753) |
 
 ## No offering is perfect, yet…
