@@ -147,7 +147,9 @@ mirror_persistent() {
 # when some seed pod logged success and none logged the failure. Every seed pod
 # is read, not the one `logs deployment/` picks: just after a rollout that can
 # be the old pod, still terminating, which loaded the old image's bundle. A
-# selector read defaults to the last 10 lines, hence --tail=-1.
+# selector read defaults to the last 10 lines, hence --tail=-1. Both strings
+# are v1.5.7's wording: a client bump must re-check them, since a new pod
+# logging neither passes while a terminating old pod still shows success.
 apply_dragonfly_backend() {
 	echo "Applying the Dragonfly back end for the registry mirrors (Q539)..."
 	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly"
