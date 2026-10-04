@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate Kata + Dragonfly as the mirror backend - GitHub Actions Gateway</title>
+        <title>Validate the Dragonfly mirror back end on dogfood - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-kata--dragonfly-as-the-mirror-backend" class="md-skip">
+        <a href="#validate-the-dragonfly-mirror-back-end-on-dogfood" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate Kata + Dragonfly as the mirror backend
+              Validate the Dragonfly mirror back end on dogfood
             
           </span>
         </div>
@@ -2597,10 +2597,11 @@
   
 
 
-<h1 id="validate-kata--dragonfly-as-the-mirror-backend">Validate Kata + Dragonfly as the mirror backend<a class="headerlink" href="#validate-kata--dragonfly-as-the-mirror-backend" title="Permanent link">&para;</a></h1>
-<p>Unblocked 2026-08-28: Q408 validated the reference posture, so the contract this is graded against exists.
-Dragonfly passes the mirror contract only via seed-peer Service, upstream allowlist, refused non-GET, workers never peers.
-Grade those <a href="../../plan/caching-and-worker-storage/">per content class</a>.</p>
+<h1 id="validate-the-dragonfly-mirror-back-end-on-dogfood">Validate the Dragonfly mirror back end on dogfood<a class="headerlink" href="#validate-the-dragonfly-mirror-back-end-on-dogfood" title="Permanent link">&para;</a></h1>
+<p>Dragonfly fails the mirror contract as the endpoint workers reach: dfdaemon's proxy is an open forward proxy that forwards pushes, so it sits behind the five Distribution mirrors instead (<a href="../../plan/q539-dragonfly-mirror-backend/">plan §2, §4</a>).
+That back end is built and measured on kind: <code>E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh</code>.
+What remains is Phase 3, a booked dogfood session: the Q408 §3.7 battery, one Kata e2e run with its in-job negatives unchanged, blob <code>GET</code>s taking the P2P path in the seed peer's log, and a worker timing out on the seed proxy port.
+Artifacts and cache saves stay out of scope, <a href="../../plan/caching-and-worker-storage/">per content class</a>.</p>
 
 
 

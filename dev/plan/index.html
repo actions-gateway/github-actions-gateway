@@ -2809,6 +2809,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>Untrusted-PR posture for Kata workers (G.14): in-cluster registry pull-through mirrors (the Athens pattern applied to images) + delete the e2e open-egress NetworkPolicy, so a Kata worker's reachable set is DNS + GitHub + mirror only</td>
 <td>⚠️ All five phases done 2026-08-28 and Q408 closed, but the doc stays active because <a href="q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a> owns two live rows. Phase 0 measured the egress inventory 2026-08-03; Phase 1 gated <code>get.helm.sh</code> and the Actions cache data plane to the hosted lane, validated 2026-08-24 by grading four self-hosted runs; Phase 2's manifests, five upstreams rather than four, validated 2026-08-28 at 25 of 25 checks; Phase 3's wiring validated the same day, all five instances serving against a measured zero baseline; Phase 4 deleted the open-egress policy and measured the tenant at zero allow-all rules, with in-job negatives passing all eight checks on a Kata worker; Phase 5 published the how-to, marked G.14 shipped, and moved the capability from the roadmap to Features. Open here: <a href="../queue/Q539/">Q539</a> and <a href="../queue/Q540/">Q540</a>, graded against the contract this validated</td>
 </tr>
+<tr>
+<td><a href="q539-dragonfly-mirror-backend/">q539-dragonfly-mirror-backend.md</a></td>
+<td>Grading Dragonfly against the Q408 mirror contract, and the shape that passes it: Distribution in front, Dragonfly as its outbound proxy and P2P back end</td>
+<td>⚠️ Phases 1 and 2 done 2026-10-04: as the worker-facing endpoint dfdaemon v1.5.7 fails the contract by construction, and as the mirrors' back end it is built and measured on kind, all five upstreams serving with workers unable to reach the proxy. Phase 3 is a booked dogfood run (<a href="../queue/Q539/">Q539</a>)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="test-plans">Test plans<a class="headerlink" href="#test-plans" title="Permanent link">&para;</a></h2>

@@ -2600,6 +2600,8 @@
 <h1 id="milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest<a class="headerlink" href="#milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest" title="Permanent link">&para;</a></h1>
 <p>Blocked by <a href="../Q539/">Q539</a>.
 Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.
+That reachability is the whole question: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> with <code>hostNetwork</code>, and Q539 measured dfdaemon's proxy as an open forward proxy that forwards pushes, so a worker reaching a node address on that port has the internet (<a href="../../plan/q539-dragonfly-mirror-backend/#8-what-this-plan-does-not-cover">plan §8</a>).
+Unmeasured.
 One deployment for both?
 <a href="../../plan/caching-and-worker-storage/">scope</a></p>
 
