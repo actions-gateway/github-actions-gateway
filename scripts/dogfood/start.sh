@@ -9,6 +9,12 @@
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
 #   ZONE      GCP zone (e.g. us-east1-b)
 #   REPO      GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
+#
+# Optional env vars:
+#   GAG_ROUTE_VARS=0  Leave the repository's routing variables untouched. A
+#             workflow's GITHUB_TOKEN cannot write repository variables, so the
+#             release gate sets this when it runs in CI (Q880); dispatches are
+#             routed per run through the workflows' `runner` input either way.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -60,6 +66,34 @@ wait_agc_rollout() {
 	kubectl -n "${ns}" rollout status "${dep}" --timeout=3m
 }
 
+# route_ci — set the runner label the opt-in dispatches consume, then dispatch
+# the validation burst onto GAG, each run routed through its own `runner` input.
+route_ci() {
+	# Set the runner label the opt-in dispatches consume. This alone does NOT
+	# route any push/PR CI — the migrated jobs read GAG_RUNNER only on a
+	# workflow_dispatch run with target_gag=true.
+	#
+	# A single JSON *string*, not an array: the workflows evaluate
+	# fromJSON(vars.GAG_RUNNER) into runs-on, and the ScaleSet RunnerSet (Q399)
+	# matches exactly one label: the scale set's own name. Must stay identical to
+	# spec.runnerLabels[0] in setup.sh, or dispatches queue forever unmatched.
+	if [[ "${GAG_ROUTE_VARS:-1}" != 0 ]]; then
+		echo "Setting GAG runner label..."
+		gh variable set GAG_RUNNER \
+			--body '"gag-ci-scaleset"' \
+			--repo "${REPO}"
+	fi
+
+	# Dispatch isolated validation bursts onto GAG. Scoped to these runs only —
+	# other PRs, Dependabot, and push CI stay on GitHub-hosted runners.
+	echo "Dispatching validation runs onto GAG (ref: main)..."
+	gh workflow run unit-test.yml -f target_gag=true -f runner='"gag-ci-scaleset"' --ref main --repo "${REPO}"
+	gh workflow run integration-test.yml -f target_gag=true -f runner='"gag-ci-scaleset"' --ref main --repo "${REPO}"
+
+	echo "Done. Dispatched unit-test and integration-test onto GAG."
+	echo "Watch: gh run list --workflow=unit-test.yml --repo ${REPO}"
+}
+
 main() {
 	: "${PROJECT:?PROJECT must be set}"
 	: "${CLUSTER:?CLUSTER must be set}"
@@ -102,27 +136,7 @@ main() {
 	echo "Waiting for AGC pod..."
 	wait_agc_rollout gag-dogfood dogfood-agc
 
-	# Set the runner label the opt-in dispatches consume. This alone does NOT
-	# route any push/PR CI — the migrated jobs read GAG_RUNNER only on a
-	# workflow_dispatch run with target_gag=true.
-	#
-	# A single JSON *string*, not an array: the workflows evaluate
-	# fromJSON(vars.GAG_RUNNER) into runs-on, and the ScaleSet RunnerSet (Q399)
-	# matches exactly one label: the scale set's own name. Must stay identical to
-	# spec.runnerLabels[0] in setup.sh, or dispatches queue forever unmatched.
-	echo "Setting GAG runner label..."
-	gh variable set GAG_RUNNER \
-		--body '"gag-ci-scaleset"' \
-		--repo "${REPO}"
-
-	# Dispatch isolated validation bursts onto GAG. Scoped to these runs only —
-	# other PRs, Dependabot, and push CI stay on GitHub-hosted runners.
-	echo "Dispatching validation runs onto GAG (ref: main)..."
-	gh workflow run unit-test.yml -f target_gag=true --ref main --repo "${REPO}"
-	gh workflow run integration-test.yml -f target_gag=true --ref main --repo "${REPO}"
-
-	echo "Done. Dispatched unit-test and integration-test onto GAG."
-	echo "Watch: gh run list --workflow=unit-test.yml --repo ${REPO}"
+	route_ci
 }
 
 [[ -n "${START_LIB_ONLY:-}" ]] || main "$@"

@@ -32,6 +32,10 @@ on:
         description: 'Route the migrated jobs to the GAG dogfood cluster (vars.GAG_RUNNER)'
         type: boolean
         default: false
+      runner:
+        description: 'JSON-encoded runs-on for a target_gag dispatch, e.g. ''"gag-ci-scaleset"''. Overrides vars.GAG_RUNNER for THIS run only, so the release gate routes its own dispatches without writing a repository variable. Empty falls through to the variable.'
+        type: string
+        default: ''
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
 # never cancelled (each is a distinct post-merge gate). Keyed on github.ref —
@@ -264,7 +268,7 @@ jobs:
     # would charge a backlog-only PR ~170s of Go linting for a check already
     # running beside it (Q808).
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -357,7 +361,7 @@ jobs:
   shellcheck:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     # Back to the 5 this carried from Q84 (#182) now that scripts-test has its
     # own job below: what is left is 86s of work (16s setup, 64s shellcheck, 6s
     # across the four named checks), so 5 is ~3.5x the measurement and still a
@@ -434,7 +438,7 @@ jobs:
   vendor-check:
     needs: [changes]
     if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -461,7 +465,7 @@ jobs:
   tidy-check:
     needs: [changes]
     if: needs.changes.outputs.modules == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -479,7 +483,7 @@ jobs:
   unit-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     # -race roughly doubles unit runtime vs. plain `go test`, so allow more
     # headroom than the lint job. The race detector needs cgo, which the
     # ubuntu-latest image's gcc satisfies out of the box.
@@ -508,7 +512,7 @@ jobs:
   coverage:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -529,7 +533,7 @@ jobs:
   path-filters:
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -591,7 +595,7 @@ jobs:
   scripts-test:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -618,7 +622,7 @@ jobs:
   actionlint:
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -659,7 +663,7 @@ jobs:
   uses-pinned:
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -678,7 +682,7 @@ jobs:
   semver-floor-sources:
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -696,7 +700,7 @@ jobs:
   cosign-pin:
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -716,7 +720,7 @@ jobs:
   publish-digest:
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -36,6 +36,8 @@
 #                      the e2e job timeout dominates both).
 #   SKIP_E2E_DRAIN=1   Skip both drains and delete the AGC regardless. Anything
 #                      still queued or running is knowingly stranded.
+#   GAG_ROUTE_VARS=0   Leave vars.GAG_E2E_RUNNER untouched, for a caller that
+#                      never opened the repo-wide window; see start.sh (Q880).
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -75,9 +77,11 @@ main() {
 
 	# Route e2e off GAG FIRST, so no new e2e job lands on the tenant while its
 	# AGC is being torn down.
-	gh variable set GAG_E2E_RUNNER \
-		--body '"ubuntu-latest"' \
-		--repo "${REPO}"
+	if [[ "${GAG_ROUTE_VARS:-1}" != 0 ]]; then
+		gh variable set GAG_E2E_RUNNER \
+			--body '"ubuntu-latest"' \
+			--repo "${REPO}"
+	fi
 
 	# Pin the target cluster and fail closed if it is not the active context,
 	# so the teardown delete never lands on another cluster.

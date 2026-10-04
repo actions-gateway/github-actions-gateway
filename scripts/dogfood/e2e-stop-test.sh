@@ -416,6 +416,19 @@ check_not_contains "never deletes against the wrong cluster" \
 check_not_contains "never resizes the wrong cluster" \
 	"clusters resize" "$(cat "${CALL_LOG}")"
 
+# --- GAG_ROUTE_VARS=0: no repository variable write, teardown unchanged ------
+#
+# The release gate in CI (Q880) cannot write repository variables, and it never
+# opened the repo-wide window this reset closes, so it skips the write.
+
+reset_stubs gag-dogfood gag-dogfood-ci
+GAG_ROUTE_VARS=0 run_main
+check "GAG_ROUTE_VARS=0 still tears down cleanly" 0 "${MAIN_RC}"
+check_not_contains "GAG_ROUTE_VARS=0 writes no repository variable" \
+	"variable set" "$(cat "${CALL_LOG}")"
+check_contains "GAG_ROUTE_VARS=0 still deletes the e2e ActionsGateway" \
+	"delete actionsgateway dogfood-e2e" "$(call_line 'delete actionsgateway')"
+
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2
 	exit 1

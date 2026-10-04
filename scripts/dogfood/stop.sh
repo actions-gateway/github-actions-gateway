@@ -40,6 +40,7 @@
 #                   so its orphaned workers never drain — see Q435).
 #   SYSTEM_POOL     Node pool to take to 0 (default default-pool), matching the
 #                   knob start.sh and e2e-stop.sh size.
+#   GAG_ROUTE_VARS=0  Leave vars.GAG_RUNNER untouched; see start.sh (Q880).
 #
 # Idempotent: a resize to the current node count is a no-op and a cluster that is
 # already at rest drains instantly, so this is safe to re-run.
@@ -116,10 +117,12 @@ main() {
 	# Route CI off GAG FIRST, so the drain below is not chasing a queue that
 	# keeps growing. Already-queued dispatches still land on the scale set —
 	# that is what the drain wait is for.
-	echo "Resetting GAG runner label to ubuntu-latest..."
-	gh variable set GAG_RUNNER \
-		--body '"ubuntu-latest"' \
-		--repo "${REPO}"
+	if [[ "${GAG_ROUTE_VARS:-1}" != 0 ]]; then
+		echo "Resetting GAG runner label to ubuntu-latest..."
+		gh variable set GAG_RUNNER \
+			--body '"ubuntu-latest"' \
+			--repo "${REPO}"
+	fi
 
 	# Pin the target cluster and fail closed if it is not the active context, so
 	# the drain reads (and the scale-down decision they gate) can only ever be
