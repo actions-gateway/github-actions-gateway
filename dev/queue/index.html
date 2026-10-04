@@ -2734,14 +2734,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>GitHub stops queueing jobs to a self-hosted runner not updated "within 30 days of a new version being made available" ([runner update …</td>
 </tr>
 <tr>
-<td><a href="Q1157/">Q1157</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Gate exits 0 after a pass whose teardown left nodes up</a></td>
-<td><code>bug</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A gate that passes and whose teardown then ends <code>Teardown INCOMPLETE</code> exits 0, so the one status a caller or a watching session reads says …</td>
-</tr>
-<tr>
 <td><a href="Q541/">Q541</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_egressproxy_fqdn_test.go">EgressProxy watch-isolation test passes with its watch deleted, at times</a></td>
 <td><code>tests</code> <code>flake</code> <code>retro</code></td>
@@ -3964,6 +3956,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Five workflows scope both legs with identical <code>paths:</code> lists written twice: <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1158/">Q1158</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease.sh">Make the release gate's lease visible across hosts</a></td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>lib/lease.sh</code> records the gate's ownership as a file holding a pid, under <code>~/.local/state</code> on the host that ran it, and only that host can …</td>
 </tr>
 </tbody>
 </table>

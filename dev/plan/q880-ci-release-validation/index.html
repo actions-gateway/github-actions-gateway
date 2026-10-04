@@ -2677,17 +2677,17 @@ Running the same gate as a workflow on the candidate tag makes the verdict a job
 <tr>
 <td>1</td>
 <td>Keyless CI identity on the dogfood project</td>
-<td>⚠️ Bootstrap run 2026-10-04; the probe read the cluster and was refused pod creation, but reported the refusal as a failure, fixed here and to be re-run</td>
+<td>✅ Bootstrap run 2026-10-04; the probe passed on its second run (37230799055), after #2028 fixed how it read GKE's refusal</td>
 </tr>
 <tr>
 <td>2</td>
 <td>The gate runs on a Linux runner with no keychain</td>
-<td>⚠️ The App-key half is in with milestone 1; the rest is unmeasured</td>
+<td>⚠️ Code in review; unproven until the first CI run</td>
 </tr>
 <tr>
 <td>3</td>
 <td>A workflow runs the gate on each <code>v*-rc.*</code> tag</td>
-<td>❌</td>
+<td>⚠️ Code in review; needs <code>ci-identity-setup.sh</code> re-run for the new pin and grant</td>
 </tr>
 <tr>
 <td>4</td>
@@ -2717,35 +2717,41 @@ This matters little in milestone 1, whose grant is read-only; it is milestone 3'
 <p><strong>Service-account impersonation rather than direct resource access.</strong> Federated principals can hold IAM roles directly, without a service account in between.
 Whether <code>kubectl</code> authenticates to GKE as such a principal is unmeasured here, and the impersonation path is the one <code>google-github-actions/auth</code> and <code>get-gke-credentials</code> document together, so milestone 1 takes it.</p>
 <p><strong>Grants follow the milestone.</strong> Milestone 1 grants <code>roles/container.viewer</code> and nothing else.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dogfood-identity-probe.yml"><code>dogfood-identity-probe.yml</code></a> is its acceptance check: it lists namespaces, and it fails if the service account can create a pod, so a grant wider than the milestone asked for goes red rather than passing silently.</p>
-<p>To finish milestone 1, from a machine with owner access to the project and admin on the repository.
+A probe workflow was its acceptance check: it listed namespaces and failed if the service account could create a pod.
+It retired with milestone 3, when the provider's pin moved to the gate's workflow.</p>
+<p>Run the setup, and re-run it whenever its grant or pin changes, from a machine with owner access to the project and admin on the repository.
 The project, cluster and zone below are the examples <code>validate-release.sh</code> documents; use the ones you run the gate with.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">PROJECT</span><span class="o">=</span>actions-gateway-dogfood<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>gag-dogfood<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>us-east1-b<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">REPO</span><span class="o">=</span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="nv">REVIEWERS</span><span class="o">=</span>karlkfi<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>scripts/dogfood/ci-identity-setup.sh
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>dogfood-identity-probe.yml<span class="w"> </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span>--ref<span class="w"> </span>main
-</code></pre></div>
-<p>The run waits for the environment's reviewer, then must go green.</p>
 <p><strong>GKE words a refusal with its reason attached</strong>, <code>no - requires one of ["container.pods.create"] permission(s) in Cloud IAM …</code>, measured on the first probe run on 2026-10-04.
-The probe compared the whole answer to <code>no</code>, so a correct refusal failed; it now compares the first word, and anything else, an error included, still fails.</p>
+The probe compared the whole answer to <code>no</code>, so a correct refusal failed; #2028 made it compare the first word, so anything else, an error included, still failed.</p>
 <h2 id="2-the-gate-on-a-linux-runner">2. The gate on a Linux runner<a class="headerlink" href="#2-the-gate-on-a-linux-runner" title="Permanent link">&para;</a></h2>
-<p>The gate was written for macOS, and two of its assumptions are known to break on a hosted runner.</p>
+<p>Three of the gate's assumptions break on a hosted runner, read off the scripts on 2026-10-04 rather than measured in a run.</p>
 <ul>
-<li><strong>The GitHub App key.</strong> <code>setup.sh</code> rebuilds the <code>github-app-v1</code> Secret from the macOS keychain on every run and required <code>security</code> unconditionally.
-  <code>GAG_APP_KEY_FROM_CLUSTER=1</code> now keeps the Secret already in the cluster instead, after checking it names the App and installation the run was given, and fails when it is absent or names others.
-  The Secret survives the gate's scale to zero nodes, so a run with no keychain can use it.
-  Rotating the key still needs one keychain run.</li>
-<li><strong>Local tools.</strong> The gate checks for <code>gcloud</code>, <code>kubectl</code>, <code>gke-gcloud-auth-plugin</code>, <code>helm</code>, the pinned <code>cosign</code> and more before it spends anything.
-  Which of these a hosted runner already carries is unmeasured; the workflow in milestone 3 installs whatever is missing, pinned.</li>
+<li><strong>The GitHub App key.</strong> <code>setup.sh</code> rebuilds the <code>github-app-v1</code> Secret from the macOS keychain on every run.
+  <code>GAG_APP_KEY_FROM_CLUSTER=1</code> keeps the Secret already in the cluster instead, after checking it names the App and installation the run was given, and fails when it is absent or names others.
+  The Secret survives the gate's scale to zero nodes, so a run with no keychain can use it; rotating the key still needs one keychain run.</li>
+<li><strong>Repository variables.</strong> The gate sets <code>vars.GAG_RUNNER</code> on bring-up and resets it and <code>vars.GAG_E2E_RUNNER</code> on teardown, and a workflow's <code>GITHUB_TOKEN</code> has no permission that writes repository variables.
+  <code>unit-test.yml</code> and <code>integration-test.yml</code> now take the per-run <code>runner</code> input <code>e2e-test.yml</code> already had, <code>start.sh</code> routes its dispatches through it, and <code>GAG_ROUTE_VARS=0</code> skips the writes in <code>start.sh</code>, <code>stop.sh</code> and <code>e2e-stop.sh</code>.</li>
+<li><strong>The App's installation id.</strong> The gate resolves it through <code>/orgs/&lt;org&gt;/installations</code>, which needs an org-scoped token.
+  <code>ci-identity-setup.sh</code> resolves it where <code>gh</code> has that access and publishes it as an environment variable, and the workflow passes it in as <code>INSTALLATION_ID</code>.</li>
 </ul>
+<p>The tools come from pinned actions (<code>setup-gcloud</code> with <code>kubectl</code> and <code>gke-gcloud-auth-plugin</code>, <code>setup-helm</code>) and <code>make cosign</code>.</p>
 <h2 id="3-the-workflow">3. The workflow<a class="headerlink" href="#3-the-workflow" title="Permanent link">&para;</a></h2>
-<p>A <code>push: tags: ['v*-rc.*']</code> workflow runs <code>validate-release.sh &lt;tag&gt;</code> with <code>ASSUME_YES=1</code> and <code>GAG_APP_KEY_FROM_CLUSTER=1</code>, inside the <code>dogfood-validation</code> environment.
-The gate runs for the better part of an hour, and its e2e leg dispatches <code>e2e-test.yml</code> itself, which <code>GITHUB_TOKEN</code> can do with <code>actions: write</code>.</p>
-<p><strong>The runner is GitHub-hosted, never dogfood.</strong> The gate scales the dogfood cluster up from zero, redeploys the gateway the dogfood runners depend on, and then drives e2e through them, so a job running on those runners would redeploy its own host.</p>
-<p>The service account's roles widen here, and the probe's write assertion moves with them.
-The candidates are <code>roles/container.admin</code> for the node-pool resizes, <code>clusters update</code>, and the Helm and CRD writes, and <code>roles/compute.viewer</code> for the quota read and the managed instance group listing.
-That list is derived from the <code>gcloud</code> calls the dogfood scripts make, not from a run, so the first CI run is what confirms it.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml"><code>validate-candidate.yml</code></a> runs <code>validate-release.sh &lt;tag&gt;</code> on a GitHub-hosted runner inside the <code>dogfood-validation</code> environment, never on dogfood: the gate scales the dogfood cluster from zero and redeploys the gateway those runners depend on.</p>
+<p><strong>A tag push dispatches the gate on <code>main</code>; it never runs the gate itself.</strong> The provider accepts a token only from this workflow on <code>refs/heads/main</code>.
+A push of a <code>v*-rc.*</code> tag runs the tag's own copy of the file, and a tag can be cut from any commit, so trusting the tag would let anyone who can push one run a modified workflow with the gate's grant.
+The push job holds no cloud access and only dispatches <code>validate</code> on <code>main</code> with the tag as input, so the gate always runs <code>main</code>'s scripts against the tag's signed artifacts, as the local gate does.</p>
+<p><strong>The grant is <code>roles/container.admin</code> and <code>roles/compute.viewer</code></strong>, approved by the maintainer on 2026-10-04.
+The gate resizes node pools, updates the cluster, installs the GMC's Helm release (ClusterRoles, webhooks, CRDs) and reads the project's CPU quota and instance groups.
+No narrower GKE role set that still writes ClusterRoles was measured.
+The list is derived from the calls the dogfood scripts make, so the first CI run is what confirms it.
+The milestone 1 probe retires with this change: the provider now names the gate's workflow, so the probe can no longer get a token.</p>
+<p><strong>The lease is host-local, so the workflow carries its own reclaim.</strong> <code>lib/lease.sh</code> records a pid on the host that ran the gate, so a CI run's lease is invisible to <code>--reclaim</code> anywhere else and vanishes with the runner.
+The gate step's limit is shorter than the job's, and a final step runs <code>--reclaim</code> on the same runner after a failure or cancellation, while the lease is still there to read.
+A <code>concurrency</code> group keeps two CI runs off the cluster at once; a CI run and a local gate still cannot see each other, which <a href="../../queue/Q1158/">Q1158</a> tracks.</p>
 <h2 id="4-publish-reads-the-ci-verdict">4. Publish reads the CI verdict<a class="headerlink" href="#4-publish-reads-the-ci-verdict" title="Permanent link">&para;</a></h2>
 <p><code>publish.yml</code>'s <code>validated-candidate</code> job reads <code>refs/validated/</code> today (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-validated-candidate.sh">check-validated-candidate.sh</a>).
 Once milestone 3 has run on a real candidate, it reads the workflow's conclusion on that tag's commit instead, and the marker and its recorder retire.

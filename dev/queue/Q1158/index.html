@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1157/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1158/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Gate exits 0 after a pass whose teardown left nodes up - GitHub Actions Gateway</title>
+        <title>Make the release gate's lease visible across hosts - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gate-exits-0-after-a-pass-whose-teardown-left-nodes-up" class="md-skip">
+        <a href="#make-the-release-gates-lease-visible-across-hosts" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Gate exits 0 after a pass whose teardown left nodes up
+              Make the release gate's lease visible across hosts
             
           </span>
         </div>
@@ -2597,21 +2597,14 @@
   
 
 
-<h1 id="gate-exits-0-after-a-pass-whose-teardown-left-nodes-up">Gate exits 0 after a pass whose teardown left nodes up<a class="headerlink" href="#gate-exits-0-after-a-pass-whose-teardown-left-nodes-up" title="Permanent link">&para;</a></h1>
-<p>A gate that passes and whose teardown then ends <code>Teardown INCOMPLETE</code> exits 0, so the one status a caller or a watching session reads says nothing about the nodes still billing.
-<code>teardown()</code> runs from the <code>EXIT</code> trap and returns 0, and a trap that returns keeps the script's original status.
-The reviewer of PR 2026 measured that on bash 5.3.15.
-This session did not re-measure it.</p>
-<p><code>scripts/dogfood/release-sentinel.sh</code> makes the gap worse: its <code>passed</code> message says <code>the gate's own task exits when the cluster is back to 0 nodes at rest</code>, which is false whenever a stop script refused.
-<code>docs/operations/release.md</code> § Confirming the cluster is actually at rest now names the case and sends the operator to <code>ops.sh at-rest</code>, so the docs no longer depend on the exit code.
-The status itself is still wrong.</p>
-<p><strong>The fix:</strong> have the trap end with <code>exit 1</code> when the gate's own status was 0 and either stop script failed.
-There is precedent in the same file: after a pass whose verdict could not be recorded, the gate already <code>exit 1</code>s (<code>scripts/dogfood/validate-release.sh:1732:       exit 1</code>).
-Correct the sentinel's <code>passed</code> wording in the same change.
-Keep the progress event <code>teardown done</code> rather than <code>fail</code>: <code>scripts/dogfood/lib/progress.sh</code> lets the first <code>fail</code> turn a passed gate into <code>failed</code>, and the verdict itself did pass and is recorded.
-Assert both directions in <code>scripts/dogfood/validate-release-test.sh</code>.
-The test has to read the status of a process whose EXIT trap fired, so drive a child <code>bash</code> rather than calling <code>teardown</code> in a subshell, where the trap never runs.</p>
-<p>Filed from the review of PR 2026 (Q1155), which kept the lease on this path and left the exit status out of scope.</p>
+<h1 id="make-the-release-gates-lease-visible-across-hosts">Make the release gate's lease visible across hosts<a class="headerlink" href="#make-the-release-gates-lease-visible-across-hosts" title="Permanent link">&para;</a></h1>
+<p><code>lib/lease.sh</code> records the gate's ownership as a file holding a pid, under <code>~/.local/state</code> on the host that ran it, and only that host can act on it.
+Once Q880's workflow runs the gate in CI, a CI run and a maintainer's local gate cannot see each other: either can start while the other owns billable cluster state, and a CI run's lease vanishes with its runner.</p>
+<p>Q880 contains the CI half without this: the workflow's <code>concurrency</code> group serializes CI runs, and a final step on the same runner runs <code>--reclaim</code> after a failure or cancellation while the lease is still there.
+What it does not cover is a local run overlapping a CI one, and a runner lost before that step runs.</p>
+<p><strong>The likely shape</strong> is a lease the cluster itself holds, such as a <code>coordination.k8s.io</code> Lease naming the holder and renewed while the gate runs, so any host reads the same record.
+The pid check that makes a host-local lease safe has no cross-host equivalent, so expiry by renewal time replaces it, and that trade needs its own reasoning before it is built.</p>
+<p>Not Q880, which runs the gate in CI and accepts this gap for its first runs; not Q1155, which keeps the host-local lease when a teardown stop script refuses.</p>
 
 
 
