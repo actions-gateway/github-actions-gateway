@@ -121,7 +121,7 @@ command -v kubectl >/dev/null 2>&1 && have_kubectl=1
 
 run_checker "$(fixture)"
 if ((have_kubectl)); then
-	expect 'the shipped tree renders' 0 '4 targets (2 shared, 2 persistent), 5 PVCs'
+	expect 'the shipped tree renders' 0 '5 targets (2 shared, 2 persistent, 1 Dragonfly), 5 PVCs'
 else
 	expect 'the shipped tree renders' 0 'renders not checked'
 fi
@@ -280,6 +280,29 @@ edit "${root}/kustomization.yaml" 'resources:
 run_checker "${root}"
 if ((have_kubectl)); then
 	expect 'a PVC reaching an ephemeral target is caught' 1 'but it is an ephemeral target'
+fi
+
+# --- rule 6: the Dragonfly back end reaches every instance, and only there ---
+#
+# The component selects by label, so a selector that stops matching renders the
+# plain base and exits 0: the overlay would read as applied with nothing proxied.
+
+root="$(fixture)"
+edit "${root}/components/dragonfly-backend/kustomization.yaml" 'labelSelector: app=registry-mirror' 'labelSelector: app=registry-mirror-renamed'
+run_checker "${root}"
+if ((have_kubectl)); then
+	expect 'a Dragonfly selector that matches nothing is caught' 1 'routes 0 of 5 mirror instances'
+fi
+
+# The inverse: the back end composed into a default target makes it the default.
+root="$(fixture)"
+edit "${root}/overlays/persistent/kustomization.yaml" 'resources:' 'components:
+  - ../../components/dragonfly-backend
+resources:'
+run_checker "${root}"
+if ((have_kubectl)); then
+	expect 'the back end reaching a non-Dragonfly target is caught' 1 'but only the
+       Dragonfly target may'
 fi
 
 # --- the kubectl guard -------------------------------------------------------
