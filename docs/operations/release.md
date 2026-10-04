@@ -277,8 +277,9 @@ The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which reso
 It runs the same script with the same verdict and marker, from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/q880-ci-release-validation.md).
 Run it locally as below when CI cannot, and never both at once: the two cannot see each other's lease ([Q1158](../queue/Q1158.md)).
 
-**One command runs the whole gate**, and it runs for the better part of an hour — a green `v1.3.0-rc.4` run took 39 minutes end to end — with nothing to type at it after the first confirmation.
-`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
+**One command runs the whole gate**, with nothing to type at it after the first confirmation.
+A green `v1.3.0-rc.4` run took 39 minutes end to end with one e2e leg; the gate now runs two, Kata then privileged DinD, and a healthy e2e leg takes 25–33 minutes.
+`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → the e2e matrix again on privileged DinD → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the `Failure diagnostics` section of a failed run's log (e.g. the `FailedScheduling` events) instead of re-running the gate to watch it fail again.
 The [legs it runs](#the-legs-the-gate-runs) are documented at the end of this section, and are the recovery path if one needs re-running by hand.
 
@@ -570,10 +571,14 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    The `EgressProxy` is manufactured and deleted because dogfood deliberately runs without one; this does not change what the cluster runs.
    **The readings outlive the run.** The gate appends one record per reading to `tmp/soak-readings.jsonl`, and `scripts/dogfood/soak-readings.sh` renders them as the rows the v2 GA plan's soak table takes, so transcribing them is a paste rather than a re-read of the terminal.
    Do it before the window's scrollback is gone: the window is billable and cannot be replayed, so a reading nobody can find afterwards cost the same as one never taken.
-7. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
+7. **Run the e2e matrix again on privileged DinD (Q1159).** `scripts/dogfood/e2e-stop.sh`, then `E2E_VARIANT=dind scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
+   Step 2 runs the Kata variant, the one untrusted pull requests need, so without this the shipped `privileged-dind` template reaches operators with no job ever having run on it; 1.9 moved its daemon from `docker:27-dind` to `docker:28-dind` that way.
+   It runs last because the two variants share one namespace, RunnerSet and node pool, and the sizing and capacity legs read the Kata tenant's state.
+   The mirror census is Kata-only: nothing on the DinD tenant reaches a mirror.
+8. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
    **Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero**, so the gate can report success with a node still billing for several more minutes.
    Confirm at rest by asking the cluster (`scripts/dogfood/ops.sh at-rest`), never by reading the gate's own teardown line.
-8. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
+9. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
    `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 A red matrix, a failed CRD smoke, a dead `NodeShare` profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.

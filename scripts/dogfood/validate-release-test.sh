@@ -1512,6 +1512,46 @@ check "soak: a failed apply does not fail the gate" "0" "${rc}"
 check "soak: a failed apply still records Q1059" "Q1059" "$(reading_for Q1059 id)"
 check "soak: a failed apply records Q1059 as not-taken" "not-taken" "$(reading_for Q1059 verdict)"
 
+# --- the DinD leg (Q1159) -----------------------------------------------------
+#
+# e2e_leg runs whatever E2E_VARIANT names, Kata by default. dind_leg must take
+# the Kata tenant down before e2e-start.sh re-applies the dind overlay over the
+# same namespace and RunnerSet, must hand e2e-start.sh the dind variant, and must
+# skip the mirror census, which only the Kata tenant's mirror-only egress makes
+# meaningful. Each case runs in a subshell so its stubs do not leak.
+
+LEG_LOG="${SCRATCH}/legs.log"
+leg_stubs() {
+	bash() { printf 'bash %s variant=%s\n' "${1##*/}" "${E2E_VARIANT:-}" >>"${LEG_LOG}"; }
+	dispatch_e2e_run() { E2E_RESOLVED_RUN_ID=42; }
+	capture_worker_sizing() { :; }
+	report_e2e_run() { :; }
+	census_mirror_clients() { echo "census" >>"${LEG_LOG}"; }
+}
+# line_of NEEDLE — 1-based line of NEEDLE's first appearance in LEG_LOG, 0 if none.
+line_of() {
+	local n
+	n="$(grep -nF -- "$1" "${LEG_LOG}" | head -1 | cut -d: -f1)"
+	echo "${n:-0}"
+}
+
+: >"${LEG_LOG}"
+(leg_stubs; unset E2E_VARIANT; e2e_leg >/dev/null 2>&1)
+check_contains "e2e leg: the Kata leg takes the mirror census" "census" "$(cat "${LEG_LOG}")"
+
+: >"${LEG_LOG}"
+(leg_stubs; unset E2E_VARIANT; dind_leg >/dev/null 2>&1)
+log="$(cat "${LEG_LOG}")"
+check_contains "dind leg: starts the e2e tenant as the dind variant" "bash e2e-start.sh variant=dind" "${log}"
+check_not_contains "dind leg: skips the mirror census" "census" "${log}"
+stop_at="$(line_of "bash e2e-stop.sh")"
+start_at="$(line_of "bash e2e-start.sh")"
+if ((stop_at > 0 && start_at > 0 && stop_at < start_at)); then
+	check "dind leg: takes the Kata tenant down before starting the DinD one" "ok" "ok"
+else
+	check "dind leg: takes the Kata tenant down before starting the DinD one" "stop before start" "stop at ${stop_at}, start at ${start_at}"
+fi
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1
