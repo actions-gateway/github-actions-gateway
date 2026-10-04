@@ -137,6 +137,7 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
   Not started; needs a booked session.** Held on 2026-10-04 while another session was using the cluster.
   The Q408 Phase-4 sequence with `E2E_MIRROR_BACKEND=dragonfly`: the [§3.7](q408-untrusted-pr-egress.md#37-the-phase-2-validation-battery) battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
   Three readings this variant adds: blob `GET`s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a `CONNECT` through the seed peer to `self-signed.badssl.com` refused.
+  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (`dragonfly_readings` in `scripts/dogfood/validate-release.sh`); the mirror hit counts it does not take.
 
 ## 8. What this plan does not cover
 
