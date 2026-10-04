@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q539/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1160/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate the Dragonfly mirror back end on dogfood - GitHub Actions Gateway</title>
+        <title>Run a Kata + Dragonfly e2e leg in the release gate - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-the-dragonfly-mirror-back-end-on-dogfood" class="md-skip">
+        <a href="#run-a-kata--dragonfly-e2e-leg-in-the-release-gate" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate the Dragonfly mirror back end on dogfood
+              Run a Kata + Dragonfly e2e leg in the release gate
             
           </span>
         </div>
@@ -2597,12 +2597,21 @@
   
 
 
-<h1 id="validate-the-dragonfly-mirror-back-end-on-dogfood">Validate the Dragonfly mirror back end on dogfood<a class="headerlink" href="#validate-the-dragonfly-mirror-back-end-on-dogfood" title="Permanent link">&para;</a></h1>
-<p>Dragonfly fails the mirror contract as the endpoint workers reach: dfdaemon's proxy is an open forward proxy that forwards pushes, so it sits behind the five Distribution mirrors instead (<a href="../../plan/q539-dragonfly-mirror-backend/">plan §2, §4</a>).
-That back end is built and measured on kind: <code>E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh</code>.
-What remains is Phase 3, a booked dogfood session: the Q408 §3.7 battery, one Kata e2e run with its in-job negatives unchanged, blob <code>GET</code>s taking the P2P path in the seed peer's log, and a worker timing out on the seed proxy port.
-The release gate is to take that reading on every candidate (<a href="../Q1160/">Q1160</a>), and its first run discharges Phase 3.
-Artifacts and cache saves stay out of scope, <a href="../../plan/caching-and-worker-storage/">per content class</a>.</p>
+<h1 id="run-a-kata--dragonfly-e2e-leg-in-the-release-gate">Run a Kata + Dragonfly e2e leg in the release gate<a class="headerlink" href="#run-a-kata--dragonfly-e2e-leg-in-the-release-gate" title="Permanent link">&para;</a></h1>
+<p>Blocked by Q1159's DinD leg (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/2031">PR #2031</a>) and by <a href="../Q539/">Q539</a>'s back end (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/2027">PR #2027</a>).</p>
+<p>Decided 2026-10-04: every release candidate is tested in each mirror mode, so the gate runs a third serial e2e leg after Kata and DinD, on Kata with <code>E2E_MIRROR_BACKEND=dragonfly</code>.
+It is Kata rather than DinD because only the Kata tenant's egress is mirror-only; on DinD a worker reaches upstreams directly, so the back end is not the path under test.
+Today <code>validate-release.sh</code> never sets either variable, so every gate run is Kata on Distribution alone.</p>
+<p><strong>The shape is Q1159's.</strong> <code>e2e-stop.sh</code>, then <code>e2e-start.sh</code> with the back end set, then <code>e2e_leg</code>'s dispatch, watch and report; a red matrix fails the gate.
+Both legs rewrite the same sequence in <code>validate-release.sh</code>, which is why this waits for #2031 to merge rather than racing it.</p>
+<p><strong>It adds the readings that make the leg say something about Dragonfly</strong>, from <a href="../../plan/q539-dragonfly-mirror-backend/#7-phases">the plan's Phase 3</a>: blob <code>GET</code>s taking the P2P path in the seed peer's log, a worker timing out on the seed proxy port, and a <code>CONNECT</code> through the seed peer to <code>self-signed.badssl.com</code> refused.
+A green matrix alone cannot tell the back end was used, because the mirrors serve either way.
+The mirror census belongs on this leg as well as the plain Kata one.</p>
+<p><strong>Cost.</strong> One more leg per gate window; the runbook measures a healthy leg at 25–33 minutes, so three legs add roughly an hour over today's gate.
+Node cost is unpriced, as it is for Q1159.
+The CI path (<code>validate-candidate.yml</code>, Q880) already installs helm, which the back end needs to mint its CA.</p>
+<p>The first gate run with this leg also discharges Q539's Phase 3, so Q539 closes when it does.
+Not <a href="../Q1025/">Q1025</a>, which is about driving the admission ladder's placeability rung in the same script; this adds a leg rather than a reading to an existing one.</p>
 
 
 

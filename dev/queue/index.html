@@ -2982,6 +2982,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Dragonfly fails the mirror contract as the endpoint workers reach: dfdaemon's proxy is an open forward proxy that forwards pushes, so it …</td>
 </tr>
 <tr>
+<td><a href="Q1160/">Q1160</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Run a Kata + Dragonfly e2e leg in the release gate</a></td>
+<td><code>dogfood</code> <code>security</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked by Q1159's DinD leg (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/2031">PR #2031</a>) and by <a href="Q539/">Q539</a>'s back …</td>
+</tr>
+<tr>
 <td><a href="Q540/">Q540</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest</a></td>
 <td><code>security</code></td>
@@ -3964,6 +3972,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><code>lib/lease.sh</code> records the gate's ownership as a file holding a pid, under <code>~/.local/state</code> on the host that ran it, and only that host can …</td>
+</tr>
+<tr>
+<td><a href="Q1161/">Q1161</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Run the release gate's e2e legs in parallel across GCP projects</a></td>
+<td><code>dogfood</code></td>
+<td>💤</td>
+<td>L</td>
+<td><strong>Event:</strong> the release gate's wall clock becomes the thing that delays a release, or a fourth e2e leg is proposed.</td>
 </tr>
 </tbody>
 </table>
