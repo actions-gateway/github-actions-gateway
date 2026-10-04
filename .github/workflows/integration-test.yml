@@ -36,6 +36,10 @@ on:
         description: 'Route the integration-test job to the GAG dogfood cluster (vars.GAG_RUNNER)'
         type: boolean
         default: false
+      runner:
+        description: 'JSON-encoded runs-on for a target_gag dispatch, e.g. ''"gag-ci-scaleset"''. Overrides vars.GAG_RUNNER for THIS run only, so the release gate routes its own dispatches without writing a repository variable. Empty falls through to the variable.'
+        type: string
+        default: ''
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
 # never cancelled (each is a distinct post-merge gate). Keyed on github.ref —
@@ -117,7 +121,7 @@ jobs:
   integration-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(inputs.runner || vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     # One job per module. The two suites are separate go.work modules with
     # separate envtest clusters and no shared state, so running them in one job
     # only serialized them: 308s (GMC) then 284s (AGC) inside a 617s job,

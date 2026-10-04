@@ -151,6 +151,33 @@ rc=$?
 set -e
 check "propagates a failed rollout" "1" "${rc}"
 
+# --- routing: every dispatch carries its runner; the variable is optional -----
+#
+# A workflow's GITHUB_TOKEN cannot write repository variables, so the release
+# gate running in CI (Q880) sets GAG_ROUTE_VARS=0. The dispatches must still
+# reach the scale set, which is why each one names it through `runner` rather
+# than relying on vars.GAG_RUNNER having been set first.
+
+GH_LOG="${WORKDIR}/gh.log"
+gh() { printf '%s\n' "$*" >>"${GH_LOG}"; }
+REPO=owner/name
+
+: >"${GH_LOG}"
+route_ci >/dev/null
+log="$(cat "${GH_LOG}")"
+check_contains "sets vars.GAG_RUNNER by default" "variable set GAG_RUNNER" "${log}"
+check_contains "routes the unit-test dispatch through its runner input" \
+	"workflow run unit-test.yml -f target_gag=true -f runner=\"gag-ci-scaleset\"" "${log}"
+check_contains "routes the integration-test dispatch through its runner input" \
+	"workflow run integration-test.yml -f target_gag=true -f runner=\"gag-ci-scaleset\"" "${log}"
+
+: >"${GH_LOG}"
+GAG_ROUTE_VARS=0 route_ci >/dev/null
+log="$(cat "${GH_LOG}")"
+check_not_contains "GAG_ROUTE_VARS=0 writes no repository variable" "variable set" "${log}"
+check_contains "GAG_ROUTE_VARS=0 still dispatches onto the scale set" \
+	"workflow run unit-test.yml -f target_gag=true -f runner=\"gag-ci-scaleset\"" "${log}"
+
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2
 	exit 1

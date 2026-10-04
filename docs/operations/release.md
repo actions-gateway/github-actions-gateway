@@ -273,6 +273,10 @@ A patch line cuts and validates its own candidate like any other release: `publi
 
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
+**Pushing a candidate tag also starts the gate in CI.** [`validate-candidate.yml`](../../.github/workflows/validate-candidate.yml) dispatches the gate on `main` for the tag, and the run waits for approval in the `dogfood-validation` environment: open the run, choose **Review deployments**, tick the environment, and approve.
+It runs the same script with the same verdict and marker, from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/q880-ci-release-validation.md).
+Run it locally as below when CI cannot, and never both at once: the two cannot see each other's lease ([Q1158](../queue/Q1158.md)).
+
 **One command runs the whole gate**, and it runs for the better part of an hour — a green `v1.3.0-rc.4` run took 39 minutes end to end — with nothing to type at it after the first confirmation.
 `validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the `Failure diagnostics` section of a failed run's log (e.g. the `FailedScheduling` events) instead of re-running the gate to watch it fail again.
