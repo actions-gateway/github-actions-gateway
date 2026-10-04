@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, `rc.2`, is the first validated in CI.** Scoped 2026-09-17; Q1150 added 2026-09-30.
+> **Status: all three gates landed (Q1085, Q413, then Q1150); `v1.9.0-rc.1` cut 2026-10-02 and [validated](#v190-rc1) on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, `rc.2`, is the first validated in CI, and `rc.2` is held for Q1158 and Q1160.** Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
 > It was held against a negative reading naming a `v2beta1` shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -38,10 +38,12 @@ Three gating rows and the candidate validation, in the order they land, then the
 | Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
 | Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
 | Q1150 | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | ✅ landed: all five rules name `v2` and the handlers are typed on `api/v2`; the `EgressProxy` alias and the `RunnerSet` Classic protocol are read from their conversion annotations, pinned by envtest writes at `v2alpha1` |
-| Q880 | Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each `v*-rc.*` tag, and `publish.yml` reading its verdict | `1.9-gate` | 🔲 milestone 1 ✅ (probe green 2026-10-04); milestones 2–3 in review (#2029); milestone 4 to follow |
+| Q880 | Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each `v*-rc.*` tag, and `publish.yml` reading its verdict | `1.9-gate` | 🔲 milestone 1 ✅; milestones 2–3 merged (#2029) and set up 2026-10-04, unproven until `rc.2`'s CI run; milestone 4 to follow |
 | Q1155 | Gate teardown keeps its lease when a stop script refuses, so `--reclaim` finds stranded nodes | gates, with Q880 | ✅ landed (#2026) |
-| Q1159 | The gate runs the e2e matrix a second time on the shipped `privileged-dind` template, after the Kata legs | gates | 🔲 in review |
-| — | RC validated on dogfood | gates | `rc.1` ✅ through the local gate; `rc.2` 🔲 to be validated in CI once Q880 lands |
+| Q1159 | The gate runs the e2e matrix a second time on the shipped `privileged-dind` template, after the Kata legs | gates | ✅ landed (#2031) |
+| Q1158 | The gate's lease is visible across hosts, so a CI run and a local run cannot overlap on the cluster | gates `rc.2` | 🔲 in progress |
+| Q1160 | A third e2e leg, Kata with the Dragonfly mirror back end, and the readings that show Dragonfly carried the pulls | gates `rc.2` | 🔲 in progress |
+| — | RC validated on dogfood | gates | `rc.1` ✅ through the local gate; `rc.2` 🔲 cut once Q1158 and Q1160 land, then validated in CI |
 | Q1101 | GMC provisions the AGC ServiceMonitor for `v2` ActionsGateways (#1991) | rides | ✅ landed |
 | Q1151 | AGC reclaims the scale-set worker whose runner held the job (#2011) | rides | ✅ landed |
 | Q1146 | Worker image bumps `actions/runner` to 2.337.0 (#2005) | rides | ✅ landed |
@@ -51,6 +53,10 @@ Q1155 gates with it because a CI run is unattended: on a laptop the stranded nod
 The stable-tag passes below stand, except that the notes' **Validation** section and the commit count are re-derived for `rc.2`.
 
 **Q1159 was added the same day, because 1.9 changed a template no gate ran.** #2004 moved `privileged-dind`'s daemon from `docker:27-dind` to `docker:28-dind`, and the gate ran only the Kata variant, so `rc.1` validated without a job ever running on the shipped DinD template.
+
+**`rc.2` waits for Q1158 and Q1160 as well, decided on 2026-10-04.** Q539's Dragonfly back end merged after `rc.1` (#2027) and its operator page publishes with 1.9.0, but no gate run had used it, since nothing set `E2E_MIRROR_BACKEND`; Q1160 adds the leg that does.
+Q1158 closes the overlap Q880 opened: a CI gate and a local gate each keep their lease on their own host, so neither sees the other.
+Neither changes a released file; both change what the candidate's validation covers.
 
 **Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.** Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when `v2` first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 `v1.8.0` tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
