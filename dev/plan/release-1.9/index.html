@@ -2784,13 +2784,19 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>Q880</td>
 <td>Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each <code>v*-rc.*</code> tag, and <code>publish.yml</code> reading its verdict</td>
 <td><code>1.9-gate</code></td>
-<td>🔲 milestone 1 merged, its bootstrap not yet run</td>
+<td>🔲 milestone 1 ✅ (probe green 2026-10-04); milestones 2–3 in review (#2029); milestone 4 to follow</td>
 </tr>
 <tr>
 <td>Q1155</td>
 <td>Gate teardown keeps its lease when a stop script refuses, so <code>--reclaim</code> finds stranded nodes</td>
 <td>gates, with Q880</td>
-<td>🔲 in review (#2026)</td>
+<td>✅ landed (#2026)</td>
+</tr>
+<tr>
+<td>Q1159</td>
+<td>The gate runs the e2e matrix a second time on the shipped <code>privileged-dind</code> template, after the Kata legs</td>
+<td>gates</td>
+<td>🔲 in review</td>
 </tr>
 <tr>
 <td>—</td>
@@ -2821,6 +2827,7 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <p><strong>Q880 was added on 2026-10-04, after <code>rc.1</code> validated.</strong> It touches no released file, so <code>rc.2</code> ships the same artifacts <code>rc.1</code> passed with; the hold buys where the verdict is recorded, a job result on the tag rather than a ref anyone who can push a tag can also push.
 Q1155 gates with it because a CI run is unattended: on a laptop the stranded nodes of a failed teardown were noticed and stopped by hand, and in CI nobody would notice.
 The stable-tag passes below stand, except that the notes' <strong>Validation</strong> section and the commit count are re-derived for <code>rc.2</code>.</p>
+<p><strong>Q1159 was added the same day, because 1.9 changed a template no gate ran.</strong> #2004 moved <code>privileged-dind</code>'s daemon from <code>docker:27-dind</code> to <code>docker:28-dind</code>, and the gate ran only the Kata variant, so <code>rc.1</code> validated without a job ever running on the shipped DinD template.</p>
 <p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 <code>v1.8.0</code> tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
 Inside one release the sequencing recovers what it can, which is less than a tag's worth.
