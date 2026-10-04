@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.8.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2601,6 +2601,8 @@
 <p>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker a maintainer's local gate writes today.
 Milestone 1 (keyless CI identity) is code plus a one-time bootstrap a maintainer runs; milestone 3's workflow cannot go green until that bootstrap and the identity probe have.
 Milestones 2 to 4 remain: the gate's tools on a Linux runner, the tag-triggered workflow, and <code>publish.yml</code> reading its verdict.</p>
+<p><strong>Gates 1.9.</strong> <code>v1.9.0-rc.1</code> validated through the local gate on 2026-10-03, and the maintainer chose on 2026-10-04 to hold the stable tag so that 1.9's shipping candidate is the first validated in CI.
+An <code>rc.2</code> cut after this lands ships the same artifacts as <code>rc.1</code>, since nothing here is on the released surface; what it changes is where the verdict is recorded.</p>
 
 
 

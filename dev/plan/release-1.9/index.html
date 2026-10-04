@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.8.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2641,6 +2641,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#stable-tag-verdicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stable-tag verdicts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#candidate-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2718,7 +2729,7 @@
 
 <h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">validated</a> on 2026-10-03; awaiting the promotion decision.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
+<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">validated</a> on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, <code>rc.2</code>, is the first validated in CI.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
 The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
 The version is no longer provisional.
 It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -2770,10 +2781,22 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>✅ landed: all five rules name <code>v2</code> and the handlers are typed on <code>api/v2</code>; the <code>EgressProxy</code> alias and the <code>RunnerSet</code> Classic protocol are read from their conversion annotations, pinned by envtest writes at <code>v2alpha1</code></td>
 </tr>
 <tr>
+<td>Q880</td>
+<td>Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each <code>v*-rc.*</code> tag, and <code>publish.yml</code> reading its verdict</td>
+<td><code>1.9-gate</code></td>
+<td>🔲 milestone 1 merged, its bootstrap not yet run</td>
+</tr>
+<tr>
+<td>Q1155</td>
+<td>Gate teardown keeps its lease when a stop script refuses, so <code>--reclaim</code> finds stranded nodes</td>
+<td>gates, with Q880</td>
+<td>🔲 in review (#2026)</td>
+</tr>
+<tr>
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td>🔲 no candidate cut</td>
+<td><code>rc.1</code> ✅ through the local gate; <code>rc.2</code> 🔲 to be validated in CI once Q880 lands</td>
 </tr>
 <tr>
 <td>Q1101</td>
@@ -2795,6 +2818,9 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 </tr>
 </tbody>
 </table>
+<p><strong>Q880 was added on 2026-10-04, after <code>rc.1</code> validated.</strong> It touches no released file, so <code>rc.2</code> ships the same artifacts <code>rc.1</code> passed with; the hold buys where the verdict is recorded, a job result on the tag rather than a ref anyone who can push a tag can also push.
+Q1155 gates with it because a CI run is unattended: on a laptop the stranded nodes of a failed teardown were noticed and stopped by hand, and in CI nobody would notice.
+The stable-tag passes below stand, except that the notes' <strong>Validation</strong> section and the commit count are re-derived for <code>rc.2</code>.</p>
 <p><strong>Q1085 lands before Q413, and the ordering is the whole of what is left of the margin.</strong> Both rows argued for landing the alias reject in 1.8, so that the stored population would already be clean when <code>v2</code> first appeared, against landing it here, where "the guard and the hazard arrive together, which works and has no margin".
 <code>v1.8.0</code> tagged on 2026-09-14 carrying neither of Q1085's remaining halves, so the no-margin case is the one that shipped.
 Inside one release the sequencing recovers what it can, which is less than a tag's worth.
@@ -2859,6 +2885,46 @@ The landmine question added the custom-<code>workerImage</code> entry: the runne
 <code>Everything since v1.8.0</code> reads 81, which <code>check-release-notes.sh</code> can verify only once <code>v1.9.0</code> is a tag; re-derive it at the cut if anything merges first.
 <strong>Validation</strong> reads <em>pending</em> until this candidate's run reports.</p>
 <p><strong>Deferred to the stable tag, deliberately.</strong> The marketing reconciliation, the roadmap and <code>features.md</code> reconciliation, the announce-bar highlight, and the three prose passes (<code>readability</code>, <code>deslop</code>, <code>semantic-remediation</code>) all bind when the text publishes, and a prerelease deploys no docs and generates rather than curates its Release body.</p>
+<h2 id="stable-tag-verdicts">Stable-tag verdicts<a class="headerlink" href="#stable-tag-verdicts" title="Permanent link">&para;</a></h2>
+<p>Taken on 2026-10-04 on a branch cut at <code>8b4b49914</code>; <code>check-artifact-unchanged.sh v1.9.0-rc.1 origin/main</code> exits 0 there, so <code>rc.1</code>'s verdict still describes what ships.</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Install pins</td>
+<td><strong>PASS.</strong> 20 pins across five pages bumped to <code>1.9.0</code> / <code>1.9.z</code>; <code>make release-pins-check</code> reads all 20 as <code>v1.9.0</code>, prepared.</td>
+</tr>
+<tr>
+<td>Marketing reconciliation</td>
+<td><strong>PASS after three edits.</strong> The README's version table said <code>v2beta1</code> was unaffected by the <code>v2.0.0</code> removals, which it is not, and had no <code>v2</code> row; <code>why-gag.md</code> said the v2 API "has only just reached beta". <code>v2</code> now has a <code>features.md</code> entry.</td>
+</tr>
+<tr>
+<td>Competitor claims</td>
+<td><strong>PASS after three edits.</strong> All 26 ARC cells re-read against <code>gha-runner-scale-set-0.15.0</code> (<code>1945b42</code>, released 2026-10-01) and re-stamped. Three clauses had gone wrong: a per-set listener throttle now exists (it still meters API calls, not worker onset); <code>AutoscalingRunnerSet</code> status lost its runner counts to metrics; and <code>Outdated</code> now reacts to a runner GitHub rejected as deprecated, parking the set rather than warning beforehand. No verdict flipped.</td>
+</tr>
+<tr>
+<td>Roadmap and <code>features.md</code></td>
+<td><strong>PASS.</strong> <code>check-roadmap.sh</code> passes as is and with <code>GAG_RELEASE_TAG=v1.9.0</code>, which expires the two <code>new in 1.7</code> chips.</td>
+</tr>
+<tr>
+<td>Announce bar</td>
+<td><strong>PASS.</strong> <code>highlight_for</code> is <code>v1.9.0</code>; a <code>GAG_DOCS_RELEASE=v1.9.0</code> build renders <code>v1.9.0 is here.</code> with the 1.9 highlight.</td>
+</tr>
+<tr>
+<td>Operator caveats</td>
+<td><strong>PASS.</strong> <code>operator-caveats-since.sh v1.8.0</code> reports the same four <code>upgrade.md</code> and one <code>troubleshooting.md</code> sections as at the candidate, plus the runner-version troubleshooting entry; all are in the notes.</td>
+</tr>
+<tr>
+<td>Notes</td>
+<td><strong>Validation</strong> names <code>rc.1</code> and its three windows. <code>Everything since v1.8.0</code> reads 87, the count once this change squash-merges; re-derive it at the tag. The semver floor is unchanged: MINOR, from the same six commits.</td>
+</tr>
+</tbody>
+</table>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
 <h3 id="v190-rc1"><code>v1.9.0-rc.1</code><a class="headerlink" href="#v190-rc1" title="Permanent link">&para;</a></h3>
 <p><strong>PASSED, validated 2026-10-03; promotion to <code>v1.9.0</code> is the maintainer's call.</strong> <code>check-artifact-unchanged.sh v1.9.0-rc.1 origin/main</code> exited 0 at <code>7fbef71d2</code> before the re-run (18 files changed since the tag, none released), and the gate records <code>refs/validated/v1.9.0-rc.1</code> → <code>aff5f2268</code>.

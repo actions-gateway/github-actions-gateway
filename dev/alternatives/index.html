@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.8.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2927,7 +2927,7 @@ ARC models the first two as one person, which is coherent for a single-owner clu
 <tbody>
 <tr>
 <td>Sandboxed workers</td>
-<td><a href="../operations/kata-dind-workloads/">500-line guide</a>, default in GAG's own end-to-end CI, validated on named kernels, no privileged container</td>
+<td><a href="../operations/kata-dind-workloads/">500-line guide</a>, validated end to end on GAG's own cluster before every release, validated on named kernels, no privileged container</td>
 <td>same <code>runtimeClassName</code> field; no doc covers it, absent from chart values, two closed issues ever</td>
 </tr>
 <tr>
