@@ -14,6 +14,14 @@
 # pair") and then keeps running on a self-generated CA the mirrors do not trust,
 # so every upstream fetch fails TLS. ./ca-chart mints an ed25519 key, which is
 # PKCS#8 and was measured to load.
+#
+# UPSTREAM TLS IS VERIFIED ONLY BECAUSE registryMirror.cert IS SET. Without it
+# dfdaemon v1.5.7 builds its direct-path client with no certificate verifier at
+# all (proxy/mod.rs), and a self-signed or expired upstream answered 200. Set to
+# the image's public bundle, both were refused while Docker Hub still answered.
+# That covers tags and token requests. The P2P path fetches without verifying
+# TLS whatever this says, and is limited by the rules below to digest-addressed
+# content.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -46,6 +54,8 @@ data:
         requestRateLimit: 400
         caCert: /etc/dragonfly-ca/ca.crt
         caKey: /etc/dragonfly-ca/ca.key
+      registryMirror:
+        cert: /etc/ssl/certs/ca-certificates.crt
       # Only digest-addressed content takes the P2P path: it is immutable, so a
       # cached copy cannot go stale. Tags, token requests and everything else
       # pass straight through.

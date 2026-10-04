@@ -36,7 +36,7 @@
 #      ephemeral one, which is what tells shared-tenants-persistent apart from
 #      shared-tenants.
 #   6. The Dragonfly target routes every instance through the seed peer (Q539),
-#      and no other target routes any. Its component patches by label, so a
+#      each trusting the seed peer's CA alone, and no other target routes any. Its component patches by label, so a
 #      label it no longer matches renders the plain base at exit 0.
 #
 # Rules 2-6 need kubectl, which is e2e-tier in scripts/ci/check-tools.sh, so
@@ -88,6 +88,9 @@ DRAGONFLY_TARGETS=(overlays/dragonfly)
 
 # The env entry components/dragonfly-backend adds to each registry container.
 PROXY_ENV='- name: HTTPS_PROXY'
+# Without it Go also reads the image's /etc/ssl/certs, and the registry trusts
+# every public root as well as the seed peer's CA.
+CERT_DIR_ENV='- name: SSL_CERT_DIR'
 
 # One PVC per mirror instance -- overlays/persistent/pvc.yaml. Named rather than
 # counted for the reason the targets are.
@@ -321,6 +324,11 @@ for target in "${RENDER_TARGETS[@]}"; do
 	[[ -n "${RENDERS[$target]:-}" ]] || continue
 	proxied="$(grep -cF -- "$PROXY_ENV" <<<"${RENDERS[$target]}" || true)"
 	if contains "$target" "${DRAGONFLY_TARGETS[@]}"; then
+		pinned="$(grep -cF -- "$CERT_DIR_ENV" <<<"${RENDERS[$target]}" || true)"
+		((pinned == ${#PVCS[@]})) ||
+			fail "$TREE/$target pins the trust store of $pinned of ${#PVCS[@]} mirror instances.
+       An instance without SSL_CERT_DIR also trusts the image's public roots, so
+       it is not held to the seed peer's CA."
 		((proxied == ${#PVCS[@]})) ||
 			fail "$TREE/$target routes $proxied of ${#PVCS[@]} mirror instances through the Dragonfly seed peer.
        components/dragonfly-backend patches every Deployment labelled

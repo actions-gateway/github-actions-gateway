@@ -88,8 +88,9 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
-          # The image declares no user and writes under each of these at
-          # startup; measured non-root with a read-only root filesystem.
+          # The image declares no user. /etc/dragonfly is its config, read-only;
+          # it writes under each of the others at startup. Measured non-root
+          # with a read-only root filesystem.
           volumeMounts:
             - name: config
               mountPath: /etc/dragonfly

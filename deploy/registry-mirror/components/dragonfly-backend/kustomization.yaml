@@ -6,7 +6,9 @@ kind: Component
 #
 # WHAT IT CHANGES. Each registry container sends its upstream traffic, token
 # requests included, through the Dragonfly seed peer as an HTTPS proxy, and
-# trusts the CA that peer intercepts TLS with (and only that CA). Workers are
+# trusts the CA that peer intercepts TLS with. SSL_CERT_DIR is what makes it
+# that CA alone: Go reads the image's /etc/ssl/certs unless it is set, and with
+# SSL_CERT_FILE only, a registry with no proxy fetched from Docker Hub. Workers are
 # untouched: they still reach Distribution on 5000, which keeps the mirror
 # contract by construction. REGISTRY_PROXY_REMOTEURL stays the real upstream on
 # purpose -- Distribution 3.1.1 discards a bearer challenge whose realm is not on
@@ -39,6 +41,8 @@ patches:
                     value: http://dragonfly-seed-client.gag-dragonfly.svc.cluster.local:4001
                   - name: SSL_CERT_FILE
                     value: /etc/dragonfly-proxy-ca/ca.crt
+                  - name: SSL_CERT_DIR
+                    value: /etc/dragonfly-proxy-ca
                 volumeMounts:
                   - name: dragonfly-proxy-ca
                     mountPath: /etc/dragonfly-proxy-ca

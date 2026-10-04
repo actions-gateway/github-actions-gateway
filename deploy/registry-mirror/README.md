@@ -60,7 +60,9 @@ Re-render the persistent overlay to recreate fresh, empty caches.
 
 [`overlays/dragonfly`](overlays/dragonfly/kustomization.yaml) keeps the five instances and their policies unchanged and sends their upstream traffic through a [Dragonfly](https://d7y.io/) seed peer in `gag-dragonfly`, so content-addressed blobs and manifests ride its peer-to-peer (P2P) cache.
 The contract stays the instances': workers never reach Dragonfly, whose proxy forwards to any host and forwards pushes, and its NetworkPolicy admits only these pods.
-Each registry container trusts the seed peer's interception CA alone, so whoever holds that key in `gag-dragonfly` can serve the mirrors any content for a tag.
+Each registry container trusts the seed peer's interception CA alone (`SSL_CERT_FILE` and `SSL_CERT_DIR`), and the seed peer verifies upstreams against the public roots, so tag lookups are still checked end to end.
+Whoever holds that CA's key can serve the mirrors any content for a tag.
+It is stored in `gag-dragonfly`, and anything with cluster-wide Secret read can read it.
 
 `E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh` applies [`deploy/dragonfly`](../dragonfly/kustomization.yaml), mints the CA on first use, waits for the seed peer, then applies this overlay; it cannot be combined with the persistent one.
 The grading and its measurements are in [q539-dragonfly-mirror-backend.md](../../docs/plan/q539-dragonfly-mirror-backend.md).

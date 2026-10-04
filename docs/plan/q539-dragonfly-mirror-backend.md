@@ -66,17 +66,26 @@ The token itself is not the obstacle: an anonymous Hub token attached by hand pa
 
 - `REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io`, unchanged, so the realm check passes.
 - `HTTPS_PROXY=http://<seed-client>:4001` on the registry container, which Go's default transport honours for every upstream call, token requests included.
-- dfdaemon terminates the tunnel with a certificate from a CA it is given (`proxy.server.caCert`/`caKey`), and the registry container trusts that CA alone (`SSL_CERT_FILE`).
+- dfdaemon terminates the tunnel with a certificate from a CA it is given (`proxy.server.caCert`/`caKey`), and the registry container trusts that CA alone: `SSL_CERT_FILE` names it and `SSL_CERT_DIR` names the directory holding only it.
+  Both are needed, because Go also reads the image's populated `/etc/ssl/certs` unless `SSL_CERT_DIR` is set: with `SSL_CERT_FILE` alone, a registry with no proxy at all fetched the alpine index from Hub with 200, and with both it refused at startup with `x509: certificate signed by unknown authority`.
+- dfdaemon verifies the upstream only because `proxy.registryMirror.cert` names the image's public bundle (`/etc/ssl/certs/ca-certificates.crt`).
+  Left unset, v1.5.7 builds its direct-path client with no certificate verifier at all (`proxy/mod.rs`, whose comment says "native roots"): a `CONNECT` through it to `self-signed.badssl.com` and to `expired.badssl.com` each returned 200.
+  Set, both failed, and `registry-1.docker.io/v2/` still answered 401.
 - Proxy rules `blobs/sha256.*` and `manifests/sha256.*` send content-addressed `GET`s through the P2P path; everything else, tag lookups and token requests, goes direct.
 
-Measured end to end against Hub: `library/alpine:3.20`'s index and amd64 manifest returned 200, and its first layer returned 200 at 3,630,321 bytes with a sha256 equal to its digest. dfdaemon's log shows the layer taking the P2P path (one "proxy HTTPS request via dfdaemon by rule config" line) and every other request going direct (twelve "directly to remote server" lines), with `auth.docker.io` named on eight log lines.
+Measured end to end against Hub, before `registryMirror.cert` and `SSL_CERT_DIR` were added: `library/alpine:3.20`'s index and amd64 manifest returned 200, and its first layer returned 200 at 3,630,321 bytes with a sha256 equal to its digest. dfdaemon's log shows the layer taking the P2P path (one "proxy HTTPS request via dfdaemon by rule config" line) and every other request going direct (twelve "directly to remote server" lines), with `auth.docker.io` named on eight log lines.
+Re-measured with both added: the same layer returned 200 at the same size and digest, with two requests taking the P2P path.
 
 **The contract is Distribution's again, and Dragonfly is not on the worker's path.** Workers reach the five Distribution Services exactly as under Q408, whose properties were measured there; the dfdaemon proxy, the open forward proxy of §2, is admitted only from the mirror pods by NetworkPolicy.
 What Dragonfly adds is the back end: P2P distribution and dedup of layer blobs across seed peers, in place of five independent upstream fetches.
 
-**What moves.** Distribution no longer verifies upstream TLS itself; it verifies dfdaemon's interception certificate and trusts dfdaemon to have verified the upstream.
+**What moves.** Distribution no longer verifies upstream TLS itself; it verifies dfdaemon's interception certificate and relies on dfdaemon to verify the upstream. dfdaemon does so on the direct path, which carries tag lookups and token requests, against the same public roots Distribution used.
+The P2P path does not: dfdaemon's HTTP back end fetches with no certificate verification whatever the proxy config says (read from source at v1.5.7, not probed).
+The rules limit that path to digest-addressed content, so a tampered blob or manifest has the wrong digest; a client pulling by digest rejects it, and whether Distribution itself rejects a proxied blob whose bytes do not match its digest is unmeasured here.
 Tag-to-digest resolution therefore trusts dfdaemon as well as the upstream; a digest-pinned pull still re-verifies client-side, exactly as [q408 §3.1](q408-untrusted-pr-egress.md#31-the-mirror--one-pull-through-cache-per-upstream) argues.
-The CA's key is held only in the `gag-dragonfly` namespace, and anyone holding it can impersonate any upstream to the mirrors.
+Anyone holding the CA's key can impersonate any upstream to the mirrors.
+It is stored only in `gag-dragonfly`, and readable beyond it by any principal with cluster-wide Secret read, the GMC's `manager-role` among them.
+The start script creates it with `kubectl create` rather than `apply`, which would copy the key into a `last-applied-configuration` annotation that `kubectl describe` prints.
 
 **Startup order matters.** Distribution pings its remote while starting and panics if the ping fails, so a mirror pod started before dfdaemon is listening crash-loops until it is; measured once, recovered on restart.
 So does load order: dfdaemon and Distribution both read the CA at startup, so a CA minted under running pods is not seen by either until they restart.
@@ -105,7 +114,7 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
 - **Phase 1 — grade Dragonfly against the contract. ✅ Done (2026-10-04, local).** §2–§6.
 - **Phase 2 — build the back end. ✅ Done (2026-10-04, kind).** `deploy/dragonfly/`: a scheduler and one seed peer with no manager, node DaemonSet or injector (so no MySQL and no Redis; the seed finds the scheduler through a static dynconfig), digest-pinned, non-root under PSA `restricted`, with NetworkPolicies admitting only the mirror pods to the proxy port.
   `deploy/registry-mirror/components/dragonfly-backend` points the five registry containers at it, and `overlays/dragonfly` applies it.
-  The CA comes from `deploy/dragonfly/ca-chart`, Helm's built-in certificate functions as the GAG chart already uses them for its webhook certificate, so no cert-manager; its key goes from `helm template` to `kubectl apply` through a pipe and never touches disk.
+  The CA comes from `deploy/dragonfly/ca-chart`, Helm's built-in certificate functions as the GAG chart already uses them for its webhook certificate, so no cert-manager; its key goes from `helm template` to `kubectl create` through a pipe and never touches disk.
   `scripts/dogfood/e2e-start.sh` gains `E2E_MIRROR_BACKEND=dragonfly`, minting the CA only when its Secret is absent and restarting both sides when it does; the default stays Distribution alone, and `e2e-stop.sh` scales Dragonfly to zero but keeps the CA.
 
   Measured by running the script's own functions against a kind cluster with kindnet enforcing NetworkPolicy:

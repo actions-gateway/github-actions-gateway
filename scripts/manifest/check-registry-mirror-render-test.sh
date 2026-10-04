@@ -294,6 +294,16 @@ if ((have_kubectl)); then
 	expect 'a Dragonfly selector that matches nothing is caught' 1 'routes 0 of 5 mirror instances'
 fi
 
+# The trust store: without SSL_CERT_DIR the public roots are trusted too.
+root="$(fixture)"
+edit "${root}/components/dragonfly-backend/kustomization.yaml" '                  - name: SSL_CERT_DIR
+                    value: /etc/dragonfly-proxy-ca
+' ''
+run_checker "${root}"
+if ((have_kubectl)); then
+	expect 'a Dragonfly instance trusting the public roots is caught' 1 'pins the trust store of 0 of 5'
+fi
+
 # The inverse: the back end composed into a default target makes it the default.
 root="$(fixture)"
 edit "${root}/overlays/persistent/kustomization.yaml" 'resources:' 'components:

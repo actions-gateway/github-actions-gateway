@@ -289,7 +289,7 @@ check_not_contains "renders the ephemeral base by default" \
 	"registry-mirror/overlays/persistent" "${mirror_apply}"
 check_contains "waits on the mirror deployments by label" \
 	"-l app=registry-mirror" \
-	"$(call_line 'kubectl wait --namespace gag-registry-mirror')"
+	"$(call_line 'kubectl rollout status --namespace gag-registry-mirror')"
 # Five image pulls must not queue in front of the bring-up's own verdict.
 check_before "waits for the AGC before applying the mirror" \
 	"actionsgateway/dogfood-e2e" "deploy/registry-mirror"
@@ -414,13 +414,23 @@ check_contains "renders the mirrors with the Dragonfly component" \
 # A registry container pings its upstream through the seed peer while starting
 # and exits when it cannot, so the seed peer has to be serving first.
 check_before "waits for Dragonfly before applying the mirrors" \
-	"--namespace gag-dragonfly --for=condition=Available" "deploy/registry-mirror/overlays/dragonfly"
+	"rollout status --namespace gag-dragonfly" "deploy/registry-mirror/overlays/dragonfly"
 check_contains "mints the CA when its Secret is absent" \
 	"helm template dragonfly-proxy-ca" "$(cat "${CALL_LOG}")"
 check_contains "gives the mirrors the certificate as a ConfigMap" \
 	"create configmap dragonfly-proxy-ca --namespace gag-registry-mirror" "$(cat "${CALL_LOG}")"
+# Over the whole log: the PEM spans lines, so a flag after it is not on the
+# call's first line. The helm stub logs no rendered content, so ca.key cannot
+# appear any other way.
 check_not_contains "never hands the mirrors the key" \
-	"ca.key" "$(call_line 'create configmap dragonfly-proxy-ca')"
+	"ca.key" "$(cat "${CALL_LOG}")"
+# apply would copy the key into a last-applied-configuration annotation.
+check_contains "creates the CA rather than applying it" \
+	"kubectl create -f -" "$(cat "${CALL_LOG}")"
+# A restarted deployment still reports Available from its old pod; rollout
+# status after the restart is what waits for the new one.
+check_before "waits on the seed peer's rollout after restarting it" \
+	"rollout restart deployment --namespace gag-dragonfly" "rollout status --namespace gag-dragonfly"
 # Both sides load the CA at startup, so a fresh one means restarting both.
 check_contains "restarts the seed peer onto a new CA" \
 	"rollout restart deployment --namespace gag-dragonfly" "$(cat "${CALL_LOG}")"

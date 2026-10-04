@@ -128,12 +128,18 @@ mirror_persistent() {
 #
 # The CA is minted only when its Secret is absent, because every render of
 # deploy/dragonfly/ca-chart is a new key. It goes from helm to kubectl through a
-# pipe and never touches disk. The certificate-only ConfigMap the mirrors mount
-# is then rewritten from the Secret on every run, so the two cannot disagree.
+# pipe and never touches disk, and through `create` rather than `apply`, which
+# would copy the key into a last-applied-configuration annotation. The
+# certificate-only ConfigMap the mirrors mount is then rewritten from the Secret
+# on every run, so the two cannot disagree.
 #
 # dfdaemon and the registry containers both load their CA at startup, so a mint
 # under running pods (a rotation: delete the Secret, re-run) leaves them on the
 # old key until restarted. Restarting matches nothing on a first window.
+#
+# The waits are `rollout status`, not `wait --for=condition=Available`: a
+# deployment just restarted, or scaled up from e2e-stop.sh's zero, still reports
+# Available from before, so the condition can be read before the new pods exist.
 apply_dragonfly_backend() {
 	echo "Applying the Dragonfly back end for the registry mirrors (Q539)..."
 	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly"
@@ -141,7 +147,7 @@ apply_dragonfly_backend() {
 	local minted=0
 	if ! kubectl get secret dragonfly-proxy-ca --namespace gag-dragonfly >/dev/null 2>&1; then
 		echo "  Minting the seed peer's CA..."
-		helm template dragonfly-proxy-ca "${REPO_ROOT}/deploy/dragonfly/ca-chart" | kubectl apply -f -
+		helm template dragonfly-proxy-ca "${REPO_ROOT}/deploy/dragonfly/ca-chart" | kubectl create -f -
 		minted=1
 	fi
 	local cert
@@ -159,8 +165,8 @@ apply_dragonfly_backend() {
 		kubectl rollout restart deployment --namespace gag-registry-mirror -l app=registry-mirror
 	fi
 	echo "  Waiting for the scheduler and seed peer to be ready..."
-	kubectl wait --namespace gag-dragonfly \
-		--for=condition=Available deployment -l app=dragonfly --timeout=180s
+	kubectl rollout status --namespace gag-dragonfly \
+		deployment -l app=dragonfly --timeout=180s
 }
 
 apply_registry_mirror() {
@@ -181,8 +187,8 @@ apply_registry_mirror() {
 	fi
 	kubectl apply -k "${overlay}"
 	echo "  Waiting for the mirror instances to be ready..."
-	kubectl wait --namespace gag-registry-mirror \
-		--for=condition=Available deployment -l app=registry-mirror --timeout=180s
+	kubectl rollout status --namespace gag-registry-mirror \
+		deployment -l app=registry-mirror --timeout=180s
 }
 
 main() {
