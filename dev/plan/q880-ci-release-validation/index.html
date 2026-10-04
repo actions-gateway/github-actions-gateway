@@ -2677,7 +2677,7 @@ Running the same gate as a workflow on the candidate tag makes the verdict a job
 <tr>
 <td>1</td>
 <td>Keyless CI identity on the dogfood project</td>
-<td>⚠️ Code in review; the one-time bootstrap and the probe run are the maintainer's</td>
+<td>⚠️ Bootstrap run 2026-10-04; the probe read the cluster and was refused pod creation, but reported the refusal as a failure, fixed here and to be re-run</td>
 </tr>
 <tr>
 <td>2</td>
@@ -2727,6 +2727,8 @@ The project, cluster and zone below are the examples <code>validate-release.sh</
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>dogfood-identity-probe.yml<span class="w"> </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span>--ref<span class="w"> </span>main
 </code></pre></div>
 <p>The run waits for the environment's reviewer, then must go green.</p>
+<p><strong>GKE words a refusal with its reason attached</strong>, <code>no - requires one of ["container.pods.create"] permission(s) in Cloud IAM …</code>, measured on the first probe run on 2026-10-04.
+The probe compared the whole answer to <code>no</code>, so a correct refusal failed; it now compares the first word, and anything else, an error included, still fails.</p>
 <h2 id="2-the-gate-on-a-linux-runner">2. The gate on a Linux runner<a class="headerlink" href="#2-the-gate-on-a-linux-runner" title="Permanent link">&para;</a></h2>
 <p>The gate was written for macOS, and two of its assumptions are known to break on a hosted runner.</p>
 <ul>
