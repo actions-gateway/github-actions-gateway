@@ -269,13 +269,13 @@ The point of doing it here rather than at the tag is that the answers are free b
 Before promoting a release-candidate line to a **stable** `vX.Y.Z` tag, validate the *latest RC* functionally on the dogfood cluster.
 `main`-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
 Run it before every stable (`vX.Y.Z`) cut, patch releases included; skip it only for an RC-to-RC.
-A patch line cuts and validates its own candidate like any other release: `publish.yml` refuses a stable tag whose line has no recorded validation, and there is no patch exemption ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
+A patch line cuts and validates its own candidate like any other release: `publish.yml` refuses a stable tag whose line has no candidate validated in CI, and there is no patch exemption ([the verdict](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
 **Pushing a candidate tag also starts the gate in CI.** [`validate-candidate.yml`](../../.github/workflows/validate-candidate.yml) dispatches the gate on `main` for the tag, and the run waits for approval in the `dogfood-validation` environment: open the run, choose **Review deployments**, tick the environment, and approve.
-It runs the same script with the same verdict and marker, from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/q880-ci-release-validation.md).
-Run it locally as below when CI cannot.
+It runs the same script from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/q880-ci-release-validation.md).
+**Only the CI run produces a verdict `publish.yml` accepts.** Run the gate locally to diagnose or to iterate on the gate itself; a local run records nothing a stable tag can use.
 A local gate and a CI one read the same lease, so whichever starts second refuses rather than resizing the cluster under the first ([why](#a-killed-gate-is-reclaimed-by-the-next-one)).
 
 **One command runs the whole gate**, with nothing to type at it after the first confirmation.
@@ -298,51 +298,42 @@ The gate also checks every local tool it needs up front — including the pinned
 
 ##### The gate records its verdict, and publish reads it
 
-Each leg that passes writes `refs/validated-legs/<rc-tag>/<leg>`, and once every leg has one for the tag's commit the gate writes `refs/validated/<rc-tag>`, pointing at that commit.
-That marker is the only machine-readable record that a candidate was validated: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes, and [`publish.yml`](../../.github/workflows/publish.yml) can read none of those.
+Each CI gate run uploads an artifact, `gate-evidence-<attempt>`, naming the candidate tag, the commit it points at, and every leg that passed.
+It is uploaded on a failed run too, with the legs that passed before the failure.
+[`publish.yml`](../../.github/workflows/publish.yml) reads nothing else as a verdict: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes.
 
-**A stable tag whose release line has no marker does not publish.** `publish.yml`'s `validated-candidate` job refuses it before any image is pushed, and it takes the newest *validated* candidate as its reference rather than the newest candidate tag.
+**A stable tag publishes only when CI runs have passed every leg for one candidate commit.** `publish.yml`'s `validated-candidate` job runs [`check-validated-candidate.sh`](../../scripts/release/check-validated-candidate.sh) before any image is pushed.
+It collects the evidence from every `validate-candidate.yml` run that was dispatched on `main`, checking the workflow path, branch and event on each run, and takes the newest candidate with every leg as its reference rather than the newest candidate tag.
 Those differ, which is the point: `v1.5.0-rc.2` was tagged and published having spent no validation at all ([postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md)), so a gate keyed on the newest prerelease would have waved it through.
 
-It is a record, not an attestation.
-Anyone who can push a tag can push the marker, so it proves the gate was run and reported to, never that a green verdict was earned.
-What it closes is a promote with no validation anywhere behind it.
+**It is the gate's verdict, not a record of one.** Only `main`'s copy of the workflow can put an artifact on such a run.
+Its predecessor, a `refs/validated/<rc-tag>` ref, could be pushed by anyone with push access, so it proved only that the gate had been reported to (Q880).
 
-**If the record fails, nothing needs re-validating.** The gate reports the pass, says the verdict is unrecorded, and exits non-zero.
-Re-run the recorder alone.
-It is idempotent, and refuses only when a marker already names a different commit:
+Ask which legs a release line's candidates still need, from any checkout with `gh` access:
 
 ```bash
-REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N
+REPO=… scripts/release/check-validated-candidate.sh vX.Y.Z
 ```
 
-Read the markers the same way you read any other ref:
-
-```bash
-git ls-remote origin 'refs/validated/*' 'refs/validated-legs/*'
-```
+**Artifacts expire after 90 days.** A candidate validated longer ago than that needs its gate run again before its stable tag.
 
 ##### Re-run only the leg that failed
 
-A failed leg leaves every leg before it recorded, so finish the candidate by running that leg alone rather than the whole gate.
-`--legs` runs the named legs, in the gate's own order, between the usual deploy and teardown:
-
-```bash
-PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh --legs dragonfly vX.Y.Z-rc.N
-```
-
-In CI, set the `legs` input when dispatching the workflow:
+A failed CI run's evidence still lists every leg that passed before the failure, so finish the candidate by running the failed leg alone rather than the whole gate.
+Set the `legs` input when dispatching the workflow:
 
 ```bash
 gh workflow run validate-candidate.yml --ref main -f tag=vX.Y.Z-rc.N -f legs=dragonfly
 ```
 
+It runs the named legs, in the gate's own order, between the usual deploy and teardown.
+`validate-release.sh --legs dragonfly vX.Y.Z-rc.N` does the same locally, for diagnosis.
+
 The legs are `kata`, `crd-smoke`, `soak`, `dind` and `dragonfly`.
 `kata` includes the sizing and capacity checks, because both read the Kata tenant its e2e matrix leaves up.
 Deploy and teardown run every time, since the cluster is at 0 nodes between runs.
 
-A run that passes its legs while others are still unrecorded says so, names the legs left, and writes no candidate marker.
-The marker appears on the run that records the last leg.
+`check-validated-candidate.sh` names the legs a candidate still needs, and passes once runs have covered them all.
 
 ##### The gate reserves the e2e pool's CPU budget
 
@@ -645,8 +636,8 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 9. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
    **Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero**, so the gate can report success with a node still billing for several more minutes.
    Confirm at rest by asking the cluster (`scripts/dogfood/ops.sh at-rest`), never by reading the gate's own teardown line.
-10. **Record the verdict.** `REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N`.
-    `validate-release.sh` does this itself; by hand it is a step, and skipping it leaves `publish.yml` refusing the stable tag with nothing under `refs/validated/` to read ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
+
+These steps are diagnosis and recovery only: a verdict `publish.yml` accepts comes from the CI gate run ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
 A red matrix, a failed CRD smoke, a dead `NodeShare` profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
 
@@ -668,7 +659,7 @@ Exit 1 means the stable tag would ship something no candidate validated.
 Revert it, or cut and validate a new candidate.
 Exit 2 is different and is never a finding about the release: the check itself could not run, so nothing has been measured and the window is still an open question.
 
-**`publish.yml` asks the same question at the tag, and it asks the other half too.** The pre-flight above takes the validated commit as an argument, so it is only as good as whichever candidate you name; the `validated-candidate` job derives that commit from `refs/validated/`, so it also refuses a release line where *no* candidate was ever validated ([the marker](#the-gate-records-its-verdict-and-publish-reads-it)).
+**`publish.yml` asks the same question at the tag, and it asks the other half too.** The pre-flight above takes the validated commit as an argument, so it is only as good as whichever candidate you name; the `validated-candidate` job derives that commit from the CI gate's evidence, so it also refuses a release line where *no* candidate was ever validated ([the verdict](#the-gate-records-its-verdict-and-publish-reads-it)).
 Both halves fail before an image is pushed.
 Running the pre-flight is still worth it, because failing here costs a command and failing there costs a burned tag.
 

@@ -1,17 +1,17 @@
 # Q880 — validate release candidates in CI
 
-The dogfood gate that stands between a release candidate and a stable tag runs on a maintainer's Mac today.
-Its verdict reaches `publish.yml` as `refs/validated/<rc-tag>`, a ref anyone who can push a tag can also push, so it records that the gate was reported to and never that it passed ([release.md](../operations/release.md#the-gate-records-its-verdict-and-publish-reads-it)).
-Running the same gate as a workflow on the candidate tag makes the verdict a job result on that tag's commit: auditable, and keyed to the tag rather than to whoever ran it.
+The dogfood gate that stands between a release candidate and a stable tag ran on a maintainer's Mac, and its verdict reached `publish.yml` as `refs/validated/<rc-tag>`, a ref anyone who can push a tag can also push.
+So it recorded that the gate was reported to, never that it passed.
+Running the same gate as a workflow on the candidate tag makes the verdict the run's own: auditable, and keyed to the tag rather than to whoever ran it ([release.md](../operations/release.md#the-gate-records-its-verdict-and-publish-reads-it)).
 
 ## Status
 
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Keyless CI identity on the dogfood project | ✅ Bootstrap run 2026-10-04; the probe passed on its second run (37230799055), after #2028 fixed how it read GKE's refusal |
-| 2 | The gate runs on a Linux runner with no keychain | ⚠️ Code in review; unproven until the first CI run |
-| 3 | A workflow runs the gate on each `v*-rc.*` tag | ⚠️ Code in review; needs `ci-identity-setup.sh` re-run for the new pin and grant |
-| 4 | `publish.yml` reads the workflow's verdict instead of `refs/validated/` | ❌ |
+| 2 | The gate runs on a Linux runner with no keychain | ✅ `v1.9.0-rc.2` passed every leg in CI on 2026-10-05 (gate run 37357489219) |
+| 3 | A workflow runs the gate on each `v*-rc.*` tag | ✅ Same run; the first two found gate defects fixed in #2038, #2040 and #2042 |
+| 4 | `publish.yml` reads the workflow's verdict instead of `refs/validated/` | ⚠️ Code in review; proven when a CI run's evidence passes `check-validated-candidate.sh` |
 
 ## 1. Keyless CI identity
 
@@ -89,6 +89,19 @@ A `concurrency` group keeps two CI runs off the cluster at once, and the shared 
 
 ## 4. Publish reads the CI verdict
 
-`publish.yml`'s `validated-candidate` job reads `refs/validated/` today ([check-validated-candidate.sh](../../scripts/release/check-validated-candidate.sh)).
-Once milestone 3 has run on a real candidate, it reads the workflow's conclusion on that tag's commit instead, and the marker and its recorder retire.
-Until then the local gate and the marker stay the release path, so nothing about how a release is cut changes before milestone 4 lands.
+Each gate run writes the candidate's tag, the commit it names on the remote, and every leg that passed to `GATE_EVIDENCE_FILE`, and `validate-candidate.yml` uploads that file as the run's artifact on failure as well as success.
+`publish.yml`'s `validated-candidate` job runs [`check-validated-candidate.sh`](../../scripts/release/check-validated-candidate.sh), which [`fetch-gate-evidence.sh`](../../scripts/release/fetch-gate-evidence.sh) feeds.
+
+**What counts as evidence.** An artifact on a run of `.github/workflows/validate-candidate.yml`, dispatched on `main`, read from each run's own path, branch and event.
+Main's copy is the one the dogfood identity trusts and the one that runs main's gate.
+A branch's copy can upload an artifact of the same name and is refused, and so is the tag push's dispatch job.
+
+**A candidate is validated once runs, together, have passed every leg** in `scripts/dogfood/lib/gate-legs.sh` for one commit, and that commit is the one the candidate's tag names in publish's checkout.
+Legs from different runs combine, so a gate that failed its last leg is finished by re-running that leg alone.
+Evidence naming a commit its tag does not name stops the ship, as a marker on the wrong commit did.
+
+**The marker and its recorder retired with this**, and a local gate run writes no evidence: the maintainer chose on 2026-10-05 that only CI's verdict authorizes a publish, at the cost that a broken CI gate holds the stable tag until it is fixed.
+It also retired the failure that made the choice concrete: `v1.9.0-rc.2`'s run passed every leg and could record none, because the gate's `GITHUB_TOKEN` was refused creating `refs/validated-legs/…` (`HTTP 403: Resource not accessible by integration`) where it had created `refs/validated/…` the night before.
+Why the token was refused was not established.
+
+**Artifacts expire after 90 days**, this repository's retention, so a candidate validated longer ago than that is run through the gate again before its stable tag.

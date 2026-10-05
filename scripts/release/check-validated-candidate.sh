@@ -16,17 +16,16 @@
 #
 #   scripts/release/check-validated-candidate.sh <tag>
 #
-# The marker is `refs/validated/<rc-tag>`, written on the remote by the dogfood
-# gate when it passes (scripts/dogfood/record-validated-candidate.sh) and read
-# here. A ref rather than a file in the tree, for the reason `refs/queue-ids/*` is
-# one: it records a fact about a commit without being a commit, so recording a
-# verdict cannot move the surface that verdict covers.
+# The evidence is CI's (Q880): each run of validate-candidate.yml on main uploads
+# the candidate tag, the commit it names and each gate leg that passed, and
+# fetch-gate-evidence.sh downloads it. A candidate is validated once those runs,
+# together, have passed every leg in scripts/dogfood/lib/gate-legs.sh for one
+# commit. Only main's copy of the workflow can put an artifact on such a run,
+# where a ref (the `refs/validated/<rc-tag>` marker before Q880) is written by
+# anyone who can push, so the verdict is the gate's own.
 #
-# It is a record, not an attestation. Anyone who can push a tag can push the
-# marker, so this proves the gate was run and reported to, never that a green
-# verdict was earned. That is the same trust level as the tag itself, and it is
-# what closes the gap the row named: a promote with no validation anywhere behind
-# it now fails before an image is pushed.
+# CHECK_VALIDATED_EVIDENCE_DIR reads evidence already downloaded, for tests and
+# for a maintainer re-checking; unset, it is fetched into a temporary directory.
 #
 # Exit 0 when a validated candidate covers the tag or the tag is a prerelease,
 # 1 when it does not, 2 on a usage or git error.
@@ -34,6 +33,9 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# shellcheck source=scripts/dogfood/lib/gate-legs.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/gate-legs.sh"
 
 usage() {
 	cat >&2 <<-EOF
@@ -64,66 +66,92 @@ if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
 	exit 0
 fi
 
-# Newest *validated* candidate of this release line, by version order. Newest
-# prerelease is the reading this exists to replace, so the glob is over the marker
-# namespace and never over `git tag --list`.
-if ! marker="$(git for-each-ref --format='%(refname:lstrip=2)' "refs/validated/${tag}-*")"; then
-	echo "check-validated-candidate: could not read refs/validated/" >&2
-	exit 2
+evidence="${CHECK_VALIDATED_EVIDENCE_DIR:-}"
+if [[ -z "${evidence}" ]]; then
+	evidence="$(mktemp -d)"
+	trap 'rm -rf "${evidence}"' EXIT
+	if ! "${SCRIPT_DIR}/fetch-gate-evidence.sh" "${tag}" "${evidence}" >&2; then
+		echo "check-validated-candidate: could not fetch the CI gate's evidence for ${tag}" >&2
+		exit 2
+	fi
 fi
-marker="$(printf '%s\n' "$marker" | sort -V | tail -1)"
+
+# Every leg each candidate of this line passed, keyed by candidate, from every
+# evidence file whose commit is the one that candidate's tag names here. A file
+# naming another commit means the tag moved under the gate, which is the
+# stale-tag incident from the other side, so it stops the ship rather than being
+# skipped.
+declare -A legs_of=()
+declare -A commit_of=()
+while IFS= read -r -d '' file; do
+	ev_tag="$(awk '$1 == "tag" { print $2; exit }' "${file}")"
+	ev_commit="$(awk '$1 == "commit" { print $2; exit }' "${file}")"
+	[[ "${ev_tag}" == "${tag}"-* ]] || continue
+	if ! git rev-parse --verify --quiet "${ev_tag}^{commit}" >/dev/null; then
+		cat >&2 <<-EOF
+			check-validated-candidate: the CI gate passed legs for ${ev_tag}, but no such tag is present here.
+
+			The evidence cannot be cross-checked against the commit its tag names. Either the
+			checkout is not full-depth, or the tag is gone.
+		EOF
+		exit 2
+	fi
+	tag_sha="$(git rev-parse "${ev_tag}^{commit}")"
+	if [[ "${ev_commit}" != "${tag_sha}" ]]; then
+		cat >&2 <<-EOF
+			check-validated-candidate: the CI gate validated ${ev_tag} at a commit its tag does not name.
+
+			  validated: ${ev_commit}
+			  ${ev_tag}: ${tag_sha}
+
+			The gate ran against one commit and the tag names another, so the verdict does not
+			describe the candidate. Cut and validate a new candidate.
+		EOF
+		exit 1
+	fi
+	commit_of["${ev_tag}"]="${ev_commit}"
+	legs_of["${ev_tag}"]+=" $(awk '$1 == "leg" { printf "%s ", $2 }' "${file}")"
+done < <(find "${evidence}" -type f -print0)
+
+# A candidate is validated when every leg the gate runs has passed for it.
+validated=()
+summary=""
+for candidate in "${!legs_of[@]}"; do
+	missing=""
+	for leg in "${GATE_LEGS_ALL[@]}"; do
+		[[ " ${legs_of[${candidate}]} " == *" ${leg} "* ]] || missing+=" ${leg}"
+	done
+	if [[ -z "${missing}" ]]; then
+		validated+=("${candidate}")
+	else
+		summary+="  ${candidate} still needs:${missing}"$'\n'
+	fi
+done
+
+# Newest *validated* candidate of this release line, by version order. Newest
+# prerelease is the reading this exists to replace, so the candidates come from
+# the evidence and never from `git tag --list`.
+marker="$(printf '%s\n' "${validated[@]}" | sort -V | tail -1)"
 if [[ -z "$marker" ]]; then
 	cat >&2 <<-EOF
-		check-validated-candidate: no candidate for ${tag} has a recorded validation.
+		check-validated-candidate: no candidate for ${tag} has passed every gate leg in CI.
 
-		Nothing under refs/validated/ names a ${tag}-rc.* candidate, so no dogfood gate
-		reported a pass for this release line — or the run that did could not record it.
-
-		  git ls-remote origin 'refs/validated/*'
+		A stable tag needs CI runs of validate-candidate.yml on main that, together, passed
+		every leg (${GATE_LEGS_ALL[*]}) for one ${tag}-rc.N candidate.
+		A local gate run does not count.
+	EOF
+	if [[ -n "${summary}" ]]; then
+		printf '\n%s' "${summary}" >&2
+		echo "Run the missing legs: gh workflow run validate-candidate.yml --ref main -f tag=<candidate> -f legs=<legs>" >&2
+	fi
+	cat >&2 <<-EOF
 
 		Validate a candidate: docs/operations/release.md#validate-the-release-candidate-on-dogfood.
 		A patch line needs its own candidate too; there is no exemption for one.
-		If one already passed and only the record is missing, write it directly:
-
-		  REPO=<owner/repo> scripts/dogfood/record-validated-candidate.sh ${tag}-rc.N
 	EOF
 	exit 1
 fi
-if ! validated_sha="$(git rev-parse "refs/validated/${marker}^{commit}")"; then
-	echo "check-validated-candidate: refs/validated/${marker} does not resolve to a commit" >&2
-	exit 2
-fi
-
-# The marker records the commit; the RC tag names one too. They are written from
-# the same read, so a disagreement means the tag moved under the record — which is
-# the incident that filed the row, seen from the other side. Refusing to measure is
-# the honest answer when the tag is absent: publish.yml checks out at full depth,
-# so an absent tag there is an anomaly rather than a shallow clone.
-if ! git rev-parse --verify --quiet "${marker}^{commit}" >/dev/null; then
-	cat >&2 <<-EOF
-		check-validated-candidate: ${marker} is recorded as validated but no such tag is present here.
-
-		The marker cannot be cross-checked against the commit its tag names. Either the
-		checkout is not full-depth, or the tag is gone. If the tag is gone the marker is
-		the stale half and clearing it is the repair:
-
-		  git push origin --delete refs/validated/${marker}
-	EOF
-	exit 2
-fi
-marker_tag_commit="$(git rev-parse "${marker}^{commit}")"
-if [[ "$validated_sha" != "$marker_tag_commit" ]]; then
-	cat >&2 <<-EOF
-		check-validated-candidate: ${marker} does not point at the commit it was validated at.
-
-		  validated: ${validated_sha}
-		  ${marker}: ${marker_tag_commit}
-
-		The gate ran against one commit and the tag names another, so the verdict does not
-		describe the candidate. Cut and validate a new candidate.
-	EOF
-	exit 1
-fi
+validated_sha="${commit_of[${marker}]}"
 
 # A validated commit off this history is not a window that moved, it is a verdict
 # from somewhere else, so it gets its own message rather than a file list.

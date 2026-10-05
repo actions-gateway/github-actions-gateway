@@ -8,10 +8,11 @@
 # validation, and an older one that does. A check keyed on `git tag --list` picks
 # the newest and passes; this one has to name the older, validated candidate.
 #
-# The decision layer is what this script owns — which marker is the reference, does
-# it agree with its tag, is it on this history, what does the delegate's verdict
-# mean — and it runs against a repository this script builds, with the surface
-# check stubbed. Deriving the released surface for real runs `go list -deps` over
+# The decision layer is what this script owns — which candidate CI's evidence
+# validates, does the evidence agree with its tag, is it on this history, what does
+# the delegate's verdict mean — and it runs against a repository this script
+# builds and evidence files it writes, with the surface check stubbed. Fetching the
+# evidence is fetch-gate-evidence-test.sh's. Deriving the released surface for real runs `go list -deps` over
 # every module the Dockerfile builds; check-artifact-unchanged-test.sh owns that.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -21,6 +22,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "$REPO_ROOT/scripts/lib/common.sh"
 SUBJECT="$SCRIPT_DIR/check-validated-candidate.sh"
+# shellcheck source=scripts/dogfood/lib/gate-legs.sh
+source "$REPO_ROOT/scripts/dogfood/lib/gate-legs.sh"
 
 pass=0
 fail=0
@@ -35,6 +38,7 @@ bad() {
 
 WORK="$(mktemp -d)"
 FIXTURE="$WORK/repo"
+EVIDENCE="$WORK/evidence"
 STUB="$WORK/surface-stub.sh"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
@@ -82,6 +86,7 @@ run_case() {
 	local out rc=0
 	out="$(cd "$FIXTURE" &&
 		STUB_EXIT="$stub_exit" CHECK_VALIDATED_SURFACE_CHECK="$STUB" \
+			CHECK_VALIDATED_EVIDENCE_DIR="$EVIDENCE" \
 			"$SUBJECT" "$@" 2>&1)" || rc=$?
 		die_if_killed "$desc" "$rc" "$want"
 	LAST_OUT="$out"
@@ -111,11 +116,30 @@ want_not_out() {
 	fi
 }
 
+# evidence NAME TAG COMMIT [LEG...] — one CI gate run's artifact, as
+# validate-release.sh writes it; every leg the gate runs when none is named.
+evidence() {
+	local name="$1" t="$2" c="$3"
+	shift 3
+	local -a legs=("$@")
+	((${#legs[@]})) || legs=("${GATE_LEGS_ALL[@]}")
+	mkdir -p "$EVIDENCE/$name"
+	{
+		printf 'tag %s\ncommit %s\n' "$t" "$c"
+		printf 'leg %s\n' "${legs[@]}"
+	} >"$EVIDENCE/$name/gate-evidence.txt"
+}
+clear_evidence() {
+	rm -rf "$EVIDENCE"
+	mkdir -p "$EVIDENCE"
+}
+
 mkdir -p "$FIXTURE"
 git -c init.defaultBranch=main init -q "$FIXTURE"
 # A fixture repo must not run background git maintenance: it outlives the suite
 # and races the traces the gate reads. docs/development/testing.md#a-fixture-repo-must-not-run-background-git
 fixture_git config maintenance.auto false
+clear_evidence
 
 # A release line whose history is: rc.1 (validated), rc.2 (NOT validated, and the
 # newest candidate tag), then the stable tag. This is the v1.5.0 shape.
@@ -133,24 +157,21 @@ want_out "the unknown tag is named" "not a tag or commit: v9.9.9"
 run_case "a prerelease is the artifact validated, not a subject of this check" 0 0 v1.5.0-rc.2
 want_out "the prerelease exemption says why" "it is the artifact that gets validated"
 
-run_case "a stable tag with no marker anywhere is a stop-ship" 1 0 v1.5.0
-want_out "the failure names the namespace to look in" "refs/validated/"
+run_case "a stable tag with no CI evidence anywhere is a stop-ship" 1 0 v1.5.0
+want_out "the failure says CI's gate is what counts" "has passed every gate leg in CI"
+want_out "the failure says a local run does not count" "A local gate run does not count"
 want_out "the failure routes to the runbook" "validate-the-release-candidate-on-dogfood"
-# The message has to carry the recorder command rather than pointing at one the
-# gate prints only on its own failure path: a maintainer whose record never ran
-# has never seen it.
-want_out "the failure prints the recorder command" "record-validated-candidate.sh v1.5.0-rc.N"
 
 # THE ROW'S CASE. rc.2 is the newest candidate and validated nothing; rc.1 is the
 # reference. A check reading `git tag --list` picks rc.2 and passes on a candidate
 # that never ran the gate, which is how v1.5.0-rc.2 reached publish.
-fixture_git update-ref refs/validated/v1.5.0-rc.1 "$rc1_sha"
+evidence run1 v1.5.0-rc.1 "$rc1_sha"
 run_case "the newest VALIDATED candidate is the reference, not the newest tag" 0 0 v1.5.0
 want_out "the passing line names rc.1" "v1.5.0-rc.1 validated"
 want_not_out "the unvalidated newer candidate is not the reference" "v1.5.0-rc.2 validated"
 
 # ...and once rc.2 is validated too, it supersedes rc.1.
-fixture_git update-ref refs/validated/v1.5.0-rc.2 "$rc2_sha"
+evidence run2 v1.5.0-rc.2 "$rc2_sha"
 run_case "a newer validated candidate supersedes an older one" 0 0 v1.5.0
 want_out "the passing line names rc.2" "v1.5.0-rc.2 validated"
 
@@ -161,14 +182,26 @@ want_out "the finding names the candidate it invalidates" "v1.5.0-rc.2 is the ne
 run_case "a delegate that could not measure is exit 2, never a stop-ship" 2 2 v1.5.0
 want_out "the unmeasurable case says which delegate failed" "surface check failed"
 
-# A marker whose sha disagrees with the tag it names: the gate ran against one
-# commit and the tag names another, which is the stale-tag incident from the other
-# side. Repointed rather than re-created — a ref update is not a compare-and-swap
-# locally, and posing the state is the point.
-fixture_git update-ref refs/validated/v1.5.0-rc.2 "$rc1_sha"
-run_case "a marker that disagrees with its own tag is a stop-ship" 1 0 v1.5.0
-want_out "the disagreement prints both commits" "does not point at the commit it was validated at"
-fixture_git update-ref refs/validated/v1.5.0-rc.2 "$rc2_sha"
+# Legs, the reason the evidence is per leg: a gate that failed its last leg and
+# was finished by re-running that leg alone validates the candidate across two
+# runs. Neither run alone does.
+clear_evidence
+last="${GATE_LEGS_ALL[${#GATE_LEGS_ALL[@]}-1]}"
+evidence first-run v1.5.0-rc.2 "$rc2_sha" "${GATE_LEGS_ALL[@]:0:${#GATE_LEGS_ALL[@]}-1}"
+run_case "a candidate missing one leg is a stop-ship" 1 0 v1.5.0
+want_out "the refusal names the leg still needed" "v1.5.0-rc.2 still needs: ${last}"
+want_out "the refusal says how to run it" "-f legs=<legs>"
+evidence rerun v1.5.0-rc.2 "$rc2_sha" "$last"
+run_case "legs passed across two runs validate the candidate" 0 0 v1.5.0
+want_out "the split case names rc.2" "v1.5.0-rc.2 validated"
+
+# Evidence whose commit disagrees with the tag it names: the gate ran against one
+# commit and the tag names another, which is the stale-tag incident from the
+# other side.
+evidence stale v1.5.0-rc.2 "$rc1_sha" "$last"
+run_case "evidence that disagrees with its own tag is a stop-ship" 1 0 v1.5.0
+want_out "the disagreement prints both commits" "at a commit its tag does not name"
+rm -rf "$EVIDENCE/stale"
 
 # A verdict from a different line of history. Built on an orphan branch so the
 # validated commit shares no ancestry with the tag at all.
@@ -176,32 +209,28 @@ fixture_git checkout -q --orphan sidetrack
 fixture_git rm -q -rf .
 side_sha="$(commit_file d.txt elsewhere)"
 fixture_git checkout -q main
-fixture_git update-ref refs/validated/v1.5.0-rc.3 "$side_sha"
 fixture_git tag -a v1.5.0-rc.3 "$side_sha" -m 'rc.3 off-history'
+evidence run3 v1.5.0-rc.3 "$side_sha"
 run_case "a validation from another line of history is a stop-ship" 1 0 v1.5.0
 want_out "the off-history failure says so" "not an ancestor"
 fixture_git tag -d v1.5.0-rc.3 >/dev/null
-fixture_git update-ref -d refs/validated/v1.5.0-rc.3
+rm -rf "$EVIDENCE/run3"
 
-# A marker naming a tag this checkout does not have cannot be cross-checked, and
+# Evidence naming a tag this checkout does not have cannot be cross-checked, and
 # refusing to measure is the answer — publish.yml checks out at full depth, so an
 # absent tag there is an anomaly rather than a shallow clone.
-fixture_git update-ref refs/validated/v1.5.0-rc.9 "$rc2_sha"
-run_case "a marker whose tag is absent cannot be measured" 2 0 v1.5.0
+evidence run9 v1.5.0-rc.9 "$rc2_sha"
+run_case "evidence whose tag is absent cannot be measured" 2 0 v1.5.0
 want_out "the unmeasurable case names the missing tag" "v1.5.0-rc.9"
-# Not only the shallow-clone diagnosis: a deleted tag leaves the marker as the
-# stale half, and clearing it is the only repair anything names.
-want_out "the unmeasurable case says how to clear a stale marker" "git push origin --delete refs/validated/v1.5.0-rc.9"
-fixture_git update-ref -d refs/validated/v1.5.0-rc.9
+rm -rf "$EVIDENCE/run9"
 
-# Markers are per release line: 1.4's validation says nothing about 1.5.
+# Evidence is per release line: 1.4's validation says nothing about 1.5.
+clear_evidence
 fixture_git tag -a v1.4.0 -m '1.4' "$rc1_sha"
 fixture_git tag -a v1.4.0-rc.1 -m '1.4 rc.1' "$rc1_sha"
-fixture_git update-ref refs/validated/v1.4.0-rc.1 "$rc1_sha"
-fixture_git update-ref -d refs/validated/v1.5.0-rc.1
-fixture_git update-ref -d refs/validated/v1.5.0-rc.2
-run_case "a marker from another release line does not cover this tag" 1 0 v1.5.0
-want_out "the cross-line case reports no validation for this line" "no candidate for v1.5.0 has a recorded validation"
+evidence run14 v1.4.0-rc.1 "$rc1_sha"
+run_case "evidence from another release line does not cover this tag" 1 0 v1.5.0
+want_out "the cross-line case reports no validation for this line" "no candidate for v1.5.0 has passed every gate leg"
 
 # A PATCH tag gets no exemption. The documented patch procedure used to cut no
 # candidate at all, and announce-bar, the sibling stop-ship gate, does exempt a
@@ -214,15 +243,15 @@ run_case "a patch tag with no candidate of its own is a stop-ship" 1 0 v1.5.1
 want_out "the patch case is named, because it is the surprising one" "A patch line needs its own candidate"
 
 fixture_git tag -a v1.5.1-rc.1 -m 'patch rc' "$patch_sha"
-fixture_git update-ref refs/validated/v1.5.1-rc.1 "$patch_sha"
+evidence run151 v1.5.1-rc.1 "$patch_sha"
 run_case "a patch tag with its own validated candidate publishes" 0 0 v1.5.1
 want_out "the passing line names the patch candidate" "v1.5.1-rc.1 validated"
 
-# ...and the minor's marker does not stand in for the patch's.
-fixture_git update-ref -d refs/validated/v1.5.1-rc.1
-fixture_git update-ref refs/validated/v1.5.0-rc.2 "$rc2_sha"
+# ...and the minor's evidence does not stand in for the patch's.
+clear_evidence
+evidence run2 v1.5.0-rc.2 "$rc2_sha"
 run_case "the minor's validation does not cover its patch" 1 0 v1.5.1
-want_out "the cross-line refusal names the patch tag" "no candidate for v1.5.1 has a recorded validation"
+want_out "the cross-line refusal names the patch tag" "no candidate for v1.5.1 has passed every gate leg"
 
 printf '[check-validated-candidate-test] %d passed, %d failed\n' "$pass" "$fail"
 ((fail == 0))

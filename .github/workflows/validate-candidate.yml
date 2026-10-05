@@ -14,6 +14,9 @@
 # from zero and redeploys the gateway its runners depend on.
 # Plan: Q880.
 name: validate-candidate
+# The candidate tag, so publish.yml's evidence fetch lists only one release
+# line's runs (scripts/release/fetch-gate-evidence.sh).
+run-name: validate-candidate ${{ inputs.tag }}
 
 on:
   push:
@@ -61,9 +64,9 @@ jobs:
       group: dogfood-release-gate
       cancel-in-progress: false
     permissions:
-      # The validated-candidate marker (refs/validated/<tag>) and each leg's
-      # record (refs/validated-legs/<tag>/<leg>), until milestone 4.
-      contents: write
+      # The verdict is this run's artifact, not a ref, so nothing here writes
+      # to the repository.
+      contents: read
       # Dispatching e2e-test, unit-test and integration-test, and downloading the
       # e2e run's report.
       actions: write
@@ -113,7 +116,21 @@ jobs:
 
       - name: Run the release gate
         timeout-minutes: 210
+        env:
+          GATE_EVIDENCE_FILE: ${{ runner.temp }}/gate-evidence.txt
         run: scripts/dogfood/validate-release.sh --legs "${LEGS}" "${TAG}"
+
+      # The verdict publish.yml reads (Q880): the candidate's commit and every leg
+      # that passed. Uploaded on failure too, because a gate that failed its last
+      # leg is finished by re-running that leg alone, and the legs before it count.
+      - name: Upload the gate's evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gate-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gate-evidence.txt
+          if-no-files-found: ignore
+          retention-days: 90
 
       # The gate's EXIT trap tears down on failure and on cancellation, but not
       # when it is killed outright. Its lease is in the cluster, so any host can
