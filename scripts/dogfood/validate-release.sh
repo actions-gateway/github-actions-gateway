@@ -511,45 +511,33 @@ settle_e2e_lane() {
 	echo "  lane settled — latest ${workflow} run ${run_id} is completed."
 }
 
-# latest_dispatch_run_id WORKFLOW — print the newest workflow_dispatch run id of
-# WORKFLOW, or nothing when it has never been dispatched.
-latest_dispatch_run_id() {
-	gh_retry run list --workflow="$1" --repo "${REPO}" \
-		--event workflow_dispatch -L1 --json databaseId --jq '.[0].databaseId'
-}
-
 # dispatch_e2e_run — trigger E2E_WORKFLOW with its runs-on pinned to the e2e
 # scale set for that single run, and set E2E_RESOLVED_RUN_ID to the new run.
-# `gh workflow run` prints no run id, so the id is resolved by watching the
-# newest workflow_dispatch run rise above a pre-dispatch baseline. Run ids only
-# increase, and "differs from the baseline" is not enough: on v1.9.0-rc.2's
-# gate the list answered with an older, cancelled dispatch right after the new
-# one was created, and the gate watched that run instead of its own.
+# The id comes from the run URL `gh workflow run` prints, never from the run
+# list: on v1.9.0-rc.2's gate the list lagged a dispatch by minutes, twice, and
+# the gate watched an older run's verdict in place of its own.
 dispatch_e2e_run() {
 	local workflow="${E2E_WORKFLOW:-e2e-test.yml}"
 	local ref="${E2E_DISPATCH_REF:-main}"
 
-	local before
-	before="$(latest_dispatch_run_id "${workflow}")"
 	echo "Dispatching ${workflow} @ ${ref} routed to ${GAG_E2E_RUNNER_INPUT} (this run only)..."
-	# Not gh_retry: the reads around it are repeatable, this is not. A dispatch
-	# that failed after GitHub accepted it would queue a second run into the
-	# concurrency group, where it parks in the single pending slot.
-	gh workflow run "${workflow}" --repo "${REPO}" --ref "${ref}" \
-		-f runner="${GAG_E2E_RUNNER_INPUT}"
-
-	local i id
-	for ((i = 0; i < 24; i++)); do
-		id="$(latest_dispatch_run_id "${workflow}")"
-		if [[ "${id}" =~ ^[0-9]+$ ]] && ((id > ${before:-0})); then
-			E2E_RESOLVED_RUN_ID="${id}"
-			echo "  dispatched run is ${id}."
-			return 0
-		fi
-		sleep "${E2E_POLL_INTERVAL}"
-	done
-	echo "error: the dispatched ${workflow} run did not appear within $((24 * E2E_POLL_INTERVAL))s" >&2
-	return 1
+	# Not gh_retry: a dispatch that failed after GitHub accepted it would queue
+	# a second run into the concurrency group, where it parks in the single
+	# pending slot.
+	local out
+	if ! out="$(gh workflow run "${workflow}" --repo "${REPO}" --ref "${ref}" \
+		-f runner="${GAG_E2E_RUNNER_INPUT}" 2>&1)"; then
+		printf '%s\n' "${out}" >&2
+		return 1
+	fi
+	printf '%s\n' "${out}"
+	if [[ ! "${out}" =~ /actions/runs/([0-9]+) ]]; then
+		echo "error: gh workflow run printed no run URL, so the dispatched run cannot be identified" >&2
+		echo "  The run list is not a substitute: it lags a dispatch. Upgrade gh." >&2
+		return 1
+	fi
+	E2E_RESOLVED_RUN_ID="${BASH_REMATCH[1]}"
+	echo "  dispatched run is ${E2E_RESOLVED_RUN_ID}."
 }
 
 # e2e_leg — spin the on-demand e2e AGC, then dispatch the e2e matrix onto the
