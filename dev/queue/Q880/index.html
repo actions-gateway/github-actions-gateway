@@ -2598,11 +2598,12 @@
 
 
 <h1 id="validate-release-candidates-in-ci-instead-of-a-local-dogfood-gate">Validate release candidates in CI instead of a local dogfood gate<a class="headerlink" href="#validate-release-candidates-in-ci-instead-of-a-local-dogfood-gate" title="Permanent link">&para;</a></h1>
-<p>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker a maintainer's local gate writes today.
-Milestone 1 (keyless CI identity) is code plus a one-time bootstrap a maintainer runs; milestone 3's workflow cannot go green until that bootstrap and the identity probe have.
-Milestones 2 to 4 remain: the gate's tools on a Linux runner, the tag-triggered workflow, and <code>publish.yml</code> reading its verdict.</p>
-<p><strong>Gates 1.9.</strong> <code>v1.9.0-rc.1</code> validated through the local gate on 2026-10-03, and the maintainer chose on 2026-10-04 to hold the stable tag so that 1.9's shipping candidate is the first validated in CI.
-An <code>rc.2</code> cut after this lands ships the same artifacts as <code>rc.1</code>, since nothing here is on the released surface; what it changes is where the verdict is recorded.</p>
+<p>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker anyone with push access could write.
+All four milestones are code on <code>main</code> once milestone 4 merges: the keyless identity, the gate on a Linux runner, the workflow on each candidate tag, and <code>publish.yml</code> reading the gate's evidence artifact instead of the marker.
+What remains is the proof: a CI gate run whose evidence <code>scripts/release/check-validated-candidate.sh v1.9.0</code> accepts, which closes this row.</p>
+<p><strong>Gates 1.9.</strong> The maintainer held the stable tag on 2026-10-04 so that 1.9's shipping candidate is the first validated in CI, and on 2026-10-05 chose to finish milestone 4 before tagging rather than ship on the marker.
+<code>v1.9.0-rc.2</code> passed every leg in CI on 2026-10-05 (gate run 37357489219), before milestone 4 existed, so it needs one more full CI run to leave evidence the new check reads.
+Nothing here is on the released surface, so <code>rc.2</code> stays the candidate.</p>
 
 
 

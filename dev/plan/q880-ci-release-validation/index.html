@@ -2661,9 +2661,9 @@
 
 
 <h1 id="q880--validate-release-candidates-in-ci">Q880 — validate release candidates in CI<a class="headerlink" href="#q880--validate-release-candidates-in-ci" title="Permanent link">&para;</a></h1>
-<p>The dogfood gate that stands between a release candidate and a stable tag runs on a maintainer's Mac today.
-Its verdict reaches <code>publish.yml</code> as <code>refs/validated/&lt;rc-tag&gt;</code>, a ref anyone who can push a tag can also push, so it records that the gate was reported to and never that it passed (<a href="../../operations/release/#the-gate-records-its-verdict-and-publish-reads-it">release.md</a>).
-Running the same gate as a workflow on the candidate tag makes the verdict a job result on that tag's commit: auditable, and keyed to the tag rather than to whoever ran it.</p>
+<p>The dogfood gate that stands between a release candidate and a stable tag ran on a maintainer's Mac, and its verdict reached <code>publish.yml</code> as <code>refs/validated/&lt;rc-tag&gt;</code>, a ref anyone who can push a tag can also push.
+So it recorded that the gate was reported to, never that it passed.
+Running the same gate as a workflow on the candidate tag makes the verdict the run's own: auditable, and keyed to the tag rather than to whoever ran it (<a href="../../operations/release/#the-gate-records-its-verdict-and-publish-reads-it">release.md</a>).</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2682,17 +2682,17 @@ Running the same gate as a workflow on the candidate tag makes the verdict a job
 <tr>
 <td>2</td>
 <td>The gate runs on a Linux runner with no keychain</td>
-<td>⚠️ Code in review; unproven until the first CI run</td>
+<td>✅ <code>v1.9.0-rc.2</code> passed every leg in CI on 2026-10-05 (gate run 37357489219)</td>
 </tr>
 <tr>
 <td>3</td>
 <td>A workflow runs the gate on each <code>v*-rc.*</code> tag</td>
-<td>⚠️ Code in review; needs <code>ci-identity-setup.sh</code> re-run for the new pin and grant</td>
+<td>✅ Same run; the first two found gate defects fixed in #2038, #2040 and #2042</td>
 </tr>
 <tr>
 <td>4</td>
 <td><code>publish.yml</code> reads the workflow's verdict instead of <code>refs/validated/</code></td>
-<td>❌</td>
+<td>⚠️ Code in review; proven when a CI run's evidence passes <code>check-validated-candidate.sh</code></td>
 </tr>
 </tbody>
 </table>
@@ -2753,9 +2753,18 @@ The milestone 1 probe retires with this change: the provider now names the gate'
 The lease lives in the cluster (Q1158), so any host can reclaim a CI run's cluster; the same-runner step is still the fast path, because the runner can check the gate's pid where any other host waits ten minutes for the lease to lapse (<a href="../../operations/release/#a-killed-gate-is-reclaimed-by-the-next-one">release.md</a>).
 A <code>concurrency</code> group keeps two CI runs off the cluster at once, and the shared lease keeps a CI run and a local gate apart.</p>
 <h2 id="4-publish-reads-the-ci-verdict">4. Publish reads the CI verdict<a class="headerlink" href="#4-publish-reads-the-ci-verdict" title="Permanent link">&para;</a></h2>
-<p><code>publish.yml</code>'s <code>validated-candidate</code> job reads <code>refs/validated/</code> today (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-validated-candidate.sh">check-validated-candidate.sh</a>).
-Once milestone 3 has run on a real candidate, it reads the workflow's conclusion on that tag's commit instead, and the marker and its recorder retire.
-Until then the local gate and the marker stay the release path, so nothing about how a release is cut changes before milestone 4 lands.</p>
+<p>Each gate run writes the candidate's tag, the commit it names on the remote, and every leg that passed to <code>GATE_EVIDENCE_FILE</code>, and <code>validate-candidate.yml</code> uploads that file as the run's artifact on failure as well as success.
+<code>publish.yml</code>'s <code>validated-candidate</code> job runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-validated-candidate.sh"><code>check-validated-candidate.sh</code></a>, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/fetch-gate-evidence.sh"><code>fetch-gate-evidence.sh</code></a> feeds.</p>
+<p><strong>What counts as evidence.</strong> An artifact on a run of <code>.github/workflows/validate-candidate.yml</code>, dispatched on <code>main</code>, read from each run's own path, branch and event.
+Main's copy is the one the dogfood identity trusts and the one that runs main's gate.
+A branch's copy can upload an artifact of the same name and is refused, and so is the tag push's dispatch job.</p>
+<p><strong>A candidate is validated once runs, together, have passed every leg</strong> in <code>scripts/dogfood/lib/gate-legs.sh</code> for one commit, and that commit is the one the candidate's tag names in publish's checkout.
+Legs from different runs combine, so a gate that failed its last leg is finished by re-running that leg alone.
+Evidence naming a commit its tag does not name stops the ship, as a marker on the wrong commit did.</p>
+<p><strong>The marker and its recorder retired with this</strong>, and a local gate run writes no evidence: the maintainer chose on 2026-10-05 that only CI's verdict authorizes a publish, at the cost that a broken CI gate holds the stable tag until it is fixed.
+It also retired the failure that made the choice concrete: <code>v1.9.0-rc.2</code>'s run passed every leg and could record none, because the gate's <code>GITHUB_TOKEN</code> was refused creating <code>refs/validated-legs/…</code> (<code>HTTP 403: Resource not accessible by integration</code>) where it had created <code>refs/validated/…</code> the night before.
+Why the token was refused was not established.</p>
+<p><strong>Artifacts expire after 90 days</strong>, this repository's retention, so a candidate validated longer ago than that is run through the gate again before its stable tag.</p>
 
 
 

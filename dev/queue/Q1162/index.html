@@ -2604,7 +2604,7 @@ The gate pulls the tag's six images at deploy time; the chart comes from <code>g
 The approval of the <code>dogfood-validation</code> environment took under a minute (run created 05:32:51, job set up 05:33:45); the margin is the gate's own seven-minute preamble of tool installs, lease, e2e-lane settle and node scale-up, so a slower publish run or a free e2e lane eats it.
 A lost race fails the gate on <code>kubectl rollout status --timeout=3m</code> in <code>start.sh</code>, a gate failure that says nothing about the candidate and costs a cluster cycle.</p>
 <p>The fix is a wait before the gate step: poll for the tag's <code>publish.yml</code> run to conclude, or for each image tag to resolve with <code>docker buildx imagetools inspect</code>, and fail on a red publish rather than deploying what it left behind.
-Separate from <a href="../Q880/">Q880</a>, whose remaining milestone 4 makes <code>publish.yml</code> read the CI verdict; this orders the gate after the publish on the way in.</p>
+Separate from <a href="../Q880/">Q880</a>, which makes <code>publish.yml</code> read the CI gate's verdict on the way out; this orders the gate after the publish on the way in.</p>
 
 
 
