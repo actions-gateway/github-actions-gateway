@@ -109,8 +109,9 @@ jobs:
         run: scripts/dogfood/validate-release.sh "${TAG}"
 
       # The gate's EXIT trap tears down on failure and on cancellation, but not
-      # when it is killed outright. Its lease lives on this runner, so a reclaim
-      # here, before the VM goes, is the only one that can still see it.
+      # when it is killed outright. Its lease is in the cluster, so any host can
+      # reclaim it once it lapses; this runner can check the gate's pid and so
+      # reclaim at once, before the VM goes.
       - name: Reclaim the cluster if the gate did not tear down
         if: failure() || cancelled()
         run: scripts/dogfood/validate-release.sh --reclaim

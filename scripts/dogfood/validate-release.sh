@@ -47,10 +47,11 @@
 # teardown process by hand (Q640). A teardown whose stop scripts refuse and
 # return leaves the same nodes up (Q1155). So the gate takes a lease
 # (lib/lease.sh) for the window in which it owns cluster state, and reclaims an
-# orphaned one — a lease for THIS target whose owning process is gone — before
-# it spends anything. Cluster state is never the trigger: a cluster that merely
-# has nodes up is what an operator debugging by hand leaves behind, so reclaim
-# acts on the lease and nothing else. `--reclaim` runs that step alone.
+# orphaned one — a lease for THIS target whose owner is gone — before it spends
+# anything. The lease lives in the cluster, so a CI runner and a maintainer's
+# machine see each other's (Q1158). Cluster state is never the trigger: a cluster
+# that merely has nodes up is what an operator debugging by hand leaves behind,
+# so reclaim acts on the lease and nothing else. `--reclaim` runs that step alone.
 #
 # PROD NOTE: gag-dogfood is hard-classified prod (.claude/prod-guard.json). This
 # is a lifecycle script run as `bash validate-release.sh …`, which the prod-guard
@@ -1689,6 +1690,33 @@ dump_diagnostics() {
 teardown() {
 	local rc="$?"
 	echo ""
+	# A gate whose lease another holder took has a successor on this cluster.
+	# Every step below would tear down or reset the successor's run, so none
+	# runs. The trap is armed only once the lease is taken, so no lease means
+	# something deleted it, most likely a reclaimer whose own gate may be about
+	# to start: re-take it, so the teardown runs on the record or not at all. A
+	# create that fails skips only if another holder is now recorded; an
+	# unreadable lease still leaves this run's nodes as the likeliest thing up.
+	local ownership
+	ownership="$(lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	if [[ "${ownership}" == none ]] &&
+		! lease_acquire "${PROJECT}" "${ZONE}" "${CLUSTER}" "${GAG_IMAGE_TAG:-}"; then
+		ownership="$(lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	fi
+	if [[ "${ownership}" == lost ]]; then
+		lease_renew_stop
+		[[ -n "${WORKDIR}" ]] && rm -rf "${WORKDIR}"
+		progress_event gate fail "lease taken by another holder"
+		echo "=== Teardown SKIPPED: another holder took this gate's lease ===" >&2
+		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
+		echo "  This run's renewals lapsed and the cluster now belongs to that holder;" >&2
+		echo "  tearing it down would end their run. This gate's verdict does not stand." >&2
+		exit 1
+	fi
+	# Keep the lease fresh through a drain that can outlast its duration, but
+	# never TERM this trap: see lease_renew_start.
+	lease_renew_stop
+	lease_renew_start "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	if ((rc != 0)); then
 		# Record the terminal state before the diagnostics dump: a renderer
 		# watching the stream should learn the gate died now, not after a
@@ -1716,6 +1744,9 @@ teardown() {
 	# claim that this run still owns billable state, and --reclaim keys on it
 	# alone. A teardown killed mid-drain and one whose stop scripts refused and
 	# returned both leave nodes up, so both must leave the lease for a reclaim.
+	# Renewal ends here either way: a kept lease must lapse so another host can
+	# reclaim it, and a released one has nothing left to renew.
+	lease_renew_stop
 	if ((!stopped)); then
 		progress_event teardown "done" "incomplete; lease kept for --reclaim"
 		echo "=== Teardown INCOMPLETE (exit ${rc}): a stop script refused, so nodes may still bill ===" >&2
@@ -1742,11 +1773,14 @@ teardown() {
 # its terminal event: release-sentinel.sh read a `passed` left by an earlier RC
 # and published it as a verdict for a run that had not started.
 #
-# Held is the one state that must not be cleared: a live gate owns that stream,
-# and lease_acquire refuses this run moments later anyway. Every other state
-# (free, orphaned, foreign) means no live local owner, so the stream is spent.
+# Held is the state that must not be cleared: a live gate may own that stream,
+# and lease_acquire refuses this run moments later anyway. Unknown is treated
+# the same, since an unreadable lease cannot rule a live owner out. Every other
+# state (free, orphaned, foreign) means no live owner, so the stream is spent.
 progress_reset_unless_held() {
-	[[ "$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")" != "held" ]] || return 0
+	case "$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")" in
+	held | unknown) return 0 ;;
+	esac
 	progress_init
 }
 
@@ -1757,11 +1791,16 @@ progress_reset_unless_held() {
 # The lease is the only trigger. Nodes being up is not evidence of an orphan —
 # an operator debugging by hand leaves exactly that state, and tearing theirs
 # down would be worse than the leak this fixes — so `free` returns having
-# touched nothing, and a `foreign` record (another host's pid, or another
-# target) is reported rather than acted on.
+# touched nothing, and a `foreign` record (one it cannot attribute) or an
+# `unknown` one (the read failed) is reported rather than acted on.
 #
-# A live lease is the two-sessions-at-once case: refuse, and touch nothing. Both
-# gates would otherwise fight over the pool size and each other's teardown.
+# A live lease is the two-sessions-at-once case, wherever the other gate runs:
+# refuse, and touch nothing. Both gates would otherwise fight over the pool size
+# and each other's teardown.
+#
+# An orphaned lease is taken over before anything is torn down, and renewed
+# while the stop scripts drain, so a second reclaimer cannot run alongside and
+# a gate that starts after this one cannot be torn down by it.
 reclaim_orphaned_gate() {
 	local confirm="${1:-0}" state
 	state="$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
@@ -1777,21 +1816,35 @@ reclaim_orphaned_gate() {
 		return 1
 		;;
 	foreign)
-		echo "error: ${PROJECT}/${ZONE}/${CLUSTER} has a lease this host cannot judge." >&2
+		echo "error: ${PROJECT}/${ZONE}/${CLUSTER} has a lease this gate cannot judge." >&2
 		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
-		echo "  A pid means nothing off the host that minted it, so this is never" >&2
+		echo "  It names no host/pid holder or no readable renewal, so it is never" >&2
 		echo "  reclaimed automatically. Confirm no gate is running, then delete it." >&2
+		return 1
+		;;
+	unknown)
+		echo "error: could not read the release-gate lease on ${PROJECT}/${ZONE}/${CLUSTER}." >&2
+		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
+		echo "  An unreadable lease is not a free one: another gate may hold it." >&2
+		echo "  Check gcloud credentials and that the cluster exists, then re-run." >&2
 		return 1
 		;;
 	esac
 
 	echo "An earlier release gate against this target did not finish tearing down:"
 	echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")"
-	echo "  Its process is gone; the nodes it scaled up are not. Reclaiming them first."
+	echo "  Its owner is gone; the nodes it scaled up are not. Reclaiming them first."
 	if ((confirm)); then
 		confirm_or_exit "$(printf 'Tear down the cluster that orphaned gate left running?\n  Project: %s\n  Cluster: %s  (zone %s)\nThis routes e2e + CI off GAG and scales the cluster back to 0 nodes.' \
 			"${PROJECT}" "${CLUSTER}" "${ZONE}")"
 	fi
+
+	if ! lease_takeover "${PROJECT}" "${ZONE}" "${CLUSTER}"; then
+		echo "error: another holder claimed ${PROJECT}/${ZONE}/${CLUSTER} first." >&2
+		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
+		return 1
+	fi
+	lease_renew_start "${PROJECT}" "${ZONE}" "${CLUSTER}"
 
 	# The stop scripts pin the cluster context fail-closed themselves and drain
 	# before they delete, so a reclaim cannot scale down under live work.
@@ -1799,6 +1852,7 @@ reclaim_orphaned_gate() {
 	local failed=0
 	bash "${SCRIPT_DIR}/e2e-stop.sh" || failed=1
 	bash "${SCRIPT_DIR}/stop.sh" || failed=1
+	lease_renew_stop
 	if ((failed)); then
 		echo "error: the orphaned run's teardown did not complete." >&2
 		echo "  The lease is kept so the next run retries it — the usual cause is a drain" >&2
@@ -1806,7 +1860,7 @@ reclaim_orphaned_gate() {
 		echo "  strand. Read their output above; re-run with --reclaim once it clears." >&2
 		return 1
 	fi
-	lease_discard "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	lease_release "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	echo "  Reclaim complete — the orphaned run's cluster is back at rest."
 }
 
@@ -1900,7 +1954,8 @@ main() {
 	# taken here rather than at reclaim time so it spans exactly the window in
 	# which this run owns billable state — a settle wait that times out spends
 	# nothing and so leaves nothing to reclaim. Two gates that raced through the
-	# check above both arrive here; ln decides, and the loser has spent nothing.
+	# check above both arrive here; the Lease create decides, and the loser has
+	# spent nothing.
 	if ! lease_acquire "${PROJECT}" "${ZONE}" "${CLUSTER}" "${GAG_IMAGE_TAG}"; then
 		echo "error: another release gate claimed ${PROJECT}/${ZONE}/${CLUSTER} while this one waited." >&2
 		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
@@ -1909,6 +1964,10 @@ main() {
 
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
 	trap teardown EXIT
+	# Renew for as long as this process lives, so a host that cannot check this
+	# pid reads the lease as held, and stop the gate if another holder takes it.
+	# Teardown replaces it with a renewer that does not signal.
+	lease_renew_start "${PROJECT}" "${ZONE}" "${CLUSTER}" stop-owner
 
 	# The stream was emptied before preflight; this is the first event in it, so
 	# a run that aborted earlier leaves an empty stream rather than a half one,

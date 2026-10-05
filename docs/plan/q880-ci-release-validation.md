@@ -83,9 +83,9 @@ No narrower GKE role set that still writes ClusterRoles was measured.
 The list is derived from the calls the dogfood scripts make, so the first CI run is what confirms it.
 The milestone 1 probe retires with this change: the provider now names the gate's workflow, so the probe can no longer get a token.
 
-**The lease is host-local, so the workflow carries its own reclaim.** `lib/lease.sh` records a pid on the host that ran the gate, so a CI run's lease is invisible to `--reclaim` anywhere else and vanishes with the runner.
-The gate step's limit is shorter than the job's, and a final step runs `--reclaim` on the same runner after a failure or cancellation, while the lease is still there to read.
-A `concurrency` group keeps two CI runs off the cluster at once; a CI run and a local gate still cannot see each other, which [Q1158](../queue/Q1158.md) tracks.
+**The workflow carries its own reclaim.** The gate step's limit is shorter than the job's, and a final step runs `--reclaim` on the same runner after a failure or cancellation.
+The lease lives in the cluster (Q1158), so any host can reclaim a CI run's cluster; the same-runner step is still the fast path, because the runner can check the gate's pid where any other host waits ten minutes for the lease to lapse ([release.md](../operations/release.md#a-killed-gate-is-reclaimed-by-the-next-one)).
+A `concurrency` group keeps two CI runs off the cluster at once, and the shared lease keeps a CI run and a local gate apart.
 
 ## 4. Publish reads the CI verdict
 
