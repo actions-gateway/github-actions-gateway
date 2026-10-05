@@ -521,7 +521,10 @@ latest_dispatch_run_id() {
 # dispatch_e2e_run — trigger E2E_WORKFLOW with its runs-on pinned to the e2e
 # scale set for that single run, and set E2E_RESOLVED_RUN_ID to the new run.
 # `gh workflow run` prints no run id, so the id is resolved by watching the
-# newest workflow_dispatch run change from a pre-dispatch baseline.
+# newest workflow_dispatch run rise above a pre-dispatch baseline. Run ids only
+# increase, and "differs from the baseline" is not enough: on v1.9.0-rc.2's
+# gate the list answered with an older, cancelled dispatch right after the new
+# one was created, and the gate watched that run instead of its own.
 dispatch_e2e_run() {
 	local workflow="${E2E_WORKFLOW:-e2e-test.yml}"
 	local ref="${E2E_DISPATCH_REF:-main}"
@@ -538,7 +541,7 @@ dispatch_e2e_run() {
 	local i id
 	for ((i = 0; i < 24; i++)); do
 		id="$(latest_dispatch_run_id "${workflow}")"
-		if [[ -n "${id}" && "${id}" != "${before}" ]]; then
+		if [[ "${id}" =~ ^[0-9]+$ ]] && ((id > ${before:-0})); then
 			E2E_RESOLVED_RUN_ID="${id}"
 			echo "  dispatched run is ${id}."
 			return 0

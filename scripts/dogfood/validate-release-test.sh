@@ -317,6 +317,14 @@ else
 fi
 check "  ...and resolves no run id" "" "${E2E_RESOLVED_RUN_ID}"
 
+# A list that answers with an OLDER dispatch after the new one is created
+# (v1.9.0-rc.2's gate) must be skipped, not watched: that run's old verdict
+# would stand in for the gate's own.
+reset_gh 100 EMPTY 50 200
+E2E_RESOLVED_RUN_ID=""
+dispatch_e2e_run >/dev/null
+check "an older run id after the dispatch is skipped for the new one" "200" "${E2E_RESOLVED_RUN_ID}"
+
 # A missing cosign binary fails the preflight — before anything billable.
 if err="$(COSIGN="${WORKDIR}/no-such-cosign" preflight_cosign 2>&1)"; then
 	echo "FAIL a missing cosign binary must fail the preflight" >&2
