@@ -145,6 +145,20 @@ check 'a missing check still grades every other check' \
 grade </dev/null
 check 'a probe run that produced nothing grades 1' 1 "${GRADE_RC}"
 
+# --- a failed pull says why --------------------------------------------------
+#
+# `fail` alone hid a gcr.io 404 behind the Dragonfly back end for a whole gate
+# run, so a failure carries docker's own words, and a timeout names the budget.
+
+desc="$(describe_pull_failure gcr.io/x:y 1 'Error response from daemon: unknown')"
+check 'a failed pull names its exit status' 'yes' \
+	"$(grep -q '^pull_probe: gcr.io/x:y failed (exit 1)' <<<"${desc}" && echo yes)"
+check 'a failed pull carries docker stderr' 'yes' \
+	"$(grep -q '^    Error response from daemon: unknown$' <<<"${desc}" && echo yes)"
+
+desc="$(describe_pull_failure gcr.io/x:y 124 '')"
+check 'a timed-out pull names the budget' "pull_probe: gcr.io/x:y timed out after ${PULL_TIMEOUT}s" "${desc}"
+
 # --- the skip path -----------------------------------------------------------
 #
 # The hosted lane and a developer's `make e2e` have no mirror and no tight

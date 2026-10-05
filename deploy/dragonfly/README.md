@@ -1,6 +1,6 @@
 # Dragonfly back end for the registry mirrors
 
-A [Dragonfly](https://d7y.io/) scheduler and one seed peer that the five registry mirrors in [`../registry-mirror`](../registry-mirror/README.md#dragonfly-back-end) use as their outbound HTTPS proxy, so content-addressed blobs and manifests are fetched once and shared peer to peer.
+A [Dragonfly](https://d7y.io/) scheduler and one seed peer that the five registry mirrors in [`../registry-mirror`](../registry-mirror/README.md#dragonfly-back-end) use as their outbound HTTPS proxy, so layer blobs are fetched once and shared peer to peer.
 No manager, so no MySQL or Redis: the seed peer finds the scheduler through a static dynconfig.
 
 **Never route a worker here.** dfdaemon's proxy forwards to any host it is asked for and forwards pushes, and no setting restricts it (measured on client v1.5.7).

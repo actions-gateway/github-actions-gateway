@@ -1,6 +1,6 @@
 # Dragonfly as the Mirror Backend — Q539
 
-> **Status (2026-10-04): Phase 1 measured, Phase 2 built and validated on kind, Phase 3 owed a booked dogfood session.** Dragonfly fails the [mirror contract](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) when it is the endpoint workers reach, so it is built as the **back end** of the Distribution mirrors rather than a substitute for them ([§2](#2-unfronted-dragonfly-fails-the-contract-by-construction)). §2–§6 were measured in local Docker and §7 on a kind cluster; nothing here has run on the dogfood cluster.
+> **Status (2026-10-05): Phase 1 measured, Phase 2 built and validated on kind, Phase 3's first dogfood run failed on gcr.io pulls and the fix is measured locally ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).** Dragonfly fails the [mirror contract](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) when it is the endpoint workers reach, so it is built as the **back end** of the Distribution mirrors rather than a substitute for them ([§2](#2-unfronted-dragonfly-fails-the-contract-by-construction)). §2–§6 were measured in local Docker and §7 on a kind cluster; nothing here has run on the dogfood cluster.
 
 Q408 validated the untrusted-PR egress posture with CNCF Distribution as the mirror, and [§6](q408-untrusted-pr-egress.md#6-follow-on-validations-q539-q540) of that plan scheduled Dragonfly as the alternate backend to grade against the same four-property contract.
 This plan is that grading, and the build it led to.
@@ -73,7 +73,8 @@ The token itself is not the obstacle: an anonymous Hub token attached by hand pa
   Set, both failed, and `registry-1.docker.io/v2/` still answered 401.
   Set to a path that does not exist, dfdaemon logged `load registry cert failed`, kept running, and answered the self-signed host with 200 again: it fails open.
   So the start script refuses to apply the mirrors unless the seed peer logged `load registry cert success`.
-- Proxy rules `blobs/sha256.*` and `manifests/sha256.*` send content-addressed `GET`s through the P2P path; everything else, tag lookups and token requests, goes direct.
+- The proxy rule `blobs/sha256.*` sends layer `GET`s through the P2P path; everything else, tag lookups, token requests and manifests by digest, goes direct.
+  Manifests by digest took the P2P path too until the first dogfood run showed that failing every gcr.io pull ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).
 
 Measured end to end against Hub, before `registryMirror.cert` and `SSL_CERT_DIR` were added: `library/alpine:3.20`'s index and amd64 manifest returned 200, and its first layer returned 200 at 3,630,321 bytes with a sha256 equal to its digest. dfdaemon's log shows the layer taking the P2P path (one "proxy HTTPS request via dfdaemon by rule config" line) and every other request going direct (twelve "directly to remote server" lines), with `auth.docker.io` named on eight log lines.
 Re-measured with both added: the same layer returned 200 at the same size and digest, with two requests taking the P2P path.
@@ -134,10 +135,35 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
 
   kind has no GMC, so the lab applied a stand-in DNS egress policy for the worker namespace that the GMC-managed default-deny provides on dogfood.
 - **Phase 3 — validate on dogfood.
-  Not started; needs a booked session.** Held on 2026-10-04 while another session was using the cluster.
-  The Q408 Phase-4 sequence with `E2E_MIRROR_BACKEND=dragonfly`: the [§3.7](q408-untrusted-pr-egress.md#37-the-phase-2-validation-battery) battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
+  First run red, fix measured locally ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).** The Q408 Phase-4 sequence with `E2E_MIRROR_BACKEND=dragonfly`: the [§3.7](q408-untrusted-pr-egress.md#37-the-phase-2-validation-battery) battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
   Three readings this variant adds: blob `GET`s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a `CONNECT` through the seed peer to `self-signed.badssl.com` refused.
   The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (`dragonfly_readings` in `scripts/dogfood/validate-release.sh`); the mirror hit counts it does not take.
+
+### 7.1 The first dogfood run: gcr.io manifests on the P2P path
+
+The release gate's Dragonfly leg for `v1.9.0-rc.2` (gate run 37273426462, e2e run 37278968369, 2026-10-05) failed one in-job check, `docker-mirror-pull`: a `docker pull` of `gcr.io/distroless/static:nonroot` through `mirror-gcr-io`.
+Every other negative passed, and the same check passed on the plain-Kata and DinD legs of the same gate, which use Distribution alone.
+The probe discarded docker's stderr, so the run itself does not say why.
+
+| Candidate | Verdict | Measurement |
+|---|---|---|
+| `PULL_TIMEOUT` (120 s) too short | Ruled out | The whole battery took 76 s (07:41:40 to 07:42:57), and three of its probes spend their full 20 s each, so the pull failed in under 17 s |
+| A cold or still-rolling seed peer | Not the cause | The lab below fails the same way against a settled seed peer on every attempt, in about 3 s. The dogfood seed's state at 07:42 was not read |
+| The probe | Ruled out | The pull really fails: reproduced with plain `docker pull` and the same ref |
+| The Dragonfly back end | **Cause** | Below |
+
+**Reproduced in local Docker** with the digests `deploy/dragonfly/` and `deploy/registry-mirror/` pin, the seed peer's ConfigMap verbatim, and a Distribution instance with `REGISTRY_PROXY_REMOTEURL=https://gcr.io` behind it: the pull failed with `error from registry: unknown error`.
+The seed peer's log shows the tag lookup going direct and succeeding, then the platform manifest by digest taking the P2P rule and failing: `download task failed: BackendError { message: "404 Not Found" … "server": "Docker Registry" }`.
+The download task it logs carries `request_header: {"user-agent": "Go-http-client/1.1"}` alone, while the request Distribution sent it carried four `Accept` values.
+
+**gcr.io refuses an OCI manifest to a client that accepts nothing.** Requested by curl with the `Accept` header removed, the amd64 and arm64 platform manifests of `distroless/static:nonroot` both answer 404 with `MANIFEST_UNKNOWN`, "Manifest has media type \"application/vnd.oci.image.manifest.v1+json\" but client accepts []"; with `Accept: */*` or the OCI type, 200.
+Docker Hub serves the same shape, an OCI manifest by digest for `library/alpine:3.20` amd64, with no `Accept` at 200, which is why every Hub pull in the e2e run passed and §7's kind lab, which fetched a gcr.io manifest by tag only, never saw it.
+The gate's own mirror battery has the same blind spot: it fetches each instance's manifest by tag, which goes direct.
+
+**The fix drops `manifests/sha256.*` from the rules.** Manifests are a few KB, so the P2P path loses nothing worth keeping; blobs are where the bytes are.
+Measured in the same lab with only `blobs/sha256.*`: the gcr.io pull succeeded, its five blobs taking the P2P rule and its manifest going direct, and a cold Hub blob (`library/busybox:1.36`'s amd64 layer) returned 200 at 2,206,402 bytes with a sha256 equal to its digest by the P2P rule.
+The only change between that run and the failing one above is the removed rule.
+Not yet measured on dogfood: the next gate run is the reading, and `pull_probe` now prints docker's stderr on a failure, so a different cause would name itself.
 
 ## 8. What this plan does not cover
 
