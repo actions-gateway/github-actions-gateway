@@ -58,7 +58,7 @@ case "$*" in
 	[[ -n "${STUB_TAGOBJ:-}" ]] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 	printf '%s\n' "${STUB_TAGOBJ}"
 	;;
-*"git/ref/validated/"*)
+*"git/ref/validated"*)
 	[[ -n "${STUB_EXISTING:-}" ]] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 	printf '%s\n' "${STUB_EXISTING}"
 	;;
@@ -176,6 +176,26 @@ run_case "a failed create names the re-run" 1 \
 	"STUB_TAG=commit ${COMMIT}" "STUB_POST_FAIL=1" -- v1.6.0-rc.2
 want_out "the failure says the validation itself stands" "The validation itself is unaffected"
 want_out "the failure prints the recorder command" "record-validated-candidate.sh v1.6.0-rc.2"
+
+# --leg records one leg's pass beside the candidate marker, never as it: a leg
+# written under refs/validated/ would read to publish.yml as the whole verdict.
+run_case "a leg is recorded under refs/validated-legs" 0 \
+	"STUB_TAG=commit ${COMMIT}" -- --leg dind v1.6.0-rc.2
+want_gh "the leg ref names the candidate and the leg" "ref=refs/validated-legs/v1.6.0-rc.2/dind"
+want_gh "the leg records the commit" "sha=${COMMIT}"
+want_no_gh "no candidate marker is written for a leg" "ref=refs/validated/"
+want_gh "the existing-record read asks for the leg's ref" "git/ref/validated-legs/v1.6.0-rc.2/dind"
+
+run_case "an already-recorded leg is a no-op" 0 \
+	"STUB_TAG=commit ${COMMIT}" "STUB_EXISTING=${COMMIT}" -- --leg dind v1.6.0-rc.2
+want_no_gh "nothing is written on a leg re-run" "-X POST"
+
+run_case "a failed leg create names the leg's re-run" 1 \
+	"STUB_TAG=commit ${COMMIT}" "STUB_POST_FAIL=1" -- --leg dind v1.6.0-rc.2
+want_out "the leg re-run carries --leg" "record-validated-candidate.sh --leg dind v1.6.0-rc.2"
+
+run_case "--leg with no leg is a usage error" 2 -- --leg
+run_case "a leg name that is not a word is a usage error" 2 -- --leg "../x" v1.6.0-rc.2
 
 printf '[record-validated-candidate-test] %d passed, %d failed\n' "$pass" "$fail"
 ((fail == 0))

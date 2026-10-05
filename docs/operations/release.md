@@ -282,6 +282,7 @@ A local gate and a CI one read the same lease, so whichever starts second refuse
 A green `v1.3.0-rc.4` run took 39 minutes end to end with one e2e leg; the gate now runs three, Kata, then privileged DinD, then Kata on the Dragonfly mirror back end, and a healthy e2e leg takes 25–33 minutes.
 `validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → the e2e matrix again on privileged DinD → the e2e matrix on Kata with the Dragonfly back end → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the `Failure diagnostics` section of a failed run's log (e.g. the `FailedScheduling` events) instead of re-running the gate to watch it fail again.
+Once it is fixed, [re-run only the leg that failed](#re-run-only-the-leg-that-failed).
 The [legs it runs](#the-legs-the-gate-runs) are documented at the end of this section, and are the recovery path if one needs re-running by hand.
 
 **If you just merged something, the gate waits before it spends anything.** The gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose single pending slot the next push to main would cancel it out of — and the latest `e2e-test.yml` run is usually the still-running push-run of the merge you just made.
@@ -297,7 +298,7 @@ The gate also checks every local tool it needs up front — including the pinned
 
 ##### The gate records its verdict, and publish reads it
 
-A passing run writes `refs/validated/<rc-tag>` on the remote, pointing at the commit that tag resolves to.
+Each leg that passes writes `refs/validated-legs/<rc-tag>/<leg>`, and once every leg has one for the tag's commit the gate writes `refs/validated/<rc-tag>`, pointing at that commit.
 That marker is the only machine-readable record that a candidate was validated: everything else the gate produces is a log, a local progress stream, or a line somebody later writes into the release notes, and [`publish.yml`](../../.github/workflows/publish.yml) can read none of those.
 
 **A stable tag whose release line has no marker does not publish.** `publish.yml`'s `validated-candidate` job refuses it before any image is pushed, and it takes the newest *validated* candidate as its reference rather than the newest candidate tag.
@@ -318,8 +319,30 @@ REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N
 Read the markers the same way you read any other ref:
 
 ```bash
-git ls-remote origin 'refs/validated/*'
+git ls-remote origin 'refs/validated/*' 'refs/validated-legs/*'
 ```
+
+##### Re-run only the leg that failed
+
+A failed leg leaves every leg before it recorded, so finish the candidate by running that leg alone rather than the whole gate.
+`--legs` runs the named legs, in the gate's own order, between the usual deploy and teardown:
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh --legs dragonfly vX.Y.Z-rc.N
+```
+
+In CI, set the `legs` input when dispatching the workflow:
+
+```bash
+gh workflow run validate-candidate.yml --ref main -f tag=vX.Y.Z-rc.N -f legs=dragonfly
+```
+
+The legs are `kata`, `crd-smoke`, `soak`, `dind` and `dragonfly`.
+`kata` includes the sizing and capacity checks, because both read the Kata tenant its e2e matrix leaves up.
+Deploy and teardown run every time, since the cluster is at 0 nodes between runs.
+
+A run that passes its legs while others are still unrecorded says so, names the legs left, and writes no candidate marker.
+The marker appears on the run that records the last leg.
 
 ##### The gate reserves the e2e pool's CPU budget
 

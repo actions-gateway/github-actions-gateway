@@ -61,7 +61,13 @@
 #
 # Usage:
 #   scripts/dogfood/validate-release.sh <rc-tag>
+#   scripts/dogfood/validate-release.sh --legs <leg>[,<leg>...] <rc-tag>
 #   scripts/dogfood/validate-release.sh --reclaim
+#
+# Each leg is recorded on the remote as it passes, and the candidate is marked
+# validated once every leg has passed for its commit, in one run or several. So
+# a gate that failed one leg is finished with `--legs <that leg>`, which deploys,
+# runs that leg alone and tears down, rather than by the whole hour again.
 #
 # Required env vars (export before running):
 #   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
@@ -233,6 +239,15 @@ E2E_POLL_INTERVAL=15
 # and leave the default untested.
 export E2E_MIRROR_BACKEND=distribution
 
+# The gate's legs, in the order they run. Each passes or fails as a unit, is
+# recorded as refs/validated-legs/<rc-tag>/<leg> when it passes, and can be run
+# alone with --legs. `kata` carries sizing and capacity, because both read the
+# Kata tenant its matrix leaves up. Deploy and teardown are not legs: every run
+# needs both, since the cluster is at 0 nodes between runs.
+GATE_LEGS_ALL=(kata crd-smoke soak dind dragonfly)
+# The legs this run executes, set by select_legs.
+GATE_LEGS=()
+
 # The retry schedule gh_retry uses. Defaults give 5, 10, 20, 40, 60s before
 # jitter, so a denial has roughly two and a half minutes to clear.
 GH_RETRIES="${GH_RETRIES:-5}"
@@ -246,12 +261,17 @@ export RELEASE_PROGRESS_FILE RELEASE_STATUS_FILE
 
 usage() {
 	cat >&2 <<'USAGE'
-Usage: scripts/dogfood/validate-release.sh <rc-tag>
+Usage: scripts/dogfood/validate-release.sh [--legs <leg>[,<leg>...]] <rc-tag>
        scripts/dogfood/validate-release.sh --reclaim
 
-Runs the full pre-GA dogfood validation gate for <rc-tag> (e.g. v1.1.0-rc.7)
-and tears the environment back down on exit. Requires PROJECT, CLUSTER, ZONE,
-and REPO to be exported. See the script header for the optional knobs.
+Runs the pre-GA dogfood validation gate for <rc-tag> (e.g. v1.1.0-rc.7) and
+tears the environment back down on exit. Requires PROJECT, CLUSTER, ZONE, and
+REPO to be exported. See the script header for the optional knobs.
+
+--legs runs only the named legs (default: all), in the gate's own order:
+  kata, crd-smoke, soak, dind, dragonfly
+Each leg is recorded when it passes, and <rc-tag> is marked validated once
+every leg has passed for its commit, so a failed leg is re-run on its own.
 
 --reclaim runs only the orphaned-run check: if a previous gate against this
 target did not finish its teardown (killed, or a stop script refused), its
@@ -1863,12 +1883,93 @@ confirm_target() {
 		"${GAG_IMAGE_TAG}" "${PROJECT}" "${CLUSTER}" "${ZONE}" "${REPO}")"
 }
 
+# select_legs LIST — set GATE_LEGS from a comma-separated LIST of leg names, in
+# GATE_LEGS_ALL's order whatever order LIST names them in. Empty or `all` selects
+# every leg. Exit 2 on a name the gate does not run, before anything spends.
+select_legs() {
+	local list="$1" leg known
+	GATE_LEGS=()
+	if [[ -z "${list}" || "${list}" == all ]]; then
+		GATE_LEGS=("${GATE_LEGS_ALL[@]}")
+		return 0
+	fi
+	local -a requested=()
+	local -A want=()
+	IFS=',' read -r -a requested <<<"${list}"
+	for leg in "${requested[@]}"; do
+		leg="${leg// /}"
+		[[ -n "${leg}" ]] || continue
+		known=0
+		for k in "${GATE_LEGS_ALL[@]}"; do
+			if [[ "${k}" == "${leg}" ]]; then
+				known=1
+			fi
+		done
+		if ((!known)); then
+			echo "error: unknown leg '${leg}' (the gate runs: ${GATE_LEGS_ALL[*]})" >&2
+			return 2
+		fi
+		want["${leg}"]=1
+	done
+	for leg in "${GATE_LEGS_ALL[@]}"; do
+		if [[ -n "${want[${leg}]:-}" ]]; then
+			GATE_LEGS+=("${leg}")
+		fi
+	done
+	if ((${#GATE_LEGS[@]} == 0)); then
+		echo "error: --legs named no leg" >&2
+		return 2
+	fi
+}
+
+# leg_selected LEG — whether this run executes LEG.
+leg_selected() {
+	local leg
+	for leg in "${GATE_LEGS[@]}"; do
+		[[ "${leg}" == "$1" ]] && return 0
+	done
+	return 1
+}
+
+# record_leg LEG — record LEG's pass for this candidate. A failed record does not
+# fail the leg, which measured what it measured: main finds it unrecorded at the
+# end and prints the recorder's re-run.
+record_leg() {
+	[[ "${GAG_IMAGE_TAG}" == v*-* ]] || return 0
+	REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" \
+		--leg "$1" "${GAG_IMAGE_TAG}" || true
+}
+
+# unrecorded_legs — print each of GATE_LEGS_ALL with no record for the commit
+# GAG_IMAGE_TAG names on the remote, one per line; nothing once all have passed.
+# Exit 1 when the records cannot be read, which is not the same as none.
+unrecorded_legs() {
+	local commit refs leg
+	commit="$(gh_retry api "repos/${REPO}/commits/${GAG_IMAGE_TAG}" --jq '.sha')" || return 1
+	[[ -n "${commit}" ]] || return 1
+	refs="$(gh_retry api "repos/${REPO}/git/matching-refs/validated-legs/${GAG_IMAGE_TAG}/" \
+		--jq '.[] | "\(.ref) \(.object.sha)"')" || return 1
+	for leg in "${GATE_LEGS_ALL[@]}"; do
+		if ! grep -qxF "refs/validated-legs/${GAG_IMAGE_TAG}/${leg} ${commit}" <<<"${refs}"; then
+			echo "${leg}"
+		fi
+	done
+}
+
 main() {
 	if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 		usage
 		exit 0
 	fi
-	local reclaim_only=0 rc_tag=""
+	local reclaim_only=0 rc_tag="" legs_arg=""
+	if [[ "${1:-}" == "--legs" ]]; then
+		if [[ $# -lt 2 ]]; then
+			usage
+			exit 2
+		fi
+		legs_arg="$2"
+		shift 2
+	fi
 	if [[ "${1:-}" == "--reclaim" ]]; then
 		reclaim_only=1
 	else
@@ -1878,6 +1979,10 @@ main() {
 			usage
 			exit 2
 		fi
+	fi
+
+	if ((!reclaim_only)); then
+		select_legs "${legs_arg}" || exit 2
 	fi
 
 	: "${PROJECT:?PROJECT must be set}"
@@ -1985,36 +2090,53 @@ main() {
 	deploy_leg
 	progress_event deploy "done"
 
-	progress_phase e2e "Running the e2e matrix on GAG runners"
-	e2e_leg
-	progress_event e2e "done"
+	echo "Legs this run: ${GATE_LEGS[*]}"
 
-	progress_phase sizing "Asserting the derived worker sizing profiles"
-	sizing_leg
-	progress_event sizing "done"
+	if leg_selected kata; then
+		progress_phase e2e "Running the e2e matrix on GAG runners"
+		e2e_leg
+		progress_event e2e "done"
 
-	progress_phase capacity "Driving the admission ladder's quota rung"
-	capacity_leg
-	progress_event capacity "done" "${CAPACITY_DRIVEN}"
+		progress_phase sizing "Asserting the derived worker sizing profiles"
+		sizing_leg
+		progress_event sizing "done"
 
-	progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
-	crd_smoke
-	progress_event crd-smoke "done"
+		progress_phase capacity "Driving the admission ladder's quota rung"
+		capacity_leg
+		progress_event capacity "done" "${CAPACITY_DRIVEN}"
+		record_leg kata
+	fi
+
+	if leg_selected crd-smoke; then
+		progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
+		crd_smoke
+		progress_event crd-smoke "done"
+		record_leg crd-smoke
+	fi
 
 	# Readings, not gates: soak_leg returns 0 whatever it finds, because a
 	# negative reading is evidence the release exists to gather rather than a
 	# reason to reject the candidate. See its own comment for why it sits here.
-	progress_phase soak "Taking the v2 soak readings (Q1059, Q1060, Q1156)"
-	soak_leg
-	progress_event soak "done"
+	if leg_selected soak; then
+		progress_phase soak "Taking the v2 soak readings (Q1059, Q1060, Q1156)"
+		soak_leg
+		progress_event soak "done"
+		record_leg soak
+	fi
 
-	progress_phase dind "Running the e2e matrix on the privileged-dind template (Q1159)"
-	dind_leg
-	progress_event dind "done"
+	if leg_selected dind; then
+		progress_phase dind "Running the e2e matrix on the privileged-dind template (Q1159)"
+		dind_leg
+		progress_event dind "done"
+		record_leg dind
+	fi
 
-	progress_phase dragonfly "Running the e2e matrix on Kata with the Dragonfly mirror back end (Q1160)"
-	dragonfly_leg
-	progress_event dragonfly "done"
+	if leg_selected dragonfly; then
+		progress_phase dragonfly "Running the e2e matrix on Kata with the Dragonfly mirror back end (Q1160)"
+		dragonfly_leg
+		progress_event dragonfly "done"
+		record_leg dragonfly
+	fi
 	# Say where the evidence went while the operator is still here. The window is
 	# billable and cannot be replayed, so a reading nobody can find afterwards
 	# cost the same as one never taken.
@@ -2024,10 +2146,21 @@ main() {
 		echo "    ${SCRIPT_DIR}/soak-readings.sh"
 	fi
 
+	record_verdict || exit 1
+}
+
+# record_verdict — after the selected legs passed: write the candidate marker if
+# every leg now has a record, or say which legs the candidate still needs.
+# Exit 1 when a record could not be read or written.
+record_verdict() {
 	# The verdict has to outlive this process. publish.yml refuses a stable tag
 	# whose release line has no recorded validation (Q879), and until this ran the
 	# only record was prose nothing could read. Recorded before the PASS event, so
 	# a run that ends clean carries a marker by construction.
+	#
+	# The marker is written only once every leg has a record for the candidate's
+	# commit, whether they passed in this run or an earlier one. A run of some
+	# legs that leaves others unrecorded passed what it ran and validated nothing.
 	#
 	# A record that fails does not retract the verdict — the legs above measured
 	# what they measured — so it exits non-zero without pretending the gate failed,
@@ -2036,11 +2169,26 @@ main() {
 	# Only for a candidate tag. GAG_IMAGE_TAG pins GAG to any published ref, so
 	# the gate is legitimately run against a branch build; there is no release
 	# line to record one against, and the recorder rejects it as a usage error.
-	local record_rc=0
+	local record_rc=0 missing="" leg
+	local -a unrecorded_here=() unrun=()
 	if [[ "${GAG_IMAGE_TAG}" != v*-* ]]; then
 		echo "Not a candidate tag (${GAG_IMAGE_TAG}): nothing recorded under refs/validated/."
+	elif ! missing="$(unrecorded_legs)"; then
+		echo "error: could not read the leg records for ${GAG_IMAGE_TAG} (refs/validated-legs/)." >&2
+		record_rc=1
 	else
-		REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" "${GAG_IMAGE_TAG}" || record_rc=$?
+		for leg in ${missing}; do
+			if leg_selected "${leg}"; then
+				unrecorded_here+=("${leg}")
+			else
+				unrun+=("${leg}")
+			fi
+		done
+		if ((${#unrecorded_here[@]})); then
+			record_rc=1
+		elif ((${#unrun[@]} == 0)); then
+			REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" "${GAG_IMAGE_TAG}" || record_rc=$?
+		fi
 	fi
 	if ((record_rc)); then
 		# A fail event rather than a `gate done`, for two reasons. The renderer
@@ -2050,12 +2198,28 @@ main() {
 		# before the trap fires, which is what release-sentinel.sh would report.
 		progress_event record fail "validation passed; verdict not recorded"
 		echo ""
-		echo "Validation gate PASSED for ${GAG_IMAGE_TAG} — but the verdict is NOT recorded."
+		echo "Validation gate PASSED for ${GAG_IMAGE_TAG} (${GATE_LEGS[*]}) — but the verdict is NOT recorded."
 		echo "  publish.yml reads refs/validated/ and will refuse the stable tag until it is."
 		echo "  Nothing here needs re-validating; re-run the recorder alone:"
+		for leg in "${unrecorded_here[@]}"; do
+			echo "    REPO=${REPO} ${SCRIPT_DIR}/record-validated-candidate.sh --leg ${leg} ${GAG_IMAGE_TAG}"
+		done
 		echo "    REPO=${REPO} ${SCRIPT_DIR}/record-validated-candidate.sh ${GAG_IMAGE_TAG}"
 		echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."
-		exit 1
+		return 1
+	fi
+
+	if ((${#unrun[@]})); then
+		local still
+		still="$(IFS=,; echo "${unrun[*]}")"
+		progress_event gate "done" "legs PASSED (${GATE_LEGS[*]}); ${GAG_IMAGE_TAG} still needs ${still}"
+		echo ""
+		echo "Legs PASSED for ${GAG_IMAGE_TAG}: ${GATE_LEGS[*]}."
+		echo "  ${GAG_IMAGE_TAG} is NOT validated yet: no pass is recorded for ${unrun[*]}."
+		echo "  Run them to finish it:"
+		echo "    scripts/dogfood/validate-release.sh --legs ${still} ${GAG_IMAGE_TAG}"
+		echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."
+		return 0
 	fi
 
 	progress_event gate "done" "validation PASSED for ${GAG_IMAGE_TAG}"

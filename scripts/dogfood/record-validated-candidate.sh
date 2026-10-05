@@ -8,10 +8,16 @@
 # spent no validation at all (docs/postmortems/2026-08-15-rc2-tagged-a-stale-commit.md).
 #
 #   REPO=owner/name scripts/dogfood/record-validated-candidate.sh <rc-tag>
+#   REPO=owner/name scripts/dogfood/record-validated-candidate.sh --leg <leg> <rc-tag>
 #
 # Writes `refs/validated/<rc-tag>` on the remote, pointing at the commit that tag
 # resolves to. scripts/release/check-validated-candidate.sh reads it from
 # publish.yml, ahead of every publishing job.
+#
+# With --leg, writes `refs/validated-legs/<rc-tag>/<leg>` instead: one leg of the
+# gate passed for that commit. validate-release.sh records each leg as it passes
+# and writes the candidate marker once every leg has a record, so a gate that
+# failed one leg is finished by re-running that leg alone (--legs).
 #
 # A ref rather than a commit in the tree, for the reason `refs/queue-ids/*` is one
 # (docs/development/queue-id-allocation.md): it records a fact about a commit
@@ -34,13 +40,21 @@ shopt -s inherit_errexit
 
 usage() {
 	cat >&2 <<-EOF
-		usage: REPO=owner/name $(basename "$0") <rc-tag>
+		usage: REPO=owner/name $(basename "$0") [--leg <leg>] <rc-tag>
 
 		  rc-tag  the candidate that passed, e.g. v1.6.0-rc.2
+		  leg     record one gate leg's pass rather than the candidate's, e.g. dind
 	EOF
 	exit 2
 }
 
+leg=""
+if [[ "${1:-}" == --leg ]]; then
+	[[ $# -ge 2 ]] || usage
+	leg="$2"
+	shift 2
+	[[ "$leg" =~ ^[a-z][a-z-]*$ ]] || usage
+fi
 [[ $# -eq 1 ]] || usage
 [[ "$1" == -h || "$1" == --help ]] && usage
 
@@ -53,6 +67,7 @@ if [[ "$rc_tag" != v*-* ]]; then
 fi
 
 ref="refs/validated/${rc_tag}"
+[[ -z "$leg" ]] || ref="refs/validated-legs/${rc_tag}/${leg}"
 
 # The tag object first, then its target. An annotated tag — which every release
 # tag here is — points at a tag object, and it is the COMMIT that has to be
@@ -77,7 +92,7 @@ fi
 # Already recorded is the re-run case and must stay free — a gate whose record
 # failed on a network blip is re-run by hand, and so is one re-run for any other
 # reason. Only a DISAGREEMENT is a finding.
-if existing="$(gh api "repos/${REPO}/git/ref/validated/${rc_tag}" --jq '.object.sha' 2>/dev/null)"; then
+if existing="$(gh api "repos/${REPO}/git/ref/${ref#refs/}" --jq '.object.sha' 2>/dev/null)"; then
 	if [[ "$existing" == "$commit" ]]; then
 		echo "record-validated-candidate: ${ref} already records ${commit}"
 		exit 0
@@ -102,7 +117,7 @@ if ! out="$(gh api -X POST "repos/${REPO}/git/refs" -f "ref=${ref}" -f "sha=${co
 		The validation itself is unaffected — it is the record that is missing, and
 		publish.yml will refuse the stable tag until it exists. Re-run:
 
-		  REPO=${REPO} scripts/dogfood/record-validated-candidate.sh ${rc_tag}
+		  REPO=${REPO} scripts/dogfood/record-validated-candidate.sh ${leg:+--leg ${leg} }${rc_tag}
 	EOF
 	exit 1
 fi
