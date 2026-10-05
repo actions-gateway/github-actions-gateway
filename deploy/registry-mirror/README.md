@@ -58,7 +58,7 @@ Re-render the persistent overlay to recreate fresh, empty caches.
 
 ## Dragonfly back end
 
-[`overlays/dragonfly`](overlays/dragonfly/kustomization.yaml) keeps the five instances and their policies unchanged and sends their upstream traffic through a [Dragonfly](https://d7y.io/) seed peer in `gag-dragonfly`, so content-addressed blobs and manifests ride its peer-to-peer (P2P) cache.
+[`overlays/dragonfly`](overlays/dragonfly/kustomization.yaml) keeps the five instances and their policies unchanged and sends their upstream traffic through a [Dragonfly](https://d7y.io/) seed peer in `gag-dragonfly`, so layer blobs ride its peer-to-peer (P2P) cache; manifests go direct.
 The contract stays the instances': workers never reach Dragonfly, whose proxy forwards to any host and forwards pushes, and its NetworkPolicy admits only these pods.
 Each registry container trusts the seed peer's interception CA alone (`SSL_CERT_FILE` and `SSL_CERT_DIR`), and the seed peer verifies upstreams against the public roots, so tag lookups are still checked end to end.
 Whoever holds that CA's key can serve the mirrors any content for a tag.

@@ -188,16 +188,35 @@ http_probe() {
 	printf '%s' "${code}"
 }
 
-# pull_probe REF — print `ok` when `docker pull REF` succeeds, `fail` otherwise.
+# describe_pull_failure REF RC STDERR — explain a failed pull for the job log.
+# 124 is `timeout`'s own status, so it names the budget rather than docker.
+describe_pull_failure() {
+	local ref="$1" rc="$2" err="$3"
+	if ((rc == 124)); then
+		echo "pull_probe: ${ref} timed out after ${PULL_TIMEOUT}s"
+	else
+		echo "pull_probe: ${ref} failed (exit ${rc}); docker said:"
+	fi
+	local line
+	[[ -z "${err}" ]] || while IFS= read -r line; do
+		echo "    ${line}"
+	done <<<"${err}"
+}
+
+# pull_probe REF — print `ok` when `docker pull REF` succeeds, `fail` otherwise,
+# and on failure write docker's stderr to stderr: `fail` alone cannot tell a
+# refused registry from an upstream error behind the mirror.
 # Bounded by `timeout`: a pull whose registry is dropped rather than refused has
 # no error to return and would otherwise sit in dockerd's own retry schedule.
 pull_probe() {
-	local ref="$1"
-	if timeout "${PULL_TIMEOUT}" docker pull "${ref}" >/dev/null 2>&1; then
+	local ref="$1" err rc=0
+	err="$(timeout "${PULL_TIMEOUT}" docker pull "${ref}" 2>&1 >/dev/null)" || rc=$?
+	if ((rc == 0)); then
 		printf 'ok'
-	else
-		printf 'fail'
+		return 0
 	fi
+	printf 'fail'
+	describe_pull_failure "${ref}" "${rc}" "${err}" >&2
 }
 
 # run_probes HUB_MIRROR MIRRORED_REF — emit one `<check> <value>` line per check.

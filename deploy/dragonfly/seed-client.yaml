@@ -61,12 +61,14 @@ data:
         caKey: /etc/dragonfly-ca/ca.key
       registryMirror:
         cert: /etc/ssl/certs/ca-certificates.crt
-      # Only digest-addressed content takes the P2P path: it is immutable, so a
-      # cached copy cannot go stale. Tags, token requests and everything else
-      # pass straight through.
+      # Only blobs take the P2P path: digest-addressed, so a cached copy cannot
+      # go stale. Tags, token requests and everything else pass straight
+      # through, manifests by digest included: the P2P download sends no Accept
+      # header, and gcr.io answers an OCI manifest requested without one with
+      # 404 MANIFEST_UNKNOWN, so a manifests/sha256 rule failed every gcr.io
+      # pull (measured on v1.5.7, Q539 plan §4).
       rules:
         - regex: blobs/sha256.*
-        - regex: manifests/sha256.*
     health:
       server:
         port: 4003
