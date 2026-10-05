@@ -2599,7 +2599,7 @@
 
 <h1 id="run-the-release-gates-e2e-legs-in-parallel-across-gcp-projects">Run the release gate's e2e legs in parallel across GCP projects<a class="headerlink" href="#run-the-release-gates-e2e-legs-in-parallel-across-gcp-projects" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> the release gate's wall clock becomes the thing that delays a release, or a fourth e2e leg is proposed.</p>
-<p>With the DinD leg (Q1159) and the Dragonfly leg (<a href="../Q1160/">Q1160</a>) the gate runs three e2e legs in series on one cluster, each a healthy 25–33 minutes by the runbook's measure.
+<p>With the DinD leg (Q1159) and the Dragonfly leg (Q1160, both shipped) the gate runs three e2e legs in series on one cluster, each a healthy 25–33 minutes by the runbook's measure.
 They run in series because they share one tenant namespace, RunnerSet and node pool, and one project-wide <code>CPUS_ALL_REGIONS</code> quota the deploy leg also draws on.
 A cluster per leg, each in its own project, removes all four contentions and brings the gate back to roughly one leg's duration.</p>
 <p><strong>What it costs is unpriced.</strong> The expectation is that it costs more than the serial gate, because GKE's free tier covers one cluster and every extra project's cluster pays its own management fee and nodes; that is an expectation, not a measurement.

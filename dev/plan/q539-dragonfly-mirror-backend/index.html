@@ -2904,7 +2904,8 @@ So the namespace can enforce PSA <code>restricted</code>, and the security conte
 - <strong>Phase 3 — validate on dogfood.
   Not started; needs a booked session.</strong> Held on 2026-10-04 while another session was using the cluster.
   The Q408 Phase-4 sequence with <code>E2E_MIRROR_BACKEND=dragonfly</code>: the <a href="../q408-untrusted-pr-egress/#37-the-phase-2-validation-battery">§3.7</a> battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
-  Three readings this variant adds: blob <code>GET</code>s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a <code>CONNECT</code> through the seed peer to <code>self-signed.badssl.com</code> refused.</p>
+  Three readings this variant adds: blob <code>GET</code>s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a <code>CONNECT</code> through the seed peer to <code>self-signed.badssl.com</code> refused.
+  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (<code>dragonfly_readings</code> in <code>scripts/dogfood/validate-release.sh</code>); the mirror hit counts it does not take.</p>
 <h2 id="8-what-this-plan-does-not-cover">8. What this plan does not cover<a class="headerlink" href="#8-what-this-plan-does-not-cover" title="Permanent link">&para;</a></h2>
 <p>The node layer, where a <code>hostNetwork</code> dfdaemon serves the kubelet's own pulls, is <a href="../../queue/Q540/">Q540</a>. §2 applies there directly: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.
 Unmeasured.</p>

@@ -3777,8 +3777,8 @@ A patch line cuts and validates its own candidate like any other release: <code>
 It runs the same script with the same verdict and marker, from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the <a href="../../plan/q880-ci-release-validation/">Q880 plan</a>.
 Run it locally as below when CI cannot, and never both at once: the two cannot see each other's lease (<a href="../../queue/Q1158/">Q1158</a>).</p>
 <p><strong>One command runs the whole gate</strong>, with nothing to type at it after the first confirmation.
-A green <code>v1.3.0-rc.4</code> run took 39 minutes end to end with one e2e leg; the gate now runs two, Kata then privileged DinD, and a healthy e2e leg takes 25–33 minutes.
-<code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → the e2e matrix again on privileged DinD → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though <a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>).
+A green <code>v1.3.0-rc.4</code> run took 39 minutes end to end with one e2e leg; the gate now runs three, Kata, then privileged DinD, then Kata on the Dragonfly mirror back end, and a healthy e2e leg takes 25–33 minutes.
+<code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → the e2e matrix again on privileged DinD → the e2e matrix on Kata with the Dragonfly back end → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though <a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the <code>Failure diagnostics</code> section of a failed run's log (e.g. the <code>FailedScheduling</code> events) instead of re-running the gate to watch it fail again.
 The <a href="#the-legs-the-gate-runs">legs it runs</a> are documented at the end of this section, and are the recovery path if one needs re-running by hand.</p>
 <p><strong>If you just merged something, the gate waits before it spends anything.</strong> The gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose single pending slot the next push to main would cancel it out of — and the latest <code>e2e-test.yml</code> run is usually the still-running push-run of the merge you just made.
@@ -4050,11 +4050,44 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
    Step 2 runs the Kata variant, the one untrusted pull requests need, so without this the shipped <code>privileged-dind</code> template reaches operators with no job ever having run on it; 1.9 moved its daemon from <code>docker:27-dind</code> to <code>docker:28-dind</code> that way.
    It runs last because the two variants share one namespace, RunnerSet and node pool, and the sizing and capacity legs read the Kata tenant's state.
    The mirror census is Kata-only: nothing on the DinD tenant reaches a mirror.
-8. <strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code> (dogfood scales to 0 at rest).
+8. <strong>Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh</code>, then step 2's dispatch and watch.
+   The mirrors can fetch through a Dragonfly seed peer instead of from their upstreams directly (Dragonfly is a peer-to-peer image distribution system); without this leg every gate run tests the default Distribution back end alone, and the Dragonfly one has run only on kind.
+   It is Kata because only the Kata tenant's egress is mirror-only; on DinD a worker reaches upstreams itself, so the back end would not be on the path under test.
+   A red matrix is a red gate.
+   A green one says nothing about Dragonfly, because the mirrors serve either way, so the leg also takes the mirror census and four readings before <code>e2e-stop.sh</code> scales the seed peer, and its log, away:</p>
+<table>
+<thead>
+<tr>
+<th>Reading</th>
+<th><code>pass</code> means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mirror-battery</code></td>
+<td><code>scripts/dogfood/e2e-mirror-validate.sh</code> passed against the Dragonfly-backed mirrors: every instance serves a real manifest and refuses a push.</td>
+</tr>
+<tr>
+<td><code>p2p-path</code></td>
+<td>At least one request in the seed peer's log took the peer-to-peer rule. Direct requests and none by rule is a <code>finding</code>; a log with neither line is <code>not-taken</code>, because a reworded log and an unused seed look the same.</td>
+</tr>
+<tr>
+<td><code>worker-to-seed-proxy</code></td>
+<td>A worker-labelled pod timed out on the seed's proxy port, which is an open forward proxy, while the same pod reached a mirror. A dead control is <code>not-taken</code>.</td>
+</tr>
+<tr>
+<td><code>connect-upstream-tls</code></td>
+<td>A <code>CONNECT</code> through the seed to <code>self-signed.badssl.com</code> was refused, while one to <code>badssl.com</code> succeeded. A <code>finding</code> means the seed peer carries traffic to hosts whose certificates it should reject.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>These are readings, not gates</strong>, recorded under <code>Q539</code> with the soak readings in step 6 and rendered by the same script.
+   A <code>finding</code> on either network reading is a security property failing on the candidate's cluster: read it before promoting, even though the gate passed.
+9. <strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code> (dogfood scales to 0 at rest).
    <strong>Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero</strong>, so the gate can report success with a node still billing for several more minutes.
    Confirm at rest by asking the cluster (<code>scripts/dogfood/ops.sh at-rest</code>), never by reading the gate's own teardown line.
-9. <strong>Record the verdict.</strong> <code>REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N</code>.
-   <code>validate-release.sh</code> does this itself; by hand it is a step, and skipping it leaves <code>publish.yml</code> refusing the stable tag with nothing under <code>refs/validated/</code> to read (<a href="#the-gate-records-its-verdict-and-publish-reads-it">why</a>).</p>
+10. <strong>Record the verdict.</strong> <code>REPO=… scripts/dogfood/record-validated-candidate.sh vX.Y.Z-rc.N</code>.
+    <code>validate-release.sh</code> does this itself; by hand it is a step, and skipping it leaves <code>publish.yml</code> refusing the stable tag with nothing under <code>refs/validated/</code> to read (<a href="#the-gate-records-its-verdict-and-publish-reads-it">why</a>).</p>
 <p>A red matrix, a failed CRD smoke, a dead <code>NodeShare</code> profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a <strong>stop-ship for the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.</p>
 <h3 id="2-tag-and-push">2. Tag and push<a class="headerlink" href="#2-tag-and-push" title="Permanent link">&para;</a></h3>
 <p><strong>What may land between a validated candidate and the stable tag.</strong> A candidate's dogfood validation covers the tree it was cut from, so anything merged after it that moves an artifact makes the verdict describe something other than what ships.
