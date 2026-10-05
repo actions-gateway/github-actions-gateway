@@ -112,9 +112,9 @@ record() { cat "$(lease_fake_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" 2>/dev/n
 holder() { record | cut -d'|' -f1; }
 field_rc() { record | cut -d'|' -f5; }
 
-# iso_ago SECONDS — a Lease MicroTime SECONDS in the past.
+# iso_ago SECONDS — a Lease MicroTime SECONDS before RELEASE_LEASE_NOW (or now).
 iso_ago() {
-	local t=$(($(date +%s) - $1))
+	local t=$((${RELEASE_LEASE_NOW:-$(date +%s)} - $1))
 	date -u -r "${t}" +%Y-%m-%dT%H:%M:%S.000000Z 2>/dev/null ||
 		date -u -d "@${t}" +%Y-%m-%dT%H:%M:%S.000000Z
 }
@@ -206,8 +206,11 @@ remote_lease 601
 check "another host's lapsed lease reads orphaned whatever runs locally at its pid" \
 	"orphaned" "$(state)"
 LIVE_PIDS=()
+# One clock reading for both sides: a second ticking over between them is 601.
+RELEASE_LEASE_NOW="$(date +%s)"
 remote_lease 600
 check "a lease renewed exactly one duration ago still reads held" "held" "$(state)"
+unset RELEASE_LEASE_NOW
 
 # The window that matters is the lost runner: Q880's own reclaim step never ran,
 # and this is the only way anyone can see the run is gone.

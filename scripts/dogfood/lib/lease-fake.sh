@@ -19,11 +19,40 @@ lease_fake_path() {
 	echo "${RELEASE_LEASE_DIR}/fake-${key//[^A-Za-z0-9._-]/-}.lease"
 }
 
+# lease_fake_locked PROJECT ZONE CLUSTER CMD ARGS... — run CMD holding the
+# target's lock, so a create, patch or delete is one step as the apiserver's
+# are. Without it a background renewer can read a record, lose a race to a test
+# overwriting it, and write its renewal back over the overwrite. `command sleep`
+# because a suite may stub sleep(). A lock held past 5s belongs to a renewer
+# killed mid-write (lease_renew_stop), so it is broken rather than waited on.
+lease_fake_locked() {
+	local lock rc=0 tries=0
+	mkdir -p "${RELEASE_LEASE_DIR}"
+	lock="$(lease_fake_path "$1" "$2" "$3").lock"
+	until mkdir "${lock}" 2>/dev/null; do
+		((++tries < 500)) || rmdir "${lock}" 2>/dev/null || true
+		command sleep 0.01
+	done
+	shift 3
+	"$@" || rc=$?
+	rmdir "${lock}"
+	return "${rc}"
+}
+
+# lease_fake_put PROJECT ZONE CLUSTER HOLDER RENEWED DURATION ACQUIRED RC — write
+# a record by rename, so a concurrent reader sees the old one or the new one.
+lease_fake_put() {
+	local f tmp
+	f="$(lease_fake_path "$1" "$2" "$3")"
+	tmp="${f}.${BASHPID}"
+	printf '%s|%s|%s|%s|%s\n' "$4" "$5" "$6" "$7" "$8" >"${tmp}"
+	mv "${tmp}" "${f}"
+}
+
 # lease_fake_write PROJECT ZONE CLUSTER HOLDER RENEWED DURATION ACQUIRED RC —
 # hand-write a record, for the states this process cannot reach by acquiring.
 lease_fake_write() {
-	mkdir -p "${RELEASE_LEASE_DIR}"
-	printf '%s|%s|%s|%s|%s\n' "$4" "$5" "$6" "$7" "$8" >"$(lease_fake_path "$1" "$2" "$3")"
+	lease_fake_locked "$1" "$2" "$3" lease_fake_put "$@"
 }
 
 lease_api_get() {
@@ -34,16 +63,19 @@ lease_api_get() {
 	return 0
 }
 
-lease_api_create() {
-	[[ -z "${LEASE_FAKE_WRITE_FAILS:-}" ]] || return 1
+lease_fake_create() {
 	[[ ! -f "$(lease_fake_path "$1" "$2" "$3")" ]] || return 1
 	local now
 	now="$(lease_now_iso)"
-	lease_fake_write "$1" "$2" "$3" "$4" "${now}" "${RELEASE_LEASE_DURATION}" "${now}" "${5:-}"
+	lease_fake_put "$1" "$2" "$3" "$4" "${now}" "${RELEASE_LEASE_DURATION}" "${now}" "${5:-}"
 }
 
-lease_api_patch() {
+lease_api_create() {
 	[[ -z "${LEASE_FAKE_WRITE_FAILS:-}" ]] || return 1
+	lease_fake_locked "$1" "$2" "$3" lease_fake_create "$@"
+}
+
+lease_fake_patch() {
 	local f holder renewed duration acquired rc now
 	f="$(lease_fake_path "$1" "$2" "$3")"
 	[[ -f "${f}" ]] || return 1
@@ -55,10 +87,15 @@ lease_api_patch() {
 		acquired="${now}"
 		rc="${6:-}"
 	fi
-	lease_fake_write "$1" "$2" "$3" "$5" "${now}" "${duration}" "${acquired}" "${rc}"
+	lease_fake_put "$1" "$2" "$3" "$5" "${now}" "${duration}" "${acquired}" "${rc}"
+}
+
+lease_api_patch() {
+	[[ -z "${LEASE_FAKE_WRITE_FAILS:-}" ]] || return 1
+	lease_fake_locked "$1" "$2" "$3" lease_fake_patch "$@"
 }
 
 lease_api_delete() {
 	[[ -z "${LEASE_FAKE_WRITE_FAILS:-}" ]] || return 1
-	rm -f "$(lease_fake_path "$1" "$2" "$3")"
+	lease_fake_locked "$1" "$2" "$3" rm -f "$(lease_fake_path "$1" "$2" "$3")"
 }
