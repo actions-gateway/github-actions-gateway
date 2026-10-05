@@ -1886,86 +1886,43 @@ rc=0
 leg_selected kata || rc=$?
 check "legs: an unnamed leg is not" "1" "${rc}"
 
-# unrecorded_legs reads the tag's commit, then every leg record under the tag.
-# A record on another commit is not this candidate's, so it does not count.
-LEGS_COMMIT=1111111111111111111111111111111111111111
-legs_gh() {
+# The evidence publish reads (Q880): the candidate's commit, then each leg as it
+# passes. The commit is the remote's answer for the tag.
+EVIDENCE_COMMIT=1111111111111111111111111111111111111111
+gh() {
 	case "$*" in
-	*"/commits/"*) echo "${LEGS_COMMIT}" ;;
-	*"matching-refs/validated-legs/"*) printf '%s\n' "${LEGS_REFS}" ;;
-	*) return 99 ;;
+	*"/commits/v9.9.0-rc.1"*) echo "${EVIDENCE_COMMIT}" ;;
+	*) return 1 ;;
 	esac
 }
-gh() { legs_gh "$@"; }
 GAG_IMAGE_TAG="v9.9.0-rc.1"
-LEGS_REFS="refs/validated-legs/v9.9.0-rc.1/kata ${LEGS_COMMIT}
-refs/validated-legs/v9.9.0-rc.1/crd-smoke ${LEGS_COMMIT}
-refs/validated-legs/v9.9.0-rc.1/soak ${LEGS_COMMIT}
-refs/validated-legs/v9.9.0-rc.1/dind 2222222222222222222222222222222222222222"
-check "records: the legs with no record for the commit are listed" "dind dragonfly" "$(unrecorded_legs | xargs)"
-LEGS_REFS=""
-check "records: with no records every leg is listed" "kata crd-smoke soak dind dragonfly" "$(unrecorded_legs | xargs)"
-LEGS_REFS="$(for l in kata crd-smoke soak dind dragonfly; do echo "refs/validated-legs/v9.9.0-rc.1/${l} ${LEGS_COMMIT}"; done)"
-check "records: with every leg recorded nothing is listed" "" "$(unrecorded_legs)"
-# A record read that fails is not an empty one: empty would mark the candidate.
+GATE_EVIDENCE_FILE="${SCRATCH}/evidence.txt"
+evidence_start
+evidence_leg kata
+evidence_leg dind
+check "evidence: the tag, its commit, then each passed leg" \
+	"tag v9.9.0-rc.1 commit ${EVIDENCE_COMMIT} leg kata leg dind" "$(xargs <"${GATE_EVIDENCE_FILE}")"
+
+# A commit the gate cannot resolve stops the run before it spends: evidence that
+# names no commit is evidence publish cannot use.
 gh() { return 1; }
 rc=0
-GH_RETRIES=0 GH_RETRY_DELAY=0 unrecorded_legs >/dev/null 2>&1 || rc=$?
-check "records: an unreadable record set fails rather than reading as complete" "1" "${rc}"
+GH_RETRIES=0 GH_RETRY_DELAY=0 evidence_start 2>/dev/null || rc=$?
+check "evidence: an unresolvable commit fails the start" "1" "${rc}"
+
+# A local run sets no file and writes nothing; so does a branch build's tag.
+rm -f "${GATE_EVIDENCE_FILE}"
+GATE_EVIDENCE_FILE=""
+evidence_start
+evidence_leg kata
+check "evidence: no file is written when none is asked for" "absent" "$([[ -e "${SCRATCH}/evidence.txt" ]] && echo present || echo absent)"
+GATE_EVIDENCE_FILE="${SCRATCH}/evidence.txt"
+GAG_IMAGE_TAG="claude-branch-build"
+evidence_start
+evidence_leg kata
+check "evidence: a non-candidate tag writes none" "absent" "$([[ -e "${SCRATCH}/evidence.txt" ]] && echo present || echo absent)"
+GATE_EVIDENCE_FILE=""
 gh() { scripted_gh "$@"; }
-
-# record_verdict writes the candidate marker only once every leg has a record.
-# The recorder is stubbed to log its arguments; unrecorded_legs is stubbed to
-# answer from VERDICT_MISSING.
-VERDICT_DIR="${SCRATCH}/verdict"
-mkdir -p "${VERDICT_DIR}"
-cat >"${VERDICT_DIR}/record-validated-candidate.sh" <<'STUB'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >>"${VERDICT_LOG}"
-exit "${VERDICT_RECORD_RC:-0}"
-STUB
-export VERDICT_LOG="${SCRATCH}/verdict.log"
-run_verdict() {
-	: >"${VERDICT_LOG}"
-	VERDICT_OUT="${SCRATCH}/verdict.out"
-	local rc=0
-	(
-		SCRIPT_DIR="${VERDICT_DIR}"
-		GAG_IMAGE_TAG="v9.9.0-rc.1"
-		unrecorded_legs() { printf '%s' "${VERDICT_MISSING}"; }
-		progress_event() { :; }
-		record_verdict
-	) >"${VERDICT_OUT}" 2>&1 || rc=$?
-	VERDICT_RC="${rc}"
-}
-
-select_legs ""
-VERDICT_MISSING=""
-run_verdict
-check "verdict: every leg recorded marks the candidate" "0" "${VERDICT_RC}"
-check "  ...by recording the candidate itself" "v9.9.0-rc.1" "$(cat "${VERDICT_LOG}")"
-
-select_legs "dragonfly"
-VERDICT_MISSING="dind"
-run_verdict
-check "verdict: a partial run that passed exits 0" "0" "${VERDICT_RC}"
-check "  ...and writes no candidate marker" "" "$(cat "${VERDICT_LOG}")"
-check_contains "  ...and says the candidate is not validated" "is NOT validated yet" "$(cat "${VERDICT_OUT}")"
-check_contains "  ...and prints the legs still to run" "--legs dind v9.9.0-rc.1" "$(cat "${VERDICT_OUT}")"
-
-# A leg this run passed but could not record is a record failure, not a pending
-# leg: telling the operator to re-run it would spend another window for nothing.
-select_legs "dind,dragonfly"
-VERDICT_MISSING="dragonfly"
-run_verdict
-check "verdict: a leg run here but unrecorded fails the record" "1" "${VERDICT_RC}"
-check "  ...and writes no candidate marker" "" "$(cat "${VERDICT_LOG}")"
-check_contains "  ...and prints that leg's recorder re-run" "--leg dragonfly v9.9.0-rc.1" "$(cat "${VERDICT_OUT}")"
-
-select_legs ""
-VERDICT_MISSING=""
-VERDICT_RECORD_RC=1 run_verdict
-check "verdict: a failed candidate record fails" "1" "${VERDICT_RC}"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

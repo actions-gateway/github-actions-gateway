@@ -64,10 +64,13 @@
 #   scripts/dogfood/validate-release.sh --legs <leg>[,<leg>...] <rc-tag>
 #   scripts/dogfood/validate-release.sh --reclaim
 #
-# Each leg is recorded on the remote as it passes, and the candidate is marked
-# validated once every leg has passed for its commit, in one run or several. So
-# a gate that failed one leg is finished with `--legs <that leg>`, which deploys,
-# runs that leg alone and tears down, rather than by the whole hour again.
+# With GATE_EVIDENCE_FILE set, the gate writes the candidate's commit and each
+# leg as it passes into that file, and validate-candidate.yml uploads it as the
+# run's artifact. That artifact is the only verdict publish.yml accepts (Q880):
+# a stable tag publishes once CI gate runs have passed every leg for one
+# candidate commit, in one run or several. So a gate that failed one leg is
+# finished with `--legs <that leg>`, which deploys, runs that leg alone and tears
+# down, rather than by the whole hour again. A local run writes no evidence.
 #
 # Required env vars (export before running):
 #   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
@@ -101,6 +104,9 @@
 #                    makes (default 5), on the jittered schedule GH_RETRY_DELAY
 #                    (5) doubles and GH_RETRY_MAX_DELAY (60) clamps. A single
 #                    transient denial mid-poll used to kill the whole run.
+#   GATE_EVIDENCE_FILE  Where to write the candidate's commit and each passed
+#                    leg, for validate-candidate.yml to upload (Q880). Unset
+#                    locally, so a local run writes no evidence.
 #
 # One-time prerequisite (NOT run here): scripts/dogfood/e2e-setup.sh must have
 # provisioned the e2e node pool + GitHub App Secret once. See release.md.
@@ -118,6 +124,8 @@ source "${REPO_ROOT}/scripts/dogfood/lib/lease.sh"
 source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
 # shellcheck source=scripts/dogfood/lib/quota.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/quota.sh"
+# shellcheck source=scripts/dogfood/lib/gate-legs.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/gate-legs.sh"
 
 SCRIPT_DIR="${REPO_ROOT}/scripts/dogfood"
 APP_ID_DEFAULT="3752347"
@@ -239,12 +247,8 @@ E2E_POLL_INTERVAL=15
 # and leave the default untested.
 export E2E_MIRROR_BACKEND=distribution
 
-# The gate's legs, in the order they run. Each passes or fails as a unit, is
-# recorded as refs/validated-legs/<rc-tag>/<leg> when it passes, and can be run
-# alone with --legs. `kata` carries sizing and capacity, because both read the
-# Kata tenant its matrix leaves up. Deploy and teardown are not legs: every run
-# needs both, since the cluster is at 0 nodes between runs.
-GATE_LEGS_ALL=(kata crd-smoke soak dind dragonfly)
+# The gate's legs, in the order they run (GATE_LEGS_ALL, lib/gate-legs.sh). Each
+# passes or fails as a unit and can be run alone with --legs.
 # The legs this run executes, set by select_legs.
 GATE_LEGS=()
 
@@ -270,8 +274,9 @@ REPO to be exported. See the script header for the optional knobs.
 
 --legs runs only the named legs (default: all), in the gate's own order:
   kata, crd-smoke, soak, dind, dragonfly
-Each leg is recorded when it passes, and <rc-tag> is marked validated once
-every leg has passed for its commit, so a failed leg is re-run on its own.
+A stable tag publishes once CI gate runs (validate-candidate.yml) have passed
+every leg for one candidate commit, so a failed leg is re-run on its own there.
+A local run writes no evidence publish reads.
 
 --reclaim runs only the orphaned-run check: if a previous gate against this
 target did not finish its teardown (killed, or a stop script refused), its
@@ -1931,29 +1936,27 @@ leg_selected() {
 	return 1
 }
 
-# record_leg LEG — record LEG's pass for this candidate. A failed record does not
-# fail the leg, which measured what it measured: main finds it unrecorded at the
-# end and prints the recorder's re-run.
-record_leg() {
-	[[ "${GAG_IMAGE_TAG}" == v*-* ]] || return 0
-	REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" \
-		--leg "$1" "${GAG_IMAGE_TAG}" || true
+# evidence_start — begin GATE_EVIDENCE_FILE with the candidate tag and the
+# commit it names on the remote, before anything billable. Nothing when the file
+# is unset or the tag is not a candidate. The commit is the remote's because the
+# gate runs main's scripts, not the candidate's tree, and publish compares it
+# with the candidate tag's commit in its own checkout.
+evidence_start() {
+	[[ -n "${GATE_EVIDENCE_FILE:-}" && "${GAG_IMAGE_TAG}" == v*-* ]] || return 0
+	local commit
+	if ! commit="$(gh_retry api "repos/${REPO}/commits/${GAG_IMAGE_TAG}" --jq '.sha')" ||
+		[[ ! "${commit}" =~ ^[0-9a-f]{40}$ ]]; then
+		echo "error: could not resolve ${GAG_IMAGE_TAG}'s commit on ${REPO} for the gate's evidence." >&2
+		return 1
+	fi
+	printf 'tag %s\ncommit %s\n' "${GAG_IMAGE_TAG}" "${commit}" >"${GATE_EVIDENCE_FILE}"
 }
 
-# unrecorded_legs — print each of GATE_LEGS_ALL with no record for the commit
-# GAG_IMAGE_TAG names on the remote, one per line; nothing once all have passed.
-# Exit 1 when the records cannot be read, which is not the same as none.
-unrecorded_legs() {
-	local commit refs leg
-	commit="$(gh_retry api "repos/${REPO}/commits/${GAG_IMAGE_TAG}" --jq '.sha')" || return 1
-	[[ -n "${commit}" ]] || return 1
-	refs="$(gh_retry api "repos/${REPO}/git/matching-refs/validated-legs/${GAG_IMAGE_TAG}/" \
-		--jq '.[] | "\(.ref) \(.object.sha)"')" || return 1
-	for leg in "${GATE_LEGS_ALL[@]}"; do
-		if ! grep -qxF "refs/validated-legs/${GAG_IMAGE_TAG}/${leg} ${commit}" <<<"${refs}"; then
-			echo "${leg}"
-		fi
-	done
+# evidence_leg LEG — add LEG's pass to GATE_EVIDENCE_FILE, when evidence_start
+# began one.
+evidence_leg() {
+	[[ -n "${GATE_EVIDENCE_FILE:-}" && -s "${GATE_EVIDENCE_FILE}" ]] || return 0
+	printf 'leg %s\n' "$1" >>"${GATE_EVIDENCE_FILE}"
 }
 
 main() {
@@ -2025,6 +2028,10 @@ main() {
 			exit 1
 		}
 	fi
+
+	# Before anything spends: evidence a run cannot attribute to a commit is
+	# evidence publish cannot use.
+	evidence_start || exit 1
 
 	confirm_target
 
@@ -2104,14 +2111,14 @@ main() {
 		progress_phase capacity "Driving the admission ladder's quota rung"
 		capacity_leg
 		progress_event capacity "done" "${CAPACITY_DRIVEN}"
-		record_leg kata
+		evidence_leg kata
 	fi
 
 	if leg_selected crd-smoke; then
 		progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
 		crd_smoke
 		progress_event crd-smoke "done"
-		record_leg crd-smoke
+		evidence_leg crd-smoke
 	fi
 
 	# Readings, not gates: soak_leg returns 0 whatever it finds, because a
@@ -2121,21 +2128,21 @@ main() {
 		progress_phase soak "Taking the v2 soak readings (Q1059, Q1060, Q1156)"
 		soak_leg
 		progress_event soak "done"
-		record_leg soak
+		evidence_leg soak
 	fi
 
 	if leg_selected dind; then
 		progress_phase dind "Running the e2e matrix on the privileged-dind template (Q1159)"
 		dind_leg
 		progress_event dind "done"
-		record_leg dind
+		evidence_leg dind
 	fi
 
 	if leg_selected dragonfly; then
 		progress_phase dragonfly "Running the e2e matrix on Kata with the Dragonfly mirror back end (Q1160)"
 		dragonfly_leg
 		progress_event dragonfly "done"
-		record_leg dragonfly
+		evidence_leg dragonfly
 	fi
 	# Say where the evidence went while the operator is still here. The window is
 	# billable and cannot be replayed, so a reading nobody can find afterwards
@@ -2146,85 +2153,19 @@ main() {
 		echo "    ${SCRIPT_DIR}/soak-readings.sh"
 	fi
 
-	record_verdict || exit 1
-}
-
-# record_verdict — after the selected legs passed: write the candidate marker if
-# every leg now has a record, or say which legs the candidate still needs.
-# Exit 1 when a record could not be read or written.
-record_verdict() {
-	# The verdict has to outlive this process. publish.yml refuses a stable tag
-	# whose release line has no recorded validation (Q879), and until this ran the
-	# only record was prose nothing could read. Recorded before the PASS event, so
-	# a run that ends clean carries a marker by construction.
-	#
-	# The marker is written only once every leg has a record for the candidate's
-	# commit, whether they passed in this run or an earlier one. A run of some
-	# legs that leaves others unrecorded passed what it ran and validated nothing.
-	#
-	# A record that fails does not retract the verdict — the legs above measured
-	# what they measured — so it exits non-zero without pretending the gate failed,
-	# and the recorder is idempotent so re-running costs nothing.
-	#
-	# Only for a candidate tag. GAG_IMAGE_TAG pins GAG to any published ref, so
-	# the gate is legitimately run against a branch build; there is no release
-	# line to record one against, and the recorder rejects it as a usage error.
-	local record_rc=0 missing="" leg
-	local -a unrecorded_here=() unrun=()
-	if [[ "${GAG_IMAGE_TAG}" != v*-* ]]; then
-		echo "Not a candidate tag (${GAG_IMAGE_TAG}): nothing recorded under refs/validated/."
-	elif ! missing="$(unrecorded_legs)"; then
-		echo "error: could not read the leg records for ${GAG_IMAGE_TAG} (refs/validated-legs/)." >&2
-		record_rc=1
-	else
-		for leg in ${missing}; do
-			if leg_selected "${leg}"; then
-				unrecorded_here+=("${leg}")
-			else
-				unrun+=("${leg}")
-			fi
-		done
-		if ((${#unrecorded_here[@]})); then
-			record_rc=1
-		elif ((${#unrun[@]} == 0)); then
-			REPO="${REPO}" bash "${SCRIPT_DIR}/record-validated-candidate.sh" "${GAG_IMAGE_TAG}" || record_rc=$?
-		fi
-	fi
-	if ((record_rc)); then
-		# A fail event rather than a `gate done`, for two reasons. The renderer
-		# takes the FIRST fail in the stream and the teardown trap adds a second
-		# one, so this is what names the step that actually broke; and a `gate
-		# done` here would make the stream read `passed` for the microseconds
-		# before the trap fires, which is what release-sentinel.sh would report.
-		progress_event record fail "validation passed; verdict not recorded"
-		echo ""
-		echo "Validation gate PASSED for ${GAG_IMAGE_TAG} (${GATE_LEGS[*]}) — but the verdict is NOT recorded."
-		echo "  publish.yml reads refs/validated/ and will refuse the stable tag until it is."
-		echo "  Nothing here needs re-validating; re-run the recorder alone:"
-		for leg in "${unrecorded_here[@]}"; do
-			echo "    REPO=${REPO} ${SCRIPT_DIR}/record-validated-candidate.sh --leg ${leg} ${GAG_IMAGE_TAG}"
-		done
-		echo "    REPO=${REPO} ${SCRIPT_DIR}/record-validated-candidate.sh ${GAG_IMAGE_TAG}"
-		echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."
-		return 1
-	fi
-
-	if ((${#unrun[@]})); then
-		local still
-		still="$(IFS=,; echo "${unrun[*]}")"
-		progress_event gate "done" "legs PASSED (${GATE_LEGS[*]}); ${GAG_IMAGE_TAG} still needs ${still}"
-		echo ""
-		echo "Legs PASSED for ${GAG_IMAGE_TAG}: ${GATE_LEGS[*]}."
-		echo "  ${GAG_IMAGE_TAG} is NOT validated yet: no pass is recorded for ${unrun[*]}."
-		echo "  Run them to finish it:"
-		echo "    scripts/dogfood/validate-release.sh --legs ${still} ${GAG_IMAGE_TAG}"
-		echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."
-		return 0
-	fi
-
-	progress_event gate "done" "validation PASSED for ${GAG_IMAGE_TAG}"
+	# The verdict a stable tag needs is CI's: validate-candidate.yml uploads
+	# GATE_EVIDENCE_FILE as this run's artifact, and publish.yml reads it there
+	# (check-validated-candidate.sh), so nothing is written to the repository.
+	progress_event gate "done" "legs PASSED for ${GAG_IMAGE_TAG}: ${GATE_LEGS[*]}"
 	echo ""
-	echo "Validation gate PASSED for ${GAG_IMAGE_TAG}."
+	echo "Validation gate PASSED for ${GAG_IMAGE_TAG}: ${GATE_LEGS[*]}."
+	if [[ -n "${GATE_EVIDENCE_FILE:-}" && -s "${GATE_EVIDENCE_FILE}" ]]; then
+		echo "  Evidence for publish: ${GATE_EVIDENCE_FILE}."
+		echo "  Which legs the candidate still needs: scripts/release/check-validated-candidate.sh <stable-tag>"
+	else
+		echo "  A local run records nothing publish reads: a stable tag needs the legs"
+		echo "  passed by validate-candidate.yml in CI."
+	fi
 	echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."
 }
 
