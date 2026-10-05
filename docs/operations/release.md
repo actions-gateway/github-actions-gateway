@@ -388,6 +388,7 @@ Whether its owner is alive is judged two ways, because a pid means nothing off t
   A runner lost before its reclaim step ran is reclaimed this way by the next gate or `--reclaim` from anywhere.
 
 A reclaim takes the lease over before it tears anything down, so two hosts reclaiming at once cannot both run the stop scripts.
+The takeover re-reads the lease after its confirmation prompt and swaps only if the owner has not renewed since, so a gate that wakes while an operator is still answering keeps its run.
 A lease the gate cannot read is never treated as free: a gate with bad credentials refuses, because the record it cannot see may belong to a live run.
 A record it cannot attribute, one with no `host/pid` holder or no readable renewal, is reported and never acted on; confirm nothing is running, then `kubectl -n default delete lease actions-gateway-release-gate`.
 
@@ -400,6 +401,7 @@ The gate accepts that trade because the alternative is the one the lease exists 
 
 Two things bound the cost.
 The gate **fences itself**: its renewer checks the holder each minute, and on finding another one it stops the gate, whose teardown then sees the lease taken and runs no stop script, resets no quota, and exits 1 with `Teardown SKIPPED`.
+A teardown that finds its lease deleted, which is what a completed reclaim leaves, re-takes it before running anything: if that succeeds the teardown runs on the record and a successor waiting to start refuses, and if a successor already holds it the teardown skips.
 So a gate that wakes after a reclaim never tears down its successor, and its verdict is discarded rather than recorded.
 And the stop scripts drain before they delete, so a reclaim that does reach a live run's cluster refuses while workers are still running.
 
