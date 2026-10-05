@@ -268,8 +268,7 @@ check "a denied lane read no longer kills the settle" 0 "${settle_rc}"
 check_contains "  ...and the lane read still resolves its run" \
 	"lane settled — latest e2e-test.yml run 555" "${settle_out}"
 
-# The dispatch is NOT a read. `latest_dispatch_run_id` answers normally; the
-# dispatch itself is denied once, and must be attempted exactly once.
+# The dispatch is NOT a read: denied, it must be attempted exactly once.
 arm_flaky "workflow run" 99 "100"
 dispatch_rc=0
 dispatch_e2e_run >/dev/null 2>&1 || dispatch_rc=$?
@@ -281,15 +280,15 @@ gh() { scripted_gh "$@"; }
 
 # --- dispatch_e2e_run: the run-scoped routing that replaced the repo-wide flip ---
 
-# The dispatched run is resolved by the newest dispatch id changing from the
-# pre-dispatch baseline. gh outputs: baseline list, the (ignored) dispatch, the
-# post-dispatch list. Not `$(...)`: E2E_RESOLVED_RUN_ID must land in THIS shell.
-reset_gh 100 EMPTY 200
+# The dispatched run is resolved from the URL `gh workflow run` prints. gh
+# outputs: the dispatch's own output, and nothing else is asked. Not `$(...)`:
+# E2E_RESOLVED_RUN_ID must land in THIS shell.
+reset_gh "https://github.com/o/r/actions/runs/200"
 E2E_RESOLVED_RUN_ID=""
 if dispatch_e2e_run >"${WORKDIR}/out"; then
 	echo "ok   a dispatched run resolves to the new run id"
 else
-	echo "FAIL a dispatched run that appears must resolve" >&2
+	echo "FAIL a dispatched run whose URL is printed must resolve" >&2
 	fails=$((fails + 1))
 fi
 check "the new dispatch run id is resolved" "200" "${E2E_RESOLVED_RUN_ID}"
@@ -298,32 +297,26 @@ check "the new dispatch run id is resolved" "200" "${E2E_RESOLVED_RUN_ID}"
 check_contains "the dispatch pins the runner input" 'runner="gag-ci-e2e"' "$(cat "${GH_LOG}")"
 check_contains "the dispatch targets the workflow" "workflow run e2e-test.yml" "$(cat "${GH_LOG}")"
 check_contains "the dispatch pins the ref" "--ref main" "$(cat "${GH_LOG}")"
-
-# A first-ever dispatch (no baseline run) still resolves.
-reset_gh EMPTY EMPTY 300
-E2E_RESOLVED_RUN_ID=""
-dispatch_e2e_run >/dev/null
-check "a first-ever dispatch resolves from an empty baseline" "300" "${E2E_RESOLVED_RUN_ID}"
-
-# A dispatch whose run never appears must fail rather than watch the baseline
-# run (rerun-era bug shape: watching a stale run reads its old green result).
-reset_gh 100 EMPTY 100
-E2E_RESOLVED_RUN_ID=""
-if err="$(dispatch_e2e_run 2>&1)"; then
-	echo "FAIL a dispatch that never appears must fail" >&2
+# The run list lagged a dispatch by minutes on v1.9.0-rc.2's gate, twice, and
+# both times its answer was an older run whose verdict the gate then reported.
+if grep -q 'run list' "${GH_LOG}"; then
+	echo "FAIL the dispatch must not consult the run list" >&2
 	fails=$((fails + 1))
 else
-	echo "ok   a dispatch that never appears fails instead of watching a stale run"
+	echo "ok   the dispatch never consults the run list"
+fi
+
+# A dispatch that prints no run URL must fail rather than guess a run.
+reset_gh EMPTY
+E2E_RESOLVED_RUN_ID=""
+if err="$(dispatch_e2e_run 2>&1)"; then
+	echo "FAIL a dispatch with no run URL must fail" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a dispatch with no run URL fails instead of guessing a run"
+	check_contains "  ...and says why" "printed no run URL" "${err}"
 fi
 check "  ...and resolves no run id" "" "${E2E_RESOLVED_RUN_ID}"
-
-# A list that answers with an OLDER dispatch after the new one is created
-# (v1.9.0-rc.2's gate) must be skipped, not watched: that run's old verdict
-# would stand in for the gate's own.
-reset_gh 100 EMPTY 50 200
-E2E_RESOLVED_RUN_ID=""
-dispatch_e2e_run >/dev/null
-check "an older run id after the dispatch is skipped for the new one" "200" "${E2E_RESOLVED_RUN_ID}"
 
 # A missing cosign binary fails the preflight — before anything billable.
 if err="$(COSIGN="${WORKDIR}/no-such-cosign" preflight_cosign 2>&1)"; then
