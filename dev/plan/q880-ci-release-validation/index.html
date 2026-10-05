@@ -2749,9 +2749,9 @@ The gate resizes node pools, updates the cluster, installs the GMC's Helm releas
 No narrower GKE role set that still writes ClusterRoles was measured.
 The list is derived from the calls the dogfood scripts make, so the first CI run is what confirms it.
 The milestone 1 probe retires with this change: the provider now names the gate's workflow, so the probe can no longer get a token.</p>
-<p><strong>The lease is host-local, so the workflow carries its own reclaim.</strong> <code>lib/lease.sh</code> records a pid on the host that ran the gate, so a CI run's lease is invisible to <code>--reclaim</code> anywhere else and vanishes with the runner.
-The gate step's limit is shorter than the job's, and a final step runs <code>--reclaim</code> on the same runner after a failure or cancellation, while the lease is still there to read.
-A <code>concurrency</code> group keeps two CI runs off the cluster at once; a CI run and a local gate still cannot see each other, which <a href="../../queue/Q1158/">Q1158</a> tracks.</p>
+<p><strong>The workflow carries its own reclaim.</strong> The gate step's limit is shorter than the job's, and a final step runs <code>--reclaim</code> on the same runner after a failure or cancellation.
+The lease lives in the cluster (Q1158), so any host can reclaim a CI run's cluster; the same-runner step is still the fast path, because the runner can check the gate's pid where any other host waits ten minutes for the lease to lapse (<a href="../../operations/release/#a-killed-gate-is-reclaimed-by-the-next-one">release.md</a>).
+A <code>concurrency</code> group keeps two CI runs off the cluster at once, and the shared lease keeps a CI run and a local gate apart.</p>
 <h2 id="4-publish-reads-the-ci-verdict">4. Publish reads the CI verdict<a class="headerlink" href="#4-publish-reads-the-ci-verdict" title="Permanent link">&para;</a></h2>
 <p><code>publish.yml</code>'s <code>validated-candidate</code> job reads <code>refs/validated/</code> today (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-validated-candidate.sh">check-validated-candidate.sh</a>).
 Once milestone 3 has run on a real candidate, it reads the workflow's conclusion on that tag's commit instead, and the marker and its recorder retire.

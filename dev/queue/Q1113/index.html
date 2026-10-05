@@ -2598,7 +2598,7 @@
 
 
 <h1 id="releasemd-detaches-the-gate-with-nohup-bypassing-the-launch-record">release.md detaches the gate with nohup, bypassing the launch record<a class="headerlink" href="#releasemd-detaches-the-gate-with-nohup-bypassing-the-launch-record" title="Permanent link">&para;</a></h1>
-<p><code>docs/operations/release.md:394</code> detaches the release-validation gate as <code>nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N &gt;tmp/validate-release.log 2&gt;&amp;1 &amp;</code>, and <code>:404</code> starts the sentinel as a bare <code>bash scripts/dogfood/release-sentinel.sh</code>.
+<p><code>docs/operations/release.md:441</code> detaches the release-validation gate as <code>nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N &gt;tmp/validate-release.log 2&gt;&amp;1 &amp;</code>, and <code>:451</code> starts the sentinel as a bare <code>bash scripts/dogfood/release-sentinel.sh</code>.
 Neither goes through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>record-launch.sh</code></a>, so the longest-running commands in the repo, registered at 60-minute and 120-minute minimums, leave no stop handle on disk.
 The <code>release-candidate</code> skill's own copy of the same step (<code>.claude/skills/release-candidate/SKILL.md:149</code>) does use the wrapper, so the two recipes for one action disagree.</p>
 <p>That matters more since Q739, which enforces the wrapper for an <em>agent</em> backgrounding a registered tier: a session following release.md's form through <code>run_in_background</code> is now denied and told to rewrite, while a session following the skill is not.

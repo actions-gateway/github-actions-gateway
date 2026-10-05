@@ -2604,7 +2604,7 @@ They run in series because they share one tenant namespace, RunnerSet and node p
 A cluster per leg, each in its own project, removes all four contentions and brings the gate back to roughly one leg's duration.</p>
 <p><strong>What it costs is unpriced.</strong> The expectation is that it costs more than the serial gate, because GKE's free tier covers one cluster and every extra project's cluster pays its own management fee and nodes; that is an expectation, not a measurement.
 It also multiplies what <code>validate-release.sh</code> assumes is singular: the resolved target the wrapper confirms, the lease it takes per target, and the keyless CI identity Q880 bootstrapped on the one dogfood project.
-Not a duplicate of <a href="../Q1158/">Q1158</a>, which makes one target's lease visible across hosts; this needs a target per leg.</p>
+Not a duplicate of Q1158 (completed, so no longer linked), which made one target's lease visible across hosts; this needs a target per leg.</p>
 
 
 

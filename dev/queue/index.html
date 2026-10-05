@@ -3563,7 +3563,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>docs</code> <code>debt</code></td>
 <td>🔲</td>
 <td>XS</td>
-<td><code>docs/operations/release.md:394</code> detaches the release-validation gate as `nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N …</td>
+<td><code>docs/operations/release.md:441</code> detaches the release-validation gate as `nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N …</td>
 </tr>
 <tr>
 <td><a href="Q993/">Q993</a></td>
@@ -3956,14 +3956,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Five workflows scope both legs with identical <code>paths:</code> lists written twice: <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code> …</td>
-</tr>
-<tr>
-<td><a href="Q1158/">Q1158</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease.sh">Make the release gate's lease visible across hosts</a></td>
-<td><code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>lib/lease.sh</code> records the gate's ownership as a file holding a pid, under <code>~/.local/state</code> on the host that ran it, and only that host can …</td>
 </tr>
 <tr>
 <td><a href="Q1161/">Q1161</a></td>
