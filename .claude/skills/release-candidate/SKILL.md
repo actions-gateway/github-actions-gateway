@@ -203,5 +203,7 @@ If the answer is yes, the [`release`](../release/SKILL.md) skill carries those o
   Then the candidate may still be sound.
   Two of the three failures in the 1.5 cycle were the release tooling itself, not the product.
 
+Either way, once the cause is fixed, re-run only the leg that failed (`--legs <leg>`, or the workflow's `legs` input): the legs before it are already recorded.
+
 Propose action items in that split, with the mitigative fix and the preventative one named separately, and let the user choose.
 A failed candidate is also a retro trigger.

@@ -24,6 +24,11 @@ on:
         description: 'Release-candidate tag to validate, e.g. v1.9.0-rc.2'
         required: true
         type: string
+      legs:
+        description: 'Legs to run, comma-separated (kata, crd-smoke, soak, dind, dragonfly); empty runs all. Each passing leg is recorded, and the tag is validated once all have passed.'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -56,7 +61,8 @@ jobs:
       group: dogfood-release-gate
       cancel-in-progress: false
     permissions:
-      # The validated-candidate marker (refs/validated/<tag>) until milestone 4.
+      # The validated-candidate marker (refs/validated/<tag>) and each leg's
+      # record (refs/validated-legs/<tag>/<leg>), until milestone 4.
       contents: write
       # Dispatching e2e-test, unit-test and integration-test, and downloading the
       # e2e run's report.
@@ -64,6 +70,7 @@ jobs:
       id-token: write
     env:
       TAG: ${{ inputs.tag }}
+      LEGS: ${{ inputs.legs }}
       PROJECT: ${{ vars.DOGFOOD_PROJECT }}
       CLUSTER: ${{ vars.DOGFOOD_CLUSTER }}
       ZONE: ${{ vars.DOGFOOD_ZONE }}
@@ -106,7 +113,7 @@ jobs:
 
       - name: Run the release gate
         timeout-minutes: 210
-        run: scripts/dogfood/validate-release.sh "${TAG}"
+        run: scripts/dogfood/validate-release.sh --legs "${LEGS}" "${TAG}"
 
       # The gate's EXIT trap tears down on failure and on cancellation, but not
       # when it is killed outright. Its lease is in the cluster, so any host can

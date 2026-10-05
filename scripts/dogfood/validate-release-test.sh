@@ -1868,6 +1868,112 @@ check "readings: a cluster that answers nothing does not fail the gate" "0" "${r
 check "readings: all four are recorded" "4" "$(jq -s 'map(select(.id=="Q539"))|length' "${RELEASE_READINGS_FILE}")"
 check "readings: none of them reads as a pass" "0" "$(jq -s 'map(select(.id=="Q539" and .verdict=="pass"))|length' "${RELEASE_READINGS_FILE}")"
 
+# --- --legs: run one leg alone, record each leg, mark the candidate once all pass ---
+
+select_legs ""
+check "legs: no --legs selects every leg in order" "kata crd-smoke soak dind dragonfly" "${GATE_LEGS[*]}"
+select_legs all
+check "legs: 'all' selects every leg" "kata crd-smoke soak dind dragonfly" "${GATE_LEGS[*]}"
+# Order is the gate's, never the caller's: dind and dragonfly each take down the
+# tenant the leg before them left up.
+select_legs "dragonfly, kata,dragonfly"
+check "legs: a list runs in the gate's order, once each" "kata dragonfly" "${GATE_LEGS[*]}"
+rc=0
+select_legs "kata,dragonfli" 2>"${SCRATCH}/legs-err" || rc=$?
+check "legs: an unknown leg is a usage error" "2" "${rc}"
+check_contains "  ...that names the legs the gate runs" "kata crd-smoke soak dind dragonfly" "$(cat "${SCRATCH}/legs-err")"
+rc=0
+select_legs "," 2>/dev/null || rc=$?
+check "legs: a list naming no leg is a usage error" "2" "${rc}"
+select_legs "dind"
+rc=0
+leg_selected dind || rc=$?
+check "legs: a named leg is selected" "0" "${rc}"
+rc=0
+leg_selected kata || rc=$?
+check "legs: an unnamed leg is not" "1" "${rc}"
+
+# unrecorded_legs reads the tag's commit, then every leg record under the tag.
+# A record on another commit is not this candidate's, so it does not count.
+LEGS_COMMIT=1111111111111111111111111111111111111111
+legs_gh() {
+	case "$*" in
+	*"/commits/"*) echo "${LEGS_COMMIT}" ;;
+	*"matching-refs/validated-legs/"*) printf '%s\n' "${LEGS_REFS}" ;;
+	*) return 99 ;;
+	esac
+}
+gh() { legs_gh "$@"; }
+GAG_IMAGE_TAG="v9.9.0-rc.1"
+LEGS_REFS="refs/validated-legs/v9.9.0-rc.1/kata ${LEGS_COMMIT}
+refs/validated-legs/v9.9.0-rc.1/crd-smoke ${LEGS_COMMIT}
+refs/validated-legs/v9.9.0-rc.1/soak ${LEGS_COMMIT}
+refs/validated-legs/v9.9.0-rc.1/dind 2222222222222222222222222222222222222222"
+check "records: the legs with no record for the commit are listed" "dind dragonfly" "$(unrecorded_legs | xargs)"
+LEGS_REFS=""
+check "records: with no records every leg is listed" "kata crd-smoke soak dind dragonfly" "$(unrecorded_legs | xargs)"
+LEGS_REFS="$(for l in kata crd-smoke soak dind dragonfly; do echo "refs/validated-legs/v9.9.0-rc.1/${l} ${LEGS_COMMIT}"; done)"
+check "records: with every leg recorded nothing is listed" "" "$(unrecorded_legs)"
+# A record read that fails is not an empty one: empty would mark the candidate.
+gh() { return 1; }
+rc=0
+GH_RETRIES=0 GH_RETRY_DELAY=0 unrecorded_legs >/dev/null 2>&1 || rc=$?
+check "records: an unreadable record set fails rather than reading as complete" "1" "${rc}"
+gh() { scripted_gh "$@"; }
+
+# record_verdict writes the candidate marker only once every leg has a record.
+# The recorder is stubbed to log its arguments; unrecorded_legs is stubbed to
+# answer from VERDICT_MISSING.
+VERDICT_DIR="${SCRATCH}/verdict"
+mkdir -p "${VERDICT_DIR}"
+cat >"${VERDICT_DIR}/record-validated-candidate.sh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${VERDICT_LOG}"
+exit "${VERDICT_RECORD_RC:-0}"
+STUB
+export VERDICT_LOG="${SCRATCH}/verdict.log"
+run_verdict() {
+	: >"${VERDICT_LOG}"
+	VERDICT_OUT="${SCRATCH}/verdict.out"
+	local rc=0
+	(
+		SCRIPT_DIR="${VERDICT_DIR}"
+		GAG_IMAGE_TAG="v9.9.0-rc.1"
+		unrecorded_legs() { printf '%s' "${VERDICT_MISSING}"; }
+		progress_event() { :; }
+		record_verdict
+	) >"${VERDICT_OUT}" 2>&1 || rc=$?
+	VERDICT_RC="${rc}"
+}
+
+select_legs ""
+VERDICT_MISSING=""
+run_verdict
+check "verdict: every leg recorded marks the candidate" "0" "${VERDICT_RC}"
+check "  ...by recording the candidate itself" "v9.9.0-rc.1" "$(cat "${VERDICT_LOG}")"
+
+select_legs "dragonfly"
+VERDICT_MISSING="dind"
+run_verdict
+check "verdict: a partial run that passed exits 0" "0" "${VERDICT_RC}"
+check "  ...and writes no candidate marker" "" "$(cat "${VERDICT_LOG}")"
+check_contains "  ...and says the candidate is not validated" "is NOT validated yet" "$(cat "${VERDICT_OUT}")"
+check_contains "  ...and prints the legs still to run" "--legs dind v9.9.0-rc.1" "$(cat "${VERDICT_OUT}")"
+
+# A leg this run passed but could not record is a record failure, not a pending
+# leg: telling the operator to re-run it would spend another window for nothing.
+select_legs "dind,dragonfly"
+VERDICT_MISSING="dragonfly"
+run_verdict
+check "verdict: a leg run here but unrecorded fails the record" "1" "${VERDICT_RC}"
+check "  ...and writes no candidate marker" "" "$(cat "${VERDICT_LOG}")"
+check_contains "  ...and prints that leg's recorder re-run" "--leg dragonfly v9.9.0-rc.1" "$(cat "${VERDICT_OUT}")"
+
+select_legs ""
+VERDICT_MISSING=""
+VERDICT_RECORD_RC=1 run_verdict
+check "verdict: a failed candidate record fails" "1" "${VERDICT_RC}"
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1
