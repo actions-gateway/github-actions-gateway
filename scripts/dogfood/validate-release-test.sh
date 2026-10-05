@@ -1531,7 +1531,7 @@ leg_stubs() {
 # line_of NEEDLE — 1-based line of NEEDLE's first appearance in LEG_LOG, 0 if none.
 line_of() {
 	local n
-	n="$(grep -nF -- "$1" "${LEG_LOG}" | head -1 | cut -d: -f1)"
+	n="$(grep -nF -- "$1" "${LEG_LOG}" | head -1 | cut -d: -f1 || true)"
 	echo "${n:-0}"
 }
 
@@ -1551,6 +1551,195 @@ if ((stop_at > 0 && start_at > 0 && stop_at < start_at)); then
 else
 	check "dind leg: takes the Kata tenant down before starting the DinD one" "stop before start" "stop at ${stop_at}, start at ${start_at}"
 fi
+
+# --- the Dragonfly leg (Q1160) -----------------------------------------------
+#
+# dragonfly_leg follows dind_leg, so it must take the DinD tenant down, put the
+# variant back to Kata (dind_leg exported dind), and hand e2e-start.sh the
+# Dragonfly back end. The census and the Dragonfly readings run on it, and
+# only on it; a red matrix still fails the gate after the readings are taken.
+
+df_leg_stubs() {
+	leg_stubs
+	bash() {
+		printf 'bash %s variant=%s backend=%s\n' "${1##*/}" "${E2E_VARIANT:-}" \
+			"${E2E_MIRROR_BACKEND:-}" >>"${LEG_LOG}"
+		[[ "${1##*/}" != e2e-run-watch.sh ]] || return "${FAKE_WATCH_RC:-0}"
+	}
+	dragonfly_readings() { echo "dragonfly-readings" >>"${LEG_LOG}"; }
+}
+
+: >"${LEG_LOG}"
+(df_leg_stubs; E2E_VARIANT=dind; export E2E_VARIANT; unset E2E_MIRROR_BACKEND; dragonfly_leg >/dev/null 2>&1)
+log="$(cat "${LEG_LOG}")"
+check_contains "dragonfly leg: starts the e2e tenant as Kata on the Dragonfly back end" \
+	"bash e2e-start.sh variant=kata backend=dragonfly" "${log}"
+check_contains "dragonfly leg: takes the mirror census" "census" "${log}"
+check_contains "dragonfly leg: takes the Dragonfly readings" "dragonfly-readings" "${log}"
+stop_at="$(line_of "bash e2e-stop.sh")"
+start_at="$(line_of "bash e2e-start.sh")"
+if ((stop_at > 0 && start_at > 0 && stop_at < start_at)); then
+	check "dragonfly leg: takes the DinD tenant down before starting its own" "ok" "ok"
+else
+	check "dragonfly leg: takes the DinD tenant down before starting its own" "stop before start" "stop at ${stop_at}, start at ${start_at}"
+fi
+
+: >"${LEG_LOG}"
+(df_leg_stubs; unset E2E_VARIANT E2E_MIRROR_BACKEND; e2e_leg >/dev/null 2>&1)
+check_not_contains "e2e leg: the Distribution leg takes no Dragonfly readings" "dragonfly-readings" "$(cat "${LEG_LOG}")"
+: >"${LEG_LOG}"
+(df_leg_stubs; unset E2E_VARIANT E2E_MIRROR_BACKEND; dind_leg >/dev/null 2>&1)
+check_not_contains "dind leg: takes no Dragonfly readings" "dragonfly-readings" "$(cat "${LEG_LOG}")"
+
+: >"${LEG_LOG}"
+rc=0
+(df_leg_stubs; FAKE_WATCH_RC=1; unset E2E_VARIANT E2E_MIRROR_BACKEND; dragonfly_leg >/dev/null 2>&1) || rc=$?
+check "dragonfly leg: a red matrix fails the leg" "1" "${rc}"
+check_contains "dragonfly leg: a red matrix still takes the readings" "dragonfly-readings" "$(cat "${LEG_LOG}")"
+
+# The census records one reading per mirror back end, so the Dragonfly leg's
+# census cannot overwrite the plain Kata leg's in soak-readings.sh.
+export FAKE_CENSUS_RC=0
+: >"${RELEASE_READINGS_FILE}"
+(unset E2E_MIRROR_BACKEND; census_mirror_clients >/dev/null 2>&1)
+check "census: the Distribution leg keeps its criterion" "mirror-client-census" "$(reading criterion)"
+(E2E_MIRROR_BACKEND=dragonfly; census_mirror_clients >/dev/null 2>&1)
+check "census: the Dragonfly leg records under its own criterion" "mirror-client-census-dragonfly" "$(reading criterion)"
+
+# An exported back end in the operator's shell must not reach the first two legs.
+pinned="$(E2E_MIRROR_BACKEND=dragonfly command bash -c \
+	'source "$1" >/dev/null 2>&1; echo "${E2E_MIRROR_BACKEND}"' _ "${REPO_ROOT}/scripts/dogfood/validate-release.sh")"
+check "gate: an inherited mirror back end is pinned back to Distribution" "distribution" "${pinned}"
+
+# --- dragonfly_probe: the probe pod the two network readings run in ----------
+#
+# The CONNECT probe runs in gag-registry-mirror, which enforces PSA restricted,
+# so the manifest must carry the restricted fields or the pod is never admitted
+# and both readings are lost to not-taken. The delete must run even when the
+# create fails, so a half-made pod never outlives the gate.
+
+PROBE_LOG="${SCRATCH}/probe-kubectl.log"
+PROBE_MANIFEST="${SCRATCH}/probe-manifest.json"
+probe_kubectl() {
+	echo "kubectl $*" >>"${PROBE_LOG}"
+	case "$1" in
+	create) cat >"${PROBE_MANIFEST}"; return "${FAKE_CREATE_RC:-0}" ;;
+	logs) echo "control 0 200" ;;
+	esac
+	return 0
+}
+: >"${PROBE_LOG}"
+out="$(kubectl() { probe_kubectl "$@"; }; dragonfly_probe ns1 pod1 '{"app":"registry-mirror"}' 'echo hi')"
+check "probe: prints the pod's log" "control 0 200" "${out}"
+check "probe: the pod lands in the namespace asked for" "ns1" "$(jq -r .metadata.namespace "${PROBE_MANIFEST}")"
+check "probe: carries the labels asked for" "registry-mirror" "$(jq -r '.metadata.labels.app' "${PROBE_MANIFEST}")"
+check "probe: runs as non-root under PSA restricted" "true" "$(jq -r .spec.securityContext.runAsNonRoot "${PROBE_MANIFEST}")"
+check "probe: sets a RuntimeDefault seccomp profile" "RuntimeDefault" "$(jq -r .spec.securityContext.seccompProfile.type "${PROBE_MANIFEST}")"
+check "probe: drops every capability" "ALL" "$(jq -r '.spec.containers[0].securityContext.capabilities.drop[0]' "${PROBE_MANIFEST}")"
+check "probe: forbids privilege escalation" "false" "$(jq -r '.spec.containers[0].securityContext.allowPrivilegeEscalation' "${PROBE_MANIFEST}")"
+check "probe: runs the script it was given" "echo hi" "$(jq -r '.spec.containers[0].command[2]' "${PROBE_MANIFEST}")"
+: >"${PROBE_LOG}"
+(kubectl() { probe_kubectl "$@"; }; FAKE_CREATE_RC=1; dragonfly_probe ns1 pod1 '{}' 'x' >/dev/null)
+check_contains "probe: a failed create still deletes the pod, detached" \
+	"kubectl delete pod pod1 --namespace ns1 --ignore-not-found --wait=false" "$(cat "${PROBE_LOG}")"
+
+# --- dragonfly_readings: readings, never gates -------------------------------
+#
+# Each case stubs the one read it is about and asserts the recorded verdict. A
+# reading that could not be taken must never record as a pass, and no branch
+# may fail the gate.
+
+df_reading() { jq -r --arg c "$1" --arg f "$2" 'select(.id=="Q539" and .criterion==$c)|.[$f]' "${RELEASE_READINGS_FILE}" | tail -1; }
+
+# dfdaemon's routing lines, in the shape the Q539 plan measured on kind.
+p2p_log() {
+	local i
+	for ((i = 0; i < $1; i++)); do echo "INFO proxy HTTPS request via dfdaemon by rule config"; done
+	for ((i = 0; i < $2; i++)); do echo "INFO proxy HTTPS request directly to remote server"; done
+}
+run_p2p() {
+	: >"${RELEASE_READINGS_FILE}"
+	out="$(kubectl() { [[ "$1" == logs ]] && printf '%s' "${FAKE_SEED_LOG}"; return 0; }; dragonfly_p2p_reading 2>&1)"
+}
+FAKE_SEED_LOG="$(p2p_log 2 35)"; run_p2p
+check "p2p: a request by rule records a pass" "pass" "$(df_reading p2p-path verdict)"
+check "p2p: the pass carries both counts" "2 request(s) by P2P rule, 35 direct" "$(df_reading p2p-path detail)"
+FAKE_SEED_LOG="$(p2p_log 0 12)"; run_p2p
+check "p2p: direct requests and none by rule record a finding" "finding" "$(df_reading p2p-path verdict)"
+check_contains "p2p: the finding names the wording it looked for" "by rule config" "${out}"
+FAKE_SEED_LOG="INFO something else entirely"; run_p2p
+check "p2p: a log with neither routing line is not-taken, never a pass" "not-taken" "$(df_reading p2p-path verdict)"
+FAKE_SEED_LOG=""; run_p2p
+check "p2p: an unreadable log is not-taken" "not-taken" "$(df_reading p2p-path verdict)"
+
+# The two network readings, fed the probe's output directly.
+run_net() {
+	local fn="$1"
+	: >"${RELEASE_READINGS_FILE}"
+	# shellcheck disable=SC2329 # the stub is invoked by "${fn}", which shellcheck 0.11 cannot follow
+	out="$(dragonfly_probe() { printf '%s\n' "${FAKE_PROBE_OUT}"; }; "${fn}" 2>&1)"; rc=$?
+}
+
+FAKE_PROBE_OUT=$'control 200\nseed 28 000'; run_net dragonfly_worker_reading
+check "worker: the reading returns 0" "0" "${rc}"
+check "worker: a timeout behind a working control records a pass" "pass" "$(df_reading worker-to-seed-proxy verdict)"
+FAKE_PROBE_OUT=$'control 200\nseed 0 404'; run_net dragonfly_worker_reading
+check "worker: an HTTP answer from the seed proxy records a finding" "finding" "$(df_reading worker-to-seed-proxy verdict)"
+FAKE_PROBE_OUT=$'control 200\nseed 52 000'; run_net dragonfly_worker_reading
+check "worker: an empty reply is still a connection, a finding" "finding" "$(df_reading worker-to-seed-proxy verdict)"
+FAKE_PROBE_OUT=$'control 000\nseed 28 000'; run_net dragonfly_worker_reading
+check "worker: a timeout with a dead control is not-taken" "not-taken" "$(df_reading worker-to-seed-proxy verdict)"
+FAKE_PROBE_OUT=$'control 200\nseed 6 000'; run_net dragonfly_worker_reading
+check "worker: a curl error that is neither is not-taken" "not-taken" "$(df_reading worker-to-seed-proxy verdict)"
+FAKE_PROBE_OUT=""; run_net dragonfly_worker_reading
+check "worker: no probe output is not-taken" "not-taken" "$(df_reading worker-to-seed-proxy verdict)"
+
+FAKE_PROBE_OUT=$'control 0 200\nselfsigned 60 000'; run_net dragonfly_connect_reading
+check "connect: the reading returns 0" "0" "${rc}"
+check "connect: a TLS refusal behind a working control records a pass" "pass" "$(df_reading connect-upstream-tls verdict)"
+FAKE_PROBE_OUT=$'control 0 200\nselfsigned 0 502'; run_net dragonfly_connect_reading
+check "connect: a 5xx from the proxy is a refusal" "pass" "$(df_reading connect-upstream-tls verdict)"
+FAKE_PROBE_OUT=$'control 0 200\nselfsigned 0 200'; run_net dragonfly_connect_reading
+check "connect: a self-signed host answering 200 records a finding" "finding" "$(df_reading connect-upstream-tls verdict)"
+check_contains "connect: the finding says what it means" "not verifying upstream TLS" "${out}"
+FAKE_PROBE_OUT=$'control 7 000\nselfsigned 7 000'; run_net dragonfly_connect_reading
+check "connect: a refusal behind a dead control is not-taken" "not-taken" "$(df_reading connect-upstream-tls verdict)"
+FAKE_PROBE_OUT=""; run_net dragonfly_connect_reading
+check "connect: no probe output is not-taken" "not-taken" "$(df_reading connect-upstream-tls verdict)"
+
+# The battery's exit classes. Its stand-in reads the namespace it was handed,
+# because the gate's own TENANT_NAMESPACE is the standing tenant, and a probe
+# run there would not ride a worker's path.
+cat >"${SCRIPT_DIR}/e2e-mirror-validate.sh" <<'BATTERY'
+echo "tenant=${TENANT_NAMESPACE}"
+exit "${FAKE_BATTERY_RC:-0}"
+BATTERY
+run_battery() {
+	: >"${RELEASE_READINGS_FILE}"
+	out="$(dragonfly_battery_reading 2>&1)"; rc=$?
+}
+FAKE_BATTERY_RC=0; export FAKE_BATTERY_RC; run_battery
+check "battery: the reading returns 0" "0" "${rc}"
+check "battery: a clean run records a pass" "pass" "$(df_reading mirror-battery verdict)"
+check_contains "battery: the probe runs in the e2e tenant" "tenant=${E2E_NAMESPACE}" "${out}"
+FAKE_BATTERY_RC=1; run_battery
+check "battery: a failed check does not fail the gate" "0" "${rc}"
+check "battery: a failed check records a finding" "finding" "$(df_reading mirror-battery verdict)"
+FAKE_BATTERY_RC=127; run_battery
+check "battery: an unclassified exit records not-taken" "not-taken" "$(df_reading mirror-battery verdict)"
+FAKE_BATTERY_RC=1
+
+# The wrapper takes all four and never fails the gate, whatever they find.
+: >"${RELEASE_READINGS_FILE}"
+rc=0
+(
+	kubectl() { return 1; }
+	dragonfly_probe() { :; }
+	dragonfly_readings >/dev/null 2>&1
+) || rc=$?
+check "readings: a cluster that answers nothing does not fail the gate" "0" "${rc}"
+check "readings: all four are recorded" "4" "$(jq -s 'map(select(.id=="Q539"))|length' "${RELEASE_READINGS_FILE}")"
+check "readings: none of them reads as a pass" "0" "$(jq -s 'map(select(.id=="Q539" and .verdict=="pass"))|length' "${RELEASE_READINGS_FILE}")"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

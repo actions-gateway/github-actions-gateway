@@ -6,6 +6,7 @@
 #   -> dispatch the e2e matrix on GAG runners (gh workflow run, run-scoped
 #   routing) -> sizing-profile assertion -> signed v2 CRD artifact smoke ->
 #   v2 soak readings -> the e2e matrix again on privileged-dind (Q1159) ->
+#   the e2e matrix on Kata with the Dragonfly mirror back end (Q1160) ->
 #   teardown (e2e-stop.sh + stop.sh)
 #
 # It bakes in the env and ordering that the manual runbook
@@ -224,6 +225,12 @@ CAPACITY_POLL_TIMEOUT="${CAPACITY_POLL_TIMEOUT:-300}"
 
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
+
+# The mirror back end e2e-start.sh applies. Pinned rather than inherited: the
+# gate tests each back end on its own leg (dragonfly_leg sets the other), so a
+# value exported in the operator's shell would move every leg onto one back end
+# and leave the default untested.
+export E2E_MIRROR_BACKEND=distribution
 
 # The retry schedule gh_retry uses. Defaults give 5, 10, 20, 40, 60s before
 # jitter, so a denial has roughly two and a half minutes to clear.
@@ -569,19 +576,25 @@ dispatch_e2e_run() {
 census_mirror_clients() {
 	echo "Mirror client census (Q1048)..."
 	local rc=0
+	# One reading per back end: the plain Kata leg and the Dragonfly leg each
+	# take the census, and soak-readings.sh keeps the newest record per id and
+	# criterion, so a shared criterion would let the second hide the first.
+	local criterion="mirror-client-census"
+	[[ "${E2E_MIRROR_BACKEND:-distribution}" == distribution ]] ||
+		criterion+="-${E2E_MIRROR_BACKEND}"
 	PROJECT="${PROJECT}" CLUSTER="${CLUSTER}" ZONE="${ZONE}" \
 		bash "${SCRIPT_DIR}/e2e-mirror-clients.sh" || rc=$?
 	case "${rc}" in
 	0)
 		echo "  census: every client that connected is a workload-labelled pod (or the kubelet)"
-		progress_reading Q1048 "mirror-client-census" pass \
+		progress_reading Q1048 "${criterion}" pass \
 			"every client that reached a mirror is a workload-labelled pod or the kubelet"
 		;;
 	1)
 		echo "  census: FINDING — at least one client carries no workload label."
 		echo "          The shared topology's narrowing would cut it off. This cluster runs"
 		echo "          the isolated topology and is unaffected, so the gate continues."
-		progress_reading Q1048 "mirror-client-census" finding \
+		progress_reading Q1048 "${criterion}" finding \
 			"at least one client carries no workload label; the shared topology's narrowing would cut it off"
 		;;
 	2)
@@ -589,12 +602,12 @@ census_mirror_clients() {
 		echo "          An unresolved pod-range address is usually a worker reaped on its TTL"
 		echo "          after its job; a link-local one was never a pod. Each REFUSE line"
 		echo "          above says which. Not a pass: the reading simply did not happen."
-		progress_reading Q1048 "mirror-client-census" not-taken \
+		progress_reading Q1048 "${criterion}" not-taken \
 			"the census refused: an address resolved to no pod and no node, or nothing connected"
 		;;
 	*)
 		echo "  census: script failed (exit ${rc}) — the reading did not happen"
-		progress_reading Q1048 "mirror-client-census" not-taken \
+		progress_reading Q1048 "${criterion}" not-taken \
 			"e2e-mirror-clients.sh failed with exit ${rc}"
 		;;
 	esac
@@ -639,6 +652,11 @@ e2e_leg() {
 	if [[ "${E2E_VARIANT:-kata}" == kata ]]; then
 		census_mirror_clients
 	fi
+	# Q1160's readings, here for the census's reason and one more: e2e-stop.sh
+	# scales the seed peer to zero, and its log goes with the pod.
+	if [[ "${E2E_MIRROR_BACKEND:-distribution}" == dragonfly ]]; then
+		dragonfly_readings
+	fi
 
 	if ((watch_rc != 0)); then
 		progress_event e2e fail "run ${run_id} did not conclude success"
@@ -665,6 +683,226 @@ dind_leg() {
 	E2E_VARIANT=dind
 	export E2E_VARIANT
 	e2e_leg
+}
+
+# dragonfly_leg — Q1160: the e2e matrix on Kata again, with the registry mirrors
+# fetching through the Dragonfly seed peer (Q539) instead of from their upstreams
+# directly. Kata because only its tenant's egress is mirror-only; on DinD a
+# worker reaches upstreams itself, so the back end would not be on the path
+# under test. A red matrix fails the gate, as on the other two legs.
+#
+# A green matrix alone says nothing about Dragonfly, because the mirrors serve
+# either way, so e2e_leg also takes dragonfly_readings. After dind_leg, which
+# leaves the DinD tenant up and E2E_VARIANT exported as dind.
+dragonfly_leg() {
+	echo "Taking the DinD e2e tenant down for the Kata + Dragonfly one (e2e-stop.sh)..."
+	bash "${SCRIPT_DIR}/e2e-stop.sh"
+	E2E_VARIANT=kata
+	E2E_MIRROR_BACKEND=dragonfly
+	export E2E_VARIANT E2E_MIRROR_BACKEND
+	e2e_leg
+}
+
+# The seed peer's proxy, as deploy/dragonfly/seed-client.yaml serves it, and the
+# lines dfdaemon logs per request routed peer-to-peer and direct. Both strings
+# are v1.5.7's wording as Q539 measured it on kind; a client bump can change
+# them, which is why neither line matching is not-taken rather than a pass.
+DRAGONFLY_NAMESPACE="gag-dragonfly"
+DRAGONFLY_SEED_SELECTOR="app=dragonfly,component=seed-client"
+DRAGONFLY_PROXY="http://dragonfly-seed-client.${DRAGONFLY_NAMESPACE}.svc.cluster.local:4001"
+DFDAEMON_P2P_LINE="proxy HTTPS request via dfdaemon by rule config"
+DFDAEMON_DIRECT_LINE="directly to remote server"
+MIRROR_NAMESPACE="gag-registry-mirror"
+MIRROR_CONTROL_URL="http://mirror-docker-io.${MIRROR_NAMESPACE}.svc.cluster.local:5000/v2/"
+PROBE_IMAGE="curlimages/curl:8.10.1"
+DRAGONFLY_PROBE_TIMEOUT="${DRAGONFLY_PROBE_TIMEOUT:-180}"
+
+# dragonfly_probe NAMESPACE POD LABELS-JSON SCRIPT — run SCRIPT in a curl pod to
+# completion and print its stdout, empty if the pod never ran. The lifecycle is
+# e2e-mirror-validate.sh's run_probe: a leftover pod removed first, logs read
+# after Succeeded, and an unconditional detached delete. The pod satisfies PSA
+# `restricted`, which gag-registry-mirror enforces; uid 100 is the image's
+# curl_user, numeric because runAsNonRoot cannot check a named user. Every
+# kubectl is guarded: this feeds readings, and a probe that cannot run is a
+# reading not taken rather than a failed gate.
+dragonfly_probe() {
+	local ns="$1" pod="$2" labels="$3" script="$4"
+	kubectl delete pod "${pod}" --namespace "${ns}" --ignore-not-found >/dev/null 2>&1 || true
+	jq -n --arg ns "${ns}" --arg pod "${pod}" --argjson labels "${labels}" \
+		--arg image "${PROBE_IMAGE}" --arg script "${script}" '{
+		apiVersion: "v1", kind: "Pod",
+		metadata: {name: $pod, namespace: $ns, labels: $labels},
+		spec: {
+			restartPolicy: "Never",
+			securityContext: {runAsNonRoot: true, runAsUser: 100, runAsGroup: 101,
+				seccompProfile: {type: "RuntimeDefault"}},
+			containers: [{name: "probe", image: $image, command: ["sh", "-c", $script],
+				securityContext: {allowPrivilegeEscalation: false,
+					readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}}]
+		}}' | kubectl create -f - >/dev/null 2>&1 || true
+	kubectl wait --namespace "${ns}" --for=jsonpath='{.status.phase}'=Succeeded \
+		"pod/${pod}" --timeout="${DRAGONFLY_PROBE_TIMEOUT}s" >/dev/null 2>&1 || true
+	kubectl logs "${pod}" --namespace "${ns}" 2>/dev/null || true
+	kubectl delete pod "${pod}" --namespace "${ns}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+}
+
+# probe_field OUTPUT KEY N — the Nth word after KEY on OUTPUT's "KEY ..." line,
+# empty when the line is absent.
+probe_field() {
+	awk -v k="$2" -v n="$3" '$1 == k { print $(n + 1); exit }' <<<"$1"
+}
+
+# dragonfly_readings — the readings that make a Dragonfly leg say something
+# about Dragonfly: Phase 3 of the Q539 plan, beside the matrix and the census. Readings, not gates: each records
+# pass, finding or not-taken and the function returns 0 whatever it finds,
+# because each is evidence about the back end rather than about whether the
+# matrix ran.
+dragonfly_readings() {
+	echo "Dragonfly back-end readings (Q539, Q1160)..."
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	dragonfly_battery_reading
+	dragonfly_p2p_reading
+	dragonfly_worker_reading
+	dragonfly_connect_reading
+	return 0
+}
+
+# dragonfly_battery_reading — the Q408 §3.7 battery against mirrors fetching
+# through the seed peer: every instance serves a real manifest and refuses a
+# push. Phase 3 of the Q539 plan lists it beside the readings below, and nothing
+# else in the gate runs it. Its probe must ride a worker's path, so it is pinned
+# to the e2e tenant: this script's own TENANT_NAMESPACE is the standing one.
+# The battery exits 1 for a failed check and for one that reported nothing
+# alike, so 1 records as a finding whose detail sends the reader to its lines.
+dragonfly_battery_reading() {
+	local rc=0
+	PROJECT="${PROJECT}" CLUSTER="${CLUSTER}" ZONE="${ZONE}" \
+		TENANT_NAMESPACE="${E2E_NAMESPACE}" MIRROR_NAMESPACE="${MIRROR_NAMESPACE}" \
+		bash "${SCRIPT_DIR}/e2e-mirror-validate.sh" || rc=$?
+	case "${rc}" in
+	0)
+		echo "  mirror battery: every instance serves and refuses uploads on the Dragonfly back end"
+		progress_reading Q539 "mirror-battery" pass \
+			"e2e-mirror-validate.sh passed every check against the Dragonfly-backed mirrors"
+		;;
+	1)
+		echo "  mirror battery: FINDING — a check failed or reported nothing; its FAIL lines above say which"
+		progress_reading Q539 "mirror-battery" finding \
+			"e2e-mirror-validate.sh exited 1: a check failed or produced no result"
+		;;
+	*)
+		echo "  mirror battery: script failed (exit ${rc}) — the reading did not happen"
+		progress_reading Q539 "mirror-battery" not-taken "e2e-mirror-validate.sh failed with exit ${rc}"
+		;;
+	esac
+}
+
+# dragonfly_p2p_reading — did any blob GET take the P2P path? Every seed pod's
+# whole log, as e2e-start.sh reads it for the cert line. A count of zero by rule
+# with direct requests present is a finding; neither line present is not-taken,
+# since a reworded log and a seed nothing reached look identical from here.
+dragonfly_p2p_reading() {
+	local log p2p direct
+	log="$(kubectl logs --namespace "${DRAGONFLY_NAMESPACE}" \
+		-l "${DRAGONFLY_SEED_SELECTOR}" --tail=-1 2>/dev/null || true)"
+	if [[ -z "${log}" ]]; then
+		echo "  P2P path: NOT TAKEN — the seed peer's log could not be read"
+		progress_reading Q539 "p2p-path" not-taken "the seed peer's log read back empty"
+		return 0
+	fi
+	p2p="$(grep -cF -- "${DFDAEMON_P2P_LINE}" <<<"${log}" || true)"
+	direct="$(grep -cF -- "${DFDAEMON_DIRECT_LINE}" <<<"${log}" || true)"
+	if ((p2p > 0)); then
+		echo "  P2P path: ${p2p} request(s) by P2P rule, ${direct} direct"
+		progress_reading Q539 "p2p-path" pass "${p2p} request(s) by P2P rule, ${direct} direct"
+	elif ((direct > 0)); then
+		echo "  P2P path: FINDING — no request took the P2P rule; ${direct} went direct."
+		echo "            Either no blob was fetched through the seed, or dfdaemon's wording"
+		echo "            moved from '${DFDAEMON_P2P_LINE}'."
+		progress_reading Q539 "p2p-path" finding "0 requests by P2P rule, ${direct} direct"
+	else
+		echo "  P2P path: NOT TAKEN — the log carries neither routing line. A reworded"
+		echo "            dfdaemon log and a seed nothing reached look the same from here."
+		progress_reading Q539 "p2p-path" not-taken \
+			"the seed log carries neither '${DFDAEMON_P2P_LINE}' nor '${DFDAEMON_DIRECT_LINE}'"
+	fi
+}
+
+# dragonfly_worker_reading — a worker-labelled pod in the e2e tenant must time out
+# on the seed proxy port, which is an open forward proxy (Q539 plan §2). The
+# control is the same pod reaching a mirror, which the worker's own egress policy
+# admits; without it a pod that reached nothing at all would read as a timeout.
+# The timeout cannot say WHICH policy held it, the worker's egress or the seed's
+# ingress: both stand between a worker and the proxy, as on kind (plan §7).
+dragonfly_worker_reading() {
+	local script out control seed_rc seed_code
+	script="c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 ${MIRROR_CONTROL_URL}); echo \"control \${c:-000}\"
+s=\$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 15 ${DRAGONFLY_PROXY}/); r=\$?; echo \"seed \$r \${s:-000}\""
+	out="$(dragonfly_probe "${E2E_NAMESPACE}" dragonfly-worker-probe \
+		'{"actions-gateway/component":"workload"}' "${script}")"
+	control="$(probe_field "${out}" control 1)"
+	seed_rc="$(probe_field "${out}" seed 1)"
+	seed_code="$(probe_field "${out}" seed 2)"
+	if [[ -z "${control}" || -z "${seed_rc}" ]]; then
+		echo "  worker to seed proxy: NOT TAKEN — the probe produced no output"
+		progress_reading Q539 "worker-to-seed-proxy" not-taken "the worker probe produced no output"
+	elif [[ "${control}" == 000 ]]; then
+		echo "  worker to seed proxy: NOT TAKEN — the probe could not reach the mirror either,"
+		echo "                        so a timeout on the seed would prove nothing"
+		progress_reading Q539 "worker-to-seed-proxy" not-taken \
+			"the control GET to mirror-docker-io got no HTTP answer"
+	elif [[ "${seed_rc}" == 28 ]]; then
+		echo "  worker to seed proxy: timed out (the mirror answered HTTP ${control})"
+		progress_reading Q539 "worker-to-seed-proxy" pass \
+			"a workload-labelled pod timed out on the seed proxy port; mirror-docker-io answered HTTP ${control}"
+	elif [[ "${seed_code}" != 000 || "${seed_rc}" == 52 ]]; then
+		echo "  worker to seed proxy: FINDING — a worker reached the open proxy (curl ${seed_rc}, HTTP ${seed_code})"
+		progress_reading Q539 "worker-to-seed-proxy" finding \
+			"a workload-labelled pod connected to the seed proxy port: curl exit ${seed_rc}, HTTP ${seed_code}"
+	else
+		echo "  worker to seed proxy: NOT TAKEN — curl exit ${seed_rc} is neither a timeout nor a connection"
+		progress_reading Q539 "worker-to-seed-proxy" not-taken \
+			"curl exit ${seed_rc} on the seed proxy port, neither a timeout nor a connection"
+	fi
+}
+
+# dragonfly_connect_reading — dfdaemon must refuse to carry a CONNECT to a host
+# with a self-signed certificate. It intercepts every CONNECT, so the probe
+# trusts the interception certificate (-k) and only dfdaemon's own upstream
+# verification decides; v1.5.7 with that verifier unset answered 200 (plan §3).
+# The pod is mirror-labelled in the mirror namespace, the one client the seed's
+# ingress policy admits, and carries no `upstream` label, so no mirror
+# Deployment or Service selects it. The control is badssl.com itself, the same
+# site with a valid certificate: if that CONNECT fails too, a refusal says
+# nothing about verification.
+dragonfly_connect_reading() {
+	local script out control_rc control_code bad_rc bad_code
+	script="c=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 20 -x ${DRAGONFLY_PROXY} https://badssl.com/); r=\$?; echo \"control \$r \${c:-000}\"
+b=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 20 -x ${DRAGONFLY_PROXY} https://self-signed.badssl.com/); r=\$?; echo \"selfsigned \$r \${b:-000}\""
+	out="$(dragonfly_probe "${MIRROR_NAMESPACE}" dragonfly-connect-probe \
+		'{"app":"registry-mirror"}' "${script}")"
+	control_rc="$(probe_field "${out}" control 1)"
+	control_code="$(probe_field "${out}" control 2)"
+	bad_rc="$(probe_field "${out}" selfsigned 1)"
+	bad_code="$(probe_field "${out}" selfsigned 2)"
+	if [[ -z "${control_code}" || -z "${bad_code}" ]]; then
+		echo "  CONNECT to a self-signed host: NOT TAKEN — the probe produced no output"
+		progress_reading Q539 "connect-upstream-tls" not-taken "the CONNECT probe produced no output"
+	elif ! [[ "${control_code}" =~ ^[23][0-9][0-9]$ ]]; then
+		echo "  CONNECT to a self-signed host: NOT TAKEN — the control to badssl.com failed"
+		echo "                                 (curl ${control_rc}, HTTP ${control_code}), so a refusal proves nothing"
+		progress_reading Q539 "connect-upstream-tls" not-taken \
+			"the control CONNECT to badssl.com got curl exit ${control_rc}, HTTP ${control_code}"
+	elif [[ "${bad_code}" == 000 || "${bad_code}" =~ ^5 ]]; then
+		echo "  CONNECT to a self-signed host: refused (curl ${bad_rc}, HTTP ${bad_code}; control HTTP ${control_code})"
+		progress_reading Q539 "connect-upstream-tls" pass \
+			"self-signed.badssl.com refused (curl exit ${bad_rc}, HTTP ${bad_code}); badssl.com answered HTTP ${control_code}"
+	else
+		echo "  CONNECT to a self-signed host: FINDING — dfdaemon carried it to HTTP ${bad_code}:"
+		echo "                                 it is not verifying upstream TLS"
+		progress_reading Q539 "connect-upstream-tls" finding \
+			"self-signed.badssl.com answered HTTP ${bad_code} through the seed proxy; badssl.com answered HTTP ${control_code}"
+	fi
 }
 
 # report_e2e_run <run-id> — render the run's JUnit report into this terminal.
@@ -1723,6 +1961,10 @@ main() {
 	progress_phase dind "Running the e2e matrix on the privileged-dind template (Q1159)"
 	dind_leg
 	progress_event dind "done"
+
+	progress_phase dragonfly "Running the e2e matrix on Kata with the Dragonfly mirror back end (Q1160)"
+	dragonfly_leg
+	progress_event dragonfly "done"
 	# Say where the evidence went while the operator is still here. The window is
 	# billable and cannot be replayed, so a reading nobody can find afterwards
 	# cost the same as one never taken.

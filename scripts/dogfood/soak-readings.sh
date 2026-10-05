@@ -66,14 +66,17 @@ require_cmd jq "https://jqlang.github.io/jq/download/"
 	exit 1
 }
 
-# Last record per id wins. A gate re-run inside one window appends rather than
-# truncating — deliberately, so a re-run cannot destroy the earlier reading —
-# and the newest record is the one that describes the cluster now.
+# Last record per id and criterion wins. A gate re-run inside one window
+# appends rather than truncating — deliberately, so a re-run cannot destroy the
+# earlier reading — and the newest record is the one that describes the cluster
+# now. The criterion is in the key because one id can carry several readings
+# (Q539's three) and one reading can be taken per leg (the census, once per
+# mirror back end), and an id alone would render only the newest of them.
 records="$(jq -sc '
 	map(select(.kind == "reading"))
-	| group_by(.id)
+	| group_by([.id, .criterion])
 	| map(max_by(.t))
-	| sort_by(.id)' "${READINGS_FILE}")"
+	| sort_by(.id, .criterion)' "${READINGS_FILE}")"
 
 count="$(jq -r 'length' <<<"${records}")"
 ((count > 0)) || {
