@@ -140,13 +140,16 @@ spec:
 EOF
 }
 
-# lease_patch_body EXPECT NEW NOW [RC] — the JSON patch that moves the holder from
-# EXPECT to NEW. The test op makes the whole patch fail unless EXPECT still holds
-# it. EXPECT == NEW is a renewal; anything else is a takeover, which also stamps
+# lease_patch_body EXPECT NEW NOW [RC] [EXPECT_RENEWED] — the JSON patch that
+# moves the holder from EXPECT to NEW. The test ops make the whole patch fail
+# unless EXPECT still holds it and, given EXPECT_RENEWED, has not renewed since.
+# EXPECT == NEW is a renewal; anything else is a takeover, which also stamps
 # acquireTime and the RC.
 lease_patch_body() {
-	local expect="$1" new="$2" now="$3" rc="${4:-}"
+	local expect="$1" new="$2" now="$3" rc="${4:-}" renewed="${5:-}"
 	printf '[{"op":"test","path":"/spec/holderIdentity","value":%s}' "$(lease_json_string "${expect}")"
+	[[ -z "${renewed}" ]] ||
+		printf ',{"op":"test","path":"/spec/renewTime","value":%s}' "$(lease_json_string "${renewed}")"
 	printf ',{"op":"replace","path":"/spec/holderIdentity","value":%s}' "$(lease_json_string "${new}")"
 	printf ',{"op":"add","path":"/spec/renewTime","value":%s}' "$(lease_json_string "${now}")"
 	if [[ "${expect}" != "${new}" ]]; then
@@ -157,11 +160,12 @@ lease_patch_body() {
 	printf ']'
 }
 
-# lease_api_patch PROJECT ZONE CLUSTER EXPECT NEW [RC] — compare-and-swap the
-# holder. Fails, changing nothing, when EXPECT no longer holds the Lease.
+# lease_api_patch PROJECT ZONE CLUSTER EXPECT NEW [RC] [EXPECT_RENEWED] —
+# compare-and-swap the holder. Fails, changing nothing, when EXPECT no longer
+# holds the Lease or, given EXPECT_RENEWED, has renewed it since.
 lease_api_patch() {
 	lease_kubectl "$1" "$2" "$3" patch lease "${RELEASE_LEASE_NAME}" --type=json \
-		-p "$(lease_patch_body "$4" "$5" "$(lease_now_iso)" "${6:-}")" >/dev/null 2>&1
+		-p "$(lease_patch_body "$4" "$5" "$(lease_now_iso)" "${6:-}" "${7:-}")" >/dev/null 2>&1
 }
 
 # lease_api_delete PROJECT ZONE CLUSTER — delete the Lease.
@@ -230,6 +234,11 @@ lease_state() {
 		return 0
 		;;
 	esac
+	lease_judge
+}
+
+# lease_judge — held, orphaned or foreign for the record lease_read last loaded.
+lease_judge() {
 	local host="${LEASE_HOLDER%/*}" pid="${LEASE_HOLDER##*/}"
 	if [[ -z "${host}" || "${host}" == "${LEASE_HOLDER}" || ! "${pid}" =~ ^[0-9]+$ ]]; then
 		echo foreign
@@ -278,11 +287,15 @@ lease_acquire() {
 
 # lease_takeover PROJECT ZONE CLUSTER — claim an orphaned target before reclaiming
 # it, so two reclaimers cannot both tear down and the loser cannot tear down a
-# gate that started after the winner. Swaps from the holder just read; returns 1
-# when that holder no longer holds it.
+# gate that started after the winner. Re-reads and re-judges rather than trusting
+# the caller's earlier verdict, which a confirmation prompt can leave minutes
+# stale, then swaps on the holder AND renewTime just read: a renewal between the
+# read and the write changes renewTime and fails the swap. Returns 1, changing
+# nothing, unless the lease is still orphaned and unchanged.
 lease_takeover() {
 	lease_read "$1" "$2" "$3" || return 1
-	lease_api_patch "$1" "$2" "$3" "${LEASE_HOLDER}" "$(lease_holder)" reclaim
+	[[ "$(lease_judge)" == orphaned ]] || return 1
+	lease_api_patch "$1" "$2" "$3" "${LEASE_HOLDER}" "$(lease_holder)" reclaim "${LEASE_RENEWED}"
 }
 
 # lease_renew_once PROJECT ZONE CLUSTER — renew this process's lease, printing
@@ -302,11 +315,14 @@ lease_renew_once() {
 # LEASE_RENEWER_PID — the background renewer lease_renew_start launched.
 LEASE_RENEWER_PID=""
 
-# lease_renew_start PROJECT ZONE CLUSTER — renew in the background for as long as
-# this process lives. On finding the lease lost it TERMs this process, whose
-# teardown then sees `lost` and leaves the cluster to its new owner.
+# lease_renew_start PROJECT ZONE CLUSTER [stop-owner] — renew in the background
+# for as long as this process lives. With stop-owner, finding the lease lost
+# TERMs this process, whose teardown then sees `lost` and leaves the cluster to
+# its new owner. Without it the renewer only stops renewing: a teardown or a
+# reclaim already running its stop scripts gains nothing from a TERM, which
+# kills bash mid-trap and leaves the stop script it was running carrying on.
 lease_renew_start() {
-	local owner="$$"
+	local owner="$$" on_lost="${4:-}"
 	(
 		trap - EXIT
 		set +e
@@ -316,6 +332,7 @@ lease_renew_start() {
 		while command sleep "${RELEASE_LEASE_RENEW_INTERVAL}" 2>/dev/null; do
 			kill -0 "${owner}" 2>/dev/null || exit 0
 			if [[ "$(lease_renew_once "$1" "$2" "$3")" == lost ]]; then
+				[[ "${on_lost}" == stop-owner ]] || exit 0
 				echo "error: another holder took the release-gate lease on $(lease_target "$1" "$2" "$3"); stopping this gate." >&2
 				kill -TERM "${owner}" 2>/dev/null
 				exit 0

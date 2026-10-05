@@ -265,6 +265,38 @@ source "${REPO_ROOT}/scripts/dogfood/lib/lease-fake.sh"
 lease_process_command() { echo "${LIVE_PIDS[$1]:-}"; }
 check "the losing takeover leaves the winner's record intact" "other-reclaimer/77" "$(holder)"
 
+# A reclaim judges the lease orphaned, then waits at a confirmation prompt for
+# as long as the operator takes. An owner that wakes and renews meanwhile keeps
+# its holder, so a swap on the holder alone would still take a live run over.
+reset_leases
+lease_fake_write "${PROJECT}" "${ZONE}" "${CLUSTER}" "laptop/4242" "$(iso_ago 3600)" 600 "$(iso_ago 5400)" v9.9.9-rc.1
+check "the sleeping laptop's lease reads orphaned" "orphaned" "$(state)"
+lease_api_patch "${PROJECT}" "${ZONE}" "${CLUSTER}" "laptop/4242" "laptop/4242"
+check_fails "a takeover after the owner renewed fails" \
+	lease_takeover "${PROJECT}" "${ZONE}" "${CLUSTER}"
+check "the renewed owner keeps its lease" "laptop/4242" "$(holder)"
+
+# The same renewal landing between the takeover's own read and its write: the
+# re-judge saw a lapsed record, so only the renewTime test can catch it.
+reset_leases
+stale="$(iso_ago 3600)"
+lease_fake_write "${PROJECT}" "${ZONE}" "${CLUSTER}" "laptop/4242" "${stale}" 600 "$(iso_ago 5400)" v9.9.9-rc.1
+# shellcheck disable=SC2329 # invoked by lease_takeover
+lease_read() {
+	LEASE_HOLDER="laptop/4242" LEASE_RENEWED="${stale}" LEASE_DURATION=600
+	lease_api_patch "${PROJECT}" "${ZONE}" "${CLUSTER}" "laptop/4242" "laptop/4242"
+	return 0
+}
+check_fails "a renewal between the takeover's read and write fails the swap" \
+	lease_takeover "${PROJECT}" "${ZONE}" "${CLUSTER}"
+unset -f lease_read
+# shellcheck source=scripts/dogfood/lib/lease.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/lease.sh"
+# shellcheck source=scripts/dogfood/lib/lease-fake.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/lease-fake.sh"
+lease_process_command() { echo "${LIVE_PIDS[$1]:-}"; }
+check "the racing owner keeps its lease" "laptop/4242" "$(holder)"
+
 # --- renewal ----------------------------------------------------------------
 
 reset_leases
@@ -313,7 +345,7 @@ run_owner() {
 # whose renewals lapsed from carrying on over its successor's cluster.
 reset_leases
 run_owner "lease_acquire '${PROJECT}' '${ZONE}' '${CLUSTER}' rc
-	lease_renew_start '${PROJECT}' '${ZONE}' '${CLUSTER}'
+	lease_renew_start '${PROJECT}' '${ZONE}' '${CLUSTER}' stop-owner
 	sleep 10
 	echo survived" >"${WORKDIR}/owner.out" 2>&1 &
 owner=$!
@@ -328,6 +360,30 @@ check "a renewer that finds another holder TERMs its gate" "143" "${owner_rc}"
 check_contains "the renewer says why it stopped the gate" "another holder took" \
 	"$(cat "${WORKDIR}/owner.out")"
 check "the stopped gate leaves the new holder's record" "ci-runner-7/4242" "$(holder)"
+
+# A renewer started for a teardown or a reclaim must not signal: its owner is
+# already running stop scripts, and a TERM there kills bash mid-trap while the
+# stop script carries on. It stops renewing and leaves its owner alone.
+reset_leases
+run_owner "lease_acquire '${PROJECT}' '${ZONE}' '${CLUSTER}' rc
+	lease_renew_start '${PROJECT}' '${ZONE}' '${CLUSTER}'
+	echo \"\${LEASE_RENEWER_PID}\" >'${WORKDIR}/quiet.pid'
+	sleep 2
+	echo survived" >"${WORKDIR}/quiet.out" 2>&1 &
+owner=$!
+for _ in $(seq 50); do
+	[[ "$(holder)" == owner-host/* ]] && break
+	sleep 0.1
+done
+remote_lease 1 "ci-runner-7/4242"
+owner_rc=0
+wait "${owner}" || owner_rc=$?
+check "a renewer without stop-owner leaves its owner running" "0" "${owner_rc}"
+check_contains "the owner ran to completion" "survived" "$(cat "${WORKDIR}/quiet.out")"
+quiet="$(cat "${WORKDIR}/quiet.pid")"
+kill -0 "${quiet}" 2>/dev/null && quiet_alive=1 || quiet_alive=0
+check "a renewer that lost its lease stops renewing" "0" "${quiet_alive}"
+((quiet_alive == 0)) || kill "${quiet}" 2>/dev/null || true
 
 # A renewer outliving a SIGKILLed gate would keep a dead run's lease fresh
 # forever, and no other host could ever reclaim it.
@@ -360,6 +416,9 @@ check "a takeover patch stamps acquireTime and the RC" "5" "$(jq length <<<"${bo
 check "the RC annotation key is pointer-escaped" "/metadata/annotations/actions-gateway.com~1release-gate-rc" \
 	"$(jq -r '.[4].path' <<<"${body}")"
 check "a quote in a value survives escaping" 'rc"x' "$(jq -r '.[4].value' <<<"${body}")"
+body="$(lease_patch_body "a/1" "b/2" "2026-10-04T20:00:00.000000Z" rc "2026-10-04T19:00:00.000000Z")"
+check "a takeover tests the renewTime it read, second" "test /spec/renewTime 2026-10-04T19:00:00.000000Z" \
+	"$(jq -r '.[1] | "\(.op) \(.path) \(.value)"' <<<"${body}")"
 
 # --- time parsing ------------------------------------------------------------
 

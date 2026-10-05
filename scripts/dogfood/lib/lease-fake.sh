@@ -3,10 +3,11 @@
 #
 # One file per target under RELEASE_LEASE_DIR holds the record as
 # holder|renewTime|duration|acquireTime|rc, the shape lease_api_get prints.
-# Create fails when the file exists and patch fails unless the expected holder
-# still holds it, which is the compare-and-swap the real API gives. What it
-# cannot model is the API itself: that kubectl's create, JSON-patch test op and
-# --ignore-not-found behave as lib/lease.sh assumes is unverified here.
+# Create fails when the file exists, and patch fails unless the record still has
+# the expected holder (and, when given, the expected renewTime), which is the
+# compare-and-swap the real API gives. What it cannot model is the API itself:
+# that kubectl's create, JSON-patch test op and --ignore-not-found behave as
+# lib/lease.sh assumes is unverified here.
 #
 #   LEASE_FAKE_READ_FAILS=1    every get fails, as an unreachable API does
 #   LEASE_FAKE_WRITE_FAILS=1   every create, patch and delete fails
@@ -43,11 +44,12 @@ lease_api_create() {
 
 lease_api_patch() {
 	[[ -z "${LEASE_FAKE_WRITE_FAILS:-}" ]] || return 1
-	local f holder duration acquired rc now
+	local f holder renewed duration acquired rc now
 	f="$(lease_fake_path "$1" "$2" "$3")"
 	[[ -f "${f}" ]] || return 1
-	IFS='|' read -r holder _ duration acquired rc <"${f}"
+	IFS='|' read -r holder renewed duration acquired rc <"${f}"
 	[[ "${holder}" == "$4" ]] || return 1
+	[[ -z "${7:-}" || "${renewed}" == "$7" ]] || return 1
 	now="$(lease_now_iso)"
 	if [[ "$4" != "$5" ]]; then
 		acquired="${now}"

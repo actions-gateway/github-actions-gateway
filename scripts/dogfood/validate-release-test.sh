@@ -892,7 +892,11 @@ for failing in RECLAIM_E2E_STOP_RC RECLAIM_STOP_RC; do
 	script="stop.sh"
 	[[ "${failing}" == RECLAIM_E2E_STOP_RC ]] && script="e2e-stop.sh"
 	export "${failing}=1"
+	# Each run starts free: a refused stop keeps the lease the teardown re-took,
+	# and the next child would read that as another holder's.
+	arm_lease free
 	check "a pass whose ${script} refuses exits 1" 1 "$(gate_exit 0)"
+	arm_lease free
 	check "a failure whose ${script} refuses keeps its own status" 3 "$(gate_exit 3)"
 	unset "${failing}"
 done
@@ -913,6 +917,55 @@ check "a teardown whose lease another holder took runs no stop script" "" "$(cat
 check_contains "the skipped teardown says why" "Teardown SKIPPED" "${out}"
 check "a teardown never releases another holder's lease" "held" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# A reclaimer that tore this run's cluster down released the lease, and its own
+# gate may be about to acquire one. Teardown re-takes the lease before running
+# anything, so it runs on the record (and that gate refuses) or not at all.
+arm_lease held
+rm -f "${LEASE_FILE}"
+(
+	set +e
+	WORKDIR=""
+	teardown
+) >/dev/null 2>&1
+check "a teardown whose lease was deleted re-takes it before the stop scripts" \
+	"e2e-stop
+stop lease=held" "$(cat "${STOP_LOG}")"
+check "the re-taken lease is released after the teardown" "free" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# The successor got there first: the re-take fails and another holder is now on
+# record, so this teardown is the one that must leave the cluster alone.
+arm_lease held
+rm -f "${LEASE_FILE}"
+out="$(
+	set +e
+	WORKDIR=""
+	lease_api_create() {
+		remote_lease 1
+		return 1
+	}
+	teardown 2>&1
+)" && teardown_rc=0 || teardown_rc=$?
+check "a teardown that loses the re-take to a successor exits 1" 1 "${teardown_rc}"
+check "a teardown that loses the re-take runs no stop script" "" "$(cat "${STOP_LOG}")"
+check "a teardown that loses the re-take leaves the successor's lease" "held" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# A re-take refused by the API with no other holder on record is no evidence of
+# a successor, so the nodes this run scaled up still come down.
+arm_lease held
+rm -f "${LEASE_FILE}"
+LEASE_FAKE_WRITE_FAILS=1
+(
+	set +e
+	WORKDIR=""
+	teardown
+) >/dev/null 2>&1
+unset LEASE_FAKE_WRITE_FAILS
+check "a teardown whose re-take the API refuses still stops the cluster" \
+	"e2e-stop
+stop lease=released" "$(cat "${STOP_LOG}")"
 
 # An unreadable lease is not evidence of a successor, so teardown still stops
 # this run's nodes: stranding them is the leak the lease exists to end.

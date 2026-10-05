@@ -1692,9 +1692,18 @@ teardown() {
 	echo ""
 	# A gate whose lease another holder took has a successor on this cluster.
 	# Every step below would tear down or reset the successor's run, so none
-	# runs. Only a recorded other holder skips: an unreadable lease, or none,
-	# still leaves this run's nodes as the likeliest thing up.
-	if [[ "$(lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}")" == lost ]]; then
+	# runs. The trap is armed only once the lease is taken, so no lease means
+	# something deleted it, most likely a reclaimer whose own gate may be about
+	# to start: re-take it, so the teardown runs on the record or not at all. A
+	# create that fails skips only if another holder is now recorded; an
+	# unreadable lease still leaves this run's nodes as the likeliest thing up.
+	local ownership
+	ownership="$(lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	if [[ "${ownership}" == none ]] &&
+		! lease_acquire "${PROJECT}" "${ZONE}" "${CLUSTER}" "${GAG_IMAGE_TAG:-}"; then
+		ownership="$(lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	fi
+	if [[ "${ownership}" == lost ]]; then
 		lease_renew_stop
 		[[ -n "${WORKDIR}" ]] && rm -rf "${WORKDIR}"
 		progress_event gate fail "lease taken by another holder"
@@ -1704,6 +1713,10 @@ teardown() {
 		echo "  tearing it down would end their run. This gate's verdict does not stand." >&2
 		exit 1
 	fi
+	# Keep the lease fresh through a drain that can outlast its duration, but
+	# never TERM this trap: see lease_renew_start.
+	lease_renew_stop
+	lease_renew_start "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	if ((rc != 0)); then
 		# Record the terminal state before the diagnostics dump: a renderer
 		# watching the stream should learn the gate died now, not after a
@@ -1952,8 +1965,9 @@ main() {
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
 	trap teardown EXIT
 	# Renew for as long as this process lives, so a host that cannot check this
-	# pid reads the lease as held. Teardown stops it.
-	lease_renew_start "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	# pid reads the lease as held, and stop the gate if another holder takes it.
+	# Teardown replaces it with a renewer that does not signal.
+	lease_renew_start "${PROJECT}" "${ZONE}" "${CLUSTER}" stop-owner
 
 	# The stream was emptied before preflight; this is the first event in it, so
 	# a run that aborted earlier leaves an empty stream rather than a half one,
