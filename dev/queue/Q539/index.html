@@ -2601,7 +2601,7 @@
 <p>Dragonfly fails the mirror contract as the endpoint workers reach: dfdaemon's proxy is an open forward proxy that forwards pushes, so it sits behind the five Distribution mirrors instead (<a href="../../plan/q539-dragonfly-mirror-backend/">plan §2, §4</a>).
 That back end is built and measured on kind: <code>E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh</code>.
 What remains is Phase 3, a booked dogfood session: the Q408 §3.7 battery, one Kata e2e run with its in-job negatives unchanged, blob <code>GET</code>s taking the P2P path in the seed peer's log, and a worker timing out on the seed proxy port.
-The release gate's Dragonfly leg (Q1160, shipped) takes all four on every candidate, plus a <code>CONNECT</code> through the seed peer to a self-signed host, so its first run on dogfood discharges Phase 3.
+The release gate's Dragonfly leg (Q1160, shipped) takes all four on every candidate, plus a <code>CONNECT</code> through the seed peer to a self-signed host, so its first green run on dogfood discharges Phase 3; the gcr.io pull failure that kept <code>v1.9.0-rc.2</code>'s leg red is diagnosed in <a href="../../plan/q539-dragonfly-mirror-backend/#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">plan §7.1</a>.
 The plan's mirror hit counts are the exception: the gate does not run <code>scripts/dogfood/e2e-mirror-hits.sh</code>, so they stay a hand reading taken before teardown.
 Artifacts and cache saves stay out of scope, <a href="../../plan/caching-and-worker-storage/">per content class</a>.</p>
 

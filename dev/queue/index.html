@@ -2982,6 +2982,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Dragonfly fails the mirror contract as the endpoint workers reach: dfdaemon's proxy is an open forward proxy that forwards pushes, so it …</td>
 </tr>
 <tr>
+<td><a href="Q1163/">Q1163</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-validate.sh">Mirror battery fetches a digest manifest and a blob, not only a tag</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>scripts/dogfood/e2e-mirror-validate.sh</code> proves each mirror instance by fetching one manifest by tag, and a tag lookup takes the Dragonfly …</td>
+</tr>
+<tr>
 <td><a href="Q540/">Q540</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest</a></td>
 <td><code>security</code></td>

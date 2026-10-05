@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q539-dragonfly-mirror-backend/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1163/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Dragonfly as the Mirror Backend — Q539 - GitHub Actions Gateway</title>
+        <title>Mirror battery fetches a digest manifest and a blob, not only a tag - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dragonfly-as-the-mirror-backend--q539" class="md-skip">
+        <a href="#mirror-battery-fetches-a-digest-manifest-and-a-blob-not-only-a-tag" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dragonfly as the Mirror Backend — Q539
+              Mirror battery fetches a digest manifest and a blob, not only a tag
             
           </span>
         </div>
@@ -2579,119 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-the-lab" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. The lab
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-unfronted-dragonfly-fails-the-contract-by-construction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Unfronted Dragonfly fails the contract by construction
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-a-filter-in-front-holds-the-contract-and-breaks-docker-hub" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. A filter in front holds the contract and breaks Docker Hub
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-the-shape-that-works-distribution-in-front-dragonfly-behind" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. The shape that works: Distribution in front, Dragonfly behind
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-per-content-class" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Per content class
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-non-root" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Non-root
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-phases" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Phases
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="7. Phases">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7.1 The first dogfood run: gcr.io manifests on the P2P path
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-what-this-plan-does-not-cover" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        8. What this plan does not cover
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2710,273 +2597,22 @@
   
 
 
-<h1 id="dragonfly-as-the-mirror-backend--q539">Dragonfly as the Mirror Backend — Q539<a class="headerlink" href="#dragonfly-as-the-mirror-backend--q539" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status (2026-10-05): Phase 1 measured, Phase 2 built and validated on kind, Phase 3's first dogfood run failed on gcr.io pulls and the fix is measured locally (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).</strong> Dragonfly fails the <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">mirror contract</a> when it is the endpoint workers reach, so it is built as the <strong>back end</strong> of the Distribution mirrors rather than a substitute for them (<a href="#2-unfronted-dragonfly-fails-the-contract-by-construction">§2</a>). §2–§6 were measured in local Docker and §7 on a kind cluster; nothing here has run on the dogfood cluster.</p>
-</blockquote>
-<p>Q408 validated the untrusted-PR egress posture with CNCF Distribution as the mirror, and <a href="../q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a> of that plan scheduled Dragonfly as the alternate backend to grade against the same four-property contract.
-This plan is that grading, and the build it led to.</p>
-<p><strong>Versions measured.</strong> Dragonfly client (dfdaemon) <code>v1.5.7</code> (<code>dragonflyoss/client@sha256:e5a4479c3e9c…</code>, source at tag <code>v1.5.7</code>, commit <code>ada717934e86</code>), scheduler <code>v2.5.2</code>, Helm chart <code>dragonfly-1.8.5</code> (packaged chart sha256 <code>8567532e15c8…</code>).
-Distribution <code>registry:3.1.1</code>, the digest <code>deploy/registry-mirror/</code> pins, as the reference arm.
-A different client version is a different measurement.</p>
-<h2 id="1-the-lab">1. The lab<a class="headerlink" href="#1-the-lab" title="Permanent link">&para;</a></h2>
-<p>One Docker network holding: a writable <code>registry:3.1.1</code> as the upstream, an nginx <strong>canary</strong> whose access log records each request's source IP, a fake scheduler (a gRPC health server that answers any other method with an empty message, enough for dfdaemon to finish startup), dfdaemon in seed-peer mode with its registry mirror pointed at the upstream, and a Distribution proxy pointed at the same upstream.
-Every probe path carries a per-backend label, so a canary line names both the probe and the backend, and its source IP says whether the backend made the request or the probe container did.</p>
-<p>The probes are the <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">§3.5</a> properties turned into requests a hostile job could send.</p>
-<h2 id="2-unfronted-dragonfly-fails-the-contract-by-construction">2. Unfronted Dragonfly fails the contract by construction<a class="headerlink" href="#2-unfronted-dragonfly-fails-the-contract-by-construction" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Probe, sent to the mirror endpoint</th>
-<th>Distribution 3.1.1</th>
-<th>dfdaemon v1.5.7</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Pull a blob seeded in the upstream (control)</td>
-<td>200, content matches</td>
-<td>200, content matches</td>
-</tr>
-<tr>
-<td>Blob push: <code>POST</code> an upload, then <code>PUT</code> the content</td>
-<td>refused, no upload session</td>
-<td><strong>201, and the blob reads back from the upstream directly</strong></td>
-</tr>
-<tr>
-<td><code>X-Dragonfly-Registry: http://canary</code> header</td>
-<td>404, canary silent</td>
-<td><strong>reached the canary</strong></td>
-</tr>
-<tr>
-<td><code>?ns=http://canary</code> query, and the same with the key percent-encoded (<code>%6Es</code>)</td>
-<td>404, canary silent</td>
-<td><strong>both reached the canary</strong></td>
-</tr>
-<tr>
-<td>Absolute-URI <code>GET</code> and <code>POST</code> to the canary</td>
-<td>404, canary silent</td>
-<td><strong>both reached the canary</strong></td>
-</tr>
-<tr>
-<td><code>CONNECT</code> to <code>https://example.com</code></td>
-<td>refused</td>
-<td><strong>200, "Example Domain"</strong></td>
-</tr>
-</tbody>
-</table>
-<p>Every canary line came from dfdaemon's address, never the probe container's.
-So a worker that can reach dfdaemon's proxy port can reach any host on the internet and can push to any registry it names; properties 2 (fixed upstream set) and 3 (read-only) both fail.</p>
-<p><strong>Nothing in its configuration closes either one.</strong> The proxy is a general forward proxy (<code>dragonfly-client/src/proxy/mod.rs</code>): a request with a host is forwarded to that host, <code>CONNECT</code> is answered with a TLS interception tunnel to any host, a mirror-form request takes its upstream from <code>X-Dragonfly-Registry</code> before <code>ns</code> before the configured address (<code>make_registry_mirror_request</code>), and every non-<code>GET</code> method is forwarded directly ("fall through to direct proxy to avoid data loss").
-The proxy config (<code>dragonfly-client-config/src/dfdaemon.rs</code>, <code>struct Proxy</code>) offers rules, basic auth and a CA, and no destination or method restriction.
-The manager-pushed block list applies only to P2P download tasks and only denies what it lists, so it can neither cover the direct path nor express an allowlist.</p>
-<p>Property 1 holds: the chart's seed client is a StatefulSet with <code>hostNetwork: false</code> behind a ClusterIP Service.
-Property 4 holds wherever workers are plain HTTP clients of the seed peer, but the four failures above are reachable by exactly that client.</p>
-<h2 id="3-a-filter-in-front-holds-the-contract-and-breaks-docker-hub">3. A filter in front holds the contract and breaks Docker Hub<a class="headerlink" href="#3-a-filter-in-front-holds-the-contract-and-breaks-docker-hub" title="Permanent link">&para;</a></h2>
-<p>An haproxy in front of dfdaemon, on the image <code>deploy/registry-mirror/</code> already pins, with four rules: only <code>GET</code>/<code>HEAD</code>, only origin-form request targets, every <code>X-Dragonfly-*</code> header deleted, and the query string dropped (<code>set-uri %[path]</code>).</p>
-<p>Against the same battery it matched Distribution: zero canary hits, no upload session, <code>CONNECT</code> and absolute URIs refused, <code>h2c</code> prior knowledge refused, and the seeded blob still pulled.
-Removing one rule at a time and requiring the bypass it blocks to return:</p>
-<table>
-<thead>
-<tr>
-<th>Rule removed</th>
-<th>Result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Header delete</td>
-<td>both header probes reach the canary again</td>
-</tr>
-<tr>
-<td>Query drop</td>
-<td>both <code>ns</code> probes reach the canary again</td>
-</tr>
-<tr>
-<td>Method restriction</td>
-<td>no blob lands, but the <code>POST</code> opens an upload session on the upstream: forwarded, which property 3 forbids. The <code>PUT</code> fails only because the query drop also strips its <code>digest</code></td>
-</tr>
-<tr>
-<td>Origin-form check</td>
-<td>nothing returns: the <code>/v2/</code> path rule and the method rule overlap it</td>
-</tr>
-</tbody>
-</table>
-<p><strong>It does not work against Docker Hub.</strong> Through dfdaemon, Hub answers a manifest request with <strong>401</strong> and <code>Bearer realm="https://auth.docker.io/token"</code>, which the client must then fetch itself.
-Distribution's proxy fetched the same manifest with <strong>200</strong>, because it performs that token exchange server-side.
-A worker under the Q408 posture reaches cluster DNS, GitHub and the mirrors, so it cannot reach <code>auth.docker.io</code>.
-That last step is the posture's definition, not a probe taken here.</p>
-<h2 id="4-the-shape-that-works-distribution-in-front-dragonfly-behind">4. The shape that works: Distribution in front, Dragonfly behind<a class="headerlink" href="#4-the-shape-that-works-distribution-in-front-dragonfly-behind" title="Permanent link">&para;</a></h2>
-<p><strong>Distribution 3.1.1 will not fetch a token for a remote it does not recognise.</strong> <code>remoteAuthChallenger.challengeManager()</code> (<code>registry/proxy/proxyregistry.go</code>) drops any bearer challenge whose realm is neither the remote's own host nor on its registrable domain, and never trusts one for a single-label host.
-So <code>remoteurl: http://&lt;dragonfly-service&gt;</code> sees Hub's challenge and discards it: measured, a Distribution pointed at dfdaemon logged <code>Challenge established with upstream</code> and answered 404, with every upstream request returning 401.
-The token itself is not the obstacle: an anonymous Hub token attached by hand passed through dfdaemon and returned 200.</p>
-<p><strong>So Distribution keeps its real <code>remoteurl</code> and sends its outbound traffic through dfdaemon</strong> as an HTTPS proxy, which is Dragonfly's documented integration:</p>
-<ul>
-<li><code>REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io</code>, unchanged, so the realm check passes.</li>
-<li><code>HTTPS_PROXY=http://&lt;seed-client&gt;:4001</code> on the registry container, which Go's default transport honours for every upstream call, token requests included.</li>
-<li>dfdaemon terminates the tunnel with a certificate from a CA it is given (<code>proxy.server.caCert</code>/<code>caKey</code>), and the registry container trusts that CA alone: <code>SSL_CERT_FILE</code> names it and <code>SSL_CERT_DIR</code> names the directory holding only it.
-  Both are needed, because Go also reads the image's populated <code>/etc/ssl/certs</code> unless <code>SSL_CERT_DIR</code> is set: with <code>SSL_CERT_FILE</code> alone, a registry with no proxy at all fetched the alpine index from Hub with 200, and with both it refused at startup with <code>x509: certificate signed by unknown authority</code>.</li>
-<li>dfdaemon verifies the upstream only because <code>proxy.registryMirror.cert</code> names the image's public bundle (<code>/etc/ssl/certs/ca-certificates.crt</code>).
-  Left unset, v1.5.7 builds its direct-path client with no certificate verifier at all (<code>proxy/mod.rs</code>, whose comment says "native roots"): a <code>CONNECT</code> through it to <code>self-signed.badssl.com</code> and to <code>expired.badssl.com</code> each returned 200.
-  Set, both failed, and <code>registry-1.docker.io/v2/</code> still answered 401.
-  Set to a path that does not exist, dfdaemon logged <code>load registry cert failed</code>, kept running, and answered the self-signed host with 200 again: it fails open.
-  So the start script refuses to apply the mirrors unless the seed peer logged <code>load registry cert success</code>.</li>
-<li>The proxy rule <code>blobs/sha256.*</code> sends layer <code>GET</code>s through the P2P path; everything else, tag lookups, token requests and manifests by digest, goes direct.
-  Manifests by digest took the P2P path too until the first dogfood run showed that failing every gcr.io pull (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).</li>
-</ul>
-<p>Measured end to end against Hub, before <code>registryMirror.cert</code> and <code>SSL_CERT_DIR</code> were added: <code>library/alpine:3.20</code>'s index and amd64 manifest returned 200, and its first layer returned 200 at 3,630,321 bytes with a sha256 equal to its digest. dfdaemon's log shows the layer taking the P2P path (one "proxy HTTPS request via dfdaemon by rule config" line) and every other request going direct (twelve "directly to remote server" lines), with <code>auth.docker.io</code> named on eight log lines.
-Re-measured with both added: the same layer returned 200 at the same size and digest, with two requests taking the P2P path.</p>
-<p><strong>The contract is Distribution's again, and Dragonfly is not on the worker's path.</strong> Workers reach the five Distribution Services exactly as under Q408, whose properties were measured there; the dfdaemon proxy, the open forward proxy of §2, is admitted only from the mirror pods by NetworkPolicy.
-What Dragonfly adds is the back end: P2P distribution and dedup of layer blobs across seed peers, in place of five independent upstream fetches.</p>
-<p><strong>What moves.</strong> Distribution no longer verifies upstream TLS itself; it verifies dfdaemon's interception certificate and relies on dfdaemon to verify the upstream. dfdaemon does so on the direct path, which carries tag lookups and token requests, against the same public roots Distribution used.
-The P2P path does not: dfdaemon's HTTP back end fetches with no certificate verification whatever the proxy config says (read from source at v1.5.7, not probed).
-The rules limit that path to digest-addressed content, so a tampered blob or manifest has the wrong digest; a client pulling by digest rejects it, and whether Distribution itself rejects a proxied blob whose bytes do not match its digest is unmeasured here.
-Tag-to-digest resolution therefore trusts dfdaemon as well as the upstream; a digest-pinned pull still re-verifies client-side, exactly as <a href="../q408-untrusted-pr-egress/#31-the-mirror--one-pull-through-cache-per-upstream">q408 §3.1</a> argues.
-Anyone holding the CA's key can impersonate any upstream to the mirrors.
-It is stored only in <code>gag-dragonfly</code>, and readable beyond it by any principal with cluster-wide Secret read, the GMC's <code>manager-role</code> among them.
-The start script creates it with <code>kubectl create</code> rather than <code>apply</code>, which would copy the key into a <code>last-applied-configuration</code> annotation that <code>kubectl describe</code> prints.</p>
-<p><strong>Startup order matters.</strong> Distribution pings its remote while starting and panics if the ping fails, so a mirror pod started before dfdaemon is listening crash-loops until it is; measured once, recovered on restart.
-So does load order: dfdaemon and Distribution both read the CA at startup, so a CA minted under running pods is not seen by either until they restart.</p>
-<p><strong>The key must be PKCS#8.</strong> Helm's <code>genCA</code> emits a PKCS#1 RSA key, which dfdaemon v1.5.7 rejects ("Could not parse key pair") and then silently falls back to a self-generated CA the mirrors do not trust.
-<code>genPrivateKey "ed25519"</code> with <code>genCAWithKey</code> emits PKCS#8 (<code>BEGIN PRIVATE KEY</code>), which it loads.</p>
-<h2 id="5-per-content-class">5. Per content class<a class="headerlink" href="#5-per-content-class" title="Permanent link">&para;</a></h2>
-<p><a href="../caching-and-worker-storage/">caching-and-worker-storage.md</a> asks for the contract graded per content class rather than once.</p>
-<table>
-<thead>
-<tr>
-<th>Class</th>
-<th>Can one Dragonfly deployment serve it under the contract?</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Images</td>
-<td>Yes, as the back end of §4. Not as the worker-facing endpoint (§2)</td>
-</tr>
-<tr>
-<td>Artifacts and <code>actions/cache</code> restores</td>
-<td>Not as a fixed upstream. The read path is a <code>GET</code> of a signed URL whose host names the storage account, so a filter can pin no tighter than the <code>*.blob.core.windows.net</code> suffix, which admits every account on Azure. Read from the source and the filter's rules, not probed</td>
-</tr>
-<tr>
-<td><code>actions/cache</code> saves</td>
-<td>No. dfdaemon forwards every non-<code>GET</code> to the origin rather than storing it (§2), so it holds no write path to contract. This stays <a href="../../queue/Q215/">Q215</a>'s question</td>
-</tr>
-</tbody>
-</table>
-<h2 id="6-non-root">6. Non-root<a class="headerlink" href="#6-non-root" title="Permanent link">&para;</a></h2>
-<p>Both images declare no user, and chart 1.8.5 exposes no pod or container security context.
-Run as uid 65532 with a read-only root filesystem, every capability dropped and <code>no-new-privileges</code>, both start and serve: dfdaemon with writable <code>/var/lib/dragonfly</code>, <code>/var/log/dragonfly</code>, <code>/var/run/dragonfly</code>, <code>/var/cache/dragonfly</code> and <code>/tmp</code>; the scheduler with those plus <code>/usr/local/dragonfly</code> and <code>/etc/dragonfly</code>, where it writes its dynconfig at startup.
-So the namespace can enforce PSA <code>restricted</code>, and the security context is a patch over the chart's render.</p>
-<h2 id="7-phases">7. Phases<a class="headerlink" href="#7-phases" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Phase 1 — grade Dragonfly against the contract. ✅ Done (2026-10-04, local).</strong> §2–§6.</li>
-<li><strong>Phase 2 — build the back end. ✅ Done (2026-10-04, kind).</strong> <code>deploy/dragonfly/</code>: a scheduler and one seed peer with no manager, node DaemonSet or injector (so no MySQL and no Redis; the seed finds the scheduler through a static dynconfig), digest-pinned, non-root under PSA <code>restricted</code>, with NetworkPolicies admitting only the mirror pods to the proxy port.
-  <code>deploy/registry-mirror/components/dragonfly-backend</code> points the five registry containers at it, and <code>overlays/dragonfly</code> applies it.
-  The CA comes from <code>deploy/dragonfly/ca-chart</code>, Helm's built-in certificate functions as the GAG chart already uses them for its webhook certificate, so no cert-manager; its key goes from <code>helm template</code> to <code>kubectl create</code> through a pipe and never touches disk.
-  <code>scripts/dogfood/e2e-start.sh</code> gains <code>E2E_MIRROR_BACKEND=dragonfly</code>, minting the CA only when its Secret is absent and restarting both sides when it does; the default stays Distribution alone, and <code>e2e-stop.sh</code> scales Dragonfly to zero but keeps the CA.</li>
-</ul>
-<p>Measured by running the script's own functions against a kind cluster with kindnet enforcing NetworkPolicy:</p>
-<table>
-<thead>
-<tr>
-<th>Reading</th>
-<th>Result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>A worker pod pulls <code>library/alpine</code> through <code>mirror-docker-io</code></td>
-<td>index, manifest and arm64 layer 200; layer 4,092,319 bytes, sha256 equal to its digest</td>
-</tr>
-<tr>
-<td>The other four mirrors</td>
-<td>manifest 200 from each</td>
-</tr>
-<tr>
-<td>Push to a mirror</td>
-<td>405</td>
-</tr>
-<tr>
-<td>The seed peer's log</td>
-<td>names all five upstream hosts and <code>auth.docker.io</code>; 2 requests by P2P rule, 35 direct, 0 errors</td>
-</tr>
-<tr>
-<td>A worker pod, and a pod in another namespace, to the seed proxy</td>
-<td>timeout</td>
-</tr>
-<tr>
-<td>A mirror-labelled pod to the seed proxy</td>
-<td>200</td>
-</tr>
-<tr>
-<td>The other-namespace pod, with the three policies selecting the seed pod deleted</td>
-<td>200; restored, timeout again. The worker is also held by its own egress policy, so this inversion needs a pod without one</td>
-</tr>
-<tr>
-<td>Re-running the start script</td>
-<td>CA unchanged, no restart; the mirrors' copy matches the Secret's byte for byte</td>
-</tr>
-</tbody>
-</table>
-<p>kind has no GMC, so the lab applied a stand-in DNS egress policy for the worker namespace that the GMC-managed default-deny provides on dogfood.
-- <strong>Phase 3 — validate on dogfood.
-  First run red, fix measured locally (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).</strong> The Q408 Phase-4 sequence with <code>E2E_MIRROR_BACKEND=dragonfly</code>: the <a href="../q408-untrusted-pr-egress/#37-the-phase-2-validation-battery">§3.7</a> battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
-  Three readings this variant adds: blob <code>GET</code>s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a <code>CONNECT</code> through the seed peer to <code>self-signed.badssl.com</code> refused.
-  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (<code>dragonfly_readings</code> in <code>scripts/dogfood/validate-release.sh</code>); the mirror hit counts it does not take.</p>
-<h3 id="71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">7.1 The first dogfood run: gcr.io manifests on the P2P path<a class="headerlink" href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path" title="Permanent link">&para;</a></h3>
-<p>The release gate's Dragonfly leg for <code>v1.9.0-rc.2</code> (gate run 37273426462, e2e run 37278968369, 2026-10-05) failed one in-job check, <code>docker-mirror-pull</code>: a <code>docker pull</code> of <code>gcr.io/distroless/static:nonroot</code> through <code>mirror-gcr-io</code>.
-Every other negative passed, and the same check passed on the plain-Kata and DinD legs of the same gate, which use Distribution alone.
-The probe discarded docker's stderr, so the run itself does not say why.</p>
-<table>
-<thead>
-<tr>
-<th>Candidate</th>
-<th>Verdict</th>
-<th>Measurement</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>PULL_TIMEOUT</code> (120 s) too short</td>
-<td>Ruled out</td>
-<td>The whole battery took 76 s (07:41:40 to 07:42:57), and three of its probes spend their full 20 s each, so the pull failed in under 17 s</td>
-</tr>
-<tr>
-<td>A cold or still-rolling seed peer</td>
-<td>Not the cause</td>
-<td>The lab below fails the same way against a settled seed peer on every attempt, in about 3 s. The dogfood seed's state at 07:42 was not read</td>
-</tr>
-<tr>
-<td>The probe</td>
-<td>Ruled out</td>
-<td>The pull really fails: reproduced with plain <code>docker pull</code> and the same ref</td>
-</tr>
-<tr>
-<td>The Dragonfly back end</td>
-<td><strong>Cause</strong></td>
-<td>Below</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Reproduced in local Docker</strong> with the digests <code>deploy/dragonfly/</code> and <code>deploy/registry-mirror/</code> pin, the seed peer's ConfigMap verbatim, and a Distribution instance with <code>REGISTRY_PROXY_REMOTEURL=https://gcr.io</code> behind it: the pull failed with <code>error from registry: unknown error</code>.
-The seed peer's log shows the tag lookup going direct and succeeding, then the platform manifest by digest taking the P2P rule and failing: <code>download task failed: BackendError { message: "404 Not Found" … "server": "Docker Registry" }</code>.
-The download task it logs carries <code>request_header: {"user-agent": "Go-http-client/1.1"}</code> alone, while the request Distribution sent it carried four <code>Accept</code> values.</p>
-<p><strong>gcr.io refuses an OCI manifest to a client that accepts nothing.</strong> Requested by curl with the <code>Accept</code> header removed, the amd64 and arm64 platform manifests of <code>distroless/static:nonroot</code> both answer 404 with <code>MANIFEST_UNKNOWN</code>, "Manifest has media type \"application/vnd.oci.image.manifest.v1+json\" but client accepts []"; with <code>Accept: */*</code> or the OCI type, 200.
-Docker Hub serves the same shape, an OCI manifest by digest for <code>library/alpine:3.20</code> amd64, with no <code>Accept</code> at 200, which is why every Hub pull in the e2e run passed and §7's kind lab, which fetched a gcr.io manifest by tag only, never saw it.
-The gate's own mirror battery has the same blind spot: it fetches each instance's manifest by tag, which goes direct.</p>
-<p><strong>The fix drops <code>manifests/sha256.*</code> from the rules.</strong> Manifests are a few KB, so the P2P path loses nothing worth keeping; blobs are where the bytes are.
-Measured in the same lab with only <code>blobs/sha256.*</code>: the gcr.io pull succeeded, its five blobs taking the P2P rule and its manifest going direct, and a cold Hub blob (<code>library/busybox:1.36</code>'s amd64 layer) returned 200 at 2,206,402 bytes with a sha256 equal to its digest by the P2P rule.
-The only change between that run and the failing one above is the removed rule.
-Not yet measured on dogfood: the next gate run is the reading, and <code>pull_probe</code> now prints docker's stderr on a failure, so a different cause would name itself.</p>
-<h2 id="8-what-this-plan-does-not-cover">8. What this plan does not cover<a class="headerlink" href="#8-what-this-plan-does-not-cover" title="Permanent link">&para;</a></h2>
-<p>The node layer, where a <code>hostNetwork</code> dfdaemon serves the kubelet's own pulls, is <a href="../../queue/Q540/">Q540</a>. §2 applies there directly: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.
-Unmeasured.</p>
+<h1 id="mirror-battery-fetches-a-digest-manifest-and-a-blob-not-only-a-tag">Mirror battery fetches a digest manifest and a blob, not only a tag<a class="headerlink" href="#mirror-battery-fetches-a-digest-manifest-and-a-blob-not-only-a-tag" title="Permanent link">&para;</a></h1>
+<p><code>scripts/dogfood/e2e-mirror-validate.sh</code> proves each mirror instance by fetching one manifest by tag, and a tag lookup takes the Dragonfly seed peer's direct path, never its P2P rule.
+So the battery cannot see a failure on the P2P path, and the release gate's Dragonfly leg reports green on it while the e2e run it dispatches then fails.</p>
+<p>Measured on <code>v1.9.0-rc.2</code> (gate run 37273426462, 2026-10-05): the battery passed every instance, including <code>mirror-gcr-io</code>, and the e2e run's <code>docker-mirror-pull</code> failed because gcr.io answered the P2P path's manifest-by-digest fetch with 404 (<a href="../../plan/q539-dragonfly-mirror-backend/#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">Q539 plan §7.1</a>).
+The same blind spot leaves the gate's <code>dragonfly_p2p_reading</code> reading probe traffic that holds no blob, so it reported "no request took the P2P rule; 27 went direct" on that run.</p>
+<p>The fix: for each instance, also resolve the tag's platform manifest by digest and fetch its smallest layer blob, check the blob's sha256 against its digest, and grade both like the existing checks.
+Then the P2P reading has a blob to count, and a back end that breaks digest fetches fails the gate's battery a full e2e run earlier.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
