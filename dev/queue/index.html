@@ -3126,6 +3126,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker a maintainer's local gate writes today.</td>
 </tr>
 <tr>
+<td><a href="Q1162/">Q1162</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">Make the CI release gate wait for the candidate's images to publish</a></td>
+<td><code>ci</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>validate-candidate.yml</code> dispatches the gate the moment a candidate tag is pushed, and <code>publish.yml</code> starts from the same push, so nothing …</td>
+</tr>
+<tr>
 <td><a href="Q1143/">Q1143</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">Run a patch line's own source through e2e before its candidate is tagged</a></td>
 <td><code>ci</code> <code>dogfood</code></td>
