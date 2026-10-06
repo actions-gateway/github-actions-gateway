@@ -1,6 +1,6 @@
 # Release 1.9 Milestone Definition
 
-> **Status: every gate landed; `v1.9.0-rc.2` [validated in CI](#v190-rc2) on 2026-10-05, the first candidate whose verdict `publish.yml` reads from the gate's own evidence (Q880); promotion to `v1.9.0` is the maintainer's call.** `rc.1` validated on 2026-10-03 through the local gate and was held for Q880, Q1158 and Q1160.
+> **Status: shipped as `v1.9.0` on 2026-10-05, validated on `rc.2` in CI ([gate run 37380198658](https://github.com/actions-gateway/github-actions-gateway/actions/runs/37380198658)); `v1.9.0` was the first stable tag `publish.yml` refused to publish without the gate's own evidence (Q880), and it published (run 37395739048).** `rc.1` validated on 2026-10-03 through the local gate and was held for Q880, Q1158 and Q1160.
 > Scoped 2026-09-17; Q1150 added 2026-09-30.
 > The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and `v1.8.0` tagged the same day.
 > The version is no longer provisional.
@@ -18,17 +18,17 @@ Without this rung that destination is `v1.8.0`, which would make `v2.0.0` the on
 It is already the largest this project asks anyone to make, carrying the `v1`→`v2` migration and four removals.
 
 It is also the only place the `v2beta1` ↔ `v2` conversion edge runs before it is mandatory.
-[v2-ga.md](v2-ga.md#phase-1--the-soak-what-well-validated-means)'s Phase 1 soak validates `v2beta1`'s shape and says nothing about a conversion that does not exist yet.
+[v2-ga.md](../v2-ga.md#phase-1--the-soak-what-well-validated-means)'s Phase 1 soak validates `v2beta1`'s shape and says nothing about a conversion that does not exist yet.
 
-Full reasoning: [release-ladder.md](release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2).
+Full reasoning: [release-ladder.md](../release-ladder.md#why-19-exists-the-storage-version-cannot-advance-in-the-same-release-that-introduces-v2).
 
 ## What this release must NOT do
 
 **It must not mark `v2` the storage version**, and must not migrate stored objects.
 That is the whole point of the rung, and it is the one way to ship 1.9 and still not satisfy Rule #4b.
-[v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it was part of Q413, not a follow-up.
+[v2-ga.md](../v2-ga.md#phase-2--the-graduation-hop) Phase 2's step 1 carries a `+kubebuilder:storageversion` marker that belongs to Phase 3 and `v2.0.0`; moving it was part of Q413, not a follow-up.
 
-The hub stays at `v2beta1`, though nothing ties it to the storage version: moving it buys nothing before `v2.0.0` leaves one served version, and it would put the alias conversion annotation on every `v2alpha1` and `v2beta1` conversion ([why](v2-ga.md#the-hub-stays-at-v2beta1)).
+The hub stays at `v2beta1`, though nothing ties it to the storage version: moving it buys nothing before `v2.0.0` leaves one served version, and it would put the alias conversion annotation on every `v2alpha1` and `v2beta1` conversion ([why](../v2-ga.md#the-hub-stays-at-v2beta1)).
 
 ## Scope ledger
 
@@ -36,8 +36,8 @@ Three gating rows and the candidate validation, in the order they land, then the
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
-| Q413 | [v2-ga.md](v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
+| Q1085 | Admission rejects new `CiliumFQDN`/`CalicoFQDN` writes, and the pre-upgrade alias check joins the checklist | `1.9-gate` | ✅ landed first, ahead of Q413: the reject is in the GMC webhook and the check is in the [Pre-Upgrade Validation Checklist](../../operations/upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) |
+| Q413 | [v2-ga.md](../v2-ga.md#phase-2--the-graduation-hop) Phase 2: add `v2` to all five kinds, serve it beside `v2beta1`, extend conversion coverage. Storage marker withheld | `1.9-gate` | ✅ landed: `v2` served on all six kinds (`PriorityClassAllowlist` included), `v2beta1` the storage version on each, conversion round-trips proven in envtest |
 | Q1150 | Retype the five validating webhooks onto `v2`, so the `v2`-typed validators run through this release before `v2.0.0` deletes `api/v2alpha1` | `1.9-gate` | ✅ landed: all five rules name `v2` and the handlers are typed on `api/v2`; the `EgressProxy` alias and the `RunnerSet` Classic protocol are read from their conversion annotations, pinned by envtest writes at `v2alpha1` |
 | Q880 | Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each `v*-rc.*` tag, and `publish.yml` reading its verdict | `1.9-gate` | ✅ landed: milestones 1–3 in #2029, milestone 4 in #2043; `rc.2`'s evidence passes `check-validated-candidate.sh v1.9.0` |
 | Q1155 | Gate teardown keeps its lease when a stop script refuses, so `--reclaim` finds stranded nodes | gates, with Q880 | ✅ landed (#2026) |
@@ -67,7 +67,7 @@ An operator does not: both halves arrive under the same tag, so for them the cle
 
 **Three items ride, none of them gating.** `scripts/release/semver-floor.sh v1.8.0` read `FLOOR: MINOR` on 2026-09-30 over the 73 commits since the tag, with five touching a released artifact: the two gates above, and Q1101, Q1151 and Q1146, which merged on their own merits and ship in the tag whether or not the release waits for them.
 On 2026-09-17 it read `FLOOR: NONE` over 26 commits, so the riders accumulated during the cycle rather than being scoped into it.
-The gates still set the scope, the way 1.8's did: the tag waits for them and not for any rider, unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](release-ladder.md#why-16-exists-rather-than-folding-into-15)).
+The gates still set the scope, the way 1.8's did: the tag waits for them and not for any rider, unlike 1.6, which nine merged features forced whatever its theme did ([release-ladder.md](../release-ladder.md#why-16-exists-rather-than-folding-into-15)).
 The riders belong in the release notes, and the ledger takes a row for each further item that merges onto the released surface before the tag.
 
 ## Definition of Done
@@ -84,7 +84,7 @@ The riders belong in the release notes, and the ledger takes a row for each furt
 
 ## Pre-flight verdicts
 
-Each verdict names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../operations/release.md#1-pre-flight)).
+Each verdict names the commit it was measured at, because a verdict covers that commit and nothing later ([release.md](../../operations/release.md#1-pre-flight)).
 All were taken on 2026-10-02 at `aff5f2268`, the `v1.9.0-rc.1` target.
 
 | Check | Verdict |
@@ -99,7 +99,7 @@ All were taken on 2026-10-02 at `aff5f2268`, the `v1.9.0-rc.1` target.
 `api-surface-since.sh` reported no new annotation keys, and the key is absent from `api/` at `v1.8.0`.
 It is written and read by the conversion webhook, and admission rejects a write that sets it to introduce an alias; the notes name it under **API and metric surface**.
 
-**The notes are drafted** in [docs/releases/v1.9.0.md](../releases/v1.9.0.md), interrogated against the tree through `verify-claims`.
+**The notes are drafted** in [docs/releases/v1.9.0.md](../../releases/v1.9.0.md), interrogated against the tree through `verify-claims`.
 That pass corrected four claims in the first draft: the annotation above had been called pre-existing, the Kubernetes bump's starting version was missing, the Go security reading was stated as checked when it was inherited from the bump's commit, and every deprecation notice was credited to `v1.8.0` when the `v1alpha1` and `v2alpha1` ones date from earlier.
 The operator-caveat pass ran into the draft: `operator-caveats-since.sh v1.8.0` reports four new `upgrade.md` sections and one new `troubleshooting.md` section, all carried as a `WARNING` (the unpinned read and the alias), a `NOTE` (the webhook rename) and **Upgrading** entries.
 The landmine question added the custom-`workerImage` entry: the runner bump changes only the default, and `RunnerVersionTooOld` cannot see GitHub's 30-day window.
@@ -195,6 +195,6 @@ The e2e run was cancelled and both stop scripts were run by hand with the drain 
 
 ## What waits for `v2.0.0`
 
-The storage advance and migration ([Q1086](../queue/Q1086.md)) and the four removals ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md), and `v2beta1` itself).
+The storage advance and migration ([Q1086](../../queue/Q1086.md)) and the four removals ([Q273](../../queue/Q273.md), [Q264](../../queue/Q264.md), and `v2beta1` itself).
 The validating webhook rules cannot silently un-match through those removals: `make webhook-versions-check` (Q1068) fails any rule naming only versions no CRD serves.
-[v2-ga.md](v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals) Phase 3 owns the ordering.
+[v2-ga.md](../v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals) Phase 3 owns the ordering.
