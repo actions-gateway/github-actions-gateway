@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.8.0/reference/api/">
+        <link rel="canonical" href="https://actions-gateway.com/1.9.0/reference/api/">
       
       
         <link rel="prev" href="../">
@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.8.0",
+    "url": "https://actions-gateway.com/1.9.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.8.0"
+      "url": "https://actions-gateway.com/1.9.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.8.0",
-    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.9.0",
+    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3671,7 +3671,8 @@ RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data) kinds —
 plus their shared types.</p>
 <p>v2beta1 is the graduation of the v2alpha1 API (Q74). It is the storage version
 and the conversion <strong>hub</strong>: the five kinds implement conversion.Hub here, while
-v2alpha1 implements conversion.Convertible (ConvertTo/ConvertFrom) as the spoke.
+v2alpha1 and the GA v2 implement conversion.Convertible (ConvertTo/ConvertFrom) as
+the spokes. v2 is served beside it from 1.9 and takes over storage at v2.0.0.
 v2beta1 is served beside v2alpha1 during the coexistence window so a tenant can
 roll forward at its own pace (and the gag-migrate Classic on-ramp keeps landing on
 v2alpha1); the two versions round-trip losslessly through the conversion webhook.</p>
@@ -3780,7 +3781,7 @@ namespace (multi-gateway support lands in M3b).</p>
 <td></td>
 </tr>
 <tr>
-<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta">ObjectMeta</a></em></td>
 <td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
 <td></td>
 <td></td>
@@ -3862,7 +3863,7 @@ docs/operations/security-operations.md.</p>
 <td>MaxLength: 255<br />MinLength: 1<br />Optional: {}</td>
 </tr>
 <tr>
-<td><code>agcResources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
+<td><code>agcResources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
 <td>AGCResources tunes the CPU/memory requests and limits stamped on this gateway's AGC control-plane container (Q171). It is an additive, per-key override of the platform default — the documented Appendix A sizing of requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC starts from that default and overlays only the request/limit keys set here, so a value that sets just one knob keeps the sensible default for the others. Unset ⇒ the platform default unchanged. Changing it is a rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine state in memory. A memory limit below the AGC's working set OOMKills the control plane, and a request larger than any node (or the namespace ResourceQuota) leaves the AGC pod unschedulable (Pending). See docs/operations/tenant-onboarding.md and docs/design/appendix-e-capacity-planning.md for sizing guidance and the recommended floor.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -3921,7 +3922,7 @@ uniform v2 status/condition contract (§H.7).</p>
 </thead>
 <tbody>
 <tr>
-<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta">Condition</a> array</em></td>
 <td>Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed, RunnerSetsDegraded.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4032,7 +4033,7 @@ ClusterRunnerTemplate (§H.4). Pure data: nothing owns it and it owns nothing.</
 <td></td>
 </tr>
 <tr>
-<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta">ObjectMeta</a></em></td>
 <td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
 <td></td>
 <td></td>
@@ -4078,25 +4079,25 @@ jobs for no packing benefit).</p>
 <td></td>
 </tr>
 <tr>
-<td><code>requests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>requests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td>Requests are the recommended resource requests (cpu, memory), derived from the p95 of observed per-job usage peaks and rounded up to coarse increments (sizing is bucket-granular, not exact).</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>limits</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>limits</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td>Limits are the recommended resource limits. Memory only, at the observed maximum peak plus OOM headroom; no CPU limit is ever recommended.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>observedPeak</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>observedPeak</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td>ObservedPeak is the highest per-job usage peak (cpu, memory) observed in the window — the input to the recommended memory limit.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>observedP95</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>observedP95</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td>ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory), bucket-interpolated — the input to the recommended requests.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4108,7 +4109,7 @@ jobs for no packing benefit).</p>
 <td></td>
 </tr>
 <tr>
-<td><code>windowStartTime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta">Time</a></em></td>
+<td><code>windowStartTime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#time-v1-meta">Time</a></em></td>
 <td>WindowStartTime is when this container's observation window began (first sampled job, surviving AGC restarts via the re-seed).</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4169,13 +4170,13 @@ docs/design/appendix-g-future-enhancements.md §G.9.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>podSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#labelselector-v1-meta">LabelSelector</a></em></td>
+<td><code>podSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#labelselector-v1-meta">LabelSelector</a></em></td>
 <td>PodSelector selects the in-cluster peer pods the AGC may reach (e.g. {app.kubernetes.io/name: vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer semantics. Mutually exclusive with CIDR.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>namespaceSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#labelselector-v1-meta">LabelSelector</a></em></td>
+<td><code>namespaceSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#labelselector-v1-meta">LabelSelector</a></em></td>
 <td>NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g. {kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set. Mutually exclusive with CIDR.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4212,15 +4213,18 @@ FQDN mechanisms proliferate (Q245).</p>
     operator's --fqdn-policy-backend. FQDN intent is REJECTED at admission when the
     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
     closed and loud, never a silent runtime Degraded.</li>
-<li>CiliumFQDN / CalicoFQDN are DEPRECATED aliases retained for backward
-    compatibility. Each pins its namesake mechanism (a CiliumNetworkPolicy with
-    toFQDNs, or a Calico NetworkPolicy with destination domains) regardless of the
-    operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work
-    and are REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition.
-    They are enum members of v2alpha1 and v2beta1, both of which v2.0.0 removes,
-    and the GA v2 version does not define them. Migrate before upgrading: v2 cannot
-    represent an object naming an alias, and one such object fails the conversion
-    for every object batched into the same request. See
+<li>CiliumFQDN / CalicoFQDN are DEPRECATED aliases, and admission no longer accepts
+    a NEW one: a create naming either, or an update that switches onto one, is
+    REJECTED. An EgressProxy that already stores one is admitted unchanged, with a
+    warning, so an existing pool keeps working until it is migrated. Each alias pins
+    its namesake mechanism (a CiliumNetworkPolicy with toFQDNs, or a Calico
+    NetworkPolicy with destination domains) regardless of the operator backend. The
+    FQDN intent plus --fqdn-policy-backend enforces the same policy. They are
+    REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition: enum
+    members of v2alpha1 and v2beta1, both of which v2.0.0 removes, and the GA v2
+    version does not define them. Migrate before upgrading: v2 cannot represent an
+    object naming an alias, and one such object fails the conversion for every
+    object batched into the same request. See
     docs/operations/v1alpha1-deprecation.md.</li>
 </ul>
 <p>All FQDN-family modes are fail-closed: the standard NetworkPolicy still
@@ -4250,11 +4254,11 @@ Selecting an FQDN mode therefore never silently weakens the default.</p>
 </tr>
 <tr>
 <td><code>CiliumFQDN</code></td>
-<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=cilium. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
+<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=cilium. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
 </tr>
 <tr>
 <td><code>CalicoFQDN</code></td>
-<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
+<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=calico. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
 </tr>
 </tbody>
 </table>
@@ -4285,7 +4289,7 @@ proxy pool. It is referenced by RunnerSets (proxyRef) and ActionsGateways
 <td></td>
 </tr>
 <tr>
-<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta">ObjectMeta</a></em></td>
 <td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
 <td></td>
 <td></td>
@@ -4346,7 +4350,7 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>resources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
+<td><code>resources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
 <td>Resources are the proxy container's resource requirements.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4377,7 +4381,7 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 </tr>
 <tr>
 <td><code>egressPolicyMode</code> <em><a href="#egresspolicymode">EgressPolicyMode</a></em></td>
-<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at v2.0.0. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
+<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at v2.0.0; admission rejects a new write naming one, and admits an object that already stores one unchanged. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
 <td>CIDR</td>
 <td>Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]<br />Optional: {}</td>
 </tr>
@@ -4425,7 +4429,7 @@ finalizer (§H.8).</p>
 </thead>
 <tbody>
 <tr>
-<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta">Condition</a> array</em></td>
 <td>Conditions are the observed conditions of the proxy pool. Known types: Ready, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded, EgressRulesStale (Q320).</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4588,7 +4592,7 @@ scheduling constraints target.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>allocatable</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>allocatable</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td>Allocatable is the node's allocatable cpu/memory to divide (from <code>kubectl describe node</code>, minus any system/sidecar overhead the operator reserves). Keys other than cpu and memory are ignored, so at least one of the two must be present: an envelope carrying neither (empty, or GPUs only) derives nothing while the profile still reports Active (Q484). Declaring just one is legitimate — the other resource keeps the template's ask.</td>
 <td></td>
 <td></td>
@@ -4727,19 +4731,19 @@ is purely additive — no conversion work, no breaking change. Tracked as Q284.<
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>tolerations</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#toleration-v1-core">Toleration</a> array</em></td>
+<td><code>tolerations</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#toleration-v1-core">Toleration</a> array</em></td>
 <td>Tolerations let the pods schedule onto nodes carrying matching taints — the companion to NodeSelector when a tenant's node pool is taint-guarded so that unrelated workloads do not land on it. Applied to the pod spec verbatim.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>affinity</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#affinity-v1-core">Affinity</a></em></td>
+<td><code>affinity</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#affinity-v1-core">Affinity</a></em></td>
 <td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in affinity, so the block applies verbatim there.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>topologySpreadConstraints</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#topologyspreadconstraint-v1-core">TopologySpreadConstraint</a> array</em></td>
+<td><code>topologySpreadConstraints</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#topologyspreadconstraint-v1-core">TopologySpreadConstraint</a> array</em></td>
 <td>TopologySpreadConstraints spreads the pods across failure domains (zones, nodes) — the modern successor to the cross-node podAntiAffinity this proxy pool already relies on. It expresses "spread across zones, tolerate a skew of 1", which anti-affinity cannot. Applied to the pod spec verbatim.<br />Composition with the built-in anti-affinity (EgressProxy only). Unlike Affinity, this field COMPOSES with the built-in required cross-node anti-affinity — it never replaces it. <code>podAntiAffinity: \{\}</code> on Affinity stays the single opt-out for the built-in cross-node spread; this field does not add a second one. That asymmetry is deliberate: Affinity has to be able to displace the built-in term because podAntiAffinity occupies the same field with nowhere else to go, whereas topologySpreadConstraints is a different field with no such collision, so composing is safe (it can only NARROW the candidate node set, like nodeSelector AND-ing with nodeAffinity) and having one author silently lose cross-node spread by asking for zonal spread would be a footgun. Its labelSelector counts only pods in the constraint's own namespace, so one tenant's spread cannot be skewed by another tenant's pods.<br />The Pending trap. An author who asks for a SOFT zonal spread (whenUnsatisfiable: ScheduleAnyway) still inherits the REQUIRED built-in cross-node anti-affinity, so replicas beyond the pinned pool's node count strand in Pending — the same behavior as any proxy pool whose minReplicas exceeds its node count. The escapes are the same: <code>podAntiAffinity: \{\}</code> to opt out of the built-in cross-node spread, or lower minReplicas.<br />Unlike PriorityClassName, this needs no allowlist: it is namespace-scoped and can only narrow placement, so it carries no cross-tenant lever.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -4791,7 +4795,7 @@ cluster-scoped, and writable only by a platform admin.</p>
 <td></td>
 </tr>
 <tr>
-<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta">ObjectMeta</a></em></td>
 <td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
 <td></td>
 <td></td>
@@ -4963,7 +4967,7 @@ so the two are never declared simultaneously. See Q74.</p>
 <td></td>
 </tr>
 <tr>
-<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta">ObjectMeta</a></em></td>
 <td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
 <td></td>
 <td></td>
@@ -5050,7 +5054,7 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 <td>Maximum: 10<br />Minimum: 0<br />Optional: {}</td>
 </tr>
 <tr>
-<td><code>evictionRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td><code>evictionRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#duration-v1-meta">Duration</a></em></td>
 <td>EvictionRetryDelay is the minimum time to wait before re-queuing an evicted job. Must be at least 1s. Defaults to "5s" when omitted.<br />Honored on both acquisition tiers as of Q417, as for MaxEvictionRetries.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -5062,25 +5066,25 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 <td>Maximum: 20<br />Minimum: 0<br />Optional: {}</td>
 </tr>
 <tr>
-<td><code>quotaRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td><code>quotaRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#duration-v1-meta">Duration</a></em></td>
 <td>QuotaRetryDelay is the time to wait between pod creation retries when the namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s" when omitted.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>completedPodTTL</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td><code>completedPodTTL</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#duration-v1-meta">Duration</a></em></td>
 <td>CompletedPodTTL is how long a worker pod that has reached a terminal phase is retained before the AGC deletes it. Set to "0s" to delete immediately on completion. Must not be negative. Defaults to "5m" when omitted.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>pendingPodDeadline</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td><code>pendingPodDeadline</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#duration-v1-meta">Duration</a></em></td>
 <td>PendingPodDeadline is the maximum time a worker pod may remain Pending before the AGC deletes it, releasing the concurrency-ceiling slot. Must be at least 1s. Defaults to "10m" when omitted.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>maxWorkerLifetime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td><code>maxWorkerLifetime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#duration-v1-meta">Duration</a></em></td>
 <td>MaxWorkerLifetime is the maximum time a worker pod may be active on its node before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It bounds a worker whose job ended while the AGC was down — a pod nothing the AGC observes later can distinguish from one running a long job (Q438). The kubelet enforces it, so it holds even while the AGC is unavailable.<br />A pod killed this way lands in Failed with reason DeadlineExceeded and is reaped under reason "lifetime_exceeded", with a Warning Event (WorkerPodLifetimeExceeded). Jobs declaring a <code>timeout-minutes</code> above this will be killed mid-run. Set to "0s" to disable. An activeDeadlineSeconds set explicitly on the RunnerTemplate's podTemplate takes precedence. Must not be negative. Defaults to "12h" when omitted.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -5125,7 +5129,7 @@ missing object.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta">Condition</a> array</em></td>
 <td>Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -5224,7 +5228,7 @@ RunnerSets via templateRef. Pure data: nothing owns it and it owns nothing (§H.
 <td></td>
 </tr>
 <tr>
-<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta">ObjectMeta</a></em></td>
 <td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
 <td></td>
 <td></td>
@@ -5271,7 +5275,7 @@ webhook in M2 (the milestone that adds the data-kind reconcilers).</p>
 </thead>
 <tbody>
 <tr>
-<td><code>podTemplate</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#podtemplatespec-v1-core">PodTemplateSpec</a></em></td>
+<td><code>podTemplate</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podtemplatespec-v1-core">PodTemplateSpec</a></em></td>
 <td>PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the large field this kind exists to isolate.<br />On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName is gated by the GMC validating webhook against the platform PriorityClass allowlist (--allowed-priority-classes; empty forbids every named class). PriorityClass is cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped ClusterRunnerTemplate is platform-authored and therefore exempt.</td>
 <td></td>
 <td></td>
@@ -5303,7 +5307,7 @@ no condition type is set on a template today (Q309).</p>
 </thead>
 <tbody>
 <tr>
-<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta">Condition</a> array</em></td>
 <td>Conditions are the observed conditions of the template. No condition types are populated today: the templates are pure data with no reconciler; the field exists for the uniform v2 status contract.</td>
 <td></td>
 <td>Optional: {}</td>
@@ -5607,13 +5611,13 @@ spec edit takes effect on the next job without a restart (Q117).</p>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>minRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>minRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td>MinRequests / MaxRequests clamp every derived cpu/memory request (and the limits that track them) within an operator-set floor/ceiling, bounding how far a skewed usage history can push the derived values. Keys other than cpu and memory are ignored.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
-<td><code>maxRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td><code>maxRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcelist-v1-core">ResourceList</a></em></td>
 <td></td>
 <td></td>
 <td>Optional: {}</td>
@@ -5767,7 +5771,7 @@ enters the cluster (§H.15, docs/design/05-security.md).</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

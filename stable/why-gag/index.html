@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.8.0/why-gag/">
+        <link rel="canonical" href="https://actions-gateway.com/1.9.0/why-gag/">
       
       
         <link rel="prev" href="..">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.8.0",
+    "url": "https://actions-gateway.com/1.9.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.8.0"
+      "url": "https://actions-gateway.com/1.9.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.8.0",
-    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.9.0",
+    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -709,10 +709,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#sandboxing-is-not-the-runtimeclassname-field" class="md-nav__link">
+  <a href="#sandboxing-testing-untrusted-code-contributions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sandboxing is not the runtimeClassName field
+        Sandboxing: testing untrusted code contributions
       
     </span>
   </a>
@@ -2826,10 +2826,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#sandboxing-is-not-the-runtimeclassname-field" class="md-nav__link">
+  <a href="#sandboxing-testing-untrusted-code-contributions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sandboxing is not the runtimeClassName field
+        Sandboxing: testing untrusted code contributions
       
     </span>
   </a>
@@ -2991,132 +2991,132 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <tbody>
 <tr>
 <td>Runner-scale-set acquisition (single-acquirer, no fan-out)</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes<br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes<br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, by default <span class="gag-v2-badge">v2</span></td>
 </tr>
 <tr>
 <td>Ephemeral, single-use runner pods</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes<br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes<br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes</td>
 </tr>
 <tr>
 <td>Custom runner pod template &amp; image</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes<br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes<br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes</td>
 </tr>
 <tr>
 <td>Bind a runner set to a named GitHub runner group</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, <code>runnerGroup</code> per scale set<br><span class="gag-cont">a name that resolves to no group fails the reconcile rather than falling back to the installation default</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, <code>runnerGroup</code> per scale set<br><span class="gag-cont">a name that resolves to no group fails the reconcile rather than falling back to the installation default</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group"><code>runnerGroup</code>, or one <code>defaultRunnerGroup</code> per gateway</a><br><span class="gag-cont">the same failure, moved to admission, so the set is refused before it exists</span></td>
 </tr>
 <tr>
 <td>Multi-label runner sets (a <code>runs-on</code> array matches)</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, since 0.14.0<br><span class="gag-cont"><code>runnerScaleSetLabels</code>, deduplicated against the set name</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, since 0.14.0<br><span class="gag-cont"><code>runnerScaleSetLabels</code>, deduplicated against the set name</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">every <code>runnerLabel</code> is registered</a></td>
 </tr>
 <tr>
 <td>Workers scale to zero between jobs</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, by default<br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, by default<br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, by default</td>
 </tr>
 <tr>
 <td>Safe under a per-tenant <code>ResourceQuota</code></td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>claims first, then discovers the quota</strong><br><span class="gag-cont">retries pod creation every 30 s and burns a fresh single-use registration every 10 min, indefinitely; the job reads as <em>assigned</em>, so GitHub's 24 h queue timeout never fires</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>claims first, then discovers the quota</strong><br><span class="gag-cont">retries pod creation every 30 s and burns a fresh single-use registration every 10 min, indefinitely; the job reads as <em>assigned</em>, so GitHub's 24 h queue timeout never fires</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>never claims a job it can't place</strong><br><span class="gag-cont"><a href="../design/04-operational-flows/#42-job-execution-flow-agc">reads quota headroom before claiming</a>, so nothing is spent and the job stays visibly queued until there is room</span></td>
 </tr>
 <tr>
 <td>Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain)</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no re-run mechanism exists</strong><br><span class="gag-cont">the runner registration is removed and the job is given up on; 0.13.1 recovers the pod, never the job</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no re-run mechanism exists</strong><br><span class="gag-cont">the runner registration is removed and the job is given up on; 0.13.1 recovers the pod, never the job</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself in seconds</a></strong><br><span class="gag-cont">15&ndash;26 s measured for a preemption or drain; evictions, drains and hand-deleted workers all covered, under a per-run budget</span></td>
 </tr>
 <tr>
 <td>Stop claiming jobs when the cluster can't place the worker</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>acquires every available job unconditionally</strong><br><span class="gag-cont">the seat exists; no cluster state is consulted in it</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>acquires every available job unconditionally</strong><br><span class="gag-cont">the seat exists; no cluster state is consulted in it</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs"><code>capacityGate</code></a></strong><br><span class="gag-cont">off by default. Bounds the <em>rate</em> of wasted claims to roughly one per <code>pendingPodDeadline</code>; it does not eliminate the first</span></td>
 </tr>
 <tr>
 <td>Bound a stranded worker with no live controller</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>pass-through only</strong><br><span class="gag-cont"><code>activeDeadlineSeconds</code> is copied from the pod template if an operator wrote one; nothing derives, reconciles or defaults a bound</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>pass-through only</strong><br><span class="gag-cont"><code>activeDeadlineSeconds</code> is copied from the pod template if an operator wrote one; nothing derives, reconciles or defaults a bound</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../design/02-architecture/"><code>maxWorkerLifetime</code> stamped on every worker</a></strong><br><span class="gag-cont">as its <code>activeDeadlineSeconds</code>, so the <em>kubelet</em> enforces it and workers stay bounded with the controller down</span></td>
 </tr>
 <tr>
 <td>Guaranteed floor for critical runner types</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no reserved floor</strong><br><span class="gag-cont">ordering works, since <code>priorityClassName</code> reaches the runner pods; <code>minRunners</code> and <code>maxRunners</code> are per scale set, so neither holds a slice another set cannot spend (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">the two gaps</a>)</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no reserved floor</strong><br><span class="gag-cont">ordering works, since <code>priorityClassName</code> reaches the runner pods; <code>minRunners</code> and <code>maxRunners</code> are per scale set, so neither holds a slice another set cannot spend (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">the two gaps</a>)</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/02-architecture/">priority tiers per runner set</a></td>
 </tr>
 <tr>
 <td>Throttle the <em>rate</em> new workers start (anti-stampede)</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no per-set start-rate control</strong><br><span class="gag-cont">its throttles are controller-wide and meter API calls, not worker onset</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no per-set start-rate control</strong><br><span class="gag-cont">its throttles, per set or controller-wide, meter Kubernetes API calls, not worker onset</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">per-set creation-rate limit</a></strong><br><span class="gag-cont">for shared-egress onset (NAT, firewall, VPN)</span></td>
 </tr>
 <tr>
 <td>Pod Security Admission on tenant namespaces</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>neither scale-set chart sets one</strong><br><span class="gag-cont">no <code>pod-security.kubernetes.io/*</code> label is templated, so a namespace keeps whatever policy the cluster already applied and the chart asserts nothing about it</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>neither scale-set chart sets one</strong><br><span class="gag-cont">no <code>pod-security.kubernetes.io/*</code> label is templated, so a namespace keeps whatever policy the cluster already applied and the chart asserts nothing about it</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../design/05-security/"><code>baseline</code> per tenant namespace</a></strong><br><span class="gag-cont">reconciled rather than opt-in, in-tree PodSecurity, so no Kyverno or Gatekeeper is required</span></td>
 </tr>
 <tr>
 <td>Default-deny worker network isolation</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>ships no <code>NetworkPolicy</code> at all</strong><br><span class="gag-cont">neither scale-set chart templates one, so worker pods reach whatever the cluster default allows, cloud metadata included; the isolation is a separate project you build and keep in sync</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>ships no <code>NetworkPolicy</code> at all</strong><br><span class="gag-cont">neither scale-set chart templates one, so worker pods reach whatever the cluster default allows, cloud metadata included; the isolation is a separate project you build and keep in sync</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../design/05-security/">default-deny, reconciled per tenant</a></strong><br><span class="gag-cont">DNS and the tenant's own proxy only, re-derived as tenants come and go</span></td>
 </tr>
 <tr>
 <td>Two tenants claiming one scale-set name</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>binds to the existing set instead of failing</strong><br><span class="gag-cont">a set whose name already exists in the runner group is reused, with no check on who owns it, so both namespaces' listeners acquire from one queue</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>binds to the existing set instead of failing</strong><br><span class="gag-cont">a set whose name already exists in the runner group is reused, with no check on who owns it, so both namespaces' listeners acquire from one queue</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">admission refuses the pair</a></strong><br><span class="gag-cont">GitHub-wide; a collision carried in from an older release is reported on the gateway instead</span></td>
 </tr>
 <tr>
 <td>Per-tenant dedicated egress IPs</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>points at a proxy you already run</strong><br><span class="gag-cont">provisions no pool, manages no lifecycle, gives no per-tenant addresses</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>points at a proxy you already run</strong><br><span class="gag-cont">provisions no pool, manages no lifecycle, gives no per-tenant addresses</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>provisioned per-tenant pool, <a href="../design/network-architecture/#per-tenant-egress-ip-the-source-ip-mechanism">live-validated on GKE</a></strong><br><span class="gag-cont">2026-07-13: one distinct, stable per-tenant NAT IP. A stable source IP needs Cilium Egress Gateway or cloud NAT beneath the pool, both specified <span class="gag-v2-badge">v2</span></span></td>
 </tr>
 <tr>
 <td>Per-connection egress audit record</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no proxy of its own to record from</strong><br><span class="gag-cont">it points at a proxy you already run, so any record is that proxy's and carries no tenant identity</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no proxy of its own to record from</strong><br><span class="gag-cont">it points at a proxy you already run, so any record is that proxy's and carries no tenant identity</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/observability-logging/#proxy-egress-audit-record">per-pool record</a></strong><br><span class="gag-cont">one line per accepted CONNECT at tunnel close: destination, bytes each way, duration. Off by default; a second opt-in on each side attributes it to the consuming tenant and the job, on a shared pool too</span></td>
 </tr>
 <tr>
 <td>GitHub App private key kept out of the cluster</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>the listener reads the key either way</strong><br><span class="gag-cont">the PEM sits in <code>githubConfigSecret</code> and is copied into the generated listener config Secret too; opt-in Azure Key Vault keeps it out of etcd, but the listener still fetches the key itself</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>the listener reads the key either way</strong><br><span class="gag-cont">the PEM sits in <code>githubConfigSecret</code> and is copied into the generated listener config Secret too; opt-in Azure Key Vault keeps it out of etcd, but the listener still fetches the key itself</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <strong>opt-in <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model"><code>workloadIdentity</code></a></strong><br><span class="gag-cont">an external signer signs the App JWT, so no App key exists in the cluster in any form. Its default <code>githubApp</code> member is the same in-cluster PEM as ARC's</span></td>
 </tr>
 <tr>
 <td>Listener footprint at rest</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> one always-on listener pod per scale set, each holding a pod IP<br><span class="gag-cont">they run in the controller's namespace, so the cost lands on platform pod density rather than the tenant's quota</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> one always-on listener pod per scale set, each holding a pod IP<br><span class="gag-cont">they run in the controller's namespace, so the cost lands on platform pod density rather than the tenant's quota</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod, ~7.7 KiB per listener session</td>
 </tr>
 <tr>
 <td>Control-plane availability out of the box</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>one replica, no <code>PodDisruptionBudget</code></strong><br><span class="gag-cont"><code>replicaCount: 1</code>, with leader election documented as enabled only above one; neither scale-set chart ships a PDB</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>one replica, no <code>PodDisruptionBudget</code></strong><br><span class="gag-cont"><code>replicaCount: 1</code>, with leader election documented as enabled only above one; neither scale-set chart ships a PDB</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/install/#verify-a-healthy-install">two replicas, leader election, PDB, anti-co-location</a></strong><br><span class="gag-cont">by default, and the lease is released on shutdown, so failover takes seconds rather than a lease timeout</span></td>
 </tr>
 <tr>
 <td>Per-tenant utilization metrics</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>opt-in, per scale set</strong><br><span class="gag-cont">ships commented out; carries a <code>namespace</code> label but nothing aggregates across sets, and no quota-headroom series</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>opt-in, per scale set</strong><br><span class="gag-cont">ships commented out; carries a <code>namespace</code> label but nothing aggregates across sets, and no quota-headroom series</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/observability/">per tenant and per runner set</a></strong><br><span class="gag-cont">plus a <a href="../operations/observability-dashboards/#tenant-dashboard">dashboard and 20 alert rules as code</a></span></td>
 </tr>
 <tr>
 <td>Right-size runner resources from measured usage</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> no feedback loop, so runner <code>resources</code> stay a guess<br><span class="gag-cont"><code>AutoscalingRunnerSet</code> status carries runner counts and a phase, and nothing else</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> no feedback loop, so runner <code>resources</code> stay a guess<br><span class="gag-cont"><code>AutoscalingRunnerSet</code> status carries only a phase, runner counts are metrics, and nothing measures usage</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/worker-rightsizing/">measured recommendations in <code>RunnerSet</code> status</a><br><span class="gag-cont">+ opt-in profiles that auto-apply them at pod build (<code>Binpack</code>/<code>Throughput</code>/<code>NodeShare</code>), a <code>SizingDrift</code> condition, and per-job peak metrics</span></td>
 </tr>
 <tr>
 <td>Warn before the runner agent falls below GitHub's minimum</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no version check exists</strong><br><span class="gag-cont">scale sets are created with <code>DisableUpdate: true</code>, so a pinned image stays pinned; the <code>Outdated</code> phase tracks spec drift, not agent version</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no warning before GitHub rejects the runner</strong><br><span class="gag-cont">scale sets are created with <code>DisableUpdate: true</code>, so a pinned image stays pinned; once a runner exits as deprecated, the set parks at <code>Outdated</code> with zero runners until its spec changes</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#worker-image-runner-version">reported before GitHub enforces it</a></strong><br><span class="gag-cont">and an image reference naming no version says so rather than passing silently</span></td>
 </tr>
 <tr>
 <td>Cross-tenant fleet health view (platform admin)</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>one sample dashboard, no alert rules</strong><br><span class="gag-cont">nothing aggregates across scale sets or tenants</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>one sample dashboard, no alert rules</strong><br><span class="gag-cont">nothing aggregates across scale sets or tenants</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/observability-metrics/#full-metrics-reference">single-pane fleet rollups</a></strong><br><span class="gag-cont">degraded, egress-stale and quota per gateway, plus a <a href="../operations/observability-dashboards/#platform-dashboard">platform dashboard</a></span></td>
 </tr>
 <tr>
 <td>Multiple gateways per namespace</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> multiple <code>AutoscalingRunnerSet</code>s<br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> multiple <code>AutoscalingRunnerSet</code>s<br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/migration-v1-to-v2/">multiple scoped gateways per namespace</a></td>
 </tr>
 <tr>
 <td>Reusable runner pod templates</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> template inlined per <code>AutoscalingRunnerSet</code><br><span class="gag-cont">the chart takes one <code>template:</code> PodSpec per release; nothing shares it between sets</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> template inlined per <code>AutoscalingRunnerSet</code><br><span class="gag-cont">the chart takes one <code>template:</code> PodSpec per release; nothing shares it between sets</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> shared <a href="../operations/migration-v1-to-v2/"><code>RunnerTemplate</code></a><br><span class="gag-cont">cluster-wide <a href="../operations/migration-v1-to-v2/"><code>ClusterRunnerTemplate</code></a></span></td>
 </tr>
 </tbody>
@@ -3147,7 +3147,7 @@ two dates because there were two passes: the original column on
 still the newest published chart. The tag is what
 the stamp names; the commit is what makes it re-checkable, since a link to a
 branch drifts out from under the claim it was cited for. Per-cell evidence,
-file by file, is in the <a href="../plan/competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
+file by file, is in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/docs/plan/competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
 <p>If you are evaluating on a later ARC than a cell names, re-check that cell
 rather than trusting it, and
 <a href="https://github.com/actions-gateway/github-actions-gateway/issues">tell us what changed</a>.</p>
@@ -3190,7 +3190,7 @@ Two we do not plan to match: the support entitlement, and <code>containerMode: k
   That is a real cost, and it is a trade rather than a straight loss: ARC needs no <em>pod</em> privilege there because it takes a namespace-wide Kubernetes API grant instead, which needs no exploit to use and reaches the other runner sets in that namespace.</li>
 <li><strong>GHES that is actually tested.</strong> GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.</li>
 </ul>
-<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API has only just reached beta (<code>v2beta1</code>, its first stability contract).
+<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API still stores its beta (<code>v2beta1</code>, its first stability contract) and serves the GA <code>v2</code> beside it only from 1.9.
 That is why the v1 to v2 migration runs on a committed, documented schedule with a working <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> tool.
 The discipline is the "won't strand you" signal while the track record accumulates.</p>
 <p>One thing is <strong>not</strong> a differentiator either way: both ride the same Public-Preview runner-scale-set protocol, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library.</p>
@@ -3236,13 +3236,24 @@ The discipline is the "won't strand you" signal while the track record accumulat
 </ul>
 </div>
 </div>
-<h3 id="sandboxing-is-not-the-runtimeclassname-field">Sandboxing is not the <code>runtimeClassName</code> field<a class="headerlink" href="#sandboxing-is-not-the-runtimeclassname-field" title="Permanent link">&para;</a></h3>
-<p>Both GAG and ARC can set one.
-The differentiator is the layer underneath.</p>
-<p><strong>Kata bounds the kernel, not the pod network</strong>, so cloud metadata still answers from inside the guest.
-GAG's default-deny NetworkPolicies close that path.</p>
-<p><strong>GAG's own CI runs this way</strong>, building a <code>kind</code> cluster inside a worker pod with <strong>zero</strong> <code>privileged: true</code> (<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">how, and what Kata does not buy you</a>).</p>
-<p><strong>Untrusted pull requests need one more step</strong>, the tight-egress recipe that ships in 1.7: an in-cluster pull-through registry mirror, and your own allow-all egress rule deleted (<a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">how</a>).</p>
+<h3 id="sandboxing-testing-untrusted-code-contributions">Sandboxing: testing untrusted code contributions<a class="headerlink" href="#sandboxing-testing-untrusted-code-contributions" title="Permanent link">&para;</a></h3>
+<p>Running a stranger's pull request safely takes more than a sandboxed runtime.
+Both GAG and ARC can set a pod's <code>runtimeClassName</code> to run a job under Kata Containers, but a sandbox only bounds the kernel.
+Here is what the rest takes, and where GAG provides it:</p>
+<ul>
+<li><strong>A kernel of its own.</strong> Kata runs each worker in a micro-VM, so a kernel escape lands in a throwaway guest rather than on your node.
+  GAG ships it as the <a href="../operations/runner-template-library/"><code>kata-dind</code> worker template</a>, on nodes that support nested virtualization.</li>
+<li><strong>No privileged containers, even for Docker builds.</strong> GAG's own CI builds a <code>kind</code> cluster inside a worker pod with <strong>zero</strong> <code>privileged: true</code> (<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">how, and what Kata does not buy you</a>).</li>
+<li><strong>No path to the node's cloud credentials.</strong> A sandbox does not isolate the pod network, so the cloud metadata server still answers from inside the guest.
+  GAG's default-deny NetworkPolicies close that path, and Workload Identity on GKE keeps the node's credentials off the table either way.</li>
+<li><strong>Egress limited to what a build needs.</strong> Under the <a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">tight-egress posture</a>, a worker reaches cluster DNS, GitHub, and in-cluster registry mirrors that each pull from one upstream, and nothing else answers.
+  GAG ships the mirrors as manifests; adopting it means deleting your own allow-all egress rule.</li>
+<li><strong>One job per worker.</strong> Every worker is ephemeral and single-use, so nothing one job leaves behind reaches the next.</li>
+</ul>
+<p><strong>This is a paved road, not a trail map.</strong> All five come as one <a href="../operations/kata-dind-workloads/">reference architecture</a>, documented end to end and validated on GAG's own dogfood cluster before every release.
+ARC's scale-set chart accepts the same <code>runtimeClassName</code> field and documents none of the rest.
+Its only mention of Kata is a comment in its legacy-mode docs suggesting a micro-VM makes <code>privileged: true</code> safer (ARC 0.15.0, read 2026-10-04).
+<a href="../alternatives/#a-paved-road-is-worth-more-than-a-trail-map">Why that gap matters</a>.</p>
 <p>Threat model and abuse-response playbooks: <a href="../design/05-security/">Security</a>, <a href="../operations/security-operations/">Security operations</a>.</p>
 
 
@@ -3376,7 +3387,7 @@ GAG's default-deny NetworkPolicies close that path.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../javascripts/extra.js"></script>
       

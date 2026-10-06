@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.8.0/features/">
+        <link rel="canonical" href="https://actions-gateway.com/1.9.0/features/">
       
       
         <link rel="prev" href="../alternatives/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.8.0",
+    "url": "https://actions-gateway.com/1.9.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.8.0"
+      "url": "https://actions-gateway.com/1.9.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.8.0",
-    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.9.0",
+    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2814,7 +2814,7 @@
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
 <p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see <a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
-<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the <code>actions-gateway.com/v2beta1</code> API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.8</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed <code>actions-gateway.com</code> API, at <code>v2beta1</code> and, from 1.9, <code>v2</code>; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.9</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.</p>
 <div class="admonition tip">
 <p class="admonition-title">Check the version you're running</p>
@@ -2880,7 +2880,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/worker-shared-storage/">Shared worker storage</a></strong>: a validated reference architecture for a <code>ReadWriteMany</code> volume several jobs mount to pass files, with its <code>fsGroup</code> requirement measured.
   The classes it was exercised against are named; a harness validates yours.</li>
 <li><strong><a href="../operations/kata-dind-workloads/">Kata micro-VM workers</a></strong>: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a <code>kind</code> cluster inside an unprivileged worker pod.</li>
-<li><strong><a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">Untrusted-PR egress posture</a></strong> <span class="gag-new-badge">new in 1.7</span>: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
+<li><strong><a href="../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">Untrusted-PR egress posture</a></strong>: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
   Measured on every run of GAG's own Kata lane.</li>
 <li><strong><a href="../operations/in-runner-image-builds/">In-runner image builds</a></strong>: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right <code>securityProfile</code> and PSA level.</li>
 <li><strong><a href="../operations/release/">Signed images, SBOM, and SLSA provenance</a></strong>: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.</li>
@@ -2907,7 +2907,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
   Advisory: it never gates <code>Ready</code>.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
 <li><strong><a href="../operations/observability-logging/#proxy-egress-audit-record">Per-pool egress audit record</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.</li>
-<li><strong><a href="../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">Which host each job reached</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.7</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.</li>
+<li><strong><a href="../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">Which host each job reached</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.</li>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2929,6 +2929,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <h2 id="api-surface-and-migration">API surface and migration<a class="headerlink" href="#api-surface-and-migration" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><a href="../operations/migration-v1-to-v2/">The v2 API</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code>, with <code>v2beta1</code> as the graduated storage and hub version.</li>
+<li><strong><a href="../operations/upgrade/#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2"><code>v2</code>, served beside <code>v2beta1</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.9</span>: every kind is also served at the General Availability (GA) version, with <code>v2beta1</code> still stored, so <code>v2.0.0</code> has a release to roll back to.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Reusable runner templates</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one <code>RunnerTemplate</code> referenced by many runner sets, or a cluster-wide <code>ClusterRunnerTemplate</code> shared across namespaces.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Multiple gateways per namespace</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.</li>
 <li><strong><a href="../operations/troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">GitHub Enterprise Server gateways</a></strong>: a gateway whose <code>gitHubURL</code> names a GHES appliance addresses that appliance on every GitHub surface, with a <code>GitHubEgressIncomplete</code> condition flagging an incomplete CIDR allow-list.
@@ -3068,7 +3069,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../javascripts/extra.js"></script>
       

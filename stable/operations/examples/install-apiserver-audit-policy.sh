@@ -19,9 +19,12 @@
 # docs/operations/security-operations.md § Install the audit policy for the
 # per-provider managed-audit-log path.
 #
-# Requires: yq (https://github.com/mikefarah/yq) for the structured manifest
-# edit — it cannot corrupt the YAML the way a text substitution could.
+# Requires: bash 4.4+ for `shopt -s inherit_errexit` (an older bash exits
+# before the script changes anything), and yq (https://github.com/mikefarah/yq)
+# for the structured manifest edit — it cannot corrupt the YAML the way a text
+# substitution could.
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 

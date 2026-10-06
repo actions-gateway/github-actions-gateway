@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.8.0/getting-started/">
+        <link rel="canonical" href="https://actions-gateway.com/1.9.0/getting-started/">
       
       
         <link rel="prev" href="../demo/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.8.0",
+    "url": "https://actions-gateway.com/1.9.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.8.0"
+      "url": "https://actions-gateway.com/1.9.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.8.0",
-    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.9.0",
+    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2819,6 +2819,7 @@
 <p class="admonition-title">New tenants: start on <code>v2beta1</code></p>
 <p>The recommended shape for a new tenant is the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2beta1</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
 <code>v2beta1</code> is the graduated, ScaleSet-only storage and hub version, v2's first stability contract, and where new capabilities land.
+The GA <strong><code>v2</code></strong> is served beside it with the same shape and becomes the storage version at <code>v2.0.0</code>; stay on <code>v2beta1</code> until then if you may roll back to a release that does not serve <code>v2</code>.
 <code>v2alpha1</code> stays served as the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
 The older single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API is still fully served but <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>: reach for it only if you have a specific reason to, and see the <a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>.
 <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol are all <a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
@@ -2831,10 +2832,10 @@ Already on v1?
 <li>A CNI that enforces <code>NetworkPolicy</code> (Calico/Cilium) for the isolation controls to take effect</li>
 <li><a href="https://cert-manager.io">cert-manager</a> installed, <em>or</em> install with <code>--set certManager.enabled=false</code> to use the chart's self-signed webhook cert</li>
 <li>A GitHub App with a private key and installation ID</li>
-<li>Go 1.26+ only if you build the images yourself</li>
+<li>Go 1.27+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="../charts/actions-gateway/README.md">reference</a>).
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/charts/actions-gateway/README.md">reference</a>).
 It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.</p>
@@ -2849,7 +2850,7 @@ They are not installed by the chart.</p>
 <p>All four images must be <strong>pinned by digest</strong>.
 The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too).
 Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only.
-See the <a href="../charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
 <blockquote>
 <p><strong>Dev/CI.</strong> The Helm chart is the single install path.
 There is no kustomize alternative.
@@ -2869,11 +2870,11 @@ For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosig
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
-<p>Either way the <code>clientConfig</code> must resolve to the GMC's <code>webhook-service</code>: each v2 CRD is served at <code>v2beta1</code> (the storage/hub version) and <code>v2alpha1</code>, and the apiserver converts between them via a conversion webhook hosted by the GMC (see <a href="../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for signature verification and the full options).
+<p>Either way the <code>clientConfig</code> must resolve to the GMC's <code>webhook-service</code>: each v2 CRD is served at <code>v2beta1</code> (the storage/hub version), <code>v2</code> and <code>v2alpha1</code>, and the apiserver converts between them via a conversion webhook hosted by the GMC (see <a href="../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for signature verification and the full options).
 The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code>).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>).
-See the <a href="../charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
 <p>Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
@@ -3296,7 +3297,7 @@ To inspect the condition:</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../javascripts/extra.js"></script>
       

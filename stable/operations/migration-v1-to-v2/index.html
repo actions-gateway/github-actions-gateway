@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/migration-v1-to-v2/">
+        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/migration-v1-to-v2/">
       
       
         <link rel="prev" href="../migration-from-arc/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.8.0",
+    "url": "https://actions-gateway.com/1.9.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.8.0"
+      "url": "https://actions-gateway.com/1.9.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.8.0",
-    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.9.0",
+    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3079,7 +3079,7 @@
 
 <h1 id="migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api">Migrating a tenant from the v1alpha1 to the v2alpha1 API<a class="headerlink" href="#migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer / tenant operator</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
 <p>The v2 API (<code>actions-gateway.com</code>) replaces the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> shape with a decomposed set of kinds — <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code>, and <code>RunnerSet</code>.
 The two API groups are <strong>served side by side</strong>: nothing forces a tenant onto v2, and v1 keeps working until you migrate it.
@@ -3087,7 +3087,7 @@ Because one v1 object fans out into several v2 objects, the move is a tool-assis
 <p>This guide covers running the <code>gag-migrate</code> tool: dry-run → review → <code>--apply</code>, the coexistence/rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
 <p>v2 is <strong>opt-in</strong>.
-It is served at two versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp).
+It is served at three versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only storage/hub version), <strong><code>v2</code></strong> (the GA version, storage from <code>v2.0.0</code>), and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp).
 <code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs Classic.
 Multi-label matching is not a reason to stay: <code>v2beta1</code> registers every <code>runnerLabel</code> on the scale set.
 Because <code>v2alpha1</code> is deprecated, the apiserver warns on every <code>v2alpha1</code> read or write, including the objects <code>gag-migrate</code> applies.
@@ -3108,7 +3108,7 @@ Migrate a tenant when one of these is worth that trade-off.</p>
   Opt-in, recommendation-only by default, and it composes with <code>agcResources</code> rather than overriding it. v1 has no equivalent field (<a href="../tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">tenant-onboarding</a>).</li>
 <li><strong>DNS-aware egress policy.</strong> <code>EgressProxy.egressPolicyMode</code> adds an <code>FQDN</code> intent (default <code>CIDR</code>) to allowlist GitHub by hostname; the operator picks the enforcement mechanism with the GMC <code>--fqdn-policy-backend</code> flag (<code>none</code>|<code>cilium</code>|<code>calico</code>|<code>gke</code>).
   The earlier per-CNI <code>CiliumFQDN</code> / <code>CalicoFQDN</code> values are accepted-but-deprecated (Q245) and <strong>are</strong> removed by <code>v2.0.0</code>, along with both versions that define them (<a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).
-  Migrate any <code>EgressProxy</code> naming one before upgrading: the GA <code>v2</code> version cannot represent it.</li>
+  Migrate any <code>EgressProxy</code> naming one before upgrading to <code>v2.0.0</code>: the GA <code>v2</code> version cannot represent it, so <code>v2.0.0</code> stores it as plain <code>FQDN</code>.</li>
 </ul>
 <p><strong>Quality-of-life and hardening — batched into the one schema break:</strong></p>
 <ul>
@@ -3560,7 +3560,7 @@ Prefer the ordered teardown above; this is a recovery path, not an alternative.<
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

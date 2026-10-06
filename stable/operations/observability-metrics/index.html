@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.8.0/operations/observability-metrics/">
+        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/observability-metrics/">
       
       
         <link rel="prev" href="../observability/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.8.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.8.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.8.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.8.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.8.0",
+    "url": "https://actions-gateway.com/1.9.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.8.0"
+      "url": "https://actions-gateway.com/1.9.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.8.0",
-    "logo": "https://actions-gateway.com/1.8.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.9.0",
+    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      Two runner pools can no longer claim one GitHub runner identity, a worker image's runner version is read from the registry instead of guessed from its tag, and a drained worker's run is re-run even when its pod is already gone.
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.8.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3589,7 +3589,7 @@ See the <a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation
 </tbody>
 </table>
 <h3 id="proxy-metrics">Proxy metrics<a class="headerlink" href="#proxy-metrics" title="Permanent link">&para;</a></h3>
-<p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>), and restricted by the L-8 NetworkPolicy (see <a href="../../plan/security/">security.md L-8</a>).
+<p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>), and restricted by the L-8 NetworkPolicy (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/docs/plan/security.md">security.md L-8</a>).
 The proxy's <code>:8081</code> port serves only the plaintext health probes (<code>/healthz</code>, <code>/readyz</code>), not metrics.
 Each proxy is a separate scrape target; these metrics carry no intrinsic <code>namespace</code> label.
 The GMC-generated per-tenant proxy <code>ServiceMonitor</code> stamps one via a relabeling (<code>namespace</code> ← the scrape target's namespace, which is the tenant's namespace), so the tenant Grafana dashboard's proxy panels filter by <code>$namespace</code> for per-tenant attribution.
@@ -3642,7 +3642,7 @@ Absent if you scrape without that relabeling.</p>
 <hr />
 <h2 id="acquisition-tier-reach">Acquisition-tier reach<a class="headerlink" href="#acquisition-tier-reach" title="Permanent link">&para;</a></h2>
 <p>Which acquisition tier emits each AGC series, so a flat zero can be read as <em>this tier does not emit it</em> rather than <em>nothing happened</em>.
-Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.</p>
+Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/docs/development/testing.md#the-make-check-pre-review-gate">gate</a> fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.</p>
 <p>Four values, and no others:</p>
 <ul>
 <li><strong>Both</strong> is the parity claim: the series populates on a <code>Classic</code> and a <code>ScaleSet</code> set alike.</li>
@@ -3650,7 +3650,7 @@ Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a hr
 <li><strong>Tier-neutral</strong> is a series with no acquisition tier at all.</li>
 </ul>
 <p>A <strong>Classic only</strong> series is not a gap by itself.
-Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear <em>with</em> classic at <code>v2.0.0</code> rather than being ported; <a href="../../plan/v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> is where that judgement is recorded and where the removal is gated on it.
+Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear <em>with</em> classic at <code>v2.0.0</code> rather than being ported; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/docs/plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> is where that judgement is recorded and where the removal is gated on it.
 What the row must never be is silent: a capability that reaches only the tier every new tenant is <em>not</em> on is the failure this table exists to make visible.</p>
 <p>The GMC and proxy series above are not listed.
 Neither binary acquires jobs, so neither has a tier.</p>
@@ -3949,7 +3949,7 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <p>A series can be <strong>Both</strong> while one of its label values is not.
 <code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
 <p>Each row here records one such exception.
-The <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
+The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.9.0/docs/development/testing.md#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
 <p>Only the two single-tier answers appear here: a value that reaches both tiers needs no row, and the <code>tier</code> label is the axis itself rather than a value on it.
 Where the file layout cannot prove the claim, because the value is named in a file both tiers run and a guard is what keeps one of them away from it, the row cites the guard, and the gate holds that citation to a real source file.</p>
 <table>
@@ -4557,7 +4557,12 @@ Do not remove or overwrite them.</p>
 <tr>
 <td><code>actions-gateway.com/job-completed-at</code> (annotation)</td>
 <td><code>2026-07-26T12:00:00Z</code></td>
-<td>When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420)</td>
+<td>When GitHub reported terminal the job this pod's runner held, or, for a job no runner started, the job the pod was created for. Gives a still-Running worker a reap deadline (Q420)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/started-job-id</code> (annotation)</td>
+<td><code>8676398a-5763-…</code></td>
+<td>The job GitHub reported this pod's runner starting, which need not be the job the pod was created for. Keeps a completion that names no runner off a busy worker, and lifts a deadline set while the runner was idle (Q1151)</td>
 </tr>
 <tr>
 <td><code>actions-gateway.com/eviction-handled-at</code> (annotation)</td>
@@ -4566,7 +4571,7 @@ Do not remove or overwrite them.</p>
 </tr>
 </tbody>
 </table>
-<p>All four are controller-set: never set them by hand.
+<p>All five are controller-set: never set them by hand.
 Editing or removing <code>runner-name</code> in particular makes the pod's runner record uncollectable, which is what leaves stale registrations behind — see <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
 <p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life: <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
 <code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the pod (Q502).
@@ -4938,7 +4943,7 @@ These are <strong>breaking</strong> for any dashboard, alert, recording rule, or
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       
