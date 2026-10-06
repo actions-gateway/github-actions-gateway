@@ -2664,6 +2664,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#v190-rc2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.9.0-rc.2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#v190-rc1" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2729,7 +2740,8 @@
 
 <h1 id="release-19-milestone-definition">Release 1.9 Milestone Definition<a class="headerlink" href="#release-19-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: all three gates landed (Q1085, Q413, then Q1150); <code>v1.9.0-rc.1</code> cut 2026-10-02 and <a href="#v190-rc1">validated</a> on 2026-10-03 through the local gate; promotion held on 2026-10-04 for Q880, so that the shipping candidate, <code>rc.2</code>, is the first validated in CI, and <code>rc.2</code> is held for Q1158 and Q1160.</strong> Scoped 2026-09-17; Q1150 added 2026-09-30.
+<p><strong>Status: every gate landed; <code>v1.9.0-rc.2</code> <a href="#v190-rc2">validated in CI</a> on 2026-10-05, the first candidate whose verdict <code>publish.yml</code> reads from the gate's own evidence (Q880); promotion to <code>v1.9.0</code> is the maintainer's call.</strong> <code>rc.1</code> validated on 2026-10-03 through the local gate and was held for Q880, Q1158 and Q1160.
+Scoped 2026-09-17; Q1150 added 2026-09-30.
 The rung exists because Rule #4b requires it rather than because a defect asked for it, and both conditions the shape was held behind are now discharged: 1.8's soak readings came back positive on 2026-09-14, and <code>v1.8.0</code> tagged the same day.
 The version is no longer provisional.
 It was held against a negative reading naming a <code>v2beta1</code> shape fix that would have landed first; the readings were positive, so nothing displaces this rung.
@@ -2784,7 +2796,7 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>Q880</td>
 <td>Validate release candidates in CI: keyless identity, the gate on a Linux runner, a workflow on each <code>v*-rc.*</code> tag, and <code>publish.yml</code> reading its verdict</td>
 <td><code>1.9-gate</code></td>
-<td>🔲 milestone 1 ✅; milestones 2–3 merged (#2029) and set up 2026-10-04, unproven until <code>rc.2</code>'s CI run; milestone 4 to follow</td>
+<td>✅ landed: milestones 1–3 in #2029, milestone 4 in #2043; <code>rc.2</code>'s evidence passes <code>check-validated-candidate.sh v1.9.0</code></td>
 </tr>
 <tr>
 <td>Q1155</td>
@@ -2802,19 +2814,19 @@ That is the whole point of the rung, and it is the one way to ship 1.9 and still
 <td>Q1158</td>
 <td>The gate's lease is visible across hosts, so a CI run and a local run cannot overlap on the cluster</td>
 <td>gates <code>rc.2</code></td>
-<td>🔲 in progress</td>
+<td>✅ landed (#2036)</td>
 </tr>
 <tr>
 <td>Q1160</td>
 <td>A third e2e leg, Kata with the Dragonfly mirror back end, and the readings that show Dragonfly carried the pulls</td>
 <td>gates <code>rc.2</code></td>
-<td>🔲 in progress</td>
+<td>✅ landed (#2037); its manifest fix landed with Q539 (#2042)</td>
 </tr>
 <tr>
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td><code>rc.1</code> ✅ through the local gate; <code>rc.2</code> 🔲 cut once Q1158 and Q1160 land, then validated in CI</td>
+<td><code>rc.1</code> ✅ through the local gate; <code>rc.2</code> ✅ in CI, gate run 37380198658</td>
 </tr>
 <tr>
 <td>Q1101</td>
@@ -2948,6 +2960,42 @@ The landmine question added the custom-<code>workerImage</code> entry: the runne
 </tbody>
 </table>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
+<h3 id="v190-rc2"><code>v1.9.0-rc.2</code><a class="headerlink" href="#v190-rc2" title="Permanent link">&para;</a></h3>
+<p><strong>PASSED in CI, validated 2026-10-05; promotion to <code>v1.9.0</code> is the maintainer's call.</strong> Tagged at <code>65ba797c2</code>, the Q1158 merge, so it carries Q1158 and Q1160 on the same released surface as <code>rc.1</code>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/37380198658">Gate run 37380198658</a> ran <code>main</code> at <code>aa1178e31</code>, after milestone 4 merged, and uploaded <code>gate-evidence-1</code> naming <code>v1.9.0-rc.2</code>, <code>65ba797c218d7f1d5422fee476e44a2dc77ed841</code> and all five legs.
+<code>check-validated-candidate.sh v1.9.0</code>, run against that live artifact with a local-only <code>v1.9.0</code> tag on <code>aa1178e31</code>, reports <code>v1.9.0-rc.2 validated 65ba797c2 and still covers v1.9.0</code>; with the <code>dragonfly</code> line removed from the same evidence it exits 1 naming that leg.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kata</code></td>
+<td><strong>PASS.</strong> e2e run 37384333934 succeeded. <code>NodeShare</code> active and deriving 1500m where the templates ask 2 and 3; <code>Throughput</code> active on 397 samples. The quota rung bound at zero headroom (<code>withheldCapacity[quota]=2</code>, <code>advertisedCapacity=0</code>) and released when the quota was restored.</td>
+</tr>
+<tr>
+<td><code>crd-smoke</code></td>
+<td><strong>PASS.</strong> The signed <code>v2</code> CRD artifact verified against the publish identity.</td>
+</tr>
+<tr>
+<td><code>soak</code></td>
+<td><strong>PASS.</strong> Q1059: all five <code>v2beta1</code> kinds carried traffic. Q1060: the standing spec is identical at <code>v2alpha1</code> and <code>v2beta1</code>. Q1156: 8 standing objects and a <code>v2</code>-applied <code>EgressProxy</code> identical at <code>v2beta1</code> and <code>v2</code>, with no <code>finding</code> this time.</td>
+</tr>
+<tr>
+<td><code>dind</code></td>
+<td><strong>PASS.</strong> e2e run 37387182676 succeeded on the shipped <code>privileged-dind</code> template (Q1159).</td>
+</tr>
+<tr>
+<td><code>dragonfly</code></td>
+<td><strong>PASS.</strong> e2e run 37388708904 succeeded on Kata with the Dragonfly back end (Q1160), and every mirror instance served and refused uploads.</td>
+</tr>
+</tbody>
+</table>
+<p>Teardown exited 0 and <code>ops.sh at-rest</code> reported no instances afterwards.
+An earlier CI run on the same candidate, 37357489219, also passed every leg but predates milestone 4 and so left no evidence; the two before it found the gate defects fixed in #2038, #2040 and #2042.</p>
 <h3 id="v190-rc1"><code>v1.9.0-rc.1</code><a class="headerlink" href="#v190-rc1" title="Permanent link">&para;</a></h3>
 <p><strong>PASSED, validated 2026-10-03; promotion to <code>v1.9.0</code> is the maintainer's call.</strong> <code>check-artifact-unchanged.sh v1.9.0-rc.1 origin/main</code> exited 0 at <code>7fbef71d2</code> before the re-run (18 files changed since the tag, none released), and the gate records <code>refs/validated/v1.9.0-rc.1</code> → <code>aff5f2268</code>.
 It took three windows: the first never reached a runner, the second passed without the <code>v2</code> reading, and the third took it.</p>

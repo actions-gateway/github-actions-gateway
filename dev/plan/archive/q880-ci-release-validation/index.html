@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q880/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/archive/q880-ci-release-validation/">
       
       
       
@@ -18,19 +18,19 @@
         
       
       
-      <link rel="icon" href="../../assets/favicon.svg">
+      <link rel="icon" href="../../../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>Validate release candidates in CI instead of a local dogfood gate - GitHub Actions Gateway</title>
+        <title>Q880 — validate release candidates in CI - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -43,9 +43,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -55,9 +55,9 @@
     
   
   
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
   <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-release-candidates-in-ci-instead-of-a-local-dogfood-gate" class="md-skip">
+        <a href="#q880--validate-release-candidates-in-ci" class="md-skip">
           Skip to content
         </a>
       
@@ -142,10 +142,10 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
-            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
           </aside>
         
       </div>
@@ -155,9 +155,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate release candidates in CI instead of a local dogfood gate
+              Q880 — validate release candidates in CI
             
           </span>
         </div>
@@ -287,7 +287,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -306,7 +306,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../why-gag/" class="md-tabs__link">
+      <a href="../../../why-gag/" class="md-tabs__link">
         
   
   
@@ -325,7 +325,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../alternatives/" class="md-tabs__link">
+      <a href="../../../alternatives/" class="md-tabs__link">
         
   
   
@@ -344,7 +344,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../features/" class="md-tabs__link">
+      <a href="../../../features/" class="md-tabs__link">
         
   
   
@@ -363,7 +363,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../demo/" class="md-tabs__link">
+      <a href="../../../demo/" class="md-tabs__link">
         
   
   
@@ -382,7 +382,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
+      <a href="../../../getting-started/" class="md-tabs__link">
         
   
   
@@ -401,7 +401,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../roadmap/" class="md-tabs__link">
+      <a href="../../../roadmap/" class="md-tabs__link">
         
   
   
@@ -422,7 +422,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../design/" class="md-tabs__link">
+        <a href="../../../design/" class="md-tabs__link">
           
   
   
@@ -444,7 +444,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../operations/" class="md-tabs__link">
+        <a href="../../../operations/" class="md-tabs__link">
           
   
   
@@ -466,7 +466,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/" class="md-tabs__link">
+        <a href="../../../reference/" class="md-tabs__link">
           
   
   
@@ -502,9 +502,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     GitHub Actions Gateway
@@ -531,7 +531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -558,7 +558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../why-gag/" class="md-nav__link">
+      <a href="../../../why-gag/" class="md-nav__link">
         
   
   
@@ -585,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../alternatives/" class="md-nav__link">
+      <a href="../../../alternatives/" class="md-nav__link">
         
   
   
@@ -612,7 +612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/" class="md-nav__link">
+      <a href="../../../features/" class="md-nav__link">
         
   
   
@@ -639,7 +639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../demo/" class="md-nav__link">
+      <a href="../../../demo/" class="md-nav__link">
         
   
   
@@ -666,7 +666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../../../getting-started/" class="md-nav__link">
         
   
   
@@ -693,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../roadmap/" class="md-nav__link">
+      <a href="../../../roadmap/" class="md-nav__link">
         
   
   
@@ -779,7 +779,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../design/" class="md-nav__link ">
+            <a href="../../../design/" class="md-nav__link ">
               
   
   
@@ -823,7 +823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/01-executive-summary/" class="md-nav__link">
+      <a href="../../../design/01-executive-summary/" class="md-nav__link">
         
   
   
@@ -851,7 +851,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/02-architecture/" class="md-nav__link">
+      <a href="../../../design/02-architecture/" class="md-nav__link">
         
   
   
@@ -879,7 +879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/network-architecture/" class="md-nav__link">
+      <a href="../../../design/network-architecture/" class="md-nav__link">
         
   
   
@@ -907,7 +907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/03-api-contracts/" class="md-nav__link">
+      <a href="../../../design/03-api-contracts/" class="md-nav__link">
         
   
   
@@ -935,7 +935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/04-operational-flows/" class="md-nav__link">
+      <a href="../../../design/04-operational-flows/" class="md-nav__link">
         
   
   
@@ -963,7 +963,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/05-security/" class="md-nav__link">
+      <a href="../../../design/05-security/" class="md-nav__link">
         
   
   
@@ -991,7 +991,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+      <a href="../../../design/06-implementation-phases/" class="md-nav__link">
         
   
   
@@ -1019,7 +1019,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/07-test-plan/" class="md-nav__link">
+      <a href="../../../design/07-test-plan/" class="md-nav__link">
         
   
   
@@ -1047,7 +1047,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/08-glossary/" class="md-nav__link">
+      <a href="../../../design/08-glossary/" class="md-nav__link">
         
   
   
@@ -1075,7 +1075,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+      <a href="../../../design/appendix-a-capacity-slos/" class="md-nav__link">
         
   
   
@@ -1103,7 +1103,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+      <a href="../../../design/appendix-b-worker-isolation/" class="md-nav__link">
         
   
   
@@ -1131,7 +1131,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+      <a href="../../../design/appendix-c-ai-implementation/" class="md-nav__link">
         
   
   
@@ -1159,7 +1159,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+      <a href="../../../design/appendix-d-alternatives-considered/" class="md-nav__link">
         
   
   
@@ -1187,7 +1187,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+      <a href="../../../design/appendix-e-capacity-planning/" class="md-nav__link">
         
   
   
@@ -1215,7 +1215,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+      <a href="../../../design/appendix-f-cost-model/" class="md-nav__link">
         
   
   
@@ -1243,7 +1243,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+      <a href="../../../design/appendix-g-future-enhancements/" class="md-nav__link">
         
   
   
@@ -1271,7 +1271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+      <a href="../../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
         
   
   
@@ -1299,7 +1299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+      <a href="../../../design/github-protocol-dependencies/" class="md-nav__link">
         
   
   
@@ -1413,7 +1413,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../operations/" class="md-nav__link ">
+            <a href="../../../operations/" class="md-nav__link ">
               
   
   
@@ -1457,7 +1457,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/personas/" class="md-nav__link">
+      <a href="../../../operations/personas/" class="md-nav__link">
         
   
   
@@ -1485,7 +1485,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/install/" class="md-nav__link">
+      <a href="../../../operations/install/" class="md-nav__link">
         
   
   
@@ -1513,7 +1513,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+      <a href="../../../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1541,7 +1541,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/gitops/" class="md-nav__link">
+      <a href="../../../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1569,7 +1569,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/upgrade/" class="md-nav__link">
+      <a href="../../../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1597,7 +1597,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+      <a href="../../../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1625,7 +1625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+      <a href="../../../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1653,7 +1653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../../../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1681,7 +1681,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+      <a href="../../../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1709,7 +1709,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+      <a href="../../../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1737,7 +1737,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runner-template-library/" class="md-nav__link">
+      <a href="../../../operations/runner-template-library/" class="md-nav__link">
         
   
   
@@ -1765,7 +1765,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+      <a href="../../../operations/worker-shared-storage/" class="md-nav__link">
         
   
   
@@ -1793,7 +1793,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+      <a href="../../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1821,7 +1821,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+      <a href="../../../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1849,7 +1849,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+      <a href="../../../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1877,7 +1877,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+      <a href="../../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -1971,7 +1971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability/" class="md-nav__link">
+      <a href="../../../operations/observability/" class="md-nav__link">
         
   
   
@@ -1999,7 +1999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -2027,7 +2027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2055,7 +2055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-alerting/" class="md-nav__link">
+      <a href="../../../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -2083,7 +2083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+      <a href="../../../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2111,7 +2111,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-logging/" class="md-nav__link">
+      <a href="../../../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2147,7 +2147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/cost-attribution/" class="md-nav__link">
+      <a href="../../../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2175,7 +2175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+      <a href="../../../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2203,7 +2203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+      <a href="../../../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2231,7 +2231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runbook/" class="md-nav__link">
+      <a href="../../../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2259,7 +2259,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/backup-restore/" class="md-nav__link">
+      <a href="../../../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2287,7 +2287,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+      <a href="../../../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2315,7 +2315,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/troubleshooting/" class="md-nav__link">
+      <a href="../../../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2343,7 +2343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/security-operations/" class="md-nav__link">
+      <a href="../../../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2371,7 +2371,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/admission-policies/" class="md-nav__link">
+      <a href="../../../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2399,7 +2399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/release/" class="md-nav__link">
+      <a href="../../../operations/release/" class="md-nav__link">
         
   
   
@@ -2427,7 +2427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../../../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2487,7 +2487,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
+            <a href="../../../reference/" class="md-nav__link ">
               
   
   
@@ -2531,7 +2531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/api/" class="md-nav__link">
+      <a href="../../../reference/api/" class="md-nav__link">
         
   
   
@@ -2579,6 +2579,69 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-keyless-ci-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Keyless CI identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-gate-on-a-linux-runner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The gate on a Linux runner
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-publish-reads-the-ci-verdict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Publish reads the CI verdict
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2597,22 +2660,117 @@
   
 
 
-<h1 id="validate-release-candidates-in-ci-instead-of-a-local-dogfood-gate">Validate release candidates in CI instead of a local dogfood gate<a class="headerlink" href="#validate-release-candidates-in-ci-instead-of-a-local-dogfood-gate" title="Permanent link">&para;</a></h1>
-<p>Auditable, keyed to the tag, and replaces the <code>refs/validated/</code> marker anyone with push access could write.
-All four milestones are code on <code>main</code> once milestone 4 merges: the keyless identity, the gate on a Linux runner, the workflow on each candidate tag, and <code>publish.yml</code> reading the gate's evidence artifact instead of the marker.
-What remains is the proof: a CI gate run whose evidence <code>scripts/release/check-validated-candidate.sh v1.9.0</code> accepts, which closes this row.</p>
-<p><strong>Gates 1.9.</strong> The maintainer held the stable tag on 2026-10-04 so that 1.9's shipping candidate is the first validated in CI, and on 2026-10-05 chose to finish milestone 4 before tagging rather than ship on the marker.
-<code>v1.9.0-rc.2</code> passed every leg in CI on 2026-10-05 (gate run 37357489219), before milestone 4 existed, so it needs one more full CI run to leave evidence the new check reads.
-Nothing here is on the released surface, so <code>rc.2</code> stays the candidate.</p>
+<h1 id="q880--validate-release-candidates-in-ci">Q880 — validate release candidates in CI<a class="headerlink" href="#q880--validate-release-candidates-in-ci" title="Permanent link">&para;</a></h1>
+<p>The dogfood gate that stands between a release candidate and a stable tag ran on a maintainer's Mac, and its verdict reached <code>publish.yml</code> as <code>refs/validated/&lt;rc-tag&gt;</code>, a ref anyone who can push a tag can also push.
+So it recorded that the gate was reported to, never that it passed.
+Running the same gate as a workflow on the candidate tag makes the verdict the run's own: auditable, and keyed to the tag rather than to whoever ran it (<a href="../../../operations/release/#the-gate-records-its-verdict-and-publish-reads-it">release.md</a>).</p>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Milestone</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Keyless CI identity on the dogfood project</td>
+<td>✅ Bootstrap run 2026-10-04; the probe passed on its second run (37230799055), after #2028 fixed how it read GKE's refusal</td>
+</tr>
+<tr>
+<td>2</td>
+<td>The gate runs on a Linux runner with no keychain</td>
+<td>✅ <code>v1.9.0-rc.2</code> passed every leg in CI on 2026-10-05 (gate run 37357489219)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>A workflow runs the gate on each <code>v*-rc.*</code> tag</td>
+<td>✅ Same run; the first two found gate defects fixed in #2038, #2040 and #2042</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>publish.yml</code> reads the workflow's verdict instead of <code>refs/validated/</code></td>
+<td>✅ Merged in #2043; <code>v1.9.0-rc.2</code>'s gate run 37380198658 on 2026-10-05 uploaded evidence for every leg, and <code>check-validated-candidate.sh v1.9.0</code> accepted it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-keyless-ci-identity">1. Keyless CI identity<a class="headerlink" href="#1-keyless-ci-identity" title="Permanent link">&para;</a></h2>
+<p>CI has no access to the dogfood project, and a service-account key is the wrong way to give it some: this project ships no-PEM workload identity as a feature.
+So the job proves who it is with its own GitHub OIDC token, exchanged through Workload Identity Federation for a short-lived token of one service account.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/ci-identity-setup.sh"><code>ci-identity-setup.sh</code></a> sets it up, and a maintainer runs it once.
+It is idempotent, and it draws the trust boundary on the GCP side, where no repository setting can loosen it:</p>
+<ul>
+<li>The pool's provider accepts a token only when it carries this repository's numeric id, its owner's numeric id, <code>environment: dogfood-validation</code>, and a <code>job_workflow_ref</code> naming the probe workflow on <code>main</code>.
+  Ids rather than the <code>owner/name</code> slug, so a renamed or re-created repository is a different principal.
+  The workflow ref pins both the file and the branch, so another workflow on <code>main</code>, or a <code>v*-rc.*</code> tag cut from any commit, gets no token until milestone 3 names the gate's workflow.</li>
+<li>Only principals carrying that environment claim may impersonate the service account.</li>
+</ul>
+<p>A fork, a pull request, or any other workflow gets no token at all.</p>
+<p>The <code>dogfood-validation</code> GitHub environment is a second layer.
+It admits <code>main</code> and tags matching <code>v*-rc.*</code>, and its jobs wait for a named reviewer.
+The script creates it before any GCP write, because a workflow that names a missing environment creates it with no protection rules, and it fails on any ref policy beyond those two.</p>
+<p><strong>The reviewer is a click, not a second person.</strong> The reviewer named in the command below is <code>karlkfi</code>, the script allows self-review so a lone reviewer can approve their own dispatch, and every agent session on the maintainer's machine runs <code>gh</code> as that account.
+Whether that token can approve a pending deployment through the API is unmeasured.
+This matters little in milestone 1, whose grant is read-only; it is milestone 3's risk, when the grant can scale and redeploy the cluster, and the workflow pin above is what bounds it rather than the approval.</p>
+<p><strong>Service-account impersonation rather than direct resource access.</strong> Federated principals can hold IAM roles directly, without a service account in between.
+Whether <code>kubectl</code> authenticates to GKE as such a principal is unmeasured here, and the impersonation path is the one <code>google-github-actions/auth</code> and <code>get-gke-credentials</code> document together, so milestone 1 takes it.</p>
+<p><strong>Grants follow the milestone.</strong> Milestone 1 grants <code>roles/container.viewer</code> and nothing else.
+A probe workflow was its acceptance check: it listed namespaces and failed if the service account could create a pod.
+It retired with milestone 3, when the provider's pin moved to the gate's workflow.</p>
+<p>Run the setup, and re-run it whenever its grant or pin changes, from a machine with owner access to the project and admin on the repository.
+The project, cluster and zone below are the examples <code>validate-release.sh</code> documents; use the ones you run the gate with.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">PROJECT</span><span class="o">=</span>actions-gateway-dogfood<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>gag-dogfood<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>us-east1-b<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">REPO</span><span class="o">=</span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="nv">REVIEWERS</span><span class="o">=</span>karlkfi<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>scripts/dogfood/ci-identity-setup.sh
+</code></pre></div>
+<p><strong>GKE words a refusal with its reason attached</strong>, <code>no - requires one of ["container.pods.create"] permission(s) in Cloud IAM …</code>, measured on the first probe run on 2026-10-04.
+The probe compared the whole answer to <code>no</code>, so a correct refusal failed; #2028 made it compare the first word, so anything else, an error included, still failed.</p>
+<h2 id="2-the-gate-on-a-linux-runner">2. The gate on a Linux runner<a class="headerlink" href="#2-the-gate-on-a-linux-runner" title="Permanent link">&para;</a></h2>
+<p>Three of the gate's assumptions break on a hosted runner, read off the scripts on 2026-10-04 rather than measured in a run.</p>
+<ul>
+<li><strong>The GitHub App key.</strong> <code>setup.sh</code> rebuilds the <code>github-app-v1</code> Secret from the macOS keychain on every run.
+  <code>GAG_APP_KEY_FROM_CLUSTER=1</code> keeps the Secret already in the cluster instead, after checking it names the App and installation the run was given, and fails when it is absent or names others.
+  The Secret survives the gate's scale to zero nodes, so a run with no keychain can use it; rotating the key still needs one keychain run.</li>
+<li><strong>Repository variables.</strong> The gate sets <code>vars.GAG_RUNNER</code> on bring-up and resets it and <code>vars.GAG_E2E_RUNNER</code> on teardown, and a workflow's <code>GITHUB_TOKEN</code> has no permission that writes repository variables.
+  <code>unit-test.yml</code> and <code>integration-test.yml</code> now take the per-run <code>runner</code> input <code>e2e-test.yml</code> already had, <code>start.sh</code> routes its dispatches through it, and <code>GAG_ROUTE_VARS=0</code> skips the writes in <code>start.sh</code>, <code>stop.sh</code> and <code>e2e-stop.sh</code>.</li>
+<li><strong>The App's installation id.</strong> The gate resolves it through <code>/orgs/&lt;org&gt;/installations</code>, which needs an org-scoped token.
+  <code>ci-identity-setup.sh</code> resolves it where <code>gh</code> has that access and publishes it as an environment variable, and the workflow passes it in as <code>INSTALLATION_ID</code>.</li>
+</ul>
+<p>The tools come from pinned actions (<code>setup-gcloud</code> with <code>kubectl</code> and <code>gke-gcloud-auth-plugin</code>, <code>setup-helm</code>) and <code>make cosign</code>.</p>
+<h2 id="3-the-workflow">3. The workflow<a class="headerlink" href="#3-the-workflow" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml"><code>validate-candidate.yml</code></a> runs <code>validate-release.sh &lt;tag&gt;</code> on a GitHub-hosted runner inside the <code>dogfood-validation</code> environment, never on dogfood: the gate scales the dogfood cluster from zero and redeploys the gateway those runners depend on.</p>
+<p><strong>A tag push dispatches the gate on <code>main</code>; it never runs the gate itself.</strong> The provider accepts a token only from this workflow on <code>refs/heads/main</code>.
+A push of a <code>v*-rc.*</code> tag runs the tag's own copy of the file, and a tag can be cut from any commit, so trusting the tag would let anyone who can push one run a modified workflow with the gate's grant.
+The push job holds no cloud access and only dispatches <code>validate</code> on <code>main</code> with the tag as input, so the gate always runs <code>main</code>'s scripts against the tag's signed artifacts, as the local gate does.</p>
+<p><strong>The grant is <code>roles/container.admin</code> and <code>roles/compute.viewer</code></strong>, approved by the maintainer on 2026-10-04.
+The gate resizes node pools, updates the cluster, installs the GMC's Helm release (ClusterRoles, webhooks, CRDs) and reads the project's CPU quota and instance groups.
+No narrower GKE role set that still writes ClusterRoles was measured.
+The list is derived from the calls the dogfood scripts make, so the first CI run is what confirms it.
+The milestone 1 probe retires with this change: the provider now names the gate's workflow, so the probe can no longer get a token.</p>
+<p><strong>The workflow carries its own reclaim.</strong> The gate step's limit is shorter than the job's, and a final step runs <code>--reclaim</code> on the same runner after a failure or cancellation.
+The lease lives in the cluster (Q1158), so any host can reclaim a CI run's cluster; the same-runner step is still the fast path, because the runner can check the gate's pid where any other host waits ten minutes for the lease to lapse (<a href="../../../operations/release/#a-killed-gate-is-reclaimed-by-the-next-one">release.md</a>).
+A <code>concurrency</code> group keeps two CI runs off the cluster at once, and the shared lease keeps a CI run and a local gate apart.</p>
+<h2 id="4-publish-reads-the-ci-verdict">4. Publish reads the CI verdict<a class="headerlink" href="#4-publish-reads-the-ci-verdict" title="Permanent link">&para;</a></h2>
+<p>Each gate run writes the candidate's tag, the commit it names on the remote, and every leg that passed to <code>GATE_EVIDENCE_FILE</code>, and <code>validate-candidate.yml</code> uploads that file as the run's artifact on failure as well as success.
+<code>publish.yml</code>'s <code>validated-candidate</code> job runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-validated-candidate.sh"><code>check-validated-candidate.sh</code></a>, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/fetch-gate-evidence.sh"><code>fetch-gate-evidence.sh</code></a> feeds.</p>
+<p><strong>What counts as evidence.</strong> An artifact on a run of <code>.github/workflows/validate-candidate.yml</code>, dispatched on <code>main</code>, read from each run's own path, branch and event.
+Main's copy is the one the dogfood identity trusts and the one that runs main's gate.
+A branch's copy can upload an artifact of the same name and is refused, and so is the tag push's dispatch job.</p>
+<p><strong>A candidate is validated once runs, together, have passed every leg</strong> in <code>scripts/dogfood/lib/gate-legs.sh</code> for one commit, and that commit is the one the candidate's tag names in publish's checkout.
+Legs from different runs combine, so a gate that failed its last leg is finished by re-running that leg alone.
+Evidence naming a commit its tag does not name stops the ship, as a marker on the wrong commit did.</p>
+<p><strong>The marker and its recorder retired with this</strong>, and a local gate run writes no evidence: the maintainer chose on 2026-10-05 that only CI's verdict authorizes a publish, at the cost that a broken CI gate holds the stable tag until it is fixed.
+It also retired the failure that made the choice concrete: <code>v1.9.0-rc.2</code>'s run passed every leg and could record none, because the gate's <code>GITHUB_TOKEN</code> was refused creating <code>refs/validated-legs/…</code> (<code>HTTP 403: Resource not accessible by integration</code>) where it had created <code>refs/validated/…</code> the night before.
+Why the token was refused was not established.</p>
+<p><strong>Artifacts expire after 90 days</strong>, this repository's retention, so a candidate validated longer ago than that is run through the gate again before its stable tag.</p>
 
 
 
 
 
 
-
-  
-  
 
 
 
@@ -2691,12 +2849,12 @@ Nothing here is on the released surface, so <code>rc.2</code> stays the candidat
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
-        <script src="../../javascripts/extra.js"></script>
+        <script src="../../../javascripts/extra.js"></script>
       
     
   </body>
