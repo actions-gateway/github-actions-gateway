@@ -1,0 +1,104 @@
+# Gatekeeper — govern WHERE github-actions-gateway (GAG) pods schedule.
+#
+# The Kyverno sibling of this file carries the full rationale; the short version:
+#
+#   * GAG deliberately lets the CR author place its pods — EgressProxy.spec.scheduling,
+#     ActionsGateway.spec.scheduling, and RunnerTemplate.spec.podTemplate all pass
+#     nodeSelector/tolerations/affinity through to the pod. Choosing your own egress
+#     path is a feature.
+#   * If your cluster attributes traffic by source IP (per-tenant NAT gateway,
+#     downstream firewall allowlist), placement should be YOURS to decide. This is
+#     the layer that expresses that.
+#   * Pin by MUTATION, not by a validating allowlist. Kubernetes ANDs nodeSelector
+#     with nodeAffinity, so a stamped nodeSelector cannot be escaped by a
+#     `NotIn` / `DoesNotExist` affinity expression. An allowlist of permitted
+#     nodeSelector values can be — affinity is a query language, not a value.
+#
+# Adjust the pool label key for your cloud:
+#   GKE  cloud.google.com/gke-nodepool
+#   EKS  eks.amazonaws.com/nodegroup
+#   AKS  agentpool
+---
+# 1. PIN — one Assign per tenant namespace.
+#
+# Gatekeeper's Assign takes a static value, so unlike the Kyverno version (which
+# reads the pool from a namespace label) you write one Assign per tenant. That is
+# more verbose but arguably clearer: the tenant -> pool -> egress-IP binding is a
+# reviewable object, not a label someone can relabel.
+#
+# Requires the mutation feature gate: --enable-mutation=true on the Gatekeeper
+# controller (default since v3.10).
+apiVersion: mutations.gatekeeper.sh/v1
+kind: Assign
+metadata:
+  name: gag-pin-tenant-a-node-pool
+spec:
+  applyTo:
+    - groups: [""]
+      kinds: ["Pod"]
+      versions: ["v1"]
+  match:
+    scope: Namespaced
+    namespaces: ["tenant-a"] # one Assign per tenant namespace
+  location: 'spec.nodeSelector."cloud.google.com/gke-nodepool"'
+  parameters:
+    assign:
+      value: pool-tenant-a
+---
+# 2. DENY BLANKET TOLERATIONS — a cheap extra, NOT a substitute for the pin above.
+#
+# A toleration with `operator: Exists` and no `key` tolerates EVERY taint in the
+# cluster, including the taints that reserve a node pool for one tenant. Nothing
+# GAG emits needs one.
+#
+# What this does NOT do: it blocks only the BLANKET case. A pod naming the target
+# pool's taint explicitly (`{key: dedicated, operator: Equal, value: pool-tenant-b}`)
+# passes it. Only the Assign mutation above actually bounds placement.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: gagnoblankettolerations
+  annotations:
+    description: >-
+      Denies pods carrying a keyless `operator: Exists` toleration, which would
+      tolerate every taint in the cluster and defeat the taints reserving other
+      tenants' dedicated node pools.
+spec:
+  crd:
+    spec:
+      names:
+        kind: GAGNoBlanketTolerations
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package gagnoblankettolerations
+
+        violation[{"msg": msg}] {
+          tol := input.review.object.spec.tolerations[_]
+          tol.operator == "Exists"
+          not has_key(tol)
+          msg := sprintf(
+            "toleration %v has operator=Exists with no key: it tolerates every taint in the cluster, including the taints reserving other tenants' node pools. Name the specific taint key you need.",
+            [tol],
+          )
+        }
+
+        has_key(tol) {
+          tol.key
+          tol.key != ""
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: GAGNoBlanketTolerations
+metadata:
+  name: gag-no-blanket-tolerations
+spec:
+  enforcementAction: dryrun # flip to deny after reviewing audit results
+  match:
+    scope: Namespaced
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaceSelector:
+      matchLabels:
+        actions-gateway.github.com/tenant: "true"

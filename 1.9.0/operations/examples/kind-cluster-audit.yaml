@@ -1,0 +1,56 @@
+# kind cluster config that ships the Actions Gateway API-server audit policy
+# baked into kube-apiserver — the one path where audit auto-install is genuinely
+# possible, because you provision the control plane.
+#
+# This is the kind/kubeadm-from-scratch analogue of the per-node installer
+# (install-apiserver-audit-policy.sh): instead of patching a running node's
+# static-pod manifest, kubeadm renders kube-apiserver with the audit flags from
+# the ClusterConfiguration patch below, and `extraMounts` makes the policy file
+# (which lives next to this config) visible inside the control-plane node.
+#
+# Usage (run from this directory so the relative hostPath resolves):
+#   kind create cluster --config kind-cluster-audit.yaml
+#   # audit events stream to the kube-apiserver container's stdout:
+#   docker exec kind-control-plane sh -c 'tail -f /var/log/kubernetes/audit/audit.log'
+#
+# The policy's placeholder tenant ServiceAccounts (tenant-acme, tenant-globex)
+# match nothing until you onboard those tenants — edit apiserver-audit-policy.yaml
+# for your install first (see its header). Reading it here is harmless: the rules
+# simply do not fire.
+#
+# Kubernetes version note: extraArgs below uses the kubeadm v1beta3 map form
+# (Kubernetes <= 1.30). For 1.31+ (kubeadm v1beta4) extraArgs is a LIST of
+# {name, value} entries — convert accordingly if kind uses a newer node image.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    # Make the policy file (next to this config) readable inside the node at the
+    # path the apiserver flag references.
+    extraMounts:
+      - hostPath: ./apiserver-audit-policy.yaml
+        containerPath: /etc/kubernetes/audit/policy.yaml
+        readOnly: true
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          extraArgs:
+            audit-policy-file: /etc/kubernetes/audit/policy.yaml
+            audit-log-path: /var/log/kubernetes/audit/audit.log
+            audit-log-maxage: "30"
+            audit-log-maxbackup: "10"
+            audit-log-maxsize: "100"
+          extraVolumes:
+            # Mount the policy file read into kube-apiserver's pod.
+            - name: audit-policy
+              hostPath: /etc/kubernetes/audit/policy.yaml
+              mountPath: /etc/kubernetes/audit/policy.yaml
+              readOnly: true
+              pathType: File
+            # Writable directory for the rotated audit log.
+            - name: audit-log
+              hostPath: /var/log/kubernetes/audit
+              mountPath: /var/log/kubernetes/audit
+              pathType: DirectoryOrCreate
+  - role: worker

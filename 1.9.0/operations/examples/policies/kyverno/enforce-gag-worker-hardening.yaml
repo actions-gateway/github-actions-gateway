@@ -1,0 +1,138 @@
+# Kyverno ClusterPolicy — enforce github-actions-gateway (GAG) pod hardening.
+#
+# Locks in the security posture GAG already produces, so a misconfiguration,
+# a tampered controller image, or a hand-edited PodTemplate cannot quietly
+# downgrade it. Scoped to GAG tenant namespaces via the marker label the GMC
+# requires on every namespace it provisions into:
+#   actions-gateway.github.com/tenant: "true"
+#
+# Ships in Audit mode. Review Policy Reports, then switch
+# validationFailureAction to Enforce once clean:
+#   kubectl get policyreport -A
+#
+# NOTE: This intentionally does NOT require drop-ALL-caps,
+# allowPrivilegeEscalation:false, or readOnlyRootFilesystem — the default
+# `baseline` worker profile does not set those (baseline CI relies on in-job
+# sudo; the runner needs a writable root fs). See ../../../admission-policies.md
+# for the full compatibility matrix. Tenants who need the stricter floor set
+# securityProfile: restricted on their ActionsGateway.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: gag-worker-hardening
+  annotations:
+    policies.kyverno.io/title: GAG worker/proxy/AGC hardening
+    policies.kyverno.io/category: github-actions-gateway
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Enforces the baseline security posture github-actions-gateway already
+      applies to worker, egress-proxy, and AGC pods in tenant namespaces:
+      run as non-root, RuntimeDefault seccomp, no host namespaces, no
+      privileged container, and digest-pinned images.
+spec:
+  validationFailureAction: Audit   # flip to Enforce after reviewing reports
+  background: true
+  rules:
+    # 1. Pods in tenant namespaces must run as non-root with RuntimeDefault
+    #    seccomp. Matches the baseline/restricted worker defaults and the
+    #    proxy/AGC containers. (privileged-profile tenants must be excluded —
+    #    add their namespaces to a PolicyException.)
+    - name: require-nonroot-and-seccomp
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  actions-gateway.github.com/tenant: "true"
+      validate:
+        message: >-
+          GAG pods must set runAsNonRoot:true and seccompProfile RuntimeDefault
+          (pod- or container-level). If this is a privileged-profile tenant,
+          exclude its namespace via a PolicyException.
+        pattern:
+          spec:
+            =(securityContext):
+              =(seccompProfile):
+                =(type): RuntimeDefault
+            containers:
+              - =(securityContext):
+                  =(seccompProfile):
+                    =(type): RuntimeDefault
+        # Either pod-level or every container must assert runAsNonRoot:true.
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true
+
+    # 2. No host namespaces. GAG forces these false on every worker pod; this
+    #    catches anything else that tries to set them true in a GAG namespace.
+    - name: disallow-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  actions-gateway.github.com/tenant: "true"
+      validate:
+        message: "Host namespaces (hostPID/hostIPC/hostNetwork) are not allowed for GAG pods."
+        pattern:
+          spec:
+            =(hostPID): "false"
+            =(hostIPC): "false"
+            =(hostNetwork): "false"
+
+    # 3. No privileged containers. baseline/restricted worker, proxy, AGC, and
+    #    GMC pods never request privileged. (privileged-profile tenants need a
+    #    PolicyException.)
+    - name: disallow-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  actions-gateway.github.com/tenant: "true"
+      validate:
+        message: "Privileged containers are not allowed for GAG pods (use securityProfile: privileged + a PolicyException for DinD tenants)."
+        pattern:
+          spec:
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+
+    # 4. Images must be digest-pinned. GAG's own images already are; this also
+    #    forces tenants who override spec.workerImage to pin theirs.
+    - name: require-digest-pinned-images
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  actions-gateway.github.com/tenant: "true"
+      validate:
+        message: "GAG pod images must be pinned by @sha256: digest, not a floating tag."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ regex_match('^.+@sha256:[a-fA-F0-9]{64}$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: false
+          - list: "request.object.spec.initContainers || []"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ regex_match('^.+@sha256:[a-fA-F0-9]{64}$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: false
