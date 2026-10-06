@@ -122,6 +122,12 @@ Taken on 2026-10-04 on a branch cut at `8b4b49914`; `check-artifact-unchanged.sh
 | Operator caveats | **PASS.** `operator-caveats-since.sh v1.8.0` reports the same four `upgrade.md` and one `troubleshooting.md` sections as at the candidate, plus the runner-version troubleshooting entry; all are in the notes. |
 | Notes | **Validation** names `rc.1` and its three windows. `Everything since v1.8.0` reads 87, the count once this change squash-merges; re-derive it at the tag. The semver floor is unchanged: MINOR, from the same six commits. |
 
+**Re-taken 2026-10-05 at `075502924`, for `rc.2`.** `check-artifact-unchanged.sh v1.9.0-rc.2 origin/main` exits 0 (29 files changed, none released), and `check-gates-green.sh` reads no gate not green: the seven path-skipped lanes ran in full on `aa1178e31`, and `e2e-calico` on `fc4c0d529`, with the released surface unchanged since each.
+`make release-pins-check` still reads 20 pins as `v1.9.0`; `check-roadmap.sh` passes with and without `GAG_RELEASE_TAG=v1.9.0`; `highlight_for` still names `v1.9.0`; and `operator-caveats-since.sh v1.8.0` reports the same sections as on 2026-10-04.
+The semver floor is unchanged, MINOR from the same six commits.
+The marketing reconciliation found one gap, the Dragonfly mirror back end (#2027), which landed after the first pass and is now in the notes; nothing else that landed since ships to an operator.
+The notes then took all four prose passes: `verify-claims` re-derived the commit count (107 once the notes PR merges; re-check at the tag) and corrected two claims about what the publish check and the earlier CI runs established, and `readability`, `deslop` and `semantic-remediation` repaired the sentences written for `rc.2`, leaving the prose reviewed at the candidate as it was.
+
 ## Candidate validation
 
 ### `v1.9.0-rc.2`
