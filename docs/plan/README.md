@@ -65,7 +65,6 @@ Each has inline ✓ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [q880-ci-release-validation.md](q880-ci-release-validation.md) | Running the release-candidate dogfood gate as a workflow on the candidate tag instead of on a maintainer's machine: keyless CI identity, the gate on Linux, the workflow, and publish reading its verdict | ⚠️ Milestone 1 in review; its one-time bootstrap is the maintainer's ([Q880](../queue/Q880.md)) |
 | [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via [Q264](../queue/Q264.md) P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook; chronological turn-up history split to [archive/gke-dogfood-turnup-findings.md](archive/gke-dogfood-turnup-findings.md) (Q336) |
 
 ## Cross-cutting
@@ -226,6 +225,7 @@ The doc remains available — the rationale is often more valuable than the diff
 | [archive/required-status-checks.md](archive/required-status-checks.md) | Make the CI quality gates merge-blocking: an always-running `gate` summary job per workflow (safe to require despite path-gating) + the ruleset edit that marks them required | 2026-07-13 — Q297 |
 | [archive/worker-egress-proxy.md](archive/worker-egress-proxy.md) | Worker traffic must route through per-tenant proxy pool | Archived 2026-09-12, Q1099. NetworkPolicy split shipped (commit `4932ce7`); proxied worker→GitHub egress live-validated via M4 §12 |
 | [archive/merge-drivers-go.md](archive/merge-drivers-go.md) | Move the four git merge drivers off shell and `awk` onto Go in `devtools/`, keeping every `scripts/` entry point, so the three-way set merge and its order reconstruction can be unit-tested. markdown-gates-parser.md excluded them, but for an argument against goldmark rather than against Go | Archived 2026-09-16, Q1047. All three phases landed: the shared runtime and the two table drivers (#1819, 2026-08-31), the roadmap driver and the deletion of `merge-keyed-records.awk` (#1954, 2026-09-16), and the gate-lists driver with the shell merge half of `merge-driver-common.sh` retired behind it. Each phase kept its suite's assertions unchanged and shipped an old-versus-new differential over generated three-way inputs; Phase 3's agrees on bytes and exit status everywhere except one deliberate class, a duplicated entry within one side, which the awk carried silently and the Go core refuses |
+| [archive/q880-ci-release-validation.md](archive/q880-ci-release-validation.md) | Running the release-candidate dogfood gate as a workflow on main, dispatched by each candidate tag: keyless CI identity, the gate on Linux, the workflow, and publish reading its evidence artifact | Archived 2026-10-05, Q880. All four milestones landed; `v1.9.0-rc.2` is the first candidate validated in CI (gate run 37380198658) |
 
 ## Conventions
 

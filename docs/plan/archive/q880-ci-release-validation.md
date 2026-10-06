@@ -2,7 +2,7 @@
 
 The dogfood gate that stands between a release candidate and a stable tag ran on a maintainer's Mac, and its verdict reached `publish.yml` as `refs/validated/<rc-tag>`, a ref anyone who can push a tag can also push.
 So it recorded that the gate was reported to, never that it passed.
-Running the same gate as a workflow on the candidate tag makes the verdict the run's own: auditable, and keyed to the tag rather than to whoever ran it ([release.md](../operations/release.md#the-gate-records-its-verdict-and-publish-reads-it)).
+Running the same gate as a workflow on the candidate tag makes the verdict the run's own: auditable, and keyed to the tag rather than to whoever ran it ([release.md](../../operations/release.md#the-gate-records-its-verdict-and-publish-reads-it)).
 
 ## Status
 
@@ -11,14 +11,14 @@ Running the same gate as a workflow on the candidate tag makes the verdict the r
 | 1 | Keyless CI identity on the dogfood project | ✅ Bootstrap run 2026-10-04; the probe passed on its second run (37230799055), after #2028 fixed how it read GKE's refusal |
 | 2 | The gate runs on a Linux runner with no keychain | ✅ `v1.9.0-rc.2` passed every leg in CI on 2026-10-05 (gate run 37357489219) |
 | 3 | A workflow runs the gate on each `v*-rc.*` tag | ✅ Same run; the first two found gate defects fixed in #2038, #2040 and #2042 |
-| 4 | `publish.yml` reads the workflow's verdict instead of `refs/validated/` | ⚠️ Code in review; proven when a CI run's evidence passes `check-validated-candidate.sh` |
+| 4 | `publish.yml` reads the workflow's verdict instead of `refs/validated/` | ✅ Merged in #2043; `v1.9.0-rc.2`'s gate run 37380198658 on 2026-10-05 uploaded evidence for every leg, and `check-validated-candidate.sh v1.9.0` accepted it |
 
 ## 1. Keyless CI identity
 
 CI has no access to the dogfood project, and a service-account key is the wrong way to give it some: this project ships no-PEM workload identity as a feature.
 So the job proves who it is with its own GitHub OIDC token, exchanged through Workload Identity Federation for a short-lived token of one service account.
 
-[`ci-identity-setup.sh`](../../scripts/dogfood/ci-identity-setup.sh) sets it up, and a maintainer runs it once.
+[`ci-identity-setup.sh`](../../../scripts/dogfood/ci-identity-setup.sh) sets it up, and a maintainer runs it once.
 It is idempotent, and it draws the trust boundary on the GCP side, where no repository setting can loosen it:
 
 - The pool's provider accepts a token only when it carries this repository's numeric id, its owner's numeric id, `environment: dogfood-validation`, and a `job_workflow_ref` naming the probe workflow on `main`.
@@ -71,7 +71,7 @@ The tools come from pinned actions (`setup-gcloud` with `kubectl` and `gke-gclou
 
 ## 3. The workflow
 
-[`validate-candidate.yml`](../../.github/workflows/validate-candidate.yml) runs `validate-release.sh <tag>` on a GitHub-hosted runner inside the `dogfood-validation` environment, never on dogfood: the gate scales the dogfood cluster from zero and redeploys the gateway those runners depend on.
+[`validate-candidate.yml`](../../../.github/workflows/validate-candidate.yml) runs `validate-release.sh <tag>` on a GitHub-hosted runner inside the `dogfood-validation` environment, never on dogfood: the gate scales the dogfood cluster from zero and redeploys the gateway those runners depend on.
 
 **A tag push dispatches the gate on `main`; it never runs the gate itself.** The provider accepts a token only from this workflow on `refs/heads/main`.
 A push of a `v*-rc.*` tag runs the tag's own copy of the file, and a tag can be cut from any commit, so trusting the tag would let anyone who can push one run a modified workflow with the gate's grant.
@@ -84,13 +84,13 @@ The list is derived from the calls the dogfood scripts make, so the first CI run
 The milestone 1 probe retires with this change: the provider now names the gate's workflow, so the probe can no longer get a token.
 
 **The workflow carries its own reclaim.** The gate step's limit is shorter than the job's, and a final step runs `--reclaim` on the same runner after a failure or cancellation.
-The lease lives in the cluster (Q1158), so any host can reclaim a CI run's cluster; the same-runner step is still the fast path, because the runner can check the gate's pid where any other host waits ten minutes for the lease to lapse ([release.md](../operations/release.md#a-killed-gate-is-reclaimed-by-the-next-one)).
+The lease lives in the cluster (Q1158), so any host can reclaim a CI run's cluster; the same-runner step is still the fast path, because the runner can check the gate's pid where any other host waits ten minutes for the lease to lapse ([release.md](../../operations/release.md#a-killed-gate-is-reclaimed-by-the-next-one)).
 A `concurrency` group keeps two CI runs off the cluster at once, and the shared lease keeps a CI run and a local gate apart.
 
 ## 4. Publish reads the CI verdict
 
 Each gate run writes the candidate's tag, the commit it names on the remote, and every leg that passed to `GATE_EVIDENCE_FILE`, and `validate-candidate.yml` uploads that file as the run's artifact on failure as well as success.
-`publish.yml`'s `validated-candidate` job runs [`check-validated-candidate.sh`](../../scripts/release/check-validated-candidate.sh), which [`fetch-gate-evidence.sh`](../../scripts/release/fetch-gate-evidence.sh) feeds.
+`publish.yml`'s `validated-candidate` job runs [`check-validated-candidate.sh`](../../../scripts/release/check-validated-candidate.sh), which [`fetch-gate-evidence.sh`](../../../scripts/release/fetch-gate-evidence.sh) feeds.
 
 **What counts as evidence.** An artifact on a run of `.github/workflows/validate-candidate.yml`, dispatched on `main`, read from each run's own path, branch and event.
 Main's copy is the one the dogfood identity trusts and the one that runs main's gate.
