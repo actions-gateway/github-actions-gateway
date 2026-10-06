@@ -2766,7 +2766,7 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 <tr>
 <td>Network egress</td>
 <td>Default-deny NetworkPolicy, per-tenant proxy pool, in-cluster pull-through mirror, egress scoped to mirror plus GitHub plus DNS</td>
-<td><strong>Shipped and validated (Q408, 2026-08-28).</strong> A Kata worker reaches cluster DNS on 53, GitHub on 443 and the mirrors on 5000 and nothing else, measured on the dogfood cluster by in-job negatives against controls that answered, on every run of the lane. Recipe: <a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">kata-dind-workloads.md § Untrusted pull requests</a>; design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>. <a href="../../queue/Q539/">Q539</a> and <a href="../../queue/Q540/">Q540</a> grade two variants against the contract this validated, and are follow-ons rather than gaps</td>
+<td><strong>Shipped and validated (Q408, 2026-08-28).</strong> A Kata worker reaches cluster DNS on 53, GitHub on 443 and the mirrors on 5000 and nothing else, measured on the dogfood cluster by in-job negatives against controls that answered, on every run of the lane. Recipe: <a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">kata-dind-workloads.md § Untrusted pull requests</a>; design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>. Q539 validated Dragonfly as the mirrors' back end against the contract this validated, and <a href="../../queue/Q540/">Q540</a> grades the composed stack; both are follow-ons rather than gaps</td>
 </tr>
 <tr>
 <td>Node metadata</td>
@@ -2846,7 +2846,7 @@ Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
-<p>Open, with rows: Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
+<p>Open, with rows: Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
 <ol>

@@ -2974,14 +2974,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The audit is due: v1.4.0 and v1.5.0 were both cut after the 2026-07-20 baseline of 41,011 non-test Go lines.</td>
 </tr>
 <tr>
-<td><a href="Q539/">Q539</a></td>
-<td><a href="../plan/q539-dragonfly-mirror-backend/#7-phases">Validate the Dragonfly mirror back end on dogfood</a></td>
-<td><code>security</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Dragonfly fails the mirror contract as the endpoint workers reach: dfdaemon's proxy is an open forward proxy that forwards pushes, so it …</td>
-</tr>
-<tr>
 <td><a href="Q1163/">Q1163</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-validate.sh">Mirror battery fetches a digest manifest and a blob, not only a tag</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
@@ -2993,9 +2985,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q540/">Q540</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest</a></td>
 <td><code>security</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked by <a href="Q539/">Q539</a>.</td>
+<td>Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from …</td>
 </tr>
 <tr>
 <td><a href="Q682/">Q682</a></td>

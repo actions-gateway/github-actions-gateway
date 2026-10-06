@@ -2712,7 +2712,8 @@
 
 <h1 id="dragonfly-as-the-mirror-backend--q539">Dragonfly as the Mirror Backend — Q539<a class="headerlink" href="#dragonfly-as-the-mirror-backend--q539" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-10-05): Phase 1 measured, Phase 2 built and validated on kind, Phase 3's first dogfood run failed on gcr.io pulls and the fix is measured locally (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).</strong> Dragonfly fails the <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">mirror contract</a> when it is the endpoint workers reach, so it is built as the <strong>back end</strong> of the Distribution mirrors rather than a substitute for them (<a href="#2-unfronted-dragonfly-fails-the-contract-by-construction">§2</a>). §2–§6 were measured in local Docker and §7 on a kind cluster; nothing here has run on the dogfood cluster.</p>
+<p><strong>Status (2026-10-05): ✅ All three phases done.</strong> Phase 3 validated on dogfood by <code>v1.9.0-rc.2</code>'s release-gate run (<a href="#7-phases">§7</a>), after a first run failed on gcr.io pulls (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).
+Dragonfly fails the <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">mirror contract</a> when it is the endpoint workers reach, so it is built as the <strong>back end</strong> of the Distribution mirrors rather than a substitute for them (<a href="#2-unfronted-dragonfly-fails-the-contract-by-construction">§2</a>). §2–§6 were measured in local Docker, Phase 2 on a kind cluster, and Phase 3 on the dogfood cluster.</p>
 </blockquote>
 <p>Q408 validated the untrusted-PR egress posture with CNCF Distribution as the mirror, and <a href="../q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a> of that plan scheduled Dragonfly as the alternate backend to grade against the same four-property contract.
 This plan is that grading, and the build it led to.</p>
@@ -2919,10 +2920,57 @@ So the namespace can enforce PSA <code>restricted</code>, and the security conte
 </tbody>
 </table>
 <p>kind has no GMC, so the lab applied a stand-in DNS egress policy for the worker namespace that the GMC-managed default-deny provides on dogfood.
-- <strong>Phase 3 — validate on dogfood.
-  First run red, fix measured locally (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).</strong> The Q408 Phase-4 sequence with <code>E2E_MIRROR_BACKEND=dragonfly</code>: the <a href="../q408-untrusted-pr-egress/#37-the-phase-2-validation-battery">§3.7</a> battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
+- <strong>Phase 3 — validate on dogfood. ✅ Done (2026-10-05, dogfood).</strong> The Q408 Phase-4 sequence with <code>E2E_MIRROR_BACKEND=dragonfly</code>: the <a href="../q408-untrusted-pr-egress/#37-the-phase-2-validation-battery">§3.7</a> battery and one Kata e2e run whose in-job negatives must pass unchanged.
   Three readings this variant adds: blob <code>GET</code>s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a <code>CONNECT</code> through the seed peer to <code>self-signed.badssl.com</code> refused.
-  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (<code>dragonfly_readings</code> in <code>scripts/dogfood/validate-release.sh</code>); the mirror hit counts it does not take.</p>
+  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (<code>dragonfly_readings</code> in <code>scripts/dogfood/validate-release.sh</code>).
+  The first run was red on gcr.io pulls (<a href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">§7.1</a>).</p>
+<p>Read from <code>v1.9.0-rc.2</code>'s gate run 37380198658 (<code>validate-candidate.yml</code> on <code>main</code> at <code>aa1178e31</code>, candidate <code>65ba797c2</code>, 2026-10-05), whose Dragonfly leg applied <code>deploy/dragonfly/</code> from that checkout and so ran with the blobs-only rule:</p>
+<table>
+<thead>
+<tr>
+<th>Reading</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Open egress</td>
+<td>the gate deleted the allow-all <code>e2e-open-egress</code> NetworkPolicy before the leg</td>
+</tr>
+<tr>
+<td>Kata e2e run 37388708904</td>
+<td>3/3 jobs ok, so the in-job negatives passed unchanged</td>
+</tr>
+<tr>
+<td>§3.7 battery</td>
+<td>every instance (<code>docker-io</code>, <code>ghcr-io</code>, <code>quay-io</code>, <code>registry-k8s-io</code>, <code>gcr-io</code>) passed available, debug, v2, manifest, push and catalog</td>
+</tr>
+<tr>
+<td>Mirror client census</td>
+<td>read all five instances' proxy logs; every client that connected was a workload-labelled pod or the kubelet</td>
+</tr>
+<tr>
+<td>The seed peer's log</td>
+<td>123 requests by P2P rule, 374 direct</td>
+</tr>
+<tr>
+<td>A worker to the seed proxy port</td>
+<td>timed out, while the mirror answered 200</td>
+</tr>
+<tr>
+<td><code>CONNECT</code> through the seed peer to a self-signed host</td>
+<td>refused (curl exit 56, HTTP 000; the control answered 200)</td>
+</tr>
+<tr>
+<td>Gate verdict</td>
+<td><code>Validation gate PASSED for v1.9.0-rc.2: kata crd-smoke soak dind dragonfly.</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The mirror hit counts are retired from this phase.</strong> <code>scripts/dogfood/e2e-mirror-hits.sh</code> exists because in Q408 Phase 3 the tenant still had open egress, so a green e2e run could not show that pulls rode the mirror.
+  With <code>e2e-open-egress</code> deleted, a pull that ignores its mirror wiring fails the run outright; the script's own header says it is no longer the only signal and stays only to attribute repositories to instances.
+  The leg's green e2e run and its mirror client census settle the question the hit counts answered, and validating the back end does not need the per-repository attribution.
+  The gate does not run <code>e2e-mirror-hits.sh</code>, and stays that way.</p>
 <h3 id="71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path">7.1 The first dogfood run: gcr.io manifests on the P2P path<a class="headerlink" href="#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path" title="Permanent link">&para;</a></h3>
 <p>The release gate's Dragonfly leg for <code>v1.9.0-rc.2</code> (gate run 37273426462, e2e run 37278968369, 2026-10-05) failed one in-job check, <code>docker-mirror-pull</code>: a <code>docker pull</code> of <code>gcr.io/distroless/static:nonroot</code> through <code>mirror-gcr-io</code>.
 Every other negative passed, and the same check passed on the plain-Kata and DinD legs of the same gate, which use Distribution alone.
@@ -2967,7 +3015,7 @@ The gate's own mirror battery has the same blind spot: it fetches each instance'
 <p><strong>The fix drops <code>manifests/sha256.*</code> from the rules.</strong> Manifests are a few KB, so the P2P path loses nothing worth keeping; blobs are where the bytes are.
 Measured in the same lab with only <code>blobs/sha256.*</code>: the gcr.io pull succeeded, its five blobs taking the P2P rule and its manifest going direct, and a cold Hub blob (<code>library/busybox:1.36</code>'s amd64 layer) returned 200 at 2,206,402 bytes with a sha256 equal to its digest by the P2P rule.
 The only change between that run and the failing one above is the removed rule.
-Not yet measured on dogfood: the next gate run is the reading, and <code>pull_probe</code> now prints docker's stderr on a failure, so a different cause would name itself.</p>
+Measured on dogfood by the next gate run, 37380198658: the Dragonfly leg's e2e run passed every job, <code>docker-mirror-pull</code> included (<a href="#7-phases">§7</a>).</p>
 <h2 id="8-what-this-plan-does-not-cover">8. What this plan does not cover<a class="headerlink" href="#8-what-this-plan-does-not-cover" title="Permanent link">&para;</a></h2>
 <p>The node layer, where a <code>hostNetwork</code> dfdaemon serves the kubelet's own pulls, is <a href="../../queue/Q540/">Q540</a>. §2 applies there directly: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.
 Unmeasured.</p>
