@@ -274,7 +274,7 @@ A patch line cuts and validates its own candidate like any other release: `publi
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
 **Pushing a candidate tag also starts the gate in CI.** [`validate-candidate.yml`](../../.github/workflows/validate-candidate.yml) dispatches the gate on `main` for the tag, and the run waits for approval in the `dogfood-validation` environment: open the run, choose **Review deployments**, tick the environment, and approve.
-It runs the same script from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/q880-ci-release-validation.md).
+It runs the same script from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/archive/q880-ci-release-validation.md).
 **Only the CI run produces a verdict `publish.yml` accepts.** Run the gate locally to diagnose or to iterate on the gate itself; a local run records nothing a stable tag can use.
 A local gate and a CI one read the same lease, so whichever starts second refuses rather than resizing the cluster under the first ([why](#a-killed-gate-is-reclaimed-by-the-next-one)).
 
