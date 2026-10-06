@@ -2959,6 +2959,11 @@ The landmine question added the custom-<code>workerImage</code> entry: the runne
 </tr>
 </tbody>
 </table>
+<p><strong>Re-taken 2026-10-05 at <code>075502924</code>, for <code>rc.2</code>.</strong> <code>check-artifact-unchanged.sh v1.9.0-rc.2 origin/main</code> exits 0 (29 files changed, none released), and <code>check-gates-green.sh</code> reads no gate not green: the seven path-skipped lanes ran in full on <code>aa1178e31</code>, and <code>e2e-calico</code> on <code>fc4c0d529</code>, with the released surface unchanged since each.
+<code>make release-pins-check</code> still reads 20 pins as <code>v1.9.0</code>; <code>check-roadmap.sh</code> passes with and without <code>GAG_RELEASE_TAG=v1.9.0</code>; <code>highlight_for</code> still names <code>v1.9.0</code>; and <code>operator-caveats-since.sh v1.8.0</code> reports the same sections as on 2026-10-04.
+The semver floor is unchanged, MINOR from the same six commits.
+The marketing reconciliation found one gap, the Dragonfly mirror back end (#2027), which landed after the first pass and is now in the notes; nothing else that landed since ships to an operator.
+The notes then took all four prose passes: <code>verify-claims</code> re-derived the commit count (107 once the notes PR merges; re-check at the tag) and corrected two claims about what the publish check and the earlier CI runs established, and <code>readability</code>, <code>deslop</code> and <code>semantic-remediation</code> repaired the sentences written for <code>rc.2</code>, leaving the prose reviewed at the candidate as it was.</p>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
 <h3 id="v190-rc2"><code>v1.9.0-rc.2</code><a class="headerlink" href="#v190-rc2" title="Permanent link">&para;</a></h3>
 <p><strong>PASSED in CI, validated 2026-10-05; promotion to <code>v1.9.0</code> is the maintainer's call.</strong> Tagged at <code>65ba797c2</code>, the Q1158 merge, so it carries Q1158 and Q1160 on the same released surface as <code>rc.1</code>.
