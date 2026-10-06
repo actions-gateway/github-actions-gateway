@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.8.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.8.0">Read the release notes.</a>
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
           </div>
           
         </aside>
@@ -2723,14 +2723,9 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Shipped as <code>v1.7.0</code> on 2026-08-30, validated on <code>rc.3</code>. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Of 1.6's three hand-offs, <a href="../queue/Q215/">Q215</a>'s trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), Q986 has landed, so Definition of Done #5 is claimed rather than narrowed, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in. Three candidates: <code>rc.1</code> failed the admission ladder's quota rung on a real product defect (Q1035, the advertisement recomputed every long-poll but published only by a reconcile an idle set never triggered), <code>rc.2</code> passed with the fix, and <code>rc.3</code> was cut because Q1026 narrowed the shared mirror set's ingress peer afterwards, a manifest that ships in no image and no chart and so is invisible to <code>check-artifact-unchanged.sh</code></td>
 </tr>
 <tr>
-<td><a href="release-1.9/">release-1.9.md</a></td>
-<td>The Rule #4b overlap rung: <code>v2</code> served beside <code>v2beta1</code> with the storage version unmoved, so <code>v2.0.0</code> has a rollback destination and the new conversion edge runs once before it is mandatory</td>
-<td>⚠️ All three gating rows landed: Q1085's reject and pre-upgrade check, Q413's Phase 2, then Q1150's retype of the validating webhooks onto <code>v2</code>. What remains is the release itself, which no backlog row tracks: no candidate cut, and no date</td>
-</tr>
-<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="release-1.9/">release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Phase 3 rides <a href="../queue/Q1086/">Q1086</a>, <a href="../queue/Q273/">Q273</a> and <a href="../queue/Q264/">Q264</a>, and Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a></td>
+<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Phase 3 rides <a href="../queue/Q1086/">Q1086</a>, <a href="../queue/Q273/">Q273</a> and <a href="../queue/Q264/">Q264</a>, and Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a></td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
@@ -3045,6 +3040,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/release-1.8/">archive/release-1.8.md</a></td>
 <td>The 1.8 release gate: both halves of the scale-set drain recovery a terminating worker's window used to cost, the swallowed window (Q1029) and the claim that raced the pod's deletion (Q1108), plus the two v2 GA soak readings and the Phase 2 alias decision that ride without gating</td>
 <td>Archived 2026-09-29, Q1146. Shipped as <code>v1.8.0</code> on 2026-09-14, validated on <code>rc.2</code>. Q1029 closed 2026-09-07, recovery running off the worker-pod watch; Q1108 was added as a second gating row on 2026-09-13 and closed that day, moving the at-most-once claim into its own ConfigMap so it outlives the pod. Q1059 and Q1060 rode and closed positive on 2026-09-14, and Q452's alias decision closed 2026-09-08. Two candidates: <code>rc.1</code> was cut and validated and then stopped covering what ships, because Q1108 landed on the released surface, and <code>rc.2</code> validated at <code>86fbb6061</code>. Q1085's removal notice rode with its docs half shipped; its items 2 and 3 did not make the tag, so both are 1.9's and the clean-population window they wanted is spent</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.9/">archive/release-1.9.md</a></td>
+<td>The Rule #4b overlap rung: <code>v2</code> served beside <code>v2beta1</code> with the storage version unmoved, so <code>v2.0.0</code> has a rollback destination and the new conversion edge runs once before it is mandatory</td>
+<td>Archived 2026-10-05, at the tag. Shipped as <code>v1.9.0</code> on 2026-10-05, validated on <code>rc.2</code> in CI, the first stable tag whose publish read the gate's own evidence (Q880). Gates: Q1085's reject and pre-upgrade check, Q413's Phase 2, Q1150's webhook retype, and Q880 itself. Two candidates: <code>rc.1</code> validated through the local gate on 2026-10-03 and was held so the shipping candidate would be validated in CI with the DinD and Dragonfly legs (Q1158, Q1159, Q1160)</td>
 </tr>
 <tr>
 <td><a href="archive/security-audit-2026-06/">archive/security-audit-2026-06.md</a></td>

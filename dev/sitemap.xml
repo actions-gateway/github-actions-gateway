@@ -461,10 +461,6 @@
          <lastmod>2026-10-06</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/release-1.9/</loc>
-         <lastmod>2026-10-06</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/release-ladder/</loc>
          <lastmod>2026-10-06</lastmod>
     </url>
@@ -962,6 +958,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/release-1.8/</loc>
+         <lastmod>2026-10-06</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/release-1.9/</loc>
          <lastmod>2026-10-06</lastmod>
     </url>
     <url>
