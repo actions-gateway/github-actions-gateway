@@ -23,7 +23,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 ## Scope ledger
 
 What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
-Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](release-1.9.md#scope-ledger) carries it, as it did Q1150, the validators' retype onto `v2`.
+Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](archive/release-1.9.md#scope-ledger) carries it, as it did Q1150, the validators' retype onto `v2`.
 `make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
 
 | Q-ID | Item | Gates? | Status |
