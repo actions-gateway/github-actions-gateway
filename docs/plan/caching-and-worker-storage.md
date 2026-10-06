@@ -26,7 +26,7 @@ Do not read this table as three deployments.
 
 | | What it holds | Where it lives today | Row |
 |---|---|---|---|
-| **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | Q408, [Q539](../queue/Q539.md), [Q540](../queue/Q540.md) |
+| **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | Q408, Q539, [Q540](../queue/Q540.md) |
 | **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works** | [Q215](../queue/Q215.md) |
 | **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere. Workers are storage-less | [Q215](../queue/Q215.md) |
 
@@ -45,7 +45,7 @@ A tenant's worker reaches the Actions cache data plane through its own proxy poo
 
 Distinct problems do not imply distinct deployments, and scoping them as three projects is how this becomes three times the work it needs to be.
 
-Dragonfly is the concrete case, and it is already the scheduled mirror candidate in [Q539](../queue/Q539.md).
+Dragonfly is the concrete case, and Q539 validated it as the mirrors' back end.
 It is a **general file-distribution system** whose registry-mirror use is one application, not its definition.
 Measured from the upstream docs on 2026-08-07:
 
@@ -141,7 +141,7 @@ Do not repeat that `actions/cache` has no home.
 
 Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).
 
-Open, with rows: [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.

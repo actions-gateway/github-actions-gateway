@@ -133,7 +133,8 @@ It is "nobody has pushed this far enough yet, and here is how far we have got".
 **Leg 2: GAG is making it safe.** Kata micro-VM workers give a job root without a shared kernel, already the default in GAG's own end-to-end suite.
 Per-tenant egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close the network half, including the path Kata does not close (a micro-VM does not change the pod's network identity, so cloud metadata still answers from inside the guest).
 Q408 shipped the egress half on 2026-08-28: an in-cluster registry mirror and a tenant carrying no allow-all rule, measured on the dogfood cluster.
-Still open under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella: [Q539](../queue/Q539.md) and [Q540](../queue/Q540.md), both variants graded against the contract Q408 validated.
+Still open under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella: [Q540](../queue/Q540.md), a variant graded against the contract Q408 validated.
+Q539 graded the other and closed 2026-10-05.
 
 **Leg 3: GAG keeps it operable.** Quota-aware intake and automatic re-run are consequences of leg 2, not standalone features, and should be presented that way.
 Bin-packing tenants onto shared expensive nodes *requires* enforceable per-tenant quotas, and enforcing a quota is what strands jobs unless intake respects it before the claim.

@@ -115,7 +115,7 @@ Both positions are defensible and they cannot both stand as written.
 - **Workload identity.** The no-PEM delegation model ([05-security.md §5.7](../../design/05-security.md)) stays opt-in with its in-cluster PEM default, and 1.6 makes no change to it and no new claim about it.
   Decided 2026-08-25.
 - **[Q765](../../queue/Q765.md) as a build.** Blocked on hardware nobody has; see criterion 4 above.
-- **[Q539](../../queue/Q539.md) and [Q540](../../queue/Q540.md).** Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before variants are graded against it.
+- **Q539 and [Q540](../../queue/Q540.md).** Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before variants are graded against it.
 - **The remaining proxy-hardening cluster.** Q565, Q566 and Q567 keep their demand triggers.
 
 ## Definition of done

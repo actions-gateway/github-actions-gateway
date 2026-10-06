@@ -82,7 +82,7 @@ The criterion now also records the decline, so a later reading cannot revive the
 
 ## Explicitly out of scope
 
-- **[Q539](../queue/Q539.md) and [Q540](../queue/Q540.md).** Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before Dragonfly and the composed stack are graded against it ([§6](q408-untrusted-pr-egress.md#6-follow-on-validations-q539-q540)).
+- **Q539 and [Q540](../queue/Q540.md).** Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before Dragonfly and the composed stack are graded against it ([§6](q408-untrusted-pr-egress.md#6-follow-on-validations-q539-q540)).
   They are the follow-on validations of this release's deliverable, so they cannot also be in it.
 - **[Q215](../queue/Q215.md) as a build.** Deferred with an unfired trigger, per the section above.
 - **Controller or API changes.** Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.

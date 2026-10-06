@@ -1,6 +1,7 @@
 # Dragonfly as the Mirror Backend — Q539
 
-> **Status (2026-10-05): Phase 1 measured, Phase 2 built and validated on kind, Phase 3's first dogfood run failed on gcr.io pulls and the fix is measured locally ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).** Dragonfly fails the [mirror contract](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) when it is the endpoint workers reach, so it is built as the **back end** of the Distribution mirrors rather than a substitute for them ([§2](#2-unfronted-dragonfly-fails-the-contract-by-construction)). §2–§6 were measured in local Docker and §7 on a kind cluster; nothing here has run on the dogfood cluster.
+> **Status (2026-10-05): ✅ All three phases done.** Phase 3 validated on dogfood by `v1.9.0-rc.2`'s release-gate run ([§7](#7-phases)), after a first run failed on gcr.io pulls ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).
+> Dragonfly fails the [mirror contract](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) when it is the endpoint workers reach, so it is built as the **back end** of the Distribution mirrors rather than a substitute for them ([§2](#2-unfronted-dragonfly-fails-the-contract-by-construction)). §2–§6 were measured in local Docker, Phase 2 on a kind cluster, and Phase 3 on the dogfood cluster.
 
 Q408 validated the untrusted-PR egress posture with CNCF Distribution as the mirror, and [§6](q408-untrusted-pr-egress.md#6-follow-on-validations-q539-q540) of that plan scheduled Dragonfly as the alternate backend to grade against the same four-property contract.
 This plan is that grading, and the build it led to.
@@ -134,10 +135,28 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
   | Re-running the start script | CA unchanged, no restart; the mirrors' copy matches the Secret's byte for byte |
 
   kind has no GMC, so the lab applied a stand-in DNS egress policy for the worker namespace that the GMC-managed default-deny provides on dogfood.
-- **Phase 3 — validate on dogfood.
-  First run red, fix measured locally ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).** The Q408 Phase-4 sequence with `E2E_MIRROR_BACKEND=dragonfly`: the [§3.7](q408-untrusted-pr-egress.md#37-the-phase-2-validation-battery) battery, one Kata e2e run whose in-job negatives must pass unchanged, and the mirror hit counts.
+- **Phase 3 — validate on dogfood. ✅ Done (2026-10-05, dogfood).** The Q408 Phase-4 sequence with `E2E_MIRROR_BACKEND=dragonfly`: the [§3.7](q408-untrusted-pr-egress.md#37-the-phase-2-validation-battery) battery and one Kata e2e run whose in-job negatives must pass unchanged.
   Three readings this variant adds: blob `GET`s in dfdaemon's log taking the P2P path, a worker unable to reach the seed peer's proxy port, and a `CONNECT` through the seed peer to `self-signed.badssl.com` refused.
-  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (`dragonfly_readings` in `scripts/dogfood/validate-release.sh`); the mirror hit counts it does not take.
+  The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (`dragonfly_readings` in `scripts/dogfood/validate-release.sh`).
+  The first run was red on gcr.io pulls ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).
+
+  Read from `v1.9.0-rc.2`'s gate run 37380198658 (`validate-candidate.yml` on `main` at `aa1178e31`, candidate `65ba797c2`, 2026-10-05), whose Dragonfly leg applied `deploy/dragonfly/` from that checkout and so ran with the blobs-only rule:
+
+  | Reading | Result |
+  |---|---|
+  | Open egress | the gate deleted the allow-all `e2e-open-egress` NetworkPolicy before the leg |
+  | Kata e2e run 37388708904 | 3/3 jobs ok, so the in-job negatives passed unchanged |
+  | §3.7 battery | every instance (`docker-io`, `ghcr-io`, `quay-io`, `registry-k8s-io`, `gcr-io`) passed available, debug, v2, manifest, push and catalog |
+  | Mirror client census | read all five instances' proxy logs; every client that connected was a workload-labelled pod or the kubelet |
+  | The seed peer's log | 123 requests by P2P rule, 374 direct |
+  | A worker to the seed proxy port | timed out, while the mirror answered 200 |
+  | `CONNECT` through the seed peer to a self-signed host | refused (curl exit 56, HTTP 000; the control answered 200) |
+  | Gate verdict | `Validation gate PASSED for v1.9.0-rc.2: kata crd-smoke soak dind dragonfly.` |
+
+  **The mirror hit counts are retired from this phase.** `scripts/dogfood/e2e-mirror-hits.sh` exists because in Q408 Phase 3 the tenant still had open egress, so a green e2e run could not show that pulls rode the mirror.
+  With `e2e-open-egress` deleted, a pull that ignores its mirror wiring fails the run outright; the script's own header says it is no longer the only signal and stays only to attribute repositories to instances.
+  The leg's green e2e run and its mirror client census settle the question the hit counts answered, and validating the back end does not need the per-repository attribution.
+  The gate does not run `e2e-mirror-hits.sh`, and stays that way.
 
 ### 7.1 The first dogfood run: gcr.io manifests on the P2P path
 
@@ -163,7 +182,7 @@ The gate's own mirror battery has the same blind spot: it fetches each instance'
 **The fix drops `manifests/sha256.*` from the rules.** Manifests are a few KB, so the P2P path loses nothing worth keeping; blobs are where the bytes are.
 Measured in the same lab with only `blobs/sha256.*`: the gcr.io pull succeeded, its five blobs taking the P2P rule and its manifest going direct, and a cold Hub blob (`library/busybox:1.36`'s amd64 layer) returned 200 at 2,206,402 bytes with a sha256 equal to its digest by the P2P rule.
 The only change between that run and the failing one above is the removed rule.
-Not yet measured on dogfood: the next gate run is the reading, and `pull_probe` now prints docker's stderr on a failure, so a different cause would name itself.
+Measured on dogfood by the next gate run, 37380198658: the Dragonfly leg's e2e run passed every job, `docker-mirror-pull` included ([§7](#7-phases)).
 
 ## 8. What this plan does not cover
 

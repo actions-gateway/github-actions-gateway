@@ -6,7 +6,7 @@
 > What is built is [§3.12](#312-phase-4-build-notes-2026-08-28).
 > Phase 5 published the recipe as the supported posture: [kata-dind-workloads.md § Untrusted pull requests](../operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture) is the operator how-to, G.14 is marked shipped, and the roadmap bullet is gone because the capability is on [Features](../features.md) instead.
 >
-> **This doc stays here rather than moving to `archive/`** because [§6](#6-follow-on-validations-q539-q540) still owns two live rows: Q539 and Q540 are graded against the contract validated here.
+> **This doc stays here rather than moving to `archive/`** because [§6](#6-follow-on-validations-q539-q540) still owns a live row: Q540 is graded against the contract validated here, as Q539 was before it closed on 2026-10-05.
 >
 > **Phase 3 is done.** Its wiring is built and gated, and validated on the dogfood cluster: a green Kata e2e run whose five mirror instances served 161 content requests between them, against a zero baseline measured on the same cluster twenty minutes earlier ([§3.11](#311-phase-3-validation-graded-2026-08-28)).
 > All four clients are wired ([§3.9](#39-phase-3-build-notes-2026-08-28)): dockerd by a mounted `daemon.json`, the non-Hub docker pulls by a ref rewrite at the one chokepoint they share, buildkit by a generated `buildkitd.toml`, helm by its OCI ref.
@@ -642,8 +642,9 @@ No off-cluster gate stands in either, whatever `deploy/registry-mirror/` ends up
 
 Decision 2026-07-31: both alternates get validated, sequenced **after** this plan's Phase 4 proves the reference posture — the contract must be validated on the simple implementation before variants are graded against it.
 
-- **[Q539](../queue/Q539.md) — Kata + Dragonfly as the mirror backend.** Graded in [q539-dragonfly-mirror-backend.md](q539-dragonfly-mirror-backend.md): substituted for the Distribution instances, Dragonfly fails §3.5, because dfdaemon's proxy forwards to any host and forwards pushes, with no setting that restricts either.
-  So it is built as the Distribution mirrors' outbound proxy instead, which keeps the contract theirs and admits only the mirror pods to Dragonfly; the dogfood run of the Phase-4 battery against that shape is what the row still owes.
+- **Q539 — Kata + Dragonfly as the mirror backend.** Graded in [q539-dragonfly-mirror-backend.md](q539-dragonfly-mirror-backend.md): substituted for the Distribution instances, Dragonfly fails §3.5, because dfdaemon's proxy forwards to any host and forwards pushes, with no setting that restricts either.
+  So it is built as the Distribution mirrors' outbound proxy instead, which keeps the contract theirs and admits only the mirror pods to Dragonfly.
+  That shape passed the Phase-4 battery on dogfood on 2026-10-05, and Q539 closed.
 - **[Q540](../queue/Q540.md) — the composed stack as a milestone: Kata + Dragonfly (node layer) + pull-through cache (guest layer).** The two operate at different layers (§5), so this validates the composition an image-heavy fleet would actually run: Dragonfly accelerating node-level pod-image distribution via containerd mirror config, the in-guest mirror serving untrusted job pulls, each with its own policy scope — and confirms neither weakens the other's posture (in particular that the node-layer P2P mesh stays unreachable from worker pods).
 
 ## 7. Success criteria
