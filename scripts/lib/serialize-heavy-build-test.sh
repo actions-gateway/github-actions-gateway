@@ -71,11 +71,13 @@ await() {
 	return 1
 }
 
-# gone PID — true once PID is dead, allowing 10 s for an orphan to be reaped;
-# work that outlived the lock runs on for the rest of its 120 s.
+# gone PID — true once PID is dead. A signalled orphan is reaped by init on its
+# own schedule, so this waits, up to 60 s; a pass returns as soon as it dies,
+# and only a failure spends the bound. Work that outlived the lock would run on
+# for the rest of its 300 s.
 gone() {
 	local i
-	for ((i = 0; i < 100; i++)); do
+	for ((i = 0; i < 600; i++)); do
 		kill -0 "$1" 2>/dev/null || return 0
 		sleep 0.1
 	done
@@ -98,7 +100,7 @@ start() {
 signalled() {
 	local name="$1" target="$2" sig="$3" want="$4"
 	local run="${name// /-}"
-	start "${run}" 120
+	start "${run}" 300
 	if ! await "${WORKDIR}/${run}.grandchild"; then
 		bad "${name}: work never entered the section"
 		kill -KILL -- "-${LAUNCHER}" 2>/dev/null || true
@@ -114,10 +116,14 @@ signalled() {
 	local child grandchild
 	child="$(<"${WORKDIR}/${run}.child")"
 	grandchild="$(<"${WORKDIR}/${run}.grandchild")"
+	# The child is the launcher's to reap, so it is gone before the launcher
+	# exits: an ordering, checked with no wait. The grandchild is not.
 	if ((rc != want)); then
 		bad "${name}: launcher exited ${rc}, want ${want}"
-	elif ! gone "${child}" || ! gone "${grandchild}"; then
-		bad "${name}: work outlived the lock (child ${child}, grandchild ${grandchild})"
+	elif kill -0 "${child}" 2>/dev/null; then
+		bad "${name}: child ${child} outlived the lock"
+	elif ! gone "${grandchild}"; then
+		bad "${name}: grandchild ${grandchild} outlived the lock"
 	else
 		ok "${name}"
 	fi
