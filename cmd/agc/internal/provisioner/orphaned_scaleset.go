@@ -199,20 +199,22 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 type scaleSetWorkerSet struct {
 	started     map[string]string // pod name -> started job ID, "" where none is recorded
 	startedJobs map[string]bool   // job IDs some live worker's runner has started
+	idle        int               // workers not terminal or deleting whose runner has started no job
 }
 
 // serving reports whether a live worker is running jobID. That is the worker whose
 // runner started it, wherever that worker was created: GitHub gives a scale-set job to
 // whichever runner asks first, so the pod named for jobID can have run another job and
-// gone, or be running one now (Q1152). With no start recorded for jobID, the worker
-// created for it stands in for it unless its runner started some other job — a job not
-// yet started may still be taken by that worker, and nothing names another candidate.
+// gone, or be running one now (Q1152). With no start recorded for jobID, the job is
+// queued until some runner takes it, and any idle worker may be that runner: the worker
+// created for it, unless its runner started some other job, or another worker whose
+// runner has started nothing yet.
 func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
 	if s.startedJobs[jobID] {
 		return true
 	}
 	started, live := s.started[scaleSetPodName(ownerName, jobID)]
-	return live && started == ""
+	return live && started == "" || s.idle > 0
 }
 
 // liveScaleSetWorkers lists this owner's scale-set worker pods, in any phase. One List
@@ -244,7 +246,18 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 		set.started[pods.Items[i].Name] = jobID
 		if jobID != "" {
 			set.startedJobs[jobID] = true
+		} else if canTakeAJob(&pods.Items[i]) {
+			set.idle++
 		}
 	}
 	return set, nil
+}
+
+// canTakeAJob reports whether a worker's runner can still be given a job: the pod is
+// neither terminal nor being deleted.
+func canTakeAJob(pod *corev1.Pod) bool {
+	if pod.DeletionTimestamp != nil {
+		return false
+	}
+	return pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed
 }

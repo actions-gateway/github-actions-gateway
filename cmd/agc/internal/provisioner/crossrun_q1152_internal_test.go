@@ -3,10 +3,12 @@ package provisioner
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -142,6 +144,59 @@ func TestRecoverOrphanedScaleSetWorkers_RecoversAJobWhoseNamesakeRunsAnother(t *
 
 	assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths),
 		"a live pod named for job-a is not job-a's worker once its runner started another job")
+}
+
+// TestRecoverOrphanedScaleSetWorkers_SparesAQueuedJobWhileAWorkerIsIdle is the shape
+// mid-crossing: job-a's namesake runs job-b, and job-b's namesake is still starting with
+// no job. job-a has not started anywhere, so it is queued, and the idle worker is the
+// one that will take it; nothing was lost.
+func TestRecoverOrphanedScaleSetWorkers_SparesAQueuedJobWhileAWorkerIsIdle(t *testing.T) {
+	ctx := context.Background()
+	namesake := mintedWorker("job-a", "myorg/repo-a", "111")
+	namesake.Annotations[AnnotationStartedJobID] = "job-b"
+	idle := mintedWorker("job-b", "myorg/repo-b", "222")
+	idle.Status.Phase = corev1.PodPending
+	p, target, _, rerunCount, _ := recoveryFixture(t, namesake, idle)
+
+	done, err := p.RecoverOrphanedScaleSetWorkers(ctx, target, []OrphanedWorker{
+		{JobID: "job-a", Owner: "myorg", Repository: "repo-a", RunID: "111"},
+		{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"},
+	})
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(), "job-a is queued with an idle worker to take it")
+	assert.NotContains(t, target.events, "OrphanedWorkerRecovered")
+}
+
+// TestRecoverOrphanedScaleSetWorkers_AnExitedWorkerTakesNoJob is the control for the
+// test above: a worker that has exited, or is being deleted, will take no job, so it
+// does not stand in for job-a.
+func TestRecoverOrphanedScaleSetWorkers_AnExitedWorkerTakesNoJob(t *testing.T) {
+	for name, gone := range map[string]func(*corev1.Pod){
+		"failed": func(p *corev1.Pod) { p.Status.Phase = corev1.PodFailed },
+		"deleting": func(p *corev1.Pod) {
+			p.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+			p.Finalizers = []string{"test"}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			namesake := mintedWorker("job-a", "myorg/repo-a", "111")
+			namesake.Annotations[AnnotationStartedJobID] = "job-b"
+			other := mintedWorker("job-c", "myorg/repo-c", "333")
+			gone(other)
+			p, target, _, _, paths := recoveryFixture(t, namesake, other)
+
+			done, err := p.RecoverOrphanedScaleSetWorkers(ctx, target, []OrphanedWorker{
+				{JobID: "job-a", Owner: "myorg", Repository: "repo-a", RunID: "111"},
+			})
+			require.NoError(t, err)
+			<-done
+
+			assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths))
+		})
+	}
 }
 
 // TestRecoverOrphanedScaleSetWorkers_ReadsTheClaimByTheJobItsWorkerServed covers the
