@@ -14,6 +14,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed](#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed)
   - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
   - [Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2](#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
@@ -120,6 +121,16 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed
+
+When a scale-set job ends before any runner starts it, typically a run cancelled by a `cancel-in-progress` concurrency group, one of the set's workers has nothing left to run.
+Earlier releases reclaimed only the worker created for that job, and when its runner had already taken another job, the idle worker that was left held a concurrency slot and a node until `maxWorkerLifetime` (12 hours by default).
+The AGC now gives the oldest idle `Running` worker the five-minute reap deadline instead, marked `actions-gateway.com/surplus-for-job`, and moves that deadline to another idle worker if the picked one is given a job (Q1153).
+A worker whose runner has started a job is never picked.
+
+Expect more `WorkerPodOrphanedRunning` Events and `actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}` on busy sets that cancel queued jobs: each is a worker that used to sit idle until the lifetime cap.
+No action is required at upgrade time.
 
 ### Non-breaking: `v2` is served beside `v2beta1`, and an unpinned read now returns `v2`
 

@@ -936,8 +936,10 @@ func scaleSetPodName(ownerName, jobID string) string {
 // stamping the minted worker then reaps a live job five minutes later (Q1151). The
 // completion names the runner that held the job, and the worker carrying that name in
 // AnnotationRunnerName is the one whose runner has now exited. With no runnerName (the
-// job ended before any runner started it) the minted worker is the surplus one, unless
-// its runner has been seen starting another job (AnnotationStartedJobID).
+// job ended before any runner started it) the set has one runner more than it has jobs:
+// the minted worker is that surplus one, unless its runner has been seen starting
+// another job (AnnotationStartedJobID), and then an idle worker is reclaimed in its
+// place (reclaimSurplusWorker, Q1153).
 func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, jobID, runnerName string) error {
 	key := target.Key()
 	minted := scaleSetPodName(key.Name, jobID)
@@ -956,9 +958,9 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 		case err != nil:
 			return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", minted, err)
 		case mp.Annotations[AnnotationStartedJobID] != "" && mp.Annotations[AnnotationStartedJobID] != jobID:
-			p.logForKey(key).Debug("scale-set worker is running another job; not reclaiming it",
+			p.logForKey(key).Debug("scale-set worker is running another job; reclaiming an idle one instead",
 				"pod", minted, "jobID", jobID, "startedJobID", mp.Annotations[AnnotationStartedJobID])
-			return nil
+			return p.reclaimSurplusWorker(ctx, target, jobID, minted)
 		default:
 			pod = &mp
 		}
@@ -992,7 +994,73 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 	if pod == nil {
 		return nil
 	}
-	return p.markJobCompleted(ctx, pod, jobID)
+	surplusFor := ""
+	if runnerName == "" {
+		surplusFor = jobID
+	}
+	return p.markJobCompleted(ctx, pod, jobID, surplusFor)
+}
+
+// reclaimSurplusWorker stamps one idle worker of target for collection, in place of the
+// worker minted for jobID: jobID ended before any runner started it, so one of the set's
+// runners will never be given a job, but the one minted for it is busy with another
+// (Q1153). Left alone, that idle runner sits at "Listening for Jobs" holding a
+// concurrency slot and a node until spec.maxWorkerLifetime.
+//
+// Every runner of the set can take any of its jobs, so which idle one goes does not
+// change how many jobs still have a runner to take them. A candidate is a Running worker
+// whose runner has started no job and that carries no stamp; the oldest is taken. A busy
+// worker is never one, and a pick that turns out to be needed costs a stamp rather than
+// a job: its JobStarted lifts the stamp and moves it on (MarkScaleSetJobStarted).
+// Pending workers are left out, since the reaper collects a stamped Pending pod in
+// seconds and one still starting is the likeliest to be taken next.
+//
+// It is idempotent per jobID: a worker already carrying AnnotationSurplusForJob for it
+// means a replayed completion has nothing left to reclaim. except names a pod never to
+// pick. Finding no candidate is not an error; the lifetime cap remains the backstop.
+func (p *Provisioner) reclaimSurplusWorker(ctx context.Context, target Target, jobID, except string) error {
+	key := target.Key()
+	var pods corev1.PodList
+	if err := p.liveReader().List(ctx, &pods, client.InNamespace(key.Namespace),
+		client.MatchingLabels(target.PodOwnerLabels())); err != nil {
+		return fmt.Errorf("provisioner: list scale-set worker pods: %w", err)
+	}
+	var pick *corev1.Pod
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if jobID != "" && pod.Annotations[AnnotationSurplusForJob] == jobID {
+			return nil
+		}
+		if pod.Name == except || !surplusCandidate(pod) {
+			continue
+		}
+		if pick == nil || pod.CreationTimestamp.Before(&pick.CreationTimestamp) ||
+			(pod.CreationTimestamp.Equal(&pick.CreationTimestamp) && pod.Name < pick.Name) {
+			pick = pod
+		}
+	}
+	if pick == nil {
+		p.logForKey(key).Debug("no idle scale-set worker to reclaim for a job no runner started", "jobID", jobID)
+		return nil
+	}
+	if secretName := scaleSetPodSecretName(pick); secretName != "" {
+		if err := p.deleteSecret(ctx, key.Namespace, secretName); err != nil {
+			return fmt.Errorf("provisioner: delete scale-set Secret %s: %w", secretName, err)
+		}
+	}
+	p.logForKey(key).Debug("reclaiming an idle scale-set worker for a job no runner started",
+		"pod", pick.Name, "jobID", jobID)
+	return p.markJobCompleted(ctx, pick, jobID, jobID)
+}
+
+// surplusCandidate reports whether pod is an idle worker reclaimSurplusWorker may stamp:
+// Running, not being deleted, its runner seen starting no job, and not already stamped.
+func surplusCandidate(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning || !pod.DeletionTimestamp.IsZero() {
+		return false
+	}
+	_, stamped := pod.Annotations[AnnotationJobCompletedAt]
+	return pod.Annotations[AnnotationStartedJobID] == "" && !stamped
 }
 
 // MarkScaleSetJobStarted records on the worker whose runner is runnerName that its
@@ -1029,8 +1097,10 @@ func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target,
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
+	surplusFor := pod.Annotations[AnnotationSurplusForJob]
 	pod.Annotations[AnnotationStartedJobID] = jobID
 	delete(pod.Annotations, AnnotationJobCompletedAt)
+	delete(pod.Annotations, AnnotationSurplusForJob)
 	if err := p.Client.Patch(ctx, pod, patch); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -1038,7 +1108,12 @@ func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target,
 		return fmt.Errorf("provisioner: record job start on worker pod %s: %w", pod.Name, err)
 	}
 	p.logFor().Debug("recorded job start on worker pod", "pod", pod.Name, "jobID", jobID, "clearedStamp", stamped)
-	return nil
+	if !stamped {
+		return nil
+	}
+	// The stamp marked this runner as the set's surplus, and it has just been given a
+	// job, so the runner that would have taken that job is the surplus one now (Q1153).
+	return p.reclaimSurplusWorker(ctx, target, surplusFor, pod.Name)
 }
 
 // liveReader is APIReader, or Client where none is wired.
@@ -1100,7 +1175,7 @@ func scaleSetPodSecretName(pod *corev1.Pod) string {
 // A pod that has already reached a terminal phase — the ordinary case, where the runner
 // ran the job and exited — is left unstamped: completedPodTTL already owns it, so the
 // stamp would buy nothing and cost one write per job.
-func (p *Provisioner) markJobCompleted(ctx context.Context, pod *corev1.Pod, jobID string) error {
+func (p *Provisioner) markJobCompleted(ctx context.Context, pod *corev1.Pod, jobID, surplusFor string) error {
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 		return nil
@@ -1113,6 +1188,9 @@ func (p *Provisioner) markJobCompleted(ctx context.Context, pod *corev1.Pod, job
 		pod.Annotations = map[string]string{}
 	}
 	pod.Annotations[AnnotationJobCompletedAt] = p.nowFn().UTC().Format(time.RFC3339)
+	if surplusFor != "" {
+		pod.Annotations[AnnotationSurplusForJob] = surplusFor
+	}
 	if err := p.Client.Patch(ctx, pod, patch); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
