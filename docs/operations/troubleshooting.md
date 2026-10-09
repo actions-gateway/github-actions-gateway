@@ -3202,7 +3202,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
 | Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
 | Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
-| Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker is no longer there: no pod's runner started that job, the pod created for it is gone or running another job, and no other worker that has not exited is idle to take it |
+| Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone, or is running another job while no other worker that has not exited is idle to take it |
 
 **Never fires, by design:**
 

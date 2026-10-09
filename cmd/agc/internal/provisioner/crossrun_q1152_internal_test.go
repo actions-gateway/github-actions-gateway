@@ -169,6 +169,26 @@ func TestRecoverOrphanedScaleSetWorkers_SparesAQueuedJobWhileAWorkerIsIdle(t *te
 	assert.NotContains(t, target.events, "OrphanedWorkerRecovered")
 }
 
+// TestRecoverOrphanedScaleSetWorkers_RecoversAVanishedWorkerWhileAnotherIsIdle is Q844's
+// base case beside an idle worker: job-a's own worker is gone and nothing started job-a,
+// while job-c's worker is still starting. The idle worker does not make job-a queued; the
+// worker that vanished is job-a's.
+func TestRecoverOrphanedScaleSetWorkers_RecoversAVanishedWorkerWhileAnotherIsIdle(t *testing.T) {
+	ctx := context.Background()
+	idle := mintedWorker("job-c", "myorg/repo-c", "333")
+	idle.Status.Phase = corev1.PodPending
+	p, target, _, _, paths := recoveryFixture(t, idle)
+
+	done, err := p.RecoverOrphanedScaleSetWorkers(ctx, target, []OrphanedWorker{
+		{JobID: "job-a", Owner: "myorg", Repository: "repo-a", RunID: "111"},
+		{JobID: "job-c", Owner: "myorg", Repository: "repo-c", RunID: "333"},
+	})
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths))
+}
+
 // TestRecoverOrphanedScaleSetWorkers_AnExitedWorkerTakesNoJob is the control for the
 // test above: a worker that has exited, or is being deleted, will take no job, so it
 // does not stand in for job-a.

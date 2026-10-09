@@ -205,16 +205,16 @@ type scaleSetWorkerSet struct {
 // serving reports whether a live worker is running jobID. That is the worker whose
 // runner started it, wherever that worker was created: GitHub gives a scale-set job to
 // whichever runner asks first, so the pod named for jobID can have run another job and
-// gone, or be running one now (Q1152). With no start recorded for jobID, the job is
-// queued until some runner takes it, and any idle worker may be that runner: the worker
-// created for it, unless its runner started some other job, or another worker whose
-// runner has started nothing yet.
+// gone, or be running one now (Q1152). With no start recorded for jobID, the worker
+// created for it stands in for it while it is still listed: the job is queued, and that
+// worker, or another whose runner has started nothing, may yet take it. With that worker
+// gone and no start recorded, the job's worker is taken to be the one that vanished.
 func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
 	if s.startedJobs[jobID] {
 		return true
 	}
 	started, live := s.started[scaleSetPodName(ownerName, jobID)]
-	return live && started == "" || s.idle > 0
+	return live && (started == "" || s.idle > 0)
 }
 
 // liveScaleSetWorkers lists this owner's scale-set worker pods, in any phase. One List

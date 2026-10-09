@@ -542,7 +542,9 @@ Q423 measured all of this rather than assuming it: the worker carried every mark
 The tombstone that closes it is ours to write rather than upstream's, and Q844 wrote it where per-job state already crosses a process boundary, the per-`RunnerSet` guard ConfigMap (Q606), rather than as a new dependency.
 The listener records the run behind every worker it builds and drops the record when the job concludes; the owning reconciler reads that set once per process, ahead of the reaper, and re-runs any run whose worker is no longer there.
 A job's worker is the pod whose runner started it (`actions-gateway.com/started-job-id`), not the pod created for it, because GitHub gives a scale-set job to whichever runner asks first (Q1152).
-A job no runner has started yet is queued, and is not re-run while any worker that has not exited could still take it: the pod created for it, unless that pod's runner started another job, or another worker whose runner has started nothing.
+A job no runner has started yet is judged by the pod created for it.
+While that pod is listed the job is queued, and it is not re-run if that pod's runner has started nothing, or another worker that has not exited has started nothing either.
+With that pod gone, the job's worker is taken to be the one that vanished.
 The recovery claim records the job the claimed worker was serving, so a job already recovered off another job's worker is not re-run twice.
 So the recovery is restart-safe on both paths now, and what stays asymmetric is only the *diagnosis*: an evicted worker is recovered under its own cause, while one that vanished is recovered under `cause="vanished"`, because which disruption took it went with the pod.
 
