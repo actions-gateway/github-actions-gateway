@@ -35,9 +35,9 @@ Six gating rows and the candidate validation, then the three items that ride.
 | [Q1152](../queue/Q1152.md) | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | 🔲 ready |
 | [Q1153](../queue/Q1153.md) | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | 🔲 ready |
 | [Q1154](../queue/Q1154.md) | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | 🔲 ready |
-| [Q1069](../queue/Q1069.md) | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | 🔲 ready |
+| Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
-| [Q1070](../queue/Q1070.md) | Security-dashboard panel keyed on Q1069's per-set gauge | rides | 🔲 ready, filtered to opted-in tenants, after Q1069 |
+| [Q1070](../queue/Q1070.md) | Security-dashboard panel keyed on Q1069's per-set gauge | rides | 🔲 ready, filtered to opted-in tenants; Q1069's gauge has landed |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | 🔲 ready, staged |
 | [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | 🔲 ready |
 
@@ -50,7 +50,7 @@ Q1069 gates as the one feature: the gateway-level attribution flag reads `0` whe
 **The riders are planned and worked, and the tag does not wait for them.** Each can come back short for a reason a gate should not absorb.
 Q540 is a measurement whose answer may be a fix of unknown size: [Q539](../plan/q539-dragonfly-mirror-backend.md#8-what-this-plan-does-not-cover) measured Dragonfly's node proxy as an open forward proxy.
 Q1066's second stage adds a cloud dependency and an identity grant per provider, and its first stage ships alone if the second slips.
-Q1070 depends on Q1069, whose per-set gauge has to carry the reason label the panel filters on.
+Q1070 keys on Q1069's per-set gauge, whose `reason` label is what the panel filters on.
 
 `scripts/release/semver-floor.sh v1.9.0` read `FLOOR: NONE` on 2026-10-09 over two commits, so nothing merged yet rides beyond the three above.
 The ledger takes a row for each further item that merges onto the released surface before the tag.

@@ -93,7 +93,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Grafana dashboards](operations/observability-dashboards.md)**: tenant, platform, budget, and security dashboards, all as code.
 - **[Why a set is not being offered jobs](operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)** <span class="gag-v2-badge">v2</span>: `RunnerSet` status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
   Readable from `kubectl describe`, so answering it no longer needs metrics access.
-- **[Egress attribution readiness](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.8</span>: an `EgressAuditUnattributed` condition and gauge say whether both halves of that attribution are on, and name the half that is not.
+- **[Egress attribution readiness](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.8</span>: an `EgressAuditUnattributed` condition and gauge, on each gateway and each `RunnerSet`, say whether both halves of that attribution are on, and name the half that is not.
   Advisory: it never gates `Ready`.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.

@@ -1085,7 +1085,8 @@ The record shapes, the join, and the CNI assumption it rests on are in [logging:
 While it is `True` the reason names the half still off: `ProxySourceAuditDisabled` (the pool), `WorkerAuditDisabled` (the gateway), `EgressAuditDisabled` (neither), or `DirectEgress` (no `defaultProxyRef`, so the AGC's own egress leaves from no pool).
 Fleet-wide the same fact is the `actions_gateway_egress_audit_unattributed` gauge (Q1062), which reads `1` until you turn both on.
 Both read the gateway's spec and its `defaultProxyRef`, so they say the pair is *configured*, not that a log pipeline is running the join.
-A `RunnerSet` with its own `spec.proxyRef` egresses through a pool neither of them looked at.
+Worker egress is judged per set: `kubectl describe runnerset <set>` shows the same condition read off the pool that set's workers use, its own `spec.proxyRef` before the gateway's `defaultProxyRef`, and `actions_gateway_runnerset_egress_audit_unattributed` is its fleet-wide gauge (Q1069).
+For a shared pool the set learns the pool's setting from the share the provider's grant projects, so it can lag a change by the projection recheck.
 
 Weigh it as a third cost on top of the two below: together the two streams say which host each of a tenant's jobs reached, which is the evidence an auditor asks for and also a per-worker record the platform now keeps.
 
