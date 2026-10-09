@@ -178,14 +178,23 @@ func TestToken_ExpiresAtParsed(t *testing.T) {
 // testClientRedirectingTo returns an *http.Client whose transport rewrites
 // every request to target baseURL (preserving path and query). This lets unit
 // tests point the provider at an httptest.Server without DNS tricks.
+//
+// Each client gets its own transport: every httptest.Server.Close calls
+// http.DefaultTransport.CloseIdleConnections, which can break a parallel
+// sibling's in-flight request whose header-only response has already
+// parked its connection as idle (Q1164).
 func testClientRedirectingTo(baseURL string) *http.Client {
 	return &http.Client{
-		Transport: &redirectTransport{base: baseURL},
+		Transport: &redirectTransport{
+			base: baseURL,
+			next: http.DefaultTransport.(*http.Transport).Clone(),
+		},
 	}
 }
 
 type redirectTransport struct {
 	base string
+	next http.RoundTripper
 }
 
 func (rt *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -197,7 +206,7 @@ func (rt *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error
 		host = host[7:]
 	}
 	cloned.URL.Host = host
-	return http.DefaultTransport.RoundTrip(cloned)
+	return rt.next.RoundTrip(cloned)
 }
 
 // ── parseRSAPrivateKey PKCS#8 paths ──────────────────────────────────────────
