@@ -42,8 +42,10 @@ sub run_relayed {
 		POSIX::sigprocmask(POSIX::SIG_SETMASK(), $old);
 		exec { $cmd[0] } @cmd or POSIX::_exit(255);
 	}
+	# local $?: the handler can run after waitpid returns and before $? is read,
+	# and the `ps` in descendants() would replace the child's status with its own.
 	if (defined $pid) {
-		$SIG{$_} = sub { kill $_[0], $pid, descendants($pid) } for @SIGNALS;
+		$SIG{$_} = sub { local ($?, $!); kill $_[0], $pid, descendants($pid) } for @SIGNALS;
 	}
 	POSIX::sigprocmask(POSIX::SIG_SETMASK(), $old);
 	return 255 unless defined $pid;
