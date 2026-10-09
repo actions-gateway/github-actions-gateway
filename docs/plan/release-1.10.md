@@ -32,7 +32,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 |---|---|---|---|
 | Q1086 | Mark `v2` the storage version, rewrite every stored object with a read-write sweep, and prune `storedVersions` to `["v2"]` | `1.10-gate` | ✅ landed: all six kinds store `v2`, and `gag-migrate storage-version` rewrites and prunes, proven on envtest |
 | [Q1171](../queue/Q1171.md) | RC validation runs the storage sweep and reads `storedVersions` on dogfood | `1.10-gate` | 🔲 ready |
-| [Q1152](../queue/Q1152.md) | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | 🔲 ready |
+| Q1152 | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | ✅ landed: a `JobStarted` replaces the worker's run identity with the started job's, and start-up recovery finds a job's worker by `started-job-id`. Unit-tested on crossed workers; not reproduced on a cluster |
 | [Q1153](../queue/Q1153.md) | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | 🔲 ready |
 | [Q1154](../queue/Q1154.md) | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | 🔲 ready |
 | Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
