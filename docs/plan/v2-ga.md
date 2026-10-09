@@ -7,8 +7,8 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > **Scoped 2026-10-09**, after `v1.9.0` tagged on 2026-10-05: the [scope ledger](#scope-ledger) is the release's record.
-> Phase 3 opens with [Q1086](../queue/Q1086.md), the storage migration, which is ready; [Q273](../queue/Q273.md) and [Q264](../queue/Q264.md), the removals, are blocked on it; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on all three.
-> One question is open and is the maintainer's: whether the storage advance ships as its own `1.10` minor or inside a two-phase `v2.0.0` upgrade ([why there must be one or the other](#the-storage-advance-needs-a-state-between-two-applies)).
+> Phase 3's storage advance ships first, in its own release: [Q1086](../queue/Q1086.md) gates [1.10](release-1.10.md), decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
+> The removals follow in `v2.0.0`: [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub, [Q273](../queue/Q273.md) for `v1alpha1`, and [Q264](../queue/Q264.md) for classic; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on all four.
 > The Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The phase table below is the real state.
 
@@ -19,25 +19,27 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
 | 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ✅ Done in Q413: `v2` is a second conversion spoke and the hub stays at `v2beta1` ([why](#the-hub-stays-at-v2beta1)) |
-| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: [Q1086](../queue/Q1086.md) ready, [Q273](../queue/Q273.md) and [Q264](../queue/Q264.md) blocked on it; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
+| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance ([Q1086](../queue/Q1086.md)) gates 1.10; the removals ([Q1167](../queue/Q1167.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md)) are blocked behind it; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
 ## Scope ledger
 
 What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
 Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](archive/release-1.9.md#scope-ledger) carries it, as it did Q1150, the validators' retype onto `v2`.
+Nor is the storage advance: [Q1086](../queue/Q1086.md) gates 1.10, and [release-1.10.md](release-1.10.md#scope-ledger) carries it.
 `make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1086](../queue/Q1086.md) | Storage-migrate stored objects to `v2` before the removals (Phase 3) | `2.0-gate` | 🔲 ready; the mechanism is a read-write sweep, and the release shape it lands in is the open question below |
-| [Q273](../queue/Q273.md) | Remove `v1alpha1` and `v2alpha1` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1086 |
-| [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q1086, ships beside Q273 |
-| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1086, Q273 and Q264 |
+| [Q1167](../queue/Q1167.md) | Retype the controllers onto `v2`, move the conversion hub, and drop `v2alpha1` and `v2beta1` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1086 |
+| [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate` (Phase 3) | `2.0-gate` | 🚫 blocked on the 1.10 tag |
+| [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q1167 and Q273 |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1086, Q1167, Q273 and Q264 |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 | [Q275](../queue/Q275.md) | Reconcile the capacity and density docs with the ScaleSet default | rides | 🚫 blocked on Q264, whose removal makes the classic framing false |
 
-**Scoped 2026-10-09, and nothing rides yet.** `scripts/release/semver-floor.sh v1.9.0` read `FLOOR: NONE` over the two commits since the tag, so the scope is the gating rows alone.
+**Scoped 2026-10-09, and nothing rides yet.** The removals are gated on the 1.10 tag as well as on their rows, since `main`'s next tag once one lands is `v2.0.0`.
+`scripts/release/semver-floor.sh v1.9.0` read `FLOOR: NONE` over the two commits since the tag, so the scope is the gating rows alone.
 The ledger takes a row for each item that merges onto the released surface before the tag, as 1.9's did.
 
 Two rows end with the release rather than ship in it.
@@ -175,7 +177,7 @@ That is a floor rather than a rate, since an external adopter is unknowable for 
 
 ## Phase 3 — the storage advance and the coupled removals
 
-**Phase 3 opens by marking `v2` the storage version and migrating stored objects**, which 1.9 deliberately did not do; whether that ships in `v2.0.0` or in a `1.10` before it is [open](#the-storage-advance-needs-a-state-between-two-applies).
+**Phase 3 opens by marking `v2` the storage version and migrating stored objects**, which 1.9 deliberately did not do; it ships in 1.10, ahead of the removals ([why](#the-storage-advance-needs-a-state-between-two-applies)).
 That ordering is the whole reason 1.9 exists, and it is also what makes the alias check in Q1085 load-bearing: the migration is the moment a pool's pinned backend stops being recoverable from the conversion annotation.
 
 `v2.0.0` then executes all three removals announced by [release-1.3.md](archive/release-1.3.md), plus a fourth decided later:
@@ -201,11 +203,12 @@ So a single `v2.0.0` apply that marks `v2` storage and drops the other three ver
 
 Between those two applies sits a state where `v2` is storage, every version is still served, and the sweep in [Q1086](../queue/Q1086.md) rewrites each object and prunes `storedVersions` to `["v2"]`.
 CRDs here are applied server-side from a release asset ([upgrade.md](../operations/upgrade.md#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart)), so that state has to be something an operator applies.
-There are two places it can live, and the choice is open ([release-ladder.md](release-ladder.md#whether-a-110-rung-belongs-before-20)):
+There were two places it could live, and the maintainer chose a release on 2026-10-09 ([release-ladder.md](release-ladder.md#why-110-exists-the-storage-advance-cannot-share-an-apply-with-the-removals)):
 
-- **A `1.10` minor.** It marks `v2` storage, ships the sweep, and keeps every version served; `v2.0.0` is then removals only, a single apply.
+- **A `1.10` minor**, chosen.
+  It marks `v2` storage, ships the sweep, and keeps every version served; `v2.0.0` is then removals only, a single apply.
   Rollback from `1.10` reaches `v1.9.0`, which serves `v2` and so reads what `1.10` stored.
-- **A two-phase `v2.0.0` upgrade.** The release ships two CRD bundles, and its upgrade is three steps: the storage-advance apply, the sweep, then the final apply.
+- **A two-phase `v2.0.0` upgrade.** The release would ship two CRD bundles, and its upgrade would be three steps: the storage-advance apply, the sweep, then the final apply.
   No extra release, at the cost of the one breaking upgrade becoming a procedure an operator can stop halfway through.
 
 Rule 4b does not decide it: `v1.9.0` already served `v2` beside `v2beta1`, so the advance is free to land in either place.

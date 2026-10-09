@@ -23,9 +23,17 @@ Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits u
 Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
 No pill means no release is decided for that item yet.
 
-- **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1086 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, after storage-migrating stored objects to `v2`.
+- **[Move stored objects to the `v2` API](plan/release-1.10.md)** <!-- q:Q1086 --> Every object an operator has stored is rewritten as `v2`, with every API version still served, so nothing an operator runs changes.
+  It has to finish before any version can be removed, which is why it ships a release ahead of the removals.
+
+- **[Scale-set recovery and cleanup that follow the runner, not the worker](design/04-operational-flows.md#on-the-scale-set-tier-q417)** <!-- q:Q1152,Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and three paths assume it went to the worker created for it.
+  Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.
+
+- **[A per-runner-set egress-audit flag](operations/tenant-onboarding.md#per-pool-egress-audit-record)** <!-- q:Q1069 --> The attribution flag reads only the gateway's default proxy, so a set that overrides it with an unlogged pool reads as attributed.
+  A per-set condition and gauge read the pool each set actually uses.
+
+- **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
-  `v1.9.0` serves `v2` beside `v2beta1`, and the storage migration is the next step.
 
 ## Exploring / longer-term
 

@@ -20,7 +20,8 @@ That is a page telling adopters nine things are in progress when they are waitin
 | **1.7** | Untrusted-PR CI on Kata: Q408 Phases 2 to 5, shipped and closed 2026-08-28, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | [release-1.7.md](release-1.7.md) |
 | **1.8** | The scale-set drain recovery Q1029 gated on (closed 2026-09-07), plus the two v2 GA soak readings (Q1059, Q1060), which rode and closed positive on 2026-09-14, and the Phase 2 alias decision (Q452), taken 2026-09-07: the release that gathered the evidence 2.0 is parked on, shipped as `v1.8.0` on 2026-09-14 | [release-1.8.md](archive/release-1.8.md) |
 | **1.9** | The Rule 4b overlap: `v2` served beside `v2beta1`, storage still `v2beta1`. The admission reject plus pre-upgrade check from Q1085, then [v2-ga.md](v2-ga.md) Phase 2, then the validating webhooks retyped onto `v2` (Q1150) | [release-1.9.md](archive/release-1.9.md) |
-| **2.0** | v2 GA: storage advances to `v2`, stored objects migrate, then four coupled removals: `v1alpha1`, `v2alpha1`, `v2beta1`, and classic acquisition. Scoped 2026-10-09; whether the storage advance is a `1.10` rung of its own is [open](#whether-a-110-rung-belongs-before-20) | [v2-ga.md](v2-ga.md) |
+| **1.10** | The storage advance: `v2` becomes the storage version and Q1086's sweep rewrites every stored object, with every version still served. Gated with it, three scale-set correctness fixes (Q1152, Q1153, Q1154) and the per-set egress-audit flag (Q1069) | [release-1.10.md](release-1.10.md) |
+| **2.0** | v2 GA: four coupled removals, `v1alpha1`, `v2alpha1`, `v2beta1`, and classic acquisition, in one apply on clusters 1.10 has already migrated. Scoped 2026-10-09 | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
 
@@ -70,25 +71,25 @@ Phase 1's soak validates `v2beta1`'s shape; it says nothing about a conversion t
 So 1.9 serves `v2` beside `v2beta1` and changes no storage version, and the storage marker moves from Phase 2 to Phase 3.
 It is deliberately thin: the work is Phase 2, which is already scoped, plus the two operator-facing halves of Q1085 that want to land before the removal rather than with it.
 
-## Whether a 1.10 rung belongs before 2.0
+## Why 1.10 exists: the storage advance cannot share an apply with the removals
 
-**Open, added 2026-10-09 when 2.0 was scoped.** The maintainer decides; this section records what the decision rests on.
+**Decided 2026-10-09 by the maintainer, when 2.0 was scoped.**
 
 Phase 3 cannot be one CustomResourceDefinition apply.
 The apiserver will not drop a version from a CRD's `spec.versions` while `status.storedVersions` lists it, and every 1.x cluster lists `v2beta1` there, so an operator has to pass through a state where `v2` is storage, every version is still served, and the stored objects are being rewritten ([v2-ga.md](v2-ga.md#the-storage-advance-needs-a-state-between-two-applies) has the contract and its source).
 
-That state is either a release or a step:
+That state could have been a release or a step:
 
-- **A `1.10` rung** carries the storage advance and [Q1086](../queue/Q1086.md)'s sweep with every version served, so `v2.0.0` is the four removals in one apply.
+- **A `1.10` rung**, chosen: it carries the storage advance and [Q1086](../queue/Q1086.md)'s sweep with every version served, so `v2.0.0` is the four removals in one apply.
   It is a non-breaking minor, and rollback from it reaches `v1.9.0`, which already serves `v2`.
-- **No rung**: `v2.0.0` ships two CRD bundles and a three-step upgrade, apply, sweep, apply, with the sweep between them.
+- **No rung**: `v2.0.0` would have shipped two CRD bundles and a three-step upgrade, apply, sweep, apply.
+  It saved a release, and made the one breaking upgrade a procedure an operator can stop halfway through.
 
-Neither is forced by anything else measured.
-Rule 4b is satisfied by `v1.9.0` either way, and `semver-floor.sh v1.9.0` read `FLOOR: NONE` on 2026-10-09 over two commits, so no merged change forces a `1.10` on its own.
-The ladder's earlier rungs were each justified by their content rather than by a floor (1.8's evidence, 1.9's overlap), which is the reading a `1.10` would need here too.
+Nothing else forced either.
+Rule 4b was satisfied by `v1.9.0`, and `semver-floor.sh v1.9.0` read `FLOOR: NONE` on 2026-10-09 over two commits.
+So the rung is justified by sequencing rather than by content, which is new on this ladder, and the maintainer gave it content in the same decision: three scale-set correctness fixes and the per-set egress-audit flag gate it beside the storage advance, and three more items ride ([release-1.10.md](release-1.10.md#scope-ledger)).
 
-The answer decides one thing for the backlog: whether the first tag cut from `main` after Q1086's storage flip lands is `1.10` or `v2.0.0`.
-With a rung, the removals in Q273 and Q264 wait for `1.10` to tag; without one, `main` carries no further 1.x minor and any 1.9 fix is a backport.
+For the backlog it means the removals wait for the `1.10` tag: once a served version is gone from `main`, the next tag cut from it is `v2.0.0`.
 
 ## What is punted past `v2.0.0`
 
