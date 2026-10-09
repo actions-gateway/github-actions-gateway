@@ -316,9 +316,11 @@ serialize_heavy_build() {
 	command -v perl >/dev/null 2>&1 || return 0
 	export GAG_HEAVY_BUILD_LOCK_HELD=1
 	# perl takes a slot, runs the script as a child, and exits with its status;
-	# the lock fd lives in perl and releases when perl exits. Locks that cannot be
-	# opened at all degrade to running unserialized rather than failing the build.
-	exec perl -MFcntl=:flock -e '
+	# the lock fd lives in perl and releases when perl exits, so perl forwards
+	# termination signals to the child (RunRelayed.pm) rather than dying without
+	# it. Locks that cannot be opened at all degrade to running unserialized
+	# rather than failing the build.
+	exec perl -I"$REPO_ROOT/scripts/lib" -MRunRelayed -MFcntl=:flock -e '
 		my $n = shift @ARGV;
 		my @paths = splice(@ARGV, 0, $n);
 		my ($fh, $start, $next_report) = (undef, time, 0);
@@ -340,9 +342,7 @@ serialize_heavy_build() {
 		}
 		my $queued = time - $start;
 		printf STDERR "==> heavy-build slot acquired after %ds queued\n", $queued if $queued >= 5;
-		my $rc = system @ARGV;
-		exit 255 if $rc == -1;
-		exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);
+		exit run_relayed(@ARGV);
 	' "${#locks[@]}" "${locks[@]}" bash "$0" "$@"
 }
 

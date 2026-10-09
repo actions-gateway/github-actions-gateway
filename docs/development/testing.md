@@ -250,6 +250,7 @@ The parallelism cap bounds **one** run's fan-out, but it is blind to siblings: s
 So the heavy phases also take one of **N machine-wide advisory slots** (`serialize_heavy_build` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh), paths from `scripts/agent/local-throttle.sh lockfile [N]`, count from `scripts/agent/local-throttle.sh slots`): N runs proceed, the rest queue, rather than every run trampling the others.
 The lock files live in the per-user cache dir (`~/Library/Caches/github-actions-gateway/` on macOS, `${XDG_CACHE_HOME:-~/.cache}/github-actions-gateway/` on Linux), **outside** any worktree, so the main checkout and every `.claude/worktrees/*` clone coordinate on the same files.
 They are implemented with `perl`'s `flock` — an advisory lock present on both macOS (which ships no `flock(1)`) and Linux, released automatically when the holder dies, so a Ctrl-C'd build never strands a stale lock.
+The holder is a `perl` launcher running the work as its child, and it forwards `HUP`/`INT`/`QUIT`/`TERM` to that child's whole process tree before exiting, so a `kill <pid>` aimed at the launcher alone stops the run instead of freeing its slot while the work carries on (Q1093); only `SIGKILL` cannot be forwarded.
 Like the throttle itself it activates only on a GUI dev shell; CI/headless/SSH report no lock file and run fully parallel and unserialized.
 (The `golangci-lint` `run.timeout` in `.golangci.yml` was also raised from 5m to 10m so a run that *does* queue behind a sibling has slack; CI is uncontended and never approaches it.)
 
