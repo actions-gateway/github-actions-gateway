@@ -131,7 +131,9 @@ func TestStorageVersionSweep(t *testing.T) {
 		rv[o.GetName()] = o.GetResourceVersion()
 	}
 
-	reports, err := migrate.SweepStorageVersion(ctx, k8sClient, migrate.SweepOptions{Apply: true})
+	// PageSize 1 puts the two RunnerTemplates on separate pages, so a sweep that
+	// stopped at the first page would leave stored-v2beta1 unrewritten.
+	reports, err := migrate.SweepStorageVersion(ctx, k8sClient, migrate.SweepOptions{Apply: true, PageSize: 1})
 	require.NoError(t, err)
 
 	for _, r := range []string{"runnertemplates", "priorityclassallowlists"} {
@@ -159,6 +161,12 @@ func TestStorageVersionSweep(t *testing.T) {
 func TestStorageVersionSweep_RefusesStoredAlias(t *testing.T) {
 	const ns = "storage-sweep-alias"
 	createNamespace(t, ns)
+	// A storage round trip lists v2beta1 in storedVersions with no object stored
+	// there, so the prune after the alias clears has something to remove.
+	t.Cleanup(func() { setStorageVersion(t, "egressproxies", "v2") })
+	setStorageVersion(t, "egressproxies", "v2beta1")
+	setStorageVersion(t, "egressproxies", "v2")
+	require.Contains(t, storedVersionsOf(t, "egressproxies"), "v2beta1")
 	ep := &v2alpha1.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "pinned", Namespace: ns},
 		Spec:       v2alpha1.EgressProxySpec{EgressPolicyMode: v2alpha1.EgressPolicyModeCiliumFQDN},
