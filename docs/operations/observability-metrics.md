@@ -103,7 +103,7 @@ For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix
 
 > **`RunnerSetsDegraded` on a v2 `ActionsGateway`.** The v2 `ActionsGateway` carries a `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1 `RunnerGroupsDegraded` above.
 > It is `True` when one or more of the `RunnerSet`s bound to the gateway (`spec.gatewayRef`) are impaired — not serving jobs: a non-transient `Ready=False` (a reference did not resolve or a provisioning step failed) **or** any abnormal-is-True impairing condition — `Degraded` (revoked/invalid credentials, pushed by the listener independently of `Ready`, Q330), `CredentialUnavailable`, `RunnerVersionTooOld`, or `WorkersUnschedulable`.
-> The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`) are excluded so the rollup does not flap on normal load.
+> The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `EgressAuditUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`) are excluded so the rollup does not flap on normal load.
 > The condition message names the impaired sets and their tripped signals, giving the operator a single pane without inspecting each child.
 > Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own AGC control plane can be healthy while a tenant's set is impaired.
 > It is exported as the `actions_gateway_runnersets_degraded` gauge (Q321), alongside `actions_gateway_agc_available`, `actions_gateway_egress_unattributed`, `actions_gateway_agc_autoscaling_unavailable`, `actions_gateway_scale_set_name_collision`, and `actions_gateway_egress_audit_unattributed` for the gateway's `AGCAvailable`, `EgressUnattributed`, `AGCAutoscalingUnavailable`, `ScaleSetNameCollision`, and `EgressAuditUnattributed` conditions — the v2 twins of the v1 `ActionsGateway` condition gauges.
@@ -307,6 +307,8 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 | `CapacityAvailable` | Both | The capacity gate's cleared state, from the same shared call. |
 | `CredentialAvailable` | Classic only | A `RunnerGroup` condition, and a `RunnerGroup` only acquires classically. A v2 set reports the same state as `Ready`/`TokenUnavailable`. |
 | `DirectEgress` | Both | Egress mode is recorded before the protocol routing. |
+| `EgressAuditDisabled` | Both | The per-set egress-audit verdict, read off the resolved references before the routing. |
+| `EgressAuditJoined` | Both | As above. |
 | `GateModeUnsupported` | Both | The capacity gate refusing an unsupported mode, from the same shared call. |
 | `GatewayNotFound` | Both | Reference resolution, before the routing. |
 | `GatewayTerminating` | Both | Gateway teardown stops both tiers before deleting worker pods. |
@@ -326,6 +328,7 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 | `ProxyDeleted` | Both | Reference resolution, before the routing. |
 | `ProxyNotFound` | Both | As above. |
 | `ProxyShareNotGranted` | Both | As above. |
+| `ProxySourceAuditDisabled` | Both | The per-set egress-audit verdict, before the routing. |
 | `ReapBlockingSidecar` | Both | Read off the resolved worker template, before the routing. |
 | `RunnerGroupNotFound` | Scale-set only | `spec.runnerGroup` binds a scale set to a GitHub runner group (Q712); the classic tier has no such binding to fail. |
 | `RunnerNameConflict` | Scale-set only | A `generate-jitconfig` 409 no retry cleared. The classic tier registers through the agent pool and meets no runner-name collision. |
@@ -341,6 +344,7 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 | `Unauthorized` | Both | The `Degraded=True` reason both listeners push when session creation is rejected as unauthorized. |
 | `VersionAccepted` | Classic only | The `RunnerVersionTooOld=False` baseline the classic listener publishes once GitHub accepts `agent.version`, clearing a `VersionTooOld` an earlier instance left behind (Q795). The scale-set protocol sends no runner version, so it has nothing to accept. Never overwrites the reconciler's image reading. |
 | `VersionTooOld` | Classic only | GitHub rejecting `agent.version` at session creation, which only the classic protocol sends. The scale-set tier reports the same condition *type* from the reconciler's own reading of the worker image, under `WorkerImageBelowMinimum` (Q715). |
+| `WorkerAuditDisabled` | Both | The per-set egress-audit verdict, before the routing. |
 | `WorkerCeilingReached` | Scale-set only | Assignments waiting because the set is at its worker ceiling. The classic tier refuses the claim instead, counted by `actions_gateway_jobs_admission_rejected_total{reason="ceiling"}`. |
 | `WorkerImageBelowMinimum` | Both | The reconciler's own reading of the effective worker image, which asks GitHub nothing and so reports on both tiers (Q715). |
 | `WorkerImageCurrent` | Both | As above. |

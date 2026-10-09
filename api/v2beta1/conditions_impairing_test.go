@@ -37,6 +37,7 @@ func TestImpairingConditionTypes(t *testing.T) {
 		ConditionWorkerQuotaPressure,
 		ConditionWorkerQuotaExceeded,
 		ConditionEgressUnattributed,
+		ConditionEgressAuditUnattributed,
 		ConditionPossibleReapBlockingSidecar,
 		ConditionWorkerCapacityDeclined,
 		// Q906: the kubelet's startup verdict reports without deciding, like
