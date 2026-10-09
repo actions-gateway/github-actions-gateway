@@ -22,8 +22,9 @@ import (
 // Q326: the v2 EgressProxy reconciler's ResourceQuota watch, proven against a real
 // apiserver with real watch semantics. The reconciler runs WITHOUT the suite's 2s
 // cache resync (startEgressProxyReconcilerNoResync) and the proxy pool is driven to
-// Ready first — so once steady, the ONLY thing that can re-trigger a reconcile is
-// the quota watch event itself.
+// Ready first. Each trigger waits for the reconciles the previous status write queued
+// to drain, so the ONLY thing that can re-trigger a reconcile is the quota watch
+// event itself.
 
 // TestV2_EgressProxy_QuotaEditRetriggersReconcile proves an admin's ResourceQuota
 // create/edit promptly refreshes the EgressProxy's ProxyQuotaPressure condition:
@@ -43,7 +44,7 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 	// which is far beyond this test either way.
 	ipCache := &controller.IPRangeCache{}
 	ipCache.MarkRefreshed(time.Now())
-	startEgressProxyReconcilerNoResync(t, ipCache)
+	reconciles := startEgressProxyReconcilerNoResync(t, ipCache)
 
 	// envtest runs no kubelet, so drive the pool Ready by writing the proxy
 	// Deployment's status once the reconciler has created it. Ready means the
@@ -62,13 +63,14 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionReady)
 	}, 20*time.Second, 100*time.Millisecond).Should(
 		gomega.HaveField("Status", metav1.ConditionTrue),
-		"the pool must be Ready (dormant) before the quota edit, so the watch is the only trigger")
+		"the pool must be Ready before the quota edit")
 
 	// Steady state without a quota: no pressure.
 	g.Eventually(func() *metav1.Condition {
 		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionProxyQuotaPressure)
 	}, 20*time.Second, 100*time.Millisecond).Should(
 		gomega.HaveField("Reason", "NoQuota"))
+	reconciles.waitIdle(t, ns, time.Second)
 
 	// A tight quota created out-of-band must re-reconcile the proxy via the watch:
 	// pods=2 cannot admit growth to the default maxReplicas of 10.
@@ -87,6 +89,7 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 		gomega.HaveField("Status", metav1.ConditionTrue),
 		gomega.HaveField("Reason", "InsufficientQuotaHeadroom"),
 	), "creating a tight ResourceQuota must promptly trip ProxyQuotaPressure via the quota watch (Q326)")
+	reconciles.waitIdle(t, ns, time.Second)
 
 	// Raising .spec.hard must clear the pressure through the hard-changed predicate.
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "rq"}, quota))

@@ -2567,6 +2567,9 @@ The repo's four instances, each showing a different way the check itself goes wr
 **A green after deletion can mean a redundant guard is standing in, not that the mechanism is dead.** Q624's suite passed in full with command position deleted, because an `already_throttled` short-circuit upstream rescued every case that would have exercised it.
 The mechanism was load-bearing in production and unasserted by the suite — so the answer is a case pitched into the gap the redundant guard does not cover (there, a wrapper the short-circuit does not recognise), not a conclusion that the code is unnecessary.
 
+**One red after the deletion does not prove the deleted edge is the only trigger, when the green it rules out is a race.** Q541's referrer-watch test went red on most runs with the watch deleted and green on 6 of 30 in one interleaved batch, because the status writes that make an EgressProxy Ready queue one or two more reconciles, and one starting after the gateway lands carries it with no watch at all.
+So a watch-edge envtest waits for the reconciler to go idle before the trigger, not for a condition (`reconcileCounter.waitIdle` in the GMC suite), and its deletion check is a batch of runs, not one.
+
 Q506 needed two rounds of this before a spec's green meant what it claimed.
 Q551's re-offer test is the routine case: disabling the one call the fix added turned it red on "the re-offer must provision the job once the conflict clears" — exactly the sentence the test exists to assert — and it went green again on restore.
 

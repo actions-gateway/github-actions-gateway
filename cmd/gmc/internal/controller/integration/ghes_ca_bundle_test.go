@@ -115,7 +115,7 @@ func TestV2_GHESGateway_MountsPrivateCABundle(t *testing.T) {
 // the ConfigMap then converges with no edit to the gateway.
 //
 // What drives that convergence here is the suite's 2s cache resync as much as the
-// reconciler's own RequeueAfter — this suite cannot separate them (Q541), and the
+// reconciler's own RequeueAfter — this suite cannot separate them, and the
 // interval itself is pinned by the unit test. What this asserts is the property that
 // matters to an operator: the gateway recovers on its own.
 func TestV2_GHESGateway_MissingCABundleFailsClosed(t *testing.T) {

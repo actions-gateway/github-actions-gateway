@@ -191,10 +191,11 @@ func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
 // TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost covers Q506 #2. The GitHub host
 // a tenant uses lives on the referring ActionsGateway, not on the EgressProxy, so an
 // FQDN-mode GHES tenant used to get a policy naming six public hosts and nothing its
-// traffic touches. The gateway is applied AFTER the pool is Ready and dormant, so the
-// assertion also proves the referrer watch edge fires: with the suite's 2s resync
-// disabled and no not-ready requeue left running, nothing else can re-enqueue the
-// proxy (the Q326 setup, for the same reason).
+// traffic touches. The gateway is applied AFTER the pool is Ready and the reconciles
+// its Ready status write queued have drained, so the assertion also proves the
+// referrer watch edge fires: with the suite's 2s resync disabled and no not-ready
+// requeue left running, nothing else can re-enqueue the proxy (the Q326 setup, for
+// the same reason).
 func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 	const ns = "v2-ep-cilium-ghes"
 	const ghesHost = "ghes.example.com"
@@ -206,7 +207,7 @@ func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 	// cache state: it requeues every threshold/8 (~6h), far past this test either way.
 	ipCache := &controller.IPRangeCache{}
 	ipCache.MarkRefreshed(time.Now())
-	startEgressProxyReconcilerNoResync(t, ipCache)
+	reconciles := startEgressProxyReconcilerNoResync(t, ipCache)
 
 	ep := &gmcv2alpha1.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
@@ -239,7 +240,8 @@ func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 		return egressProxyCondition(t, ns, egressProxyName, gmcv2alpha1.ConditionReady)
 	}, 20*time.Second, 100*time.Millisecond).Should(
 		gomega.HaveField("Status", metav1.ConditionTrue),
-		"the pool must be Ready (dormant) before the gateway lands, so the watch is the only trigger")
+		"the pool must be Ready before the gateway lands")
+	reconciles.waitIdle(t, ns, time.Second)
 
 	// No referrer yet: the appliance is absent, which is the defect being fixed.
 	cnp, err := getCNIPolicy(t, ns, fqdnName, ciliumGVK)
