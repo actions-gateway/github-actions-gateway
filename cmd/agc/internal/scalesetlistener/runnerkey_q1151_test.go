@@ -2,6 +2,7 @@ package scalesetlistener_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -154,4 +155,35 @@ func TestListener_StartCarriesTheStartedJobsRun(t *testing.T) {
 	assert.Equal(t, scalesetlistener.Job{
 		JobID: "job-b", RunnerName: "linux-job-a", Owner: "myorg", Repository: "repo-b", RunID: "222", JobName: "shellcheck",
 	}, got[0])
+}
+
+// TestListener_RedeliversAStartItCouldNotRecord covers Q1153's cost bound. The runner
+// created for job-x started job-d, and that worker may carry a completion stamp only the
+// start can lift; a start dropped on a transient error leaves the reaper to delete the
+// worker mid-job, so the message must redeliver until the start is recorded.
+func TestListener_RedeliversAStartItCouldNotRecord(t *testing.T) {
+	srv := newQuickPollServer(t)
+	srv.SeedMessage([]scaleset.JobMessage{
+		{MessageType: scaleset.MessageTypeJobStarted, JobID: "job-d", RunnerName: "linux-job-x"},
+	})
+
+	var mu sync.Mutex
+	var calls int
+	started := func(_ context.Context, _ scalesetlistener.Job) error {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		if calls == 1 {
+			return errors.New("apiserver: internal error")
+		}
+		return nil
+	}
+	startListener(t, srv, fixedCapacity(5), &recordingProvisioner{srv: srv, completeErr: true}, nil,
+		func(c *scalesetlistener.Config) { c.Started = started })
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return calls >= 2
+	}, 5*time.Second, 10*time.Millisecond, "a start that failed to record must be retried by redelivery")
 }
