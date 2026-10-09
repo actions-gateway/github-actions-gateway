@@ -708,6 +708,7 @@ A worker that registers but never receives its job therefore waits at `Listening
 
 The fix makes GitHub's own verdict the deadline.
 When the listener sees the terminal `JobCompleted` for a job, it stamps `actions-gateway.com/job-completed-at` on the worker pod whose runner held that job (the same reclaim point that deletes that worker's JIT-config Secret), and the reaper deletes any pod still `Running` five minutes later.
+The Secret does not depend on that completion arriving while the pod exists: the provisioner makes the pod the Secret's only owner once the pod is created, so the garbage collector deletes the Secret with the pod, however the pod goes (Q1154).
 
 **The worker that held a job is not necessarily the one created for it.** GitHub gives a scale-set job to whichever of the set's runners asks first, so the runner the AGC registered for job A can run job B while A runs elsewhere.
 Measured on dogfood on 2026-09-30: the runner registered for one job ran `lint` until 17:35:15Z, while the job it was registered for completed at 17:30:11Z.

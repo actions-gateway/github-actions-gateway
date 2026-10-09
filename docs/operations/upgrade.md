@@ -14,6 +14,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: a scale-set worker's JIT-config Secret is now owned by its pod](#non-breaking-a-scale-set-workers-jit-config-secret-is-now-owned-by-its-pod)
   - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
   - [Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2](#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
@@ -120,6 +121,16 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: a scale-set worker's JIT-config Secret is now owned by its pod
+
+Each scale-set worker mounts a `job-ss-*` Secret holding its runner's JIT config, a runner credential.
+That Secret's `ownerReferences` now name the worker pod instead of the `RunnerSet`, so Kubernetes deletes it once the pod is gone, including a pod deleted by hand or reaped before its job's completion arrived (Q1154).
+Earlier releases could leave such a Secret in the namespace until the `RunnerSet` was deleted.
+Deleting the `RunnerSet` still removes both, since it owns the pods.
+
+Secrets created by an earlier AGC keep the `RunnerSet` as owner and are reclaimed as before.
+No action is required at upgrade time.
 
 ### Non-breaking: `v2` is served beside `v2beta1`, and an unpinned read now returns `v2`
 
