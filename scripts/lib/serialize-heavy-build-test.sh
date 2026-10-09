@@ -87,10 +87,13 @@ gone() {
 LAUNCHER=""
 
 # start RUN SECONDS [RC] — launch work.sh in its own process group; sets LAUNCHER,
-# whose pid is the perl lock holder once work.sh has re-exec'd.
+# whose pid is the perl lock holder once work.sh has re-exec'd. The relayed
+# signals start at their default: run-parallel.sh backgrounds this suite, which
+# leaves INT ignored, and bash cannot un-ignore a signal it inherited ignored.
 start() {
 	set -m
-	"${WORKDIR}/root/work.sh" "$@" &
+	perl -e '$SIG{$_} = "DEFAULT" for qw(HUP INT QUIT TERM); exec @ARGV or exit 127' \
+		"${WORKDIR}/root/work.sh" "$@" &
 	LAUNCHER=$!
 	set +m
 }
@@ -118,22 +121,59 @@ signalled() {
 	grandchild="$(<"${WORKDIR}/${run}.grandchild")"
 	# The child is the launcher's to reap, so it is gone before the launcher
 	# exits: an ordering, checked with no wait. The grandchild is not.
+	# Survivors are killed on the failure branches only: after a pass both pids
+	# are dead, and signalling them could reach a process that reused one.
 	if ((rc != want)); then
 		bad "${name}: launcher exited ${rc}, want ${want}"
+		kill -KILL "${child}" "${grandchild}" 2>/dev/null || true
 	elif kill -0 "${child}" 2>/dev/null; then
 		bad "${name}: child ${child} outlived the lock"
+		kill -KILL "${child}" "${grandchild}" 2>/dev/null || true
 	elif ! gone "${grandchild}"; then
 		bad "${name}: grandchild ${grandchild} outlived the lock"
+		kill -KILL "${grandchild}" 2>/dev/null || true
 	else
 		ok "${name}"
 	fi
-	kill -KILL "${child}" "${grandchild}" 2>/dev/null || true
+}
+
+# ignored NAME SIG — launch with SIG already ignored, as nohup does for HUP and a
+# non-interactive `cmd &` for INT, and assert SIG sent to the launcher alone is
+# still ignored: the work runs to completion and the launcher exits 0.
+ignored() {
+	local name="$1" sig="$2"
+	local run="${name// /-}"
+	set -m
+	(
+		trap '' "${sig}"
+		exec "${WORKDIR}/root/work.sh" "${run}" 2
+	) &
+	LAUNCHER=$!
+	set +m
+	if ! await "${WORKDIR}/${run}.grandchild"; then
+		bad "${name}: work never entered the section"
+		kill -KILL -- "-${LAUNCHER}" 2>/dev/null || true
+		return
+	fi
+	kill "-${sig}" "${LAUNCHER}"
+	local rc=0
+	wait "${LAUNCHER}" || rc=$?
+	if ((rc != 0)); then
+		bad "${name}: launcher exited ${rc}, want 0"
+		kill -KILL -- "-${LAUNCHER}" 2>/dev/null || true
+	elif [[ ! -s "${WORKDIR}/${run}.exit" ]]; then
+		bad "${name}: work exited 0 without finishing"
+	else
+		ok "${name}"
+	fi
 }
 
 signalled "TERM to the launcher alone" pid TERM 143
 signalled "HUP to the launcher alone" pid HUP 129
 signalled "TERM to the group" group TERM 143
 signalled "INT to the group" group INT 130
+ignored "HUP ignored on entry stays ignored" HUP
+ignored "INT ignored on entry stays ignored" INT
 
 # The child's own status still comes back through the relay.
 start status 0 3

@@ -11,8 +11,8 @@
 # command it was running (a `go test`, a lint) alive and still mid-section. The
 # tree is walked rather than signalled as a process group because the child
 # stays in perl's group, so a group signal, SIGKILL included, still reaches
-# everything as it did before. SIGKILL to perl alone cannot be forwarded and
-# still orphans.
+# everything as it did before. Two gaps remain: SIGKILL to perl alone cannot be
+# forwarded, and a process forked after the `ps` snapshot is not signalled.
 #
 #   perl -I"$REPO_ROOT/scripts/lib" -MRunRelayed -e 'exit run_relayed(@ARGV)' cmd args...
 package RunRelayed;
@@ -26,11 +26,14 @@ our @EXPORT = ('run_relayed');
 
 my @SIGNALS = qw(HUP INT QUIT TERM);
 
-# run_relayed(@cmd) — fork/exec @cmd, forward @SIGNALS to it until it exits, and
+# run_relayed(@cmd) — fork/exec @cmd, forward @SIGNALS to its tree until it exits, and
 # return its status as a shell would report it: the exit code, 128+n for a
 # signal death, or 255 when it could not be started.
 sub run_relayed {
 	my @cmd = @_;
+	# A signal the launcher inherited as ignored (nohup's HUP, a non-interactive
+	# `cmd &`'s INT) stays ignored, and the child inherits it as system's did.
+	my @relay = grep { ($SIG{$_} // '') ne 'IGNORE' } @SIGNALS;
 	# Blocked across the fork, so a signal landing before the handlers below are
 	# installed is delivered to them rather than lost or taken by the child early.
 	my $set = POSIX::SigSet->new(map { POSIX->can("SIG$_")->() } @SIGNALS);
@@ -38,14 +41,13 @@ sub run_relayed {
 	POSIX::sigprocmask(POSIX::SIG_BLOCK(), $set, $old);
 	my $pid = fork;
 	if (defined $pid && $pid == 0) {
-		$SIG{$_} = 'DEFAULT' for @SIGNALS;
 		POSIX::sigprocmask(POSIX::SIG_SETMASK(), $old);
 		exec { $cmd[0] } @cmd or POSIX::_exit(255);
 	}
 	# local $?: the handler can run after waitpid returns and before $? is read,
 	# and the `ps` in descendants() would replace the child's status with its own.
 	if (defined $pid) {
-		$SIG{$_} = sub { local ($?, $!); kill $_[0], $pid, descendants($pid) } for @SIGNALS;
+		$SIG{$_} = sub { local ($?, $!); kill $_[0], $pid, descendants($pid) } for @relay;
 	}
 	POSIX::sigprocmask(POSIX::SIG_SETMASK(), $old);
 	return 255 unless defined $pid;
