@@ -91,7 +91,35 @@ def discover(root: Path) -> list[str]:
     return pages
 
 
+NAV_ATTEMPTS = 3
+
+
+async def goto(page, url: str, timeout_error: type[Exception], attempts: int = NAV_ATTEMPTS) -> int:
+    """Navigate to `url`, retrying a navigation timeout; returns the attempt that loaded.
+
+    A retry rather than a longer timeout, and not a block on off-host requests:
+    Q1165's sighting timed out on a page whose only off-host requests are XHRs,
+    which never delay `load` (hanging every off-host request left it loading in
+    0.4s, measured 2026-10-09), so the stall was the runner's. Each retry is
+    printed, so a recurrence stays visible instead of turning silently slow.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            await page.goto(url, wait_until="load")
+            return attempt
+        except timeout_error:
+            if attempt == attempts:
+                raise
+            msg = f"{url} did not finish loading (attempt {attempt} of {attempts}), retrying"
+            if os.environ.get("GITHUB_ACTIONS"):
+                print(f"::warning::check-render-overflow: {msg}")
+            else:
+                print(f"check-render-overflow: {msg}", file=sys.stderr)
+    raise AssertionError("unreachable")
+
+
 async def measure(base: str, pages: list[str], widths: list[int]) -> tuple[list[dict], int]:
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
     from playwright.async_api import async_playwright
 
     findings: list[dict] = []
@@ -105,7 +133,7 @@ async def measure(base: str, pages: list[str], widths: list[int]) -> tuple[list[
         ctx = await browser.new_context(viewport={"width": max(widths), "height": 900})
         page = await ctx.new_page()
         for path in pages:
-            await page.goto(base + path, wait_until="load")
+            await goto(page, base + path, PlaywrightTimeoutError)
             for width in widths:
                 await page.set_viewport_size({"width": width, "height": 900})
                 result = await page.evaluate(OWNER_JS)

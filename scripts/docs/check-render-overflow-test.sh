@@ -125,6 +125,32 @@ print(' '.join(m.discover(Path(sys.argv[2]))))
     expect_eq "/ /operations/ /operations/install/" "$got" \
         "page discovery maps a built tree to the served URL paths"
 
+    # A navigation timeout is retried and announced, and one that persists past
+    # the last attempt still fails the run rather than skipping the page (Q1165).
+    got="$(python3 -c "
+import asyncio, importlib.util, sys
+spec = importlib.util.spec_from_file_location('c', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+class Stall(Exception): pass
+class Page:
+    def __init__(self, stalls): self.stalls, self.calls = stalls, 0
+    async def goto(self, url, wait_until):
+        self.calls += 1
+        if self.calls <= self.stalls: raise Stall()
+try:
+    recovered = asyncio.run(m.goto(Page(1), '/p/', Stall))
+except Stall:
+    recovered = 'raised'
+stuck = Page(99)
+try:
+    asyncio.run(m.goto(stuck, '/p/', Stall)); raised = 'no'
+except Stall:
+    raised = 'yes'
+print(recovered, stuck.calls, raised)
+" "$CHECKER" 2>/dev/null)"
+    expect_eq "2 3 yes" "$got" \
+        "a navigation timeout is retried, and one that persists still fails"
+
     # A tree with no pages must refuse rather than pass: a gate that measures
     # nothing is indistinguishable from a clean one by its exit status alone.
     # This path returns before the browser is ever needed, which is why the
