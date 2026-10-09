@@ -21,11 +21,13 @@ A fourth deprecation, [the `CiliumFQDN` / `CalicoFQDN` egress modes](#the-cilium
 | **`actions-gateway.github.com/v1alpha1`** | the monolithic `ActionsGateway` (inline `proxy` and `runnerGroups[]`) plus the standalone `RunnerGroup` kind | the decomposed `actions-gateway.com` API at `v2beta1` | [`gag-migrate`](migration-v1-to-v2.md), a one-shot fan-out of one v1 object into several v2 objects |
 | **`actions-gateway.com/v2alpha1`** | v2's first served version, superseded as storage and hub version by the `v2beta1` graduation | `v2beta1` until `v2.0.0`, then `v2` | read and re-apply your objects; the conversion webhook already round-trips them, so there is no re-author step except for the two `v2alpha1`-only fields below |
 | **Classic acquisition** (`RunnerSet.spec.acquisitionProtocol: Classic` and `spec.maxListeners`, both `v2alpha1`-only) | the many-acquirers protocol, and the only protocol `v1alpha1` speaks | `ScaleSet`, the single-acquirer protocol: the default since `v1.1.0`, and the only protocol `v2beta1` serves | create one fresh single-label `ScaleSet` `RunnerSet` per `runs-on` target. `acquisitionProtocol` is immutable, so this is a create-and-delete, not an edit |
-| **`actions-gateway.com/v2beta1`** | the graduated beta version, storage and hub since `v1.1.0` | `v2`, the GA version | read and re-apply your objects at `v2`; the conversion webhook round-trips them, with the one exception of the two deprecated `egressPolicyMode` aliases below |
+| **`actions-gateway.com/v2beta1`** | the graduated beta version, the hub since `v1.1.0`, and the storage version from `v1.1.0` until 1.10 | `v2`, the GA version | read and re-apply your objects at `v2`; the conversion webhook round-trips them, with the one exception of the two deprecated `egressPolicyMode` aliases below |
 
 **`v2beta1`'s removal was decided later than the other three** and is not in the `release-1.3.md` announcement.
 Decided 2026-09-08 ([reasoning](../plan/v2beta1-retirement.md)): `v2.0.0` is a major release, and dropping a served version is a breaking change a major release may make.
 Beta's contract is a migration path, not permanence, and the path here is the overlap release: the tag before `v2.0.0` serves `v2beta1` and `v2` together, so no object is ever unreachable.
+
+**Removing a version also needs every stored object rewritten at `v2` first.** 1.10 makes `v2` the storage version, and `gag-migrate storage-version` rewrites what is already stored; run it after upgrading to 1.10 and before `v2.0.0`, or the `v2.0.0` CRD apply is rejected ([how](upgrade.md#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)).
 
 ### Why the removals are coupled
 

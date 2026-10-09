@@ -608,7 +608,6 @@ type ActionsGatewayStatus struct {
 // namespace (multi-gateway support lands in M3b).
 //
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ag,categories=actions-gateway
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.spec.githubURL`

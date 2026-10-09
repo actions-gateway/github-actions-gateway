@@ -280,7 +280,7 @@ func setupGMC() {
 // --server-side`) rather than `helm install` or a raw `kubectl apply -f
 // api/config/crd`. Two reasons:
 //   - As of Q74 each v2 CRD carries a spec.conversion pointing at the GMC-hosted
-//     /convert webhook (v2beta1 is served + storage/hub, v2alpha1 the served spoke),
+//     /convert webhook (v2beta1 is the hub, v2 the storage version, v2alpha1 a spoke),
 //     so the deployment-specific conversion stanza must be present or the apiserver
 //     silently prunes the ScaleSet-only-stripped RunnerSet fields on storage. Only the
 //     chart carries that wiring — api/config/crd stays conversion-free.

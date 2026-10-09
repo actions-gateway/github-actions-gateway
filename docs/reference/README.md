@@ -13,13 +13,13 @@ The reference answers "what does this field do?", not "which objects do I need?"
 
 ## Which API versions this covers
 
-**`actions-gateway.com/v2beta1` only** — the storage version, and the one every new install should use.
+**`actions-gateway.com/v2beta1` only** — the conversion hub, and the one every new install should use.
 
 The cluster serves three versions today, and the other two are on their way out:
 
 | Version | Status | Where to go |
 |---|---|---|
-| `actions-gateway.com/v2beta1` | Served, storage version, current | [api.md](api.md) |
+| `actions-gateway.com/v2beta1` | Served, conversion hub, current | [api.md](api.md) |
 | `actions-gateway.com/v2alpha1` | Deprecated, removed in v2.0.0 | [Deprecations & the v2.0.0 removal](../operations/v1alpha1-deprecation.md) |
 | `actions-gateway.github.com/v1alpha1` | Deprecated, removed in v2.0.0 | [Migrate v1 → v2](../operations/migration-v1-to-v2.md) |
 

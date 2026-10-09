@@ -8,9 +8,9 @@ package v2beta1
 // served version converts to/from this one hub rather than to every other version
 // pairwise. api/v2/conversion.go says why the hub stays here rather than at v2.
 //
-// v2beta1 is also the storage version (+kubebuilder:storageversion on each root
-// kind), so a persisted object is already in hub shape and the apiserver only
-// invokes the webhook to serve a v2alpha1 or v2 read, or admit a write at either.
+// The storage version is v2 from 1.10 (Q1086), not the hub, so the apiserver
+// invokes the webhook for every v2alpha1 or v2beta1 read and write; a v2 request
+// needs no conversion.
 
 // Hub marks ActionsGateway as the conversion hub for its kind.
 func (*ActionsGateway) Hub() {}

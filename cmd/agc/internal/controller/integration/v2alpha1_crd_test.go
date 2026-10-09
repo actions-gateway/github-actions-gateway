@@ -330,9 +330,9 @@ func TestV2_RunnerSet_ScaleSetAcceptsMultiLabel(t *testing.T) {
 }
 
 // TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub is Q398's regression guard,
-// outliving the rule that caused it. A Classic multi-label set is STORED as a v2beta1
+// outliving the rule that caused it. A Classic multi-label set was STORED as a v2beta1
 // hub object, and v2beta1 once rejected more than one runnerLabel — so every
-// unqualified `kubectl edit/patch/apply`, which addresses the storage version, failed
+// unqualified `kubectl edit/patch/apply`, which then addressed v2beta1, failed
 // on a field that had nothing to do with labels. Q726 removed the rule outright, which
 // removes the cause; this keeps asserting the symptom is gone, because the shape that
 // produced it (a hub object holding a spoke-authored value) is permanent and the next
@@ -399,7 +399,7 @@ func TestV2beta1_RunnerSet_MultiLabelCreateAccepted(t *testing.T) {
 	var got agcv2beta1.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "multi"}, &got))
 	assert.Equal(t, []string{"self-hosted", "linux", "gpu"}, got.Spec.RunnerLabels,
-		"every declared label must round-trip through the storage version in order")
+		"every declared label must round-trip through the hub in order")
 }
 
 func TestV2_RunnerSet_AcquisitionProtocolImmutable(t *testing.T) {

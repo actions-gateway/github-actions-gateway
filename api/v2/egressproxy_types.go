@@ -263,6 +263,7 @@ type EgressProxyStatus struct {
 // (defaultProxyRef) by name; referrers never own it (§H.8).
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ep,categories=actions-gateway
 // +kubebuilder:printcolumn:name="Min",type=integer,JSONPath=`.spec.minReplicas`

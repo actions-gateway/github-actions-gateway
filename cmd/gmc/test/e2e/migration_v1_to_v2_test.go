@@ -208,7 +208,7 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		// Without an explicit kind the referent defaults to a namespaced
 		// RunnerTemplate, and the set would sit Ready=False/TemplateNotFound forever.
 		// The version is qualified explicitly: templateRef.kind and maxListeners are
-		// v2alpha1 fields the ScaleSet-only v2beta1 storage version strips, so an
+		// v2alpha1 fields the ScaleSet-only v2beta1 and v2 versions strip, so an
 		// unqualified read would not see them (cf. Q398).
 		Expect(jsonpathValue("runnersets.v2alpha1.actions-gateway.com", setName, tenantNS,
 			"{.spec.templateRef.kind}")).To(Equal("ClusterRunnerTemplate"))

@@ -39,7 +39,7 @@ spec:
   gatewayRef:
     name: dogfood-e2e
   # templateRef is supplied by the overlay — the isolation-specific worker shape.
-  # Authored directly at v2beta1 — the graduated, served+storage front-door shape
+  # Authored directly at v2beta1 — the graduated, served front-door shape
   # (Q273), the same version scripts/dogfood/setup.sh (main dogfood) now authors
   # at since Q1104 moved it off v2alpha1. v2beta1 is ScaleSet-only
   # and strips acquisitionProtocol + maxListeners (Q74 graduation / Q264 §5a). One

@@ -5,7 +5,7 @@ package v2
 //
 // The hub stays at v2beta1 rather than moving to v2. controller-runtime routes a
 // spoke-to-spoke request through the hub, so a v2 hub would send every v2alpha1 read
-// of a v2beta1-stored object through a type that cannot hold the deprecated
+// of an object still stored at v2beta1 through a type that cannot hold the deprecated
 // CiliumFQDN/CalicoFQDN aliases, and a stored alias would fail v2alpha1 reads that
 // work today. With the v2beta1 hub, only a request that names v2 meets the alias.
 //
@@ -27,8 +27,10 @@ import (
 )
 
 // annEgressPolicyMode carries a stored EgressProxy's deprecated egressPolicyMode
-// alias (CiliumFQDN or CalicoFQDN) on its v2 view, which shows FQDN. It is a
-// conversion artifact, never stored: ConvertTo strips it from the hub object.
+// alias (CiliumFQDN or CalicoFQDN) on its v2 view, which shows FQDN. ConvertTo
+// strips it from the hub object. v2 is the storage version from 1.10, so a pool
+// still naming an alias is persisted as FQDN plus this annotation, which is how a
+// v2beta1 read still returns the alias.
 const annEgressPolicyMode = "conversion.actions-gateway.com/egress-policy-mode"
 
 // Compile-time proof that every converted v2 root kind is a conversion spoke.

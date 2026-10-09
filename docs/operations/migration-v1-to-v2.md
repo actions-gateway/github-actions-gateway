@@ -11,7 +11,7 @@ This guide covers running the `gag-migrate` tool: dry-run → review → `--appl
 ## Why upgrade to v2
 
 v2 is **opt-in**.
-It is served at three versions: **`v2beta1`** (the graduated, ScaleSet-only storage/hub version), **`v2`** (the GA version, storage from `v2.0.0`), and **`v2alpha1`** (deprecated, served as this tool's on-ramp).
+It is served at three versions: **`v2beta1`** (the graduated, ScaleSet-only hub version), **`v2`** (the GA version, storage from 1.10), and **`v2alpha1`** (deprecated, served as this tool's on-ramp).
 `gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs Classic.
 Multi-label matching is not a reason to stay: `v2beta1` registers every `runnerLabel` on the scale set.
 Because `v2alpha1` is deprecated, the apiserver warns on every `v2alpha1` read or write, including the objects `gag-migrate` applies.

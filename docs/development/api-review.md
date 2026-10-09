@@ -330,7 +330,7 @@ A bare "no earlier than `v3.0.0`" gives them no way to know the sentence is load
 
 ### A new version must round-trip losslessly
 
-`v2alpha1` and `v2` are spokes and `v2beta1` is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
+`v2alpha1` and `v2` are spokes and `v2beta1` is the hub, so every served version converts to and from one hub rather than pairwise; `v2` is the storage version from 1.10.
 If a new version drops something the old one can store, a field or an enum value, the object must still round-trip: `RunnerSet` conversion stashes the dropped `acquisitionProtocol` and `maxListeners` in `conversion.actions-gateway.com/*` annotations, and `v2`'s `EgressProxy` carries a stored `CiliumFQDN`/`CalicoFQDN` alias the same way while showing `FQDN`.
 Any such carrier needs a round-trip test — see `TestRunnerSetConversion_RoundTrip` and friends in [`api/v2alpha1/conversion_test.go`](../../api/v2alpha1/conversion_test.go).
 

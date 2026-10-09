@@ -67,7 +67,6 @@ type RunnerTemplateStatus struct {
 // RunnerSets via templateRef. Pure data: nothing owns it and it owns nothing (§H.8).
 //
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rt,categories=actions-gateway
 // +kubebuilder:printcolumn:name="WorkerImage",type=string,JSONPath=`.spec.workerImage`
@@ -96,7 +95,6 @@ type RunnerTemplateList struct {
 // ClusterRunnerTemplate (§H.4). Pure data: nothing owns it and it owns nothing.
 //
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName=crt,categories=actions-gateway
 // +kubebuilder:printcolumn:name="WorkerImage",type=string,JSONPath=`.spec.workerImage`

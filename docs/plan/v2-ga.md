@@ -7,7 +7,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > **Scoped 2026-10-09**, after `v1.9.0` tagged on 2026-10-05: the [scope ledger](#scope-ledger) is the release's record.
-> Phase 3's storage advance ships first, in its own release: [Q1086](../queue/Q1086.md) gates [1.10](release-1.10.md), decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
+> Phase 3's storage advance ships first, in its own release: Q1086 landed it for [1.10](release-1.10.md), `v2` storing on every kind and `gag-migrate storage-version` rewriting what is stored, decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
 > The removals follow in `v2.0.0`: [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub, [Q273](../queue/Q273.md) for `v1alpha1`, and [Q264](../queue/Q264.md) for classic; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on all four.
 > The Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The phase table below is the real state.
@@ -19,22 +19,22 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
 | 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ✅ Done in Q413: `v2` is a second conversion spoke and the hub stays at `v2beta1` ([why](#the-hub-stays-at-v2beta1)) |
-| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance ([Q1086](../queue/Q1086.md)) gates 1.10; the removals ([Q1167](../queue/Q1167.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md)) are blocked behind it; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
+| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance landed for 1.10 in Q1086, and its dogfood reading is [Q1171](../queue/Q1171.md); the removals ([Q1167](../queue/Q1167.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md)) are blocked behind the 1.10 tag; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
 ## Scope ledger
 
 What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
 Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](archive/release-1.9.md#scope-ledger) carries it, as it did Q1150, the validators' retype onto `v2`.
-Nor is the storage advance: [Q1086](../queue/Q1086.md) gates 1.10, and [release-1.10.md](release-1.10.md#scope-ledger) carries it.
+Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](release-1.10.md#scope-ledger) carries it.
 `make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1167](../queue/Q1167.md) | Retype the controllers onto `v2`, move the conversion hub, and drop `v2alpha1` and `v2beta1` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1086 |
+| [Q1167](../queue/Q1167.md) | Retype the controllers onto `v2`, move the conversion hub, and drop `v2alpha1` and `v2beta1` (Phase 3) | `2.0-gate` | 🚫 blocked on the 1.10 tag |
 | [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate` (Phase 3) | `2.0-gate` | 🚫 blocked on the 1.10 tag |
 | [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q1167 and Q273 |
-| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1086, Q1167, Q273 and Q264 |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q273 and Q264 |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 | [Q275](../queue/Q275.md) | Reconcile the capacity and density docs with the ScaleSet default | rides | 🚫 blocked on Q264, whose removal makes the classic framing false |
 
@@ -201,7 +201,7 @@ The apiserver refuses to remove a version from a CRD's `spec.versions` while its
 Every cluster that has run any 1.x release lists `v2beta1` there, because `v2beta1` is the storage version today, and a cluster that stored objects before `v2beta1` became storage may list an older version as well.
 So a single `v2.0.0` apply that marks `v2` storage and drops the other three versions is rejected on every such cluster, mid-upgrade.
 
-Between those two applies sits a state where `v2` is storage, every version is still served, and the sweep in [Q1086](../queue/Q1086.md) rewrites each object and prunes `storedVersions` to `["v2"]`.
+Between those two applies sits a state where `v2` is storage, every version is still served, and Q1086's sweep, `gag-migrate storage-version`, rewrites each object and prunes `storedVersions` to `["v2"]`.
 CRDs here are applied server-side from a release asset ([upgrade.md](../operations/upgrade.md#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart)), so that state has to be something an operator applies.
 There were two places it could live, and the maintainer chose a release on 2026-10-09 ([release-ladder.md](release-ladder.md#why-110-exists-the-storage-advance-cannot-share-an-apply-with-the-removals)):
 

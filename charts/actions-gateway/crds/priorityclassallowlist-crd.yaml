@@ -150,7 +150,7 @@ spec:
                 || !self.allowedPriorityClasses.exists(c, c in self.allowedInfraPriorityClasses)'
         type: object
     served: true
-    storage: false
+    storage: true
     subresources: {}
   - additionalPrinterColumns:
     - jsonPath: .spec.allowedPriorityClasses
@@ -267,5 +267,5 @@ spec:
                 || !self.allowedPriorityClasses.exists(c, c in self.allowedInfraPriorityClasses)'
         type: object
     served: true
-    storage: true
+    storage: false
     subresources: {}

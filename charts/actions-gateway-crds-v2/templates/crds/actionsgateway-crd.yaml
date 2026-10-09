@@ -2040,7 +2040,7 @@ spec:
             label/Service-name budget'
           rule: self.metadata.name.size() <= 52
     served: true
-    storage: false
+    storage: true
     subresources:
       status: {}
   - additionalPrinterColumns:
@@ -6046,6 +6046,6 @@ spec:
             label/Service-name budget'
           rule: self.metadata.name.size() <= 52
     served: true
-    storage: true
+    storage: false
     subresources:
       status: {}

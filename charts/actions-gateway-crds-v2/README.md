@@ -1,7 +1,7 @@
 # actions-gateway-crds-v2
 
 Opt-in CustomResourceDefinitions for the v2 (`actions-gateway.com`) API.
-Each kind is served at three versions: **`v2beta1`** (the graduated, ScaleSet-only storage/hub version), **`v2`** (the GA version, served beside it and becoming storage at `v2.0.0`), and **`v2alpha1`** (still served for coexistence and the `gag-migrate` on-ramp).
+Each kind is served at three versions: **`v2beta1`** (the graduated, ScaleSet-only hub version, removed at `v2.0.0`), **`v2`** (the GA version and, from 1.10, the storage version), and **`v2alpha1`** (still served for coexistence and the `gag-migrate` on-ramp).
 
 | Kind | Scope | Short |
 |---|---|---|
@@ -31,7 +31,7 @@ Re-run the same command to carry CRD field changes on upgrade.
 
 ## Conversion webhook
 
-Because each kind is multi-version (`v2beta1` storage/hub, `v2alpha1` and `v2` spokes), every CRD carries a `spec.conversion` that routes the apiserver to a **conversion webhook hosted by the GMC** (`/convert` on the main chart's `webhook-service`).
+Because each kind is multi-version (`v2beta1` the hub, `v2alpha1` and `v2` spokes, `v2` the storage version), every CRD carries a `spec.conversion` that routes the apiserver to a **conversion webhook hosted by the GMC** (`/convert` on the main chart's `webhook-service`).
 This chart therefore depends on the main `actions-gateway` chart and, by default, cert-manager:
 
 | Value | Default | Purpose |

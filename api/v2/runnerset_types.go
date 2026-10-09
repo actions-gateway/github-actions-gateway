@@ -689,6 +689,7 @@ type ContainerSizingRecommendation struct {
 // so the two are never declared simultaneously. See Q74.
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rs,categories=actions-gateway
 // +kubebuilder:printcolumn:name="Gateway",type=string,JSONPath=`.spec.gatewayRef.name`

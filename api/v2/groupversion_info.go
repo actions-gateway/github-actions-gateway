@@ -5,9 +5,9 @@
 // (data) kinds — plus the platform-owned PriorityClassAllowlist and their shared
 // types.
 //
-// v2 is served beside v2beta1 and is NOT the storage version: v2beta1 keeps that
-// role until v2.0.0, because Kubernetes' deprecation policy (rule #4b) will not let
-// the storage version advance in the release that introduces its successor (Q413).
+// v2 is the storage version from 1.10 (Q1086). It was served beside v2beta1 a release
+// earlier, in 1.9, because Kubernetes' deprecation policy (rule #4b) will not let the
+// storage version advance in the release that introduces its successor (Q413).
 //
 // v2 is a conversion **spoke** of the v2beta1 hub (see conversion.go), like
 // v2alpha1. The shape is identical to v2beta1 with one exception: EgressProxy's

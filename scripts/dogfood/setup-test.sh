@@ -643,7 +643,7 @@ run_main
 check_contains "renders the persistent Athens overlay on request" \
 	"deploy/athens/overlays/persistent" "$(call_line 'apply -k')"
 
-# --- the tenant is authored at the storage version, and the webhook is probed --
+# --- the tenant is authored at v2beta1, and the webhook is probed -------------
 #
 # The three tenant CRs used to be authored at v2alpha1, which reached the
 # conversion webhook on every apply and so proved the caBundle by accident.

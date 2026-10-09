@@ -23,8 +23,6 @@ Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits u
 Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
 No pill means no release is decided for that item yet.
 
-- **[Move stored objects to the `v2` API](plan/release-1.10.md)** <!-- q:Q1086 --> Every object an operator has stored is rewritten as `v2`, with every API version still served, so nothing an operator runs changes.
-  It has to finish before any version can be removed, which is why it ships a release ahead of the removals.
 
 - **[Scale-set recovery and cleanup that follow the runner, not the worker](design/04-operational-flows.md#on-the-scale-set-tier-q417)** <!-- q:Q1152,Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and three paths assume it went to the worker created for it.
   Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.

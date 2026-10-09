@@ -27,7 +27,7 @@ import (
 //     (Q243) depends on an empty object surviving a write/read round-trip as a
 //     NON-NIL pointer. Whether the apiserver preserves or elides an empty known
 //     object is an apiserver question, not a Go question.
-//  3. CONVERSION. v2beta1 is the storage hub and v2alpha1 the served spoke, so
+//  3. CONVERSION. v2beta1 is the hub, v2 the storage version, and v2alpha1 a spoke, so
 //     scheduling set at one version must survive storage and round-trip back.
 
 // tenantPoolScheduling is the Q243 egress-IP pinning shape: pin the pool to one node

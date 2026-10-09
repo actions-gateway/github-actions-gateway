@@ -47,7 +47,7 @@ func init() {
 	// the ActionsGateway/RunnerSet reconcilers that consume the rest land in M3a.
 	utilruntime.Must(v2alpha1.AddToScheme(scheme))
 	// Register the v2beta1 kinds (Q74): the graduated, ScaleSet-only API and the
-	// conversion-hub / storage version. Both v2alpha1 (spoke) and v2beta1 (hub) must be
+	// conversion hub. Both v2alpha1 (spoke) and v2beta1 (hub) must be
 	// in the scheme for the GMC-hosted conversion webhook to resolve each kind as
 	// convertible and serve /convert.
 	utilruntime.Must(v2beta1.AddToScheme(scheme))

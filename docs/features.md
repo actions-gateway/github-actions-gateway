@@ -118,7 +118,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 
 ## API surface and migration
 
-- **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with `v2beta1` as the graduated storage and hub version.
+- **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with `v2beta1` as the graduated hub version and `v2` the storage version.
 - **[`v2`, served beside `v2beta1`](operations/upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.9</span>: every kind is also served at the General Availability (GA) version, with `v2beta1` still stored, so `v2.0.0` has a release to roll back to.
 - **[Reusable runner templates](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one `RunnerTemplate` referenced by many runner sets, or a cluster-wide `ClusterRunnerTemplate` shared across namespaces.
 - **[Multiple gateways per namespace](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.

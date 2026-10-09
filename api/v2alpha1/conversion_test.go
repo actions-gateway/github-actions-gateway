@@ -321,8 +321,8 @@ func TestEgressProxyConversion_EgressPolicyModeRoundTrip(t *testing.T) {
 	}
 	for _, mode := range modes {
 		t.Run(string(mode), func(t *testing.T) {
-			// Start from a v2beta1 (hub / storage) object, since the fuzz targets a stored
-			// object surviving a read-as-v2alpha1 and write-back.
+			// Start from a v2beta1 (hub) object, since the fuzz targets a stored object
+			// surviving a read-as-v2alpha1 and write-back, which passes through the hub.
 			hub := &v2beta1.EgressProxy{
 				ObjectMeta: metav1.ObjectMeta{Name: "proxy", Namespace: "ns"},
 				Spec: v2beta1.EgressProxySpec{

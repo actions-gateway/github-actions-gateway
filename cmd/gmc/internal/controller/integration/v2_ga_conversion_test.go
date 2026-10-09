@@ -24,12 +24,12 @@ import (
 const egressPolicyModeAnnotation = "conversion.actions-gateway.com/egress-policy-mode"
 
 // These tests cover the GA v2 version served beside v2beta1 (Q413) against the real
-// apiserver: v2 is a second conversion spoke of the v2beta1 hub, v2beta1 stays the
-// storage version, and v2 omits the deprecated CiliumFQDN/CalicoFQDN aliases.
+// apiserver: v2 is a second conversion spoke of the v2beta1 hub, v2 is the storage
+// version from 1.10 (Q1086), and v2 omits the deprecated CiliumFQDN/CalicoFQDN aliases.
 
 // TestV2GA_ServedBesideStorage reads the served and storage flags off the installed
 // CustomResourceDefinitions rather than off the kubebuilder markers: every
-// actions-gateway.com kind serves v2 and stores v2beta1.
+// actions-gateway.com kind serves v2 and v2beta1 and stores v2.
 func TestV2GA_ServedBesideStorage(t *testing.T) {
 	for _, plural := range []string{
 		"actionsgateways", "egressproxies", "runnersets", "runnertemplates",
@@ -55,7 +55,7 @@ func TestV2GA_ServedBesideStorage(t *testing.T) {
 			}
 			assert.True(t, served["v2"], "v2 must be served")
 			assert.True(t, served["v2beta1"], "v2beta1 must stay served beside v2")
-			assert.Equal(t, []string{"v2beta1"}, storage, "v2beta1 must stay the only storage version until v2.0.0")
+			assert.Equal(t, []string{"v2"}, storage, "v2 must be the only storage version from 1.10")
 		})
 	}
 }
@@ -317,8 +317,8 @@ func TestV2GA_StoredAliasReadsAtV2(t *testing.T) {
 	})
 }
 
-// TestV2GA_PriorityClassAllowlist_ServedAtV2 creates a PriorityClassAllowlist at the
-// storage version and reads it at v2. The kind has no conversion webhook, so this
+// TestV2GA_PriorityClassAllowlist_ServedAtV2 creates a PriorityClassAllowlist at
+// v2beta1 and reads it at v2. The kind has no conversion webhook, so this
 // is the apiserver's None strategy, which is lossless only while the schemas match.
 func TestV2GA_PriorityClassAllowlist_ServedAtV2(t *testing.T) {
 	pca := &v2beta1.PriorityClassAllowlist{
