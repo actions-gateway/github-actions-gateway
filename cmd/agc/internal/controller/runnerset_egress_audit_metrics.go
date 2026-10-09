@@ -17,8 +17,10 @@ import (
 //
 // It is shaped like the WorkerCapacityDeclined family in runnerSetCapacityCollector,
 // for the same reasons. The reason label is closed and small (EgressAuditJoined,
-// EgressAuditDisabled, WorkerAuditDisabled, ProxySourceAuditDisabled, DirectEgress)
-// and is what lets a panel keep only sets with at least one half of the pair on. It
+// EgressAuditDisabled, WorkerAuditDisabled, ProxySourceAuditDisabled,
+// WorkerAuditWithoutProxy, DirectEgress) and is what lets a panel keep only tenants
+// with at least one half of the pair on: EgressAuditDisabled and DirectEgress are the
+// two that mean neither. It
 // reads at scrape time, so a reason change replaces the series and a deleted set's
 // disappears. And it is emitted only once the condition is present: a set whose
 // references never resolved has no pool to judge, and a 0 there would read as joined.
@@ -34,7 +36,7 @@ func NewRunnerSetEgressAuditCollector(reader client.Reader) prometheus.Collector
 		reader: reader,
 		unattributed: prometheus.NewDesc(
 			"actions_gateway_runnerset_egress_audit_unattributed",
-			"1 when the RunnerSet EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off for this set's workers: the gateway does not log WorkerAddresses, or the EgressProxy the set resolves — its own proxyRef, else the gateway's defaultProxyRef — does not log ConnectionsWithSource), else 0. The reason label carries the condition's reason, which names the half that is off. Both halves are opt-in, so a 1 is the expected state on a tenant that never opted in. A 0 says the pair is configured, not that anything runs the join. Emitted only once the set's references have resolved.",
+			"1 when the RunnerSet EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off for this set's workers: the gateway does not log WorkerAddresses, or the EgressProxy the set resolves — its own proxyRef, else the gateway's defaultProxyRef — does not log ConnectionsWithSource), else 0. The reason label carries the condition's reason, which names the half that is off; EgressAuditDisabled and DirectEgress are the only reasons for a tenant that turned neither half on, so excluding them keeps opted-in tenants, direct-egress sets included. Both halves are opt-in, so a 1 is the expected state on a tenant that never opted in. A 0 says the pair is configured, not that anything runs the join. Emitted only once the set's references have resolved.",
 			[]string{"namespace", "runner_set", "reason"}, nil,
 		),
 	}

@@ -993,9 +993,16 @@ func (r *RunnerSetReconciler) setEgressAuditStatus(rs *v2alpha1.RunnerSet, gw *v
 
 // runnerSetEgressAudit reports the EgressAuditUnattributed reason and message for a
 // set's gateway and resolved pool (nil for direct egress). Every reason but
-// ReasonEgressAuditJoined names the half to turn on.
+// ReasonEgressAuditJoined names the half to turn on, and a direct-egress set splits on
+// the gateway half so the reason alone says whether the tenant opted in.
 func runnerSetEgressAudit(gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) (reason, message string) {
+	workerHalf := gw.Spec.AuditLogging == string(provisioner.WorkerAuditAddresses)
 	if proxy == nil {
+		if workerHalf {
+			return v2alpha1.ReasonWorkerAuditWithoutProxy,
+				fmt.Sprintf("ActionsGateway %q logs %s but this set has no proxyRef/defaultProxyRef: worker egress is direct, so no per-connection record exists to join the addresses to. Attach an EgressProxy that logs %s",
+					gw.Name, provisioner.WorkerAuditAddresses, proxyAuditConnectionsWithSource)
+		}
 		return v2alpha1.ReasonDirectEgress,
 			"no proxyRef/defaultProxyRef: worker egress is direct, so no per-connection record attributes it"
 	}
@@ -1006,7 +1013,6 @@ func runnerSetEgressAudit(gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) (re
 		}
 		return v
 	}
-	workerHalf := gw.Spec.AuditLogging == string(provisioner.WorkerAuditAddresses)
 	proxyHalf := proxy.auditLogging == proxyAuditConnectionsWithSource
 	switch {
 	case workerHalf && proxyHalf:

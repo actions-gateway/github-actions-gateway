@@ -160,9 +160,11 @@ func TestRunnerSetEgressAudit_ProxyRefWithoutGatewayDefault(t *testing.T) {
 	assert.Equal(t, metav1.ConditionFalse, cond.Status)
 	assert.Equal(t, v2alpha1.ReasonEgressAuditJoined, cond.Reason)
 
+	// The gateway half is on, so the direct set's tenant opted in: the reason must say
+	// so rather than read like a set nobody configured.
 	cond = egressAuditCondition(t, c, ns, "direct")
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, v2alpha1.ReasonDirectEgress, cond.Reason)
+	assert.Equal(t, v2alpha1.ReasonWorkerAuditWithoutProxy, cond.Reason)
 }
 
 // A shared pool is never read by the AGC, so the source half arrives in the
@@ -226,7 +228,8 @@ func TestRunnerSetEgressAudit_Reasons(t *testing.T) {
 		{"worker half off", gw(""), pool(src), v2alpha1.ReasonWorkerAuditDisabled, `"Off"`},
 		{"source half off", gw(on), pool("Connections"), v2alpha1.ReasonProxySourceAuditDisabled, `"Connections"`},
 		{"neither", gw("Off"), pool(""), v2alpha1.ReasonEgressAuditDisabled, `"pool"`},
-		{"direct", gw(on), nil, v2alpha1.ReasonDirectEgress, "direct"},
+		{"direct, gateway half on", gw(on), nil, v2alpha1.ReasonWorkerAuditWithoutProxy, "Attach an EgressProxy"},
+		{"direct, gateway half off", gw(""), nil, v2alpha1.ReasonDirectEgress, "direct"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			reason, msg := runnerSetEgressAudit(tc.gw, tc.proxy)
@@ -243,4 +246,33 @@ func TestRunnerSetEgressAuditCollector_SkipsSetsWithoutTheCondition(t *testing.T
 	c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).Build()
 	values, _ := egressAuditSeries(t, c)
 	assert.Empty(t, values)
+}
+
+// Q1070 plots only tenants that turned on at least one half, and it can filter on
+// nothing but the reason, so the reason alone has to say whether the tenant opted in.
+// Every combination of the gateway half and the set's pool is enumerated: the two
+// not-opted-in reasons appear exactly when neither half is on.
+func TestRunnerSetEgressAudit_ReasonSaysWhetherTheTenantOptedIn(t *testing.T) {
+	notOptedIn := map[string]bool{
+		v2alpha1.ReasonEgressAuditDisabled: true,
+		v2alpha1.ReasonDirectEgress:        true,
+	}
+	pools := map[string]*resolvedProxy{
+		"no pool":          nil,
+		"pool off":         {name: "pool", auditLogging: "Off"},
+		"pool connections": {name: "pool", auditLogging: "Connections"},
+		"pool with source": {name: "pool", auditLogging: proxyAuditConnectionsWithSource},
+		"pool unset (Off)": {name: "pool"},
+	}
+	for _, gwMode := range []string{"", "Off", string(provisioner.WorkerAuditAddresses)} {
+		for poolName, pool := range pools {
+			gw := &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw"},
+				Spec: v2alpha1.ActionsGatewaySpec{AuditLogging: gwMode}}
+			optedIn := gwMode == string(provisioner.WorkerAuditAddresses) ||
+				(pool != nil && pool.auditLogging == proxyAuditConnectionsWithSource)
+			reason, _ := runnerSetEgressAudit(gw, pool)
+			assert.Equal(t, !optedIn, notOptedIn[reason],
+				"gateway %q, %s: reason %s misreports whether the tenant opted in", gwMode, poolName, reason)
+		}
+	}
 }

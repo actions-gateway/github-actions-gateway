@@ -108,6 +108,11 @@ const (
 	// therefore judged only by the RunnerSet condition, which is the one to key worker
 	// egress on (Q1069); a shared pool's half reaches the set's AGC through the share
 	// projection, since the AGC cannot read the provider's EgressProxy.
+	//
+	// The RunnerSet reasons say whether the tenant opted into either half: a set with
+	// no pool reads WorkerAuditWithoutProxy when the gateway logs WorkerAddresses and
+	// DirectEgress when it does not, so EgressAuditDisabled and DirectEgress are the
+	// only reasons for a tenant that turned neither half on.
 	ConditionEgressAuditUnattributed = "EgressAuditUnattributed"
 	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
 	// set True on a RunnerSet whose resolved worker template carries a regular
@@ -333,6 +338,13 @@ const (
 	// gateway records worker addresses but the resolved EgressProxy's spec.auditLogging is
 	// not ConnectionsWithSource, so no record carries an address to join on.
 	ReasonProxySourceAuditDisabled = "ProxySourceAuditDisabled"
+	// ReasonWorkerAuditWithoutProxy is the RunnerSet EgressAuditUnattributed=True reason
+	// when the gateway records worker addresses but the set resolves no EgressProxy, so
+	// its workers egress directly and no pool record exists to join on (Q1069). On a
+	// RunnerSet, DirectEgress is reserved for the same egress with the gateway half off,
+	// so the reason alone says whether the tenant opted in. The gateway's own condition
+	// keeps DirectEgress for both.
+	ReasonWorkerAuditWithoutProxy = "WorkerAuditWithoutProxy"
 	// ReasonVPACRDNotInstalled is the AGCAutoscalingUnavailable=True reason: the gateway
 	// opted into spec.agcAutoscaling but the cluster has no autoscaling.k8s.io
 	// VerticalPodAutoscaler CRD, so the managed autoscaler could not be created (Q360).
