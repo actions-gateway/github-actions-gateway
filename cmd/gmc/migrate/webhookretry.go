@@ -35,6 +35,27 @@ var (
 	webhookRetryGap = 3 * time.Second
 )
 
+// Clock seams, nil outside tests. A test fills them so the op decides which attempt
+// is the last, rather than racing the wall clock for an attempt count (Q1111).
+var (
+	webhookRetryNow   func() time.Time
+	webhookRetryAfter func(time.Duration) <-chan time.Time
+)
+
+func retryNow() time.Time {
+	if webhookRetryNow != nil {
+		return webhookRetryNow()
+	}
+	return time.Now()
+}
+
+func retryAfter(d time.Duration) <-chan time.Time {
+	if webhookRetryAfter != nil {
+		return webhookRetryAfter(d)
+	}
+	return time.After(d)
+}
+
 // retryOnTransientWebhookError runs op, retrying ONLY while the apiserver reports it
 // could not REACH an admission webhook.
 //
@@ -54,14 +75,14 @@ var (
 // burning the budget. Progress is reported to stderr rather than stalling silently,
 // so an operator watching an --apply can tell "waiting on a webhook" from "hung".
 func retryOnTransientWebhookError(ctx context.Context, what string, stderr io.Writer, op func() error) error {
-	deadline := time.Now().Add(webhookRetryBudget)
+	deadline := retryNow().Add(webhookRetryBudget)
 	attempts := 0
 	for {
 		err := op()
 		if err == nil || !webhookTransportErrorRe.MatchString(err.Error()) {
 			return err
 		}
-		remaining := time.Until(deadline)
+		remaining := deadline.Sub(retryNow())
 		if remaining <= 0 {
 			return err
 		}
@@ -77,7 +98,7 @@ func retryOnTransientWebhookError(ctx context.Context, what string, stderr io.Wr
 		select {
 		case <-ctx.Done():
 			return err
-		case <-time.After(webhookRetryGap):
+		case <-retryAfter(webhookRetryGap):
 		}
 	}
 }
