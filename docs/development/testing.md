@@ -1050,12 +1050,14 @@ The density rules next door stay character budgets over the Markdown ([card bull
 **Only a real browser reaches this class.** The persona pills that motivated the gate are built by `docs/javascripts/extra.js` at page load from a `> **Audience:**` blockquote, so they exist in no built HTML file and no Markdown-AST gate can see them.
 Measured 2026-09-14 before the fix: two published pages were over at 320px, `operations/migration-from-arc.md` by 324px, which rendered a 320px viewport 644px wide.
 
-Three decisions worth knowing:
+Four decisions worth knowing:
 
 - **The site is served over HTTP, never `file://`.** The two disagree: measured the same day, the landing page reported 279px of overflow under `file://` and none when served, so the cheaper oracle invents findings.
   The checker starts its own server on an ephemeral port, so there is no port to collide on.
 - **The reported owner is the largest contributor, not the first.** Overflow is a maximum rather than a sum, so one owner can mask another; the checker hides each `article` child in turn and reports the one whose removal shrinks the document most.
 - **A tree with no pages exits 2.** A gate that measures nothing passes exactly like a clean one.
+- **A page that does not finish loading is retried, not given longer.** Each navigation gets Playwright's 30-second default and up to three attempts, and every retry prints a warning (a `::warning::` annotation in CI) so a recurrence stays visible; a page that fails all three still fails the run.
+  The one sighting (Q1165) stalled on a page whose only off-host requests are XHRs, which never delay `load`: with every off-host request held open, it still loaded in 0.4 seconds (measured 2026-10-09), so blocking off-host traffic would not have helped it.
 
 The pinned browser lives in `requirements-docs-check.txt`, deliberately apart from `requirements-docs.txt`: that file is what `pages.yml` installs to build and publish the site, and the publish job has no business pulling 200MB of Chromium.
 Provisioning costs about 13 seconds and ~350MB once, on a workstation and on a GitHub runner alike, cached thereafter in the gitignored `.venv-render/`.
@@ -1066,7 +1068,7 @@ If it ever needs to be cheaper, narrow that scope rather than drop a width: the 
 Adding the gate also closed a gap in [`doc-links.yml`](../../.github/workflows/doc-links.yml)'s path filter.
 `docs/stylesheets/**` and `docs/javascripts/**` were in neither of its two path lists, so a CSS or JavaScript change, the one kind that can *only* break a render, reached no gate in that workflow at all.
 
-Behaviour is asserted by `scripts/docs/check-render-overflow-test.sh`, **split by what each half needs rather than by what the machine happens to have.** The default half drives the checker with the system `python3` and runs under `make scripts-test` like any other suite: the checker imports its browser inside `measure()`, so argument handling, page discovery and the refusal paths are all reachable without one.
+Behaviour is asserted by `scripts/docs/check-render-overflow-test.sh`, **split by what each half needs rather than by what the machine happens to have.** The default half drives the checker with the system `python3` and runs under `make scripts-test` like any other suite: the checker imports its browser inside `measure()`, so argument handling, page discovery, the navigation retry and the refusal paths are all reachable without one.
 `--render-only` is the pair that needs the pinned browser, and the gate runs it itself after provisioning and before it measures the site.
 The injected defect is an element with `white-space: nowrap` too long to shrink, the exact shape the audience pills had, and it must go red and name the element that owns it.
 
