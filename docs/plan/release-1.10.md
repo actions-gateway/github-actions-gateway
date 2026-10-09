@@ -40,7 +40,8 @@ Five gating rows and the candidate validation, then the three items that ride.
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | 🔲 ready, staged |
 | [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | 🔲 ready |
 
-**The gates are the storage advance and the scale-set tier's correctness.** Q1086 is what the release is for.
+**The split is the maintainer's, chosen 2026-10-09; the reasons below are this plan's, offered with it.** The theme is in the maintainer's own words: the storage advance plus scale-set correctness.
+Q1086 is what the release is for.
 Q1152, Q1153 and Q1154 are defects on the scale-set tier, the one `v2.0.0` keeps as the only tier: recovery that re-runs the wrong run, a worker that holds a node for up to 12 hours, and a credential-bearing Secret that outlives its worker.
 Q1152 and Q1154 were found reviewing Q1151's fix, and all three follow from the same fact, that GitHub hands a scale-set job to whichever runner asks first.
 Q1069 gates as the one feature: the gateway-level attribution flag reads `0` where a set's traffic leaves through a pool that logs no source address, the wrong direction for an audit signal.
