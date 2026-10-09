@@ -256,3 +256,43 @@ func TestReconcileProxyShares_UnconsentedReferrerGetsNothing(t *testing.T) {
 		t.Errorf("projected %d ConfigMap(s) for an unconsented referrer", len(list.Items))
 	}
 }
+
+// A consumer's AGC cannot read a shared pool's EgressProxy, so the projection is the
+// only way its per-set EgressAuditUnattributed learns the source half (Q1069). The key
+// must follow the provider's spec, or a pool turned on later reads Off to every
+// consumer forever.
+func TestReconcileProxyShares_ProjectsAuditLogging(t *testing.T) {
+	ctx := context.Background()
+	ep := proxyWithSharing("provider", "pool", "team-a")
+
+	c := fake.NewClientBuilder().
+		WithScheme(shareTestScheme(t)).
+		WithObjects(
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
+				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
+			},
+			&gmcv2alpha1.ActionsGateway{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
+				Spec: gmcv2alpha1.ActionsGatewaySpec{
+					DefaultProxyRef: &gmcv2alpha1.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+				},
+			},
+		).Build()
+	r := &EgressProxyReconciler{Client: c}
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyShareConfigMapName("provider", "pool")}
+
+	for _, want := range []string{auditLoggingOff, auditLoggingConnectionsWithSource} {
+		ep.Spec.AuditLogging = want
+		if err := r.reconcileProxyShares(ctx, ep); err != nil {
+			t.Fatalf("project with auditLogging %q: %v", want, err)
+		}
+		var cm corev1.ConfigMap
+		if err := c.Get(ctx, key, &cm); err != nil {
+			t.Fatalf("granted namespace holds no projection: %v", err)
+		}
+		if got := cm.Data[shareAuditLoggingKey]; got != want {
+			t.Errorf("projection carries %s %q, want the provider's %q", shareAuditLoggingKey, got, want)
+		}
+	}
+}

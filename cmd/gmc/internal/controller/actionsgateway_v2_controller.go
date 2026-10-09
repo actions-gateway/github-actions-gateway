@@ -911,12 +911,12 @@ func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2a
 // cleared state; every other reason names the half to turn on, because that is the
 // operator's next action.
 //
-// The shared-pool and defaultProxyRef-scope cases are in the condition's own godoc
+// The shared-pool case and the per-RunnerSet twin are in the condition's own godoc
 // (apiconditions.ConditionEgressAuditUnattributed).
 func egressAuditAttribution(ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy) (reason, message string) {
 	if proxy == nil {
 		return gmcv2alpha1.ReasonDirectEgress,
-			"no defaultProxyRef: AGC control-plane egress is direct, so no per-connection record attributes it. A bound RunnerSet naming its own spec.proxyRef is not read here (Q1069)"
+			"no defaultProxyRef: AGC control-plane egress is direct, so no per-connection record attributes it. A bound RunnerSet naming its own spec.proxyRef reports its workers' egress on its own EgressAuditUnattributed condition"
 	}
 	// An empty value is the CRD default, so report it as Off rather than as "".
 	effective := func(v string) string {
