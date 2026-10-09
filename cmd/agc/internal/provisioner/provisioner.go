@@ -39,6 +39,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -872,13 +874,57 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 			// Idempotent: a replayed job already has its worker pod — and that pod mounts
 			// this Secret, so the Secret must survive. It is reclaimed with every other
 			// steady-state Secret by CleanupScaleSetJob on the job's completion.
+			p.handScaleSetSecretToPod(ctx, key.Namespace, podName, "", secretName, log)
 			return nil
 		}
 		unstage()
 		return fmt.Errorf("provisioner: create scale-set Pod %s: %w", podName, err)
 	}
 	log.Debug("scale-set worker pod created", "priorityClass", priorityClass)
+	p.handScaleSetSecretToPod(ctx, key.Namespace, podName, pod.UID, secretName, log)
 	return nil
+}
+
+// handScaleSetSecretToPod makes the worker pod the only owner of the JIT-config Secret
+// it mounts, so the garbage collector deletes the Secret once the pod is gone, however
+// it went: the reaper, a drain, or a hand-run delete (Q1154). The Secret is staged
+// before the pod exists, owned by the RunnerSet, and the completion that reclaims it is
+// keyed by the runner that held the job, which reads the Secret's name off a pod that
+// may already have been deleted. A Secret holding a runner credential then outlived its
+// worker until the RunnerSet was deleted.
+//
+// The pod is owned by the RunnerSet, so deleting the RunnerSet still cascades to both.
+// uid is the created pod's, or empty to read it (a replay that found the pod already
+// there). It is best-effort: a failure leaves the RunnerSet owning the Secret, which is
+// the reclaim-on-completion behaviour, and is logged rather than failing a provision
+// whose pod already exists.
+func (p *Provisioner) handScaleSetSecretToPod(ctx context.Context, namespace, podName string, uid types.UID, secretName string, log *slog.Logger) {
+	if uid == "" {
+		var pod corev1.Pod
+		if err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod); err != nil {
+			log.Warn("could not read the scale-set worker pod to hand it its Secret; the Secret stays with the RunnerSet",
+				"secret", secretName, "error", err)
+			return
+		}
+		uid = pod.UID
+	}
+	ref := metav1.OwnerReference{APIVersion: "v1", Kind: "Pod", Name: podName, UID: uid}
+	var secret corev1.Secret
+	if err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, &secret); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Warn("could not read the scale-set worker Secret to hand it to its pod", "secret", secretName, "error", err)
+		}
+		return
+	}
+	if len(secret.OwnerReferences) == 1 && secret.OwnerReferences[0] == ref {
+		return
+	}
+	patch := client.MergeFrom(secret.DeepCopy())
+	secret.OwnerReferences = []metav1.OwnerReference{ref}
+	if err := p.Client.Patch(ctx, &secret, patch); err != nil && !apierrors.IsNotFound(err) {
+		log.Warn("could not hand the scale-set worker Secret to its pod; the Secret stays with the RunnerSet",
+			"secret", secretName, "error", err)
+	}
 }
 
 // secretCleanupTimeout bounds a Secret delete issued on a detached context — the
