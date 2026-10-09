@@ -327,7 +327,7 @@ func TestCleanupScaleSetJob_RunnerlessCompletionSparesABusyWorker(t *testing.T) 
 	mintedForX := provisionHolder(ctx, t, p, target, "job-x")
 	setPhase(ctx, t, fc, mintedForX, corev1.PodRunning)
 
-	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-job-x"}))
 	assert.Equal(t, "job-d", podAnnotations(ctx, t, fc, mintedForX)[AnnotationStartedJobID])
 
 	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
@@ -368,13 +368,13 @@ func TestMarkScaleSetJobStarted_ClearsAStampFromARunnerlessCompletion(t *testing
 	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
 	require.Contains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt)
 
-	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-job-x"}))
 	ann := podAnnotations(ctx, t, fc, mintedForX)
 	assert.NotContains(t, ann, AnnotationJobCompletedAt,
 		"a worker whose runner started a job must lose a deadline set while it was idle")
 	assert.Equal(t, "job-d", ann[AnnotationStartedJobID])
 
-	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-no-such-runner"),
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-no-such-runner"}),
 		"a start naming a runner with no worker is not an error")
 }
 
@@ -416,7 +416,7 @@ func TestCleanupScaleSetJob_RunnerlessCompletionReadsPastALaggingCache(t *testin
 	p.Client = laggingCache(ctx, t, fc)
 	p.APIReader = fc
 
-	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-job-x"}))
 	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
 
 	assert.NotContains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt,
@@ -441,7 +441,7 @@ func TestMarkScaleSetJobStarted_ClearsAStampTheCacheHasNotSeen(t *testing.T) {
 	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
 	require.Contains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt)
 
-	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, "job-d", "gpu-job-x"))
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-job-x"}))
 	assert.NotContains(t, podAnnotations(ctx, t, fc, mintedForX), AnnotationJobCompletedAt,
 		"a start must lift a stamp the cache has not caught up with")
 }

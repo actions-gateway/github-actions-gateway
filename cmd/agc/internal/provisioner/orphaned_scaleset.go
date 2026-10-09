@@ -31,8 +31,10 @@ import (
 // The listener persists the run identity of every job whose worker it built, in the
 // per-RunnerSet guard ConfigMap it already writes ahead of each message delete
 // (scalesetlistener.GuardState.InFlight, Q606). An entry is added on a successful
-// provision and dropped when the job concludes, so an entry that outlives its worker POD
-// is a run whose worker went away with nobody watching.
+// provision and dropped when the job concludes, so an entry that outlives its worker
+// is a run whose worker went away with nobody watching. Its worker is the pod whose
+// runner started the job (AnnotationStartedJobID), which need not be the pod created for
+// it: GitHub gives a scale-set job to whichever runner asks first (Q1152).
 //
 // # Why the verdict is taken once per process, before the reaper
 //
@@ -111,12 +113,12 @@ func (s *orphanScanState) release(key string) {
 }
 
 // RecoverOrphanedScaleSetWorkers triggers the automatic re-run for every job in inFlight
-// whose worker pod no longer exists, and is a no-op on every reconcile after the first
-// for a given owner. inFlight is the set a previous process persisted; the caller reads
-// it from the guard ConfigMap.
+// whose worker no longer exists (scaleSetWorkerSet.serving), and is a no-op on every
+// reconcile after the first for a given owner. inFlight is the set a previous process
+// persisted; the caller reads it from the guard ConfigMap.
 //
 // Call it from the same place as RecoverEvictedScaleSetWorkers and BEFORE the reaper —
-// the whole discriminator is whether the worker pod is still there, and the reaper is
+// the whole discriminator is whether the job's worker is still there, and the reaper is
 // the one thing in this process that would remove a terminal one.
 //
 // It returns a done channel that closes once every recovery it started has finished, so
@@ -138,7 +140,7 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 	}
 	log := p.logForKey(key)
 
-	live, err := p.liveScaleSetWorkerPodNames(ctx, target)
+	workers, err := p.liveScaleSetWorkers(ctx, target)
 	if err != nil {
 		p.orphanScans.release(key.String())
 		return closedChan(), err
@@ -155,19 +157,19 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 	// two failures here.
 	candidates := make(map[string]bool, len(inFlight))
 	for _, w := range inFlight {
-		if podName := scaleSetPodName(key.Name, w.JobID); !live[podName] {
-			candidates[podName] = true
+		if !workers.serving(key.Name, w.JobID) {
+			candidates[w.JobID] = true
 		}
 	}
 	claimed := p.recoveryAlreadyClaimed(ctx, target, candidates)
 
 	var recoveries []<-chan struct{}
 	for _, w := range inFlight {
-		podName := scaleSetPodName(key.Name, w.JobID)
-		if live[podName] {
+		if !candidates[w.JobID] {
 			continue
 		}
-		if claimed[podName] {
+		podName := scaleSetPodName(key.Name, w.JobID)
+		if claimed[w.JobID] {
 			log.Debug("an unconcluded job's worker is gone but its disruption was already recovered; not re-running",
 				"podName", podName, "jobID", w.JobID, "runID", w.RunID)
 			continue
@@ -176,7 +178,7 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 		podLog.Warn("worker pod for an unconcluded job was gone when this AGC started; its run lost its worker unobserved",
 			"runID", w.RunID)
 		target.RecordEvent(corev1.EventTypeWarning, "OrphanedWorkerRecovered", "RecoverOrphanedWorker",
-			fmt.Sprintf("worker pod %s was gone when this controller started and its job never concluded, so run %s is being re-run; the disruption's cause was lost with the pod", podName, w.RunID))
+			fmt.Sprintf("the worker for job %s was gone when this controller started and the job never concluded, so run %s is being re-run; the disruption's cause was lost with the pod", w.JobID, w.RunID))
 		recoveries = append(recoveries,
 			p.handleEviction(ctx, target, w.Owner, w.Repository, w.RunID, podLog,
 				spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, recoveryCauseVanished))
@@ -192,33 +194,57 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 	return done, nil
 }
 
-// liveScaleSetWorkerPodNames names this owner's scale-set worker pods, in any phase. One
-// List answers a whole in-flight set, rather than a Get per entry.
+// scaleSetWorkerSet is the live scale-set worker pods of one owner, by name, with the
+// jobs their runners have started (AnnotationStartedJobID).
+type scaleSetWorkerSet struct {
+	started     map[string]string // pod name -> started job ID, "" where none is recorded
+	startedJobs map[string]bool   // job IDs some live worker's runner has started
+}
+
+// serving reports whether a live worker is running jobID. That is the worker whose
+// runner started it, wherever that worker was created: GitHub gives a scale-set job to
+// whichever runner asks first, so the pod named for jobID can have run another job and
+// gone, or be running one now (Q1152). With no start recorded for jobID, the worker
+// created for it stands in for it unless its runner started some other job — a job not
+// yet started may still be taken by that worker, and nothing names another candidate.
+func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
+	if s.startedJobs[jobID] {
+		return true
+	}
+	started, live := s.started[scaleSetPodName(ownerName, jobID)]
+	return live && started == ""
+}
+
+// liveScaleSetWorkers lists this owner's scale-set worker pods, in any phase. One List
+// answers a whole in-flight set, rather than a Get per entry.
 //
 // It goes through the uncached reader, unlike the disruption scan's own List: here the
 // verdict is driven by a pod NOT being listed, so an informer cache that has not caught
 // up would read as every worker in the set having been disrupted. Once per process per
 // set, so the uncached read costs nothing in steady state.
-func (p *Provisioner) liveScaleSetWorkerPodNames(ctx context.Context, target Target) (map[string]bool, error) {
+func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (scaleSetWorkerSet, error) {
 	key := target.Key()
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}
 	for k, v := range target.PodOwnerLabels() {
 		selector[k] = v
 	}
-	reader := client.Reader(p.Client)
-	if p.APIReader != nil {
-		reader = p.APIReader
-	}
 	var pods corev1.PodList
-	if err := reader.List(ctx, &pods,
+	if err := p.liveReader().List(ctx, &pods,
 		client.InNamespace(key.Namespace),
 		client.MatchingLabels(selector),
 	); err != nil {
-		return nil, fmt.Errorf("provisioner: list scale-set worker pods for orphaned-worker recovery: %w", err)
+		return scaleSetWorkerSet{}, fmt.Errorf("provisioner: list scale-set worker pods for orphaned-worker recovery: %w", err)
 	}
-	names := make(map[string]bool, len(pods.Items))
+	set := scaleSetWorkerSet{
+		started:     make(map[string]string, len(pods.Items)),
+		startedJobs: make(map[string]bool, len(pods.Items)),
+	}
 	for i := range pods.Items {
-		names[pods.Items[i].Name] = true
+		jobID := pods.Items[i].Annotations[AnnotationStartedJobID]
+		set.started[pods.Items[i].Name] = jobID
+		if jobID != "" {
+			set.startedJobs[jobID] = true
+		}
 	}
-	return names, nil
+	return set, nil
 }

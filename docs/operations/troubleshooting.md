@@ -3202,7 +3202,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
 | Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
 | Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
-| Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker pod is no longer there |
+| Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone or running another job |
 
 **Never fires, by design:**
 
@@ -3526,7 +3526,7 @@ Usually one of two accompanying signals is present:
 - neither counter moves at all.
 
 **Cause.** The scale-set tier provisions fire-and-forget — the runner pulls and completes its own job — so nothing in the AGC is watching a given worker pod, and there is no acquired payload to read the job's identity from.
-Recovery therefore depends on two things being on the pod: the run identity (`actions-gateway.com/run-id`, `actions-gateway.com/repository`), stamped from the assignment message's `ownerName`/`repositoryName`/`workflowRunId`, and the `actions-gateway.com/acquisition-protocol=ScaleSet` label that tells the reconciler the pod is its to recover.
+Recovery therefore depends on two things being on the pod: the run identity (`actions-gateway.com/run-id`, `actions-gateway.com/repository`), stamped from the assignment message's `ownerName`/`repositoryName`/`workflowRunId` and replaced from the `JobStarted` of the job the pod's runner actually took (Q1152), and the `actions-gateway.com/acquisition-protocol=ScaleSet` label that tells the reconciler the pod is its to recover.
 Either one missing makes recovery inert for that pod.
 
 **Diagnostics.**
