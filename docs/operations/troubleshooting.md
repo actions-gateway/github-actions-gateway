@@ -1683,7 +1683,9 @@ Before the reap fires, the shape is a set that looks busy and is not: `status.ac
 **What happened.** The pod was still `Running` five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
 For a job that ended before any runner started it, the set is left with one runner more than it has jobs, and one idle worker goes on the clock: the pod the AGC created for that job, or, when that pod's runner has started a different job, the oldest `Running` worker whose runner has started nothing (Q1153).
 Such a pod carries `actions-gateway.com/surplus-for-job` naming the job that freed it.
-If its runner is given a job after all, the stamp comes off it and moves to another idle worker, so a wrong pick never reaps a job.
+If its runner is given a job after all, the stamp comes off it and moves to another idle worker when the AGC records that job's start.
+A start the AGC fails to record is redelivered until it is recorded.
+A start that reaches the AGC more than five minutes after the stamp, because the listener's session was down that long, comes too late, and the worker can be reaped mid-job.
 GitHub gives a ScaleSet job to whichever of the set's runners asks first, so a worker often runs a job other than the one it was created for; the AGC follows the runner GitHub names, not the job ID in the pod name.
 Three causes produce that:
 
