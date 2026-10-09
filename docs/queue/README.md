@@ -43,7 +43,7 @@ Pick the number deliberately rather than treating it as a constant: it is a deci
 
 **Status:** `ready` · `blocked` · `deferred`  
 **Size:** S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in [`docs/plan/`](../plan/README.md)  
-**Labels:** `milestone` `security` `tests` `speed` `docs` `ci` `dogfood` `debt` `feature` `bug` `flake` `retro` `open-question` (the row ends in a choice, and names the route that settles it) `2.0-gate` (blocks the [v2 GA](../plan/v2-ga.md) tag)  
+**Labels:** `milestone` `security` `tests` `speed` `docs` `ci` `dogfood` `debt` `feature` `bug` `flake` `retro` `open-question` (the row ends in a choice, and names the route that settles it) `1.10-gate` (blocks the [Release 1.10](../plan/release-1.10.md) tag, the storage advance) `2.0-gate` (blocks the [v2 GA](../plan/v2-ga.md) tag)  
 **New IDs:** `make queue-id TITLE="…"`: it searches for near-duplicates, then claims ([why there is no counter](../development/queue-id-allocation.md))  
 **Ranks:** `make queue-rank ARGS="--after <rank> --before <rank>"` (also `--head` / `--tail`): it warns when the key it mints is one the store already holds ([why a tie is legal](../development/maintaining-backlog.md#mint-the-rank-dont-write-one))
 
