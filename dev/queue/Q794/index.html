@@ -2603,6 +2603,8 @@ Now conservative rather than necessary, but flipping it changes a migrating tena
 <p><strong>Ask:</strong> whether <code>gag-migrate</code> may stop writing <code>acquisitionProtocol: Classic</code>.
 Flipping it changes the acquisition protocol of every set a tenant migrates, silently and without their asking, on a tool whose whole promise is a faithful translation of what they already run.
 The technical reason for the pin is gone (Q726), so nothing here is a measurement: what is left is whether a migration tool is allowed to improve on its input.</p>
+<p>The question now has an end date: <code>gag-migrate</code> emits <code>v2alpha1</code> objects (<code>cmd/gmc/internal/migrate/migrate.go:1:// Package migrate implements the one-shot v1alpha1 → v2alpha1 fan-out the M5</code>), and <code>v2.0.0</code> removes both <code>v2alpha1</code> and classic acquisition (<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a>).
+Every set it writes as Classic changes protocol at that upgrade whatever is decided here, so the answer governs only the 1.x window between a migration and the <code>v2.0.0</code> upgrade.</p>
 
 
 

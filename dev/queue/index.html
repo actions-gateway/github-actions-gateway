@@ -2665,7 +2665,7 @@ Pick the number deliberately rather than treating it as a constant: it is a deci
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.9-gate</code> (blocks the Release 1.9 tag, the <a href="../plan/release-ladder/">Rule 4b overlap release</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.10-gate</code> (blocks the <a href="../plan/release-1.10/">Release 1.10</a> tag, the storage advance) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)<br />
 <strong>Ranks:</strong> <code>make queue-rank ARGS="--after &lt;rank&gt; --before &lt;rank&gt;"</code> (also <code>--head</code> / <code>--tail</code>): it warns when the key it mints is one the store already holds (<a href="../development/maintaining-backlog/#mint-the-rank-dont-write-one">why a tie is legal</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.
@@ -2702,6 +2702,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1164/">Q1164</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth_test.go">Parallel githubapp tests break each other through http.DefaultTransport</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Sighted once, on the <code>push main</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1165/">Q1165</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check times out loading a page from its own local server</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Sighted once, on the <code>push main</code> …</td>
+</tr>
+<tr>
 <td><a href="Q1144/">Q1144</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters-test.sh">check-path-filters-test read a fixture filter as empty, 1 run in 4</a></td>
 <td><code>ci</code> <code>flake</code></td>
@@ -2720,7 +2736,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1152/">Q1152</a></td>
 <td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Scale-set recovery ties a job to the worker minted for it, not a runner</a></td>
-<td><code>bug</code> <code>dogfood</code></td>
+<td><code>bug</code> <code>dogfood</code> <code>1.10-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Eviction recovery on the scale-set tier re-runs whatever <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code> say on the …</td>
@@ -2748,6 +2764,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> is the only fetch of the pinned …</td>
+</tr>
+<tr>
+<td><a href="Q1166/">Q1166</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/updatecli.yml">updatecli fails every run: GITHUB_TOKEN cannot write workflow files</a></td>
+<td><code>ci</code> <code>bug</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The scheduled <code>updatecli</code> workflow has concluded <code>failure</code> on all 16 of its runs, every Monday from 2026-06-22 to 2026-10-05, and has …</td>
 </tr>
 <tr>
 <td><a href="Q1119/">Q1119</a></td>
@@ -2880,10 +2904,10 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1086/">Q1086</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Storage-migrate stored objects to <code>v2</code> before the <code>v2.0.0</code> removals</a></td>
-<td><code>feature</code> <code>2.0-gate</code></td>
-<td>💤</td>
+<td><code>feature</code> <code>1.10-gate</code></td>
+<td>🔲</td>
 <td>L</td>
-<td><strong>Event:</strong> Q413 lands and 1.9 ships <code>v2</code> served beside <code>v2beta1</code>.</td>
+<td><strong>Revived 2026-10-09.</strong> It waited on <code>v2</code> being served beside <code>v2beta1</code> in a shipped release; Q413 landed in #1999 and <code>v1.9.0</code> tagged …</td>
 </tr>
 <tr>
 <td><a href="Q1055/">Q1055</a></td>
@@ -2918,9 +2942,17 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</td>
 </tr>
 <tr>
+<td><a href="Q448/">Q448</a></td>
+<td><a href="../plan/runner-sizing-profiles/#the-live-path-and-why-the-rc-gate-could-not-have-found-this">Tighten the e2e NodeShare envelope against a measured allocatable</a></td>
+<td><code>tests</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
+</tr>
+<tr>
 <td><a href="Q1153/">Q1153</a></td>
 <td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Idle scale-set worker left by a cancelled job waits out lifetime cap</a></td>
-<td><code>bug</code></td>
+<td><code>bug</code> <code>1.10-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>When a scale-set job ends before any runner starts it, one of the set's workers has nothing left to run.</td>
@@ -2928,7 +2960,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1154/">Q1154</a></td>
 <td>Scale-set JIT Secret outlives a worker reaped before its job completes</td>
-<td><code>bug</code> <code>security</code></td>
+<td><code>bug</code> <code>security</code> <code>1.10-gate</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Since Q1151, a scale-set <code>JobCompleted</code> reclaims the Secret mounted by the worker whose <code>actions-gateway.com/runner-name</code> matches the …</td>
@@ -3144,7 +3176,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1069/">Q1069</a></td>
 <td><a href="../operations/observability-metrics/">Scope the egress-audit attribution gauge to a RunnerSet's own proxyRef</a></td>
-<td><code>feature</code> <code>security</code> <code>open-question</code></td>
+<td><code>feature</code> <code>security</code> <code>1.10-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td><code>EgressAuditUnattributed</code> and <code>actions_gateway_egress_audit_unattributed</code> (Q1062) read the proxy half from …</td>
@@ -3152,7 +3184,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1070/">Q1070</a></td>
 <td><a href="../operations/observability-dashboards/#security-dashboard">Key a security-dashboard panel on the egress-audit attribution gauge</a></td>
-<td><code>feature</code> <code>docs</code> <code>open-question</code></td>
+<td><code>feature</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Q1062 shipped <code>actions_gateway_egress_audit_unattributed</code>, the series the security dashboard's own Row 1 prose says a consumer-keyed panel …</td>
@@ -3188,14 +3220,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> the next dogfood recreate bootstraps from zero.</td>
-</tr>
-<tr>
-<td><a href="Q448/">Q448</a></td>
-<td><a href="../plan/runner-sizing-profiles/#the-live-path-and-why-the-rc-gate-could-not-have-found-this">Tighten the e2e NodeShare envelope against a measured allocatable</a></td>
-<td><code>tests</code> <code>dogfood</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a dogfood turn-up stands an e2e node up — raising the envelope needs one live allocatable reading, less the dind sidecar and …</td>
 </tr>
 <tr>
 <td><a href="Q418/">Q418</a></td>
@@ -3369,33 +3393,41 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q273/">Q273</a></td>
 <td><a href="../plan/q273-v2-front-door/">Complete v1 removal (full v2-only)</a></td>
 <td><code>docs</code> <code>2.0-gate</code></td>
-<td>💤</td>
+<td>🚫</td>
 <td>M</td>
-<td><strong>Event:</strong> <a href="../plan/v2-ga/">v2-ga.md</a> Phase 3 begins — the same gate as <a href="Q264/">Q264</a>, which it ships beside.</td>
+<td>Blocked on the 1.10 tag: <code>v2.0.0</code> is the only breaking release, so once a removal is on <code>main</code> the next tag cut from it is <code>v2.0.0</code>.</td>
+</tr>
+<tr>
+<td><a href="Q1167/">Q1167</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Retype the controllers onto v2, move the hub, drop v2alpha1 and v2beta1</a></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
+<td>🚫</td>
+<td>L</td>
+<td>Blocked by <a href="Q1086/">Q1086</a>: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop …</td>
 </tr>
 <tr>
 <td><a href="Q264/">Q264</a></td>
 <td><a href="../plan/q264-scale-set-protocol/">Remove deprecated classic acquisition machinery</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
-<td>💤</td>
+<td>🚫</td>
 <td>L</td>
-<td><strong>Event:</strong> <a href="../plan/v2-ga/">v2-ga.md</a> Phase 3 begins.</td>
+<td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>: classic serves only <code>v1alpha1</code> objects and <code>v2alpha1</code> sets written with the Classic …</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
-<td>💤</td>
+<td>🚫</td>
 <td>S</td>
-<td><strong>Event:</strong> <a href="Q1086/">Q1086</a>'s storage migration has completed and the coupled removals have landed, so the surface the docs describe is …</td>
+<td>Blocked by <a href="Q1086/">Q1086</a>, <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>, <a href="Q264/">Q264</a>: the storage migration and the coupled removals land …</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>
 <td><a href="../design/appendix-a-capacity-slos/">Reconcile AGC capacity/density docs with the ScaleSet default</a></td>
 <td><code>docs</code></td>
-<td>💤</td>
+<td>🚫</td>
 <td>S</td>
-<td><strong>Decision:</strong> classic removal proceeds on the deprecation-window schedule (<a href="Q264/">Q264</a>) — reconcile alongside it.</td>
+<td>Blocked by <a href="Q264/">Q264</a>: reconcile alongside the classic removal, which the 2.0 scope committed to <code>v2.0.0</code> on 2026-10-09, so the …</td>
 </tr>
 <tr>
 <td><a href="Q310/">Q310</a></td>
@@ -3800,7 +3832,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1019/">Q1019</a></td>
 <td>Dogfood scripts write shared kubeconfig state on every run</td>
-<td><code>debt</code> <code>dogfood</code> <code>retro</code> <code>open-question</code></td>
+<td><code>debt</code> <code>dogfood</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>gke_get_credentials_and_verify</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">scripts/lib/common.sh</a>) runs <code>gcloud container clusters get-credentials</code> …</td>
@@ -3912,7 +3944,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1135/">Q1135</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Nothing keeps the shell egress banner in step with the Go one</a></td>
-<td><code>ci</code> <code>tests</code> <code>open-question</code></td>
+<td><code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The runner-host GitHub egress verdict is implemented twice, and only one copy is tested.</td>
@@ -3936,7 +3968,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1140/">Q1140</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/prepull-manifest-images.sh">Pre-pull hit predicate trusts the cache layer, not the files it needs</a></td>
-<td><code>ci</code> <code>tests</code> <code>open-question</code></td>
+<td><code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>A restored cache entry whose contents no longer match what the script expects takes the miss branch silently, so the only symptom is a cold …</td>

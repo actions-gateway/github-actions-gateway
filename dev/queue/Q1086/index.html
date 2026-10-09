@@ -2598,19 +2598,25 @@
 
 
 <h1 id="storage-migrate-stored-objects-to-v2-before-the-v200-removals">Storage-migrate stored objects to <code>v2</code> before the <code>v2.0.0</code> removals<a class="headerlink" href="#storage-migrate-stored-objects-to-v2-before-the-v200-removals" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> Q413 lands and 1.9 ships <code>v2</code> served beside <code>v2beta1</code>.
+<p><strong>Revived 2026-10-09.</strong> It waited on <code>v2</code> being served beside <code>v2beta1</code> in a shipped release; Q413 landed in #1999 and <code>v1.9.0</code> tagged 2026-10-05.
 The migration cannot run before <code>v2</code> exists, and must complete before <code>v2beta1</code> is dropped.</p>
 <p><a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 opens by marking <code>v2</code> the storage version and rewriting stored objects, and Phase 4 cuts the tag on top of that.
 Both assume a migration mechanism this repo does not have: <code>StorageVersionMigration</code> and <code>storedVersions</code> appear nowhere outside <code>vendor/</code>, measured 2026-09-08 across the whole tree.
 Until this row existed the gap was recorded in one sentence of a plan doc and tracked nowhere, which is what makes it <code>L</code> rather than the <code>M</code> the phase table implies.</p>
 <p>Marking <code>+kubebuilder:storageversion</code> on <code>v2</code> changes only what the apiserver writes <em>next</em>.
 Objects already stored as <code>v2beta1</code> stay that way, and <code>metadata.storedVersions</code> on each CustomResourceDefinition keeps listing <code>v2beta1</code> until every object is rewritten and the list is pruned.
-An apiserver refuses to drop a version still named in <code>storedVersions</code>, so skipping this does not fail loudly at the tag: it fails when the removal is attempted, on a cluster, mid-upgrade.</p>
-<p>The deliverable is the migration itself plus the evidence it completed: rewrite every stored object of all five kinds, prune <code>storedVersions</code> to <code>["v2"]</code>, and record the reading.
-Decide the mechanism first, and the choice is the row's first question: the <code>StorageVersionMigrator</code> is a separate controller with its own CRD and its own install story, while a read-write sweep over each kind needs no new component and no new dependency.
-Both need the same evidence, so <code>storedVersions</code> is the assertion either way.</p>
-<p>The pre-upgrade alias check in Q1085 is a precondition rather than a neighbour: an <code>EgressProxy</code> naming <code>CiliumFQDN</code> or <code>CalicoFQDN</code> cannot be rewritten as <code>v2</code> at all, because <code>v2</code> does not define those values (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>).
+The apiserver's own contract is that "versions may not be removed from <code>spec.versions</code> while they exist in this list" (the <code>storedVersions</code> godoc, <code>k8s.io/apiextensions-apiserver</code> v0.37.0 as vendored), so skipping this does not fail loudly at the tag: it fails when an operator applies the <code>v2.0.0</code> CRDs, on a cluster, mid-upgrade.</p>
+<p>The deliverable is the migration itself plus the evidence it completed: rewrite every stored object of all five kinds, prune <code>storedVersions</code> to <code>["v2"]</code>, and record the reading.</p>
+<p><strong>The mechanism is a read-write sweep, settled 2026-10-09.</strong> The in-tree alternative is Kubernetes' own <code>StorageVersionMigration</code> API, which the vendored <code>k8s.io/api</code> marks beta from 1.35 and GA only from 1.37.
+The charts accept Kubernetes 1.30 and up and the tested floor is 1.35 (<a href="../Q354/">Q354</a>), so the in-tree API reaches only the newest clusters this release supports, and the separate <code>StorageVersionMigrator</code> controller would add a component with its own install story.
+A sweep over each kind needs neither, and <code>storedVersions</code> is the assertion either way.</p>
+<p>The pre-upgrade alias check Q1085 shipped in 1.9 is a precondition rather than a neighbour: an <code>EgressProxy</code> naming <code>CiliumFQDN</code> or <code>CalicoFQDN</code> cannot be rewritten as <code>v2</code> at all, because <code>v2</code> does not define those values (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>).
 Running this before that check has cleared is how one unmigrated object stalls the migration partway.</p>
+<p><strong>Ask (answered):</strong> a <code>1.10</code> minor, decided by the maintainer on 2026-10-09.
+The contract above forces an intermediate state between "every object is stored as <code>v2</code>" and "<code>v2beta1</code> is no longer served", and <code>1.10</code> is it: it advances storage and runs the sweep with every version still served, so <code>v2.0.0</code> is removals only, in one apply.
+Rollback from <code>1.10</code> reaches <code>v1.9.0</code>, which serves <code>v2</code>.
+The rejected alternative was a two-phase <code>v2.0.0</code> upgrade, apply, sweep, apply, which would have saved a release and made the one breaking upgrade a procedure an operator can stop halfway through.
+<a href="../../plan/release-1.10/">release-1.10.md</a> is the release's record.</p>
 
 
 

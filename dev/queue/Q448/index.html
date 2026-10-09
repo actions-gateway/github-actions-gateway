@@ -2598,8 +2598,14 @@
 
 
 <h1 id="tighten-the-e2e-nodeshare-envelope-against-a-measured-allocatable">Tighten the e2e NodeShare envelope against a measured allocatable<a class="headerlink" href="#tighten-the-e2e-nodeshare-envelope-against-a-measured-allocatable" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a dogfood turn-up stands an e2e node up — raising the envelope needs one live allocatable reading, less the dind sidecar and Kata's 250m.
-The 1500m÷1 lower bound sits under both static asks, so nothing is unschedulable meanwhile.</p>
+<p>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' static runner request because nobody had measured the node's allocatable CPU.
+Raising it needs one live reading, less the dind sidecar and Kata's 250m, and nothing is unschedulable meanwhile.</p>
+<p><strong>Revived 2026-10-09: the trigger fired on every release candidate since it was written.</strong> It read "a dogfood turn-up stands an e2e node up", and the e2e matrix that <code>validate-release.sh</code> runs on each candidate scales the <code>e2e</code> pool up from zero to carry it, twice for <code>v1.9.0</code> alone.
+Nobody took the reading because the trigger needs someone watching a gate that runs unattended, so the fix is to make the gate take it.</p>
+<p>Have the gate's e2e leg record the e2e node's <code>status.allocatable</code> in its evidence, then set the envelope from that reading.
+The recipe in <code>deploy/dogfood-e2e/base/resources.yaml:83:  #   kubectl get node -l cloud.google.com/gke-nodepool=gag-e2e-pool \</code> is stale on two counts, so do not copy it: <code>scripts/dogfood/e2e-setup.sh:77:   gcloud container node-pools create e2e \</code> names the pool <code>e2e</code>, not <code>gag-e2e-pool</code>, and creates it as <code>n2-standard-8</code>, not the <code>c2-standard-8</code> the comment above the recipe states.
+<code>EXPECTED_NODESHARE_CPU</code> in <code>scripts/dogfood/validate-release.sh:164:EXPECTED_NODESHARE_CPU="1500m"</code> mirrors the envelope on purpose and moves with it.</p>
+<p>Ranked beside <a href="../Q1048/">Q1048</a>, the other reading nothing takes in a dogfood window, because the repair is the same for both: the gate takes the reading itself, so the next candidate answers it whether or not anyone is watching.</p>
 
 
 

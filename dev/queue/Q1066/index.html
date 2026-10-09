@@ -2606,6 +2606,9 @@ The first is cheap and covers the SA-attached Secret only; the second is what th
 <p>The SA-attached case is this repo's own documented install path rather than an edge: <code>docs/operations/air-gapped-install.md</code> §5 patches <code>imagePullSecrets</code> onto the <code>actions-gateway-worker</code> ServiceAccount, which kubelet injects into every worker pod and the AGC never reads, since both call sites pass <code>Spec.PodTemplate.Spec.ImagePullSecrets</code> (<code>runnergroup_controller.go</code>, <code>runnerset_controller.go</code>).
 Against a mirror that requires authentication, an air-gapped install therefore never completes the registry read unless the operator also names the same Secret in the pod template, which the operator docs say to do; the tag verdict still stands where the tag names a version, as above.
 That is the workaround, so the first closure buys an install path that needs no workaround; it does not reach node identity.</p>
+<p><strong>Decided 2026-10-09 by the maintainer: both, staged, riding release 1.10.</strong> Stage one reads the worker ServiceAccount's <code>imagePullSecrets</code>, which widens the tenant Role with <code>get</code> on <code>serviceaccounts</code> and closes the air-gapped install path above; it is small and ships alone if stage two slips.
+Stage two adds a credential helper per cloud for the node-identity case, an Artifact Registry token from the AGC's Workload Identity and an ECR <code>GetAuthorizationToken</code>, each a dependency and an identity grant.
+The Role widening and each identity grant are security-relevant changes to what the AGC can read, so each needs the operator half of <a href="../../development/doc-update-matrix/">doc-update-matrix.md</a> in the same PR.</p>
 
 
 

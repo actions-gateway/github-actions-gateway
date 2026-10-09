@@ -2598,8 +2598,10 @@
 
 
 <h1 id="complete-v1-removal-full-v2-only">Complete v1 removal (full v2-only)<a class="headerlink" href="#complete-v1-removal-full-v2-only" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <a href="../../plan/v2-ga/">v2-ga.md</a> Phase 3 begins — the same gate as <a href="../Q264/">Q264</a>, which it ships beside.
-Front door, banners, and <code>gag-migrate</code> are done; the residual <code>v1alpha1</code> + <code>v2alpha1</code> removal lands in the <code>v2.0.0</code> bundle.</p>
+<p>Blocked on the 1.10 tag: <code>v2.0.0</code> is the only breaking release, so once a removal is on <code>main</code> the next tag cut from it is <code>v2.0.0</code>.
+Front door, banners, and <code>gag-migrate</code> are done; what is left is removing the <code>actions-gateway.github.com</code> group (<code>v1alpha1</code>) and <code>gag-migrate</code>, whose only input it is.
+<code>v2alpha1</code> belongs to the <code>actions-gateway.com</code> group and is <a href="../Q1167/">Q1167</a>'s, with <code>v2beta1</code>.
+Deleting a CRD deletes every object of its kind, so the operator docs Q1107 owns have to make the <code>v1</code>→<code>v2</code> migration mandatory before this ships, not after.</p>
 
 
 

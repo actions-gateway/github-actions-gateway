@@ -2598,9 +2598,10 @@
 
 
 <h1 id="remove-deprecated-classic-acquisition-machinery">Remove deprecated classic acquisition machinery<a class="headerlink" href="#remove-deprecated-classic-acquisition-machinery" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <a href="../../plan/v2-ga/">v2-ga.md</a> Phase 3 begins.
+<p>Blocked by <a href="../Q1167/">Q1167</a>, <a href="../Q273/">Q273</a>: classic serves only <code>v1alpha1</code> objects and <code>v2alpha1</code> sets written with the Classic protocol, so removing it while either version is served breaks those sets.
 <code>v2beta1</code> is ScaleSet-only, so classic serves only v1alpha1/v2alpha1 objects and comes out in the same <code>v2.0.0</code> bundle, not separately.
-Strips <code>acquisitionProtocol</code>/<code>maxListeners</code>.</p>
+Strips <code>acquisitionProtocol</code>/<code>maxListeners</code>.
+Removing classic also retires <a href="../Q416/">Q416</a>, a classic-listener defect parked until classic removal slips, so the completing change deletes that row too.</p>
 
 
 
