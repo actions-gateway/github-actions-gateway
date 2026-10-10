@@ -3315,6 +3315,12 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>1</code> when <code>WorkerCapacityDeclined=True</code> on a v2 <code>RunnerSet</code> (Q405, Q406; gauged in Q643): the opt-in capacity gate is refusing job intake because the cluster cannot place another worker pod of this set's shape. <strong>Emitted only for a set that set <code>spec.capacityGate.mode</code></strong> — a set with no gate carries no condition, and an absent series is what says so; a <code>0</code> would read as "gate evaluated, capacity available". <code>reason</code> is the condition's current reason and is the label to alert and group on: <code>PodsUnschedulable</code> is the scheduler's verdict (a fixed-size cluster, <code>clusterCapacity.nodeAutoscaling: Absent</code>), <code>ScaleUpDeclined</code> is the cluster autoscaler's own declination (the default, <code>Present</code>), <code>PodsNotStarting</code> is the kubelet's on a worker pod that bound and then could not start (Q714, read on either cluster fact since it is not a placement question), and <code>AwaitingProbe</code> is the <strong>latched</strong> state (Q512) — the declined pods were reaped, so intake is throttled to one probe job per <code>pendingPodDeadline</code> window until a worker pod starts. <code>CapacityAvailable</code> and <code>GateModeUnsupported</code> are the two <code>False</code> reasons and read <code>0</code>. Exactly one series exists per gated set: a reason change replaces it rather than adding one, so <code>max by (reason) (…) == 1</code> is safe. <strong>The <code>AwaitingProbe</code> row is the one that needs the label.</strong> It outlives the stuck pod that produced it, so <code>actions_gateway_runnerset_workers_unschedulable</code> has already fallen back to <code>0</code> while this reads <code>1</code> — an operator watching only the scheduler signal sees a recovered set whose intake is still throttled.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_runnerset_egress_audit_unattributed</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td><code>1</code> when <code>EgressAuditUnattributed=True</code> on a v2 <code>RunnerSet</code> (Q1069, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off <strong>for this set's workers</strong>. The worker half is the gateway's <code>spec.auditLogging</code>; the source half is the pool the set resolves, its own <code>spec.proxyRef</code> before the gateway's <code>defaultProxyRef</code>, which is why this and not the gateway's <code>actions_gateway_egress_audit_unattributed</code> is the series to key worker egress on. <code>reason</code> names the missing half: <code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, <code>WorkerAuditWithoutProxy</code> for a set with no pool under a gateway that logs <code>WorkerAddresses</code>, <code>DirectEgress</code> for a set with no pool under one that does not, and <code>EgressAuditJoined</code>, the one <code>0</code>. So <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a tenant that turned neither half on, and <code>reason!~"EgressAuditDisabled\|DirectEgress"</code> keeps every opted-in tenant, direct-egress sets included. One series per set; a reason change replaces it. <strong>Emitted only once the set's references have resolved</strong>, so an absent series is a set with no pool to judge, never a joined one. A shared pool's half is read from the projection the GMC writes into the consumer namespace, and reads <code>Off</code> until a GMC carrying Q1069 has re-projected it. <code>1</code> is the expected state where nobody opted in, and the <code>0</code> says the pair is configured, not that a pipeline runs the join. v2 only.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
@@ -3402,7 +3408,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_egress_audit_unattributed</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressAuditUnattributed=True</code> (Q1062, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off, so no egress audit record joins to a tenant and a job. The reason names the missing half (<code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, or <code>DirectEgress</code> for no <code>defaultProxyRef</code>); <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding</a> says what to set for each. Advisory, and <strong><code>1</code> is the expected state on a gateway that never opted in</strong>: both halves default <code>Off</code>, so this flags a fleet's un-attributed tenants rather than a fault, the way <code>egress_unattributed</code> flags its direct-egress ones. The <code>0</code> says the pair is <strong>configured</strong>, not that the CNI leaves the worker's source address intact or that a pipeline runs the join, and it reads only <code>defaultProxyRef</code> (Q1069). v2 only, emitted only on a v2 install.</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressAuditUnattributed=True</code> (Q1062, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off, so no egress audit record joins to a tenant and a job. The reason names the missing half (<code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, or <code>DirectEgress</code> for no <code>defaultProxyRef</code>); <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding</a> says what to set for each. Advisory, and <strong><code>1</code> is the expected state on a gateway that never opted in</strong>: both halves default <code>Off</code>, so this flags a fleet's un-attributed tenants rather than a fault, the way <code>egress_unattributed</code> flags its direct-egress ones. The <code>0</code> says the pair is <strong>configured</strong>, not that the CNI leaves the worker's source address intact or that a pipeline runs the join, and it reads only <code>defaultProxyRef</code>, the AGC control plane's own pool: worker egress is per set, on <code>actions_gateway_runnerset_egress_audit_unattributed</code>. v2 only, emitted only on a v2 install.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_build_info</code></td>
@@ -3442,7 +3448,7 @@ Separate names cost existing queries nothing, and a v2 dashboard selects on <cod
 The v1 families are unchanged and stay <code>RunnerGroup</code>-only.</p>
 <p><strong><code>RunnerSetsDegraded</code> on a v2 <code>ActionsGateway</code>.</strong> The v2 <code>ActionsGateway</code> carries a <code>RunnerSetsDegraded</code> condition (Q304) — the child-health rollup counterpart of the v1 <code>RunnerGroupsDegraded</code> above.
 It is <code>True</code> when one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) are impaired — not serving jobs: a non-transient <code>Ready=False</code> (a reference did not resolve or a provisioning step failed) <strong>or</strong> any abnormal-is-True impairing condition — <code>Degraded</code> (revoked/invalid credentials, pushed by the listener independently of <code>Ready</code>, Q330), <code>CredentialUnavailable</code>, <code>RunnerVersionTooOld</code>, or <code>WorkersUnschedulable</code>.
-The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>, <code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load.
+The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>EgressAuditUnattributed</code>, <code>PossibleReapBlockingSidecar</code>, <code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load.
 The condition message names the impaired sets and their tripped signals, giving the operator a single pane without inspecting each child.
 Advisory — like the v1 rollup it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own AGC control plane can be healthy while a tenant's set is impaired.
 It is exported as the <code>actions_gateway_runnersets_degraded</code> gauge (Q321), alongside <code>actions_gateway_agc_available</code>, <code>actions_gateway_egress_unattributed</code>, <code>actions_gateway_agc_autoscaling_unavailable</code>, <code>actions_gateway_scale_set_name_collision</code>, and <code>actions_gateway_egress_audit_unattributed</code> for the gateway's <code>AGCAvailable</code>, <code>EgressUnattributed</code>, <code>AGCAutoscalingUnavailable</code>, <code>ScaleSetNameCollision</code>, and <code>EgressAuditUnattributed</code> conditions — the v2 twins of the v1 <code>ActionsGateway</code> condition gauges.
@@ -3905,6 +3911,11 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td>As above; emitted only for a set whose capacity gate is enabled.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_runnerset_egress_audit_unattributed</code></td>
+<td>Both</td>
+<td>Set by the <code>RunnerSet</code> reconciler from the set's resolved references, before the tier routes.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_worker_usage_job_cpu_peak_cores</code></td>
 <td>Both</td>
 <td>Sampled from every v2 <code>RunnerSet</code> worker pod, which both protocols label identically.</td>
@@ -4079,6 +4090,16 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td>Egress mode is recorded before the protocol routing.</td>
 </tr>
 <tr>
+<td><code>EgressAuditDisabled</code></td>
+<td>Both</td>
+<td>The per-set egress-audit verdict, read off the resolved references before the routing.</td>
+</tr>
+<tr>
+<td><code>EgressAuditJoined</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
 <td><code>GateModeUnsupported</code></td>
 <td>Both</td>
 <td>The capacity gate refusing an unsupported mode, from the same shared call.</td>
@@ -4174,6 +4195,11 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td>As above.</td>
 </tr>
 <tr>
+<td><code>ProxySourceAuditDisabled</code></td>
+<td>Both</td>
+<td>The per-set egress-audit verdict, before the routing.</td>
+</tr>
+<tr>
 <td><code>ReapBlockingSidecar</code></td>
 <td>Both</td>
 <td>Read off the resolved worker template, before the routing.</td>
@@ -4247,6 +4273,16 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td><code>VersionTooOld</code></td>
 <td>Classic only</td>
 <td>GitHub rejecting <code>agent.version</code> at session creation, which only the classic protocol sends. The scale-set tier reports the same condition <em>type</em> from the reconciler's own reading of the worker image, under <code>WorkerImageBelowMinimum</code> (Q715).</td>
+</tr>
+<tr>
+<td><code>WorkerAuditDisabled</code></td>
+<td>Both</td>
+<td>The per-set egress-audit verdict, before the routing.</td>
+</tr>
+<tr>
+<td><code>WorkerAuditWithoutProxy</code></td>
+<td>Both</td>
+<td>As above.</td>
 </tr>
 <tr>
 <td><code>WorkerCeilingReached</code></td>

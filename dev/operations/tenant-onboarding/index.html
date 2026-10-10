@@ -4390,7 +4390,9 @@ The record shapes, the join, and the CNI assumption it rests on are in <a href="
 While it is <code>True</code> the reason names the half still off: <code>ProxySourceAuditDisabled</code> (the pool), <code>WorkerAuditDisabled</code> (the gateway), <code>EgressAuditDisabled</code> (neither), or <code>DirectEgress</code> (no <code>defaultProxyRef</code>, so the AGC's own egress leaves from no pool).
 Fleet-wide the same fact is the <code>actions_gateway_egress_audit_unattributed</code> gauge (Q1062), which reads <code>1</code> until you turn both on.
 Both read the gateway's spec and its <code>defaultProxyRef</code>, so they say the pair is <em>configured</em>, not that a log pipeline is running the join.
-A <code>RunnerSet</code> with its own <code>spec.proxyRef</code> egresses through a pool neither of them looked at.</p>
+Worker egress is judged per set: <code>kubectl describe runnerset &lt;set&gt;</code> shows the same condition read off the pool that set's workers use, its own <code>spec.proxyRef</code> before the gateway's <code>defaultProxyRef</code>, and <code>actions_gateway_runnerset_egress_audit_unattributed</code> is its fleet-wide gauge (Q1069).
+For a shared pool the set learns the pool's setting from the share the provider's grant projects, so it can lag a change by the projection recheck.
+A set with no pool reads <code>WorkerAuditWithoutProxy</code> when the gateway half is on, since its workers egress directly and leave no proxy record to join, and <code>DirectEgress</code> when it is off.</p>
 <p>Weigh it as a third cost on top of the two below: together the two streams say which host each of a tenant's jobs reached, which is the evidence an auditor asks for and also a per-worker record the platform now keeps.</p>
 <p><strong>Off is the default deliberately, and turning it on is a decision with two costs.</strong> The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
 Agree that with the tenant rather than switching it on across a cluster.

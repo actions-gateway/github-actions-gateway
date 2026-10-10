@@ -2722,10 +2722,10 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>🔲 ready</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1069/">Q1069</a></td>
+<td>Q1069</td>
 <td>Per-<code>RunnerSet</code> egress-audit attribution condition and gauge</td>
 <td><code>1.10-gate</code></td>
-<td>🔲 ready</td>
+<td>✅ landed: <code>EgressAuditUnattributed</code> on each <code>RunnerSet</code> and <code>actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}</code></td>
 </tr>
 <tr>
 <td>—</td>
@@ -2737,7 +2737,7 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td><a href="../../queue/Q1070/">Q1070</a></td>
 <td>Security-dashboard panel keyed on Q1069's per-set gauge</td>
 <td>rides</td>
-<td>🔲 ready, filtered to opted-in tenants, after Q1069</td>
+<td>🔲 ready, filtered to opted-in tenants; Q1069's gauge has landed</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1066/">Q1066</a></td>
@@ -2761,7 +2761,7 @@ Q1069 gates as the one feature: the gateway-level attribution flag reads <code>0
 <p><strong>The riders are planned and worked, and the tag does not wait for them.</strong> Each can come back short for a reason a gate should not absorb.
 Q540 is a measurement whose answer may be a fix of unknown size: <a href="../q539-dragonfly-mirror-backend/#8-what-this-plan-does-not-cover">Q539</a> measured Dragonfly's node proxy as an open forward proxy.
 Q1066's second stage adds a cloud dependency and an identity grant per provider, and its first stage ships alone if the second slips.
-Q1070 depends on Q1069, whose per-set gauge has to carry the reason label the panel filters on.</p>
+Q1070 keys on Q1069's per-set gauge, whose <code>reason</code> label is what the panel filters on.</p>
 <p><code>scripts/release/semver-floor.sh v1.9.0</code> read <code>FLOOR: NONE</code> on 2026-10-09 over two commits, so nothing merged yet rides beyond the three above.
 The ledger takes a row for each further item that merges onto the released surface before the tag.</p>
 <h2 id="what-the-candidate-must-show">What the candidate must show<a class="headerlink" href="#what-the-candidate-must-show" title="Permanent link">&para;</a></h2>

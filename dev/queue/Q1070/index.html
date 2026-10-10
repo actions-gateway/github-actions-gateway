@@ -2609,7 +2609,10 @@ A consumer-keyed <em>traffic</em> panel, proxy series filtered to the gateways r
 The series plots only a tenant that has turned on at least one half of the pair, so a lit band is a configured pair with a gap in it, which the audit persona can act on, and a tenant that never opted in is absent rather than flagged.
 How many tenants have opted in at all is a separate stat panel, if one is wanted, and not a series in this row.</p>
 <p>The filter needs a label the gauge does not carry yet: <code>actions_gateway_egress_audit_unattributed</code> has <code>namespace</code> and <code>name</code> only, so a query cannot tell <code>EgressAuditDisabled</code> (neither half on) from a partial pair.
-So key the panel on <a href="../Q1069/">Q1069</a>'s per-<code>RunnerSet</code> gauge, and have that gauge carry its reason as a label, which this row now asks of Q1069; the panel lands after it, and both are in <a href="../../plan/release-1.10/">release 1.10</a>, this one riding.</p>
+So key the panel on the per-<code>RunnerSet</code> gauge Q1069 shipped, <code>actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}</code>, whose <code>reason</code> is one of <code>EgressAuditJoined</code> (the one <code>0</code>), <code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>WorkerAuditWithoutProxy</code>, <code>EgressAuditDisabled</code> and <code>DirectEgress</code>.
+The reason alone says whether the tenant opted in: on a set with no pool it reads <code>WorkerAuditWithoutProxy</code> when the gateway logs <code>WorkerAddresses</code> and <code>DirectEgress</code> when it does not, so <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a tenant that turned neither half on.
+So the filter that implements the answer above is <code>reason!~"EgressAuditDisabled|DirectEgress"</code>, and it keeps opted-in tenants whose sets egress directly.
+This row rides <a href="../../plan/release-1.10/">release 1.10</a>.</p>
 
 
 

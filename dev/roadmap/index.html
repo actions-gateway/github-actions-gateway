@@ -2750,10 +2750,6 @@ No pill means no release is decided for that item yet.</p>
   Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.</p>
 </li>
 <li>
-<p><strong><a href="../operations/tenant-onboarding/#per-pool-egress-audit-record">A per-runner-set egress-audit flag</a></strong> <span class="gag-release-chip" title="Blocks the 1.10 release">1.10</span> <!-- q:Q1069 --> The attribution flag reads only the gateway's default proxy, so a set that overrides it with an unlogged pool reads as attributed.
-  A per-set condition and gauge read the pool each set actually uses.</p>
-</li>
-<li>
 <p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and the classic acquisition protocol</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q273,Q1167 --> <strong><code>v2.0.0</code></strong> removes all four, plus the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> egress aliases, on clusters whose stored objects have already moved to <code>v2</code>.
   <code>v1.3.0</code> announced the first three; <code>v2beta1</code> was added 2026-09-08, superseded by GA <code>v2</code>.</p>
 </li>
