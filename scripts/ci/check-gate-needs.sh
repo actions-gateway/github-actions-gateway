@@ -57,11 +57,14 @@ while (($# > 0)); do
 	esac
 done
 
-# A job a gate deliberately does not wait on. Empty today, and an entry must say
-# why: the whole value of this gate is that the list cannot grow silently, so an
-# exemption belongs in the diff where a reviewer meets it. Format is
+# A job a gate deliberately does not wait on. An entry must say why: the whole
+# value of this gate is that the list cannot grow silently, so an exemption
+# belongs in the diff where a reviewer meets it. Format is
 # `<workflow.yml>:<gate job>:<job id>`.
 EXEMPT=(
+	# Runs AFTER the gate on scheduled runs only, to file an issue from its
+	# result; waiting on it would make the gate depend on its own reporter.
+	security-scan.yml:security-scan-gate:report
 )
 
 # Overridable so the suite can drive the read failures below without racing a

@@ -753,13 +753,14 @@ Eleven workflows carry no `pull_request` trigger at all, measured by parsing eac
 A grep answers ten, because `release-freeze-watch.yml` names `pull_request` only in a comment explaining why it has none.
 That count is not itself the scope: a workflow with a `pull_request` trigger can still gate its acting job off that event, which `pages.yml` does.
 
-Five workflows run an acting command.
-Three are driven:
+Six workflows run an acting command.
+Four are driven:
 
 | Workflow | Step | Acts by | Why a PR never runs it |
 |---|---|---|---|
 | `release-freeze-watch.yml` | `check`, `report` | `gh issue create` / `comment` / `close` | no `pull_request` trigger |
 | `pages.yml` | `mike` | `git push origin gh-pages` | the `publish` job is `if: github.event_name != 'pull_request'` |
+| `security-scan.yml` | `scan-report` | `gh issue create` / `comment` / `close` | the `report` job runs only on `schedule` and `workflow_dispatch` |
 | `publish.yml` | six release-lane steps | `helm push` / `cosign sign` / `gh release create`, `upload`, `edit` | no `pull_request` trigger; it runs on a `v*` tag push |
 
 `publish.yml` is driven by a suite of its own, [`workflow-publish-steps-test.sh`](../../scripts/ci/workflow-publish-steps-test.sh) (Q1056), described [below](#publishyml-has-its-own-suite).
