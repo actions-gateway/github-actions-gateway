@@ -757,9 +757,11 @@ func (j ScaleSetJob) jobMeta() jobMeta {
 // call staged, so a credential-bearing Secret never outlives a job that never ran
 // (Q373). In steady state the Secret must outlive this method — the pod mounts it — so
 // it is reclaimed by CleanupScaleSetJob, which the scale-set listener calls on the
-// terminal JobCompleted for the job. The Secret and pod also carry the RunnerSet
-// OwnerRef, so both cascade-GC when the set is deleted; the reconciler's reaper deletes
-// the terminal pod per spec.completedPodTTL.
+// terminal JobCompleted for the job. The Secret is staged with the RunnerSet OwnerRef and
+// handed to the pod once it exists (handScaleSetSecretToPod), so it is garbage-collected
+// with the pod however the pod goes; the pod carries the RunnerSet OwnerRef, so both
+// cascade-GC when the set is deleted. The reconciler's reaper deletes the terminal pod
+// per spec.completedPodTTL.
 func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, job ScaleSetJob) error {
 	jobID, jitConfig := job.JobID, job.JITConfig
 	if jitConfig == "" {
