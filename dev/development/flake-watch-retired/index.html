@@ -2619,6 +2619,13 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q541</td>
+<td>EgressProxy watch-isolation test passes with its watch deleted, at times</td>
+<td>#2065</td>
+<td>2026-10-09</td>
+<td>Fixed, and retired at fix time because its trigger cannot fire: the defect was a green that shows only with a watch deleted, a mutation <code>main</code> never runs. Mechanism measured 2026-10-09: across 40 traced runs with the referrer watch deleted, all 7 greens had a reconcile start after the gateway was created, queued by the status writes that make the pool Ready, and none of the 33 reds did. The fix waits for the reconciler to go idle before each trigger (<code>reconcileCounter.waitIdle</code>). In interleaved batches on one host at load 1-75, the watch-deleted test went 6/30 green without the wait and 0/30 with it, and 30/30 green with the watch intact. The same fix closed the Q326 quota-watch test, which went 23/30 green with its quota watch deleted and 26/30 with update events dropped, and 0/30 each with the waits. A recurrence is a watch-edge test going green with its edge deleted, and it re-enters as a fresh find.</td>
+</tr>
+<tr>
 <td>Q951</td>
 <td><code>version-cmds-answer</code> flakes on kubectl, cause unverified</td>
 <td>#1712</td>

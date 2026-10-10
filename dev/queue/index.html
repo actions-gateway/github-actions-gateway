@@ -2750,20 +2750,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>GitHub stops queueing jobs to a self-hosted runner not updated "within 30 days of a new version being made available" ([runner update …</td>
 </tr>
 <tr>
-<td><a href="Q541/">Q541</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_egressproxy_fqdn_test.go">EgressProxy watch-isolation test passes with its watch deleted, at times</a></td>
-<td><code>tests</code> <code>flake</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost</code> claims the referrer watch edge is the only thing that can re-enqueue the proxy once …</td>
-</tr>
-<tr>
 <td><a href="Q1133/">Q1133</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/prepull-manifest-images.sh">Retry cannot span a release-CDN incident on the cert-manager manifest</a></td>
 <td><code>ci</code> <code>flake</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><code>scripts/fetch/prepull-manifest-images.sh:70:curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o</code> is the only fetch of the pinned …</td>
+<td><strong>Event:</strong> the <code>Pre-pull cert-manager images</code> step (or the Calico or metrics-server pre-pull through the same script) fails on <code>main</code> or in …</td>
 </tr>
 <tr>
 <td><a href="Q1166/">Q1166</a></td>
@@ -3777,9 +3769,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1111/">Q1111</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/migrate/webhookretry_test.go">webhookretry's budget test measures the host, not the retry loop</a></td>
 <td><code>tests</code> <code>flake</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>XS</td>
-<td><code>shrinkRetryPacing(t, 50*time.Millisecond, time.Millisecond)</code> gives the retry loop a 50ms wall-clock budget, and the test then asserts …</td>
+<td><strong>Event:</strong> <code>TestRetryOnTransientWebhookError_BudgetSurfacesLastError</code> or <code>TestRetryOnTransientWebhookError_TheUnseamedBudgetExpires</code> fails …</td>
 </tr>
 <tr>
 <td><a href="Q1016/">Q1016</a></td>
@@ -3996,6 +3988,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> the release gate's wall clock becomes the thing that delays a release, or a fourth e2e leg is proposed.</td>
+</tr>
+<tr>
+<td><a href="Q1172/">Q1172</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/scripts/fetch">Four scripts hand-copy one exponential jittered retry loop</a></td>
+<td><code>debt</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The same retry schedule is written out four times: base delay doubled after each sleep, capped, plus up to half again in jitter.</td>
 </tr>
 </tbody>
 </table>

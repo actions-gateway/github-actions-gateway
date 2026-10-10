@@ -2618,7 +2618,7 @@ Measured both ways: the test itself runs in 0.05-0.07s intact, and goes red at 6
 The repo's Go tests hold 43 <code>Greater</code>/<code>GreaterOrEqual</code> assertions, of which roughly 14 to 21 take a counter as their subject depending on how the subject is matched.
 This is not a census: every one read is sound, but not all 43 were classified, and the first pass reported seven from a regex narrow enough to miss the one in the file this row edits.
 The sound ones fall into two shapes, a signal-decided count behind an <code>assert.Eventually</code> or a fake clock's <code>Advance</code> (the <code>cmd/agc/internal/listener</code> cases, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges_test.go"><code>ipranges_test.go</code></a>), and a stub-decided one where the handler chooses when to stop refusing (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset_internal_test.go"><code>eviction_scaleset_internal_test.go</code></a>, and <code>TestHandleEviction_DrainedRunStillReRuns</code> in this row's own file).
-One genuine instance turned up, in another module, and is filed as Q1111.</p>
+One genuine instance turned up, in another module, and is Q1111, repaired the same way.</p>
 
 
 

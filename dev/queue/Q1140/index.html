@@ -2658,7 +2658,7 @@ Whether a third manifest could skew once the tar names were uniform was the open
 The author left the predicate alone and the reviewer flagged it once as the only finding in that review with no row behind it.
 This row is that filing decision, taken at the groom.</p>
 <p><strong>Settles (answered):</strong> the names are uniform and the class is still open, so the row is a task rather than a delete; read 2026-10-09 off <code>main</code>.
-All three entries are written by one script, whose names are fixed at <code>scripts/fetch/prepull-manifest-images.sh:55:tar="${dir}/images.tar"</code> and the two lines after, so they cannot drift apart from each other.
+All three entries are written by one script, whose names are fixed at <code>scripts/fetch/prepull-manifest-images.sh:59:tar="${dir}/images.tar"</code> and the two lines after, so they cannot drift apart from each other.
 That uniformity is what #319 exploited rather than what prevents it: one edit to this script renames the files for all three manifests at once, while the three cache keys in <code>e2e-reusable.yml</code> are written by hand and move only when someone remembers.
 So key each entry on the script as well as the version, with <code>hashFiles('scripts/fetch/prepull-manifest-images.sh')</code> in all three <code>key:</code> lines.
 Any edit that could change what an entry holds then misses once and re-warms, which makes the skew impossible rather than detectable, and leaves the predicate's failure behaviour, the question above, with nothing to decide.

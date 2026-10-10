@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q541/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1172/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>EgressProxy watch-isolation test passes with its watch deleted, at times - GitHub Actions Gateway</title>
+        <title>Four scripts hand-copy one exponential jittered retry loop - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#egressproxy-watch-isolation-test-passes-with-its-watch-deleted-at-times" class="md-skip">
+        <a href="#four-scripts-hand-copy-one-exponential-jittered-retry-loop" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              EgressProxy watch-isolation test passes with its watch deleted, at times
+              Four scripts hand-copy one exponential jittered retry loop
             
           </span>
         </div>
@@ -2597,19 +2597,22 @@
   
 
 
-<h1 id="egressproxy-watch-isolation-test-passes-with-its-watch-deleted-at-times">EgressProxy watch-isolation test passes with its watch deleted, at times<a class="headerlink" href="#egressproxy-watch-isolation-test-passes-with-its-watch-deleted-at-times" title="Permanent link">&para;</a></h1>
-<p><code>TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost</code> claims the referrer watch edge is the only thing that can re-enqueue the proxy once the pool is Ready.
-Deleting both referrer <code>Watches</code> from <code>SetupWithManager</code> usually reddens it, but not always: across two sessions on 2026-09-21, 10 mutant runs at head f9e26b8 gave 9 FAIL and 1 PASS, so the assertion can pass with the mechanism it names removed.
-The single green was taken with the mutation verified present in the tree and the package confirmed to compile that source, so it is a real observation rather than a mutation that failed to land.
-Both hosts sat at load 13–80 on 18 cores; treat the split as evidence of non-determinism, never as a rate.
-Ten samples across two loaded hosts cannot support a frequency, and a number in a row gets quoted.</p>
-<p>Unverified hypothesis, stated as such: residual self-triggered reconciles from the Ready status write may straddle the gateway creation, letting a reconcile pick the referrer up with no referrer watch.
-A fix likely has to quiesce the reconcile chain before the gateway lands, rather than lengthen a timeout.
-A cheap directional probe before building anything, unverified and predicted from that hypothesis rather than measured: if the green really is a residual reconcile straddling the gateway creation, creating the gateway immediately after the Deployment status write instead of after the Ready assertion should make the green more frequent, and inserting a delay should make it rarer.
-A rate that does not move refutes the hypothesis cheaply; one that does puts the on-demand green this row needs within reach.</p>
-<p>Nobody has reproduced the green on demand, so a hardening fix cannot currently be shown to be load-bearing — whoever takes this needs a reliable red first, or the fix repeats the defect it closes.
-That is a deliberate scoping decision, ruled on when the row was re-scoped, not work left unfinished: a fix nobody can make fail would make this row unfalsifiable, which is the defect it exists to close.
-The helper godoc this row originally named was corrected in the same PR that restored this row; what remains is the racy isolation itself.</p>
+<h1 id="four-scripts-hand-copy-one-exponential-jittered-retry-loop">Four scripts hand-copy one exponential jittered retry loop<a class="headerlink" href="#four-scripts-hand-copy-one-exponential-jittered-retry-loop" title="Permanent link">&para;</a></h1>
+<p>The same retry schedule is written out four times: base delay doubled after each sleep, capped, plus up to half again in jitter.</p>
+<ul>
+<li><code>scripts/fetch/download-verified.sh</code> wraps <code>curl</code> for pinned binaries.</li>
+<li><code>scripts/fetch/pull-image-with-retry.sh</code> wraps <code>docker pull</code>.</li>
+<li><code>scripts/fetch/prepull-manifest-images.sh</code> wraps the manifest <code>curl</code> (added in Q1133).</li>
+<li><code>scripts/dogfood/validate-release.sh</code> has a <code>gh_retry</code> function that wraps <code>gh</code>.</li>
+</ul>
+<p>Measured 2026-10-09: <code>grep -rln 'RANDOM % (' scripts/</code> returns exactly those four files.
+Each copy carries its own env-var names and defaults, and nothing keeps the schedule's three properties (doubling, jitter, cap) in step across them.
+Three have a test asserting the schedule (<code>download-verified-test.sh</code>, <code>pull-image-with-retry-test.sh</code>, <code>prepull-manifest-images-test.sh</code>), so the same assertions are triplicated as well; whether <code>gh_retry</code> is pinned is not checked here.</p>
+<p>None can call another as it stands: each loop is inlined around its own command rather than exposed as a function that takes one.
+<code>scripts/fetch/retry.sh</code> is generic but uses linear backoff with no jitter or cap, so it is not the shared form either.</p>
+<p>A <code>scripts/lib/</code> function that takes the command and the schedule, with one test pinning the schedule, is the likely remedy; it is unmeasured.
+How the variables a caller already sets would map onto it is part of the design, since dropping them would change behaviour for anyone tuning them today.
+Raised by the independent review of Q1133's PR as a note that does not block it.</p>
 
 
 
