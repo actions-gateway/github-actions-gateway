@@ -578,9 +578,9 @@ spec:
               conditions:
                 description: |-
                   Conditions are the observed conditions of the runner set. Known types: Ready,
-                  Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
-                  SizingDrift.
+                  Degraded, EgressUnattributed, EgressAuditUnattributed, PossibleReapBlockingSidecar,
+                  WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited,
+                  RunnerVersionTooOld, SizingDrift.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -1467,9 +1467,9 @@ spec:
               conditions:
                 description: |-
                   Conditions are the observed conditions of the runner set. Known types: Ready,
-                  Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
-                  SizingDrift.
+                  Degraded, EgressUnattributed, EgressAuditUnattributed, PossibleReapBlockingSidecar,
+                  WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited,
+                  RunnerVersionTooOld, SizingDrift.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -2318,9 +2318,9 @@ spec:
               conditions:
                 description: |-
                   Conditions are the observed conditions of the runner set. Known types: Ready,
-                  Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
-                  SizingDrift.
+                  Degraded, EgressUnattributed, EgressAuditUnattributed, PossibleReapBlockingSidecar,
+                  WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited,
+                  RunnerVersionTooOld, SizingDrift.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

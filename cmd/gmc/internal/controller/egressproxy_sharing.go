@@ -38,6 +38,10 @@ const (
 	shareNoProxyKey  = "no-proxy"
 	shareProxyNSKey  = "proxy-namespace"
 	shareProxyNamKey = "proxy-name"
+	// shareAuditLoggingKey carries the provider's spec.auditLogging, the source half
+	// of the egress-audit join, which the consumer's AGC cannot otherwise read
+	// (Q1069). It is a fact about the pool's records, not a grant of anything.
+	shareAuditLoggingKey = "audit-logging"
 
 	// Labels identifying a projected share ConfigMap. The GMC lists by
 	// labelShareManaged to find projections it owns — including ones in namespaces a
@@ -101,12 +105,13 @@ func buildProxyShareConfigMap(ep *gmcv2alpha1.EgressProxy, consumerNS string, ca
 			},
 		},
 		Data: map[string]string{
-			shareCACertKey:   string(caPEM),
-			shareHostKey:     proxyShareServiceHost(ep),
-			sharePortKey:     fmt.Sprintf("%d", proxyPort),
-			shareNoProxyKey:  noProxy,
-			shareProxyNSKey:  ep.Namespace,
-			shareProxyNamKey: ep.Name,
+			shareCACertKey:       string(caPEM),
+			shareHostKey:         proxyShareServiceHost(ep),
+			sharePortKey:         fmt.Sprintf("%d", proxyPort),
+			shareNoProxyKey:      noProxy,
+			shareProxyNSKey:      ep.Namespace,
+			shareProxyNamKey:     ep.Name,
+			shareAuditLoggingKey: ep.Spec.AuditLogging,
 		},
 	}
 }

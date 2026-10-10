@@ -123,6 +123,9 @@ func TestV2_ProxySharing_GrantAdmitsConsumerAndProjectsCA(t *testing.T) {
 	}, 30*time.Second, 250*time.Millisecond, "no CA projection appeared in the granted namespace")
 
 	assert.Equal(t, sharedProxyName+"-proxy."+providerNS+".svc.cluster.local", cm.Data["proxy-host"])
+	// The consumer's AGC reads the pool's audit setting only from here (Q1069); the
+	// CRD defaults an unset spec.auditLogging to Off before the GMC ever sees it.
+	assert.Equal(t, "Off", cm.Data["audit-logging"])
 	assert.NotContains(t, cm.Data["ca.crt"], "PRIVATE KEY",
 		"the projection leaked private key material into the consumer namespace")
 

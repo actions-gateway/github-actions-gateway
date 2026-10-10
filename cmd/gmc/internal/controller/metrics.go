@@ -213,7 +213,7 @@ func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewa
 		),
 		egressAuditUnattributed: prometheus.NewDesc(
 			"actions_gateway_egress_audit_unattributed",
-			"1 when the v2 ActionsGateway EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off, so no egress audit record joins to a tenant and a job: the gateway does not log WorkerAddresses, or the EgressProxy it defaults to does not log ConnectionsWithSource), else 0. Both halves are opt-in and Off is the default, so a 1 is the expected state on a gateway that never opted in, not a fault. A 0 says the pair is configured, not that anything runs the join; scoped to defaultProxyRef, so a RunnerSet with its own proxyRef is not covered.",
+			"1 when the v2 ActionsGateway EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off, so no egress audit record joins to a tenant and a job: the gateway does not log WorkerAddresses, or the EgressProxy it defaults to does not log ConnectionsWithSource), else 0. Both halves are opt-in and Off is the default, so a 1 is the expected state on a gateway that never opted in, not a fault. A 0 says the pair is configured, not that anything runs the join. Scoped to defaultProxyRef, the AGC control plane's pool; worker egress is per RunnerSet, in actions_gateway_runnerset_egress_audit_unattributed.",
 			[]string{"namespace", "name"}, nil,
 		),
 	}

@@ -44,6 +44,10 @@ const (
 	proxyShareHostKey    = "proxy-host"
 	proxySharePortKey    = "proxy-port"
 	proxyShareNoProxyKey = "no-proxy"
+	// proxyShareAuditLoggingKey carries the provider's spec.auditLogging, the
+	// source half of the egress-audit join (Q1069). Absent on a projection an older
+	// GMC wrote, which reads as Off.
+	proxyShareAuditLoggingKey = "audit-logging"
 
 	// defaultNoProxy excludes cluster-internal traffic from the egress proxy so the
 	// proxy is only used for external (GitHub) traffic. The GMC sets the AGC's own
@@ -544,6 +548,8 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 		port:          proxyPort,
 		noProxyCIDRs:  proxy.Spec.NoProxyCIDRs,
 		tlsSecretName: egressProxyTLSSecretName(proxyName),
+		name:          proxyName,
+		auditLogging:  proxy.Spec.AuditLogging,
 	}
 
 	return refs, refResolution{}
@@ -562,6 +568,10 @@ type resolvedProxy struct {
 	// TLS Secret for a colocated proxy, the projected ConfigMap for a shared one.
 	tlsSecretName   string
 	caConfigMapName string
+	// name and auditLogging are the pool's name and its spec.auditLogging, read only
+	// for the EgressAuditUnattributed condition (Q1069); neither shapes the wiring.
+	name         string
+	auditLogging string
 }
 
 // resolveSharedProxy resolves a cross-namespace proxyRef through the projection the
@@ -604,6 +614,8 @@ func resolveSharedProxy(ctx context.Context, reader client.Reader, consumerNS, p
 		port:            port,
 		noProxyCIDRs:    noProxy,
 		caConfigMapName: name,
+		name:            proxyName,
+		auditLogging:    cm.Data[proxyShareAuditLoggingKey],
 	}, refResolution{}
 }
 

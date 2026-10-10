@@ -209,6 +209,7 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// so a stalled set is alertable without kube-state-metrics — the v2 twin of the
 	// v1 RunnerGroup registrations (Q319).
 	registerRunnerSetCapacityMetrics(mgr.GetClient())
+	registerRunnerSetEgressAuditMetrics(mgr.GetClient())
 
 	// Drain listener goroutines inside the manager's graceful shutdown so SIGTERM
 	// cannot kill the process mid-DELETE and leak GitHub-side sessions (Q222).
@@ -417,6 +418,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// supported, NetworkPolicy-restricted mode. Set before any later status write so
 	// every exit below persists it.
 	r.setEgressMode(&rs, refs.proxy != nil)
+	r.setEgressAuditStatus(&rs, refs.gateway, refs.proxy)
 
 	// Record which rung of the optional-templateRef chain supplied the pod shape (Q172,
 	// §H.4): the set's own templateRef, the gateway's defaultTemplateRef, or the single
@@ -962,6 +964,73 @@ func (r *RunnerSetReconciler) setEgressMode(rs *v2alpha1.RunnerSet, proxied bool
 		Message:            msg,
 		ObservedGeneration: rs.Generation,
 	})
+}
+
+// proxyAuditConnectionsWithSource is the EgressProxy.spec.auditLogging value whose
+// records carry the source address the egress-audit join keys on (Q986).
+const proxyAuditConnectionsWithSource = "ConnectionsWithSource"
+
+// setEgressAuditStatus records whether this RunnerSet's worker egress is attributable
+// to a tenant and a job (Q1069): the per-set twin of the gateway's
+// EgressAuditUnattributed, read off the pool this set actually resolved — its own
+// proxyRef before the gateway's defaultProxyRef — rather than the gateway's default.
+// The worker half is the gateway's spec.auditLogging, the source half the resolved
+// pool's. Advisory and abnormal-is-True like the gateway's; it never gates Ready.
+func (r *RunnerSetReconciler) setEgressAuditStatus(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) {
+	reason, msg := runnerSetEgressAudit(gw, proxy)
+	status := metav1.ConditionTrue
+	if reason == v2alpha1.ReasonEgressAuditJoined {
+		status = metav1.ConditionFalse
+	}
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type:               v2alpha1.ConditionEgressAuditUnattributed,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: rs.Generation,
+	})
+}
+
+// runnerSetEgressAudit reports the EgressAuditUnattributed reason and message for a
+// set's gateway and resolved pool (nil for direct egress). Every reason but
+// ReasonEgressAuditJoined names the half to turn on, and a direct-egress set splits on
+// the gateway half so the reason alone says whether the tenant opted in.
+func runnerSetEgressAudit(gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) (reason, message string) {
+	workerHalf := gw.Spec.AuditLogging == string(provisioner.WorkerAuditAddresses)
+	if proxy == nil {
+		if workerHalf {
+			return v2alpha1.ReasonWorkerAuditWithoutProxy,
+				fmt.Sprintf("ActionsGateway %q logs %s but this set has no proxyRef/defaultProxyRef: worker egress is direct, so no per-connection record exists to join the addresses to. Attach an EgressProxy that logs %s",
+					gw.Name, provisioner.WorkerAuditAddresses, proxyAuditConnectionsWithSource)
+		}
+		return v2alpha1.ReasonDirectEgress,
+			"no proxyRef/defaultProxyRef: worker egress is direct, so no per-connection record attributes it"
+	}
+	// An empty value is the CRD default, so report it as Off rather than as "".
+	effective := func(v string) string {
+		if v == "" {
+			return string(provisioner.WorkerAuditOff)
+		}
+		return v
+	}
+	proxyHalf := proxy.auditLogging == proxyAuditConnectionsWithSource
+	switch {
+	case workerHalf && proxyHalf:
+		return v2alpha1.ReasonEgressAuditJoined,
+			fmt.Sprintf("ActionsGateway %q logs %s and EgressProxy %q logs %s: an egress audit record from this set's workers joins to this tenant and the job that held the address",
+				gw.Name, provisioner.WorkerAuditAddresses, proxy.name, proxyAuditConnectionsWithSource)
+	case proxyHalf:
+		return v2alpha1.ReasonWorkerAuditDisabled,
+			fmt.Sprintf("EgressProxy %q logs %s but ActionsGateway %q's spec.auditLogging is %q: the source addresses it records name no tenant or job. Set spec.auditLogging: %s on the gateway",
+				proxy.name, proxyAuditConnectionsWithSource, gw.Name, effective(gw.Spec.AuditLogging), provisioner.WorkerAuditAddresses)
+	case workerHalf:
+		return v2alpha1.ReasonProxySourceAuditDisabled,
+			fmt.Sprintf("ActionsGateway %q logs %s but EgressProxy %q, which this set's workers egress through, logs %q: no egress record carries a source address to join on. Set that proxy's spec.auditLogging: %s",
+				gw.Name, provisioner.WorkerAuditAddresses, proxy.name, effective(proxy.auditLogging), proxyAuditConnectionsWithSource)
+	default:
+		return v2alpha1.ReasonEgressAuditDisabled,
+			fmt.Sprintf("neither ActionsGateway %q's spec.auditLogging nor EgressProxy %q's is on, so this set's worker egress is not attributable to a tenant or a job", gw.Name, proxy.name)
+	}
 }
 
 // setReapBlockingSidecarStatus surfaces whether the RunnerSet's resolved worker

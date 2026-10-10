@@ -87,6 +87,7 @@ const (
 	ReasonEgressAuditDisabled      = apiconditions.ReasonEgressAuditDisabled
 	ReasonWorkerAuditDisabled      = apiconditions.ReasonWorkerAuditDisabled
 	ReasonProxySourceAuditDisabled = apiconditions.ReasonProxySourceAuditDisabled
+	ReasonWorkerAuditWithoutProxy  = apiconditions.ReasonWorkerAuditWithoutProxy
 	ReasonVPACRDNotInstalled       = apiconditions.ReasonVPACRDNotInstalled
 	ReasonAGCAutoscalingActive     = apiconditions.ReasonAGCAutoscalingActive
 	ReasonAGCAutoscalingDisabled   = apiconditions.ReasonAGCAutoscalingDisabled

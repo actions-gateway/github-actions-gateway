@@ -74,12 +74,12 @@ const (
 	// follows.
 	ConditionScaleSetNameCollision = "ScaleSetNameCollision"
 	// ConditionEgressAuditUnattributed is an advisory condition (abnormal-is-True) set
-	// True on an ActionsGateway when either half of the Q986 egress-attribution pair is
-	// off, so nothing joins an egress audit record to a tenant and a job: the gateway's
-	// spec.auditLogging is not WorkerAddresses, so no record says which tenant and job
-	// held a worker address, or the EgressProxy resolved from spec.defaultProxyRef does
-	// not log ConnectionsWithSource, so no record carries an address to join on. False
-	// (reason EgressAuditJoined) means both halves are on.
+	// True on an ActionsGateway or a RunnerSet when either half of the Q986
+	// egress-attribution pair is off, so nothing joins an egress audit record to a tenant
+	// and a job: the gateway's spec.auditLogging is not WorkerAddresses, so no record says
+	// which tenant and job held a worker address, or the EgressProxy resolved for the
+	// object does not log ConnectionsWithSource, so no record carries an address to join
+	// on. False (reason EgressAuditJoined) means both halves are on.
 	//
 	// The polarity is what the condition can establish rather than a house preference.
 	// A join needs more than the two switches — the CNI must not source-NAT pod-to-Service
@@ -101,11 +101,18 @@ const (
 	// so this gateway's own WorkerAddresses records resolve its own connections whoever
 	// asked for the pool half.
 	//
-	// Its scope is the gateway: the proxy half is read from defaultProxyRef, and a bound
-	// RunnerSet's own spec.proxyRef takes precedence over that for its workers, so this
-	// condition is wrong in both directions on a gateway whose sets override it — False
-	// where their pool does not log ConnectionsWithSource, and True (reason DirectEgress)
-	// where the gateway has no defaultProxyRef and their pools do (Q1069).
+	// On an ActionsGateway the proxy half is read from spec.defaultProxyRef, the AGC
+	// control plane's own pool. On a RunnerSet it is read from the pool the set's workers
+	// resolve — its own spec.proxyRef, else the gateway's defaultProxyRef — and the worker
+	// half is still the gateway's spec.auditLogging. A set naming its own proxyRef is
+	// therefore judged only by the RunnerSet condition, which is the one to key worker
+	// egress on (Q1069); a shared pool's half reaches the set's AGC through the share
+	// projection, since the AGC cannot read the provider's EgressProxy.
+	//
+	// The RunnerSet reasons say whether the tenant opted into either half: a set with
+	// no pool reads WorkerAuditWithoutProxy when the gateway logs WorkerAddresses and
+	// DirectEgress when it does not, so EgressAuditDisabled and DirectEgress are the
+	// only reasons for a tenant that turned neither half on.
 	ConditionEgressAuditUnattributed = "EgressAuditUnattributed"
 	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
 	// set True on a RunnerSet whose resolved worker template carries a regular
@@ -321,7 +328,7 @@ const (
 	// to join against.
 	ReasonEgressAuditJoined = "EgressAuditJoined"
 	// ReasonEgressAuditDisabled is the EgressAuditUnattributed=True reason when neither
-	// half is on — the default for a proxied gateway that never opted in.
+	// half is on — the default for a proxied gateway or set that never opted in.
 	ReasonEgressAuditDisabled = "EgressAuditDisabled"
 	// ReasonWorkerAuditDisabled is the EgressAuditUnattributed=True reason when the pool
 	// records source addresses but the gateway's spec.auditLogging is Off, so nothing
@@ -331,6 +338,13 @@ const (
 	// gateway records worker addresses but the resolved EgressProxy's spec.auditLogging is
 	// not ConnectionsWithSource, so no record carries an address to join on.
 	ReasonProxySourceAuditDisabled = "ProxySourceAuditDisabled"
+	// ReasonWorkerAuditWithoutProxy is the RunnerSet EgressAuditUnattributed=True reason
+	// when the gateway records worker addresses but the set resolves no EgressProxy, so
+	// its workers egress directly and no pool record exists to join on (Q1069). On a
+	// RunnerSet, DirectEgress is reserved for the same egress with the gateway half off,
+	// so the reason alone says whether the tenant opted in. The gateway's own condition
+	// keeps DirectEgress for both.
+	ReasonWorkerAuditWithoutProxy = "WorkerAuditWithoutProxy"
 	// ReasonVPACRDNotInstalled is the AGCAutoscalingUnavailable=True reason: the gateway
 	// opted into spec.agcAutoscaling but the cluster has no autoscaling.k8s.io
 	// VerticalPodAutoscaler CRD, so the managed autoscaler could not be created (Q360).

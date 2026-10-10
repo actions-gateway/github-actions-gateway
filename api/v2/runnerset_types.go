@@ -451,9 +451,9 @@ type ScaleUpRateLimit struct {
 // missing object.
 type RunnerSetStatus struct {
 	// Conditions are the observed conditions of the runner set. Known types: Ready,
-	// Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-	// WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
-	// SizingDrift.
+	// Degraded, EgressUnattributed, EgressAuditUnattributed, PossibleReapBlockingSidecar,
+	// WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited,
+	// RunnerVersionTooOld, SizingDrift.
 	//
 	// +optional
 	// +listType=map

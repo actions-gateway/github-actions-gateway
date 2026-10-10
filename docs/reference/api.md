@@ -900,7 +900,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta) array_ | Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift. |  | Optional: \{\} |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta) array_ | Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, EgressAuditUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift. |  | Optional: \{\} |
 | `activeSessions` _integer_ | ActiveSessions is the number of currently open long-poll sessions. |  | Optional: \{\} |
 | `activeJobs` _integer_ | ActiveJobs is the number of worker pods currently in the Running phase (a job is actively executing). Derived from the worker pod phase count during each reconcile; see also PendingJobs. |  | Optional: \{\} |
 | `pendingJobs` _integer_ | PendingJobs is the number of worker pods currently in the Pending phase (a job has been acquired and a pod spawned, but the pod is not yet running — waiting on scheduling, image pull, or node readiness). Pods that remain Pending past spec.pendingPodDeadline are deleted by the controller; a sustained non-zero count warrants checking events and scheduling constraints. |  | Optional: \{\} |
