@@ -32,6 +32,26 @@ func shrinkRetryPacing(t *testing.T, budget, gap time.Duration) {
 	t.Cleanup(func() { webhookRetryBudget, webhookRetryGap = oldBudget, oldGap })
 }
 
+// pinRetryClock stops the retry loop's clock for one test: every gap fires at once,
+// and time stands still until the op calls the returned expire, which moves it to the
+// end of the budget. The op therefore decides which attempt is the last, so the
+// attempt count is exact on a loaded host and an idle one alike. A real budget asks
+// only whether N attempts fit inside it, which is a property of the host (Q1111).
+//
+// Exactly one select case is ever ready at a pass, so the loop has no race to lose.
+func pinRetryClock(t *testing.T) (expire func()) {
+	t.Helper()
+	now := time.Unix(0, 0)
+	webhookRetryNow = func() time.Time { return now }
+	webhookRetryAfter = func(time.Duration) <-chan time.Time {
+		ch := make(chan time.Time, 1)
+		ch <- now
+		return ch
+	}
+	t.Cleanup(func() { webhookRetryNow, webhookRetryAfter = nil, nil })
+	return func() { now = now.Add(webhookRetryBudget) }
+}
+
 // unreachableErr is the apiserver's text when it could not COMPLETE a webhook call.
 // This is the string the fix keys on, reproduced verbatim from the Q391/Q461 e2e
 // failures rather than paraphrased — a paraphrase would let the regex rot silently.
@@ -117,20 +137,48 @@ func TestRetryOnTransientWebhookError_NonTransientErrorsFailFast(t *testing.T) {
 // TestRetryOnTransientWebhookError_BudgetSurfacesLastError proves a persistent outage
 // is reported rather than papered over or retried forever.
 func TestRetryOnTransientWebhookError_BudgetSurfacesLastError(t *testing.T) {
-	shrinkRetryPacing(t, 50*time.Millisecond, time.Millisecond)
+	const attempts = 3
+	shrinkRetryPacing(t, 5*time.Second, time.Millisecond)
+	expire := pinRetryClock(t)
 
 	calls := 0
 	var stderr bytes.Buffer
 	err := retryOnTransientWebhookError(context.Background(), "EgressProxy/team-a-egress", &stderr, func() error {
 		calls++
+		if calls == attempts {
+			expire()
+		}
 		return unreachableErr()
 	})
 
 	require.Error(t, err, "a persistent outage must surface, not succeed silently")
 	assert.Contains(t, err.Error(), "context deadline exceeded")
-	assert.Greater(t, calls, 1, "it should have retried before giving up")
+	assert.Equal(t, attempts, calls, "it must retry until the budget runs out, then stop")
 	assert.Contains(t, stderr.String(), "admission webhook unreachable",
 		"the operator must be told why --apply is taking time")
+	assert.Contains(t, stderr.String(), "still unreachable (attempt 2,",
+		"every retry after the first must report progress")
+}
+
+// TestRetryOnTransientWebhookError_TheUnseamedBudgetExpires covers what pinRetryClock
+// bypasses: that the real clock ever ends the budget. It asserts the surfaced error
+// alone, never an attempt count or the banner, so it needs the 50ms budget to elapse
+// eventually rather than any number of attempts to fit inside it.
+func TestRetryOnTransientWebhookError_TheUnseamedBudgetExpires(t *testing.T) {
+	shrinkRetryPacing(t, 50*time.Millisecond, time.Millisecond)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- retryOnTransientWebhookError(context.Background(), "EgressProxy/team-a-egress", &bytes.Buffer{}, unreachableErr)
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err, "a persistent outage must surface, not succeed silently")
+		assert.Contains(t, err.Error(), "context deadline exceeded")
+	case <-time.After(30 * time.Second):
+		t.Fatal("a 50ms budget never ended the retry loop")
+	}
 }
 
 // TestRetryOnTransientWebhookError_HonoursContext proves a cancelled run stops
