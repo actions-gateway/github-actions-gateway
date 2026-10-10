@@ -157,8 +157,10 @@ serialize_on_cluster() {
 	fi
 	export GAG_PREVIEW_LOCK_HELD=1
 	# perl takes the lock, runs the script as a child, and exits with its status;
-	# the lock fd lives in perl and releases when perl exits.
-	exec perl -MFcntl=:flock -e '
+	# the lock fd lives in perl and releases when perl exits, so perl forwards
+	# termination signals to the child (scripts/lib/RunRelayed.pm) rather than
+	# dying without it.
+	exec perl -I"$SCRIPT_DIR/../../../scripts/lib" -MRunRelayed -MFcntl=:flock -e '
 		my ($path, $cluster) = splice(@ARGV, 0, 2);
 		# Same posture as the bash-side degrade above, and the same reason to
 		# be loud about it: running on is right, running on in silence is not.
@@ -177,9 +179,7 @@ serialize_on_cluster() {
 		}
 		my $queued = time - $start;
 		printf STDERR "==> preview cluster acquired after %ds queued\n", $queued if $queued >= 5;
-		my $rc = system @ARGV;
-		exit 255 if $rc == -1;
-		exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);
+		exit run_relayed(@ARGV);
 	' "$lock" "$CLUSTER" bash "$0" "$@"
 }
 
