@@ -2794,7 +2794,7 @@ Each waits on a real operator need, a measured limit, or a gating release before
 <li><strong>An Operator Lifecycle Manager bundle.</strong> <!-- q:Q217 --> <a href="../operations/install/">Helm-only</a> is the deliberate install stance; an OperatorHub catalog entry waits on OpenShift demand.</li>
 <li><strong>A published benchmark and case study.</strong> <!-- q:Q198 --> Real GitHub-at-scale numbers behind the <a href="../design/appendix-f-cost-model/">cost model</a>, which needs a funded scale run rather than a local cluster.</li>
 </ul>
-<p>The last three are opt-in additions to the <a href="../design/network-architecture/">per-tenant proxy</a>, shelved together because none has demand recorded against it.
+<p>The last two are opt-in additions to the <a href="../design/network-architecture/">per-tenant proxy</a>, shelved together because none has demand recorded against it.
 A coherent theme is not a release.</p>
 <ul>
 <li>
@@ -2802,13 +2802,9 @@ A coherent theme is not a release.</p>
   Per-pod state, since global limits would need a shared backend.</p>
 </li>
 <li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS on the in-cluster proxy hop</a></strong> <!-- q:Q566 --> The CONNECT target is cleartext between the AGC or workers and the proxy, readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub.
-  Mount a cert-manager certificate and move to an <code>https://</code> proxy URL.</p>
-</li>
-<li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g5-per-runnergroup-dedicated-proxy-pool">A dedicated proxy pool per runner group</a></strong> <!-- q:Q567 --> One pool per gateway today, so a bandwidth-heavy group can saturate a co-tenant's.
   Give an opted-in group its own Deployment, Service, and autoscaler.
-  Largest of the three; needs a plan doc before code.</p>
+  Larger of the two; needs a plan doc before code.</p>
 </li>
 </ul>
 <h2 id="how-priorities-are-set">How priorities are set<a class="headerlink" href="#how-priorities-are-set" title="Permanent link">&para;</a></h2>

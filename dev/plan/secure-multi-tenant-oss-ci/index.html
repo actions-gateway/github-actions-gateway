@@ -2786,7 +2786,7 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 <tr>
 <td>Transport to the proxy</td>
 <td>TLS on the AGC-to-proxy and worker-to-proxy hop</td>
-<td><strong>Open.</strong> The CONNECT target is cleartext on that hop and readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub. Row: Q566</td>
+<td><strong>Shipped.</strong> The proxy serves CONNECT over TLS 1.2 or later with a GMC-generated per-tenant certificate, and the AGC and workers pin that tenant's CA, so the CONNECT target is not readable on the hop. Cluster DNS is still plaintext; see <a href="../../design/appendix-g-future-enhancements/#g4-in-cluster-encryption-beyond-the-proxy-hop">Appendix G.4</a></td>
 </tr>
 <tr>
 <td>Noisy-neighbour containment</td>
@@ -2845,8 +2845,8 @@ The guest timing measurement the probe now takes sharpens that guidance rather t
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
-<p>Open, with rows: Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
+<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), TLS on the proxy hop, and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
+<p>Open, with rows: Q540 (composed node-layer plus guest-layer stack), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
 <ol>
