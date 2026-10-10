@@ -1681,7 +1681,11 @@ The thirty-second grace is a fixed constant, not a CRD field: the pod has not st
 Before the reap fires, the shape is a set that looks busy and is not: `status.activeJobs` sits at some non-zero number, worker pods are `Running`, but no job is executing — `kubectl logs` on the pod ends at `Listening for Jobs`, and GitHub shows nothing in progress for the set.
 
 **What happened.** The pod was still `Running` five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
-For a job that ended before any runner started it, the pod the AGC created for that job is the one on the clock, unless its runner has since started a different job.
+For a job that ended before any runner started it, the set is left with one runner more than it has jobs, and one idle worker goes on the clock: the pod the AGC created for that job, or, when that pod's runner has started a different job, the oldest `Running` worker whose runner has started nothing (Q1153).
+Such a pod carries `actions-gateway.com/surplus-for-job` naming the job that freed it.
+If its runner is given a job after all, the stamp comes off it and moves to another idle worker when the AGC records that job's start.
+A start the AGC fails to record is redelivered until it is recorded.
+A start that reaches the AGC more than five minutes after the stamp, because the listener's session was down that long, comes too late, and the worker can be reaped mid-job.
 GitHub gives a ScaleSet job to whichever of the set's runners asks first, so a worker often runs a job other than the one it was created for; the AGC follows the runner GitHub names, not the job ID in the pod name.
 Three causes produce that:
 
@@ -1713,7 +1717,7 @@ kubectl get events -n <namespace> --field-selector reason=WorkerPodOrphanedRunni
 # Which Running workers already have a completion stamp (they are on the clock),
 # and which job each one's runner actually started
 kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
-  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id'
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id,SURPLUS-FOR:.metadata.annotations.actions-gateway\.com/surplus-for-job'
 
 # Rate of orphan reaps per set
 # PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])

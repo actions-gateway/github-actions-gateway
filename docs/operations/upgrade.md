@@ -17,6 +17,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
+  - [Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed](#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed)
   - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
   - [Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2](#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
@@ -188,6 +189,16 @@ A worker's `actions-gateway.com/run-id`, `/repository` and `/job-name` annotatio
 Recovery after an AGC restart finds a job's worker by `actions-gateway.com/started-job-id` rather than by pod name, and the `OrphanedWorkerRecovered` Event now names the job rather than a pod.
 The recovery-claim ConfigMap's entries gain a `jobID` field; entries written by an older AGC lack it and are read as before.
 
+No action is required at upgrade time.
+
+### Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed
+
+When a scale-set job ends before any runner starts it, typically a run cancelled by a `cancel-in-progress` concurrency group, one of the set's workers has nothing left to run.
+Earlier releases reclaimed only the worker created for that job, and when its runner had already taken another job, the idle worker that was left held a concurrency slot and a node until `maxWorkerLifetime` (12 hours by default).
+The AGC now gives the oldest idle `Running` worker the five-minute reap deadline instead, marked `actions-gateway.com/surplus-for-job`, and moves that deadline to another idle worker if the picked one is given a job (Q1153).
+A worker whose runner has started a job is never picked.
+
+Expect more `WorkerPodOrphanedRunning` Events and `actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}` on busy sets that cancel queued jobs: each is a worker that used to sit idle until the lifetime cap.
 No action is required at upgrade time.
 
 ### Non-breaking: `v2` is served beside `v2beta1`, and an unpinned read now returns `v2`
