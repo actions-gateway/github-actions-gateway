@@ -79,6 +79,7 @@ type PriorityClassAllowlistSpec struct {
 // cluster-scoped, and writable only by a platform admin.
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:resource:scope=Cluster,shortName=pca,categories=actions-gateway
 // +kubebuilder:printcolumn:name="Allowed",type=string,JSONPath=`.spec.allowedPriorityClasses`
 // +kubebuilder:printcolumn:name="Infra",type=string,JSONPath=`.spec.allowedInfraPriorityClasses`

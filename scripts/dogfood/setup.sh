@@ -391,8 +391,10 @@ QUOTA
 # detection), so the CRDs-before-GMC order must NOT be reversed. We therefore
 # patch the caBundle in here, after the GMC is up and before apply_cr, so a CR
 # is never applied against a caBundle-less clientConfig. verify_conversion is
-# what proves the wiring took; apply_cr no longer does, because it authors at
-# the storage version and so never reaches the webhook (Q1104).
+# what proves the wiring took; apply_cr is no proof of it, because it authored at
+# the storage version and so never reached the webhook (Q1104) until v2 took over
+# storage in 1.10, and whether an apply converts depends on which release is
+# installed.
 #
 # Secure by default: this RESTORES webhook TLS verification. Never fall back to a
 # caBundle-less clientConfig or insecureSkipTLSVerify shortcut.
@@ -769,8 +771,9 @@ EOF
 # apply_cr authored at v2alpha1, a non-storage served version, so every apply
 # crossed the webhook. That version was residue from before the Q74 graduation
 # rather than a chosen exercise, and Q452 removes it at v2.0.0, so the tenant now
-# authors at v2beta1 (the storage version, which never reaches the webhook) and
-# the check is made explicit here instead.
+# authors at v2beta1 and the check is made explicit here instead. Before 1.10
+# v2beta1 was the storage version, so an apply never reached the webhook; from
+# 1.10 v2 is, and it does, but this check does not depend on either.
 #
 # Reading at CONVERSION_PROBE_VERSION forces the apiserver to call the GMC over
 # TLS to convert out of storage, so an empty or wrong caBundle fails here with

@@ -10,6 +10,9 @@
 // prints, or copies Secret contents: only the githubAppRef *name* is carried across.
 // It never deletes v1 objects — v1 keeps running beside v2 (coexistence / rollback)
 // until the operator tears it down per the migration runbook.
+//
+// `gag-migrate storage-version` is a second, unrelated command: the 1.10 sweep that
+// rewrites every stored actions-gateway.com object at v2 (storageversion.go, Q1086).
 package main
 
 import (
@@ -100,7 +103,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&opts.assumeYes, "y", false, "Shorthand for --assume-yes.")
 	fs.Usage = func() {
 		fprintf(stderr, "gag-migrate — fan a v1alpha1 tenant out to the v2alpha1 object set.\n\n")
-		fprintf(stderr, "Usage:\n  gag-migrate --namespace <ns> [--context <ctx>] [--apply] [--output-dir <dir>]\n  gag-migrate --all-namespaces [--context <ctx>] [--apply]\n\n")
+		fprintf(stderr, "Usage:\n  gag-migrate --namespace <ns> [--context <ctx>] [--apply] [--output-dir <dir>]\n  gag-migrate --all-namespaces [--context <ctx>] [--apply]\n  gag-migrate %s [--context <ctx>] [--apply]   (see gag-migrate %s -h)\n\n", storageVersionCommand, storageVersionCommand)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -119,6 +122,9 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) > 0 && args[0] == storageVersionCommand {
+		return runStorageVersion(args[1:], stdin, stdout, stderr)
+	}
 	opts, err := parseOptions(args, stderr)
 	if err != nil {
 		return err
@@ -184,10 +190,18 @@ func resolveContextName(override string) string {
 // y/Y/yes proceeds; anything else — including EOF on a non-interactive stdin —
 // declines, so a piped invocation never writes without --assume-yes.
 func confirmApply(contextName, scope string, assumeYes bool, in io.Reader, out io.Writer) (bool, error) {
-	fprintf(out, "About to APPLY the v2 migration.\n")
+	return confirm("the v2 migration", contextName, scope,
+		"This creates v2 objects and patches namespace metadata. v1 keeps running; nothing is deleted.",
+		assumeYes, in, out)
+}
+
+// confirm is confirmApply's prompt for any write: what names the operation and
+// effect says what it changes.
+func confirm(what, contextName, scope, effect string, assumeYes bool, in io.Reader, out io.Writer) (bool, error) {
+	fprintf(out, "About to APPLY %s.\n", what)
 	fprintf(out, "  Target context: %s\n", contextName)
 	fprintf(out, "  Scope:          %s\n", scope)
-	fprintf(out, "This creates v2 objects and patches namespace metadata. v1 keeps running; nothing is deleted.\n")
+	fprintf(out, "%s\n", effect)
 	if assumeYes {
 		fprintf(out, "--assume-yes set — skipping confirmation.\n")
 		return true, nil

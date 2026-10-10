@@ -195,6 +195,6 @@ The e2e run was cancelled and both stop scripts were run by hand with the drain 
 
 ## What waits for `v2.0.0`
 
-The storage advance and migration ([Q1086](../../queue/Q1086.md)) and the four removals ([Q273](../../queue/Q273.md), [Q264](../../queue/Q264.md), and `v2beta1` itself).
+The storage advance and migration (Q1086) and the four removals ([Q273](../../queue/Q273.md), [Q264](../../queue/Q264.md), and `v2beta1` itself).
 The validating webhook rules cannot silently un-match through those removals: `make webhook-versions-check` (Q1068) fails any rule naming only versions no CRD serves.
 [v2-ga.md](../v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals) Phase 3 owns the ordering.

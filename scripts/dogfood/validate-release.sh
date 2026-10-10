@@ -1388,7 +1388,7 @@ preflight_cosign() {
 # register — the helm-free install path operators actually use. Consumes the
 # COSIGN_BIN that preflight_cosign resolved before anything billable ran.
 # spec_canon <json> — the spec with empty strings, objects, arrays and nulls
-# dropped, so a read at the storage version (the bytes as written) compares
+# dropped, so a read that skips the webhook (at the storage version) compares
 # equal to one converted through the webhook's Go types. Those types drop an
 # `omitempty` empty string and always emit an empty struct: `env[].value: ""`
 # disappears and `podTemplate.metadata: {}` appears, and both decode to the same
@@ -1498,8 +1498,9 @@ EOF
 	#
 	# What this covers: the two SERVED versions of the v2 CRD, v2alpha1 and
 	# v2beta1, compared field for field over a real object on this cluster.
-	# Storage is v2beta1, so reading at v2alpha1 forces a conversion over TLS and
-	# reading back at v2beta1 closes the loop.
+	# Reading at v2alpha1 forces a conversion over TLS whichever version stores
+	# the object (v2beta1 before 1.10, v2 from it), and reading back at v2beta1
+	# closes the loop.
 	#
 	# What it does NOT cover, deliberately: `actions-gateway.github.com/v1alpha1`.
 	# That is a DIFFERENT CRD in a different API group, and a conversion webhook

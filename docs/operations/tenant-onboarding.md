@@ -744,7 +744,7 @@ Onboarding is complete when:
 
 ## v2 API: multiple gateways per namespace
 
-> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only storage and hub version, and the version every **new** tenant should use.
+> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only hub version, and the version every **new** tenant should use.
 > It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
 > `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1: it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need.
 > `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md); `v2beta1` is not.
@@ -867,7 +867,7 @@ spec:
   `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
 - **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
   Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
-- **Editing a Classic set works unqualified, labels included.** An unqualified `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which admits the same multi-label shape.
+- **Editing a Classic set works unqualified, labels included.** An unqualified `kubectl edit/patch/apply` addresses the preferred version, `v2`, which admits the same multi-label shape as `v2beta1`.
 
 ### Bind a runner set to a GitHub runner group
 

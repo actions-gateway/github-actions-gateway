@@ -787,6 +787,13 @@ Once on `v2alpha1`, the API graduates **in place** `v2alpha1 → v2beta1 → v2`
 The superseded versions do not linger indefinitely: `v2alpha1` is dropped at **`v2.0.0`**, the same release that removes `v1alpha1` and the classic acquisition machinery, announced one release ahead in `v1.3.0`.
 That coupling and the operator-facing contract are the [deprecation and removal notice](../operations/v1alpha1-deprecation.md); the release sequencing is [v2-ga.md](../plan/v2-ga.md).
 
+**`gag-migrate storage-version` rewrites what is stored when the storage version advances (Q1086).** 1.10 marks `v2` the storage version of all six `actions-gateway.com` kinds, which changes only what the apiserver writes next.
+The subcommand lists every object of each kind at `v2` and writes it back unchanged: the apiserver persists the bytes at the new storage version, so a write of an object stored at `v2beta1` changes its `resourceVersion`, while one already stored at `v2` is a no-op it skips.
+Once every object of a kind is rewritten it sets that CRD's `status.storedVersions` to `["v2"]`, which `v2.0.0` needs before its CRDs can stop serving the older versions.
+It is a read-write sweep rather than Kubernetes' `StorageVersionMigration` API, which is beta from 1.35 and so reaches only the newest clusters this release supports.
+It refuses to start while any `EgressProxy` names a `CiliumFQDN`/`CalicoFQDN` alias, because `v2` stores one only as `FQDN` plus a conversion annotation no served version reads once `v2.0.0` removes `v2beta1`.
+An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good ([release-1.10.md](../plan/release-1.10.md#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version)).
+
 ## H.12. Folding in the grandfathered label-value alignment (Q147)
 
 Two shipped keys still carry boolean-looking `"true"` values that predate the [no-boolean label convention](../development/kubernetes-conventions.md) and are grandfathered only because changing them is breaking:

@@ -8,7 +8,7 @@
 # reads the same Go doc comments and validation markers controller-gen turns into
 # the CRD schemas, so the page cannot describe a field the API does not have.
 #
-# Scope is v2beta1 only — the served, storage, non-deprecated version. v1alpha1
+# Scope is v2beta1 only — the served version every install authors at. v1alpha1
 # and v2alpha1 are deprecated and removed at v2.0.0; documenting them field by
 # field beside v2beta1 would read as a supported choice. Their readers are served
 # by docs/operations/v1alpha1-deprecation.md and migration-v1-to-v2.md.

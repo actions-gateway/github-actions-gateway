@@ -14,7 +14,7 @@ import (
 )
 
 // These tests exercise the Q74 conversion webhook end-to-end against the real
-// apiserver: v2beta1 is the storage/hub version and v2alpha1 the served spoke, so a
+// apiserver: v2beta1 is the hub, v2 the storage version, and v2alpha1 a served spoke, so a
 // create/read in one version is converted through the GMC-hosted /convert endpoint
 // (envtest redirects each convertible CRD's conversion to the suite webhook server).
 // Only envtest can observe this — a fake client bypasses conversion entirely.
@@ -27,8 +27,8 @@ const (
 )
 
 // TestV2Conversion_RunnerSet_ClassicRoundTrip creates a v2alpha1 Classic, multi-label
-// RunnerSet (a shape v2beta1 cannot express) and proves it survives storage as the
-// ScaleSet-only hub and round-trips back unchanged: the two dropped protocol fields
+// RunnerSet (a shape v2beta1 and v2 cannot express) and proves it survives conversion
+// through the ScaleSet-only hub into storage and round-trips back unchanged: the two dropped protocol fields
 // ride across as conversion annotations on the hub and are restored — never silently
 // re-protocol'd — on the v2alpha1 read.
 func TestV2Conversion_RunnerSet_ClassicRoundTrip(t *testing.T) {

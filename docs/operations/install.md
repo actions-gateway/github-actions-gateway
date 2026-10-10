@@ -186,7 +186,7 @@ The main chart installs the `v1alpha1` (`actions-gateway.github.com`) CRDs — s
 The v2 (`actions-gateway.com`) API that new tenants onboard on ships its five CRDs in a **separate, opt-in chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
 Install it alongside the main chart unless you are running v1-only.
 
-Each v2 CRD is served at **three versions**: **`v2beta1`** (the served **and** storage version — the graduated, ScaleSet-only shape), **`v2`** (the General Availability (GA) version, identical but for the dropped `CiliumFQDN`/`CalicoFQDN` aliases, and the storage version from `v2.0.0`), and **`v2alpha1`** (served as the `gag-migrate` on-ramp, deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md)).
+Each v2 CRD is served at **three versions**: **`v2beta1`** (the graduated, ScaleSet-only shape, and the conversion hub), **`v2`** (the General Availability (GA) version, identical but for the dropped `CiliumFQDN`/`CalicoFQDN` aliases, and the storage version from 1.10), and **`v2alpha1`** (served as the `gag-migrate` on-ramp, deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md)).
 An unpinned `kubectl get` returns `v2`, the version the apiserver prefers ([what that changes](upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)).
 The apiserver converts between them through a **conversion webhook hosted by the GMC** (the `/convert` endpoint on the same `webhook-service` that fronts the validating webhooks).
 Two consequences for an operator:

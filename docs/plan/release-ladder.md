@@ -80,7 +80,7 @@ The apiserver will not drop a version from a CRD's `spec.versions` while `status
 
 That state could have been a release or a step:
 
-- **A `1.10` rung**, chosen: it carries the storage advance and [Q1086](../queue/Q1086.md)'s sweep with every version served, so `v2.0.0` is the four removals in one apply.
+- **A `1.10` rung**, chosen: it carries the storage advance and Q1086's sweep with every version served, so `v2.0.0` is the four removals in one apply.
   It is a non-breaking minor, and rollback from it reaches `v1.9.0`, which already serves `v2`.
 - **No rung**: `v2.0.0` would have shipped two CRD bundles and a three-step upgrade, apply, sweep, apply.
   It saved a release, and made the one breaking upgrade a procedure an operator can stop halfway through.

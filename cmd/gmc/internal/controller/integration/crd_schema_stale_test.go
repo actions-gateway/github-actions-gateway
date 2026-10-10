@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -32,7 +32,7 @@ import (
 // schema change into them and a skipped apply step leaves them behind.
 //
 // It runs against its own envtest because it mutates a CRD the shared suite's
-// other tests depend on, and writes at v2beta1 — the storage version, so the
+// other tests depend on, and writes at v2 — the storage version, so the
 // apiserver never calls the conversion webhook this env has no server for.
 func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 	env := &envtest.Environment{
@@ -60,7 +60,7 @@ func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 
 	require.NoError(t, c.Create(ctx, newBoundRunnerSet("current", ns)))
 
-	var got v2beta1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: "current"}, &got))
 	require.Equal(t, "restricted", got.Spec.RunnerGroup,
 		"the shipped CRD must round-trip spec.runnerGroup, or the pruning below proves nothing")
@@ -81,7 +81,7 @@ func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 			t.Logf("create %s: %v", rs.Name, err)
 			return false
 		}
-		var stored v2beta1.RunnerSet
+		var stored v2.RunnerSet
 		if err := c.Get(ctx, client.ObjectKeyFromObject(rs), &stored); err != nil {
 			return false
 		}
@@ -97,13 +97,13 @@ func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 	require.Contains(t, err.Error(), "kubectl apply --server-side")
 }
 
-// newBoundRunnerSet builds a v2beta1 RunnerSet bound to a named GitHub runner
+// newBoundRunnerSet builds a v2 RunnerSet bound to a named GitHub runner
 // group — the tenant boundary whose survival this test is about.
-func newBoundRunnerSet(name, ns string) *v2beta1.RunnerSet {
-	return &v2beta1.RunnerSet{
+func newBoundRunnerSet(name, ns string) *v2.RunnerSet {
+	return &v2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2beta1.RunnerSetSpec{
-			GatewayRef:   v2beta1.ObjectRef{Name: "gw"},
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:   v2.ObjectRef{Name: "gw"},
 			RunnerLabels: []string{"linux"},
 			RunnerGroup:  "restricted",
 		},

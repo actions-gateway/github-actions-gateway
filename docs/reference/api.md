@@ -19,10 +19,10 @@ ActionsGateway (control) and EgressProxy (data) kinds, and the AGC-reconciled
 RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data) kinds —
 plus their shared types.
 
-v2beta1 is the graduation of the v2alpha1 API (Q74). It is the storage version
-and the conversion **hub**: the five kinds implement conversion.Hub here, while
-v2alpha1 and the GA v2 implement conversion.Convertible (ConvertTo/ConvertFrom) as
-the spokes. v2 is served beside it from 1.9 and takes over storage at v2.0.0.
+v2beta1 is the graduation of the v2alpha1 API (Q74). It is the conversion **hub**:
+the five kinds implement conversion.Hub here, while v2alpha1 and the GA v2
+implement conversion.Convertible (ConvertTo/ConvertFrom) as the spokes. It was the
+storage version until 1.10, when v2 took it over (Q1086); v2.0.0 removes it.
 v2beta1 is served beside v2alpha1 during the coexistence window so a tenant can
 roll forward at its own pace (and the gag-migrate Classic on-ramp keeps landing on
 v2alpha1); the two versions round-trip losslessly through the conversion webhook.

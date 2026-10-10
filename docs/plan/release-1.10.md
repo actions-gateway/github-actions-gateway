@@ -1,7 +1,7 @@
 # Release 1.10 Milestone Definition
 
 > **Status: scoped 2026-10-09, no candidate cut.** The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-> Five rows gate the tag and three ride.
+> Six rows gate the tag and three ride; Q1086, the storage advance, has landed.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -26,11 +26,12 @@ Dropping one is [Q1167](../queue/Q1167.md)'s and [Q273](../queue/Q273.md)'s, in 
 
 ## Scope ledger
 
-Five gating rows and the candidate validation, then the three items that ride.
+Six gating rows and the candidate validation, then the three items that ride.
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1086](../queue/Q1086.md) | Mark `v2` the storage version, rewrite every stored object with a read-write sweep, and prune `storedVersions` to `["v2"]` | `1.10-gate` | 🔲 ready |
+| Q1086 | Mark `v2` the storage version, rewrite every stored object with a read-write sweep, and prune `storedVersions` to `["v2"]` | `1.10-gate` | ✅ landed: all six kinds store `v2`, and `gag-migrate storage-version` rewrites and prunes, proven on envtest |
+| [Q1171](../queue/Q1171.md) | RC validation runs the storage sweep and reads `storedVersions` on dogfood | `1.10-gate` | 🔲 ready |
 | [Q1152](../queue/Q1152.md) | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | 🔲 ready |
 | [Q1153](../queue/Q1153.md) | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | 🔲 ready |
 | [Q1154](../queue/Q1154.md) | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | 🔲 ready |
@@ -41,7 +42,7 @@ Five gating rows and the candidate validation, then the three items that ride.
 | [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | 🔲 ready |
 
 **The split is the maintainer's, chosen 2026-10-09; the reasons below are this plan's, offered with it.** The theme is in the maintainer's own words: the storage advance plus scale-set correctness.
-Q1086 is what the release is for.
+Q1086 is what the release is for, and Q1171 is what shows it worked on a cluster that has run 1.x.
 Q1152, Q1153 and Q1154 are defects on the scale-set tier, the one `v2.0.0` keeps as the only tier: recovery that re-runs the wrong run, a worker that holds a node for up to 12 hours, and a credential-bearing Secret that outlives its worker.
 Q1152 and Q1154 were found reviewing Q1151's fix, and all three follow from the same fact, that GitHub hands a scale-set job to whichever runner asks first.
 Q1069 gates as the one feature: the gateway-level attribution flag reads `0` where a set's traffic leaves through a pool that logs no source address, the wrong direction for an audit signal.
@@ -57,4 +58,13 @@ The ledger takes a row for each further item that merges onto the released surfa
 ## What the candidate must show
 
 The dogfood gate validates every candidate; this one also has to show the storage advance completed on a cluster that has run 1.x.
-Q1086's deliverable is that evidence, and the candidate is where it is read: every one of the five kinds' CRDs reports `storedVersions: ["v2"]` after the upgrade, on the dogfood cluster, whose objects are stored as `v2beta1` today.
+Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports `storedVersions: ["v2"]` after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as `v2beta1` today.
+The gate does not yet run the sweep, which is [Q1171](../queue/Q1171.md).
+
+## Decided: an operator runs the sweep, as `gag-migrate storage-version`
+
+**Decided by the maintainer on 2026-10-09**, choosing between the operator-run command and a sweep the GMC runs itself at startup.
+The GMC's ClusterRole had `get` on `customresourcedefinitions` and no write on four of the six kinds, so a GMC-run sweep would have widened a long-lived controller's privileges for a job that runs once per cluster.
+The command runs under the credentials that apply the CRDs, ships in the signed `gag-migrate` binary each release already publishes, and keeps that tool's `--context` pin and confirmation prompt.
+What it costs is a manual upgrade step an operator can skip; skipping it fails loudly at the `v2.0.0` CRD apply rather than silently, and the [pre-upgrade check](../operations/upgrade.md#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2) catches it first.
+The sweep refuses to start while any `EgressProxy` names a deprecated alias, so Q1085's check stays a precondition rather than something the sweep works around.

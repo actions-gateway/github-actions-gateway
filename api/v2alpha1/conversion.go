@@ -1,8 +1,7 @@
 package v2alpha1
 
 // v2alpha1 is the Convertible **spoke** of the actions-gateway.com conversion graph
-// (Q74): its five kinds convert to and from the v2beta1 **hub** (the storage
-// version). Hub-and-spoke keeps the conversion count linear — every served version
+// (Q74): its five kinds convert to and from the v2beta1 **hub**. Hub-and-spoke keeps the conversion count linear — every served version
 // converts to/from the single hub, never pairwise.
 //
 // Four of the five kinds are a pure **identity** conversion: v2beta1 has the same

@@ -13,7 +13,9 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
+  - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
+  - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
   - [Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2](#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
@@ -113,6 +115,20 @@ Two details the command depends on:
 - **Two `range` blocks, not one filter.** `kubectl`'s JSONPath has no `||` in a filter expression, so a single combined filter fails to parse rather than matching nothing.
   Measured 2026-09-24 on the `kubectl` 1.36 client, which rejects the combined form with `unrecognized character in action: U+007C '|'`.
 
+### Before upgrading to `v2.0.0`: every `actions-gateway.com` CRD stores only `v2`
+
+`v2.0.0` stops serving `v2beta1`, `v2alpha1` and the other versions `v2` replaces, and the apiserver refuses to remove a version from a CustomResourceDefinition (CRD) whose `status.storedVersions` still lists it.
+Run this and expect `[v2]` on every line:
+
+```sh
+kubectl get crd actionsgateways.actions-gateway.com egressproxies.actions-gateway.com \
+  runnersets.actions-gateway.com runnertemplates.actions-gateway.com \
+  clusterrunnertemplates.actions-gateway.com priorityclassallowlists.actions-gateway.com \
+  -o custom-columns='NAME:.metadata.name,STORED:.status.storedVersions'
+```
+
+Any other value means the cluster still holds objects written at an older version: run [the storage sweep](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting) first.
+
 Also check the release notes for the new version before upgrading, particularly:
 - CRD schema changes (new required fields, removed fields, validation tightening).
 - Behavior changes that require configuration updates before the new binary takes effect.
@@ -120,6 +136,47 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Action required before `v2.0.0`: `v2` is the storage version, and stored objects need rewriting
+
+**Who is affected:** every cluster with the v2 CRDs installed.
+
+**What changed.** Every `actions-gateway.com` kind now stores `v2`, the six in both charts alike.
+The apiserver writes the new version only on the next write, so an object stored at `v2beta1` stays that way until something rewrites it, and each CRD's `status.storedVersions` keeps listing `v2beta1` beside `v2`.
+`v2.0.0`'s CRDs remove `v2beta1`, and the apiserver rejects that apply while `storedVersions` lists it.
+This release ships the rewrite as `gag-migrate storage-version`, in the same signed `gag-migrate` binary as the [v1 → v2 migration](migration-v1-to-v2.md).
+
+**What you will see.** Nothing changes for any client: every version stays served, and the conversion webhook converts between them as before.
+After the CRD apply, `storedVersions` reads `["v2beta1","v2"]`, and can list `v2alpha1` too on a cluster that has run since before `v2beta1` existed.
+An `EgressProxy` that still names `CiliumFQDN` or `CalicoFQDN` is stored from its next write as `egressPolicyMode: FQDN` with the alias in the annotation `conversion.actions-gateway.com/egress-policy-mode`, and a `v2beta1` read still returns the alias, so its pool keeps the backend the alias pinned.
+
+**What to do.** Any time after applying this release's CRDs, and before upgrading to `v2.0.0`:
+
+1. Run the [pre-upgrade alias check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) and migrate every pool it prints.
+   `v2.0.0` cannot represent an alias, so the sweep refuses to start while one exists, names each pool, and writes nothing.
+2. Preview the sweep, which writes nothing and prints each CRD's `storedVersions` and how many objects it would rewrite:
+
+   ```sh
+   gag-migrate storage-version --context <your-cluster-context>
+   ```
+
+3. Run it, and confirm the prompt that echoes the target context:
+
+   ```sh
+   gag-migrate storage-version --context <your-cluster-context> --apply
+   ```
+
+   It writes every object of each kind back unchanged, which makes the apiserver store it at `v2`, then sets `storedVersions` to `["v2"]`.
+   A CRD already reading `["v2"]` is skipped, so a second run is safe.
+4. Confirm with the [storedVersions check](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2).
+
+The sweep needs `list` and `update` on every `actions-gateway.com` kind cluster-wide and `update` on `customresourcedefinitions/status`: run it as a cluster administrator, as you apply the CRDs.
+Every write passes through the GMC's validating webhooks, so run it with the GMC up.
+If the apiserver refuses an object, for example because a validating webhook rejects it, the sweep finishes the other objects, names each refused one, leaves that object's CRD listing the old version, and exits non-zero.
+Fix the named objects and run it again.
+
+**Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
+Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
 
 ### Non-breaking: `v2` is served beside `v2beta1`, and an unpinned read now returns `v2`
 

@@ -9013,7 +9013,7 @@ spec:
             which shares the v2 52-char name budget'
           rule: self.metadata.name.size() <= 52
     served: true
-    storage: false
+    storage: true
     subresources:
       status: {}
   - additionalPrinterColumns:
@@ -26965,6 +26965,6 @@ spec:
             which shares the v2 52-char name budget'
           rule: self.metadata.name.size() <= 52
     served: true
-    storage: true
+    storage: false
     subresources:
       status: {}

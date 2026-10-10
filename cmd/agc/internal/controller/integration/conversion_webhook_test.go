@@ -35,7 +35,7 @@ var conversionWebhookCancel context.CancelFunc
 var suiteGoroutineBaseline goleak.Option
 
 // The v2 CRDs the AGC suite installs (api/config/crd) are multi-version as of Q74:
-// v2beta1 is the storage/hub version and v2alpha1 the served spoke. Because envtest
+// v2beta1 is the hub, v2 the storage version, and v2alpha1 a served spoke. Because envtest
 // recognizes them as convertible (both versions are in testScheme) it patches each
 // CRD's spec.conversion to point at a local webhook server, so every v2 create/read
 // in this suite is routed through /convert. In production the GMC hosts that webhook;
@@ -96,8 +96,8 @@ func startConversionWebhook() error {
 
 // waitForConversionReady blocks until the conversion webhook is serving and the
 // apiserver can reach it: it waits for the TLS listener, then proves the /convert
-// path end-to-end by creating a v2alpha1 RunnerSet (whose storage as the v2beta1 hub
-// requires conversion) and confirming the round-trip preserves the defaulted
+// path end-to-end by creating a v2alpha1 RunnerSet (whose storage at v2 requires
+// conversion) and confirming the round-trip preserves the defaulted
 // acquisitionProtocol — the exact field that would be pruned if conversion were not
 // wired.
 func waitForConversionReady(opts envtest.WebhookInstallOptions) error {

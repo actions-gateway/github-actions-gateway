@@ -95,7 +95,7 @@ make api-reference-check  # the drift gate, run by `make check` and CI's lint jo
 
 `crd-ref-docs` is pinned in the vendored `tools/` module like controller-gen, so `make tools` builds it into `.build/` and no host install is involved.
 
-**Scope is `api/v2beta1` only** — the served, storage, non-deprecated version.
+**Scope is `api/v2beta1` only** — the served version every install authors at.
 `v1alpha1` and `v2alpha1` are removed at v2.0.0; a deprecated version documented field by field beside the current one reads as a supported choice, and `v2alpha1` is `v2beta1`'s shape anyway apart from the two RunnerSet fields the conversion webhook round-trips.
 Readers on either get `kubectl explain` and the [deprecation](../operations/v1alpha1-deprecation.md) and [migration](../operations/migration-v1-to-v2.md) pages instead — spelled out on the [reference overview](../reference/README.md).
 **Adding a version to the page is a deliberate decision, not a mechanical one**; adding a *kind* to `v2beta1` needs nothing beyond `make api-reference`, but do add it to the generator's completeness assertion (below).

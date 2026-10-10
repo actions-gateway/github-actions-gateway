@@ -33,8 +33,9 @@ func assertDeepEqual(t *testing.T, what string, want, got any) {
 	t.Errorf("%s round-trip mismatch:\n--- want ---\n%s\n--- got ---\n%s", what, w, g)
 }
 
-// Every round-trip below starts from the hub, because v2beta1 is the storage
-// version: the case that matters is a stored object read at v2 and written back.
+// Every round-trip below starts from the hub, because a v2alpha1 or v2beta1 request
+// passes through it: the case that matters is an object written at either, then read
+// at v2 and written back.
 
 func TestActionsGatewayConversion_RoundTrip(t *testing.T) {
 	hub := &v2beta1.ActionsGateway{
