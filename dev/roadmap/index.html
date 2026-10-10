@@ -2746,10 +2746,6 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.</p>
 <ul>
 <li>
-<p><strong><a href="../plan/release-1.10/">Move stored objects to the <code>v2</code> API</a></strong> <span class="gag-release-chip" title="Blocks the 1.10 release">1.10</span> <!-- q:Q1086 --> Every object an operator has stored is rewritten as <code>v2</code>, with every API version still served, so nothing an operator runs changes.
-  It has to finish before any version can be removed, which is why it ships a release ahead of the removals.</p>
-</li>
-<li>
 <p><strong><a href="../design/04-operational-flows/#on-the-scale-set-tier-q417">Scale-set recovery and cleanup that follow the runner, not the worker</a></strong> <span class="gag-release-chip" title="Blocks the 1.10 release">1.10</span> <!-- q:Q1152,Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and three paths assume it went to the worker created for it.
   Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.</p>
 </li>

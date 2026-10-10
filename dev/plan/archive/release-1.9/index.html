@@ -3093,7 +3093,7 @@ Tagged 2026-10-02 at <code>aff5f2268</code>; dogfood run the same evening.</p>
 The e2e run was cancelled and both stop scripts were run by hand with the drain skips; <code>ops.sh at-rest</code> reported no instances at 22:01 PDT.</p>
 <h1 id="2008-merged-on-2026-10-03-and-changes-dogfood-setup-and-no-released-file-so-the-candidate-stood-and-the-gate-re-ran-against-it">2008 merged on 2026-10-03 and changes dogfood setup and no released file, so the candidate stood and the gate re-ran against it.<a class="headerlink" href="#2008-merged-on-2026-10-03-and-changes-dogfood-setup-and-no-released-file-so-the-candidate-stood-and-the-gate-re-ran-against-it" title="Permanent link">&para;</a></h1>
 <h2 id="what-waits-for-v200">What waits for <code>v2.0.0</code><a class="headerlink" href="#what-waits-for-v200" title="Permanent link">&para;</a></h2>
-<p>The storage advance and migration (<a href="../../../queue/Q1086/">Q1086</a>) and the four removals (<a href="../../../queue/Q273/">Q273</a>, <a href="../../../queue/Q264/">Q264</a>, and <code>v2beta1</code> itself).
+<p>The storage advance and migration (Q1086) and the four removals (<a href="../../../queue/Q273/">Q273</a>, <a href="../../../queue/Q264/">Q264</a>, and <code>v2beta1</code> itself).
 The validating webhook rules cannot silently un-match through those removals: <code>make webhook-versions-check</code> (Q1068) fails any rule naming only versions no CRD serves.
 <a href="../../v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> Phase 3 owns the ordering.</p>
 

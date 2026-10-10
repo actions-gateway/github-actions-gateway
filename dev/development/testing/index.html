@@ -5098,8 +5098,8 @@ It was caught by hand-driving the step, with actionlint, shellcheck and <code>ma
 <p>Eleven workflows carry no <code>pull_request</code> trigger at all, measured by parsing each <code>on:</code> block.
 A grep answers ten, because <code>release-freeze-watch.yml</code> names <code>pull_request</code> only in a comment explaining why it has none.
 That count is not itself the scope: a workflow with a <code>pull_request</code> trigger can still gate its acting job off that event, which <code>pages.yml</code> does.</p>
-<p>Five workflows run an acting command.
-Three are driven:</p>
+<p>Six workflows run an acting command.
+Four are driven:</p>
 <table>
 <thead>
 <tr>
@@ -5121,6 +5121,12 @@ Three are driven:</p>
 <td><code>mike</code></td>
 <td><code>git push origin gh-pages</code></td>
 <td>the <code>publish</code> job is <code>if: github.event_name != 'pull_request'</code></td>
+</tr>
+<tr>
+<td><code>security-scan.yml</code></td>
+<td><code>scan-report</code></td>
+<td><code>gh issue create</code> / <code>comment</code> / <code>close</code></td>
+<td>the <code>report</code> job runs only on <code>schedule</code> and <code>workflow_dispatch</code></td>
 </tr>
 <tr>
 <td><code>publish.yml</code></td>
@@ -5983,9 +5989,9 @@ Same principle as <a href="#a-bulk-mechanical-change-proves-itself-by-reconcilia
   A claim that a controller write works <em>under the shipped role</em> therefore needs the kind e2e tier, where the AGC runs under the chart's real <code>agc-tenant-role</code> — <code>E2E_AGC_ScaleSetRecovery</code> is the Q519 gate for the scale-set disruption-recovery writes, and <code>E2E_AGC_ScaleSetAcquisition</code> the Q528 gate for the tier's acquisition half.
   Both <code>cmd/agc</code> and <code>cmd/gmc</code> already have envtest suites at <code>internal/controller/integration/</code> (build tag <code>integration</code>, see <a href="#integration-tests">Integration tests</a>) — add to them rather than concluding none exists; confirm with a directory listing before deciding a tier is missing.
   Example: PR #143 (Q65) migrated the GMC <code>apply*</code> helpers to <code>CreateOrPatch</code>; a fake-client test could verify field-level behavior, but only <code>apply_nochurn_test.go</code> (envtest, asserting <code>resourceVersion</code> stability across periodic reconciles) could prove the whole-<code>Spec</code> helpers don't churn.
-  A test that needs its own <code>envtest.Environment</code>, because it mutates something the shared suite depends on (as <code>v1_only_install_test.go</code> and <code>crd_schema_stale_test.go</code> do), <strong>must write v2 objects at <code>v2beta1</code></strong>.
+  A test that needs its own <code>envtest.Environment</code>, because it mutates something the shared suite depends on (as <code>v1_only_install_test.go</code> and <code>crd_schema_stale_test.go</code> do), <strong>must write v2 objects at <code>v2</code></strong>.
   The v2 CRDs declare a conversion webhook, and envtest rewrites its <code>clientConfig</code> to the environment's own serving host and port, which in a standalone environment nothing is listening on: a create at <code>v2alpha1</code> dies on <code>conversion webhook … dial tcp … connect: connection refused</code>, naming a port that is not the shared suite's.
-  <code>v2beta1</code> is the storage version, so no conversion is invoked and the write lands.</li>
+  <code>v2</code> is the storage version from 1.10, so no conversion is invoked and the write lands; before it, <code>v2beta1</code> was.</li>
 <li><strong>cluster-only kind e2e</strong> — behaviors that emerge from real Container Network Interface (CNI), kube-proxy Destination NAT (DNAT), kubelet image-pull policy, or TLS-over-tunnel.
   When a feature crosses one of those boundaries, the cluster-only test (see <a href="../../design/07-test-plan/#73-end-to-end-tests">design §7.3</a> and <a href="#end-to-end-tests">End-to-end tests</a>) is the only thing that proves it works.
   Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented cluster-only test (<code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code>) would have caught 4 of them locally.</li>
@@ -8092,6 +8098,10 @@ There is no local <code>make</code> target; reproduce a run with <code>docker ru
 <h2 id="security-scanning">Security scanning<a class="headerlink" href="#security-scanning" title="Permanent link">&para;</a></h2>
 <p>The <code>security-scan.yml</code> workflow runs three gates on every PR (and on push to <code>main</code>), independent of the unit/integration/e2e suites — two supply-chain scans plus a Kubernetes posture scan.
 All three have local equivalents so you can reproduce a CI verdict before pushing.</p>
+<p>It also runs daily against <code>main</code> (05:31 UTC, or on demand with <code>workflow_dispatch</code>), because govulncheck and trivy read advisory databases that change without a commit.
+A newly published advisory turns <code>main</code> red with no merge to trip it, so every PR that runs the scan fails the same way until a standalone fix lands.
+A failing scheduled run opens one issue labelled <code>security-scan</code>, comments on it while <code>main</code> stays red, and closes it on the first clean run.
+When a PR's scan goes red, check for that issue before debugging the PR: a finding already open there is not the PR's to fix.</p>
 <p><strong>govulncheck</strong> — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs).
 It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path.
 Run it locally with:</p>

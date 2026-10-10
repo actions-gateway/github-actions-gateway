@@ -2629,6 +2629,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decided: an operator runs the sweep, as gag-migrate storage-version
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2652,7 +2663,7 @@
 <h1 id="release-110-milestone-definition">Release 1.10 Milestone Definition<a class="headerlink" href="#release-110-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scoped 2026-10-09, no candidate cut.</strong> The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-Five rows gate the tag and three ride.
+Six rows gate the tag and three ride; Q1086, the storage advance, has landed.
 Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
@@ -2669,7 +2680,7 @@ Rollback from this release reaches <code>v1.9.0</code>, which serves <code>v2</c
 Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queue/Q273/">Q273</a>'s, in <code>v2.0.0</code>, after this tag.</p>
 <p><strong>It must not remove classic acquisition.</strong> That is <a href="../../queue/Q264/">Q264</a>, also in <code>v2.0.0</code>.</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
-<p>Five gating rows and the candidate validation, then the three items that ride.</p>
+<p>Six gating rows and the candidate validation, then the three items that ride.</p>
 <table>
 <thead>
 <tr>
@@ -2681,8 +2692,14 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 </thead>
 <tbody>
 <tr>
-<td><a href="../../queue/Q1086/">Q1086</a></td>
+<td>Q1086</td>
 <td>Mark <code>v2</code> the storage version, rewrite every stored object with a read-write sweep, and prune <code>storedVersions</code> to <code>["v2"]</code></td>
+<td><code>1.10-gate</code></td>
+<td>✅ landed: all six kinds store <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites and prunes, proven on envtest</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1171/">Q1171</a></td>
+<td>RC validation runs the storage sweep and reads <code>storedVersions</code> on dogfood</td>
 <td><code>1.10-gate</code></td>
 <td>🔲 ready</td>
 </tr>
@@ -2737,7 +2754,7 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 </tbody>
 </table>
 <p><strong>The split is the maintainer's, chosen 2026-10-09; the reasons below are this plan's, offered with it.</strong> The theme is in the maintainer's own words: the storage advance plus scale-set correctness.
-Q1086 is what the release is for.
+Q1086 is what the release is for, and Q1171 is what shows it worked on a cluster that has run 1.x.
 Q1152, Q1153 and Q1154 are defects on the scale-set tier, the one <code>v2.0.0</code> keeps as the only tier: recovery that re-runs the wrong run, a worker that holds a node for up to 12 hours, and a credential-bearing Secret that outlives its worker.
 Q1152 and Q1154 were found reviewing Q1151's fix, and all three follow from the same fact, that GitHub hands a scale-set job to whichever runner asks first.
 Q1069 gates as the one feature: the gateway-level attribution flag reads <code>0</code> where a set's traffic leaves through a pool that logs no source address, the wrong direction for an audit signal.</p>
@@ -2749,7 +2766,14 @@ Q1070 depends on Q1069, whose per-set gauge has to carry the reason label the pa
 The ledger takes a row for each further item that merges onto the released surface before the tag.</p>
 <h2 id="what-the-candidate-must-show">What the candidate must show<a class="headerlink" href="#what-the-candidate-must-show" title="Permanent link">&para;</a></h2>
 <p>The dogfood gate validates every candidate; this one also has to show the storage advance completed on a cluster that has run 1.x.
-Q1086's deliverable is that evidence, and the candidate is where it is read: every one of the five kinds' CRDs reports <code>storedVersions: ["v2"]</code> after the upgrade, on the dogfood cluster, whose objects are stored as <code>v2beta1</code> today.</p>
+Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports <code>storedVersions: ["v2"]</code> after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as <code>v2beta1</code> today.
+The gate does not yet run the sweep, which is <a href="../../queue/Q1171/">Q1171</a>.</p>
+<h2 id="decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version">Decided: an operator runs the sweep, as <code>gag-migrate storage-version</code><a class="headerlink" href="#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version" title="Permanent link">&para;</a></h2>
+<p><strong>Decided by the maintainer on 2026-10-09</strong>, choosing between the operator-run command and a sweep the GMC runs itself at startup.
+The GMC's ClusterRole had <code>get</code> on <code>customresourcedefinitions</code> and no write on four of the six kinds, so a GMC-run sweep would have widened a long-lived controller's privileges for a job that runs once per cluster.
+The command runs under the credentials that apply the CRDs, ships in the signed <code>gag-migrate</code> binary each release already publishes, and keeps that tool's <code>--context</code> pin and confirmation prompt.
+What it costs is a manual upgrade step an operator can skip; skipping it fails loudly at the <code>v2.0.0</code> CRD apply rather than silently, and the <a href="../../operations/upgrade/#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">pre-upgrade check</a> catches it first.
+The sweep refuses to start while any <code>EgressProxy</code> names a deprecated alias, so Q1085's check stays a precondition rather than something the sweep works around.</p>
 
 
 

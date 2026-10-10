@@ -4078,7 +4078,7 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 <hr />
 <h2 id="v2-api-multiple-gateways-per-namespace">v2 API: multiple gateways per namespace<a class="headerlink" href="#v2-api-multiple-gateways-per-namespace" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2beta1</code></strong> — the graduated, ScaleSet-only storage and hub version, and the version every <strong>new</strong> tenant should use.
+<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2beta1</code></strong> — the graduated, ScaleSet-only hub version, and the version every <strong>new</strong> tenant should use.
 It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it.
 <code>v2alpha1</code> is also still served, but only as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants moving off v1: it carries the deprecated <a href="#acquisition-protocol-v2alpha1-only"><code>acquisitionProtocol</code></a> selector, which a new tenant does not need.
 <code>v2alpha1</code> is itself deprecated and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
@@ -4189,7 +4189,7 @@ It exists to let a tenant migrating off <code>v1alpha1</code> keep the classic p
   <code>Classic</code> is deprecated and, together with <code>v2alpha1</code> and <code>v1alpha1</code>, <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>spec.maxListeners</code> goes with it.</li>
 <li><strong><code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code></strong> onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
   Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is <strong>immutable</strong>, because switching a live set's protocol is a re-registration storm.</li>
-<li><strong>Editing a Classic set works unqualified, labels included.</strong> An unqualified <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which admits the same multi-label shape.</li>
+<li><strong>Editing a Classic set works unqualified, labels included.</strong> An unqualified <code>kubectl edit/patch/apply</code> addresses the preferred version, <code>v2</code>, which admits the same multi-label shape as <code>v2beta1</code>.</li>
 </ul>
 <h3 id="bind-a-runner-set-to-a-github-runner-group">Bind a runner set to a GitHub runner group<a class="headerlink" href="#bind-a-runner-set-to-a-github-runner-group" title="Permanent link">&para;</a></h3>
 <p>Everything else on this page bounds what a tenant's workers may <em>do</em>.

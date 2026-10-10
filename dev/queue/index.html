@@ -2894,20 +2894,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>expect_rc</code> compares the command's status numerically against the wanted one, so a status of 128+n means a killed process rather than a …</td>
 </tr>
 <tr>
-<td><a href="Q1086/">Q1086</a></td>
-<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Storage-migrate stored objects to <code>v2</code> before the <code>v2.0.0</code> removals</a></td>
-<td><code>feature</code> <code>1.10-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td><strong>Revived 2026-10-09.</strong> It waited on <code>v2</code> being served beside <code>v2beta1</code> in a shipped release; Q413 landed in #1999 and <code>v1.9.0</code> tagged …</td>
-</tr>
-<tr>
 <td><a href="Q1055/">Q1055</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">Roll the signal-death guard out to the suites still comparing rc raw</a></td>
 <td><code>ci</code> <code>tests</code> <code>flake</code></td>
 <td>💤</td>
 <td>M</td>
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
+</tr>
+<tr>
+<td><a href="Q1171/">Q1171</a></td>
+<td><a href="../plan/release-1.10/#what-the-candidate-must-show">RC validation runs the storage sweep and reads storedVersions on dogfood</a></td>
+<td><code>dogfood</code> <code>tests</code> <code>1.10-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><a href="../plan/release-1.10/#what-the-candidate-must-show">release-1.10.md</a> requires the 1.10 candidate to show every <code>actions-gateway.com</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1066/">Q1066</a></td>
@@ -3395,7 +3395,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>debt</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>L</td>
-<td>Blocked by <a href="Q1086/">Q1086</a>: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop …</td>
+<td>Blocked until 1.10 tags: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a …</td>
 </tr>
 <tr>
 <td><a href="Q264/">Q264</a></td>
@@ -3411,7 +3411,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>S</td>
-<td>Blocked by <a href="Q1086/">Q1086</a>, <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>, <a href="Q264/">Q264</a>: the storage migration and the coupled removals land …</td>
+<td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>, <a href="Q264/">Q264</a>: the coupled removals land first, after Q1086's storage migration in 1.10 …</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>

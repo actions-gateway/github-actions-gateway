@@ -2598,7 +2598,8 @@
 
 
 <h1 id="retype-the-controllers-onto-v2-move-the-hub-drop-v2alpha1-and-v2beta1">Retype the controllers onto v2, move the hub, drop v2alpha1 and v2beta1<a class="headerlink" href="#retype-the-controllers-onto-v2-move-the-hub-drop-v2alpha1-and-v2beta1" title="Permanent link">&para;</a></h1>
-<p>Blocked by <a href="../Q1086/">Q1086</a>: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a served version until the storage migration has run on every cluster that upgrades.</p>
+<p>Blocked until 1.10 tags: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a served version until the storage migration has run on every cluster that upgrades.
+Q1086 shipped that migration for 1.10 as <code>gag-migrate storage-version</code>.</p>
 <p>The <code>actions-gateway.com</code> half of Phase 3, which no row owned until the 2.0 scope was reviewed on 2026-10-09.
 <a href="../Q273/">Q273</a> removes the <code>actions-gateway.github.com</code> group (<code>v1alpha1</code>) and <a href="../Q264/">Q264</a> the classic acquisition machinery, and neither reaches the <code>v2</code> group's own versions.
 Three things, measured 2026-10-09 off <code>main</code>:</p>

@@ -2804,7 +2804,7 @@ It is deliberately thin: the work is Phase 2, which is already scoped, plus the 
 The apiserver will not drop a version from a CRD's <code>spec.versions</code> while <code>status.storedVersions</code> lists it, and every 1.x cluster lists <code>v2beta1</code> there, so an operator has to pass through a state where <code>v2</code> is storage, every version is still served, and the stored objects are being rewritten (<a href="../v2-ga/#the-storage-advance-needs-a-state-between-two-applies">v2-ga.md</a> has the contract and its source).</p>
 <p>That state could have been a release or a step:</p>
 <ul>
-<li><strong>A <code>1.10</code> rung</strong>, chosen: it carries the storage advance and <a href="../../queue/Q1086/">Q1086</a>'s sweep with every version served, so <code>v2.0.0</code> is the four removals in one apply.
+<li><strong>A <code>1.10</code> rung</strong>, chosen: it carries the storage advance and Q1086's sweep with every version served, so <code>v2.0.0</code> is the four removals in one apply.
   It is a non-breaking minor, and rollback from it reaches <code>v1.9.0</code>, which already serves <code>v2</code>.</li>
 <li><strong>No rung</strong>: <code>v2.0.0</code> would have shipped two CRD bundles and a three-step upgrade, apply, sweep, apply.
   It saved a release, and made the one breaking upgrade a procedure an operator can stop halfway through.</li>
