@@ -4163,6 +4163,11 @@ There is no local `make` target; reproduce a run with `docker run --rm -i hadoli
 The `security-scan.yml` workflow runs three gates on every PR (and on push to `main`), independent of the unit/integration/e2e suites — two supply-chain scans plus a Kubernetes posture scan.
 All three have local equivalents so you can reproduce a CI verdict before pushing.
 
+It also runs daily against `main` (05:31 UTC, or on demand with `workflow_dispatch`), because govulncheck and trivy read advisory databases that change without a commit.
+A newly published advisory turns `main` red with no merge to trip it, so every PR that runs the scan fails the same way until a standalone fix lands.
+A failing scheduled run opens one issue labelled `security-scan`, comments on it while `main` stays red, and closes it on the first clean run.
+When a PR's scan goes red, check for that issue before debugging the PR: a finding already open there is not the PR's to fix.
+
 **govulncheck** — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs).
 It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path.
 Run it locally with:
