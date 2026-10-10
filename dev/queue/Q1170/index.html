@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1145/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1170/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>check-release-ladder-test revived-missing flakes under make check - GitHub Actions Gateway</title>
+        <title>Fixture builders as arguments hide a killed builder in six test suites - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#check-release-ladder-test-revived-missing-flakes-under-make-check" class="md-skip">
+        <a href="#fixture-builders-as-arguments-hide-a-killed-builder-in-six-test-suites" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              check-release-ladder-test revived-missing flakes under make check
+              Fixture builders as arguments hide a killed builder in six test suites
             
           </span>
         </div>
@@ -2597,26 +2597,27 @@
   
 
 
-<h1 id="check-release-ladder-test-revived-missing-flakes-under-make-check">check-release-ladder-test revived-missing flakes under make check<a class="headerlink" href="#check-release-ladder-test-revived-missing-flakes-under-make-check" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>check-release-ladder-test</code> is reported KILLED by <code>make scripts-test</code>, or exits 1 with a shell error from a <code>write_*</code> fixture builder, or any of its cases fails again with an empty path in the checker's message.</p>
-<p>Sighted once, 2026-09-29, in <code>make check</code> on the Q737 branch, whose diff touches neither the checker nor its test:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[check-release-ladder-test] FAIL: revived-missing — a revived item whose row is gone fails: expected rc 1, got 2
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[check-release-ladder-test]        release-ladder:  does not exist, so this gate would verify nothing
-</code></pre></div>
-<p>The double space is an empty <code>--page</code>: <code>write_page rm</code> printed nothing that run, and every other case passed.</p>
-<p><strong>What the mitigation changes.</strong> Every fixture builder ran inside <code>expect</code>'s argument list, where bash drops a command substitution's status, so a builder that failed or died became an empty path the suite reported as the checker's rc 2.
-They now run in assignments, so errexit ends the suite with the builder's own status: 143 for a SIGTERM, which <code>run-parallel.sh</code> reports as KILLED with the signal, and 1 plus bash's own error for a failed write.
-A recurrence therefore names its cause instead of reading as a wrong verdict.</p>
-<p><strong>What is measured, 2026-10-09 on <code>02fb0338b</code>.</strong></p>
+<h1 id="fixture-builders-as-arguments-hide-a-killed-builder-in-six-test-suites">Fixture builders as arguments hide a killed builder in six test suites<a class="headerlink" href="#fixture-builders-as-arguments-hide-a-killed-builder-in-six-test-suites" title="Permanent link">&para;</a></h1>
+<p>Six suites build fixtures inside a command substitution passed straight to an assertion helper, the shape <a href="../Q1145/">Q1145</a> removed from <code>check-release-ladder-test.sh</code>.
+Counted 2026-10-09 on <code>02fb0338b</code>, every <code>"$(builder</code> in argument position, on the helper's own line or a continuation, and not as an assignment:</p>
 <ul>
-<li>A SIGTERM'd <code>write_page rm</code> in the old suite reproduces the sighted output exactly, with no shell error line; in the new suite the same injection exits 143.</li>
-<li>Deleting the fixture directory before that case also yields the empty path in the old suite, but bash prints <code>No such file or directory</code> first.
-  The Q737 log's lines between the <code>reparked</code> result and the FAIL carry no such line (read from that session's transcript; the log file itself is gone), so deletion is not what happened.</li>
-<li>120 copies of the suite run 40 at a time, at load average 75, all passed: load alone does not reproduce it.</li>
+<li><code>scripts/docs/check-roadmap-test.sh</code>: 99 sites, <code>roadmap</code>, <code>status</code>, <code>features</code></li>
+<li><code>scripts/docs/check-release-pins-test.sh</code>: 15 sites, <code>fixture</code></li>
+<li><code>scripts/docs/check-release-links-test.sh</code>: 11 sites, <code>make_notes</code></li>
+<li><code>scripts/ci/check-publish-digest-test.sh</code>: 10 sites, <code>write_workflow</code></li>
+<li><code>scripts/ci/check-tool-pins-test.sh</code>: 8 sites, <code>write_makefile</code></li>
+<li><code>scripts/ci/check-cosign-pin-test.sh</code>: 2 sites, <code>write_makefile</code></li>
 </ul>
-<p><strong>Not measured:</strong> what killed the builder, if that is what happened.
-The Q737 session ran one <code>make check</code> and stopped nothing; its only concurrent work in that worktree was a dogfood <code>e2e-start</code> against GKE.
-No sibling in <code>make scripts-test</code> kills a stale pid: the two <code>kill -KILL "$PPID"</code> sites (<code>release-sentinel-test.sh</code>, <code>progress-watch-test.sh</code>) fire while that parent is blocked in the stub <code>sleep</code>. Nor is it <a href="../Q991/">Q991</a>'s mechanism, suites sharing a fixed fixture path: this suite's path carries <code>$$</code>.</p>
+<p>That is 145 in all.</p>
+<p>Bash drops a substitution's exit status when it is an argument, so a builder that fails or is killed hands the helper an empty path, and the suite reports the checker's answer to that empty path as a wrong verdict.
+Measured 2026-10-09 on <code>02fb0338b</code> against the release-ladder suite: a SIGTERM injected into its page builder produced a FAIL blaming the checker, with no shell error line; the same injection after hoisting the builder into an assignment exited 143, which <code>run-parallel.sh</code> reports as KILLED.
+None of these six has been sighted failing this way, so this is a reporting defect rather than a flake.
+Separate from <a href="../Q991/">Q991</a>, which is suites sharing a fixed fixture path so that one run deletes another's: that fix changes where fixtures live, this one how a builder's failure is reported, and neither closes the other.</p>
+<p><strong>The census is scoped to fixture builders.</strong> It matched the six helpers above by name.
+Counting any local function substituted into a continuation-line argument reaches 17 suites, but most of those helpers return a value (a field, a rendered line) rather than a fixture path, so whether an empty result there can pass as a verdict is unassessed.
+An earlier census of this row, matching only continuation lines that open with a builder-style name, found 4 suites and 35 sites; it missed every builder on the helper's own line.</p>
+<p><strong>The fix</strong> is the one Q1145 applied: assign each fixture (<code>page="$(fixture …)"</code>) and pass the variable, so errexit ends the suite with the builder's own status.
+Re-run the census above after the change: every count should be 0.</p>
 
 
 
