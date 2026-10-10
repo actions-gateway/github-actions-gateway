@@ -76,20 +76,25 @@ A shared pool's setting reaches the consumer's AGC through the share projection,
 
 ---
 
-## G.4. TLS Between AGC/Workers and the Proxy
+## G.4. In-Cluster Encryption Beyond the Proxy Hop
 
-**Current behavior.** The AGC and worker pods reach the proxy at `http://actions-gateway-proxy.<ns>.svc.cluster.local:8080`.
-The CONNECT-tunneled payload is itself TLS to GitHub; only the CONNECT request line is in cleartext on the in-cluster hop.
+**Current behavior.** Every gag hop that carries credentials or GitHub traffic is TLS.
+The AGC and worker pods reach the proxy at `https://actions-gateway-proxy.<ns>.svc.cluster.local:8080`, which serves CONNECT over TLS 1.2 or later with a per-tenant certificate the GMC generates; both clients pin that tenant's CA ([§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped)).
+Inside that tunnel the payload is a second TLS session to GitHub, so neither the proxy nor an on-path observer reads it.
+Apiserver traffic is HTTPS, and per-tenant metrics are mutual TLS.
 
-**Gap.** On clusters with eBPF taps, sidecar meshes, or shared-CNI visibility, the CONNECT target host:port is observable.
-The actual payload remains encrypted.
-No bearer token is sent on the outer hop today, so credential exposure is not on the table.
+**Gap.** Three in-cluster flows stay plaintext:
 
-**What "added" would look like.** cert-manager-managed cert mounted into proxy pods, AGC and workers use `https://` proxy URL.
-Adds one in-cluster handshake per upstream connection.
-Adds operational cost of managing per-tenant proxy certs.
+- DNS from the AGC and workers to cluster DNS on port 53, which reveals the hostnames a job resolves.
+- Health probes on the AGC and proxy health port, which carry no secrets.
+- Metrics served on the health port when no metrics certificate is mounted, which is a dev/test fallback: a GMC-built proxy always mounts its certificate.
 
-**What would trigger building it.** A compliance requirement for in-cluster encryption-in-transit beyond what an mTLS service mesh already provides, or a future change that puts authentication on the outer hop.
+A compliance requirement for encryption of *all* in-transit pod traffic is not met by gag alone.
+
+**What "added" would look like.** gag would not encrypt DNS itself, since pod resolvers only speak plaintext DNS.
+The fit is node-level encryption that covers every pod flow, such as Calico or Cilium WireGuard, or NodeLocal DNSCache forwarding upstream over DNS-over-TLS. gag's part would be a documented and tested compatibility recipe, with the NetworkPolicy DNS rule checked against the chosen setup.
+
+**What would trigger building it.** An operator with an encryption-in-transit requirement that covers pod DNS, asking for a supported recipe rather than configuring their CNI unaided.
 
 ---
 
