@@ -485,24 +485,27 @@ func startEgressProxyReconcilerWithBackend(t *testing.T, ipCache *controller.IPR
 // and no cache state changes that, so a test clears it by finishing first, never by
 // disabling it: isolation here is time-bounded, not absolute.
 //
-// Isolation is also not yet reliable. A run with the referrer Watches deleted has been
-// observed green, so a test asserting a watch edge off this helper can pass with that
-// edge removed; Q541 tracks hardening it.
-func startEgressProxyReconcilerNoResync(t *testing.T, ipCache *controller.IPRangeCache) {
+// Ready is not dormant: the status writes that make the pool Ready queue one or two
+// more reconciles, and one that starts after the trigger under test carries it with
+// the watch deleted (Q541). Call waitIdle on the returned counter before the trigger.
+// waitIdle sees only queued and running reconciles, not a pending not-ready
+// RequeueAfter; that timer is spent by the Ready reconcile because controller-runtime
+// v0.25.1's default priority queue holds one entry per key.
+func startEgressProxyReconcilerNoResync(t *testing.T, ipCache *controller.IPRangeCache) *reconcileCounter {
 	t.Helper()
-	startEgressProxyReconcilerOpts(t, ipCache, controller.FQDNBackendNone, nil)
+	return startEgressProxyReconcilerOpts(t, ipCache, controller.FQDNBackendNone, nil)
 }
 
 // startEgressProxyReconcilerOpts is the shared core: a nil syncPeriod keeps the
 // manager's default resync behavior.
-func startEgressProxyReconcilerOpts(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration) {
+func startEgressProxyReconcilerOpts(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration) *reconcileCounter {
 	t.Helper()
-	startEgressProxyReconcilerFull(t, ipCache, backend, syncPeriod, false)
+	return startEgressProxyReconcilerFull(t, ipCache, backend, syncPeriod, false)
 }
 
 // startEgressProxyReconcilerFull is the underlying constructor; enableServiceMonitor
 // toggles the per-EgressProxy ServiceMonitor provisioning (Q324).
-func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration, enableServiceMonitor bool) {
+func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration, enableServiceMonitor bool) *reconcileCounter {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -522,8 +525,9 @@ func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCac
 		ipCache = &controller.IPRangeCache{}
 	}
 
+	counter := newReconcileCounter(mgr.GetClient())
 	err = (&controller.EgressProxyReconciler{
-		Client:               mgr.GetClient(),
+		Client:               counter,
 		APIReader:            mgr.GetAPIReader(),
 		Scheme:               mgr.GetScheme(),
 		IPCache:              ipCache,
@@ -535,6 +539,7 @@ func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCac
 	require.NoError(t, err)
 
 	go func() { _ = mgr.Start(mgrCtx) }()
+	return counter
 }
 
 type stubIPFetcher struct {
