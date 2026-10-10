@@ -1713,6 +1713,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a scale-set worker's run identity follows the job its runner started
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3477,6 +3488,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a scale-set worker's run identity follows the job its runner started
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4195,6 +4217,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
+<li><a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started</a></li>
 <li><a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2</a></li>
 <li><a href="#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2">Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2</a></li>
 <li><a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission">A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission</a></li>
@@ -4329,6 +4352,13 @@ If the apiserver refuses an object, for example because a validating webhook rej
 Fix the named objects and run it again.</p>
 <p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
+<h3 id="non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started<a class="headerlink" href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" title="Permanent link">&para;</a></h3>
+<p>GitHub gives a scale-set job to whichever of the set's runners asks first, so a worker can run a different job, from a different run, than the one it was created for.
+Recovery used to re-run the run the worker was created for, which left the run that actually lost a job failed (Q1152).</p>
+<p>A worker's <code>actions-gateway.com/run-id</code>, <code>/repository</code> and <code>/job-name</code> annotations are now rewritten when its runner starts a job, so <code>kubectl describe pod</code> shows the run the worker is serving, and an evicted, preempted or drained worker re-runs that run.
+Recovery after an AGC restart finds a job's worker by <code>actions-gateway.com/started-job-id</code> rather than by pod name, and the <code>OrphanedWorkerRecovered</code> Event now names the job rather than a pod.
+The recovery-claim ConfigMap's entries gain a <code>jobID</code> field; entries written by an older AGC lack it and are read as before.</p>
+<p>No action is required at upgrade time.</p>
 <h3 id="non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: <code>v2</code> is served beside <code>v2beta1</code>, and an unpinned read now returns <code>v2</code><a class="headerlink" href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone with the v2 CRDs installed.</p>
 <p><strong>What changed.</strong> Every <code>actions-gateway.com</code> kind is now also served at <code>v2</code>, the General Availability (GA) version: the five kinds in <code>actions-gateway-crds-v2</code>, and <code>PriorityClassAllowlist</code> in the main chart.

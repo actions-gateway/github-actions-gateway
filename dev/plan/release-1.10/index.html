@@ -2704,10 +2704,10 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>🔲 ready</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1152/">Q1152</a></td>
+<td>Q1152</td>
 <td>Scale-set recovery ties a job to the runner that took it, not the worker created for it</td>
 <td><code>1.10-gate</code></td>
-<td>🔲 ready</td>
+<td>✅ landed: a <code>JobStarted</code> replaces the worker's run identity with the started job's, and start-up recovery finds a job's worker by <code>started-job-id</code>. Unit-tested on crossed workers; not reproduced on a cluster</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1153/">Q1153</a></td>

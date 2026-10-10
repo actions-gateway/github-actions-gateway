@@ -2746,8 +2746,8 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.</p>
 <ul>
 <li>
-<p><strong><a href="../design/04-operational-flows/#on-the-scale-set-tier-q417">Scale-set recovery and cleanup that follow the runner, not the worker</a></strong> <span class="gag-release-chip" title="Blocks the 1.10 release">1.10</span> <!-- q:Q1152,Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and three paths assume it went to the worker created for it.
-  Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.</p>
+<p><strong><a href="../design/04-operational-flows/#on-the-scale-set-tier-q417">Scale-set recovery and cleanup that follow the runner, not the worker</a></strong> <span class="gag-release-chip" title="Blocks the 1.10 release">1.10</span> <!-- q:Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and two cleanup paths assume it went to the worker created for it.
+  An idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.</p>
 </li>
 <li>
 <p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and the classic acquisition protocol</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q273,Q1167 --> <strong><code>v2.0.0</code></strong> removes all four, plus the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> egress aliases, on clusters whose stored objects have already moved to <code>v2</code>.

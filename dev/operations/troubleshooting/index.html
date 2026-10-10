@@ -7925,7 +7925,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <tr>
 <td>Any of the above that happened while the AGC was down (<code>ScaleSet</code> tier)</td>
 <td><code class="gag-nowrap">vanished</code></td>
-<td>a persisted in-flight record whose worker pod is no longer there</td>
+<td>a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone, or is running another job while no other worker that has not exited is idle to take it</td>
 </tr>
 </tbody>
 </table>
@@ -8209,7 +8209,7 @@ Usually one of two accompanying signals is present:</p>
 <li>neither counter moves at all.</li>
 </ul>
 <p><strong>Cause.</strong> The scale-set tier provisions fire-and-forget — the runner pulls and completes its own job — so nothing in the AGC is watching a given worker pod, and there is no acquired payload to read the job's identity from.
-Recovery therefore depends on two things being on the pod: the run identity (<code>actions-gateway.com/run-id</code>, <code>actions-gateway.com/repository</code>), stamped from the assignment message's <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>, and the <code>actions-gateway.com/acquisition-protocol=ScaleSet</code> label that tells the reconciler the pod is its to recover.
+Recovery therefore depends on two things being on the pod: the run identity (<code>actions-gateway.com/run-id</code>, <code>actions-gateway.com/repository</code>), stamped from the assignment message's <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> and replaced from the <code>JobStarted</code> of the job the pod's runner actually took (Q1152), and the <code>actions-gateway.com/acquisition-protocol=ScaleSet</code> label that tells the reconciler the pod is its to recover.
 Either one missing makes recovery inert for that pod.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a><span class="c1"># Does the evicted worker carry its run identity and the tier marker?</span>

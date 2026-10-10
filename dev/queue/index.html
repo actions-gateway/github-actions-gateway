@@ -2750,14 +2750,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>check-release-ladder-test</code> is reported KILLED by <code>make scripts-test</code>, or exits 1 with a shell error from a <code>write_*</code> fixture …</td>
 </tr>
 <tr>
-<td><a href="Q1152/">Q1152</a></td>
-<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Scale-set recovery ties a job to the worker minted for it, not a runner</a></td>
-<td><code>bug</code> <code>dogfood</code> <code>1.10-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Eviction recovery on the scale-set tier re-runs whatever <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code> say on the …</td>
-</tr>
-<tr>
 <td><a href="Q1149/">Q1149</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go">Warn before the pinned runner ages out of GitHub's 30-day window</a></td>
 <td><code>ci</code> <code>dogfood</code></td>
@@ -2972,6 +2964,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Since Q1151, a scale-set <code>JobCompleted</code> reclaims the Secret mounted by the worker whose <code>actions-gateway.com/runner-name</code> matches the …</td>
+</tr>
+<tr>
+<td><a href="Q1169/">Q1169</a></td>
+<td><a href="../design/04-operational-flows/">A never-started scale-set worker's recovery acts on its namesake's run</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>When a scale-set worker is removed before its container ever ran — the reaper's <code>pendingPodDeadline</code> delete, or an external delete of a …</td>
 </tr>
 <tr>
 <td><a href="Q1130/">Q1130</a></td>

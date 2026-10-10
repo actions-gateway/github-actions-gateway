@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1152/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1169/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Scale-set recovery ties a job to the worker minted for it, not a runner - GitHub Actions Gateway</title>
+        <title>A never-started scale-set worker's recovery acts on its namesake's run - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#scale-set-recovery-ties-a-job-to-the-worker-minted-for-it-not-a-runner" class="md-skip">
+        <a href="#a-never-started-scale-set-workers-recovery-acts-on-its-namesakes-run" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Scale-set recovery ties a job to the worker minted for it, not a runner
+              A never-started scale-set worker's recovery acts on its namesake's run
             
           </span>
         </div>
@@ -2597,26 +2597,23 @@
   
 
 
-<h1 id="scale-set-recovery-ties-a-job-to-the-worker-minted-for-it-not-a-runner">Scale-set recovery ties a job to the worker minted for it, not a runner<a class="headerlink" href="#scale-set-recovery-ties-a-job-to-the-worker-minted-for-it-not-a-runner" title="Permanent link">&para;</a></h1>
-<p>Eviction recovery on the scale-set tier re-runs whatever <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code> say on the evicted pod (Q417), and those are stamped at provision time from the <code>JobAssigned</code> the pod was created for.
-GitHub gives a scale-set job to whichever of the set's runners asks first, so the pod can be running a different job, possibly from a different run, when it is evicted.
-Recovery then re-runs the wrong run's failed jobs and leaves the run that lost its job to fail.</p>
-<p>Start-up orphan recovery (Q844) has the same keying from the other side.
-<code>RecoverOrphanedScaleSetWorkers</code> (<code>cmd/agc/internal/provisioner/orphaned_scaleset.go</code>) judges an in-flight job's worker lost when the pod named <code>scaleSetPodName(set, jobID)</code> is not listed.
-That pod can be gone because its runner finished some other job, while the in-flight job runs on a live worker, which re-runs a run that is still running.
-The reverse also holds: the job's real worker can be gone while its namesake is alive, and nothing is recovered.
-Found by the reviewer of the Q1151 fix, from source; not observed on a cluster.</p>
-<p><strong>Measured, 2026-09-30 on <code>gag-dogfood</code></strong> (the Q1151 evidence): the pod created for job <code>7d6b7dca-…</code> ran <code>integration-test (agc)</code> of run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/36751338479">36751338479</a>, per the Actions jobs API's <code>runner_name</code>.
-Its completion stamp landed at 17:34:27Z, the moment <code>shellcheck</code> of run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/36751334381">36751334381</a> completed, so job <code>7d6b7dca-…</code> was most likely <code>shellcheck</code> and the pod carried the other run's ID.
-That pairing is inferred from timing; nothing recorded the job ID of <code>shellcheck</code>.
-No eviction was traced through recovery.
-The three spot preemptions in the same burst were not checked for which run recovery re-ran, and the mechanism is unverified end to end.</p>
-<p><strong>Where the fix likely goes.</strong> <code>JobStarted</code> carries <code>workflowRunId</code>, <code>ownerName</code> and <code>repositoryName</code> (<code>scaleset/types.go</code>, <code>JobMessage</code>), and since Q1151 the listener already patches the started runner's pod with <code>actions-gateway.com/started-job-id</code>.
-Stamping the started job's run identity there, and having recovery prefer it, would name the run the runner was actually serving.
-Orphan recovery would need the same record the other way round: which live worker, if any, carries <code>started-job-id</code> for the in-flight job.
-The <code>observability-metrics.md</code> sentence calling <code>run-id</code> and <code>repository</code> "the only record of which workflow run a worker was serving" is wrong for the same reason and changes with the fix.</p>
-<p><strong>Reach.</strong> Any scale-set tenant whose worker is evicted while running a job it was not created for: a spot preemption or a node drain re-runs an unrelated run, and the run that lost the job is not recovered.
-Orphan recovery reaches the same tenants after any AGC restart with jobs in flight.</p>
+<h1 id="a-never-started-scale-set-workers-recovery-acts-on-its-namesakes-run">A never-started scale-set worker's recovery acts on its namesake's run<a class="headerlink" href="#a-never-started-scale-set-workers-recovery-acts-on-its-namesakes-run" title="Permanent link">&para;</a></h1>
+<p>When a scale-set worker is removed before its container ever ran — the reaper's <code>pendingPodDeadline</code> delete, or an external delete of a <code>Pending</code> worker — abandoned-run recovery (Q766, <code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>) force-cancels the run named by the pod's <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code>.
+A worker that never ran has no <code>JobStarted</code>, so those are the identity of the job the pod was created for.
+GitHub gives a scale-set job to whichever of the set's runners asks first, so that job can be running on another worker when this one is abandoned.
+Recovery then force-cancels a run with a live job, and the job that actually lost a runner, if any, is a different one that nothing names.</p>
+<p>Eviction recovery (Q417) has the same keying on a worker that never started a job: evicted, preempted or drained before its runner took one, it re-runs the run the pod was created for.
+Measured with a throwaway internal test on the Q1152 branch: one <code>mintedWorker</code> for job-a in run 111, no start recorded, evicted in place, then <code>RecoverEvictedScaleSetWorkers</code> issued one re-run, of run 111.
+That job is queued or running elsewhere, so the re-run is asked of a run that lost nothing; what GitHub does with it while that run is in progress is unmeasured.
+Q1152 left both paths as they were, because neither has a <code>JobStarted</code> to read.</p>
+<p>This is the same keying Q1152 corrected for a worker that started a job, on the two recovery paths whose pod has none to read instead.
+Found from source while working Q1152; not observed on a cluster, and the rate is unmeasured.
+It needs a worker stuck <code>Pending</code> past its deadline while another runner of the same set took that worker's job, so it shows on a set whose workers schedule unevenly (a node pool scaling up while others are warm).</p>
+<p><strong>A likely fix</strong>: before force-cancelling, look for a live worker whose <code>actions-gateway.com/started-job-id</code> is the abandoned pod's job (the pod name is <code>scaleSetPodName(set, jobID)</code>, so the job ID needs recording on the pod or matching by name).
+Where one exists the job is running and nothing is cancelled or re-run; on the eviction path, an idle live worker that could still take the job means the same.
+Which job, if any, is stranded instead is the open part: it is one assigned job that never sees a <code>JobStarted</code>, and the listener's in-flight set is the only record that could name it.</p>
+<p><strong>Reach.</strong> Any scale-set tenant whose worker is abandoned while its job runs elsewhere: a live run is cancelled and re-run, costing the run's progress and one slot of its retry budget.
+On the eviction path a re-run is requested for a run that lost nothing, and its cost is unmeasured.</p>
 
 
 

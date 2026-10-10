@@ -4569,8 +4569,9 @@ A pod that was just reaped in the same reconcile cycle appears in <code>PENDINGJ
 </tbody>
 </table>
 <p>On the scale-set tier these are more than diagnostics: <code>run-id</code> and <code>repository</code> are the <strong>only</strong> record of which workflow run a worker was serving, because that tier provisions fire-and-forget with no in-process job state.
+GitHub gives a scale-set job to whichever of the set's runners asks first, so the AGC rewrites <code>run-id</code>, <code>repository</code>, and <code>job-name</code> when the pod's runner starts a job: before that they name the job the pod was created for, after it the job the runner is running (Q1152).
 Eviction recovery reads them back off the pod to name the run to re-run (Q417), so a worker missing them cannot be recovered automatically — that case is counted by <code>actions_gateway_eviction_recovery_identity_unknown_total</code>.
-Do not remove or overwrite them.</p>
+Do not remove or overwrite them by hand.</p>
 <p>Scale-set worker pods additionally carry:</p>
 <table>
 <thead>
@@ -4599,7 +4600,7 @@ Do not remove or overwrite them.</p>
 <tr>
 <td><code>actions-gateway.com/started-job-id</code> (annotation)</td>
 <td><code>8676398a-5763-…</code></td>
-<td>The job GitHub reported this pod's runner starting, which need not be the job the pod was created for. Keeps a completion that names no runner off a busy worker, and lifts a deadline set while the runner was idle (Q1151)</td>
+<td>The job GitHub reported this pod's runner starting, which need not be the job the pod was created for. Keeps a completion that names no runner off a busy worker, lifts a deadline set while the runner was idle (Q1151), and is how start-up recovery finds a job's worker (Q1152)</td>
 </tr>
 <tr>
 <td><code>actions-gateway.com/eviction-handled-at</code> (annotation)</td>
