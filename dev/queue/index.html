@@ -2702,6 +2702,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1176/">Q1176</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check fails when Playwright's browser target crashes</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The <code>render-overflow</code> job failed in run 38081758922 (job 114300061125, head <code>07befb885</code>, 2026-10-10) and passed when that job was re-run …</td>
+</tr>
+<tr>
 <td><a href="Q1164/">Q1164</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth_test.go">Parallel githubapp tests break each other through http.DefaultTransport</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2713,9 +2721,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1165/">Q1165</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check times out loading a page from its own local server</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Sighted once, on the <code>push main</code> …</td>
+<td><strong>Event:</strong> the <code>render-overflow</code> job fails on <code>main</code> after three attempts on one page, or prints the checker's `failed (attempt N of 3: …) …</td>
 </tr>
 <tr>
 <td><a href="Q1144/">Q1144</a></td>
@@ -3988,6 +3996,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> the release gate's wall clock becomes the thing that delays a release, or a fourth e2e leg is proposed.</td>
+</tr>
+<tr>
+<td><a href="Q1168/">Q1168</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check cannot load a Mermaid page while unpkg.com stalls</a></td>
+<td><code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Separate from <a href="Q1165/">Q1165</a>: that row's page made no load-blocking off-host request, and this one is a page that does.</td>
 </tr>
 <tr>
 <td><a href="Q1170/">Q1170</a></td>

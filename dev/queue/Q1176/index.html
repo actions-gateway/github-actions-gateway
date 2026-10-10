@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1165/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1176/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>render-overflow-check times out loading a page from its own local server - GitHub Actions Gateway</title>
+        <title>render-overflow-check fails when Playwright's browser target crashes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#render-overflow-check-times-out-loading-a-page-from-its-own-local-server" class="md-skip">
+        <a href="#render-overflow-check-fails-when-playwrights-browser-target-crashes" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              render-overflow-check times out loading a page from its own local server
+              render-overflow-check fails when Playwright's browser target crashes
             
           </span>
         </div>
@@ -2597,23 +2597,22 @@
   
 
 
-<h1 id="render-overflow-check-times-out-loading-a-page-from-its-own-local-server">render-overflow-check times out loading a page from its own local server<a class="headerlink" href="#render-overflow-check-times-out-loading-a-page-from-its-own-local-server" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <code>render-overflow</code> job fails on <code>main</code> after three attempts on one page, or prints the checker's <code>failed (attempt N of 3: …), retrying on a fresh page</code> warning on most runs. → top of Queue, escalated.</p>
-<p>Sighted once on <code>main</code>, on the <code>push main</code> run of <code>1ced9359b</code> (#2047, run 37403964143, 2026-10-06), which left <code>main</code>'s tip red on <code>doc-links</code>.
-The merge-group run of the same tree passed six minutes earlier.
-Playwright's navigation to <code>http://127.0.0.1:35949/operations/velero-backup-restore/</code> timed out waiting for <code>load</code> while measuring the <code>site</code> scope, and the <code>site-dev</code> scope then measured 424 pages with no finding, so nothing about the page's layout failed.</p>
-<p><strong>Not an off-host subresource.</strong> Measured 2026-10-09 against a local <code>make docs-build</code>, with every off-host request in the checker's browser context routed to a handler that never answers: that page still reached <code>load</code> in 0.4 seconds.
-Its only off-host requests are the two <code>api.github.com</code> repository-stats XHRs, which do not delay <code>load</code>, and its favicon links to <code>actions-gateway.com</code> were never requested.
-So blocking off-host traffic would not have prevented this sighting, and the cause sits on the runner side, unidentified.
-The same probe found one page that <em>does</em> wait on an off-host host, which is <a href="../Q1168/">Q1168</a>'s, not this row's.</p>
-<p><strong>Retrying on the same page did not recover.</strong> The first mitigation retried <code>page.goto</code> timeouts on the one page the checker reuses for every path.
-In merge-group run 38083333704 (2026-10-10) it timed out twice on <code>/plan/q710-overlong-paragraphs/</code>, about halfway through the <code>site-dev</code> sweep, and the third attempt failed <code>net::ERR_ABORTED</code>, which that retry did not catch.
-That page is ordinary: 65 KB, 141st largest of 431.</p>
-<p><strong>Not renderer growth across the sweep, on a Mac.</strong> Measured 2026-10-10 over a local <code>site-dev</code> sweep using Chromium's own counters: the shared page's renderer sits at about 4.2 GB RSS throughout, and recycling the page every 25 paths still reaches about 3.5 GB within 24 paths, then holds flat.
-So memory does not accumulate across the sweep, and recycling pages on a schedule would not cap it.
-The runner's memory during a failure has not been read.</p>
-<p>Mitigation: the checker retries loading and measuring a path up to three times at Playwright's 30-second default, on a fresh page each time and for any Playwright error, rather than raising the timeout.
-Each retry prints a <code>::warning::</code> annotation, so a page that keeps failing stays visible instead of silently slowing the job.</p>
+<h1 id="render-overflow-check-fails-when-playwrights-browser-target-crashes">render-overflow-check fails when Playwright's browser target crashes<a class="headerlink" href="#render-overflow-check-fails-when-playwrights-browser-target-crashes" title="Permanent link">&para;</a></h1>
+<p>The <code>render-overflow</code> job failed in run 38081758922 (job 114300061125, head <code>07befb885</code>, 2026-10-10) and passed when that job was re-run with no code change.
+It measured <code>site</code> at widths 320 and 1440 clean (63 pages, 126 measurements, 0 findings), began on <code>site-dev</code>, and about three minutes later raised from <code>measure</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>playwright._impl._errors.Error: Page.set_viewport_size: Target crashed
+</code></pre></div>
+<p>So no page produced a finding; the browser tab died under the checker.
+That head changed only Go and a few doc paragraphs, none of them layout.</p>
+<p>This is a different symptom from Q1165, a navigation timeout, and the retry proposed for Q1165 does not reach it: as drafted it catches Playwright's <code>TimeoutError</code> from <code>page.goto</code> only.
+The cause of the crash is unmeasured.
+A crashed Chromium renderer on a hosted runner is usually memory pressure, and <code>site-dev</code> publishes the backlog, which is the largest scope the checker loads; that is a hypothesis, not a reading.
+<code>measure()</code> also opens one page and reuses it for every URL in a scope (<code>scripts/docs/check-render-overflow.py</code>, the comment above <code>ctx.new_page()</code>), so in <code>site-dev</code> one renderer lives through every navigation; a renderer that grows with each page it has loaded would crash late in the largest scope, which fits the reading but is also unmeasured.</p>
+<p><strong>A likely fix</strong>: when a measurement raises <code>Target crashed</code>, open a fresh page (or browser context) and retry that path a bounded number of times, reporting a crash that persists as a failure that names the path.
+If the renderer's growth is the cause, recycling the page every N paths would prevent the crash rather than recover from it, at the cost of the speed the shared page was chosen for.
+First check the failed run's runner for memory, and whether one path crashes repeatedly, since a page that reliably kills the renderer is a finding rather than a flake.</p>
+<p><strong>Reach.</strong> Any run of the <code>render-overflow</code> job: a red that a re-run clears.
+One occurrence observed; the rate is unmeasured.</p>
 
 
 

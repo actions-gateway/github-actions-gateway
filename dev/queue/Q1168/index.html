@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1165/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1168/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>render-overflow-check times out loading a page from its own local server - GitHub Actions Gateway</title>
+        <title>render-overflow-check cannot load a Mermaid page while unpkg.com stalls - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#render-overflow-check-times-out-loading-a-page-from-its-own-local-server" class="md-skip">
+        <a href="#render-overflow-check-cannot-load-a-mermaid-page-while-unpkgcom-stalls" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              render-overflow-check times out loading a page from its own local server
+              render-overflow-check cannot load a Mermaid page while unpkg.com stalls
             
           </span>
         </div>
@@ -2597,23 +2597,16 @@
   
 
 
-<h1 id="render-overflow-check-times-out-loading-a-page-from-its-own-local-server">render-overflow-check times out loading a page from its own local server<a class="headerlink" href="#render-overflow-check-times-out-loading-a-page-from-its-own-local-server" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> the <code>render-overflow</code> job fails on <code>main</code> after three attempts on one page, or prints the checker's <code>failed (attempt N of 3: …), retrying on a fresh page</code> warning on most runs. → top of Queue, escalated.</p>
-<p>Sighted once on <code>main</code>, on the <code>push main</code> run of <code>1ced9359b</code> (#2047, run 37403964143, 2026-10-06), which left <code>main</code>'s tip red on <code>doc-links</code>.
-The merge-group run of the same tree passed six minutes earlier.
-Playwright's navigation to <code>http://127.0.0.1:35949/operations/velero-backup-restore/</code> timed out waiting for <code>load</code> while measuring the <code>site</code> scope, and the <code>site-dev</code> scope then measured 424 pages with no finding, so nothing about the page's layout failed.</p>
-<p><strong>Not an off-host subresource.</strong> Measured 2026-10-09 against a local <code>make docs-build</code>, with every off-host request in the checker's browser context routed to a handler that never answers: that page still reached <code>load</code> in 0.4 seconds.
-Its only off-host requests are the two <code>api.github.com</code> repository-stats XHRs, which do not delay <code>load</code>, and its favicon links to <code>actions-gateway.com</code> were never requested.
-So blocking off-host traffic would not have prevented this sighting, and the cause sits on the runner side, unidentified.
-The same probe found one page that <em>does</em> wait on an off-host host, which is <a href="../Q1168/">Q1168</a>'s, not this row's.</p>
-<p><strong>Retrying on the same page did not recover.</strong> The first mitigation retried <code>page.goto</code> timeouts on the one page the checker reuses for every path.
-In merge-group run 38083333704 (2026-10-10) it timed out twice on <code>/plan/q710-overlong-paragraphs/</code>, about halfway through the <code>site-dev</code> sweep, and the third attempt failed <code>net::ERR_ABORTED</code>, which that retry did not catch.
-That page is ordinary: 65 KB, 141st largest of 431.</p>
-<p><strong>Not renderer growth across the sweep, on a Mac.</strong> Measured 2026-10-10 over a local <code>site-dev</code> sweep using Chromium's own counters: the shared page's renderer sits at about 4.2 GB RSS throughout, and recycling the page every 25 paths still reaches about 3.5 GB within 24 paths, then holds flat.
-So memory does not accumulate across the sweep, and recycling pages on a schedule would not cap it.
-The runner's memory during a failure has not been read.</p>
-<p>Mitigation: the checker retries loading and measuring a path up to three times at Playwright's 30-second default, on a fresh page each time and for any Playwright error, rather than raising the timeout.
-Each retry prints a <code>::warning::</code> annotation, so a page that keeps failing stays visible instead of silently slowing the job.</p>
+<h1 id="render-overflow-check-cannot-load-a-mermaid-page-while-unpkgcom-stalls">render-overflow-check cannot load a Mermaid page while unpkg.com stalls<a class="headerlink" href="#render-overflow-check-cannot-load-a-mermaid-page-while-unpkgcom-stalls" title="Permanent link">&para;</a></h1>
+<p>Separate from <a href="../Q1165/">Q1165</a>: that row's page made no load-blocking off-host request, and this one is a page that does.
+A navigation retry cannot close this one, because every attempt waits on the same stalled host.</p>
+<p>Measured 2026-10-09 against a local <code>make docs-build</code>, by routing every off-host request in the checker's browser context to a handler that never answers: <code>/design/04-operational-flows/</code>, the one page carrying a <code>class="mermaid"</code> diagram in each scope, then timed out waiting for <code>load</code>.
+The request it hung on was <code>https://unpkg.com/mermaid@11/dist/mermaid.min.js</code>, a script Material's own bundle injects for the diagram; an unhung run then also requested <code>mermaid@11.17.2</code>, which reads as unpkg resolving the floating major (not checked).
+<code>404.html</code> also hangs, on <code>https://actions-gateway.com/assets/wormhole-animation.webp</code>, but the checker only discovers <code>index.html</code> pages, so it is never navigated.
+Every other page's off-host traffic is the two <code>api.github.com</code> repository-stats XHRs, which do not delay <code>load</code>.</p>
+<p>So the gate's verdict on that page depends on unpkg.com answering within 30 seconds, three times over.
+Blocking off-host requests in the browser context would remove the dependency, but it also changes what gets measured: the diagram would stay as unrendered source text, and its width is not the rendered SVG's.
+Self-hosting Mermaid would remove it for the gate and for readers alike, since the published site loads a floating <code>mermaid@11</code> from a third-party CDN today; that is a site change, and it needs its own call.</p>
 
 
 
