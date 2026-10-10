@@ -2702,6 +2702,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1173/">Q1173</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged-test.sh">check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Observed 2026-10-09 16:40 PDT in a …</td>
+</tr>
+<tr>
 <td><a href="Q1176/">Q1176</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check fails when Playwright's browser target crashes</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3836,14 +3844,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> <code>spec.capacityGate.mode</code> gains a value that yields a negative placeability verdict without a scale-up: the <code>Probe</code> mode sketched …</td>
-</tr>
-<tr>
-<td><a href="Q1093/">Q1093</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">Signalling the perl lock launcher orphans its child and frees the lock</a></td>
-<td><code>debt</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>serialize_heavy_build</code> re-execs the calling script under perl, which takes an advisory <code>flock</code> and then runs the real work as a <code>system</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1050/">Q1050</a></td>

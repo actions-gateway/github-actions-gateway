@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1093/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1173/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Signalling the perl lock launcher orphans its child and frees the lock - GitHub Actions Gateway</title>
+        <title>check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#signalling-the-perl-lock-launcher-orphans-its-child-and-frees-the-lock" class="md-skip">
+        <a href="#check-artifact-unchanged-test-pathfilters-killed-by-sigterm-mid-gate" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Signalling the perl lock launcher orphans its child and frees the lock
+              check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate
             
           </span>
         </div>
@@ -2597,26 +2597,24 @@
   
 
 
-<h1 id="signalling-the-perl-lock-launcher-orphans-its-child-and-frees-the-lock">Signalling the perl lock launcher orphans its child and frees the lock<a class="headerlink" href="#signalling-the-perl-lock-launcher-orphans-its-child-and-frees-the-lock" title="Permanent link">&para;</a></h1>
-<p><code>serialize_heavy_build</code> re-execs the calling script under perl, which takes an advisory <code>flock</code> and then runs the real work as a <code>system</code> child.
-The lock fd lives in perl; the work lives in the bash child.
-Signal perl alone and the kernel drops the lock while the child keeps running, reparented to init and still inside the critical section, so the next contender acquires and enters beside it.
-That is the exact state the lock exists to prevent, reached through it rather than around it.</p>
-<p><strong>Measured 2026-09-09</strong>, on a verbatim reduction of the same pattern in <code>deploy/monitoring/preview/render.sh</code> (Q1072, which copied the mechanism from here).
-A's child (pid 19380) entered its 20s section at <code>t=1789026381</code> and was still alive after <code>kill &lt;launcher&gt;</code>; B acquired and entered at <code>t=1789026386</code>.
-Two concurrent entries under one lock.</p>
-<p><strong>Every reachable path is safe today, which is what makes this debt rather than a defect in flight.</strong> Group signals kill the child, verified on both <code>SIGINT</code> (Ctrl-C) and <code>SIGTERM</code> (<code>kill -TERM -- -PID</code>, which is how <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>record-launch.sh</code></a> stops a recorded run when <code>pgid == pid</code>), and <code>timeout</code> takes the child too.
-The one path that orphans today is a hand-typed <code>kill &lt;pid&gt;</code> against the launcher pid read off <code>ps</code>, which is a plausible thing for a session to do to a wedged gate.</p>
-<p><code>record-launch.sh</code> is safe by construction rather than by luck, and it carries a fallback worth knowing about.
-<code>launch()</code> sets <code>set -m</code> so the run is its own process group, and the stop command is chosen on a measured <code>pgid == RUN_PID</code> rather than assumed; when that holds it group-kills.
-The <code>else</code> arm records a single-pid <code>kill -TERM ${RUN_PID}</code>, which is exactly the orphaning shape, and it is reached only if job control did not give the run its own group.
-So a fix here should keep that arm safe too, rather than relying on the group arm always being the one taken.</p>
-<p><strong>The repair is unmeasured and the row does not prescribe one.</strong> The shapes worth weighing: have perl trap <code>INT</code>/<code>TERM</code> and relay to the child before exiting; or <code>setpgid</code> the child and signal the group; or hold the lock in the child instead of the parent, which changes what "released on death" means.
-Whichever is picked, assert the inverse as well: the child must still die on the paths that already work, or the fix trades a rare orphan for a routine one.</p>
-<p><strong>Do not fix this in <code>render.sh</code> alone.</strong> Both copies share the mechanism, and diverging them leaves the harness and the heavy-build semaphore reasoning differently about the same failure.
-The change belongs in the shared helper, with <code>render.sh</code> following.</p>
-<p><strong>Notes:</strong> found reviewing <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1887">#1887</a>.
-It predates that PR and is inherited, not introduced: a lock with this hole is still strictly better than the unserialized cluster Q1072 fixed.</p>
+<h1 id="check-artifact-unchanged-test-pathfilters-killed-by-sigterm-mid-gate">check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate<a class="headerlink" href="#check-artifact-unchanged-test-pathfilters-killed-by-sigterm-mid-gate" title="Permanent link">&para;</a></h1>
+<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p>Observed 2026-10-09 16:40 PDT in a local <code>make check</code> on a branch that touches nothing under <code>scripts/release/</code> or <code>devtools/</code>.
+One case failed, the rest of the suite passed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>FAIL --lane e2e-test.yml: an AGC change is inside it (want exit 1, got 2)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>check-artifact-unchanged: pathfilters match e2e-test.yml at bfef9dce7a9446a955b4b7fe995a2dc149e40b37 failed (exit 143)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>13 passed, 1 failed
+</code></pre></div>
+<p>Running <code>scripts/release/check-artifact-unchanged-test.sh</code> alone straight afterwards, with no code change, passed <code>14 passed, 0 failed</code>.
+<code>uptime</code> then read <code>load averages: 20.75 33.96 35.37</code> on the 18-core host.</p>
+<p><strong>Mechanism unverified.</strong> Exit 143 is a SIGTERM to <code>pathfilters</code>, and nothing in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">check-artifact-unchanged.sh</a> or its test sets a timeout, so the signal came from outside the suite.
+It is not <a href="../Q1144/">Q1144</a>'s shared-binary hazard: this script builds <code>pathfilters</code> into its own <code>mktemp -d</code> directory, not <code>.build/</code>.
+It is not <a href="../Q1106/">Q1106</a>'s probe either: the read that failed is <code>git show</code> of a committed workflow into that same temp directory.
+The same <code>make check</code> ran <code>scripts/lib/serialize-heavy-build-test.sh</code> concurrently, which sends TERM, HUP and INT, but only to pids it launched and the processes below them, so a stray hit would need pid reuse within milliseconds.
+That is unmeasured rather than ruled out.
+A second sighting, 2026-10-10 11:47 PDT, in a <code>make check</code> on the same branch rebased onto <code>63824ad79</code>: <code>[script-docs-check] make[1]: *** [script-docs-check] Terminated: 15</code>, with <code>uptime</code> reading <code>load averages: 61.88 121.99 91.54</code>.
+So the target is not one suite: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">run-parallel.sh</a>'s header already says it never kills a child and that a command ended by a signal under host contention is SIGTERM, which names the symptom and not the sender.
+A first step is to record which process sent the signal on a recurrence, for example by running the suite under <code>make check</code> in a loop with the match wrapped to log its parent and process group on exit 143.</p>
 
 
 
