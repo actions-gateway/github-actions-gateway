@@ -4595,7 +4595,12 @@ Do not remove or overwrite them by hand.</p>
 <tr>
 <td><code>actions-gateway.com/job-completed-at</code> (annotation)</td>
 <td><code>2026-07-26T12:00:00Z</code></td>
-<td>When GitHub reported terminal the job this pod's runner held, or, for a job no runner started, the job the pod was created for. Gives a still-Running worker a reap deadline (Q420)</td>
+<td>When GitHub reported terminal the job this pod's runner held, or, for a job no runner started, the job that left this idle worker with nothing to run. Gives a still-Running worker a reap deadline (Q420)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/surplus-for-job</code> (annotation)</td>
+<td><code>8676398a-5763-…</code></td>
+<td>Beside <code>job-completed-at</code> on an idle worker reclaimed because that job ended before any runner started it, when the worker created for the job was busy with another. Makes the reclaim once per job; a start on the worker removes both and moves them to another idle worker (Q1153)</td>
 </tr>
 <tr>
 <td><code>actions-gateway.com/started-job-id</code> (annotation)</td>

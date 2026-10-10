@@ -2950,14 +2950,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
 </tr>
 <tr>
-<td><a href="Q1153/">Q1153</a></td>
-<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">Idle scale-set worker left by a cancelled job waits out lifetime cap</a></td>
-<td><code>bug</code> <code>1.10-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>When a scale-set job ends before any runner starts it, one of the set's workers has nothing left to run.</td>
-</tr>
-<tr>
 <td><a href="Q1154/">Q1154</a></td>
 <td>Scale-set JIT Secret outlives a worker reaped before its job completes</td>
 <td><code>bug</code> <code>security</code> <code>1.10-gate</code></td>

@@ -6563,7 +6563,11 @@ Treat a <em>sustained</em> or <em>bursty</em> rate as the signal:</p>
 <p><strong>Symptoms.</strong> A <code>Warning</code> Event with reason <code>WorkerPodOrphanedRunning</code> appears on the <code>RunnerSet</code> (<code>kubectl describe runnerset &lt;name&gt; -n &lt;namespace&gt;</code>) and <code>actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}</code> increments.
 Before the reap fires, the shape is a set that looks busy and is not: <code>status.activeJobs</code> sits at some non-zero number, worker pods are <code>Running</code>, but no job is executing — <code>kubectl logs</code> on the pod ends at <code>Listening for Jobs</code>, and GitHub shows nothing in progress for the set.</p>
 <p><strong>What happened.</strong> The pod was still <code>Running</code> five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
-For a job that ended before any runner started it, the pod the AGC created for that job is the one on the clock, unless its runner has since started a different job.
+For a job that ended before any runner started it, the set is left with one runner more than it has jobs, and one idle worker goes on the clock: the pod the AGC created for that job, or, when that pod's runner has started a different job, the oldest <code>Running</code> worker whose runner has started nothing (Q1153).
+Such a pod carries <code>actions-gateway.com/surplus-for-job</code> naming the job that freed it.
+If its runner is given a job after all, the stamp comes off it and moves to another idle worker when the AGC records that job's start.
+A start the AGC fails to record is redelivered until it is recorded.
+A start that reaches the AGC more than five minutes after the stamp, because the listener's session was down that long, comes too late, and the worker can be reaped mid-job.
 GitHub gives a ScaleSet job to whichever of the set's runners asks first, so a worker often runs a job other than the one it was created for; the AGC follows the runner GitHub names, not the job ID in the pod name.
 Three causes produce that:</p>
 <ul>
@@ -6591,7 +6595,7 @@ Upgrade; nothing on those releases prevents it.</p>
 <a id="__codelineno-76-4" name="__codelineno-76-4" href="#__codelineno-76-4"></a><span class="c1"># Which Running workers already have a completion stamp (they are on the clock),</span>
 <a id="__codelineno-76-5" name="__codelineno-76-5" href="#__codelineno-76-5"></a><span class="c1"># and which job each one's runner actually started</span>
 <a id="__codelineno-76-6" name="__codelineno-76-6" href="#__codelineno-76-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;set&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-76-7" name="__codelineno-76-7" href="#__codelineno-76-7"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id'</span>
+<a id="__codelineno-76-7" name="__codelineno-76-7" href="#__codelineno-76-7"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id,SURPLUS-FOR:.metadata.annotations.actions-gateway\.com/surplus-for-job'</span>
 <a id="__codelineno-76-8" name="__codelineno-76-8" href="#__codelineno-76-8"></a>
 <a id="__codelineno-76-9" name="__codelineno-76-9" href="#__codelineno-76-9"></a><span class="c1"># Rate of orphan reaps per set</span>
 <a id="__codelineno-76-10" name="__codelineno-76-10" href="#__codelineno-76-10"></a><span class="c1"># PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])</span>

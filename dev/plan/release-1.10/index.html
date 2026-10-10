@@ -2710,10 +2710,10 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>✅ landed: a <code>JobStarted</code> replaces the worker's run identity with the started job's, and start-up recovery finds a job's worker by <code>started-job-id</code>. Unit-tested on crossed workers; not reproduced on a cluster</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1153/">Q1153</a></td>
+<td>Q1153</td>
 <td>Reclaim the idle scale-set worker a cancelled job leaves behind</td>
 <td><code>1.10-gate</code></td>
-<td>🔲 ready</td>
+<td>✅ landed: a runnerless completion whose own worker is busy stamps the oldest idle <code>Running</code> worker, once per job, and a start moves the stamp on. Unit-tested on crossed workers; not reproduced on a cluster</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1154/">Q1154</a></td>

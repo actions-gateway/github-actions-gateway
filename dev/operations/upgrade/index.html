@@ -1724,6 +1724,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3499,6 +3510,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4218,6 +4240,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
 <li><a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started</a></li>
+<li><a href="#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed">Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed</a></li>
 <li><a href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2</a></li>
 <li><a href="#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2">Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2</a></li>
 <li><a href="#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission">A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission</a></li>
@@ -4359,6 +4382,13 @@ Recovery used to re-run the run the worker was created for, which left the run t
 Recovery after an AGC restart finds a job's worker by <code>actions-gateway.com/started-job-id</code> rather than by pod name, and the <code>OrphanedWorkerRecovered</code> Event now names the job rather than a pod.
 The recovery-claim ConfigMap's entries gain a <code>jobID</code> field; entries written by an older AGC lack it and are read as before.</p>
 <p>No action is required at upgrade time.</p>
+<h3 id="non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed">Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed<a class="headerlink" href="#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed" title="Permanent link">&para;</a></h3>
+<p>When a scale-set job ends before any runner starts it, typically a run cancelled by a <code>cancel-in-progress</code> concurrency group, one of the set's workers has nothing left to run.
+Earlier releases reclaimed only the worker created for that job, and when its runner had already taken another job, the idle worker that was left held a concurrency slot and a node until <code>maxWorkerLifetime</code> (12 hours by default).
+The AGC now gives the oldest idle <code>Running</code> worker the five-minute reap deadline instead, marked <code>actions-gateway.com/surplus-for-job</code>, and moves that deadline to another idle worker if the picked one is given a job (Q1153).
+A worker whose runner has started a job is never picked.</p>
+<p>Expect more <code>WorkerPodOrphanedRunning</code> Events and <code>actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}</code> on busy sets that cancel queued jobs: each is a worker that used to sit idle until the lifetime cap.
+No action is required at upgrade time.</p>
 <h3 id="non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">Non-breaking: <code>v2</code> is served beside <code>v2beta1</code>, and an unpinned read now returns <code>v2</code><a class="headerlink" href="#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone with the v2 CRDs installed.</p>
 <p><strong>What changed.</strong> Every <code>actions-gateway.com</code> kind is now also served at <code>v2</code>, the General Availability (GA) version: the five kinds in <code>actions-gateway-crds-v2</code>, and <code>PriorityClassAllowlist</code> in the main chart.
