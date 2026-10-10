@@ -2705,9 +2705,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1164/">Q1164</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth_test.go">Parallel githubapp tests break each other through http.DefaultTransport</a></td>
 <td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Sighted once, on the <code>push main</code> …</td>
+<td><strong>Event:</strong> any test in <code>githubapp</code> or <code>cmd/probe</code> (<code>TestToken_*</code>, <code>TestDeregisterRunner_Statuses</code>, <code>TestAbandonedProbe_*</code> above all) fails …</td>
 </tr>
 <tr>
 <td><a href="Q1165/">Q1165</a></td>

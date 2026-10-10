@@ -2598,16 +2598,30 @@
 
 
 <h1 id="parallel-githubapp-tests-break-each-other-through-httpdefaulttransport">Parallel githubapp tests break each other through http.DefaultTransport<a class="headerlink" href="#parallel-githubapp-tests-break-each-other-through-httpdefaulttransport" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Sighted once, on the <code>push main</code> run of <code>35d1ccb4a</code> (#1999, run 36649692418, 2026-09-30), in <code>unit-test</code>'s <code>-race</code> step.
+<p><strong>Event:</strong> any test in <code>githubapp</code> or <code>cmd/probe</code> (<code>TestToken_*</code>, <code>TestDeregisterRunner_Statuses</code>, <code>TestAbandonedProbe_*</code> above all) fails on <code>main</code> with <code>http: CloseIdleConnections called</code> in the error.</p>
+<p>Sighted once, on the <code>push main</code> run of <code>35d1ccb4a</code> (#1999, run 36649692418, 2026-09-30), in <code>unit-test</code>'s <code>-race</code> step.
 The merge-group run of the same tree had passed 20 minutes earlier.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>--- FAIL: TestToken_NonOKResponse (0.00s)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Error: "githubapp: POST access_tokens: Post \"https://api.github.com/app/installations/1/access_tokens\": net/http: HTTP/1.x transport connection broken: http: CloseIdleConnections called" does not contain "401"
 </code></pre></div>
-<p><strong>The mechanism reads off source; it has not been reproduced.</strong> <code>redirectTransport.RoundTrip</code> sends every request through the process-wide transport, at <code>githubapp/auth_test.go:200:return http.DefaultTransport.RoundTrip(cloned)</code>.
-Ten tests in that file call <code>t.Parallel()</code> and each one's <code>defer srv.Close()</code> runs <code>httptest.Server.Close</code>, which calls <code>CloseIdleConnections()</code> on <code>http.DefaultTransport</code> (Go 1.27.1, <code>net/http/httptest/server.go</code> line 514).
-One test closing its server can therefore break a connection a sibling is still using, and <code>errCloseIdleConns</code> is the error text in the failure.</p>
-<p>The likely fix is a transport per client: <code>http.DefaultTransport.(*http.Transport).Clone()</code> inside <code>testClientRedirectingTo</code>.
-Sweep the idiom while you are there, since any other test helper routing through <code>http.DefaultTransport</code> beside a parallel <code>httptest.Server</code> has the same race; say what the sweep found, including nothing.</p>
+<p><strong>Mechanism, read from the Go 1.27.1 source.</strong> Every <code>httptest.Server.Close</code> calls <code>CloseIdleConnections()</code> on <code>http.DefaultTransport</code> (<code>net/http/httptest/server.go</code> line 514).
+For a response with no body, the transport's read loop parks the connection as idle <em>before</em> handing the response to the caller (<code>net/http/transport.go</code> lines 2532-2548).
+If a sibling's <code>Close</code> lands in that gap, the caller sees the connection close, finds no response waiting yet (line 3086), and returns <code>errCloseIdleConns</code>.
+So only header-only responses are exposed: <code>NonOKResponse</code>'s bare 401 was, and the bodied 201s in the same file were not.</p>
+<p><strong>Reproduction.</strong> The real tests did not go red under stress on the unchanged tree: 0 failures in 500 and in 1,500 iterations under <code>-race</code> (<code>-cpu 8 -parallel 32</code> for the second).
+An in-package hammer calling <code>CloseIdleConnections</code> in a loop found nothing either, because the transport's <code>closeIdle</code> flag then stops connections being parked at all, and a noisier sibling exhausted local ports before it hit the window.
+A standalone amplifier with <code>NonOKResponse</code>'s shape went red with the CI text: a header-only 401 POST through <code>DefaultTransport</code> from 8 goroutines while another goroutine calls <code>CloseIdleConnections</code>, under <code>-race</code>, failed 422 of 16,000 requests.
+The same amplifier with a cloned transport passed 5 runs of 16,000 with no failure.</p>
+<p><strong>Fix.</strong> <code>testClientRedirectingTo</code> clones the transport per client, and <code>TestDeregisterRunner_Statuses</code>, whose handlers also answer header-only, uses <code>srv.Client()</code> instead of <code>http.DefaultClient</code>.
+<code>brokertest.Server.HTTPClient</code> returns the server's own client rather than <code>http.DefaultClient</code>, as <code>scalesettest.Server.HTTPClient</code> already did; <code>cmd/probe</code>'s parallel <code>TestAbandonedProbe_*</code> tests pass it to a REST stub whose DELETE (204), cancel (202), rerun and force-cancel (configurable status) and jitconfig-conflict (409) answers carry no body.</p>
+<p><strong>Idiom sweep</strong>, per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">sweep the idiom</a>.
+<code>git grep -n 'http\.DefaultTransport' -- '*.go' ':!vendor' ':!tools/vendor'</code> names one test helper routing requests through it, the one fixed.
+Implicit uses (<code>http.Get</code>, <code>http.DefaultClient</code>, a bare <code>&amp;http.Client{}</code>) in the 444 non-vendored <code>_test.go</code> files that call both <code>httptest.New</code> and <code>t.Parallel()</code> found six more sites.
+One was exposed, <code>TestDeregisterRunner_Statuses</code>, and is fixed.
+The other five sit outside the window because they get bodied responses or send no request: four in <code>cmd/probe/abandoned_test.go</code> (<code>TestDecodeJobRequest_EncryptedBody</code> starts no server) and <code>broker/egress_ip_test.go</code>'s <code>http.Error</code> 405.</p>
+<p>That scan missed a site in two ways, which review caught: it keyed on the file rather than the package, and it never looked through a helper.
+Helpers: <code>git grep -n -E 'return (http\.DefaultClient|http\.DefaultTransport|&amp;http\.Client\{\s*\})'</code> names one, <code>brokertest.Server.HTTPClient</code>, fixed above.
+Package level: every remaining <code>http.DefaultClient</code> use in test code is in a package with no <code>t.Parallel()</code> at all (<code>broker/brokertest</code>, <code>scaleset</code>, <code>test/fakegithub</code>, <code>cmd/gmc/test/e2e</code>), so nothing runs beside it to close a server.</p>
 
 
 
