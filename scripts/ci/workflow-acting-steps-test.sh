@@ -20,9 +20,10 @@
 # rather than report — those that open an issue, push, publish or tag — minus the
 # ones a `pull_request` event already executes. That derivation, and what it
 # excludes, is in docs/development/testing.md § Driving a workflow `run:` body.
-# Two steps qualify today:
+# Three steps qualify today:
 #
 #   release-freeze-watch.yml  `check` + `report`  — opens/comments/closes an issue
+#   security-scan.yml         `scan-report`       — opens/comments/closes an issue
 #   pages.yml                 `mike`              — pushes the gh-pages version tree
 #
 # THE POSITIVE CONTROLS ARE THE LOAD-BEARING HALF. A suite of "must not act"
@@ -44,6 +45,7 @@ EXTRACT="$REPO_ROOT/scripts/ci/workflow-step-body.sh"
 
 FREEZE_WORKFLOW=".github/workflows/release-freeze-watch.yml"
 PAGES_WORKFLOW=".github/workflows/pages.yml"
+SCAN_WORKFLOW=".github/workflows/security-scan.yml"
 
 WORK="$REPO_ROOT/tmp/workflow-acting-steps.$$"
 mkdir -p "$WORK"
@@ -67,8 +69,8 @@ REPORTS="$WORK/reports"
 : >"$REPORTS"
 fails=0
 
-# The 19 cases plus registry-complete. Bump it with the case you add.
-EXPECTED_REPORTS=20
+# The 25 cases plus registry-complete. Bump it with the case you add.
+EXPECTED_REPORTS=26
 
 fail() {
 	printf 'FAIL %-34s %s\n' "$1" "$2" >&2
@@ -107,7 +109,7 @@ refuse() {
 # means this constant is stale and the suite refuses.
 ACTIONS_SHELL=(bash --noprofile --norc -e)
 
-for wf in "$FREEZE_WORKFLOW" "$PAGES_WORKFLOW"; do
+for wf in "$FREEZE_WORKFLOW" "$PAGES_WORKFLOW" "$SCAN_WORKFLOW"; do
 	[[ -f "$wf" ]] || refuse "$wf does not exist, so there are no bodies to drive"
 	if grep -nE '^[[:space:]]*(shell|defaults):' "$wf" >/dev/null; then
 		refuse "$wf now sets shell: or defaults:, so \`${ACTIONS_SHELL[*]}\` may no longer be the shell its steps get — re-derive it from GitHub's defaults before trusting this suite"
@@ -127,11 +129,14 @@ extract() {
 CHECK_BODY="$(extract "$FREEZE_WORKFLOW" check freeze-check)"
 REPORT_BODY="$(extract "$FREEZE_WORKFLOW" report freeze-report)"
 MIKE_BODY="$(extract "$PAGES_WORKFLOW" mike pages-mike)"
+SCAN_BODY="$(extract "$SCAN_WORKFLOW" scan-report scan-report)"
 
 # Each subject must still contain the act the cases assert on. Without this a
 # body rewritten to do nothing would satisfy every negative case in the suite.
 grep -q 'gh issue create' "$REPORT_BODY" ||
 	refuse "the report step no longer runs \`gh issue create\`, so its cases assert about a step that has stopped acting"
+grep -q 'gh issue create' "$SCAN_BODY" ||
+	refuse "the scan-report step no longer runs \`gh issue create\`, so its cases assert about a step that has stopped acting"
 grep -q 'git push origin gh-pages' "$MIKE_BODY" ||
 	refuse "the mike step no longer runs \`git push origin gh-pages\`, so its cases assert about a step that has stopped acting"
 
@@ -578,6 +583,84 @@ else
 fi
 
 # ============================================================================
+# security-scan.yml `scan-report` — the scheduled run's issue
+# ============================================================================
+#
+# The decision under test: only a FAILED gate opens or comments, a successful
+# one closes whatever is open, and a cancelled or timed-out run says nothing
+# about main, so it must not file an issue claiming main is vulnerable.
+
+# run_scan CASE RESULT EXISTING — echoes the sandbox.
+run_scan() {
+	local case="$1" result="$2" existing="$3" body="${4:-$SCAN_BODY}"
+	local dir got
+	dir="$(new_sandbox "$case")"
+	write_gh_stub "$dir"
+	got="$(drive "$dir" "$body" \
+		"GH_TOKEN=stub" "GH_REPO=o/r" "RESULT=$result" "RUN_URL=https://run/1" \
+		"SHA=deadbeef" "GH_STUB_EXISTING=$existing")"
+	expect_rc "$case" 0 "$got" "$dir" || return 0
+	printf '%s\n' "$dir"
+}
+
+dir="$(run_scan scan-clean-no-issue success '')"
+if [[ -n "$dir" ]]; then
+	expect_no_call scan-clean-no-issue "$dir" 'gh issue create' &&
+		expect_no_call scan-clean-no-issue "$dir" 'gh issue comment' &&
+		expect_call scan-clean-no-issue "$dir" 'gh label create security-scan --force' &&
+		pass scan-clean-no-issue 'a clean scan opens nothing'
+fi
+
+dir="$(run_scan scan-resolves success 7)"
+if [[ -n "$dir" ]]; then
+	expect_call scan-resolves "$dir" 'gh issue comment 7 --body Resolved: main scans clean at deadbeef' &&
+		expect_call scan-resolves "$dir" 'gh issue close 7' &&
+		expect_no_call scan-resolves "$dir" 'gh issue create' &&
+		pass scan-resolves 'a clean scan closes the open issue'
+fi
+
+# THE POSITIVE CONTROL: a failed scan with nothing open must open an issue.
+dir="$(run_scan scan-opens-issue failure '')"
+if [[ -n "$dir" ]]; then
+	expect_call scan-opens-issue "$dir" 'gh issue create --label security-scan --title Scheduled security scan of main is failing' &&
+		pass scan-opens-issue 'a failed scan opens an issue'
+fi
+
+dir="$(run_scan scan-still-failing failure 7)"
+if [[ -n "$dir" ]]; then
+	expect_call scan-still-failing "$dir" 'gh issue comment 7 --body Still failing at deadbeef' &&
+		expect_no_call scan-still-failing "$dir" 'gh issue create' &&
+		expect_no_call scan-still-failing "$dir" 'gh issue close' &&
+		pass scan-still-failing 'a repeat failure comments on the open issue'
+fi
+
+dir="$(run_scan scan-cancelled cancelled '')"
+if [[ -n "$dir" ]]; then
+	expect_no_call scan-cancelled "$dir" 'gh issue create' &&
+		expect_no_call scan-cancelled "$dir" 'gh issue comment' &&
+		pass scan-cancelled 'a cancelled run reports nothing'
+fi
+
+# Drop the failure-only guard and require the cancelled case to open an issue,
+# so scan-cancelled is known to be able to fail.
+grep -v 'RESULT}" == "failure" ]] || exit 0' "$SCAN_BODY" >"$WORK/scan-report-no-guard.sh" || true
+if cmp -s "$SCAN_BODY" "$WORK/scan-report-no-guard.sh"; then
+	fail scan-regression-cancelled 'the failure-only guard is gone from the scan-report step, so this control mutates nothing'
+else
+	dir="$(new_sandbox scan-regression-cancelled)"
+	write_gh_stub "$dir"
+	got="$(drive "$dir" "$WORK/scan-report-no-guard.sh" \
+		"GH_TOKEN=stub" "GH_REPO=o/r" "RESULT=cancelled" "RUN_URL=https://run/1" \
+		"SHA=deadbeef" "GH_STUB_EXISTING=")"
+	die_if_killed scan-regression-cancelled "$got"
+	if [[ "$got" == 0 ]] && grep -qF 'gh issue create --label security-scan' "$dir/calls"; then
+		pass scan-regression-cancelled 'without the guard a cancelled run files an issue, so this case can fail'
+	else
+		fail scan-regression-cancelled "the mutated body did not reproduce the defect (rc=$got)"
+	fi
+fi
+
+# ============================================================================
 # Completeness: every workflow that acts is classified
 # ============================================================================
 #
@@ -605,6 +688,7 @@ acting_registry() {
 	cat <<'EOF'
 release-freeze-watch.yml|driven|its check and report steps are the subject above
 pages.yml|driven|its mike step is the subject above
+security-scan.yml|driven|its scan-report step is the subject above
 dependabot-go-sync.yml|pre-merge|pull_request is its only trigger, so every Dependabot PR executes this body before it merges
 e2e-reusable.yml|pre-merge|called by the e2e lanes on merge_group, so the queue runs it on the candidate merge; and its docker push targets the registry the same job stands up
 dependabot-rebase-stale.yml|delegated|the body picks one --dry-run flag and calls scripts/ci/dependabot-rebase-stale.sh, whose decisions are covered by ci/dependabot-rebase-stale-test

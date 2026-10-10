@@ -753,13 +753,14 @@ Eleven workflows carry no `pull_request` trigger at all, measured by parsing eac
 A grep answers ten, because `release-freeze-watch.yml` names `pull_request` only in a comment explaining why it has none.
 That count is not itself the scope: a workflow with a `pull_request` trigger can still gate its acting job off that event, which `pages.yml` does.
 
-Five workflows run an acting command.
-Three are driven:
+Six workflows run an acting command.
+Four are driven:
 
 | Workflow | Step | Acts by | Why a PR never runs it |
 |---|---|---|---|
 | `release-freeze-watch.yml` | `check`, `report` | `gh issue create` / `comment` / `close` | no `pull_request` trigger |
 | `pages.yml` | `mike` | `git push origin gh-pages` | the `publish` job is `if: github.event_name != 'pull_request'` |
+| `security-scan.yml` | `scan-report` | `gh issue create` / `comment` / `close` | the `report` job runs only on `schedule` and `workflow_dispatch` |
 | `publish.yml` | six release-lane steps | `helm push` / `cosign sign` / `gh release create`, `upload`, `edit` | no `pull_request` trigger; it runs on a `v*` tag push |
 
 `publish.yml` is driven by a suite of its own, [`workflow-publish-steps-test.sh`](../../scripts/ci/workflow-publish-steps-test.sh) (Q1056), described [below](#publishyml-has-its-own-suite).
@@ -4165,6 +4166,11 @@ There is no local `make` target; reproduce a run with `docker run --rm -i hadoli
 
 The `security-scan.yml` workflow runs three gates on every PR (and on push to `main`), independent of the unit/integration/e2e suites — two supply-chain scans plus a Kubernetes posture scan.
 All three have local equivalents so you can reproduce a CI verdict before pushing.
+
+It also runs daily against `main` (05:31 UTC, or on demand with `workflow_dispatch`), because govulncheck and trivy read advisory databases that change without a commit.
+A newly published advisory turns `main` red with no merge to trip it, so every PR that runs the scan fails the same way until a standalone fix lands.
+A failing scheduled run opens one issue labelled `security-scan`, comments on it while `main` stays red, and closes it on the first clean run.
+When a PR's scan goes red, check for that issue before debugging the PR: a finding already open there is not the PR's to fix.
 
 **govulncheck** — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs).
 It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path.

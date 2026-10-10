@@ -24,6 +24,13 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+  # An advisory published between merges reddens `main` with no commit to trip
+  # it, so otherwise the first PR to run this workflow is what finds it. The
+  # daily run finds it first and files an issue (the `report` job below).
+  schedule:
+    - cron: '31 5 * * *'
+  # Re-asks on demand, and closes the issue once main scans clean again.
+  workflow_dispatch:
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
 # never cancelled (each is a distinct post-merge gate). Mirrors unit-test.yml.
@@ -35,7 +42,8 @@ jobs:
   # Fine-grained path gate. The coarse paths-ignore above still lets non-code
   # files (e.g. .gitignore, LICENSE) trigger this workflow, so classify the diff
   # and skip the scan jobs when nothing they cover changed. Mirrors
-  # unit-test.yml. On push to main the jobs always run.
+  # unit-test.yml. On push to main the jobs always run, and on a scheduled or
+  # dispatched run the filter is skipped, so every output reads 'true'.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -48,6 +56,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
+        # A scheduled or dispatched run has no diff to classify; it scans everything.
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         # paths-filter resolves the changed-file list through ONE un-retried
         # GitHub API call (@actions/github Octokit carries no retry plugin), so a
         # single transient 5xx fails this job and, with it, the gate. Survive it:
@@ -454,3 +464,47 @@ jobs:
               *) echo "::error::a gating job concluded '${r}'"; exit 1 ;;
             esac
           done
+
+  # A failed scheduled run scrolls out of the Actions list unread, so the
+  # finding is an issue that stays open until a run on main scans clean. One
+  # open issue, found by label; mirrors release-freeze-watch.yml.
+  report:
+    needs: [security-scan-gate]
+    if: ${{ always() && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      issues: write
+    steps:
+      - name: open or close the scan issue
+        id: scan-report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.security-scan-gate.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh label create security-scan --force --color D93F0B \
+            --description "The scheduled security scan of main is failing"
+          existing="$(gh issue list --label security-scan --state open \
+            --json number --jq '.[0].number // empty')"
+          if [[ "${RESULT}" == "success" ]]; then
+            if [[ -n "${existing}" ]]; then
+              gh issue comment "${existing}" --body "Resolved: main scans clean at ${SHA} (${RUN_URL})."
+              gh issue close "${existing}"
+            fi
+            exit 0
+          fi
+          # Cancelled or timed out says nothing about main, so it reports nothing.
+          [[ "${RESULT}" == "failure" ]] || exit 0
+          if [[ -n "${existing}" ]]; then
+            gh issue comment "${existing}" --body "Still failing at ${SHA}: ${RUN_URL}"
+            exit 0
+          fi
+          gh issue create --label security-scan \
+            --title "Scheduled security scan of main is failing" \
+            --body "The scheduled \`security-scan.yml\` run failed on main at ${SHA}: ${RUN_URL}
+
+          Usually a newly published advisory rather than a merge, so every PR that runs the scan goes red until a standalone fix lands. Open that fix PR before chasing the failure on any other PR; see \`docs/development/testing.md\` § Security scanning."
