@@ -127,7 +127,8 @@ print(' '.join(m.discover(Path(sys.argv[2]))))
 
     # A navigation timeout is retried and announced, and one that persists past
     # the last attempt still fails the run rather than skipping the page (Q1165).
-    got="$(python3 -c "
+    # GITHUB_ACTIONS is unset because it moves the retry warning onto stdout.
+    got="$(env -u GITHUB_ACTIONS python3 -c "
 import asyncio, importlib.util, sys
 spec = importlib.util.spec_from_file_location('c', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
