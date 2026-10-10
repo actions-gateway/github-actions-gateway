@@ -66,18 +66,15 @@ Each waits on a real operator need, a measured limit, or a gating release before
 - **An Operator Lifecycle Manager bundle.** <!-- q:Q217 --> [Helm-only](operations/install.md) is the deliberate install stance; an OperatorHub catalog entry waits on OpenShift demand.
 - **A published benchmark and case study.** <!-- q:Q198 --> Real GitHub-at-scale numbers behind the [cost model](design/appendix-f-cost-model.md), which needs a funded scale run rather than a local cluster.
 
-The last three are opt-in additions to the [per-tenant proxy](design/network-architecture.md), shelved together because none has demand recorded against it.
+The last two are opt-in additions to the [per-tenant proxy](design/network-architecture.md), shelved together because none has demand recorded against it.
 A coherent theme is not a release.
 
 - **[Per-tenant proxy rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting)** <!-- q:Q565 --> A token bucket at the proxy, so one looping tenant is slowed before it reaches GitHub's ceiling; today the only feedback is a 429 and Actions Gateway Controller (AGC) backoff.
   Per-pod state, since global limits would need a shared backend.
 
-- **[TLS on the in-cluster proxy hop](design/appendix-g-future-enhancements.md#g4-tls-between-agcworkers-and-the-proxy)** <!-- q:Q566 --> The CONNECT target is cleartext between the AGC or workers and the proxy, readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub.
-  Mount a cert-manager certificate and move to an `https://` proxy URL.
-
 - **[A dedicated proxy pool per runner group](design/appendix-g-future-enhancements.md#g5-per-runnergroup-dedicated-proxy-pool)** <!-- q:Q567 --> One pool per gateway today, so a bandwidth-heavy group can saturate a co-tenant's.
   Give an opted-in group its own Deployment, Service, and autoscaler.
-  Largest of the three; needs a plan doc before code.
+  Larger of the two; needs a plan doc before code.
 
 ## How priorities are set
 
