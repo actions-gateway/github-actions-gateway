@@ -152,7 +152,7 @@ var nonBoundaryFiles = map[string]string{
 	"../controller/integration/q260_late_redelivery_test.go":                 "filters live worker pods with DeletionTimestamp.IsZero(); the subject is delivery dedup",
 	"testdata/gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
 	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerGroup CR is held deleting by its finalizer; an admission-policy subject",
-	"testdata/gmc/internal/controller/integration/suite_integration_test.go": "reconcileCounter skips an EgressProxy CR that is mid-deletion; no worker pods",
+	"testdata/gmc/internal/controller/integration/reconcile_counter_test.go": "reconcileCounter skips an EgressProxy CR that is mid-deletion; no worker pods",
 }
 
 // TestDeletePathInventory_MatchesDeclaredSites fails when the AGC's set of client
