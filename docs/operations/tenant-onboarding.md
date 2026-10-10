@@ -1087,6 +1087,7 @@ Fleet-wide the same fact is the `actions_gateway_egress_audit_unattributed` gaug
 Both read the gateway's spec and its `defaultProxyRef`, so they say the pair is *configured*, not that a log pipeline is running the join.
 Worker egress is judged per set: `kubectl describe runnerset <set>` shows the same condition read off the pool that set's workers use, its own `spec.proxyRef` before the gateway's `defaultProxyRef`, and `actions_gateway_runnerset_egress_audit_unattributed` is its fleet-wide gauge (Q1069).
 For a shared pool the set learns the pool's setting from the share the provider's grant projects, so it can lag a change by the projection recheck.
+A set with no pool reads `WorkerAuditWithoutProxy` when the gateway half is on, since its workers egress directly and leave no proxy record to join, and `DirectEgress` when it is off.
 
 Weigh it as a third cost on top of the two below: together the two streams say which host each of a tenant's jobs reached, which is the evidence an auditor asks for and also a per-worker record the platform now keeps.
 
