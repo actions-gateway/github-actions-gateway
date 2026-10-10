@@ -5,4 +5,4 @@
 #
 # Pinned for the same reason the site toolchain is: the gate's verdict is a
 # layout measurement, so the engine that produces it is an input to the answer.
-playwright==1.62.0
+playwright==1.63.0
