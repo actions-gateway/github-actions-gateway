@@ -540,7 +540,12 @@ Q423 measured all of this rather than assuming it: the worker carried every mark
 
 **What it costs us** is an asymmetry in the *evidence*: a kubelet-evicted pod persists in `PodFailed` until the reaper takes it, while a preempted pod is deleted, so nothing survives for a later reader to key on.
 The tombstone that closes it is ours to write rather than upstream's, and Q844 wrote it where per-job state already crosses a process boundary, the per-`RunnerSet` guard ConfigMap (Q606), rather than as a new dependency.
-The listener records the run behind every worker it builds and drops the record when the job concludes; the owning reconciler reads that set once per process, ahead of the reaper, and re-runs any run whose worker pod is no longer there.
+The listener records the run behind every worker it builds and drops the record when the job concludes; the owning reconciler reads that set once per process, ahead of the reaper, and re-runs any run whose worker is no longer there.
+A job's worker is the pod whose runner started it (`actions-gateway.com/started-job-id`), not the pod created for it, because GitHub gives a scale-set job to whichever runner asks first (Q1152).
+A job no runner has started yet is judged by the pod created for it.
+While that pod is listed the job is queued, and it is not re-run if that pod's runner has started nothing, or another worker that has not exited has started nothing either.
+With that pod gone, the job's worker is taken to be the one that vanished.
+The recovery claim records the job the claimed worker was serving, so a job already recovered off another job's worker is not re-run twice.
 So the recovery is restart-safe on both paths now, and what stays asymmetric is only the *diagnosis*: an evicted worker is recovered under its own cause, while one that vanished is recovered under `cause="vanished"`, because which disruption took it went with the pod.
 
 #### Why re-running a preempted job is not a double report
@@ -665,6 +670,7 @@ sequenceDiagram
 
 Three things make this the same capability rather than a lookalike.
 The **identity** is the `actions-gateway.com/run-id` / `actions-gateway.com/repository` pair `ProvisionScaleSetWorker` stamps, the same pair Q417's eviction recovery reads.
+A worker that never ran has no `JobStarted` to replace it, so it is the identity of the job the pod was created for, which another runner may be running ([Q1169](../queue/Q1169.md)).
 The **budget** is the same shared per-`run_id` one, so `maxEvictionRetries` still bounds re-runs per run across both tiers together; only the `tier` label splits the reporting.
 And the **wait** is the identical capacity test: a worker pod of the same owner binding after the abandonment.
 
@@ -715,6 +721,7 @@ An AGC that stamped the pod named for the completed job reaped it at 17:35:12Z w
 So the stamp follows the `runnerName` the `JobCompleted` carries, matched against each pod's `actions-gateway.com/runner-name`.
 A job that ended before any runner started it carries no runner; its completion stamps the pod created for it, unless that pod's runner has since started another job.
 The listener records each `JobStarted` on its runner's pod as `actions-gateway.com/started-job-id`, handling a batch's starts before its completions.
+The same start replaces the pod's `run-id` and `repository` with the started job's run, which is what eviction recovery re-runs (Q1152).
 A start also lifts a deadline set while that runner was idle.
 The grace is a constant, not a tunable: it measures runner shutdown — a runner that actually ran the job reports completion and exits within seconds — and the job is already over at GitHub either way, so the only thing a premature reap costs is the terminal pod's `completedPodTTL` inspection window.
 The stamp is set once, so a completion replayed to a re-created session cannot push the deadline back, and it lives on the pod rather than in AGC memory, so the deadline survives an AGC restart.

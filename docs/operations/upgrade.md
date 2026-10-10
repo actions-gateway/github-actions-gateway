@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
   - [Non-breaking: v2 is served beside v2beta1, and an unpinned read now returns v2](#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)
   - [Non-breaking: the actions-gateway.com validating webhooks now validate v2, and their names end in -v2](#non-breaking-the-actions-gatewaycom-validating-webhooks-now-validate-v2-and-their-names-end-in--v2)
   - [A new CiliumFQDN / CalicoFQDN EgressProxy is now rejected at admission](#a-new-ciliumfqdn--calicofqdn-egressproxy-is-now-rejected-at-admission)
@@ -177,6 +178,17 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Non-breaking: a scale-set worker's run identity follows the job its runner started
+
+GitHub gives a scale-set job to whichever of the set's runners asks first, so a worker can run a different job, from a different run, than the one it was created for.
+Recovery used to re-run the run the worker was created for, which left the run that actually lost a job failed (Q1152).
+
+A worker's `actions-gateway.com/run-id`, `/repository` and `/job-name` annotations are now rewritten when its runner starts a job, so `kubectl describe pod` shows the run the worker is serving, and an evicted, preempted or drained worker re-runs that run.
+Recovery after an AGC restart finds a job's worker by `actions-gateway.com/started-job-id` rather than by pod name, and the `OrphanedWorkerRecovered` Event now names the job rather than a pod.
+The recovery-claim ConfigMap's entries gain a `jobID` field; entries written by an older AGC lack it and are read as before.
+
+No action is required at upgrade time.
 
 ### Non-breaking: `v2` is served beside `v2beta1`, and an unpinned read now returns `v2`
 

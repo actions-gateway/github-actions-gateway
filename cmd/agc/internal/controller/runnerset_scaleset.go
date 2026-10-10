@@ -373,8 +373,17 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		Cleanup: func(ctx context.Context, jobID, runnerName string) error {
 			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID, runnerName)
 		},
-		Started: func(ctx context.Context, jobID, runnerName string) error {
-			return r.Provisioner.MarkScaleSetJobStarted(ctx, target, jobID, runnerName)
+		// The start names the run the runner is serving, which need not be the one its
+		// worker was created for, so it replaces the pod's run identity (Q1152).
+		Started: func(ctx context.Context, job scalesetlistener.Job) error {
+			return r.Provisioner.MarkScaleSetJobStarted(ctx, target, provisioner.ScaleSetJob{
+				JobID:      job.JobID,
+				RunnerName: job.RunnerName,
+				Owner:      job.Owner,
+				Repository: job.Repository,
+				RunID:      job.RunID,
+				JobName:    job.JobName,
+			})
 		},
 		// Per-RunnerSet ConfigMap persisting the concluded-job guards, so a hard-killed
 		// AGC does not replay an assignment it concluded but had not yet deleted (Q606).

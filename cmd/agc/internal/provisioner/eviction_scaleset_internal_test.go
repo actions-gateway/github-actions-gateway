@@ -376,16 +376,16 @@ func TestClaimDisruptionRecovery_LedgerRejectsTheSecondClaimant(t *testing.T) {
 	ctx := context.Background()
 	p, target, _, _, _ := recoveryFixture(t)
 
-	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-race", recoveryCauseDeletion),
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-race", "", recoveryCauseDeletion),
 		"the first claim must win")
 
-	err := p.claimDisruptionRecovery(ctx, target, "runner-gpu-race", recoveryCauseDeletion)
+	err := p.claimDisruptionRecovery(ctx, target, "runner-gpu-race", "", recoveryCauseDeletion)
 	require.Error(t, err, "the second claim must be rejected, not silently applied")
 	assert.ErrorIs(t, err, errRecoveryClaimHeld,
 		"a lost claim must be errRecoveryClaimHeld so the caller recognises it and skips: got %v", err)
 
 	// A different pod of the same owner is a different disruption and must still claim.
-	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-other", recoveryCauseDeletion))
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-other", "", recoveryCauseDeletion))
 }
 
 // TestClaimDisruptionRecovery_SurvivesAConcurrentLedgerWrite pins the retry the ledger
@@ -405,8 +405,8 @@ func TestClaimDisruptionRecovery_SurvivesAConcurrentLedgerWrite(t *testing.T) {
 			return c.Update(ctx, obj, opts...)
 		},
 	})
-	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-first", recoveryCauseDeletion))
-	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-second", recoveryCauseDeletion),
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-first", "", recoveryCauseDeletion))
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-second", "", recoveryCauseDeletion),
 		"a conflict from another claim must be retried, not read as this pod being claimed")
 	assert.Greater(t, updates.Load(), int64(1), "the conflicting update must actually have been retried")
 }
@@ -431,7 +431,7 @@ func TestClaimDisruptionRecovery_ConcurrentClaimsAllLand(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs[i] = p.claimDisruptionRecovery(ctx, target, fmt.Sprintf("runner-gpu-%d", i), recoveryCauseDeletion)
+			errs[i] = p.claimDisruptionRecovery(ctx, target, fmt.Sprintf("runner-gpu-%d", i), "", recoveryCauseDeletion)
 		}()
 	}
 	wg.Wait()
@@ -554,7 +554,7 @@ func TestRecoverEvictedScaleSetWorkers_ClaimHeldElsewhereStillSkips(t *testing.T
 	p, target, _, rerunCount, _ := recoveryFixture(t, drainedWorker("runner-gpu-raced"))
 
 	// The other replica's claim, landed before this scan reaches the pod.
-	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-raced", recoveryCauseDeletion))
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-raced", "", recoveryCauseDeletion))
 
 	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
 	require.NoError(t, err)
