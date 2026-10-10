@@ -39,6 +39,10 @@
 # Environment:
 #   PULL_RETRY_ATTEMPTS — forwarded to pull-image-with-retry.sh (default: 3)
 #   PULL_RETRY_DELAY    — forwarded to pull-image-with-retry.sh (default: 15)
+#   MANIFEST_FETCH_ATTEMPTS  — max manifest fetch attempts           (default: 6)
+#   MANIFEST_FETCH_DELAY     — base seconds, doubled after each sleep (default: 5)
+#   MANIFEST_FETCH_MAX_DELAY — cap on the doubled delay, before jitter
+#                                                                   (default: 60)
 
 set -euo pipefail
 shopt -s inherit_errexit
@@ -65,9 +69,44 @@ if [[ -f "${tar}" && -f "${list}" ]]; then
 fi
 
 # Cache miss: fetch the pinned manifest and extract the image refs it names.
+#
+# The fetch retries on the exponential jittered schedule download-verified.sh
+# uses, not curl's own --retry. A flat `--retry 5 --retry-delay 2` spent its
+# whole budget in 12.7s of release-CDN 500s and killed the e2e lane before the
+# cluster existed (Q1133); this schedule spans 135-202s of backoff.
 manifest="$(mktemp)"
 trap 'rm -f "${manifest}"' EXIT
-curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "${manifest}" "${url}"
+
+attempts="${MANIFEST_FETCH_ATTEMPTS:-6}"
+delay="${MANIFEST_FETCH_DELAY:-5}"
+max_delay="${MANIFEST_FETCH_MAX_DELAY:-60}"
+backoff="${delay}"
+rc=0
+for (( attempt = 1; attempt <= attempts; attempt++ )); do
+  rc=0
+  curl -fsSL -o "${manifest}" "${url}" || rc=$?
+  if (( rc == 0 )); then
+    break
+  fi
+  if (( attempt < attempts )); then
+    # Jitter up to half the delay, so the two e2e lanes failing in the same
+    # second do not retry in the same second.
+    sleep_for="${backoff}"
+    if (( sleep_for > 0 )); then
+      sleep_for=$(( sleep_for + RANDOM % (sleep_for / 2 + 1) ))
+    fi
+    echo "fetch of ${name} manifest failed with curl exit ${rc} (attempt ${attempt}/${attempts}); retrying in ${sleep_for}s" >&2
+    sleep "${sleep_for}"
+    backoff=$(( backoff * 2 ))
+    if (( backoff > max_delay )); then
+      backoff="${max_delay}"
+    fi
+  fi
+done
+if (( rc != 0 )); then
+  echo "failed to fetch ${name} manifest from ${url} after ${attempts} attempts" >&2
+  exit "${rc}"
+fi
 
 mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "${manifest}" | sort -u)
 if (( ${#images[@]} == 0 )); then
