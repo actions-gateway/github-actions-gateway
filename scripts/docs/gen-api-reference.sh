@@ -89,15 +89,16 @@ if [[ "$config_version" != "1.${api_minor}" ]]; then
 	fi
 fi
 
-work_dir="tmp/api-reference"
+# Per-invocation, because `make check` and `make docs-gates` both run the check
+# and a shared directory lets one run delete the other's output mid-check (Q1175).
+mkdir -p tmp
+work_dir="$(mktemp -d tmp/api-reference.XXXXXX)"
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
 # that whenever the script ends in an explicit `exit`.
 cleanup() {
 	rm -rf "${work_dir}"
 }
 trap cleanup EXIT INT TERM
-rm -rf "${work_dir}"
-mkdir -p "${work_dir}"
 
 generated="${work_dir}/api.md"
 GOWORK="$API_GOWORK" "$CRD_REF_DOCS" \
