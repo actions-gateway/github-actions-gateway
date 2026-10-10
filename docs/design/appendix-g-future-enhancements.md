@@ -583,8 +583,8 @@ Two things are worth stating plainly before anything is built on this:
 That argues for the wrapper as the translator rather than the job writing a pod-visible file directly.
 It sits on the runner-container side of every one of these boundaries, already owns the exit code, and can read a workspace-relative marker the job wrote from wherever it ran.
 
-**Trigger.** Q555 tracks the design decision.
-Promote when a design session commits the CRD shape, or an operator asks for it (the demand signal that reorders everything else on the roadmap).
+**Trigger.** Fired 2026-10-10: the maintainer ruled that this repository's own CI, which runs on GAG, is the operator ask.
+Q555 is in the Queue and tracks the design decision; the [draft](../plan/q555-flaky-job-retry.md) holds the requirements and the questions a design session settles.
 
 ---
 

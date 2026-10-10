@@ -1,7 +1,9 @@
 # Q555 flaky-job retry: problem statement, requirements, scope
 
 **Status:** ⓘ draft for a design session, written 2026-10-10.
-Nothing is built and no CRD shape is committed; [Q555](../queue/Q555.md) stays deferred until a design session settles the [open questions](#open-questions-for-the-design-session).
+Nothing is built and no CRD shape is committed.
+[Q555](../queue/Q555.md) is in the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
+A design session settles the [open questions](#open-questions-for-the-design-session) next.
 It extends [G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.
 
 ## The prerequisite already exists
@@ -206,5 +208,3 @@ Each requirement is written to be testable.
    It depends on whether that boundary is observable from the worker, which nobody has measured.
 5. **One lifetime cap or two.** Should a run that is both evicted and flaky be bounded by the sum of the two budgets, or by a single combined cap?
 6. **The CRD shape**, via [api-review.md](../development/api-review.md), including whether detection's default-on needs a field at all.
-7. **Demand.** Q555's trigger is an operator asking.
-   This repository runs its own CI on GAG and maintains a flake-watch discipline; whether that counts as the ask is the maintainer's call.

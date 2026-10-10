@@ -24,6 +24,10 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.
 
 
+- **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
+  Same machinery, opted in per runner set with its own budget so a broken test cannot loop.
+  Flaky-job detection ships first, so a flake is counted before anything retries it.
+
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
 
@@ -40,10 +44,6 @@ Each waits on a real operator need, a measured limit, or a gating release before
 - **[Pod-per-step `container:` and `services:` without Kata](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)** <!-- q:Q998 --> Docker-in-Docker under Kata is the answer today, and Kata needs nested virtualization that GKE Autopilot and most AMD, Arm and GPU instances cannot provide.
   ARC's own mechanism is declined permanently: it needs a Kubernetes API token inside the pod running your workflow.
   A broker-mediated design keeps that invariant, and waits on demand.
-
-- **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
-  Same machinery, opted in per runner set with its own budget so a broken test cannot loop.
-  Waits on detection, which needs a real job outcome.
 
 - **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The per-tenant controller runs [one replica by design](design/02-architecture.md): the session registry is in-memory, and HA comes from GitHub redelivering an unacquired job.
   Distributed session state would enable multi-replica HA if a single controller becomes a measured bottleneck.
