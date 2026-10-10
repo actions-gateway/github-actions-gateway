@@ -32,7 +32,7 @@ Five gating rows and the candidate validation, then the three items that ride.
 |---|---|---|---|
 | [Q1086](../queue/Q1086.md) | Mark `v2` the storage version, rewrite every stored object with a read-write sweep, and prune `storedVersions` to `["v2"]` | `1.10-gate` | 🔲 ready |
 | [Q1152](../queue/Q1152.md) | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | 🔲 ready |
-| [Q1153](../queue/Q1153.md) | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | 🔲 ready |
+| Q1153 | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | ✅ landed: a runnerless completion whose own worker is busy stamps the oldest idle `Running` worker, once per job, and a start moves the stamp on. Unit-tested on crossed workers; not reproduced on a cluster |
 | [Q1154](../queue/Q1154.md) | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | 🔲 ready |
 | [Q1069](../queue/Q1069.md) | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | 🔲 ready |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |

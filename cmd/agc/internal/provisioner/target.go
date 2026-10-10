@@ -61,6 +61,17 @@ const AnnotationRunnerName = "actions-gateway.com/runner-name"
 // enforcement.
 const AnnotationStartedJobID = "actions-gateway.com/started-job-id"
 
+// AnnotationSurplusForJob is stamped beside AnnotationJobCompletedAt, with a job ID as its
+// value, on the idle worker reclaimed because that job ended before any runner started
+// it: the set then has one runner more than it has jobs, and this worker is the one
+// picked to go, which need not be the one created for that job (Q1153). It makes the
+// reclaim idempotent per job, and a JobStarted on the worker removes it with the stamp
+// and moves both to another idle worker.
+//
+// Controller-set and informational: never set it by hand and never use it for security
+// enforcement.
+const AnnotationSurplusForJob = "actions-gateway.com/surplus-for-job"
+
 // AnnotationSizingProfile is stamped on a worker pod, with the profile name as its
 // value, when an opt-in sizing profile actually derived that pod's cpu/memory ask
 // (Q489). A pod built from the template's static values — Static, or a history-based

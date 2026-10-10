@@ -1351,8 +1351,11 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	// Starts go ahead of both: a batch can carry one runner's JobStarted beside another
 	// job's runnerless JobCompleted, and the start is what keeps that completion off the
 	// busy worker (Q1151).
+	ackable := true
 	for _, sj := range startedJobs(jobs) {
-		l.startJob(ctx, sj)
+		if !l.startJob(ctx, sj) {
+			ackable = false
+		}
 	}
 	cleaned := make(map[string]bool)
 	for _, cj := range completedJobs(jobs) {
@@ -1361,7 +1364,6 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		}
 	}
 
-	ackable := true
 	for _, aj := range scaleset.AssignedJobs(jobs) {
 		l.metricsIncAssigned()
 		outcome := l.provisionAssigned(ctx, ssID, aj)
@@ -1376,9 +1378,9 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	// Ack (advance the cursor) unless a job needs a redelivery retry. A provisioned or
 	// already-provisioned job is ackable; so is a deferred one (advancing past it is what
 	// stops one stuck assignment from wedging the batch — Q270; the Listener re-offers it
-	// itself). Only a transient failure (provisionRetry) holds the cursor so the message
-	// redelivers — which on a long-poll queue is immediate, so nothing that will still be
-	// true on the next delivery may take this path (Q576).
+	// itself). Only a transient failure (provisionRetry, or a start not recorded) holds
+	// the cursor so the message redelivers — which on a long-poll queue is immediate, so
+	// nothing that will still be true on the next delivery may take this path (Q576).
 	if ackable {
 		l.advanceCursor(msg.MessageID)
 		// The delete half. A message whose jobs have all concluded goes on the next
@@ -2451,24 +2453,29 @@ func (l *Listener) metricsIncPollError(reason string) {
 	}
 }
 
-// startJob records which job a runner took, best-effort: a failure costs only the
-// protection a runnerless completion reads it for, so it neither holds the cursor nor
-// retries. A start for a job already seen complete is a replay, and recording it would
-// mark a finished worker busy.
-func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) {
+// startJob records which job a runner took, and reports false when that failed so the
+// caller holds the cursor and the start redelivers. The record is what lifts a
+// completion stamp from a worker whose runner took a job, so a start left unrecorded
+// lets the reaper delete that worker mid-job once the stamp's grace runs out (Q1153).
+// The hook's only errors are transient API failures; a worker already gone is not one.
+// A start for a job already seen complete is a replay, and recording it would mark a
+// finished worker busy.
+func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) bool {
 	if l.cfg.Started == nil || sj.RunnerName == "" {
-		return
+		return true
 	}
 	l.mu.Lock()
 	done := l.completed[sj.JobID]
 	l.mu.Unlock()
 	if done {
-		return
+		return true
 	}
 	if err := l.cfg.Started(ctx, sj.JobID, sj.RunnerName); err != nil {
-		l.log.Warn("scaleset: record job start on its worker",
+		l.log.Warn("scaleset: record job start on its worker; holding the message for redelivery",
 			"scaleSet", l.cfg.ScaleSetName, "jobID", sj.JobID, "runner", sj.RunnerName, "err", err)
+		return false
 	}
+	return true
 }
 
 // startedJobs returns the JobStarted entries in a batched message body.

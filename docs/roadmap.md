@@ -26,8 +26,8 @@ No pill means no release is decided for that item yet.
 - **[Move stored objects to the `v2` API](plan/release-1.10.md)** <!-- q:Q1086 --> Every object an operator has stored is rewritten as `v2`, with every API version still served, so nothing an operator runs changes.
   It has to finish before any version can be removed, which is why it ships a release ahead of the removals.
 
-- **[Scale-set recovery and cleanup that follow the runner, not the worker](design/04-operational-flows.md#on-the-scale-set-tier-q417)** <!-- q:Q1152,Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and three paths assume it went to the worker created for it.
-  Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.
+- **[Scale-set recovery and cleanup that follow the runner, not the worker](design/04-operational-flows.md#on-the-scale-set-tier-q417)** <!-- q:Q1152,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and two paths assume it went to the worker created for it.
+  Recovery can re-run the wrong run, and a runner's credential Secret can outlive its worker.
 
 - **[A per-runner-set egress-audit flag](operations/tenant-onboarding.md#per-pool-egress-audit-record)** <!-- q:Q1069 --> The attribution flag reads only the gateway's default proxy, so a set that overrides it with an unlogged pool reads as attributed.
   A per-set condition and gauge read the pool each set actually uses.
