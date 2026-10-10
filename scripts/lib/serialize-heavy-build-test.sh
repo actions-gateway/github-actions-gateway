@@ -71,14 +71,17 @@ await() {
 	return 1
 }
 
-# gone PID — true once PID is dead. A signalled orphan is reaped by init on its
-# own schedule, so this waits, up to 60 s; a pass returns as soon as it dies,
-# and only a failure spends the bound. Work that outlived the lock would run on
-# for the rest of its 300 s.
+# gone PID — true once PID is dead: absent, or a zombie, since an orphan waits on
+# whatever reaps for PID 1 and some containers' PID 1 never does. A signalled
+# orphan dies on its own schedule, so this waits, up to 60 s; a pass returns as
+# soon as it dies, and only a failure spends the bound. Work that outlived the
+# lock would run on for the rest of its 300 s.
 gone() {
-	local i
+	local i stat
 	for ((i = 0; i < 600; i++)); do
-		kill -0 "$1" 2>/dev/null || return 0
+		stat="$(ps -o stat= -p "$1" 2>/dev/null)" || return 0
+		stat="${stat// /}"
+		[[ -z "${stat}" || "${stat}" == Z* ]] && return 0
 		sleep 0.1
 	done
 	return 1
@@ -146,13 +149,19 @@ ignored() {
 	set -m
 	(
 		trap '' "${sig}"
-		exec "${WORKDIR}/root/work.sh" "${run}" 2
+		exec "${WORKDIR}/root/work.sh" "${run}" 5
 	) &
 	LAUNCHER=$!
 	set +m
 	if ! await "${WORKDIR}/${run}.grandchild"; then
 		bad "${name}: work never entered the section"
 		kill -KILL -- "-${LAUNCHER}" 2>/dev/null || true
+		return
+	fi
+	# Otherwise a late await sees work that already finished, and passes untested.
+	if [[ -e "${WORKDIR}/${run}.exit" ]]; then
+		bad "${name}: work finished before the signal was sent"
+		wait "${LAUNCHER}" || true
 		return
 	fi
 	kill "-${sig}" "${LAUNCHER}"
