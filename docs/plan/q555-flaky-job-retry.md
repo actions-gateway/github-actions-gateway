@@ -79,11 +79,16 @@ Pull request and merge queue jobs are the ones built to be thrown away, and they
 That is tolerable for disruptions; for a retry triggered by a deterministic failure it means a restart loop re-runs a broken job without limit.
 GitHub already keeps a durable per-run counter, `run_attempt`, which no restart can reset and which also counts human re-runs, so capping on it is conservative in the right direction.
 
-**A retry is safe when the failure is classified as platform-caused, temporary and self-resolving.** That is the property GAG's existing arms already have.
-Eviction, preemption, drain, deletion, a worker that never started, and a worker that vanished are each recognised from Kubernetes facts, come from a situation that is temporary, and resolve once capacity or the node comes back.
-Retrying one of them masks nothing, because the tenant's code never got a fair run.
+**A retry is safe when the failure is classified as platform-caused, temporary and self-resolving.** That is the property GAG's existing arms are meant to have.
+Preemption, a drain or hand-delete (both the `deletion` cause), a worker that never started (`abandoned`), and one that vanished while the AGC was down are each recognised from Kubernetes facts, come from a temporary situation, and clear once capacity or the node comes back.
+Retrying one of those masks nothing, because the tenant's code never got a fair run.
 So the low-risk way to retry more is to recognise more classes that pass that test, and only after that to retry failures nobody has classified.
 Classifying is where GAG is strong: no GitHub-layer product can see the pod, the node, the egress proxy or the mirror a job depended on.
+
+**The `eviction` arm does not fully pass that test today.** It keys on `reason: Evicted` alone ([`eviction_scaleset.go`](../../cmd/agc/internal/provisioner/eviction_scaleset.go)), and the kubelet sets that reason when a pod exceeds its *own* `ephemeral-storage` limit, as well as when the node is short.
+The live eviction-recovery e2e triggers eviction exactly that way, with a job that outgrows its own limit, and expects the re-run ([`github_scaleset_test.go`](../../cmd/gmc/test/e2e/github_scaleset_test.go)).
+That is a tenant-caused, likely deterministic failure, the storage analogue of `OOMKilled`, retried up to `maxEvictionRetries` (default 2) and documented as "node pressure".
+Whether the kubelet's `status.message` separates the two shapes is unmeasured; [Q1177](../queue/Q1177.md) tracks it, and R12a's test applies to it as much as to any new class.
 
 **Retry moves the flake away from the person who can fix it.** Today the pull request author sees the red run.
 After a GAG retry the run is green, and the flake survives only in operator metrics and Events, because writing back to GitHub is out of scope (R16).
