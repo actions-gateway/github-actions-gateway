@@ -967,8 +967,10 @@ func TestDeregisterRunner_Statuses(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
+	// srv.Client, not http.DefaultClient: these header-only answers race a
+	// parallel sibling's srv.Close on the shared transport (Q1164).
 	p := newAbandonedProbe(discardLogger(), abandonedConfig{Owner: "o", Repo: "r"},
-		staticTokenProvider{token: "tok"}, srv.URL, http.DefaultClient, http.DefaultClient)
+		staticTokenProvider{token: "tok"}, srv.URL, srv.Client(), srv.Client())
 
 	status.Store(http.StatusNotFound)
 	r := &jitRunner{ID: 5, Name: "gone"}

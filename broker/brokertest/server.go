@@ -103,10 +103,12 @@ func New() *Server {
 }
 
 // HTTPClient returns an *http.Client suitable for use with the stub server.
-// Since the stub uses a real TCP listener via httptest, the default client works
-// and the unbounded read timeout is harmless — the test bounds the call (Q138).
+// Since the stub uses a real TCP listener via httptest, the unbounded read
+// timeout is harmless — the test bounds the call (Q138). The client has its own
+// transport rather than http.DefaultTransport, whose idle connections every
+// parallel sibling's httptest.Server.Close drops mid-request (Q1164).
 func (s *Server) HTTPClient() *http.Client {
-	return http.DefaultClient //nolint:forbidigo // Q138: bounded by the test's local httptest server.
+	return s.server.Client()
 }
 
 // RegisteredSessions returns the IDs of sessions that are currently active
