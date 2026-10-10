@@ -99,7 +99,7 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 | Waiting on | Items |
 |---|---|
 | Recorded demand from an operator | The proxy hardening cluster: [Q565](../queue/Q565.md) rate limiting, [Q567](../queue/Q567.md) per-group pools |
-| An unbuilt prerequisite | [Q555](../queue/Q555.md) flaky-job retry, which needs a real job outcome |
+| A design session | [Q555](../queue/Q555.md) flaky-job retry: the job outcome it was waiting on already arrives on the scale-set tier ([draft](q555-flaky-job-retry.md)) |
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
 Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it and Q566 was closed as already shipped, so four of the original seven remain in it, which is the set the sentence below counts against.

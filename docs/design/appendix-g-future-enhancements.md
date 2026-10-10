@@ -526,7 +526,7 @@ ARC has neither the re-run machinery nor the metrics plumbing, so this extends a
 1. **Flaky-job detection (no behavior change).** Record re-run-then-pass transitions per job name (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs metric, K8s events, and an advisory condition.
    This is pure observability, zero masking risk, and no CI product offers it per *tenant* on shared runners.
    It also builds the history an only-known-flakes mode needs.
-   Its prerequisite is a real per-job outcome, which the AGC does not read today — see the signal note below.
+   Its prerequisite, a real per-job outcome, already arrives on the scale-set tier as `JobCompleted.result` and is only counted today ([Q555 draft](../plan/q555-flaky-job-retry.md#the-prerequisite-already-exists)).
 2. **Opt-in retry (`spec.flakyRetry` on the `RunnerSet`).** Bounded per-run budget separate from `maxEvictionRetries`, its own `cause` value on the existing counters, driven by the same paced `rerun-failed-jobs` loop.
    Candidate scoping knobs, cheapest first: max retries per run, per-window cap per set (a stampede guard, like the Q512 latch), and later a known-flakes-only mode fed by phase 1.
 
@@ -538,10 +538,11 @@ ARC has neither the re-run machinery nor the metrics plumbing, so this extends a
    The feature must be off by default, per-set opt-in, loudly metered, and framed as "retry *and* surface" — detection metrics keep the flake visible while retry buys throughput.
    Never silent.
 3. **Cost attribution.** A retried job spends the tenant's own quota and compute; per-set counters must make the spend visible (the [cost-attribution doc](../operations/cost-attribution.md) would gain a flake-spend line).
-4. **Failure classification is thin at the platform layer, but less thin than it looks.** The AGC polls no jobs API; its only outcome signal is the pod phase, used as a proxy (`PodFailed`→failed, else succeeded).
+4. **Failure classification is thin at the platform layer, but less thin than it looks.** The AGC polls no jobs API.
+   On the scale-set tier GitHub pushes the job's `result` in `JobCompleted`; the classic tier has only the pod phase, used as a proxy (`PodFailed`→failed, else succeeded).
    One layer down there is more: `Runner.Worker` encodes the job's real `TaskResult` as exit code `100 + result`, and the wrapper flattens only 100/101 (the two GitHub concludes as `success`) to 0, passing 102 failed / 103 canceled / 104 skipped through verbatim ([`translateWorkerExitCode`](../../cmd/worker/main.go)).
    Nothing in the AGC reads `ContainerStatuses[].State.Terminated.ExitCode`.
-   Reading it is the cheap prerequisite for phase 1's detector; a GitLab-style taxonomy past that still needs log or annotation heuristics.
+   On the classic tier, reading it would be the prerequisite for phase 1's detector; a GitLab-style taxonomy past either signal still needs log or annotation heuristics.
    Phase 2 ships without matchers first: budget and scope knobs only.
 
 **Signals, and why an explicit one from the job is a separate question.**
