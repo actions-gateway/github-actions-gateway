@@ -125,32 +125,35 @@ print(' '.join(m.discover(Path(sys.argv[2]))))
     expect_eq "/ /operations/ /operations/install/" "$got" \
         "page discovery maps a built tree to the served URL paths"
 
-    # A navigation timeout is retried and announced, and one that persists past
-    # the last attempt still fails the run rather than skipping the page (Q1165).
+    # A failed load is retried on a fresh page, closing the old one, and a
+    # failure that persists past the last attempt still fails the run (Q1165).
     # GITHUB_ACTIONS is unset because it moves the retry warning onto stdout.
     got="$(env -u GITHUB_ACTIONS python3 -c "
 import asyncio, importlib.util, sys
 spec = importlib.util.spec_from_file_location('c', sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 class Stall(Exception): pass
-class Page:
-    def __init__(self, stalls): self.stalls, self.calls = stalls, 0
-    async def goto(self, url, wait_until):
-        self.calls += 1
-        if self.calls <= self.stalls: raise Stall()
-try:
-    recovered = asyncio.run(m.goto(Page(1), '/p/', Stall))
-except Stall:
-    recovered = 'raised'
-stuck = Page(99)
-try:
-    asyncio.run(m.goto(stuck, '/p/', Stall)); raised = 'no'
-except Stall:
-    raised = 'yes'
-print(recovered, stuck.calls, raised)
+def run(stalls):
+    made, calls = [], []
+    class Page:
+        def __init__(self): self.closed = False; made.append(self)
+        async def close(self): self.closed = True
+    async def new_page(): return Page()
+    async def attempt(page):
+        calls.append(page)
+        if len(calls) <= stalls: raise Stall('Page.goto: Timeout 30000ms exceeded.')
+        return 'measured'
+    try:
+        page, out = asyncio.run(m.retry(attempt, Page(), new_page, '/p/', Stall))
+    except Stall:
+        out = 'raised'
+    fresh = len(set(map(id, calls))) == len(calls)
+    closed = all(p.closed for p in calls[:-1])
+    return f'{out}:{len(calls)}:{fresh}:{closed}'
+print(run(1), run(99))
 " "$CHECKER" 2>/dev/null)"
-    expect_eq "2 3 yes" "$got" \
-        "a navigation timeout is retried, and one that persists still fails"
+    expect_eq "measured:2:True:True raised:3:True:True" "$got" \
+        "a failed load is retried on a fresh page, and one that persists still fails"
 
     # A tree with no pages must refuse rather than pass: a gate that measures
     # nothing is indistinguishable from a clean one by its exit status alone.

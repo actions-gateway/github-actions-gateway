@@ -94,32 +94,36 @@ def discover(root: Path) -> list[str]:
 NAV_ATTEMPTS = 3
 
 
-async def goto(page, url: str, timeout_error: type[Exception], attempts: int = NAV_ATTEMPTS) -> int:
-    """Navigate to `url`, retrying a navigation timeout; returns the attempt that loaded.
+async def retry(attempt, page, new_page, path: str, error: type[Exception], attempts: int = NAV_ATTEMPTS):
+    """Run `attempt(page)`, retrying any Playwright error on a fresh page; returns (page, result).
 
     A retry rather than a longer timeout, and not a block on off-host requests:
     Q1165's sighting timed out on a page whose only off-host requests are XHRs,
     which never delay `load` (hanging every off-host request left it loading in
-    0.4s, measured 2026-10-09), so the stall was the runner's. Each retry is
-    printed, so a recurrence stays visible instead of turning silently slow.
+    0.4s, measured 2026-10-09). A fresh page because retrying the same one did
+    not recover: a merge-group run timed out twice on one path, then failed
+    `net::ERR_ABORTED`. Each retry is printed, so a recurrence stays visible.
     """
-    for attempt in range(1, attempts + 1):
+    for n in range(1, attempts + 1):
         try:
-            await page.goto(url, wait_until="load")
-            return attempt
-        except timeout_error:
-            if attempt == attempts:
+            return page, await attempt(page)
+        except error as e:
+            if n == attempts:
                 raise
-            msg = f"{url} did not finish loading (attempt {attempt} of {attempts}), retrying"
+            first = str(e).splitlines()[0] if str(e) else type(e).__name__
+            msg = f"{path} failed (attempt {n} of {attempts}: {first}), retrying on a fresh page"
             if os.environ.get("GITHUB_ACTIONS"):
-                print(f"::warning::check-render-overflow: {msg}")
+                print(f"::warning::check-render-overflow: {msg}", flush=True)
             else:
-                print(f"check-render-overflow: {msg}", file=sys.stderr)
+                print(f"check-render-overflow: {msg}", file=sys.stderr, flush=True)
+            with contextlib.suppress(error):
+                await page.close()
+            page = await new_page()
     raise AssertionError("unreachable")
 
 
 async def measure(base: str, pages: list[str], widths: list[int]) -> tuple[list[dict], int]:
-    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import Error as PlaywrightError
     from playwright.async_api import async_playwright
 
     findings: list[dict] = []
@@ -133,10 +137,17 @@ async def measure(base: str, pages: list[str], widths: list[int]) -> tuple[list[
         ctx = await browser.new_context(viewport={"width": max(widths), "height": 900})
         page = await ctx.new_page()
         for path in pages:
-            await goto(page, base + path, PlaywrightTimeoutError)
-            for width in widths:
-                await page.set_viewport_size({"width": width, "height": 900})
-                result = await page.evaluate(OWNER_JS)
+
+            async def load_and_measure(page, path=path):
+                await page.goto(base + path, wait_until="load")
+                results = []
+                for width in widths:
+                    await page.set_viewport_size({"width": width, "height": 900})
+                    results.append((width, await page.evaluate(OWNER_JS)))
+                return results
+
+            page, results = await retry(load_and_measure, page, ctx.new_page, path, PlaywrightError)
+            for width, result in results:
                 measured += 1
                 if result["over"] > 0:
                     findings.append({"page": path, "width": width, **result})
