@@ -284,9 +284,11 @@ type CapacityCheckFunc func(ctx context.Context) error
 // collects terminal pods on spec.completedPodTTL.
 type CleanupFunc func(ctx context.Context, jobID, runnerName string) error
 
-// StartedFunc records that runnerName has started jobID, from a JobStarted. It must be
-// idempotent, since a re-created session replays messages from cursor 0.
-type StartedFunc func(ctx context.Context, jobID, runnerName string) error
+// StartedFunc records that job.RunnerName has started job.JobID, from a JobStarted. job
+// carries the started job's run identity, which is the run that runner is serving and
+// not necessarily the one its worker was created for (Q1152); JITConfig is empty. It
+// must be idempotent, since a re-created session replays messages from cursor 0.
+type StartedFunc func(ctx context.Context, job Job) error
 
 // GuardState is the durable half of the replay guards: the jobs this listener has
 // concluded — completed or abandoned — whose queue messages may not all be deleted yet.
@@ -306,10 +308,11 @@ type GuardState struct {
 // conclude — the durable record of a run the gateway owes a re-run if its worker
 // disappears unobserved (Q844).
 //
-// It carries the run identity rather than the worker pod's name: the name is derived
-// from (runnerSetName, jobID) at a single site, so re-deriving it cannot drift from what
-// provisioning created, while a stored copy could. ProvisionedAt bounds the set against
-// a job whose conclusion never arrives at all.
+// It carries the run identity rather than a worker pod's name: the job's worker is
+// whichever pod's runner started it, which the provisioner reads off the pods (Q1152),
+// so a name stored at provision time would name the wrong pod whenever GitHub gave the
+// job to another runner. ProvisionedAt bounds the set against a job whose conclusion
+// never arrives at all.
 type InFlightJob struct {
 	JobID         string    `json:"jobID"`
 	Owner         string    `json:"owner"`
@@ -2451,9 +2454,9 @@ func (l *Listener) metricsIncPollError(reason string) {
 	}
 }
 
-// startJob records which job a runner took, best-effort: a failure costs only the
-// protection a runnerless completion reads it for, so it neither holds the cursor nor
-// retries. A start for a job already seen complete is a replay, and recording it would
+// startJob records which job a runner took, and the run that job belongs to,
+// best-effort: a failure costs the protection a runnerless completion reads it for and
+// the run identity eviction recovery reads, so it neither holds the cursor nor retries. A start for a job already seen complete is a replay, and recording it would
 // mark a finished worker busy.
 func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) {
 	if l.cfg.Started == nil || sj.RunnerName == "" {
@@ -2465,7 +2468,15 @@ func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) {
 	if done {
 		return
 	}
-	if err := l.cfg.Started(ctx, sj.JobID, sj.RunnerName); err != nil {
+	owner, repo, runID, _ := sj.RunIdentity()
+	if err := l.cfg.Started(ctx, Job{
+		JobID:      sj.JobID,
+		RunnerName: sj.RunnerName,
+		Owner:      owner,
+		Repository: repo,
+		RunID:      runID,
+		JobName:    sj.JobDisplayName,
+	}); err != nil {
 		l.log.Warn("scaleset: record job start on its worker",
 			"scaleSet", l.cfg.ScaleSetName, "jobID", sj.JobID, "runner", sj.RunnerName, "err", err)
 	}

@@ -72,7 +72,7 @@ func TestRecoverOrphanedScaleSetWorkers_LeavesAnAlreadyRecoveredWorkerAlone(t *t
 	p, target, _, rerunCount, _ := recoveryFixture(t)
 
 	// The previous process's claim, which survives both the pod and the process.
-	require.NoError(t, p.claimDisruptionRecovery(ctx, target, scaleSetPodName("gpu", "job1"), recoveryCauseDeletion))
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, scaleSetPodName("gpu", "job1"), "", recoveryCauseDeletion))
 
 	done, err := p.RecoverOrphanedScaleSetWorkers(ctx, target,
 		[]OrphanedWorker{orphan("job1"), orphan("job2")})

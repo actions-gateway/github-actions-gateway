@@ -31,7 +31,9 @@ import (
 //
 // Identity moves onto the pod: the assignment message carries the workflow run
 // (scaleset.JobMessage.RunIdentity), and ProvisionScaleSetWorker stamps it as the
-// AnnotationRunID / AnnotationRepository annotations. Detection moves to the owning
+// AnnotationRunID / AnnotationRepository annotations. The run a worker serves is the
+// one its runner starts, which GitHub need not give the job the pod was created for, so
+// MarkScaleSetJobStarted replaces both with the started job's run (Q1152). Detection moves to the owning
 // reconciler, in two paths that share one judge and one claim: its worker-pod watch
 // hands each phase-changing event's pod to RecoverDisruptedScaleSetWorker as it
 // arrives (Q1029), and RecoverEvictedScaleSetWorkers lists every reconcile for what no
@@ -210,7 +212,7 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	// Claim before calling GitHub, and off the pod: the claim outlives the pod the
 	// evidence was read from, so a drain that removes the object seconds after the
 	// container exits no longer costs the run its recovery (Q1108).
-	if err := p.claimDisruptionRecovery(ctx, target, pod.Name, cause); err != nil {
+	if err := p.claimDisruptionRecovery(ctx, target, pod.Name, pod.Annotations[AnnotationStartedJobID], cause); err != nil {
 		switch {
 		case errors.Is(err, errRecoveryClaimHeld):
 			// The other detection path, another reconcile, or another replica owns this
@@ -250,8 +252,8 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 
 	owner, repo, runID, ok := runIdentityFromPod(pod)
 	if !ok {
-		// The assignment message carried no complete run identity, so there is
-		// nothing to re-run. Surface it: this is the one failure mode that makes the
+		// Neither the assignment nor the start of the job the worker was serving carried
+		// a complete run identity, so there is nothing to re-run. Surface it: this is the one failure mode that makes the
 		// whole mechanism silently inert, and an operator seeing disrupted jobs stay
 		// failed needs to be told why rather than left to infer it.
 		podLog.Warn("scale-set worker was disrupted but its run identity is unknown; automatic re-run skipped", "cause", cause)
@@ -373,9 +375,9 @@ func (p *Provisioner) stampEvictionHandled(ctx context.Context, pod *corev1.Pod)
 	return p.Client.Patch(ctx, pod, patch)
 }
 
-// runIdentityFromPod reads back the workflow-run identity ProvisionScaleSetWorker
-// stamped on a scale-set worker pod, as the (owner, repo, run_id) triple
-// rerun-failed-jobs addresses a run by. ok is false unless all three are present and
+// runIdentityFromPod reads back the workflow-run identity stamped on a scale-set worker
+// pod — the started job's once its runner starts one, the assigned job's before that —
+// as the (owner, repo, run_id) triple rerun-failed-jobs addresses a run by. ok is false unless all three are present and
 // the repository annotation is a well-formed "owner/repo" — a partial identity cannot
 // name a run, and guessing at one would re-run the wrong thing.
 func runIdentityFromPod(pod *corev1.Pod) (owner, repo, runID string, ok bool) {

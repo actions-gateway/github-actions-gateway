@@ -69,6 +69,10 @@ var errRecoveryClaimHeld = errors.New("provisioner: the disruption's recovery is
 type recoveryClaim struct {
 	ClaimedAt time.Time `json:"claimedAt"`
 	Cause     string    `json:"cause"`
+	// JobID is the job the worker's runner had started (AnnotationStartedJobID), empty
+	// where none was recorded. It is what lets the orphaned-worker scan find a recovery
+	// taken for a job off a worker created for a different one (Q1152).
+	JobID string `json:"jobID,omitempty"`
 }
 
 // recoveryClaimLedger is the persisted set, keyed by worker pod name — the one
@@ -95,7 +99,7 @@ func scaleSetRecoveryClaimsConfigMapName(ownerName string) string {
 // collector reaps it with the owner. Reads go through the uncached reader for the same
 // reason the guard store's do: the AGC runs no ConfigMap informer, and a cached read
 // would answer "unclaimed" from a copy that predates the rival's write.
-func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target, podName, cause string) error {
+func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target, podName, jobID, cause string) error {
 	// Serialise this process's own claims, so the compare-and-swap below arbitrates
 	// between REPLICAS rather than between the goroutines of one AGC. A node drain
 	// disrupts every worker it holds at once and both detection paths see each of them,
@@ -138,7 +142,7 @@ func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target
 		if _, held := ledger.Claims[podName]; held {
 			return errRecoveryClaimHeld
 		}
-		ledger.Claims[podName] = recoveryClaim{ClaimedAt: p.nowFn().UTC(), Cause: cause}
+		ledger.Claims[podName] = recoveryClaim{ClaimedAt: p.nowFn().UTC(), Cause: cause, JobID: jobID}
 		pruneRecoveryClaims(ledger, p.nowFn().UTC())
 
 		data, err := json.Marshal(ledger)
@@ -171,11 +175,13 @@ func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target
 	}
 }
 
-// recoveryAlreadyClaimed reports whether podName's recovery has already been claimed —
-// the read half of the ledger, for a caller that has no evidence of its own to act on.
-// An unreadable ledger answers false: the orphaned-worker scan is the only caller, and
+// recoveryAlreadyClaimed reports which of jobIDs already have their recovery claimed
+// — the read half of the ledger, for a caller that has no evidence of its own to act on.
+// A claim covers the job its worker's runner had started; a claim recording no job
+// covers the job the worker was created for, the only one its pod name says. An
+// unreadable ledger answers false: the orphaned-worker scan is the only caller, and
 // leaving a lost worker un-re-run is the worse of the two failures there.
-func (p *Provisioner) recoveryAlreadyClaimed(ctx context.Context, target Target, podNames map[string]bool) map[string]bool {
+func (p *Provisioner) recoveryAlreadyClaimed(ctx context.Context, target Target, jobIDs map[string]bool) map[string]bool {
 	key := target.Key()
 	reader := client.Reader(p.Client)
 	if p.APIReader != nil {
@@ -190,10 +196,15 @@ func (p *Provisioner) recoveryAlreadyClaimed(ctx context.Context, target Target,
 	if err != nil {
 		return nil
 	}
-	claimed := make(map[string]bool, len(podNames))
-	for name := range podNames {
-		if _, held := ledger.Claims[name]; held {
-			claimed[name] = true
+	claimed := make(map[string]bool, len(jobIDs))
+	for _, c := range ledger.Claims {
+		if jobIDs[c.JobID] {
+			claimed[c.JobID] = true
+		}
+	}
+	for jobID := range jobIDs {
+		if c, held := ledger.Claims[scaleSetPodName(key.Name, jobID)]; held && c.JobID == "" {
+			claimed[jobID] = true
 		}
 	}
 	return claimed

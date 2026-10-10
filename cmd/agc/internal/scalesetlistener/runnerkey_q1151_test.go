@@ -39,8 +39,8 @@ func (l *lifecycleLog) seen() []string {
 	return append([]string(nil), l.events...)
 }
 
-func (l *lifecycleLog) started(_ context.Context, jobID, runnerName string) error {
-	l.add("started " + jobID + " on " + runnerName)
+func (l *lifecycleLog) started(_ context.Context, job scalesetlistener.Job) error {
+	l.add("started " + job.JobID + " on " + job.RunnerName)
 	return nil
 }
 
@@ -120,4 +120,38 @@ func TestListener_IgnoresAStartReplayedAfterItsCompletion(t *testing.T) {
 	require.Eventually(t, func() bool { return len(log.seen()) >= 2 }, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, []string{"completed job-d on linux-job-d", "started job-e on linux-job-e"}, log.seen(),
 		"a start for a job already complete must not be recorded")
+}
+
+// TestListener_StartCarriesTheStartedJobsRun pins the listener's half of Q1152: the
+// runner minted for job-a started job-b, so the start hands over job-b's run, which is
+// the one that worker is serving and the one eviction recovery must re-run.
+func TestListener_StartCarriesTheStartedJobsRun(t *testing.T) {
+	srv := newQuickPollServer(t)
+	srv.SeedMessage([]scaleset.JobMessage{
+		{
+			MessageType: scaleset.MessageTypeJobStarted, JobID: "job-b", RunnerName: "linux-job-a",
+			OwnerName: "myorg", RepositoryName: "repo-b", WorkflowRunID: 222, JobDisplayName: "shellcheck",
+		},
+	})
+
+	var (
+		mu  sync.Mutex
+		got []scalesetlistener.Job
+	)
+	startListener(t, srv, fixedCapacity(5), &recordingProvisioner{srv: srv, completeErr: true}, nil,
+		func(c *scalesetlistener.Config) {
+			c.Started = func(_ context.Context, job scalesetlistener.Job) error {
+				mu.Lock()
+				got = append(got, job)
+				mu.Unlock()
+				return nil
+			}
+		})
+
+	require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(got) == 1 }, 5*time.Second, 10*time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, scalesetlistener.Job{
+		JobID: "job-b", RunnerName: "linux-job-a", Owner: "myorg", Repository: "repo-b", RunID: "222", JobName: "shellcheck",
+	}, got[0])
 }

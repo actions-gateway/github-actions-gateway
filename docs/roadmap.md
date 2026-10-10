@@ -24,8 +24,8 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.
 
 
-- **[Scale-set recovery and cleanup that follow the runner, not the worker](design/04-operational-flows.md#on-the-scale-set-tier-q417)** <!-- q:Q1152,Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and three paths assume it went to the worker created for it.
-  Recovery can re-run the wrong run, an idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.
+- **[Scale-set recovery and cleanup that follow the runner, not the worker](design/04-operational-flows.md#on-the-scale-set-tier-q417)** <!-- q:Q1153,Q1154 --> GitHub hands a scale-set job to whichever runner asks first, and two cleanup paths assume it went to the worker created for it.
+  An idle worker can hold a node for 12 hours, and a runner's credential Secret can outlive its worker.
 
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.

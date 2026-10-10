@@ -995,16 +995,25 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 	return p.markJobCompleted(ctx, pod, jobID)
 }
 
-// MarkScaleSetJobStarted records on the worker whose runner is runnerName that its
-// runner has started jobID (AnnotationStartedJobID), which is what stops a completion
-// that names no runner from reclaiming a worker that is busy (see CleanupScaleSetJob).
+// MarkScaleSetJobStarted records on the worker whose runner is job.RunnerName that its
+// runner has started job.JobID (AnnotationStartedJobID), which is what stops a
+// completion that names no runner from reclaiming a worker that is busy (see
+// CleanupScaleSetJob).
+//
+// It also makes the pod's run identity (AnnotationRunID, AnnotationRepository, and the
+// job name) the started job's. ProvisionScaleSetWorker stamped the identity of the job
+// the pod was created for, but GitHub gives a scale-set job to whichever runner asks
+// first, so the pod can be serving another run — and eviction recovery re-runs the run
+// these annotations name (Q1152). A start that carries no complete identity, on a pod
+// created for a different job, removes the stamped identity instead: recovery then
+// reports the identity unknown rather than re-running an unrelated run.
 //
 // A completion stamp already on that worker came from such a completion — a stamp for
 // the worker's own job cannot precede its start, since the listener drops a JobStarted
 // for a job it has already seen complete — so it is removed: the runner that was idle
 // is running a job now. A worker that is gone or already terminal is not an error.
-func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target, jobID, runnerName string) error {
-	found, err := p.scaleSetWorkerByRunner(ctx, target, runnerName)
+func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target, job ScaleSetJob) error {
+	found, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName)
 	if err != nil || found == nil {
 		return err
 	}
@@ -1021,24 +1030,62 @@ func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target,
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 		return nil
 	}
+	identity := startedRunIdentity(job, pod.Name == scaleSetPodName(target.Key().Name, job.JobID))
 	_, stamped := pod.Annotations[AnnotationJobCompletedAt]
-	if pod.Annotations[AnnotationStartedJobID] == jobID && !stamped {
+	if pod.Annotations[AnnotationStartedJobID] == job.JobID && !stamped && annotationsMatch(pod, identity) {
 		return nil
 	}
 	patch := client.MergeFrom(pod.DeepCopy())
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
-	pod.Annotations[AnnotationStartedJobID] = jobID
+	pod.Annotations[AnnotationStartedJobID] = job.JobID
 	delete(pod.Annotations, AnnotationJobCompletedAt)
+	for k, v := range identity {
+		if v == "" {
+			delete(pod.Annotations, k)
+		} else {
+			pod.Annotations[k] = v
+		}
+	}
 	if err := p.Client.Patch(ctx, pod, patch); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		return fmt.Errorf("provisioner: record job start on worker pod %s: %w", pod.Name, err)
 	}
-	p.logFor().Debug("recorded job start on worker pod", "pod", pod.Name, "jobID", jobID, "clearedStamp", stamped)
+	p.logFor().Debug("recorded job start on worker pod", "pod", pod.Name, "jobID", job.JobID,
+		"runID", identity[AnnotationRunID], "clearedStamp", stamped)
 	return nil
+}
+
+// startedRunIdentity is the run-identity annotations a worker takes on when its runner
+// starts job, keyed by annotation with "" meaning absent. It is nil — leave the pod's
+// as stamped — where the start carries no complete identity and the pod was created for
+// that same job, so the stamped identity is already the job's.
+func startedRunIdentity(job ScaleSetJob, mintedForJob bool) map[string]string {
+	m := job.jobMeta()
+	if m.runID == "" || m.repository == "" {
+		if mintedForJob {
+			return nil
+		}
+		m = jobMeta{}
+	}
+	return map[string]string{
+		AnnotationRunID:      m.runID,
+		AnnotationRepository: m.repository,
+		annotationJobName:    m.jobName,
+	}
+}
+
+// annotationsMatch reports whether pod already carries want, "" meaning absent.
+func annotationsMatch(pod *corev1.Pod, want map[string]string) bool {
+	for k, v := range want {
+		if pod.Annotations[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // liveReader is APIReader, or Client where none is wired.

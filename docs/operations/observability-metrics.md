@@ -432,8 +432,9 @@ Add `-o wide` for node placement or `-w` to watch phase transitions live.
 | `actions-gateway.com/workflow` | `CI` | Workflow name. Classic only — the scale-set protocol delivers no workflow name |
 
 On the scale-set tier these are more than diagnostics: `run-id` and `repository` are the **only** record of which workflow run a worker was serving, because that tier provisions fire-and-forget with no in-process job state.
+GitHub gives a scale-set job to whichever of the set's runners asks first, so the AGC rewrites `run-id`, `repository`, and `job-name` when the pod's runner starts a job: before that they name the job the pod was created for, after it the job the runner is running (Q1152).
 Eviction recovery reads them back off the pod to name the run to re-run (Q417), so a worker missing them cannot be recovered automatically — that case is counted by `actions_gateway_eviction_recovery_identity_unknown_total`.
-Do not remove or overwrite them.
+Do not remove or overwrite them by hand.
 
 Scale-set worker pods additionally carry:
 
@@ -442,7 +443,7 @@ Scale-set worker pods additionally carry:
 | `actions-gateway.com/acquisition-protocol` (label) | `ScaleSet` | Marks the pod as provisioned by the scale-set tier. Present only on that tier, so `-l actions-gateway.com/acquisition-protocol=ScaleSet` selects exactly the scale-set workers |
 | `actions-gateway.com/runner-name` (annotation) | `gag-ci-e2e-8f3c…` | The name this pod's runner is registered under at GitHub. The AGC deregisters that record when it reaps the pod, and treats a name stamped here as in-use when it sweeps stale records (Q550) |
 | `actions-gateway.com/job-completed-at` (annotation) | `2026-07-26T12:00:00Z` | When GitHub reported terminal the job this pod's runner held, or, for a job no runner started, the job the pod was created for. Gives a still-Running worker a reap deadline (Q420) |
-| `actions-gateway.com/started-job-id` (annotation) | `8676398a-5763-…` | The job GitHub reported this pod's runner starting, which need not be the job the pod was created for. Keeps a completion that names no runner off a busy worker, and lifts a deadline set while the runner was idle (Q1151) |
+| `actions-gateway.com/started-job-id` (annotation) | `8676398a-5763-…` | The job GitHub reported this pod's runner starting, which need not be the job the pod was created for. Keeps a completion that names no runner off a busy worker, lifts a deadline set while the runner was idle (Q1151), and is how start-up recovery finds a job's worker (Q1152) |
 | `actions-gateway.com/eviction-handled-at` (annotation) | `2026-07-26T12:04:00Z` | When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417) |
 
 All five are controller-set: never set them by hand.

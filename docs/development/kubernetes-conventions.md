@@ -194,6 +194,7 @@ The ground truth is `testdata/job_payload.json`, a redacted capture of a live re
 
 These are best-effort: absent if GitHub omitted the corresponding field (`contextData.github.run_id`/`.repository`/`.workflow` on classic; `ownerName`/`repositoryName`/`workflowRunId` on scale-set).
 Never use them for security enforcement — they are informational annotations for operator visibility, **except** that on the scale-set tier `run-id` and `repository` are also load-bearing: they are the only record of which workflow run a worker was serving, so eviction recovery reads them back off the pod (Q417).
+They are stamped from the job the pod was created for and replaced from the job its runner starts, which GitHub need not give that pod (Q1152).
 Adding a fifth key is fine; changing or removing either of those two breaks recovery on that tier.
 
 One further controller-set annotation is stamped at pod build, on both tiers, only when an opt-in sizing profile actually derived the pod's ask:
