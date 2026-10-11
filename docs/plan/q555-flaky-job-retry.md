@@ -258,6 +258,35 @@ That needs the scale-set assignment to carry enough identity to recognise the re
 **It still masks one thing.** A pull request that doubles a job's memory use would get the memory silently.
 The `SizingDrift` condition already reports a template below observed peaks, and this class's counter must make each bump visible.
 
+### The egress proxy as a failure sensor
+
+The repo's own flake record is dominated by outbound fetches failing inside a job step: registry pulls, release-CDN downloads, GitHub API calls (24 platform-caused flakes of 118 read, 2026-10-10).
+Kubernetes objects show none of those.
+GAG's per-tenant egress proxy is on the path of every one of them, which no other GitHub-layer product is, and an operator-supplied proxy under ARC is not joined to the jobs it serves.
+That join, from a proxy event to the job it broke, is what makes the proxy a sensor rather than plumbing.
+
+**What it records today is thin** (read from [`cmd/proxy`](../../cmd/proxy/), 2026-10-10).
+Its counters (`actions_gateway_proxy_dial_errors_total`, `_connect_denied_total`) carry no labels.
+A denial or a failed upstream dial is logged with the host and not the client.
+Per-connection records that name a source, and so a job, exist only when the operator opts into `ConnectionsWithSource`, and cover accepted connections only (Q986).
+It cannot see an HTTP status inside TLS, so a 403 or 429 from the upstream is invisible, and the proxy must never terminate TLS to see one.
+
+What it could feed into this feature:
+
+| Use | What the proxy would observe | Kind | Needs |
+|---|---|---|---|
+| Upstream unreachable during the job | A dial failure to an allowed destination from this job's worker | Retry class; GAG can watch it clear, because later dials to the same destination succeed | Failures attributed to a source |
+| Destination outage across jobs | Dial failures to one destination from many workers at once | Per-destination breaker: hold retries that depend on it until dials succeed | Failures labelled by destination |
+| Proxy pool unready or saturated | Pool readiness, active tunnels against capacity | Retry class | Already observable from the pool |
+| Policy denial | A `destination not allowed` refusal from this job's worker | Futile: a retry is refused the same way. The event names the host and the allowlist change that fixes it | Denials attributed to a source |
+| Egress IP refused by GitHub | The proxy probing an unauthenticated GitHub endpoint from the tenant's egress IP and getting a 403 (the probe #1217 and #1977 built for CI) | Condition on the set; retries wait until it clears | A periodic self-probe |
+
+Two constraints shape every row.
+**Attribution is a retention decision.** Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so it needs a security review against [05-security.md](../design/05-security.md) before anything ships.
+**Destination labels have bounded cardinality only if they name the allowlist entry that matched**, never the raw host.
+
+[Q1178](../queue/Q1178.md) carries the wider set of ideas for using the proxy as a sensor: conditions, events and intake behaviour beyond retry.
+
 ### Unclassified retry (not scheduled)
 
 A blanket retry of failures nobody classified: the flake retry G.17 sketched.
