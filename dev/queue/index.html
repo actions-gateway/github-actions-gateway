@@ -2710,6 +2710,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Observed 2026-10-09 16:40 PDT in a …</td>
 </tr>
 <tr>
+<td><a href="Q1175/">Q1175</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/gen-api-reference.sh">api-reference-check flakes when two gate runs share tmp/api-reference</a></td>
+<td><code>ci</code> <code>tests</code> <code>flake</code></td>
+<td>💤</td>
+<td>S</td>
+<td><code>gen-api-reference.sh</code> renders into a fixed <code>tmp/api-reference/</code> and <code>rm -rf</code>s it both before generating and in its <code>EXIT</code> trap.</td>
+</tr>
+<tr>
 <td><a href="Q1176/">Q1176</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check fails when Playwright's browser target crashes</a></td>
 <td><code>flake</code> <code>ci</code></td>
