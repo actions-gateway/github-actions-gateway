@@ -239,10 +239,12 @@ It also gives the person who has to act a reason, where today an exhausted budge
 | GitHub will refuse the re-run | `run_attempt` at 50, a run older than 30 days, a `cancelled` conclusion | The deletion arm already stands down on `cancelled` (Q811); the other two are unchecked |
 | The same class failed this job again | A second failure of the same class on a later attempt, after its cause was judged cleared | Per-run counterpart of R14: the class is wrong for this job, so stop and say so |
 | A correlated outage | A set-wide failure rate past the breaker's threshold | R11's breaker |
+| The platform's own image or config is broken | A setup step the worker image provides exits 127, the same on every pod | 8 `gag-ci` jobs did this 2026-06-28 to 07-12; like an unpullable image, every next pod fails the same way |
+| The account cannot run jobs | `The job was not started because recent account payments have failed` | 4 in 2026-05; GitHub refuses before any pod exists |
 
 ### Candidate classes
 
-None is measured yet; each needs R12's reproduction before it becomes a class.
+None is reproduced yet; each needs R12's reproduction before it becomes a class, and the CI history below shows which ones occur.
 
 | Candidate | What GAG would observe | Clears by (R11) | Note |
 |---|---|---|---|
@@ -253,6 +255,21 @@ None is measured yet; each needs R12's reproduction before it becomes a class.
 | Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | Fresh pod | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified. Dogfood logged 16 Spot preemptions against one recovery line in 2026-09 ([Q1179](../queue/Q1179.md)) |
 | Node-level out-of-memory kill | Container killed below its own limit, with a `SystemOOM` node event (the kubelet's name, from recall) | Fresh pod, not guaranteed: it can land on the same packed node | Overcommitted packing is the platform's doing; a kill at the container's own limit is not |
 | `dockerd` sidecar crash | The Docker-in-Docker sidecar's restart count rose during the job | Fresh pod | Mixed: `dockerd` also dies of tenant disk use, so it needs a discriminator |
+
+**What this repository's CI history shows** (failed jobs from 2026-05-18 to 2026-10-11, classified 2026-10-10 from annotations on 2,588 of 2,590 failed jobs and 523 logs; jobs on GAG's own runners are 127 of them):
+
+- **Platform-signed failures are a floor of 1 in 13.** 147 carry a platform signature against 1,772 that do not.
+  A network error inside a test step leaves no annotation, so the true platform share is higher.
+- **Runner lost communication, 55 jobs on GAG's runners**, all concluding at 10 to 11 minutes with no failed step, between 2026-06-30 and 07-20.
+  That is the worker-lost shape the existing arms and [Q1179](../queue/Q1179.md) are about.
+  39 were never re-run.
+  Of 16 same-run retries, 9 passed and 5 failed with the identical message, all 5 in the 2026-06-30 incident, which is a cause outliving one pod: R11's case for waiting on the cause, not the clock.
+  Many arms post-date that window, so this does not show a gap today.
+- **Runner received a shutdown signal, 34 jobs** on the scale-set validation runner, all `workflow_dispatch` on `main`.
+  Troubleshooting ties this text to the JIT Secret mount failure Q1154 fixed; whether these were induced by validation teardown is unverified.
+- **`dockerd` unreachable, 2 jobs**, and **a GAG mirror pull failure, 1 job**, on GAG's runners: the sidecar and mirror candidates above, now each seen at least once.
+- **On GitHub-hosted runners**, the shapes are the outbound fetches the proxy section covers: Docker Hub auth 504s and blob failures (18), action downloads from `codeload.github.com` including a 429 (9), and disk full (6), plus GitHub Pages deploys (16) that no runner platform can see.
+
 
 ### OOMKilled under right-sizing
 
