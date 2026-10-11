@@ -147,7 +147,7 @@ Each line was read at its source unless it says otherwise.
 1. **The merge queue is where retry pays most and where the only product on the same API refuses to go.** It matters only to [unclassified retry](#unclassified-retry-not-scheduled), which is not scheduled.
 2. **Classification is the idea G.17 lacked, and GAG is already good at it.** Zuul retries only setup and infrastructure failures; Jenkins' `kubernetesAgent()` retries a lost pod but not `OOMKilled`.
    GAG's disruption arms are the same idea, and phase 2 widens them ([classified retry](#classified-platform-retry-phase-2)).
-3. **A global rate cap belongs beside the per-run cap** (Kubernetes' one per 20 minutes, Gradle's `maxFailures`); for classified retry, R10's wait for the cause to clear does that job.
+3. **A global rate cap belongs beside the per-run cap** (Kubernetes' one per 20 minutes, Gradle's `maxFailures`); classified retry keeps one beside R10's per-class waits.
 4. **The 50-re-run cap is shared with humans**, and a re-run by the AGC runs with the original actor's privileges, which the existing disruption path already accepts.
 
 ## Requirements
@@ -182,8 +182,15 @@ A class is a failure shape GAG recognises and retries automatically, the way it 
 - **R8.** A class MUST be recognised from facts GAG owns (Kubernetes objects, its own components, protocol messages), never from job logs or anything tenant code writes.
 - **R9.** A class MUST be caused outside the tenant's code and configuration.
   A job exceeding its own limits (memory, `ephemeral-storage`, `timeout-minutes`) does not qualify on that fact alone; [Q1177](../queue/Q1177.md) is the existing arm that misses this.
-- **R10.** A class MUST retry only once the condition that caused the failure has measurably changed: the node is back, the proxy pool is ready again, capacity has returned (the `abandoned` arm's wait, Q691), or the next pod will get more of the resource that ran out.
-  Retrying on a timer while the cause still holds fails again and doubles the load on whatever is broken, so this is also the guard against correlated failure.
+- **R10.** A class MUST NOT spend the budget while its cause still holds.
+  How it waits depends on how the cause clears, and each class MUST declare which of three applies:
+  - **A fresh pod clears it.** A re-run builds a new pod, and the scheduler will not place it on a `NotReady` node, so the retry is already the change.
+    The existing delay and pacing are enough.
+  - **GAG can observe it clearing.** The cause is state GAG owns or computes (proxy pool readiness, mirror readiness, schedulable capacity, the next pod's memory limit), so the retry waits on that state, as the `abandoned` arm already waits for a worker pod to bind before it re-runs (Q691, [`abandoned_rerun.go`](../../cmd/agc/internal/provisioner/abandoned_rerun.go)).
+  - **Neither.** The cause is outside GAG and unobservable from it, such as GitHub or an upstream registry, so it gets the standard answer: backoff and a circuit breaker.
+
+  A set-wide breaker applies to every class regardless, because a cause can be misdeclared.
+  The timing is coarser than request-level retry: a re-run cannot start until the whole run concludes, up to about 10 minutes after a killed runner (Q396), so a backoff schedule matters less than not spending one of a run's two slots too early.
 - **R11.** Each class MUST arrive with evidence: a dogfood reproduction that produces it, and its discriminator shown to separate it from the nearest tenant-caused shape.
 - **R12.** Each class MUST get its own `cause` label on the existing counters and spend the existing per-run budget (`maxEvictionRetries`), so a run cannot collect one budget per class.
   It is on by default like the existing arms, and reuses the paced re-run path (`rerunUntilAccepted`).
@@ -198,15 +205,15 @@ A class is a failure shape GAG recognises and retries automatically, the way it 
 
 None is measured yet; each needs R11's reproduction before it becomes a class.
 
-| Candidate | What GAG would observe | Note |
-|---|---|---|
-| Out of memory under a [right-sizing](runner-sizing-profiles.md) profile | Container `OOMKilled` at its limit, on a set whose profile derives limits from history | Qualifies under R10 only when the retry's pod gets a strictly higher memory limit; see [below](#oomkilled-under-right-sizing) |
-| Setup failure before the first step | The job failed while the runner was registering or downloading actions | Needs the worker to report where setup ends; unmeasured |
-| Egress proxy pool unavailable | The pool had no ready endpoint during the job's window | Retry once the pool is ready again (R10) |
-| Registry mirror unavailable | The mirror was unready while the job pulled an image | Same shape as the proxy |
-| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified |
-| Node-level out-of-memory kill | Container killed below its own limit, with a `SystemOOM` node event (the kubelet's name, from recall) | Overcommitted packing is the platform's doing; a kill at the container's own limit is not |
-| `dockerd` sidecar crash | The Docker-in-Docker sidecar's restart count rose during the job | Mixed: `dockerd` also dies of tenant disk use, so it needs a discriminator |
+| Candidate | What GAG would observe | Clears by (R10) | Note |
+|---|---|---|---|
+| Out of memory under a [right-sizing](runner-sizing-profiles.md) profile | Container `OOMKilled` at its limit, on a set whose profile derives limits from history | Observable: GAG computes the next limit | Qualifies under R10 only when the retry's pod gets a strictly higher memory limit; see [below](#oomkilled-under-right-sizing) |
+| Setup failure before the first step | The job failed while the runner was registering or downloading actions | Neither, when the cause is GitHub: backoff and breaker | Needs the worker to report where setup ends; unmeasured |
+| Egress proxy pool unavailable | The pool had no ready endpoint during the job's window | Observable: pool readiness | GAG owns the pool |
+| Registry mirror unavailable | The mirror was unready while the job pulled an image | Observable: mirror readiness | Same shape as the proxy |
+| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | Fresh pod | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified |
+| Node-level out-of-memory kill | Container killed below its own limit, with a `SystemOOM` node event (the kubelet's name, from recall) | Fresh pod, not guaranteed: it can land on the same packed node | Overcommitted packing is the platform's doing; a kill at the container's own limit is not |
+| `dockerd` sidecar crash | The Docker-in-Docker sidecar's restart count rose during the job | Fresh pod | Mixed: `dockerd` also dies of tenant disk use, so it needs a discriminator |
 
 ### OOMKilled under right-sizing
 
