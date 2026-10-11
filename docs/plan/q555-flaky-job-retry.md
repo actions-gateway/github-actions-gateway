@@ -1,4 +1,4 @@
-# Q555 flaky-job retry: problem statement, requirements, scope
+# Q555 flaky-job detection and classified retry: problem, requirements, scope
 
 **Status:** ⓘ draft for a design session, written 2026-10-10.
 Nothing is built and no CRD shape is committed.
@@ -88,15 +88,15 @@ Classifying is where GAG is strong: no GitHub-layer product can see the pod, the
 **The `eviction` arm does not fully pass that test today.** It keys on `reason: Evicted` alone ([`eviction_scaleset.go`](../../cmd/agc/internal/provisioner/eviction_scaleset.go)), and the kubelet sets that reason when a pod exceeds its *own* `ephemeral-storage` limit, as well as when the node is short.
 The live eviction-recovery e2e triggers eviction exactly that way, with a job that outgrows its own limit, and expects the re-run ([`github_scaleset_test.go`](../../cmd/gmc/test/e2e/github_scaleset_test.go)).
 That is a tenant-caused, likely deterministic failure, the storage analogue of `OOMKilled`, retried up to `maxEvictionRetries` (default 2) and documented as "node pressure".
-Whether the kubelet's `status.message` separates the two shapes is unmeasured; [Q1177](../queue/Q1177.md) tracks it, and R12a's test applies to it as much as to any new class.
+Whether the kubelet's `status.message` separates the two shapes is unmeasured; [Q1177](../queue/Q1177.md) tracks it, and R9's test applies to it as much as to any new class.
 
 **Retry moves the flake away from the person who can fix it.** Today the pull request author sees the red run.
 After a GAG retry the run is green, and the flake survives only in operator metrics and Events, because writing back to GitHub is out of scope (R16).
 Removing that friction also removes some of the pressure to fix the test, which is why Kubernetes bans automatic retries outright.
-On 2026-10-10 the maintainer kept retry as an opt-in phase 2 with this cost understood, on the condition that detection ships first and makes the flake visible somewhere.
+On 2026-10-10 the maintainer first kept unclassified retry as an opt-in phase 2 with this cost understood, then preferred classified retry, which does not pay it; unclassified retry is now [not scheduled](#unclassified-retry-not-scheduled).
 
 **Whoever pays decides.** The operator pays for compute; the repository owner owns the correctness of their checks.
-Retry spends both, so it needs an explicit opt-in from whoever owns the `RunnerSet`, and a job's own workflow must never be able to switch it on (G.17 already holds this line for the tenant-signal channel).
+An unclassified retry spends both, so it would need an explicit opt-in from whoever owns the `RunnerSet`, and a job's own workflow must never be able to switch it on (G.17 already holds this line for the tenant-signal channel).
 
 ## Prior art
 
@@ -144,16 +144,20 @@ Each line was read at its source unless it says otherwise.
 
 ### What this changes
 
-1. **The merge queue is where retry pays most and where the only product on the same API refuses to go.** So R12 leaves `merge_group` out of the default scope and the design session decides.
+1. **The merge queue is where retry pays most and where the only product on the same API refuses to go.** It matters only to [unclassified retry](#unclassified-retry-not-scheduled), which is not scheduled.
 2. **Classification is the idea G.17 lacked, and GAG is already good at it.** Zuul retries only setup and infrastructure failures; Jenkins' `kubernetesAgent()` retries a lost pod but not `OOMKilled`.
-   GAG's disruption arms are the same idea, and phase 2 should widen them before it retries anything unclassified ([R12a](#retry-phase-2)).
-3. **A global rate cap belongs beside the per-run cap** (Kubernetes' one per 20 minutes, Gradle's `maxFailures`); R11 now says so.
+   GAG's disruption arms are the same idea, and phase 2 widens them ([classified retry](#classified-platform-retry-phase-2)).
+3. **A global rate cap belongs beside the per-run cap** (Kubernetes' one per 20 minutes, Gradle's `maxFailures`); for classified retry, R10's wait for the cause to clear does that job.
 4. **The 50-re-run cap is shared with humans**, and a re-run by the AGC runs with the original actor's privileges, which the existing disruption path already accepts.
 
 ## Requirements
 
 MUST and SHOULD are used in their usual sense.
 Each requirement is written to be testable.
+
+**Direction, set 2026-10-10.** The maintainer judged classified platform retry more practical and useful than a blanket flake retry: every class GAG can recognise and retry is a failure nobody has to re-run by hand to triage.
+So phase 2 is classified retry.
+A blanket retry of unclassified failures is [not scheduled](#unclassified-retry-not-scheduled), and its design is kept below in case detection shows it is still wanted.
 
 ### Detection (phase 1, no behaviour change)
 
@@ -168,41 +172,81 @@ Each requirement is written to be testable.
   An undercount is acceptable; a false flake is not.
 - **R6.** Detection MUST NOT need a GitHub API call per completed job.
   Calls are for the rare case (a failure, or a re-run), never the common one.
+- **R7.** For each failed attempt, detection MUST record the platform context GAG could read at the time: the pod's phase, reason and message, each container's termination reason and restart count (sidecars included), the node's conditions, and the readiness of the set's egress proxy pool and registry mirror.
+  The record of failures that later passed is the evidence that proposes new classes; without it, a candidate is a guess.
 
-### Retry (phase 2)
+### Classified platform retry (phase 2)
 
-- **R7.** Retry MUST be off by default and enabled per `RunnerSet`, by its owner, never by anything a workflow emits.
-- **R8.** Retry MUST fire only on `result == failed`.
-  It MUST NOT fire on succeeded, cancelled or skipped jobs, nor on a run a user cancelled.
-- **R9.** Retry MUST be bounded per run by a cap that survives an AGC restart.
-  The default cap SHOULD be one automatic retry.
-  Capping on GitHub's `run_attempt` meets this without new state, and keeps the AGC well inside GitHub's 50-re-run limit, which humans share.
-- **R10.** Flake retries MUST have their own budget and their own `cause` value, so the disruption budget is neither spent by flakes nor able to stand in for them.
-  Whether a combined lifetime cap also applies is an [open question](#open-questions-for-the-design-session).
-- **R11.** Retry MUST suspend itself when the set-wide failure rate over a window passes a threshold, report that as a condition on the `RunnerSet`, and resume without an operator.
-  This is the stampede guard for correlated failure.
-  A per-set rate cap on retries SHOULD sit beside it, so a burst of individually eligible runs cannot all retry at once.
-- **R12.** Retry MUST be scoped by event type, defaulting to `pull_request`; whether `merge_group` joins the default is [open](#open-questions-for-the-design-session).
-  Other events, `push` to a default branch above all, MUST be an explicit further opt-in, because those are where deploy and publish jobs live.
-  A repository or workflow filter SHOULD be available.
-- **R12a.** Phase 2 MUST first add retry for newly classified platform failures, each recognised from facts GAG owns and shown to be temporary and self-resolving, before it retries failures nobody has classified.
-  A new class joins the existing re-run arms and their budget, so it is on by default like they are; a blanket retry of unclassified failures stays opt-in (R7).
-  Candidates, none yet measured to be distinguishable: a job that failed during setup (image pull, runner registration, action download) before its first step; a job that failed while its egress proxy pool or registry mirror was reporting unavailable; a node that went `NotReady` under a running worker.
-  `OOMKilled` is not a candidate: the job's own memory use is the tenant's to fix, which is the line Jenkins draws.
-- **R13.** Every automatic retry MUST be counted and evented, and a retry that then passes MUST be counted as a detected flake under R1.
-  A retry may never make a flake less visible to the operator than it was before.
-- **R14.** Retry MUST reuse the existing paced re-run path (`rerunUntilAccepted`), so it inherits the wait for run conclusion, the refusal handling, and the API budget.
-- **R15.** Retried compute MUST be attributable per set, so the [cost-attribution](../operations/cost-attribution.md) story gains a flake-spend line.
-- **R16.** Retry MUST need no GitHub App permission beyond what disruption recovery already uses.
+A class is a failure shape GAG recognises and retries automatically, the way it already retries eviction, preemption, deletion, abandoned and vanished workers.
+
+- **R8.** A class MUST be recognised from facts GAG owns (Kubernetes objects, its own components, protocol messages), never from job logs or anything tenant code writes.
+- **R9.** A class MUST be caused outside the tenant's code and configuration.
+  A job exceeding its own limits (memory, `ephemeral-storage`, `timeout-minutes`) does not qualify on that fact alone; [Q1177](../queue/Q1177.md) is the existing arm that misses this.
+- **R10.** A class MUST retry only once the condition that caused the failure has measurably changed: the node is back, the proxy pool is ready again, capacity has returned (the `abandoned` arm's wait, Q691), or the next pod will get more of the resource that ran out.
+  Retrying on a timer while the cause still holds fails again and doubles the load on whatever is broken, so this is also the guard against correlated failure.
+- **R11.** Each class MUST arrive with evidence: a dogfood reproduction that produces it, and its discriminator shown to separate it from the nearest tenant-caused shape.
+- **R12.** Each class MUST get its own `cause` label on the existing counters and spend the existing per-run budget (`maxEvictionRetries`), so a run cannot collect one budget per class.
+  It is on by default like the existing arms, and reuses the paced re-run path (`rerunUntilAccepted`).
+- **R13.** The AGC MUST measure each cause's retry success rate (re-runs that then passed, over re-runs), using detection's pairing.
+  A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape would read near zero.
+- **R14.** The per-run budget MUST survive an AGC restart before classes that fire more often are added.
+  It lives in process memory today ([`reserveEvictionRetry`](../../cmd/agc/internal/provisioner/eviction.go)); capping on GitHub's `run_attempt` is one way, and keeps the AGC well inside GitHub's 50-re-run limit, which humans share.
+- **R15.** Every classified retry MUST be counted and evented with its cause, and its compute attributable per set ([cost attribution](../operations/cost-attribution.md)).
+- **R16.** Classified retry MUST need no GitHub App permission beyond what disruption recovery already uses.
+
+### Candidate classes
+
+None is measured yet; each needs R11's reproduction before it becomes a class.
+
+| Candidate | What GAG would observe | Note |
+|---|---|---|
+| Out of memory under a [right-sizing](runner-sizing-profiles.md) profile | Container `OOMKilled` at its limit, on a set whose profile derives limits from history | Qualifies under R10 only when the retry's pod gets a strictly higher memory limit; see [below](#oomkilled-under-right-sizing) |
+| Setup failure before the first step | The job failed while the runner was registering or downloading actions | Needs the worker to report where setup ends; unmeasured |
+| Egress proxy pool unavailable | The pool had no ready endpoint during the job's window | Retry once the pool is ready again (R10) |
+| Registry mirror unavailable | The mirror was unready while the job pulled an image | Same shape as the proxy |
+| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified |
+| Node-level out-of-memory kill | Container killed below its own limit, with a `SystemOOM` node event (the kubelet's name, from recall) | Overcommitted packing is the platform's doing; a kill at the container's own limit is not |
+| `dockerd` sidecar crash | The Docker-in-Docker sidecar's restart count rose during the job | Mixed: `dockerd` also dies of tenant disk use, so it needs a discriminator |
+
+### OOMKilled under right-sizing
+
+A job killed at its own memory limit is tenant-caused under R9, and retrying it under a fixed limit fails the same way.
+Right-sizing changes that: under the `Throughput` and `Binpack` profiles the next pod's limit is derived from observed usage, so a retry can be the fix rather than a repeat.
+It qualifies under R10 when the AGC can show the retry's pod will get a strictly higher memory limit than the pod that died, and it is easy to get wrong in three ways (all read from source, 2026-10-10):
+
+1. **The set's history may not move.** The recommended limit is the set's highest sampled per-job peak × 1.4 ([`aggregate.go`](../../cmd/agc/internal/usage/aggregate.go)), sampled from metrics-server every 15 seconds.
+   A job dies at its limit, so its sampled peak is at most that limit, and lower whenever the climb before the kill is shorter than one sample.
+   One OOM may raise the limit by up to 1.4×, or not at all.
+2. **History is not used until it is confident.** A set with fewer than 5 sampled jobs provisions `Static`, which is the template as written.
+3. **A clamp can stop it.** A limit already at the profile's ceiling cannot grow, so the retry would repeat.
+
+So the retry should not count on the aggregate.
+The AGC SHOULD raise the limit for that job's next attempt from the killed pod's own limit (× the same headroom, clamped to the ceiling) and retry only if that is higher.
+That needs the scale-set assignment to carry enough identity to recognise the re-run, which `JobAssigned` does (run id and job display name).
+
+**It still masks one thing.** A pull request that doubles a job's memory use would get the memory silently.
+The `SizingDrift` condition already reports a template below observed peaks, and this class's counter must make each bump visible.
+
+### Unclassified retry (not scheduled)
+
+A blanket retry of failures nobody classified: the flake retry G.17 sketched.
+It is not scheduled, because [moving the flake away from the author](#first-principles) is a cost classified retry does not pay.
+Revive it if detection shows flake toil the classes cannot reach and the maintainer accepts that cost.
+The design if it is revived:
+
+- Off by default, opted in per `RunnerSet` by its owner, never by anything a workflow emits.
+- Only on `result == failed`; never on succeeded, cancelled or skipped jobs, nor a run a user cancelled.
+- One retry per run by default, capped on `run_attempt`, with its own budget and `cause`.
+- A set-wide failure-rate breaker and a retry rate cap.
+- Scoped by event, defaulting to `pull_request`, with `merge_group` an open question (where a flake costs most, and where Mergify declines to retry).
+- A retry that passes counts as a detected flake under R1.
 
 ## Scope
 
 **In scope:**
 
-- The scale-set tier.
-- Job-granular detection and run-granular retry through the existing re-run machinery.
-- New classified platform-failure classes on the existing re-run arms (R12a).
-- An opt-in on the `RunnerSet` for unclassified failures, with bounds, scope filters and a circuit breaker.
+- Flaky-job detection on the scale-set tier, with the platform context of each failure (R7).
+- Classified platform retry on the existing re-run arms, one evidenced class at a time.
 - Metrics, Events and a condition for the operator.
 
 **Out of scope, and why:**
@@ -210,21 +254,18 @@ Each requirement is written to be testable.
 | Out | Why |
 |---|---|
 | The classic tier | It never receives `JobCompleted`, and it is terminal |
+| Unclassified retry | Not scheduled; its design is kept [above](#unclassified-retry-not-scheduled) |
 | Test-level retry or quarantine | Needs the test framework; Datadog, Trunk and Develocity own that layer |
-| Failure-reason matching (exit codes, log patterns) | Ship with budgets and scopes first, as G.17 already says; a taxonomy needs data detection will produce |
+| Classifying from job logs | R8: a class rests on facts GAG owns |
 | A signal from inside the job asking for retry | G.17's channel analysis stands; it gives up the "no workflow edits" property and needs its own design |
-| Writing back to GitHub (check runs, PR comments) | Needs new App permissions (R16); GitHub's own "Attempt #2" label is the tenant-visible trace for now |
-| Known-flakes-only retry | Needs the history phase 1 collects; revisit once it has some |
-| Merge queue reordering or re-enqueue | The queue is GitHub's; GAG re-runs the job and lets the queue react |
+| Writing back to GitHub (check runs, PR comments) | Needs new App permissions (R16) |
 
 ## Open questions for the design session
 
 1. **Where pairing state lives.** In memory loses pairs on restart (R5 accepts the undercount); a ConfigMap shares the write-contention problems the recovery claims already hit (Q1108); asking GitHub for the previous attempt's jobs is stateless but costs a call per re-run.
 2. **Run-granular or job-granular re-run.** Both endpoints wait for the run to conclude and both re-run dependents, so timing does not decide it.
    `rerun-failed-jobs` re-runs every failed job, plus siblings fail-fast cancelled; `jobs/{id}/rerun` re-runs one, but needs the job's numeric id, which `JobCompleted` does not carry (it has a UUID), so it costs a jobs-list call per retry.
-3. **Merge queue.** It is where a flake costs most, since an ejection rebuilds every group behind it, and where Mergify, the nearest product on the same API, declines to retry.
-   In the default scope or not?
-4. **Which platform classes can be told apart.** R12a's candidates rest on boundaries nobody has measured: whether the worker can report that it failed before the first step, and whether a proxy or mirror outage can be tied to the jobs it broke.
-   Each candidate needs a dogfood measurement before it becomes a class.
-5. **One lifetime cap or two.** Should a run that is both evicted and flaky be bounded by the sum of the two budgets, or by a single combined cap?
-6. **The CRD shape**, via [api-review.md](../development/api-review.md), including whether detection's default-on needs a field at all.
+3. **Which candidates can be told apart**, and in what order to measure them.
+4. **Event scope.** The existing arms re-run every event, deploy and publish jobs included.
+   Do new classes inherit that?
+5. **The CRD shape**, via [api-review.md](../development/api-review.md): whether detection or any class needs a field, and whether a class needs a per-set off switch.

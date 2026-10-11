@@ -24,9 +24,9 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.
 
 
-- **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
-  Same machinery, opted in per runner set with its own budget so a broken test cannot loop.
-  Flaky-job detection ships first, so a flake is counted before anything retries it.
+- **[Flaky-job detection, and auto-retry for more platform failures](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
+  Detection counts flaky jobs per runner set first.
+  Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
 
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.

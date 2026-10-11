@@ -585,6 +585,7 @@ It sits on the runner-container side of every one of these boundaries, already o
 
 **Trigger.** Fired 2026-10-10: the maintainer ruled that this repository's own CI, which runs on GAG, is the operator ask.
 Q555 is in the Queue and tracks the design decision; the [draft](../plan/q555-flaky-job-retry.md) holds the requirements and the questions a design session settles.
+Its direction differs from the sketch above: phase 2 retries newly *classified* platform failures on the existing arms, and the blanket opt-in retry is not scheduled.
 
 ---
 
