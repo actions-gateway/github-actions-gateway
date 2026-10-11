@@ -201,6 +201,24 @@ A class is a failure shape GAG recognises and retries automatically, the way it 
 - **R15.** Every classified retry MUST be counted and evented with its cause, and its compute attributable per set ([cost attribution](../operations/cost-attribution.md)).
 - **R16.** Classified retry MUST need no GitHub App permission beyond what disruption recovery already uses.
 
+### Known-futile retries
+
+The inverse of a class: a failure GAG can recognise as one a retry will not fix.
+Skipping it saves a budget slot, a node, queue time and throughput, and in a correlated failure it is the difference between one failed job and a stampede.
+It also gives the person who has to act a reason, where today an exhausted budget only says a manual re-run is needed.
+
+- **R17.** Before any retry spends a budget slot, on the existing arms and every new class alike, the AGC MUST check it against the known-futile shapes below.
+  A futile retry is skipped, counted under its own reason label, and evented with the reason and the action that would fix it (raise the limit, fix the image, nothing because the run was superseded).
+
+| Futile shape | What GAG would observe | Status |
+|---|---|---|
+| The worker's *shape* cannot run: an unpullable image, or a pod no node can host | The capacity gate's startup and placeability verdicts ([`worker_startup_verdict.go`](../../cmd/agc/internal/controller/worker_startup_verdict.go), Q714) | Built for intake: the gate stops new work when every next pod would fail the same way. Whether the re-run paths consult it is unverified |
+| The job exceeded its own limit | `OOMKilled` at its limit under `Static` sizing, an `ephemeral-storage` limit eviction, `timeout-minutes` | The eviction arm retries the storage case today ([Q1177](../queue/Q1177.md)) |
+| A newer commit superseded the run | The pull request's head no longer matches the run's `head_sha`, or the run was cancelled by a concurrency group | Not checked: nothing in the re-run path reads either. One API call per retry, which is affordable because retries are rare |
+| GitHub will refuse the re-run | `run_attempt` at 50, a run older than 30 days, a `cancelled` conclusion | The deletion arm already stands down on `cancelled` (Q811); the other two are unchecked |
+| The same class failed this job again | A second failure of the same class on a later attempt, after its cause was judged cleared | Per-run counterpart of R13: the class is wrong for this job, so stop and say so |
+| A correlated outage | A set-wide failure rate past the breaker's threshold | R10's breaker |
+
 ### Candidate classes
 
 None is measured yet; each needs R11's reproduction before it becomes a class.
