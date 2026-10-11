@@ -2598,20 +2598,23 @@
 
 
 <h1 id="render-overflow-check-fails-when-playwrights-browser-target-crashes">render-overflow-check fails when Playwright's browser target crashes<a class="headerlink" href="#render-overflow-check-fails-when-playwrights-browser-target-crashes" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> the <code>render-overflow</code> job fails on <code>main</code> with <code>Target crashed</code> after three attempts on one path, or fails because opening the fresh page itself raises (a whole-browser crash rather than one renderer's). → top of Queue, escalated.</p>
 <p>The <code>render-overflow</code> job failed in run 38081758922 (job 114300061125, head <code>07befb885</code>, 2026-10-10) and passed when that job was re-run with no code change.
 It measured <code>site</code> at widths 320 and 1440 clean (63 pages, 126 measurements, 0 findings), began on <code>site-dev</code>, and about three minutes later raised from <code>measure</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>playwright._impl._errors.Error: Page.set_viewport_size: Target crashed
 </code></pre></div>
 <p>So no page produced a finding; the browser tab died under the checker.
 That head changed only Go and a few doc paragraphs, none of them layout.</p>
-<p>This is a different symptom from Q1165, a navigation timeout, and the retry proposed for Q1165 does not reach it: as drafted it catches Playwright's <code>TimeoutError</code> from <code>page.goto</code> only.
-The cause of the crash is unmeasured.
-A crashed Chromium renderer on a hosted runner is usually memory pressure, and <code>site-dev</code> publishes the backlog, which is the largest scope the checker loads; that is a hypothesis, not a reading.
-<code>measure()</code> also opens one page and reuses it for every URL in a scope (<code>scripts/docs/check-render-overflow.py</code>, the comment above <code>ctx.new_page()</code>), so in <code>site-dev</code> one renderer lives through every navigation; a renderer that grows with each page it has loaded would crash late in the largest scope, which fits the reading but is also unmeasured.</p>
-<p><strong>A likely fix</strong>: when a measurement raises <code>Target crashed</code>, open a fresh page (or browser context) and retry that path a bounded number of times, reporting a crash that persists as a failure that names the path.
-If the renderer's growth is the cause, recycling the page every N paths would prevent the crash rather than recover from it, at the cost of the speed the shared page was chosen for.
-First check the failed run's runner for memory, and whether one path crashes repeatedly, since a page that reliably kills the renderer is a finding rather than a flake.</p>
-<p><strong>Reach.</strong> Any run of the <code>render-overflow</code> job: a red that a re-run clears.
+<p><strong>Mitigated by <a href="../Q1165/">Q1165</a>'s retry</strong>, which owns the mechanism: since #2054 the checker retries each path's load, resize and measure up to three times, on a fresh page, for any Playwright error.
+Measured 2026-10-10 on macOS against <code>11b992181</code>'s checker and its pinned Playwright: a probe drove the checker's own <code>retry()</code> on a local page, crashed the renderer with Chrome DevTools Protocol <code>Page.crash</code> after <code>goto</code>, then called <code>set_viewport_size</code>.
+It raised <code>Page.set_viewport_size: Target crashed</code> (the CI message, word for word), printed the retry warning, and measured the path on attempt 2, in 10 of 10 rounds.
+A Linux hosted runner was not tried.</p>
+<p><strong>What the retry does not reach.</strong> Opening the fresh page sits outside the retried call, so a crash of the whole browser, rather than one tab's renderer, still fails the job, and so does a path that crashes all three fresh pages.
+The second would be a finding rather than a flake: a page that reliably kills the renderer.</p>
+<p>The cause of the crash is unmeasured.
+A crashed Chromium renderer on a hosted runner is usually memory pressure, and <code>site-dev</code> publishes the backlog, the largest scope the checker loads; that is a hypothesis, not a reading.
+Q1165 measured no renderer growth across a local <code>site-dev</code> sweep on a Mac, and the runner's memory during a failure has not been read.</p>
+<p>Soak counts <code>render-overflow</code> runs on <code>main</code> from #2054's merge, 2026-10-10.
 One occurrence observed; the rate is unmeasured.</p>
 
 

@@ -2721,9 +2721,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1176/">Q1176</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check fails when Playwright's browser target crashes</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>The <code>render-overflow</code> job failed in run 38081758922 (job 114300061125, head <code>07befb885</code>, 2026-10-10) and passed when that job was re-run …</td>
+<td><strong>Event:</strong> the <code>render-overflow</code> job fails on <code>main</code> with <code>Target crashed</code> after three attempts on one path, or fails because opening the …</td>
 </tr>
 <tr>
 <td><a href="Q1164/">Q1164</a></td>
@@ -2958,14 +2958,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
 </tr>
 <tr>
-<td><a href="Q1174/">Q1174</a></td>
-<td><a href="../design/04-operational-flows/">A replayed scale-set provision can hand its pod a Secret being deleted</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.</td>
-</tr>
-<tr>
 <td><a href="Q1169/">Q1169</a></td>
 <td><a href="../design/04-operational-flows/">A never-started scale-set worker's recovery acts on its namesake's run</a></td>
 <td><code>bug</code></td>
@@ -2974,12 +2966,36 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>When a scale-set worker is removed before its container ever ran — the reaper's <code>pendingPodDeadline</code> delete, or an external delete of a …</td>
 </tr>
 <tr>
+<td><a href="Q1174/">Q1174</a></td>
+<td><a href="../design/04-operational-flows/">A replayed scale-set provision can hand its pod a Secret being deleted</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.</td>
+</tr>
+<tr>
 <td><a href="Q1130/">Q1130</a></td>
 <td><a href="../development/parallel-dispatch/">Nothing spaces a batch across the registry files that still collide</a></td>
 <td><code>ci</code> <code>debt</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>.gitattributes</code> routes four paths to per-clone merge drivers: <code>scripts/README.md</code>, <code>mk/gate-lists.mk</code>, <code>docs/plan/README.md</code> and …</td>
+</tr>
+<tr>
+<td><a href="Q1185/">Q1185</a></td>
+<td><a href="../development/maintaining-backlog/#plan-level-status-lives-in-the-plan-index">Should feature PRs stop editing a release plan's Status cell?</a></td>
+<td><code>retro</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Every PR in a release batch rewrites the same cell, so each merge leaves the next PR conflicted and the batch can only merge one at a time.</td>
+</tr>
+<tr>
+<td><a href="Q1168/">Q1168</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check cannot load a Mermaid page while unpkg.com stalls</a></td>
+<td><code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Separate from <a href="Q1165/">Q1165</a>: that row's page made no load-blocking off-host request, and this one is a page that does.</td>
 </tr>
 <tr>
 <td><a href="Q401/">Q401</a></td>
@@ -3403,7 +3419,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>debt</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>L</td>
-<td>Blocked until 1.10 tags: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a …</td>
+<td>Blocked on the 1.10 tag: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a …</td>
 </tr>
 <tr>
 <td><a href="Q264/">Q264</a></td>
@@ -3726,6 +3742,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or …</td>
 </tr>
 <tr>
+<td><a href="Q1170/">Q1170</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-roadmap-test.sh">Fixture builders as arguments hide a killed builder in six test suites</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Six suites build fixtures inside a command substitution passed straight to an assertion helper, the shape <a href="Q1145/">Q1145</a> removed from …</td>
+</tr>
+<tr>
 <td><a href="Q996/">Q996</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/monitoring/promqlcheck/main.go">promql-check and dashboard-render-check guard less than they read as</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -3980,22 +4004,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Event:</strong> the release gate's wall clock becomes the thing that delays a release, or a fourth e2e leg is proposed.</td>
-</tr>
-<tr>
-<td><a href="Q1168/">Q1168</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check cannot load a Mermaid page while unpkg.com stalls</a></td>
-<td><code>ci</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Separate from <a href="Q1165/">Q1165</a>: that row's page made no load-blocking off-host request, and this one is a page that does.</td>
-</tr>
-<tr>
-<td><a href="Q1170/">Q1170</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-roadmap-test.sh">Fixture builders as arguments hide a killed builder in six test suites</a></td>
-<td><code>tests</code> <code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Six suites build fixtures inside a command substitution passed straight to an assertion helper, the shape <a href="Q1145/">Q1145</a> removed from …</td>
 </tr>
 <tr>
 <td><a href="Q1172/">Q1172</a></td>
