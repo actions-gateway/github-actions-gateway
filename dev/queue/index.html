@@ -2950,12 +2950,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
 </tr>
 <tr>
-<td><a href="Q1154/">Q1154</a></td>
-<td>Scale-set JIT Secret outlives a worker reaped before its job completes</td>
-<td><code>bug</code> <code>security</code> <code>1.10-gate</code></td>
+<td><a href="Q1174/">Q1174</a></td>
+<td><a href="../design/04-operational-flows/">A replayed scale-set provision can hand its pod a Secret being deleted</a></td>
+<td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Since Q1151, a scale-set <code>JobCompleted</code> reclaims the Secret mounted by the worker whose <code>actions-gateway.com/runner-name</code> matches the …</td>
+<td>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.</td>
 </tr>
 <tr>
 <td><a href="Q1169/">Q1169</a></td>

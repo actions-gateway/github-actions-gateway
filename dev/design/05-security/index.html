@@ -3736,6 +3736,11 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <td>Enforce absolute 1-Job-Per-Pod isolation. Avoid reusing volumes or host paths between worker pods. Use ephemeral, <code>emptyDir</code> volumes for workspace storage.</td>
 </tr>
 <tr>
+<td><strong>A Runner Credential Outliving Its Worker</strong> (scale-set JIT-config Secret)</td>
+<td>Medium</td>
+<td>Each scale-set worker mounts a per-job Secret holding its runner's JIT config. Once the pod exists it becomes the Secret's only owner, so the garbage collector deletes the Secret whenever the pod goes: reaped, drained, or deleted by hand (Q1154). Before that the RunnerSet owned it, and a job completion, the only other reclaim, reads the Secret's name off a pod that may already be gone. The handover is best-effort: if it fails, the RunnerSet keeps ownership, and the Secret is reclaimed by the job's completion when it can find the worker, and otherwise only when the RunnerSet is deleted.</td>
+</tr>
+<tr>
 <td><strong>AGC Token Compromise</strong></td>
 <td>High</td>
 <td>The AGC never saves plaintext keys to disk. GitHub App private keys are mounted as read-only volumes with restrictive file permissions (0400).</td>

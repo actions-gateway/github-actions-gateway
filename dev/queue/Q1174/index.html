@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1154/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1174/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Scale-set JIT Secret outlives a worker reaped before its job completes - GitHub Actions Gateway</title>
+        <title>A replayed scale-set provision can hand its pod a Secret being deleted - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#scale-set-jit-secret-outlives-a-worker-reaped-before-its-job-completes" class="md-skip">
+        <a href="#a-replayed-scale-set-provision-can-hand-its-pod-a-secret-being-deleted" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Scale-set JIT Secret outlives a worker reaped before its job completes
+              A replayed scale-set provision can hand its pod a Secret being deleted
             
           </span>
         </div>
@@ -2597,16 +2597,16 @@
   
 
 
-<h1 id="scale-set-jit-secret-outlives-a-worker-reaped-before-its-job-completes">Scale-set JIT Secret outlives a worker reaped before its job completes<a class="headerlink" href="#scale-set-jit-secret-outlives-a-worker-reaped-before-its-job-completes" title="Permanent link">&para;</a></h1>
-<p>Since Q1151, a scale-set <code>JobCompleted</code> reclaims the Secret mounted by the worker whose <code>actions-gateway.com/runner-name</code> matches the runner the completion names.
-If that worker is already gone when the completion arrives, the Secret is read off nothing.
-The fallback deletes the Secret named for the completed job only when the worker minted for that job is gone too.
-So when a job ran on another job's worker, that worker was deleted first, and the minted worker is still present, the credential-bearing JIT-config Secret the deleted worker mounted stays until the RunnerSet is deleted (Q373's leak, narrowed).</p>
-<p>The window is small: a completion normally arrives seconds after the runner exits, and <code>completedPodTTL</code> holds a terminal pod for minutes.
-It opens when a completion is delayed past that TTL (a listener down, or a queue replayed after restart) or when an operator deletes the pod by hand.
-Found by the reviewer of the Q1151 fix, from source; the rate is unmeasured.</p>
-<p>This is separate from Q1152 (which run recovery names) and Q1153 (an idle worker not reclaimed); none of the three fixes closes another.</p>
-<p><strong>A likely fix</strong> is to reclaim a worker's Secret when the reaper deletes the worker, reading the name off its <code>job-payload</code> volume, so the Secret's lifetime follows the pod rather than a message that may arrive after it.</p>
+<h1 id="a-replayed-scale-set-provision-can-hand-its-pod-a-secret-being-deleted">A replayed scale-set provision can hand its pod a Secret being deleted<a class="headerlink" href="#a-replayed-scale-set-provision-can-hand-its-pod-a-secret-being-deleted" title="Permanent link">&para;</a></h1>
+<p>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.
+Suppose a provision for the same job is replayed in the window between the pod's deletion and the collector's delete of the Secret (a re-created session replays its assignments from cursor 0).
+<code>ProvisionScaleSetWorker</code> names both objects from the job ID, so the replay finds the old Secret, treats its <code>AlreadyExists</code> as success, creates a new pod, and patches the Secret's owner to that pod.
+If the collector has already decided to delete the Secret, the new pod is left <code>Pending</code> on a Secret that no longer exists.</p>
+<p>Reasoned from code by the Q1154 reviewer; not reproduced, and whether the collector re-checks owners after the patch is unmeasured.
+It needs a replay of an assignment whose worker was deleted moments before, which the listener's held-message bookkeeping (Q583) makes rare but does not exclude.</p>
+<p><strong>A likely fix</strong>: on the <code>AlreadyExists</code> path, read the Secret and treat one with a <code>deletionTimestamp</code>, or one owned by a Pod that no longer exists, as absent: wait for it to go and re-create it.
+A <code>Pending</code> worker on a missing Secret falls to the RunnerSet's <code>spec.pendingPodDeadline</code> reap, so the cost should be bounded by one worker's deadline rather than a stuck slot; that bound is read from the reaper, not exercised for this case.</p>
+<p><strong>Reach.</strong> Any scale-set tenant whose session is re-created while a worker is being deleted: a replayed job's worker waits out its <code>Pending</code> deadline instead of starting.</p>
 
 
 
