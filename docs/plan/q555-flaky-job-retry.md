@@ -280,7 +280,7 @@ It qualifies under R11 when the AGC can show the retry's pod will get a strictly
 1. **The set's history may not move.** The recommended limit is the set's highest sampled per-job peak × 1.4 ([`aggregate.go`](../../cmd/agc/internal/usage/aggregate.go)), sampled from metrics-server every 15 seconds.
    A job dies at its limit, so its sampled peak is at most that limit, and lower whenever the climb before the kill is shorter than one sample.
    One OOM may raise the limit by up to 1.4×, or not at all.
-2. **History is not used until it is confident.** A set with fewer than 5 sampled jobs provisions `Static`, which is the template as written.
+2. **History is not used until it is confident.** A right-sizing profile applies only once every container has 20 sampled jobs (`MinSamplesForDrift`); until then the set provisions the template as written.
 3. **A clamp can stop it.** A limit already at the profile's ceiling cannot grow, so the retry would repeat.
 
 So the retry should not count on the aggregate.
@@ -356,7 +356,7 @@ The design if it is revived:
 
 [The design](q555-automatic-recovery-design.md) recommends an answer to each, marked **Decide** there.
 
-1. **Where pairing state lives.** In memory loses pairs on restart (R5 accepts the undercount); a ConfigMap shares the write-contention problems the recovery claims already hit (Q1108); asking GitHub for the previous attempt's jobs is stateless but costs a call per re-run.
+1. **Where pairing state lives.** In memory loses pairs on restart (R5 accepts the undercount); a ConfigMap is an uncached read-modify-write, like the recovery claims; asking GitHub for the previous attempt's jobs is stateless but costs a call per re-run.
 2. **Run-granular or job-granular re-run.** Both endpoints wait for the run to conclude and both re-run dependents, so timing does not decide it.
    `rerun-failed-jobs` re-runs every failed job, plus siblings fail-fast cancelled; `jobs/{id}/rerun` re-runs one, but needs the job's numeric id, which `JobCompleted` does not carry (it has a UUID), so it costs a jobs-list call per retry.
 3. **Which candidates can be told apart**, and in what order to measure them.
