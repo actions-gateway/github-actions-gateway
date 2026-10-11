@@ -2618,7 +2618,7 @@ kubectl get runnergroup -n <namespace> <name> \
 | `private key: RSA key parse error` / `no PEM block found` | PEM key is corrupted — extra whitespace, missing or extra newlines, CRLF line endings, hand-paste damage, or an unsupported block type (e.g. `OPENSSH`/`EC`, which fail with `unsupported PEM block type`). Both PKCS#1 (`-----BEGIN RSA PRIVATE KEY-----`) and PKCS#8 (`-----BEGIN PRIVATE KEY-----`) are accepted, so PKCS#8 is **not** a wrong format. |
 | `401 Unauthorized` on token exchange | `appId` or `installationId` is wrong. |
 | `404 Not Found` on token exchange | The GitHub App is not installed in the target organization or the `installationId` does not match. |
-| `422 Unprocessable Entity` | The App lacks the `Actions: Read` and `Administration: Read` permissions. |
+| `422 Unprocessable Entity` | The App lacks the [onboarding permission set](tenant-onboarding.md#0a-create-the-app-web-ui). |
 
 **Diagnostics.**
 
