@@ -38,7 +38,7 @@ Before beginning, confirm all of the following:
 - [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`.
   Install it with the [`actions-gateway` Helm chart](../../charts/actions-gateway/README.md) (`helm install gag charts/actions-gateway -n gmc-system --create-namespace …`).
 - [ ] **CRDs are installed.** `kubectl get crd actionsgateways.actions-gateway.github.com && kubectl get crd runnergroups.actions-gateway.github.com`.
-- [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions.
+- [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with the permissions in [Step 0a](#0a-create-the-app-web-ui): `Actions: Read and write`, plus `Self-hosted runners: Read and write` (organization `gitHubURL`) or `Administration: Read and write` (repository `gitHubURL`).
   The platform team has the `appId`, `installationId`, and private key `.pem` file.
   First time?
   [Step 0](#step-0-create-and-install-the-github-app) walks through creating the App and capturing all three.
@@ -111,7 +111,7 @@ Before beginning, confirm all of the following:
 > The output of this step feeds directly into [Step 1](#step-1-create-the-github-app-secret).
 
 GitHub Apps are the gateway's only credential model on the v1 API — there is no Personal Access Token (PAT) path.
-This is deliberate: an App yields **short-lived, auto-rotating installation tokens** scoped to the installation and to the App's declared permissions (`Actions: Read` + `Administration: Read` here), so a compromise has a far smaller blast radius than a long-lived PAT carrying its owner's full account access.
+This is deliberate: an App yields **short-lived, auto-rotating installation tokens** scoped to the installation and to the App's declared permissions (the [Step 0a](#0a-create-the-app-web-ui) set), so a compromise has a far smaller blast radius than a long-lived PAT carrying its owner's full account access.
 The App is also an **automation-owned identity** — it does not break when a user leaves the org or loses access — and installation-level rate/concurrency budgets are what let one tenant scale to thousands of sessions (and shard across installations; see [Appendix E §E.6](../design/appendix-e-capacity-planning.md#e6-when-to-shard-across-installations)).
 See [security §5](../design/05-security.md) for the full credential trust model.
 
@@ -125,16 +125,28 @@ There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh a
 3. **Homepage URL** — any valid URL (e.g. the repo URL); it is not used by the gateway.
 4. **Webhook** — uncheck **Active**.
    The gateway polls GitHub; it does not receive webhooks, so no webhook URL or secret is needed.
-5. **Permissions** — grant only the two read-only permissions the gateway needs to register and observe self-hosted runners:
-   - **Repository permissions → Actions: Read-only**
-   - **Organization permissions → Administration: Read-only** (labelled **Self-hosted runners: Read-only** on some plans)
-   - These are the `Actions: Read` and `Administration: Read` permissions referenced throughout this guide.
-     Leave **Contents**, **Pull requests**, and everything else at **No access** — the gateway never reads tenant code or writes to repositories.
+5. **Permissions** — grant these; the access levels are from GitHub's [permissions required for GitHub Apps](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps) reference:
+   - **Repository permissions → Actions: Read and write.** Read is what observes a workflow run.
+     Write is used only for automatic recovery: re-running a job whose worker pod was lost (`rerun-failed-jobs`), and force-cancelling the run of a job abandoned before its worker started (`force-cancel`).
+   - **Runner registration: Read and write** on the permission that matches the scope of the `gitHubURL` you set in [Step 2](#step-2-create-the-actionsgateway-resource).
+     For an organization URL that is **Organization permissions → Self-hosted runners**; for a repository URL it is **Repository permissions → Administration**.
+     GitHub has no read-only way to register a runner: `generate-jitconfig` and `registration-token` both require write.
+   - **Repository permissions → Metadata: Read-only** is added by GitHub automatically.
+   - Leave **Contents**, **Pull requests**, and the rest at **No access**: the gateway never reads tenant code or writes to repositories.
 6. **Where can this GitHub App be installed?** — **Only on this account** is the typical choice for a single-org deployment.
 7. Click **Create GitHub App**.
 
 > **Least privilege.** The installation tokens the gateway mints inherit exactly these App permissions.
-> Granting more than `Actions: Read` + `Administration: Read` widens the blast radius of a key compromise for no functional gain — see [security §5](../design/05-security.md) and the [runbook key-compromise scope assessment](runbook.md).
+> Granting more than this set widens the blast radius of a key compromise for no functional gain — see [security §5](../design/05-security.md) and the [runbook key-compromise scope assessment](runbook.md#github-app-key-compromise).
+>
+> **Running with `Actions: Read-only`.** The gateway still registers runners and runs jobs, but automatic recovery stops working:
+>
+> - A job whose worker pod is evicted, preempted, deleted, or vanishes is not re-run: GitHub refuses each attempt for want of the permission, which counts as `actions_gateway_eviction_rerun_failures_total{reason="api_error"}`, and the run needs a manual re-run.
+> - The run of a job abandoned before its worker started is not force-cancelled, so it stays queued until GitHub cancels it at its roughly 15-minute unstarted-job timeout, and is never re-run (`actions_gateway_abandoned_run_force_cancels_total{outcome="error"}`).
+>
+> If you choose read-only, set `maxEvictionRetries: 0` on every `RunnerGroup` or `RunnerSet` so the gateway never attempts the re-run.
+> Each lost worker then emits `EvictionRetriesExhausted` instead of a failed re-run, which is accurate: the job needs a manual re-run either way.
+> The force-cancel call has no switch; it fails harmlessly and the timeout above applies.
 
 ### 0b. Capture the `appId`
 

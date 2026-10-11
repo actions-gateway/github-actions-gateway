@@ -397,7 +397,11 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
 7. Confirm `actions_gateway_token_refresh_errors_total` is no longer incrementing.
 8. Delete the old Secret once confirmed healthy, and delete the downloaded `.pem` file from disk (`shred -u <path>` on Linux, `rm -P <path>` on macOS) — the key now lives only in the Kubernetes Secret.
 
-**Scope assessment.** The compromised key could have been used to acquire installation tokens (scoped to `Actions: Read`, `Administration: Read`).
+**Scope assessment.** The compromised key could have been used to acquire installation tokens carrying every permission the App holds.
+With the [onboarding set](tenant-onboarding.md#0a-create-the-app-web-ui), `Actions: Read and write` plus runner registration (`Self-hosted runners` or `Administration`, read and write), on every repository the installation covers.
+That means a holder could have re-run or cancelled workflow runs, and registered or deleted self-hosted runners; a rogue runner registered into a group can take jobs from it.
+It could not read repository contents or write code.
+Check the self-hosted runner list for runners the gateway did not create, alongside the audit log.
 Check GitHub's audit log for unusual API activity from the App installation: Settings → Organizations → `<org>` → Audit log → filter by the App name.
 
 ---

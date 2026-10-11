@@ -205,7 +205,7 @@ Confirm the namespace is marked a managed tenant, carries its security-profile l
 ### 1. Create the GitHub App Secret
 
 If your ARC scale set used a **GitHub App** already, you can reuse the same App — create a GAG-shaped Secret (`appId`, `installationId`, `privateKey`) in the tenant namespace per [tenant-onboarding Step 1](tenant-onboarding.md#step-1-create-the-github-app-secret).
-If your scale set used a **PAT**, register a GitHub App now (`Actions: Read` + `Administration: Read`, installed on the same org/repos) — GAG has no PAT path.
+If your scale set used a **PAT**, register a GitHub App now with the [onboarding permission set](tenant-onboarding.md#0a-create-the-app-web-ui), installed on the same org/repos — GAG has no PAT path.
 Never copy a private key through an environment variable or shell history.
 
 ### 2. Translate the scale set into the v2 object set
