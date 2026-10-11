@@ -4070,7 +4070,11 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
 </code></pre></div>
 7. Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.
 8. Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</p>
-<p><strong>Scope assessment.</strong> The compromised key could have been used to acquire installation tokens (scoped to <code>Actions: Read</code>, <code>Administration: Read</code>).
+<p><strong>Scope assessment.</strong> The compromised key could have been used to acquire installation tokens carrying every permission the App holds.
+With the <a href="../tenant-onboarding/#0a-create-the-app-web-ui">onboarding set</a>, <code>Actions: Read and write</code> plus runner registration (<code>Self-hosted runners</code> or <code>Administration</code>, read and write), on every repository the installation covers.
+That means a holder could have re-run or cancelled workflow runs, and registered or deleted self-hosted runners; a rogue runner registered into a group can take jobs from it.
+It could not read repository contents or write code.
+Check the self-hosted runner list for runners the gateway did not create, alongside the audit log.
 Check GitHub's audit log for unusual API activity from the App installation: Settings → Organizations → <code>&lt;org&gt;</code> → Audit log → filter by the App name.</p>
 <hr />
 <h3 id="agc-total-failure">AGC Total Failure<a class="headerlink" href="#agc-total-failure" title="Permanent link">&para;</a></h3>

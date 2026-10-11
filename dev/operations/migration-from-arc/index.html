@@ -3405,7 +3405,7 @@ Confirm the namespace is marked a managed tenant, carries its security-profile l
 <strong>Leave the ARC scale set running</strong> throughout.</p>
 <h3 id="1-create-the-github-app-secret">1. Create the GitHub App Secret<a class="headerlink" href="#1-create-the-github-app-secret" title="Permanent link">&para;</a></h3>
 <p>If your ARC scale set used a <strong>GitHub App</strong> already, you can reuse the same App — create a GAG-shaped Secret (<code>appId</code>, <code>installationId</code>, <code>privateKey</code>) in the tenant namespace per <a href="../tenant-onboarding/#step-1-create-the-github-app-secret">tenant-onboarding Step 1</a>.
-If your scale set used a <strong>PAT</strong>, register a GitHub App now (<code>Actions: Read</code> + <code>Administration: Read</code>, installed on the same org/repos) — GAG has no PAT path.
+If your scale set used a <strong>PAT</strong>, register a GitHub App now with the <a href="../tenant-onboarding/#0a-create-the-app-web-ui">onboarding permission set</a>, installed on the same org/repos — GAG has no PAT path.
 Never copy a private key through an environment variable or shell history.</p>
 <h3 id="2-translate-the-scale-set-into-the-v2-object-set">2. Translate the scale set into the v2 object set<a class="headerlink" href="#2-translate-the-scale-set-into-the-v2-object-set" title="Permanent link">&para;</a></h3>
 <p>Lift your ARC <code>spec.template</code> straight into the <code>RunnerTemplate</code> (same type), and carry the scale-set name across as the runner set's single label so existing <code>runs-on</code> keeps working:</p>

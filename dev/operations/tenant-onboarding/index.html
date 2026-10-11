@@ -3345,7 +3345,7 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
 <li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>.
   Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
 <li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.github.com &amp;&amp; kubectl get crd runnergroups.actions-gateway.github.com</code>.</li>
-<li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with at least <code>Actions: Read</code> and <code>Administration: Read</code> permissions.
+<li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with the permissions in <a href="#0a-create-the-app-web-ui">Step 0a</a>: <code>Actions: Read and write</code>, plus <code>Self-hosted runners: Read and write</code> (organization <code>gitHubURL</code>) or <code>Administration: Read and write</code> (repository <code>gitHubURL</code>).
   The platform team has the <code>appId</code>, <code>installationId</code>, and private key <code>.pem</code> file.
   First time?
   <a href="#step-0-create-and-install-the-github-app">Step 0</a> walks through creating the App and capturing all three.</li>
@@ -3412,7 +3412,7 @@ Otherwise, this is where those three values come from.
 The output of this step feeds directly into <a href="#step-1-create-the-github-app-secret">Step 1</a>.</p>
 </blockquote>
 <p>GitHub Apps are the gateway's only credential model on the v1 API — there is no Personal Access Token (PAT) path.
-This is deliberate: an App yields <strong>short-lived, auto-rotating installation tokens</strong> scoped to the installation and to the App's declared permissions (<code>Actions: Read</code> + <code>Administration: Read</code> here), so a compromise has a far smaller blast radius than a long-lived PAT carrying its owner's full account access.
+This is deliberate: an App yields <strong>short-lived, auto-rotating installation tokens</strong> scoped to the installation and to the App's declared permissions (the <a href="#0a-create-the-app-web-ui">Step 0a</a> set), so a compromise has a far smaller blast radius than a long-lived PAT carrying its owner's full account access.
 The App is also an <strong>automation-owned identity</strong> — it does not break when a user leaves the org or loses access — and installation-level rate/concurrency budgets are what let one tenant scale to thousands of sessions (and shard across installations; see <a href="../../design/appendix-e-capacity-planning/#e6-when-to-shard-across-installations">Appendix E §E.6</a>).
 See <a href="../../design/05-security/">security §5</a> for the full credential trust model.</p>
 <p>There is <strong>no <code>gh</code> command to create a GitHub App</strong> (the GitHub CLI has no <code>gh app create</code>), so the App is created in the web UI; the GitHub CLI (<code>gh</code>) is used afterwards to read back the IDs.</p>
@@ -3424,17 +3424,28 @@ See <a href="../../design/05-security/">security §5</a> for the full credential
 <li><strong>Homepage URL</strong> — any valid URL (e.g. the repo URL); it is not used by the gateway.</li>
 <li><strong>Webhook</strong> — uncheck <strong>Active</strong>.
    The gateway polls GitHub; it does not receive webhooks, so no webhook URL or secret is needed.</li>
-<li><strong>Permissions</strong> — grant only the two read-only permissions the gateway needs to register and observe self-hosted runners:</li>
-<li><strong>Repository permissions → Actions: Read-only</strong></li>
-<li><strong>Organization permissions → Administration: Read-only</strong> (labelled <strong>Self-hosted runners: Read-only</strong> on some plans)</li>
-<li>These are the <code>Actions: Read</code> and <code>Administration: Read</code> permissions referenced throughout this guide.
-     Leave <strong>Contents</strong>, <strong>Pull requests</strong>, and everything else at <strong>No access</strong> — the gateway never reads tenant code or writes to repositories.</li>
+<li><strong>Permissions</strong> — grant these; the access levels are from GitHub's <a href="https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps">permissions required for GitHub Apps</a> reference:</li>
+<li><strong>Repository permissions → Actions: Read and write.</strong> Read is what observes a workflow run.
+     Write is used only for automatic recovery: re-running a job whose worker pod was lost (<code>rerun-failed-jobs</code>), and force-cancelling the run of a job abandoned before its worker started (<code>force-cancel</code>).</li>
+<li><strong>Runner registration: Read and write</strong> on the permission that matches the scope of the <code>gitHubURL</code> you set in <a href="#step-2-create-the-actionsgateway-resource">Step 2</a>.
+     For an organization URL that is <strong>Organization permissions → Self-hosted runners</strong>; for a repository URL it is <strong>Repository permissions → Administration</strong>.
+     GitHub has no read-only way to register a runner: <code>generate-jitconfig</code> and <code>registration-token</code> both require write.</li>
+<li><strong>Repository permissions → Metadata: Read-only</strong> is added by GitHub automatically.</li>
+<li>Leave <strong>Contents</strong>, <strong>Pull requests</strong>, and the rest at <strong>No access</strong>: the gateway never reads tenant code or writes to repositories.</li>
 <li><strong>Where can this GitHub App be installed?</strong> — <strong>Only on this account</strong> is the typical choice for a single-org deployment.</li>
 <li>Click <strong>Create GitHub App</strong>.</li>
 </ol>
 <blockquote>
 <p><strong>Least privilege.</strong> The installation tokens the gateway mints inherit exactly these App permissions.
-Granting more than <code>Actions: Read</code> + <code>Administration: Read</code> widens the blast radius of a key compromise for no functional gain — see <a href="../../design/05-security/">security §5</a> and the <a href="../runbook/">runbook key-compromise scope assessment</a>.</p>
+Granting more than this set widens the blast radius of a key compromise for no functional gain — see <a href="../../design/05-security/">security §5</a> and the <a href="../runbook/#github-app-key-compromise">runbook key-compromise scope assessment</a>.</p>
+<p><strong>Running with <code>Actions: Read-only</code>.</strong> The gateway still registers runners and runs jobs, but automatic recovery stops working:</p>
+<ul>
+<li>A job whose worker pod is evicted, preempted, deleted, or vanishes is not re-run: GitHub refuses each attempt for want of the permission, which counts as <code>actions_gateway_eviction_rerun_failures_total{reason="api_error"}</code>, and the run needs a manual re-run.</li>
+<li>The run of a job abandoned before its worker started is not force-cancelled, so it stays queued until GitHub cancels it at its roughly 15-minute unstarted-job timeout, and is never re-run (<code>actions_gateway_abandoned_run_force_cancels_total{outcome="error"}</code>).</li>
+</ul>
+<p>If you choose read-only, set <code>maxEvictionRetries: 0</code> on every <code>RunnerGroup</code> or <code>RunnerSet</code> so the gateway never attempts the re-run.
+Each lost worker then emits <code>EvictionRetriesExhausted</code> instead of a failed re-run, which is accurate: the job needs a manual re-run either way.
+The force-cancel call has no switch; it fails harmlessly and the timeout above applies.</p>
 </blockquote>
 <h3 id="0b-capture-the-appid">0b. Capture the <code>appId</code><a class="headerlink" href="#0b-capture-the-appid" title="Permanent link">&para;</a></h3>
 <p>On the App's <strong>General</strong> page, copy the numeric <strong>App ID</strong> (top of the page).
