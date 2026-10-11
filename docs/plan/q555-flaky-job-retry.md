@@ -178,6 +178,7 @@ A blanket retry of unclassified failures is [not scheduled](#unclassified-retry-
   Calls are for the rare case (a failure, or a re-run), never the common one.
 - **R7.** For each failed attempt, detection MUST record the platform context GAG could read at the time: the pod's phase, reason and message, each container's termination reason and restart count (sidecars included), the node's conditions, and the readiness of the set's egress proxy pool and registry mirror.
   The record of failures that later passed is the evidence that proposes new classes; without it, a candidate is a guess.
+  It MUST outlive the AGC pod: on dogfood today no AGC metric is scraped and Cloud Logging keeps warn lines for 30 days ([Q1180](../queue/Q1180.md)), so one structured line per concluded job, carrying run, job, result, cause and node, is the cheapest durable form.
 - **R8.** Detection MUST tell the re-runs GAG triggered from the ones it did not, and report per set the rate of re-runs nobody automated.
   That rate is this feature's success metric: each class shipped should lower it, and a class that does not is not paying for itself.
 
@@ -235,7 +236,7 @@ None is measured yet; each needs R12's reproduction before it becomes a class.
 | Setup failure before the first step | The job failed while the runner was registering or downloading actions | Neither, when the cause is GitHub: backoff and breaker | Needs the worker to report where setup ends; unmeasured |
 | Egress proxy pool unavailable | The pool had no ready endpoint during the job's window | Observable: pool readiness | GAG owns the pool |
 | Registry mirror unavailable | The mirror was unready while the job pulled an image | Observable: mirror readiness | Same shape as the proxy |
-| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | Fresh pod | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified |
+| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | Fresh pod | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified. Dogfood logged 16 Spot preemptions against one recovery line in 2026-09 ([Q1179](../queue/Q1179.md)) |
 | Node-level out-of-memory kill | Container killed below its own limit, with a `SystemOOM` node event (the kubelet's name, from recall) | Fresh pod, not guaranteed: it can land on the same packed node | Overcommitted packing is the platform's doing; a kill at the container's own limit is not |
 | `dockerd` sidecar crash | The Docker-in-Docker sidecar's restart count rose during the job | Fresh pod | Mixed: `dockerd` also dies of tenant disk use, so it needs a discriminator |
 
