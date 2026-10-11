@@ -287,6 +287,18 @@ func TestV2_RunnerSet_ScaleSet_ProvisionsWorkerOnJobAssigned(t *testing.T) {
 	assert.NotEmpty(t, secret.Data["jitconfig"], "the staged Secret carries the JIT config blob")
 	assert.NotContains(t, secret.Data, "payload", "the scale-set worker Secret carries no acquired payload")
 
+	// Once the pod exists it is the Secret's only owner, so the garbage collector takes
+	// the credential with the pod however the pod goes (Q1154). The apiserver accepting
+	// the patch is part of what this asserts.
+	assert.Eventually(t, func() bool {
+		var got corev1.Secret
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&secret), &got); err != nil {
+			return false
+		}
+		refs := got.OwnerReferences
+		return len(refs) == 1 && refs[0].Kind == "Pod" && refs[0].Name == pod.Name && refs[0].UID == pod.UID
+	}, 10*time.Second, 50*time.Millisecond, "the JIT-config Secret must be owned by the worker pod that mounts it")
+
 	// 3. Delete the RunnerSet: the listener stops and its session is deleted (no leak).
 	require.NoError(t, k8sClient.Delete(ctx, rs))
 	require.Eventually(t, func() bool {

@@ -34,7 +34,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | [Q1171](../queue/Q1171.md) | RC validation runs the storage sweep and reads `storedVersions` on dogfood | `1.10-gate` | 🔲 ready |
 | Q1152 | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | ✅ landed: a `JobStarted` replaces the worker's run identity with the started job's, and start-up recovery finds a job's worker by `started-job-id`. Unit-tested on crossed workers; not reproduced on a cluster |
 | Q1153 | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | ✅ landed: a runnerless completion whose own worker is busy stamps the oldest idle `Running` worker, once per job, and a start moves the stamp on. Unit-tested on crossed workers; not reproduced on a cluster |
-| [Q1154](../queue/Q1154.md) | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | 🔲 ready |
+| Q1154 | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | ✅ landed: the worker pod becomes the Secret's only owner once created, so the garbage collector deletes it with the pod. Unit-tested with a collector stand-in; not reproduced on a cluster |
 | Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | [Q1070](../queue/Q1070.md) | Security-dashboard panel keyed on Q1069's per-set gauge | rides | 🔲 ready, filtered to opted-in tenants; Q1069's gauge has landed |
