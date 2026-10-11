@@ -1,7 +1,7 @@
 # Q555 flaky-job detection and classified retry: problem, requirements, scope
 
 **Status:** ⓘ draft for a design session, written 2026-10-10.
-Nothing is built and no CRD shape is committed.
+Nothing is built and no CRD shape is committed; the work is split across the rows [below](#how-this-splits-into-backlog-items).
 [Q555](../queue/Q555.md) is in the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
 A design session settles the [open questions](#open-questions-for-the-design-session) next.
 It extends [G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.
@@ -28,6 +28,20 @@ The live evidence is thinner than "the outcome is delivered" suggests, and each 
 3. **Whether a timed-out job is distinguishable** from a failed one.
 
 All three are one dogfood turn-up to settle: fail a step, cancel a run, and time a job out, then read `actions_gateway_scaleset_jobs_completed_total` by `result`, which needs no code change.
+
+## How this splits into backlog items
+
+The requirements below span several separable pieces of work, filed 2026-10-10 so each can be prioritised on its own:
+
+| Row | Covers | Depends on |
+|---|---|---|
+| [Q555](../queue/Q555.md) | Detection, R1 to R8 | A dogfood measurement of the `result` vocabulary |
+| [Q1181](../queue/Q1181.md) | R18's futility checks, on the arms that exist today | Nothing |
+| [Q1182](../queue/Q1182.md) | R15, a budget that survives an AGC restart | Nothing |
+| [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 and Q1182 |
+| [Q1177](../queue/Q1177.md), [Q1179](../queue/Q1179.md) | Two possible defects in the existing arms | A measurement each |
+| [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
+| [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184 needs a security review |
 
 ## Problem statement
 
@@ -286,7 +300,7 @@ Two constraints shape every row.
 **Attribution is a retention decision.** Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so it needs a security review against [05-security.md](../design/05-security.md) before anything ships.
 **Destination labels have bounded cardinality only if they name the allowlist entry that matched**, never the raw host.
 
-[Q1178](../queue/Q1178.md) carries the wider set of ideas for using the proxy as a sensor: conditions, events and intake behaviour beyond retry.
+[Q1178](../queue/Q1178.md) labels the proxy's outcome metrics, [Q1184](../queue/Q1184.md) attributes failures to jobs, and the uses beyond retry are non-commitments in [G.18](../design/appendix-g-future-enhancements.md#g18-the-egress-proxy-as-a-platform-sensor).
 
 ### Unclassified retry (not scheduled)
 

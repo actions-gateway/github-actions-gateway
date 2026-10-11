@@ -587,6 +587,33 @@ It sits on the runner-container side of every one of these boundaries, already o
 Q555 is in the Queue and tracks the design decision; the [draft](../plan/q555-flaky-job-retry.md) holds the requirements and the questions a design session settles.
 Its direction differs from the sketch above: phase 2 retries newly *classified* platform failures on the existing arms, and the blanket opt-in retry is not scheduled.
 
+
+## G.18. The Egress Proxy as a Platform Sensor
+
+**The idea.** Every outbound fetch a tenant's job makes goes through the tenant's egress proxy, and this repository's own flake record is dominated by exactly those fetches failing: registry pulls, release-CDN downloads, GitHub API calls ([Q555 draft](../plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor)).
+Kubernetes objects show none of them.
+An operator can point ARC's runners at a proxy they run themselves, so the proxy is not the moat; joining a proxy event to the job, the set and the controller that can act on it is.
+
+**What is already committed.** [Q1178](../queue/Q1178.md) labels the proxy's outcome counters by allowlist entry and outcome, and [Q1184](../queue/Q1184.md) attributes failures to the job that hit them, for retry.
+Everything below is a non-commitment.
+
+**Choosing the channel.** A use goes to **metrics** when its reader is a person, a dashboard or an alert reading aggregates over bounded labels, a scrape interval late and lossy.
+It needs a **bespoke endpoint** when the reader is a control loop acting on one job or pod: per-instance identity is unbounded for metrics, the answer has to be exact for that instance, and per-job egress is too sensitive for a shared, long-retention time-series store.
+It goes to the **Kubernetes API** when it is derived state other controllers or operators act on, written only when it changes, never per flow: an outage would otherwise turn every failed dial into a write to the shared control plane.
+The tenant's AGC is the aggregator: it is a single replica in the same namespace as its proxy pool, and it holds the pod-to-job join.
+It pulls rather than being pushed to, so the proxy's data path never depends on the AGC's health.
+
+**Further uses, unscheduled:**
+
+- **Cluster-level destination health.** The GMC reads every tenant's per-destination counters, never per-job data, to tell "github.com is unreachable from this cluster" from one tenant's problem.
+  It aggregates across tenants, so it needs its own security review.
+- **Egress IP refused by GitHub.** The proxy probes an unauthenticated GitHub endpoint from the tenant's egress IP, the probe this repository's CI already built (#1217, #1977), and a 403 becomes a condition that holds retries until it clears.
+- **Rate-limit early warning.** Connection rate from one egress IP to a registry, against that registry's published per-IP limits, before the 429s start, since the 429 itself is inside TLS.
+- **Mirror bypass.** A job pulling from an upstream registry the set has a mirror for, which costs rate-limit headroom and egress.
+- **Egress bytes per job**, for [cost attribution](../operations/cost-attribution.md).
+- **Tunnel close reason.** A mid-tunnel reset is not recorded today, and it is the shape of a registry or CDN dropping a long download.
+
+**Trigger.** Promote one when a retry class, an operator or a cost question needs it, and route anything per-job through Q1184's security review.
 ---
 
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
