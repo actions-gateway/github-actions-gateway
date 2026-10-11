@@ -600,6 +600,8 @@ Everything below is a non-commitment.
 **Choosing the channel.** A use goes to **metrics** when its reader is a person, a dashboard or an alert reading aggregates over bounded labels, a scrape interval late and lossy.
 It needs a **bespoke endpoint** when the reader is a control loop acting on one job or pod: per-instance identity is unbounded for metrics, the answer has to be exact for that instance, and per-job egress is too sensitive for a shared, long-retention time-series store.
 It goes to the **Kubernetes API** when it is derived state other controllers or operators act on, written only when it changes, never per flow: an outage would otherwise turn every failed dial into a write to the shared control plane.
+A useful shorthand is *now or later*: metrics are slow, lossy and cheap, so they suit a reader who can wait; a reader acting now pays to be fast, complete and consistent.
+It is a proxy for the real question, *one instance or an aggregate*, and the two counterexamples show where it breaks: the AGC reading per-destination counters to call a destination degraded is a now-use that metrics serve, and the opt-in audit records are read later yet are per-job and exact, so they could never be metrics.
 The tenant's AGC is the aggregator: it is a single replica in the same namespace as its proxy pool, and it holds the pod-to-job join.
 It pulls rather than being pushed to, so the proxy's data path never depends on the AGC's health.
 
