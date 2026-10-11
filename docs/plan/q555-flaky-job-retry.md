@@ -3,7 +3,7 @@
 **Status:** ⓘ draft for a design session, written 2026-10-10.
 Nothing is built and no CRD shape is committed; the work is split across the rows [below](#how-this-splits-into-backlog-items).
 [Q555](../queue/Q555.md) is in the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
-A design session settles the [open questions](#open-questions-for-the-design-session) next.
+[The design](q555-automatic-recovery-design.md) proposes how to build it and recommends answers to the [open questions](#open-questions-for-the-design-session), pending sign-off.
 It extends [G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.
 
 ## The prerequisite already exists
@@ -353,6 +353,8 @@ The design if it is revived:
 | Writing back to GitHub (check runs, PR comments) | Needs new App permissions (R17) |
 
 ## Open questions for the design session
+
+[The design](q555-automatic-recovery-design.md) recommends an answer to each, marked **Decide** there.
 
 1. **Where pairing state lives.** In memory loses pairs on restart (R5 accepts the undercount); a ConfigMap shares the write-contention problems the recovery claims already hit (Q1108); asking GitHub for the previous attempt's jobs is stateless but costs a call per re-run.
 2. **Run-granular or job-granular re-run.** Both endpoints wait for the run to conclude and both re-run dependents, so timing does not decide it.
