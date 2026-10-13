@@ -358,7 +358,7 @@ Nothing in this section ships with the first rows; it fixes the shape the first 
 
 ### The API shape
 
-**Decide:** one home and one shape for every future retry option.
+**Decided** (2026-10-12): one home and one shape for every future retry option.
 
 - **One home.** New retry configuration goes under a `spec.retry` block, typed as a standalone `RetryPolicy` so a gateway-wide default can reuse it later.
   `maxEvictionRetries` and `evictionRetryDelay` stay where they are: moving shipped fields is churn with no reader asking for it.
