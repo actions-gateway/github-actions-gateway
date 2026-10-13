@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1070/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1187/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Key a security-dashboard panel on the egress-audit attribution gauge - GitHub Actions Gateway</title>
+        <title>Give the preview harness's Grafana render a timeout above 30 s - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#key-a-security-dashboard-panel-on-the-egress-audit-attribution-gauge" class="md-skip">
+        <a href="#give-the-preview-harnesss-grafana-render-a-timeout-above-30-s" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Key a security-dashboard panel on the egress-audit attribution gauge
+              Give the preview harness's Grafana render a timeout above 30 s
             
           </span>
         </div>
@@ -2597,22 +2597,12 @@
   
 
 
-<h1 id="key-a-security-dashboard-panel-on-the-egress-audit-attribution-gauge">Key a security-dashboard panel on the egress-audit attribution gauge<a class="headerlink" href="#key-a-security-dashboard-panel-on-the-egress-audit-attribution-gauge" title="Permanent link">&para;</a></h1>
-<p>Q1062 shipped <code>actions_gateway_egress_audit_unattributed</code>, the series the security dashboard's own Row 1 prose says a consumer-keyed panel would have to gate on so a pool's traffic is never read under a consumer's name without the join to back it.
-No panel reads it yet, so the dashboard still keys egress entirely on the pool.</p>
-<p>The minimum is a fourth series in the existing "Egress posture per gateway" state timeline, which it fits: that panel is <code>1 = flagged</code> and so is this gauge, and it tells the audit persona which tenants' egress resolves to no job and since when.
-Unfiltered, it would be near-solid <code>1</code> across a fleet that has not turned the pair on, and a band that is always lit in a <code>1 = flagged</code> row trains the eye to discount the three neighbours where a <code>1</code> genuinely is a fault.
-The answer below filters it instead, which keeps the since-when a timeline gives and drops the always-lit band.</p>
-<p>The reason this was not folded into Q1062 is the render, not the JSON: <code>make dashboard-render-check</code> fails a dashboard changed beyond its panel descriptions whose screenshot did not, so the panel needs a live Grafana + Prometheus to re-render <code>docs/assets/grafana-dashboard-security.png</code> per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/README.md</code></a>.
-A consumer-keyed <em>traffic</em> panel, proxy series filtered to the gateways reading <code>1</code>, is the larger question behind it and needs its own decision about what a mixed pool should show.</p>
-<p><strong>Ask (answered):</strong> yes, filtered to opted-in tenants, decided by the maintainer on 2026-10-09.
-The series plots only a tenant that has turned on at least one half of the pair, so a lit band is a configured pair with a gap in it, which the audit persona can act on, and a tenant that never opted in is absent rather than flagged.
-How many tenants have opted in at all is a separate stat panel, if one is wanted, and not a series in this row.</p>
-<p>The filter needs a label the gauge does not carry yet: <code>actions_gateway_egress_audit_unattributed</code> has <code>namespace</code> and <code>name</code> only, so a query cannot tell <code>EgressAuditDisabled</code> (neither half on) from a partial pair.
-So key the panel on the per-<code>RunnerSet</code> gauge Q1069 shipped, <code>actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}</code>, whose <code>reason</code> is one of <code>EgressAuditJoined</code> (the one <code>0</code>), <code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>WorkerAuditWithoutProxy</code>, <code>EgressAuditDisabled</code> and <code>DirectEgress</code>.
-The reason alone says whether the tenant opted in: on a set with no pool it reads <code>WorkerAuditWithoutProxy</code> when the gateway logs <code>WorkerAddresses</code> and <code>DirectEgress</code> when it does not, so <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a tenant that turned neither half on.
-So the filter that implements the answer above is <code>reason!~"EgressAuditDisabled|DirectEgress"</code>, and it keeps opted-in tenants whose sets egress directly.
-This row rides <a href="../../plan/release-1.10/">release 1.10</a>.</p>
+<h1 id="give-the-preview-harnesss-grafana-render-a-timeout-above-30-s">Give the preview harness's Grafana render a timeout above 30 s<a class="headerlink" href="#give-the-preview-harnesss-grafana-render-a-timeout-above-30-s" title="Permanent link">&para;</a></h1>
+<p><code>render()</code> in <code>deploy/monitoring/preview/render.sh</code> calls <code>/render/d/&lt;uid&gt;/&lt;uid&gt;</code> with no <code>timeout</code> parameter, so Grafana's image renderer gives up at its 30 s default, and the harness then dies <code>Grafana render of '&lt;uid&gt;' returned HTTP 500</code> after the 660 s <code>WAIT</code> has already been spent.</p>
+<p><strong>Measured 2026-10-12</strong> rendering Q1070, load average 6 to 11 on this 18-core box: the tenant, platform and budget dashboards rendered, and the security dashboard returned HTTP 500.
+Grafana's log read <code>level=error msg="Failed to render image" path="d/actions-gateway-security/…" error="[rendering.serverTimeout] "</code>, with <code>time_ms=33198</code>.
+The same URL with <code>&amp;timeout=120</code> appended, against the same Grafana minutes later, returned HTTP 200 and a complete 1500×2300 PNG, so the dashboard was not at fault.</p>
+<p>Fix shape, unmeasured beyond that one call: append a <code>timeout=</code> query parameter to the render URL (a knob beside <code>WIDTH</code>/<code>HEIGHT</code>, defaulting to something like 120), so a slow host costs seconds instead of a whole re-run.</p>
 
 
 

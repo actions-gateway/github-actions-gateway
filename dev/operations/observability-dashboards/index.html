@@ -3471,7 +3471,7 @@ Attributing a connection to a tenant and a job is the <a href="../observability-
 Whether that join is missing is a gauge per <code>RunnerSet</code>, <code>actions_gateway_runnerset_egress_audit_unattributed</code>, <code>1</code> while either half of the pair is off for that set's workers (Q1069), and that is the series a consumer-keyed panel would have to gate on.
 It is read off the pool the set's workers actually use, its own <code>spec.proxyRef</code> before the gateway's <code>defaultProxyRef</code>, and its <code>reason</code> label names the missing half.
 The gateway-level <code>actions_gateway_egress_audit_unattributed</code> (Q1062) reads only <code>defaultProxyRef</code>, the AGC's own pool, so it is not the one to gate worker traffic on.
-No panel here reads either yet (<a href="../../queue/Q1070/">Q1070</a>).</p>
+The egress-posture timeline below plots the per-set gauge; no panel reads the gateway-level one.</p>
 <p><strong>Row 1: Egress Attribution (per pool)</strong></p>
 <table>
 <thead>
@@ -3498,16 +3498,20 @@ No panel here reads either yet (<a href="../../queue/Q1070/">Q1070</a>).</p>
 <td>Time series. A pool pinned near capacity is the slowloris signal (<code>ActionsGatewayProxyConnectionsSaturated</code>)</td>
 </tr>
 <tr>
-<td>Egress posture per gateway</td>
-<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code></td>
-<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape; <code>egress_rules_stale</code> is emitted for v1 and v2 gateways, the other two for v2 only</td>
+<td>Egress posture per gateway and RunnerSet</td>
+<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code>, and <code>max by (namespace, runner_set) (actions_gateway_runnerset_egress_audit_unattributed{reason!~"EgressAuditDisabled\|DirectEgress"})</code></td>
+<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, an incomplete GHES allowlist denies the appliance, and a set's egress audit records join to no job. The first three from the GMC scrape, where <code>egress_rules_stale</code> is emitted for v1 and v2 gateways and the other two for v2 only; the fourth per <code>RunnerSet</code> from the AGC scrape, one row per set across a change of <code>reason</code></td>
 </tr>
 </tbody>
 </table>
-<p><code>actions_gateway_runnerset_egress_audit_unattributed</code> belongs in that timeline as a fourth flag and is not in it yet (<a href="../../queue/Q1070/">Q1070</a>).
-It shares the row's <code>1 = flagged</code> polarity, and it is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">job-attribution</a> half, whether an egress record resolves to a tenant and a job, where <code>egress_unattributed</code> is the IP-identity half, whether there is a per-tenant proxy at all.
+<p>The <code>egress audit</code> rows are the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">job-attribution</a> half, whether an egress record resolves to a tenant and a job, where <code>egress_unattributed</code> is the IP-identity half, whether there is a per-tenant proxy at all.
 A gateway can be proxied and still unattributed by job, and that is the common state, since both halves of the pair default <code>Off</code>.
-Expect it near-solid <code>1</code> across a fleet that has not opted in, which is a true reading rather than an incident: unlike its three neighbours, a <code>1</code> here is a tenant nobody turned attribution on for, not something that broke.</p>
+<strong>They plot only tenants that turned on at least one half.</strong> <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a set whose tenant turned neither half on, and the query drops them, so a red band is a tenant that turned on one half and is missing the other, and the series' <code>reason</code> label, or the set's <code>EgressAuditUnattributed</code> condition, names the half to fix (<a href="../tenant-onboarding/#per-pool-egress-audit-record">what to set for each</a>).
+The legend leaves the reason out: a label that long clips in the state timeline's label column.
+A tenant that never opted in has no row rather than a permanently red one, which would otherwise light most of a fleet and teach the eye to discount the three neighbours where a <code>1</code> is a fault.
+How many tenants have opted in is not on this dashboard.
+A green row says the pair is configured, not that a pipeline runs the join, and a set whose references have not resolved has no row at all.
+It can also outlive its pool: a set whose <code>EgressProxy</code> is deleted keeps its last reading rather than turning red (<a href="../../queue/Q1079/">Q1079</a>).</p>
 <p><strong>Row 2: Admission Decisions</strong></p>
 <table>
 <thead>
