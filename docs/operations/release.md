@@ -280,7 +280,7 @@ A local gate and a CI one read the same lease, so whichever starts second refuse
 
 **One command runs the whole gate**, with nothing to type at it after the first confirmation.
 A green `v1.3.0-rc.4` run took 39 minutes end to end with one e2e leg; the gate now runs three, Kata, then privileged DinD, then Kata on the Dragonfly mirror back end, and a healthy e2e leg takes 25–33 minutes.
-`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → the e2e matrix again on privileged DinD → the e2e matrix on Kata with the Dragonfly back end → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
+`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → storage sweep → the e2e matrix again on privileged DinD → the e2e matrix on Kata with the Dragonfly back end → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the `Failure diagnostics` section of a failed run's log (e.g. the `FailedScheduling` events) instead of re-running the gate to watch it fail again.
 Once it is fixed, [re-run only the leg that failed](#re-run-only-the-leg-that-failed).
 The [legs it runs](#the-legs-the-gate-runs) are documented at the end of this section, and are the recovery path if one needs re-running by hand.
@@ -329,7 +329,8 @@ gh workflow run validate-candidate.yml --ref main -f tag=vX.Y.Z-rc.N -f legs=dra
 It runs the named legs, in the gate's own order, between the usual deploy and teardown.
 `validate-release.sh --legs dragonfly vX.Y.Z-rc.N` does the same locally, for diagnosis.
 
-The legs are `kata`, `crd-smoke`, `soak`, `dind` and `dragonfly`.
+The legs are `kata`, `crd-smoke`, `soak`, `storage`, `dind` and `dragonfly`.
+For a candidate on a line older than 1.10, pass `legs` without `storage`: that line's `gag-migrate` has no `storage-version` command, so the leg fails there, and its own tag's leg list never requires it.
 `kata` includes the sizing and capacity checks, because both read the Kata tenant its e2e matrix leaves up.
 Deploy and teardown run every time, since the cluster is at 0 nodes between runs.
 
@@ -614,11 +615,17 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    The `EgressProxy` is manufactured and deleted because dogfood deliberately runs without one; this does not change what the cluster runs.
    **The readings outlive the run.** The gate appends one record per reading to `tmp/soak-readings.jsonl`, and `scripts/dogfood/soak-readings.sh` renders them as the rows the v2 GA plan's soak table takes, so transcribing them is a paste rather than a re-read of the terminal.
    Do it before the window's scrollback is gone: the window is billable and cannot be replayed, so a reading nobody can find afterwards cost the same as one never taken.
-7. **Run the e2e matrix again on privileged DinD (Q1159).** `scripts/dogfood/e2e-stop.sh`, then `E2E_VARIANT=dind scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
+7. **Run the storage sweep and read `storedVersions` (Q1171).** Apply the RC chart's `PriorityClassAllowlist` CRD with `helm show crds … | kubectl apply -f -`, since `helm upgrade` never re-applies it.
+   Then download the RC's `gag-migrate` binary for the gate host with `SHA256SUMS` and its `.cosign.bundle`, `cosign verify-blob` the manifest against the publish identity, and check the binary's digest against it.
+   Run `gag-migrate storage-version --context <dogfood>` as a dry run, then again with `--apply --assume-yes`, and assert all six `actions-gateway.com` CRDs read `storedVersions: ["v2"]` with the [pre-upgrade check](upgrade.md#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2).
+   The dry run refuses, and writes nothing, while a CRD does not store `v2` or an `EgressProxy` still names `CiliumFQDN` or `CalicoFQDN`, so the [alias check](upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) runs as part of it.
+   **This changes the cluster for good.** Once pruned, `storedVersions` stays `["v2"]`, so a later run takes the sweep's no-op path and still asserts the reading.
+   A refused precondition, a refused object, or any other value fails the leg.
+8. **Run the e2e matrix again on privileged DinD (Q1159).** `scripts/dogfood/e2e-stop.sh`, then `E2E_VARIANT=dind scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
    Step 2 runs the Kata variant, the one untrusted pull requests need, so without this the shipped `privileged-dind` template reaches operators with no job ever having run on it; 1.9 moved its daemon from `docker:27-dind` to `docker:28-dind` that way.
    It runs last because the two variants share one namespace, RunnerSet and node pool, and the sizing and capacity legs read the Kata tenant's state.
    The mirror census is Kata-only: nothing on the DinD tenant reaches a mirror.
-8. **Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).** `scripts/dogfood/e2e-stop.sh`, then `E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
+9. **Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).** `scripts/dogfood/e2e-stop.sh`, then `E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
    The mirrors can fetch through a Dragonfly seed peer instead of from their upstreams directly (Dragonfly is a peer-to-peer image distribution system); without this leg every gate run tests the default Distribution back end alone, and the Dragonfly one has run only on kind.
    It is Kata because only the Kata tenant's egress is mirror-only; on DinD a worker reaches upstreams itself, so the back end would not be on the path under test.
    A red matrix is a red gate.
@@ -633,13 +640,13 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    **These are readings, not gates**, recorded under `Q539` with the soak readings in step 6 and rendered by the same script.
    A `finding` on either network reading is a security property failing on the candidate's cluster: read it before promoting, even though the gate passed.
-9. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
-   **Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero**, so the gate can report success with a node still billing for several more minutes.
-   Confirm at rest by asking the cluster (`scripts/dogfood/ops.sh at-rest`), never by reading the gate's own teardown line.
+10. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
+    **Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero**, so the gate can report success with a node still billing for several more minutes.
+    Confirm at rest by asking the cluster (`scripts/dogfood/ops.sh at-rest`), never by reading the gate's own teardown line.
 
 These steps are diagnosis and recovery only: a verdict `publish.yml` accepts comes from the CI gate run ([why](#the-gate-records-its-verdict-and-publish-reads-it)).
 
-A red matrix, a failed CRD smoke, a dead `NodeShare` profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
+A red matrix, a failed CRD smoke, a CRD left listing a version other than `v2`, a dead `NodeShare` profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a **stop-ship for the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.
 
 ### 2. Tag and push
 

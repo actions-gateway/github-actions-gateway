@@ -14,4 +14,4 @@
 # `kata` carries sizing and capacity, because both read the Kata tenant its
 # matrix leaves up. Deploy and teardown are not legs: every run needs both.
 # shellcheck disable=SC2034 # read by the scripts that source this file
-GATE_LEGS_ALL=(kata crd-smoke soak dind dragonfly)
+GATE_LEGS_ALL=(kata crd-smoke soak storage dind dragonfly)
