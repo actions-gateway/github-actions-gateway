@@ -309,6 +309,7 @@ The namespace quota is set separately on the namespace (Step 1b), not on this CR
 
 **One `ActionsGateway` per namespace.** The admission webhook rejects a second `ActionsGateway` in a namespace that already has one — every per-tenant resource has a fixed, namespace-scoped name, so two CRs would contend over them and flap the namespace's PSA labels.
 To run a second logical gateway (e.g. a `privileged` profile alongside a `baseline` one), give it its own namespace.
+**Keep unrelated Secrets out of the gateway's namespace.** The AGC can read every Secret in it, since it manages its runners' credential Secrets and creates pods that could mount any of them, so the namespace is the boundary that keeps it from the rest.
 See [troubleshooting: second ActionsGateway rejected](troubleshooting.md#second-actionsgateway-in-a-namespace-rejected-singleton-guard).
 
 ```yaml
@@ -551,7 +552,7 @@ GitHub refuses to register a runner below its enforced minimum, currently `2.329
 
 A digest-only or custom tag is no longer unchecked: the registry read reaches it.
 The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` gives a verdict from the tag while the read runs and from the image once it lands.
-A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; a registry kubelet reaches through the node's identity is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
+A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; the AGC reads those Secrets to log in for this check and never stores or copies them; a registry kubelet reaches through the node's identity is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
 
 **Reading the version a running worker actually shipped.** Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:
 
