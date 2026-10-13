@@ -362,6 +362,7 @@ Nothing in this section ships with the first rows; it fixes the shape the first 
 
 - **One home.** New retry configuration goes under a `spec.retry` block, typed as a standalone `RetryPolicy` so a gateway-wide default can reuse it later.
   `maxEvictionRetries` and `evictionRetryDelay` stay where they are: moving shipped fields is churn with no reader asking for it.
+  The block is named for its subject, as `sizing` and `capacityGate` are, rather than `retryPolicy` after the Kubernetes Job API's `podFailurePolicy`; the list inside it is `rules`, because each entry is one rule of the policy (maintainer's choice, 2026-10-12).
 - **One shape: an ordered rule list.** `spec.retry.rules[]`, first match wins, and a job no rule matches gets the built-in behaviour.
 
   ```yaml
