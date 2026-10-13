@@ -177,7 +177,7 @@ func TestInspectBasicAuth(t *testing.T) {
 	assert.Equal(t, "2.335.1", got.Version)
 
 	_, err = Inspect(context.Background(), f.Client(), f.Image("acme/runner", ":v"), nil)
-	require.ErrorContains(t, err, "names no imagePullSecret")
+	require.ErrorContains(t, err, "no imagePullSecret names it")
 }
 
 func TestInspectErrors(t *testing.T) {

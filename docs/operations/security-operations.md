@@ -259,7 +259,7 @@ groups:
 ## Audit-log abuse detections
 
 The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC calls that are *permitted* but *anomalous* — are invisible to Prometheus.
-The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per [H-2](../plan/security.md); the GMC reads Secret bodies only during a reconcile via a cache-bypassing `Get`), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.
+The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per [H-2](../plan/security.md), and reads a tenant's Secret body only to present a pull secret to the registry read behind `RunnerVersionTooOld`; the GMC reads Secret bodies only during a reconcile via a cache-bypassing `Get`), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.
 
 Detecting these requires an **API-server audit policy** that logs the relevant verbs at `Metadata` level or higher, shipped to a security information and event management (SIEM) system or log-based alerting backend.
 A ready-to-adapt sample policy ships at [`examples/apiserver-audit-policy.yaml`](examples/apiserver-audit-policy.yaml); [§ API server audit policy (sample)](#api-server-audit-policy-sample) below covers installing it and reading the events.
@@ -382,7 +382,9 @@ A baseline is one `get` per `gitHubAppRef` Secret per reconcile, only in tenant 
 Alert on: any `list`/`watch`; a `get` rate well above the reconcile cadence; or any `get` outside a tenant namespace (e.g.
 `kube-system`).
 For the GMC write rule, a `responseStatus.code` of `403` is a VAP block — investigate the binary that attempted it.
-For AGC reads, filter by each AGC user string and alert on `verb == "list"` (the legit path is metadata-only) or a `get` on a Secret name the AGC does not own.
+For AGC reads, filter by each AGC user string and alert on `verb == "list"` (the legit path is metadata-only) or a `get` on a Secret name the AGC does not own, other than a pull secret.
+The registry read `get`s each `imagePullSecrets` entry the worker pod template names, or, when it names none, those on the worker ServiceAccount, which it reads with one `get` on `serviceaccounts`; it repeats on a failure's backoff (one minute doubling to an hour) and on each hourly re-check of a tag-addressed image.
+A `get` on a ServiceAccount other than the worker ServiceAccount, or on a Secret that neither names, is outside it.
 
 ---
 

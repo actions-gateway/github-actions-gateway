@@ -60,6 +60,15 @@
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "create", "update", "patch", "delete"]
+# serviceaccounts get-only (Q1066): the worker-image registry read behind
+# RunnerVersionTooOld presents the imagePullSecrets named on the worker
+# ServiceAccount when the pod template names none, which is what admission puts
+# on the worker pod. One named object per read, uncached: no list, no watch, no
+# write, so the AGC can neither enumerate ServiceAccounts nor change which
+# Secrets one carries.
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get"]
 # configmaps (Q606): the per-RunnerSet guard ConfigMap persisting a scale-set
 # listener's concluded-job state across a hard kill, so a restarted AGC does not
 # provision a worker for a job that is over. get/create/update only: reads are

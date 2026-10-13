@@ -126,3 +126,51 @@ func TestGMC_AGCRoleBinding_PermitsOwnNamespace(t *testing.T) {
 	// behavior depends on the admission configuration.
 	_ = err // RBAC scope check: if denied, cross-namespace will definitely be denied
 }
+
+// TestGMC_AGCRole_ReadsWorkerServiceAccountOnly pins the serviceaccounts grant the
+// worker-image registry read needs (Q1066) to its narrowest shape: the AGC can get
+// the worker ServiceAccount in its own namespace, and can neither list
+// ServiceAccounts there nor get one in another tenant's namespace.
+func TestGMC_AGCRole_ReadsWorkerServiceAccountOnly(t *testing.T) {
+	const nsA = "team-rbac-sa-a"
+	const nsB = "team-rbac-sa-b"
+	createNamespace(t, nsA)
+	createNamespace(t, nsB)
+	createGitHubAppSecret(t, nsA, "github-app")
+	createGitHubAppSecret(t, nsB, "github-app")
+
+	agA := newActionsGateway("rbac-sa-gateway-a", nsA, "github-app")
+	agB := newActionsGateway("rbac-sa-gateway-b", nsB, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, agA))
+	require.NoError(t, k8sClient.Create(ctx, agB))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), agA)
+		_ = k8sClient.Delete(context.Background(), agB)
+	})
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+	for _, ns := range []string{nsA, nsB} {
+		g.Eventually(func() error {
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: agcName}, &rbacv1.RoleBinding{}); err != nil {
+				return err
+			}
+			return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: workerSAName}, &corev1.ServiceAccount{})
+		}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+	}
+
+	agc := newImpersonatedClient(t, nsA, agcName)
+
+	// RoleBinding propagation to the authorizer is not instant, so the allowed read
+	// is retried; the denials below are then read against a settled binding.
+	g.Eventually(func() error {
+		return agc.Get(ctx, types.NamespacedName{Namespace: nsA, Name: workerSAName}, &corev1.ServiceAccount{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "the AGC reads its own worker ServiceAccount")
+
+	err := agc.List(ctx, &corev1.ServiceAccountList{}, client.InNamespace(nsA))
+	require.True(t, apierrors.IsForbidden(err), "listing ServiceAccounts must be denied; got: %v", err)
+
+	err = agc.Get(ctx, types.NamespacedName{Namespace: nsB, Name: workerSAName}, &corev1.ServiceAccount{})
+	require.True(t, apierrors.IsForbidden(err), "another namespace's ServiceAccount must be denied; got: %v", err)
+}

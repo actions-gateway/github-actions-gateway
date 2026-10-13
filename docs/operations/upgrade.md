@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
   - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
   - [Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed](#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed)
   - [Non-breaking: a scale-set worker's JIT-config Secret is now owned by its pod](#non-breaking-a-scale-set-workers-jit-config-secret-is-now-owned-by-its-pod)
@@ -180,6 +181,19 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets
+
+**Who is affected:** a tenant whose worker image sits in a registry that requires a login, with the pull Secret on the worker ServiceAccount rather than in the pod template, as the [air-gapped install](air-gapped-install.md#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker) wires it.
+
+The registry read behind `RunnerVersionTooOld` used to present only the Secrets the pod template's `imagePullSecrets` names, so on that wiring it failed authentication on every reconcile while the pull itself worked.
+When the template names none, the AGC now presents the worker ServiceAccount's `imagePullSecrets`, the same set ServiceAccount admission puts on the worker pod (Q1066), and the `WorkerImageVersionUnknown` authentication failure resolves to a verdict read from the image.
+
+- **RBAC:** the `agc-tenant-role` ClusterRole gains `get` on `serviceaccounts`, no `list`, `watch` or write, and the chart ships it.
+  An AGC running against a Role without the grant reads anonymously as before, and a refused read names the unread ServiceAccount in its message.
+- A pull Secret named in both places can come out of the pod template, since the ServiceAccount's is now read too; leaving it in changes nothing.
+
+No action is required at upgrade time.
 
 ### Non-breaking: a scale-set worker's run identity follows the job its runner started
 

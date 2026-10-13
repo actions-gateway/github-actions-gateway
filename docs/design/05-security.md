@@ -312,7 +312,8 @@ Three properties bound what the read can cost or leak:
 
 - **No new egress breadth.** The read uses the AGC's existing policy, which admits 443 and 6443 to any destination by default (the exfiltration section above) and no other port, so it opens nothing and a registry on another port is out of reach; an install that scopes egress with `apiServerCIDRs` closes the registry too, and the verdict falls back to the tag with the failure in the message.
   A scoped policy carries no registry allowance, which is the decision recorded below.
-- **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, read through the `get` on Secrets the tenant Role already grants; it is the credential kubelet reads for the same pull.
+- **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, or the worker ServiceAccount's when the template names none, read through the `get` on Secrets the tenant Role already grants; it is the set ServiceAccount admission puts on the worker pod, so the credential kubelet reads for the same pull.
+  Reading the ServiceAccount takes a `get` on `serviceaccounts` in the tenant namespace (Q1066), with no `list`, `watch` or write: the AGC can read one named ServiceAccount's Secret references and can neither enumerate ServiceAccounts nor change which Secrets one carries, and every Secret it could reach that way it could already `get` by name.
   The password is never logged or reported; the username reaches the condition message and the warning log when a read fails, so an operator can tell which login was refused.
   A Bearer challenge's realm must be `https`, since the login rides on that exchange.
   Node-identity registries are out of reach by construction ([Q1066](../queue/Q1066.md)).
