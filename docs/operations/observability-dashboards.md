@@ -293,7 +293,7 @@ The egress-posture timeline below plots the per-set gauge; no panel reads the ga
 
 The `egress audit` rows are the [job-attribution](observability-logging.md#attributing-a-record-to-a-tenant-and-a-job) half, whether an egress record resolves to a tenant and a job, where `egress_unattributed` is the IP-identity half, whether there is a per-tenant proxy at all.
 A gateway can be proxied and still unattributed by job, and that is the common state, since both halves of the pair default `Off`.
-**They plot only tenants that turned on at least one half.** `EgressAuditDisabled` and `DirectEgress` are the only reasons for a set whose tenant turned neither half on, and the query drops them, so a red band is a configured pair with a gap in it, and the series' `reason` label, or the set's `EgressAuditUnattributed` condition, names the half to fix ([what to set for each](tenant-onboarding.md#per-pool-egress-audit-record)).
+**They plot only tenants that turned on at least one half.** `EgressAuditDisabled` and `DirectEgress` are the only reasons for a set whose tenant turned neither half on, and the query drops them, so a red band is a tenant that turned on one half and is missing the other, and the series' `reason` label, or the set's `EgressAuditUnattributed` condition, names the half to fix ([what to set for each](tenant-onboarding.md#per-pool-egress-audit-record)).
 The legend leaves the reason out: a label that long clips in the state timeline's label column.
 A tenant that never opted in has no row rather than a permanently red one, which would otherwise light most of a fleet and teach the eye to discount the three neighbours where a `1` is a fault.
 How many tenants have opted in is not on this dashboard.
