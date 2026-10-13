@@ -3670,6 +3670,16 @@ The doc remains available — the rationale is often more valuable than the diff
 <li>Once everything in a plan ships, leave the plan in place with the status table updated to ✅ Done.
   Don't delete it — the rationale is more valuable than the diff.</li>
 </ul>
+<p>Before a design goes to sign-off, walk each piece of state it persists or shares through five cases:</p>
+<ul>
+<li><strong>A restart</strong>, which loses everything held in memory.</li>
+<li><strong>A rollout</strong>, where two versions of the component run at once.</li>
+<li><strong>A rollback</strong>, where the older version reads what the newer one wrote.</li>
+<li><strong>Concurrent writers</strong>, including two disruptions of one run, or two replicas.</li>
+<li><strong>A human acting in between</strong>, such as a manual re-run or cancel.</li>
+</ul>
+<p>Then have an independent review session read it before it goes to sign-off.
+The Q555 design (<a href="q555-automatic-recovery-design/">q555-automatic-recovery-design.md</a>) took two independent reviews and 29 findings to reach sign-off, and 12 of them were one of these five cases left unwalked.</p>
 <p>When writing a plan's Status cell:</p>
 <ul>
 <li>Link a backlog item that is still open as <code>[QNNN](../queue/QNNN.md)</code>, and write a closed one bare.
