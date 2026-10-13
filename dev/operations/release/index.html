@@ -3835,7 +3835,7 @@ It runs the same script from a GitHub-hosted runner with no stored credential; h
 A local gate and a CI one read the same lease, so whichever starts second refuses rather than resizing the cluster under the first (<a href="#a-killed-gate-is-reclaimed-by-the-next-one">why</a>).</p>
 <p><strong>One command runs the whole gate</strong>, with nothing to type at it after the first confirmation.
 A green <code>v1.3.0-rc.4</code> run took 39 minutes end to end with one e2e leg; the gate now runs three, Kata, then privileged DinD, then Kata on the Dragonfly mirror back end, and a healthy e2e leg takes 25–33 minutes.
-<code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → the e2e matrix again on privileged DinD → the e2e matrix on Kata with the Dragonfly back end → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though <a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>).
+<code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → sizing → capacity → CRD smoke → soak readings → storage sweep → the e2e matrix again on privileged DinD → the e2e matrix on Kata with the Dragonfly back end → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though <a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the <code>Failure diagnostics</code> section of a failed run's log (e.g. the <code>FailedScheduling</code> events) instead of re-running the gate to watch it fail again.
 Once it is fixed, <a href="#re-run-only-the-leg-that-failed">re-run only the leg that failed</a>.
 The <a href="#the-legs-the-gate-runs">legs it runs</a> are documented at the end of this section, and are the recovery path if one needs re-running by hand.</p>
@@ -3867,7 +3867,8 @@ Set the <code>legs</code> input when dispatching the workflow:</p>
 </code></pre></div>
 <p>It runs the named legs, in the gate's own order, between the usual deploy and teardown.
 <code>validate-release.sh --legs dragonfly vX.Y.Z-rc.N</code> does the same locally, for diagnosis.</p>
-<p>The legs are <code>kata</code>, <code>crd-smoke</code>, <code>soak</code>, <code>dind</code> and <code>dragonfly</code>.
+<p>The legs are <code>kata</code>, <code>crd-smoke</code>, <code>soak</code>, <code>storage</code>, <code>dind</code> and <code>dragonfly</code>.
+For a candidate on a line older than 1.10, pass <code>legs</code> without <code>storage</code>: that line's <code>gag-migrate</code> has no <code>storage-version</code> command, so the leg fails there, and its own tag's leg list never requires it.
 <code>kata</code> includes the sizing and capacity checks, because both read the Kata tenant its e2e matrix leaves up.
 Deploy and teardown run every time, since the cluster is at 0 nodes between runs.</p>
 <p><code>check-validated-candidate.sh</code> names the legs a candidate still needs, and passes once runs have covered them all.</p>
@@ -4135,11 +4136,17 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
    The <code>EgressProxy</code> is manufactured and deleted because dogfood deliberately runs without one; this does not change what the cluster runs.
    <strong>The readings outlive the run.</strong> The gate appends one record per reading to <code>tmp/soak-readings.jsonl</code>, and <code>scripts/dogfood/soak-readings.sh</code> renders them as the rows the v2 GA plan's soak table takes, so transcribing them is a paste rather than a re-read of the terminal.
    Do it before the window's scrollback is gone: the window is billable and cannot be replayed, so a reading nobody can find afterwards cost the same as one never taken.
-7. <strong>Run the e2e matrix again on privileged DinD (Q1159).</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>E2E_VARIANT=dind scripts/dogfood/e2e-start.sh</code>, then step 2's dispatch and watch.
+7. <strong>Run the storage sweep and read <code>storedVersions</code> (Q1171).</strong> Apply the RC chart's <code>PriorityClassAllowlist</code> CRD with <code>helm show crds … | kubectl apply -f -</code>, since <code>helm upgrade</code> never re-applies it.
+   Then download the RC's <code>gag-migrate</code> binary for the gate host with <code>SHA256SUMS</code> and its <code>.cosign.bundle</code>, <code>cosign verify-blob</code> the manifest against the publish identity, and check the binary's digest against it.
+   Run <code>gag-migrate storage-version --context &lt;dogfood&gt;</code> as a dry run, then again with <code>--apply --assume-yes</code>, and assert all six <code>actions-gateway.com</code> CRDs read <code>storedVersions: ["v2"]</code> with the <a href="../upgrade/#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">pre-upgrade check</a>.
+   The dry run refuses, and writes nothing, while a CRD does not store <code>v2</code> or an <code>EgressProxy</code> still names <code>CiliumFQDN</code> or <code>CalicoFQDN</code>, so the <a href="../upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">alias check</a> runs as part of it.
+   <strong>This changes the cluster for good.</strong> Once pruned, <code>storedVersions</code> stays <code>["v2"]</code>, so a later run takes the sweep's no-op path and still asserts the reading.
+   A refused precondition, a refused object, or any other value fails the leg.
+8. <strong>Run the e2e matrix again on privileged DinD (Q1159).</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>E2E_VARIANT=dind scripts/dogfood/e2e-start.sh</code>, then step 2's dispatch and watch.
    Step 2 runs the Kata variant, the one untrusted pull requests need, so without this the shipped <code>privileged-dind</code> template reaches operators with no job ever having run on it; 1.9 moved its daemon from <code>docker:27-dind</code> to <code>docker:28-dind</code> that way.
    It runs last because the two variants share one namespace, RunnerSet and node pool, and the sizing and capacity legs read the Kata tenant's state.
    The mirror census is Kata-only: nothing on the DinD tenant reaches a mirror.
-8. <strong>Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh</code>, then step 2's dispatch and watch.
+9. <strong>Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh</code>, then step 2's dispatch and watch.
    The mirrors can fetch through a Dragonfly seed peer instead of from their upstreams directly (Dragonfly is a peer-to-peer image distribution system); without this leg every gate run tests the default Distribution back end alone, and the Dragonfly one has run only on kind.
    It is Kata because only the Kata tenant's egress is mirror-only; on DinD a worker reaches upstreams itself, so the back end would not be on the path under test.
    A red matrix is a red gate.
@@ -4172,11 +4179,11 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
 </table>
 <p><strong>These are readings, not gates</strong>, recorded under <code>Q539</code> with the soak readings in step 6 and rendered by the same script.
    A <code>finding</code> on either network reading is a security property failing on the candidate's cluster: read it before promoting, even though the gate passed.
-9. <strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code> (dogfood scales to 0 at rest).
-   <strong>Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero</strong>, so the gate can report success with a node still billing for several more minutes.
-   Confirm at rest by asking the cluster (<code>scripts/dogfood/ops.sh at-rest</code>), never by reading the gate's own teardown line.</p>
+10. <strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code> (dogfood scales to 0 at rest).
+    <strong>Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero</strong>, so the gate can report success with a node still billing for several more minutes.
+    Confirm at rest by asking the cluster (<code>scripts/dogfood/ops.sh at-rest</code>), never by reading the gate's own teardown line.</p>
 <p>These steps are diagnosis and recovery only: a verdict <code>publish.yml</code> accepts comes from the CI gate run (<a href="#the-gate-records-its-verdict-and-publish-reads-it">why</a>).</p>
-<p>A red matrix, a failed CRD smoke, a dead <code>NodeShare</code> profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a <strong>stop-ship for the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.</p>
+<p>A red matrix, a failed CRD smoke, a CRD left listing a version other than <code>v2</code>, a dead <code>NodeShare</code> profile, or a quota rung that fails to withhold under zero headroom on a run that drove it is a <strong>stop-ship for the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable tag.</p>
 <h3 id="2-tag-and-push">2. Tag and push<a class="headerlink" href="#2-tag-and-push" title="Permanent link">&para;</a></h3>
 <p><strong>What may land between a validated candidate and the stable tag.</strong> A candidate's dogfood validation covers the tree it was cut from, so anything merged after it that moves an artifact makes the verdict describe something other than what ships.
 That is how <code>v1.5.0-rc.1</code> was superseded: it validated, eight rows merged on top, and its verdict stopped describing <code>main</code>.</p>

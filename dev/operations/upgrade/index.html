@@ -1713,6 +1713,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3510,6 +3521,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4261,6 +4283,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
+<li><a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets</a></li>
 <li><a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started</a></li>
 <li><a href="#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed">Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed</a></li>
 <li><a href="#non-breaking-a-scale-set-workers-jit-config-secret-is-now-owned-by-its-pod">Non-breaking: a scale-set worker's JIT-config Secret is now owned by its pod</a></li>
@@ -4398,6 +4421,16 @@ If the apiserver refuses an object, for example because a validating webhook rej
 Fix the named objects and run it again.</p>
 <p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
+<h3 id="non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets<a class="headerlink" href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> a tenant whose worker image sits in a registry that requires a login, with the pull Secret on the worker ServiceAccount rather than in the pod template, as the <a href="../air-gapped-install/#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">air-gapped install</a> wires it.</p>
+<p>The registry read behind <code>RunnerVersionTooOld</code> used to present only the Secrets the pod template's <code>imagePullSecrets</code> names, so on that wiring it failed authentication on every reconcile while the pull itself worked.
+When the template names none, the AGC now presents the worker ServiceAccount's <code>imagePullSecrets</code>, the same set ServiceAccount admission puts on the worker pod (Q1066), and the <code>WorkerImageVersionUnknown</code> authentication failure resolves to a verdict read from the image.</p>
+<ul>
+<li><strong>RBAC:</strong> the <code>agc-tenant-role</code> ClusterRole gains <code>get</code> on <code>serviceaccounts</code>, no <code>list</code>, <code>watch</code> or write, and the chart ships it.
+  An AGC running against a Role without the grant reads anonymously as before, and a refused read names the unread ServiceAccount in its message.</li>
+<li>A pull Secret named in both places can come out of the pod template, since the ServiceAccount's is now read too; leaving it in changes nothing.</li>
+</ul>
+<p>No action is required at upgrade time.</p>
 <h3 id="non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started<a class="headerlink" href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" title="Permanent link">&para;</a></h3>
 <p>GitHub gives a scale-set job to whichever of the set's runners asks first, so a worker can run a different job, from a different run, than the one it was created for.
 Recovery used to re-run the run the worker was created for, which left the run that actually lost a job failed (Q1152).</p>

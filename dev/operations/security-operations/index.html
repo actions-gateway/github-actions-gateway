@@ -4215,7 +4215,7 @@ If your scrape config does not add it, drop the interpolation.</p>
 <hr />
 <h2 id="audit-log-abuse-detections">Audit-log abuse detections<a class="headerlink" href="#audit-log-abuse-detections" title="Permanent link">&para;</a></h2>
 <p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
-The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="../../plan/security/">H-2</a>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
+The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="../../plan/security/">H-2</a>, and reads a tenant's Secret body only to present a pull secret to the registry read behind <code>RunnerVersionTooOld</code>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
 <p>Detecting these requires an <strong>API-server audit policy</strong> that logs the relevant verbs at <code>Metadata</code> level or higher, shipped to a security information and event management (SIEM) system or log-based alerting backend.
 A ready-to-adapt sample policy ships at <a href="../examples/apiserver-audit-policy.yaml"><code>examples/apiserver-audit-policy.yaml</code></a>; <a href="#api-server-audit-policy-sample">§ API server audit policy (sample)</a> below covers installing it and reading the events.
 The table specifies <em>what to alert on</em> once that policy is in place.</p>
@@ -4352,7 +4352,9 @@ To see GMC Secret reads (substitute your GMC user string):</p>
 Alert on: any <code>list</code>/<code>watch</code>; a <code>get</code> rate well above the reconcile cadence; or any <code>get</code> outside a tenant namespace (e.g.
 <code>kube-system</code>).
 For the GMC write rule, a <code>responseStatus.code</code> of <code>403</code> is a VAP block — investigate the binary that attempted it.
-For AGC reads, filter by each AGC user string and alert on <code>verb == "list"</code> (the legit path is metadata-only) or a <code>get</code> on a Secret name the AGC does not own.</p>
+For AGC reads, filter by each AGC user string and alert on <code>verb == "list"</code> (the legit path is metadata-only) or a <code>get</code> on a Secret name the AGC does not own, other than a pull secret.
+The registry read <code>get</code>s each <code>imagePullSecrets</code> entry the worker pod template names, or, when it names none, those on the worker ServiceAccount, which it reads with one <code>get</code> on <code>serviceaccounts</code>; it repeats on a failure's backoff (one minute doubling to an hour) and on each hourly re-check of a tag-addressed image.
+A <code>get</code> on a ServiceAccount other than the worker ServiceAccount, or on a Secret that neither names, is outside it.</p>
 <hr />
 <h2 id="per-connection-egress-audit">Per-connection egress audit<a class="headerlink" href="#per-connection-egress-audit" title="Permanent link">&para;</a></h2>
 <p>The audit policy above is a detective control on what a controller asks the <strong>apiserver</strong>.

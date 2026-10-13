@@ -2918,20 +2918,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
 </tr>
 <tr>
-<td><a href="Q1171/">Q1171</a></td>
-<td><a href="../plan/release-1.10/#what-the-candidate-must-show">RC validation runs the storage sweep and reads storedVersions on dogfood</a></td>
-<td><code>dogfood</code> <code>tests</code> <code>1.10-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><a href="../plan/release-1.10/#what-the-candidate-must-show">release-1.10.md</a> requires the 1.10 candidate to show every <code>actions-gateway.com</code> …</td>
-</tr>
-<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with the <code>kubernetes.io/dockerconfigjson</code> Secrets the pod template's …</td>
+<td>The registry read behind <code>RunnerVersionTooOld</code> (Q988) authenticates with <code>kubernetes.io/dockerconfigjson</code> Secrets: those the pod template's …</td>
 </tr>
 <tr>
 <td><a href="Q989/">Q989</a></td>
