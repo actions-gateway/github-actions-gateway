@@ -71,6 +71,10 @@ That is one of R5's stated blind spots.
 - Memory alone loses every pairing on a restart, and an AGC rollout restarts it, so the manual re-run rate would undercount on every upgrade.
 - Asking GitHub is stateless but needs a run read per completed job to learn whether it is a re-run, which R6 forbids, because `JobAssigned` carries no attempt number.
 - `guards.json` is not the home: it is re-serialised whole by the listener and retired when the assignment message is deleted, while a failure must outlive that by days.
+- Kubernetes Events are not either, though the design uses them for every notification: they expire after an hour by default, the client-go recorder drops and aggregates them under load (both from recall), and they have no compare-and-swap, so a budget kept in them could be lost or double-spent.
+  The ledger is state the AGC reads back and acts on one record at a time, which needs exact, complete storage.
+- A record CRD (one small object per run GAG re-ran) is the upgrade path if the ConfigMap's cap ever binds: no shared size limit and no write contention between runs, at the cost of new public API and an object per re-run.
+  The ledger's size is the measure that says when.
 
 The AGC's ConfigMap verbs are `get`, `create` and `update`, with no informer, so every read is an uncached API call.
 The AGC loads the ledger once at start and keeps an in-memory copy, updated on each of its own writes and re-read when a compare-and-swap loses.
