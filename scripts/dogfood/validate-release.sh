@@ -1643,7 +1643,7 @@ EOF
 crd_smoke() {
 	# Re-pin the cluster context (fail-closed) before the apply, independent of
 	# which child last fetched credentials.
-	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}" || return 1
 
 	echo "Downloading the signed v2 CRD manifest for ${GAG_IMAGE_TAG}..."
 	gh_retry release download "${GAG_IMAGE_TAG}" --repo "${REPO}" \

@@ -119,9 +119,11 @@ Measured on bash 5.3.15, with `f() { false; echo after; }`:
 | Caller | `after` printed | Caller sees |
 |---|---|---|
 | `f` | no | exit 1, script aborts |
-| `f \|\| rc=$?` | yes | `rc=0` |
+| `f \|\| rc=$?` | yes | 0, so `rc=$?` never runs and `rc` keeps its prior value |
 | `if f; then …` | yes | the `then` branch runs |
 | `f && :` | yes | 0 |
+
+A command substitution inside such a body runs past its failure too: `inherit_errexit` passes errexit into `$(…)` only when the caller has it on.
 
 So a function whose safety is *stopping* (verify a signature, then run or apply what it verified) must not lean on errexit for that stop.
 Every such step returns explicitly:
