@@ -37,7 +37,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q1154 | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | ✅ landed: the worker pod becomes the Secret's only owner once created, so the garbage collector deletes it with the pod. Unit-tested with a collector stand-in; not reproduced on a cluster |
 | Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
-| [Q1070](../queue/Q1070.md) | Security-dashboard panel keyed on Q1069's per-set gauge | rides | 🔲 ready, filtered to opted-in tenants; Q1069's gauge has landed |
+| Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | 🔲 ready, staged |
 | [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | 🔲 ready |
 
