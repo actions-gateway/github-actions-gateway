@@ -1,8 +1,9 @@
 # Q555 automatic recovery: design
 
-**Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review.
+**Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
 Nothing here is built.
-It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session) with recommendations that need the maintainer's sign-off (marked **Decide**).
+It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
+Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
 Code facts were read from source on 2026-10-10 and 2026-10-11 unless marked otherwise; the assumptions the design rests on that nobody has measured are listed [first](#measure-before-building).
 
@@ -23,6 +24,7 @@ Each of these decides a component's shape, and none has been observed:
 | M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | A dogfood job that allocates past its limit under `Binpack` |
 | M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | The same turn-up: compare the pod's deletion time to the completion's arrival in the AGC log |
 | M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | A fork PR on a test repository |
+| M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | A test workflow with a matrix, a reusable workflow and a `needs:` chain, re-run one job at a time |
 
 M3 rests on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event.
 The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour expiry are proposals, not measurements; R14's metrics are what will move them.
@@ -64,7 +66,7 @@ That is one of R5's stated blind spots.
 
 ### Where the ledger lives (open question 1)
 
-**Decide:** a per-set ConfigMap, `scaleset-failures-<runnerset>`, key `failures.json`, owner-referenced to the `RunnerSet`, written with the same read, modify, compare-and-swap loop as `scaleset-recovery-claims` (`recovery_claims.go`).
+**Decided:** a per-set ConfigMap, `scaleset-failures-<runnerset>`, key `failures.json`, owner-referenced to the `RunnerSet`, written with the same read, modify, compare-and-swap loop as `scaleset-recovery-claims` (`recovery_claims.go`).
 
 - Memory alone loses every pairing on a restart, and an AGC rollout restarts it, so the manual re-run rate would undercount on every upgrade.
 - Asking GitHub is stateless but needs a run read per completed job to learn whether it is a re-run, which R6 forbids, because `JobAssigned` carries no attempt number.
@@ -73,7 +75,7 @@ That is one of R5's stated blind spots.
 The AGC's ConfigMap verbs are `get`, `create` and `update`, with no informer, so every read is an uncached API call.
 The AGC loads the ledger once at start and keeps an in-memory copy, updated on each of its own writes and re-read when a compare-and-swap loses.
 Lookups, including the per-provision floor lookup below, read that copy and cost nothing.
-Writes happen on a failed completion, a GAG re-run and a pairing, never on a succeeded job with no record, so the write rate tracks failures and not throughput.
+Writes happen on a failed completion, a GAG re-run (its budget reservation) and a pairing, never on a succeeded job with no record, so the write rate tracks failures and not throughput.
 
 It holds two maps:
 
@@ -83,19 +85,23 @@ It holds two maps:
     "<runID>/<jobDisplayName>": {
       "failedAt": "2026-10-10T12:00:00Z",
       "jobID": "6f1c…",
+      "event": "pull_request",
+      "workflowRef": "org/repo/.github/workflows/ci.yml@refs/pull/42/merge",
       "context": { "podPhase": "Failed", "containers": [{ "name": "runner", "reason": "OOMKilled", "exitCode": 137 }] },
       "memoryFloor": "6Gi"
     }
   },
   "reruns": {
-    "<runID>": { "attempt": 1, "cause": "oom", "job": "<jobDisplayName>", "selfCancelled": false, "at": "2026-10-10T12:11:00Z" }
+    "<runID>": { "count": 1, "attempt": 1, "cause": "oom", "job": "<jobDisplayName>", "selfCancelled": false, "at": "2026-10-10T12:11:00Z" }
   }
 }
 ```
 
 `reruns` is keyed by run, not by failure, because a disruption arm fires about 10 minutes before the failed completion that would create the failure entry (the job lock); a run-keyed mark needs nothing to exist first.
+It is also [the budget](#the-budget-is-gags-own-count-in-the-ledger-r15): `count` is how many times GAG has re-run the run.
+`event` and `workflowRef` are decoded from the job message, which carries them on every type (a live capture in [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md)), so they cost no API call; they are what [event scope](#event-scope-open-question-4) is waiting to measure.
 
-Bounds: entries expire after 7 days (a human re-runs Monday what failed Friday).
+Bounds: failure entries expire after 7 days (a human re-runs Monday what failed Friday); `reruns` entries after 30, GitHub's re-run window, so a budget cannot refill while the run can still be re-run.
 Past a cap sized so the worst-case object stays under 512 KiB, the oldest go first, except an entry holding a `memoryFloor` whose re-run has not completed, which is pinned so the re-run gets its floor.
 A unit test asserts the size against a maximal entry.
 
@@ -123,7 +129,7 @@ Detection is on for every scale-set `RunnerSet` with no field (R4); it changes n
 |---|---|---|
 | `actions_gateway_scaleset_job_reruns_total` | `namespace`, `runner_set`, `trigger` (`gag`, `gag_collateral`, `other`) | A later attempt of a failed job completed. `trigger="other"` over `scaleset_jobs_completed_total` is the manual re-run rate, the success metric |
 | `actions_gateway_scaleset_flaky_jobs_total` | `namespace`, `runner_set`, `trigger` | A failed job later succeeded with no disruption or class attributed |
-| `actions_gateway_eviction_rerun_outcomes_total` | `namespace`, `runner_group`, `tier`, `cause`, `result` | The result of each attempt GAG re-ran, per cause (R14); `result="failed"` over the total is a cause's failure rate |
+| `actions_gateway_eviction_rerun_outcomes_total` | `namespace`, `runner_group`, `tier`, `cause`, `event`, `result` | The result of each attempt GAG re-ran, per cause (R14); `result="failed"` over the total is a cause's failure rate |
 
 The third keeps the `eviction_` prefix and `runner_group` label of the family it extends, so one query joins it to `eviction_retries_total`.
 No job or repository name is a label (R3).
@@ -144,20 +150,27 @@ It keeps the existing failure handling: a transport error or a 5xx retries insid
 That is a new failure mode for the four arms that do not read the run today, and it fails in the safe direction: a run GAG cannot read is not re-run, and the re-run call needs the same API anyway.
 The read, and the workflow-runs list below, need only read access to Actions, so R17 holds.
 
-### The budget becomes `run_attempt` (R15)
+### The budget is GAG's own count, in the ledger (R15)
 
 Today the budget is an in-memory count per run id, reset by a restart and not shared between replicas.
-**Decide:** replace the count with `run_attempt`: GAG re-runs a run only while `run_attempt <= maxEvictionRetries`, that is, while the run has been re-run fewer than `maxEvictionRetries` times, by anyone.
-It survives a restart, needs no write, and is the same number across replicas and both tiers.
+**Decided:** keep counting only GAG's own re-runs, and move the count into the ledger's `reruns` map.
+`maxEvictionRetries` keeps its meaning, so nothing about the field changes and no release note is needed for it.
 
-The trade-off is that it counts a human's re-runs too: a run somebody re-ran twice gets no automatic re-run under the default budget of 2.
-That fails safe (fewer automatic re-runs, never more), and a run re-run twice by hand is one a person is watching.
-It still changes what an existing field means for an object nobody edits, which [api-review.md](../development/api-review.md) classes with changing a default: wire-breaking.
-So it ships with a breaking-change release note, and the godoc changes in all four definitions of the field, including `v2alpha1`'s, whose "Classic only" is already stale.
+**Reserving a slot is a ledger write.** Before the re-run call, a compare-and-swap reads the run's `reruns` entry and does one of three things:
 
-The in-memory map stays, re-keyed to `(run id, run_attempt)`, as a dedup.
-Today two disruptions in one run each reserve a slot and each start a retry loop (`handleEviction`, read 2026-10-11): the second keeps meeting `403 This workflow is already running` while the first re-run is in progress, and lands a second re-run once that attempt concludes inside its 15-minute window.
-The dedup makes one attempt's disruptions one re-run, and `already_rerun` below catches whatever a restart lets through.
+- **Merges** when the entry's `attempt` equals the `run_attempt` just read: another disruption of the same attempt already reserved, so this one rides on that re-run and writes nothing.
+- **Refuses** when `count` has reached `maxEvictionRetries`: `budget_exhausted`.
+- **Reserves** otherwise: it increments `count` and records `attempt`.
+
+A write that fails withholds the re-run, the safe direction.
+The `(run, attempt)` merge also fixes a defect in today's code.
+Two disruptions in one run each reserve a slot and each start a retry loop (`handleEviction`, read 2026-10-11): the second keeps meeting `403 This workflow is already running` while the first re-run is in progress, and lands a second re-run once that attempt concludes inside its 15-minute window.
+
+A human's re-runs do not count, so a run somebody re-ran by hand can still be recovered.
+GitHub's own cap of 50 attempts, which humans and GAG share, is the `attempt_limit` check below.
+The ledger is per scale-set `RunnerSet`, so the classic tier keeps its in-memory count; classic is terminal, so it is not worth the second store.
+A run whose jobs span two sets has a budget in each, so it can be re-run up to twice `maxEvictionRetries`, which the operator docs must say.
+The two sets cannot merge a reservation across ledgers, so what stops both re-running one attempt is `already_rerun` below: each loop re-reads the run before every call and stands down once `run_attempt` has moved.
 
 ### The futility checks (R18), in order
 
@@ -326,47 +339,148 @@ So Q1178 ships metrics for operators only, and the per-destination breaker the d
 
 ## The CRD (open question 5)
 
-**Decide:** no new field and no new condition.
+**Decided:** no new field and no new condition; classes are on by default.
 
 - Detection changes no behaviour, so it needs no switch (R4).
 - Classes spend the existing budget and inherit `maxEvictionRetries: 0` as the off switch.
   That follows what ships: the disruption arms are on by default, so a platform cause is retried by default.
 - The out-of-memory class fires only on a set whose owner chose a right-sizing profile, so the opt-in is already on the object.
 - A per-class switch waits for its consumer: the first class some operator wants off.
-  Then it is a `spec.retry.disabledCauses` list, whose emptiness is the default, rather than one boolean per class, and api-review's rules settle its shape then.
+  Then it is a rule in `spec.retry.rules`, under [Built to extend](#built-to-extend), not a boolean per class.
 - The breaker reports through a gauge and an Event rather than a condition, because its state is in memory: a condition would flip on every restart, and two AGC pods during a rollout would write it in conflict.
 
-The one API change is the meaning of `maxEvictionRetries`, under [the budget](#the-budget-becomes-run_attempt-r15).
+Nothing in the API changes: the budget keeps `maxEvictionRetries`' meaning.
+
+## Built to extend
+
+The maintainer's direction (2026-10-12): not every option above needs to be configurable, but the API and the storage must be shaped so any of them can be added later without a breaking change or a migration.
+Nothing in this section ships with the first rows; it fixes the shape the first configurable option will take.
+
+### The API shape
+
+**Decide:** one home and one shape for every future retry option.
+
+- **One home.** New retry configuration goes under a `spec.retry` block, typed as a standalone `RetryPolicy` so a gateway-wide default can reuse it later.
+  `maxEvictionRetries` and `evictionRetryDelay` stay where they are: moving shipped fields is churn with no reader asking for it.
+- **One shape: an ordered rule list.** `spec.retry.rules[]`, first match wins, and a job no rule matches gets the built-in behaviour.
+
+  ```yaml
+  spec:
+    retry:
+      rules:
+        - match:
+            workflows: [".github/workflows/release.yml"]
+          action: Never
+        - match:
+            causes: [oom]
+            events: [pull_request, merge_group]
+          action: Retry
+          scope: Job
+  ```
+
+  Every `match` field is optional, its values OR together, and the fields AND together; an absent field matches anything.
+- **Why a list and not a field per axis.** A new axis (an environment, a branch) is a new optional `match` field, which every stored object lacks and so reads as "any": no existing rule changes meaning.
+  Per-axis fields would interact (an event filter against a cause switch against a workflow list), and each pair would need its own CEL rule tying them together, which is the split api-review's tells warn about.
+- **String enums for the verbs.** `action` is `Retry` or `Never`, and `scope` is `FailedJobs` or `Job`, which is where [granularity](#run--or-job-granular-re-run-open-question-2) becomes configurable per rule if M6 allows it.
+  A new value is an additive schema change.
+  An AGC that meets an `action` or `scope` it does not know, as an older one can during a rollout, treats the rule as `Never`, the safe direction.
+- **List semantics,** per api-review: atomic, `MaxItems` bounded, and the first-match ordering stated in the godoc as a contract admission does not check, as `priorityTiers`' ordering is.
+- **What a rule cannot do:** turn a futility check off, or raise a budget.
+  Rules narrow what is retried and how; `maxEvictionRetries` stays the only budget, and futile shapes stay futile.
+
+### The code shape
+
+One decision function, called by every arm and class after the futility checks and before the budget:
+
+```go
+// decide returns what the set's retry policy says for one failed job.
+func (p RetryPolicy) decide(f retryFacts) retryDecision // {action, scope, rule index}
+
+type retryFacts struct {
+	cause, event, workflowRef, headBranch string // headBranch from the run read
+	// an axis added later is a field here and a match field on the rule
+}
+```
+
+The disruption arms call it too, so a rule can turn one off for one workflow, not only the classes.
+With no `spec.retry`, it returns today's behaviour.
+
+### The storage shape
+
+The ledger is internal, not API, but two AGC versions share it during every rollout and every rollback, so it is built to be read and written by a version that does not understand all of it:
+
+- **A top-level `version`.** A schema change that an older AGC could not write safely bumps it.
+  An AGC that reads a higher version than it knows does not write the ledger: detection pauses and budget reservations fail, so re-runs are withheld until the rollout settles.
+- **Unknown fields survive a rewrite.** Each entry, and the top level, keeps fields it does not recognise as raw JSON and writes them back.
+  Go's decoder drops unknown fields by default, so an older AGC doing a compare-and-swap would otherwise erase whatever a newer one added.
+- **New data is a new key.** Maps are keyed by stable identifiers (run id; run and job), so a new kind of record is a new top-level map, as the pending re-runs already are, never a reinterpretation of an existing one.
+- **Record the facts before the rule exists.** Every failure entry carries every `retryFacts` field GAG can read (`cause`, `event`, `workflowRef`, and `headBranch` once a run read has happened), so when a rule ships, the ledger and the log lines already show what it would have matched.
+  `actions_gateway_eviction_rerun_outcomes_total` gains an `event` label for the same reason: GitHub's event list bounds it, and it is the one axis cheap enough to keep as a label.
 
 ## Event scope (open question 4)
 
-**Decide:** classes inherit the arms' scope, every event.
-A deploy job killed by the platform is one a human would re-run, and a class only fires on a cause outside the job.
-An event filter is a field whose consumer has not arrived.
+**Decide:** classes inherit the arms' scope, every event, and detection records each failure's `event` and `workflowRef` so the data shows which scopes retries help or hurt before anything is made configurable.
+
+The event is a proxy for two properties that matter more, whether a re-run has side effects and whether it is still useful later:
+
+| Group | Events | Why it might behave differently |
+|---|---|---|
+| Validation | `pull_request`, `pull_request_target`, `merge_group`, `push` to a non-default branch | Safe to retry; `superseded` matters most here |
+| Side effects | `release`, `deployment`, `workflow_dispatch` (often a deploy), `push` to the default branch (often a publish) | A retry can publish or deploy twice if the failed job got partway |
+| Time-sensitive | `schedule` | A retry hours later may not be worth running |
+
+When an operator asks for a knob, the candidates, in the order they say most about a job, are:
+
+- **The workflow file** (`jobWorkflowRef`), which names `release.yml` outright rather than guessing from its event.
+- **The GitHub Environment** the job deploys to, the most direct marker of a deploy job; whether the job message or any API GAG already calls exposes it is unverified.
+- **The branch**, the default against the rest.
+- **The event**, the coarsest.
+
+A tenant (a workflow author) wanting to opt a job out is a different case from an operator: an opt-out only ever means fewer retries, so it is safe to take from tenant input, unlike anything that triggers a retry (R9).
+The natural channel is the job's `runs-on` labels, but whether a scale set still routes a job carrying an extra label is unverified, and recall says it does not.
+None of these ships until someone asks for it; each then lands as one optional match field on a `spec.retry.rules` entry ([Built to extend](#built-to-extend)), never as a field per axis.
 
 ## Run- or job-granular re-run (open question 2)
 
-**Decide:** keep `rerun-failed-jobs` for everything.
-Job-granular re-run needs the job's numeric id, which costs a jobs-list call per retry, and whether a `JobCompleted` display name matches the API's job name exactly for reusable workflows is unmeasured.
-The cost of run-granular is collateral: a sibling's real failure is re-run too, and masked if it then passes.
-Detection counts exactly that as `trigger="gag_collateral"`, so the decision comes back with a number if the collateral share turns out to matter.
+**Research**, with the maintainer's preference recorded: re-run only the job GAG classified, unless something rules it out (2026-10-12).
+GitHub re-runs no finer than a job, through three endpoints:
+
+- `POST …/runs/{id}/rerun` re-runs every job: the UI's "Re-run all jobs".
+- `POST …/runs/{id}/rerun-failed-jobs` re-runs every failed job and its dependents: the UI's "Re-run failed jobs", and what GAG calls today.
+- `POST …/jobs/{job_id}/rerun` re-runs one job and its dependents: the re-run button on a single job.
+
+Only the third leaves a failed sibling alone.
+
+Run-granular re-runs a sibling's real failure too, and hides it if it passes, which is the masking R1 exists to measure.
+Job-granular avoids that, and costs:
+
+- **A jobs-list call per retry** (`GET …/runs/{id}/attempts/{n}/jobs`), to turn the job's display name into the numeric id the endpoint takes; the job message carries only a UUID.
+  Retries are rare, so the cost is small.
+- **A name match that may not hold** (M6): if `jobDisplayName` and the API's `name` differ for matrix or reusable-workflow jobs, or two jobs share a name, the match is ambiguous.
+  An ambiguous match falls back to `rerun-failed-jobs`, counted as `trigger="gag_collateral"`.
+- **The external-state case**: a job whose passed upstream jobs set state it depends on (a staging deploy, a lock, a published artifact) can fail again on a single-job re-run where a whole-run re-run would pass.
+  GitHub keeps the upstream jobs' outputs for the re-run, from recall; whether it keeps their artifacts is part of M6.
+  The fallback for this case is the same `rerun-failed-jobs`, and choosing it needs a signal GAG does not have, so the first version does not try; `same_class_again` stops the repeat.
+
+M6 settles it; until then, detection's `gag_collateral` count measures what run-granular costs on the existing arms.
 
 ## Failure modes
 
 | Failure | Effect | Direction |
 |---|---|---|
 | The ledger's ConfigMap write fails | The pairing is lost; the job counts in nothing | Undercount, never a wrong re-run |
-| The AGC restarts | Snapshots, breakers and the abandoned arm's waiting set are lost; the ledger, its pending class re-runs and the budget are not | Context reads `unknown`; breakers close and the budget still bounds; an abandoned run waiting for capacity needs a manual re-run, as today |
+| The AGC restarts | Snapshots, breakers and the abandoned arm's waiting set are lost; the ledger, its pending class re-runs and the scale-set budget are not | Context reads `unknown`; breakers close and the budget still bounds; an abandoned run waiting for capacity needs a manual re-run, as today |
+| The budget reservation write fails | No slot is reserved | The re-run is withheld; never a re-run without a slot |
 | GitHub's API is unreachable | No run read, so no re-run | Fail closed, as the deletion arm does today |
 | A class is misdeclared | Its re-runs keep failing | `same_class_again` stops each job's repeat, and the alert names the cause |
 | A floor's pod cannot be placed | The worker stays Pending past its deadline | The abandoned arm's existing path, which waits for capacity |
-| Two AGC pods during a rollout | Both may see one disruption | The `(run, attempt)` dedup is per process, so the second read sees `already_rerun` |
+| Two AGC pods during a rollout | Both may see one disruption | The reservation is a compare-and-swap on one object, so the second merges into the first |
 
 ## Test plan
 
 - **Unit:**
   - each `reason` in the futility table against an `httptest` GitHub returning that run;
-  - the budget at `run_attempt` 1, 2 and 3 with the default of 2;
+  - the reservation's merge, refuse and reserve paths, with a human re-run between two of GAG's;
   - the out-of-memory floor at, below and above each ceiling, for both profiles, and a second kill on one job;
   - the pairing table, row by row, and a replayed completion;
   - the ledger's worst-case size, and a floor surviving the cap.
@@ -376,13 +490,13 @@ Detection counts exactly that as `trigger="gag_collateral"`, so the decision com
   - a restart while a class re-run is pending, asserting it still lands.
 - **Deleting the mechanism:**
   - each futility check's test goes red with the check removed;
-  - the dedup's test goes red with the key back to run id alone, which also reproduces today's double re-run.
-- **Dogfood:** M1 to M5, and each class's R12 reproduction, before its class merges.
+  - the merge's test goes red with the merge removed, which also reproduces today's double re-run.
+- **Dogfood:** M1 to M6, and each class's R12 reproduction, before its class merges.
 
 ## Order of work
 
-1. The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction.
-2. Q1182, then Q1181: both widen one read, and the budget change and its dedup are the smaller diff to review alone.
-3. Q555's ledger and metrics.
-4. Q1183: the persistent deferred path, the breaker and the out-of-memory class.
+1. The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.
+2. Q555's ledger store and its reservation, then Q1182's budget on it: the budget needs the ledger, so the store lands first, with detection's pairing and metrics in the same row or right after.
+3. Q1181: the futility checks on the widened run read.
+4. Q1183: the persistent deferred path, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.
 5. Q1178 any time; Q1184 after its review.
