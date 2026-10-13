@@ -2688,6 +2688,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="8. What this plan does not cover">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-measured-the-worker-policy-holds-and-nothing-else-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Measured: the worker policy holds, and nothing else does
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -3017,8 +3034,59 @@ Measured in the same lab with only <code>blobs/sha256.*</code>: the gcr.io pull 
 The only change between that run and the failing one above is the removed rule.
 Measured on dogfood by the next gate run, 37380198658: the Dragonfly leg's e2e run passed every job, <code>docker-mirror-pull</code> included (<a href="#7-phases">§7</a>).</p>
 <h2 id="8-what-this-plan-does-not-cover">8. What this plan does not cover<a class="headerlink" href="#8-what-this-plan-does-not-cover" title="Permanent link">&para;</a></h2>
-<p>The node layer, where a <code>hostNetwork</code> dfdaemon serves the kubelet's own pulls, is <a href="../../queue/Q540/">Q540</a>. §2 applies there directly: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.
-Unmeasured.</p>
+<p>The node layer, where a <code>hostNetwork</code> dfdaemon serves the kubelet's own pulls, is <a href="../../queue/Q540/">Q540</a>. §2 applies there directly: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.</p>
+<h3 id="81-measured-the-worker-policy-holds-and-nothing-else-does">8.1 Measured: the worker policy holds, and nothing else does<a class="headerlink" href="#81-measured-the-worker-policy-holds-and-nothing-else-does" title="Permanent link">&para;</a></h3>
+<p>Measured on dogfood on 2026-10-13 (GKE <code>v1.35.8-gke.1439001</code>, Dataplane V2, one Kata <code>e2e</code> node and two system nodes), with a stand-in rather than dfdaemon: a <code>hostNetwork</code> DaemonSet answering HTTP on <code>0.0.0.0:4001</code> on every node.
+The Kata e2e tenant was up under the Q408 posture, so the GMC's <code>dogfood-e2e-workload</code> policy was in force and <code>e2e-open-egress</code> was gone.
+Each probe was a 6-second <code>wget</code> from three pods on the same Kata node:</p>
+<table>
+<thead>
+<tr>
+<th>Target, port 4001</th>
+<th>runc pod, no egress policy</th>
+<th>Kata pod in the tenant, no <code>workload</code> label</th>
+<th>Kata pod in the tenant, <code>actions-gateway/component: workload</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Its own node's InternalIP</td>
+<td>200</td>
+<td>200</td>
+<td>timeout</td>
+</tr>
+<tr>
+<td>Each system node's InternalIP</td>
+<td>200</td>
+<td>200</td>
+<td>timeout</td>
+</tr>
+<tr>
+<td><code>169.254.4.6</code>, the <code>CiliumInternalIP</code> every node carries</td>
+<td>200</td>
+<td>200</td>
+<td>timeout</td>
+</tr>
+<tr>
+<td>Its own node's ExternalIP</td>
+<td>timeout</td>
+<td>timeout</td>
+<td>timeout</td>
+</tr>
+<tr>
+<td><code>mirror-docker-io:5000/v2/</code> (control)</td>
+<td>timeout, not admitted</td>
+<td>200</td>
+<td>200</td>
+</tr>
+</tbody>
+</table>
+<p><strong>A worker cannot reach a node-layer dfdaemon.</strong> The worker policy allows nothing on 4001: DNS on 53 (the <code>169.254.0.0/16</code> block included), the egress proxy on 8080, and GitHub's ranges on 443 only.
+Dataplane V2 enforces it toward the pod's own node as well as the others, and Kata changes nothing.
+The middle column is the inversion: the same runtime, namespace and node without the label reaches every listener.</p>
+<p><strong>Every pod without an egress policy can reach one, on every node.</strong> Pod-level policy cannot select a <code>hostNetwork</code> listener, so the only thing between a pod and the open proxy of §2 is that pod's own egress policy.
+That covers any tenant pod the GMC does not label as a workload, and every pod in a namespace with no default-deny.
+Q540's build has to answer that before a node client ships, for example by binding the proxy to loopback for the node's own containerd rather than to <code>0.0.0.0</code>; that remedy is not measured here.</p>
 
 
 

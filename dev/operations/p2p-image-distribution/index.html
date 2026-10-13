@@ -3041,7 +3041,8 @@ That:</p>
 <li><strong>NetworkPolicy.</strong> P2P daemons talk node-to-node on their own ports.
   GAG's isolation boundary is the <em>tenant</em> NetworkPolicy on worker and proxy pods, not host-level node traffic, so the two generally do not collide — but if you run a default-deny policy at the node/host layer, allow the P2P tool's ports per its docs.</li>
 <li><strong>Keep worker pods off Dragonfly's proxy port.</strong> dfdaemon's proxy (port 4001 by default) forwards requests to any host, including pushes, and no setting restricts it, so a worker that can reach it has unrestricted egress (measured on client v1.5.7).
-  Admit only the clients you mean to serve, by NetworkPolicy on a pod-network deployment; a <code>hostNetwork</code> dfdaemon listens on every node address, where pod-level policy cannot select it.</li>
+  Admit only the clients you mean to serve, by NetworkPolicy on a pod-network deployment; a <code>hostNetwork</code> dfdaemon listens on every node address, where pod-level policy cannot select it.
+  GAG's worker egress policy does block a worker from that port on every node, its own included (measured with a Kata worker on GKE Dataplane V2), but any pod without its own egress policy reaches it.</li>
 <li><strong>Verify with the upstream guides.</strong> Installation, runtime compatibility (containerd settings, mirror configuration), and tuning are owned by the tools.
   Start at Spegel's <a href="https://spegel.dev/docs/getting-started/">Getting Started</a> or Dragonfly's <a href="https://d7y.io/docs/">documentation</a>.</li>
 </ul>

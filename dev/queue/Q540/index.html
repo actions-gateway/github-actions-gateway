@@ -2598,10 +2598,14 @@
 
 
 <h1 id="milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest<a class="headerlink" href="#milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest" title="Permanent link">&para;</a></h1>
-<p>Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.
-That reachability is the whole question: chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> with <code>hostNetwork</code>, and Q539 measured dfdaemon's proxy as an open forward proxy that forwards pushes, so a worker reaching a node address on that port has the internet (<a href="../../plan/q539-dragonfly-mirror-backend/#8-what-this-plan-does-not-cover">plan §8</a>).
-Unmeasured.
-One deployment for both?
+<p>Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls.
+Nothing node-layer is built: <code>deploy/dragonfly/</code> holds only Q539's pod-network seed peer.</p>
+<p>The worker half of the reachability question is answered (<a href="../../plan/q539-dragonfly-mirror-backend/#81-measured-the-worker-policy-holds-and-nothing-else-does">Q539 plan §8.1</a>): on dogfood, a Kata worker under the GMC's workload policy times out on port 4001 at every node address, including its own node's and the <code>CiliumInternalIP</code>, while an unlabelled Kata pod beside it reaches all of them.
+That was measured with a stand-in listener, not dfdaemon.</p>
+<p>The open part is the rest of the cluster.
+Chart 1.8.5's node client listens on <code>0.0.0.0:4001</code> with <code>hostNetwork</code>, Q539 measured that proxy as an open forward proxy that forwards pushes, and every pod with no egress policy reaches a node address on that port.
+So the build has to keep the proxy off the pod network, for example by binding it to loopback for the node's own containerd; whether chart 1.8.5 can do that is unmeasured.
+One deployment for both layers?
 <a href="../../plan/caching-and-worker-storage/">scope</a></p>
 
 
