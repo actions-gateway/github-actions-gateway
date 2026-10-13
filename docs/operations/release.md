@@ -330,6 +330,7 @@ It runs the named legs, in the gate's own order, between the usual deploy and te
 `validate-release.sh --legs dragonfly vX.Y.Z-rc.N` does the same locally, for diagnosis.
 
 The legs are `kata`, `crd-smoke`, `soak`, `storage`, `dind` and `dragonfly`.
+For a candidate on a line older than 1.10, pass `legs` without `storage`: that line's `gag-migrate` has no `storage-version` command, so the leg fails there, and its own tag's leg list never requires it.
 `kata` includes the sizing and capacity checks, because both read the Kata tenant its e2e matrix leaves up.
 Deploy and teardown run every time, since the cluster is at 0 nodes between runs.
 

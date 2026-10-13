@@ -60,6 +60,7 @@ The ledger takes a row for each further item that merges onto the released surfa
 The dogfood gate validates every candidate; this one also has to show the storage advance completed on a cluster that has run 1.x.
 Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports `storedVersions: ["v2"]` after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as `v2beta1` today.
 The gate's `storage` leg runs the sweep and takes that reading (Q1171, landed), so the candidate's evidence carries it.
+Only the first candidate's run rewrites anything: it leaves dogfood at `["v2"]`, so every later candidate's sweep takes the no-op path, and a sweep fix shipped in a later candidate is never exercised on a real cluster.
 
 ## Decided: an operator runs the sweep, as `gag-migrate storage-version`
 
