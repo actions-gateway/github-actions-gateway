@@ -31,7 +31,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
 | Q1086 | Mark `v2` the storage version, rewrite every stored object with a read-write sweep, and prune `storedVersions` to `["v2"]` | `1.10-gate` | ✅ landed: all six kinds store `v2`, and `gag-migrate storage-version` rewrites and prunes, proven on envtest |
-| [Q1171](../queue/Q1171.md) | RC validation runs the storage sweep and reads `storedVersions` on dogfood | `1.10-gate` | 🔲 ready |
+| Q1171 | RC validation runs the storage sweep and reads `storedVersions` on dogfood | `1.10-gate` | ✅ landed: the gate's `storage` leg applies the chart's `PriorityClassAllowlist` CRD, runs the RC's signed `gag-migrate storage-version`, and fails unless all six CRDs read `["v2"]`. Unit-tested with stubs; not yet run on dogfood |
 | Q1152 | Scale-set recovery ties a job to the runner that took it, not the worker created for it | `1.10-gate` | ✅ landed: a `JobStarted` replaces the worker's run identity with the started job's, and start-up recovery finds a job's worker by `started-job-id`. Unit-tested on crossed workers; not reproduced on a cluster |
 | Q1153 | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | ✅ landed: a runnerless completion whose own worker is busy stamps the oldest idle `Running` worker, once per job, and a start moves the stamp on. Unit-tested on crossed workers; not reproduced on a cluster |
 | Q1154 | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | ✅ landed: the worker pod becomes the Secret's only owner once created, so the garbage collector deletes it with the pod. Unit-tested with a collector stand-in; not reproduced on a cluster |
@@ -59,7 +59,7 @@ The ledger takes a row for each further item that merges onto the released surfa
 
 The dogfood gate validates every candidate; this one also has to show the storage advance completed on a cluster that has run 1.x.
 Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports `storedVersions: ["v2"]` after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as `v2beta1` today.
-The gate does not yet run the sweep, which is [Q1171](../queue/Q1171.md).
+The gate's `storage` leg runs the sweep and takes that reading (Q1171, landed), so the candidate's evidence carries it.
 
 ## Decided: an operator runs the sweep, as `gag-migrate storage-version`
 
