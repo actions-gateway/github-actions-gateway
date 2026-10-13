@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 )
 
 // cloudMetadataIP is the link-local cloud metadata server (GCE, EC2 IMDS, Azure
@@ -127,6 +129,8 @@ func TestBuildNetworkPolicy_DeniesCloudMetadataServer(t *testing.T) {
 		buildWorkloadNetworkPolicyV2(v2Direct, githubCIDRs, true, nil),
 		buildAGCNetworkPolicyV2(v2AG, []string{"10.0.0.0/24"}, githubCIDRs, false, nil),
 		buildAGCNetworkPolicyV2(v2Direct, []string{"10.0.0.0/24"}, githubCIDRs, true, nil),
+		buildAGCNetworkPolicyV2(withGKEIdentity(v2AG), []string{"10.0.0.0/24"}, githubCIDRs, false, nil),
+		buildAGCNetworkPolicyV2(withGKEIdentity(v2Direct), []string{"10.0.0.0/24"}, githubCIDRs, true, nil),
 	} {
 		assert.False(t, egressAdmits(np, cloudMetadataIP, corev1.ProtocolTCP, 80),
 			"%s admits TCP/80 to the cloud metadata server %s — a worker pod can read the node's "+
@@ -147,4 +151,39 @@ func TestBuildNetworkPolicy_DeniesCloudMetadataServer(t *testing.T) {
 			"%s no longer admits UDP/53 to the link-local block — the NodeLocal DNSCache peer "+
 				"(Q136) is gone, so the metadata assertions above prove nothing", np.Name)
 	}
+}
+
+// withGKEIdentity returns a copy of ag opted into registryIdentity: GKEWorkloadIdentity.
+func withGKEIdentity(ag *gmcv2alpha1.ActionsGateway) *gmcv2alpha1.ActionsGateway {
+	out := ag.DeepCopy()
+	out.Name += "-gke"
+	out.Spec.RegistryIdentity = gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity
+	return out
+}
+
+// TestBuildAGCNetworkPolicyV2_GKEIdentityAdmitsOnlyGKEMetadataServer pins the one
+// link-local destination registryIdentity: GKEWorkloadIdentity opens (Q1066): the GKE
+// metadata server's own address on its own port, never another port there, and
+// nothing at all for a gateway that has not opted in. The Compute Engine address is
+// covered by TestBuildNetworkPolicy_DeniesCloudMetadataServer, which includes the
+// opted-in policies.
+func TestBuildAGCNetworkPolicyV2_GKEIdentityAdmitsOnlyGKEMetadataServer(t *testing.T) {
+	gkeMetadataIP := net.ParseIP("169.254.169.252")
+	require.NotNil(t, gkeMetadataIP)
+	ag := v2Gateway("gateway", "team-a", "github-app", "proxy")
+	scoped := []string{"10.0.0.0/24"}
+
+	plain := buildAGCNetworkPolicyV2(ag, scoped, nil, false, nil)
+	assert.False(t, egressAdmits(plain, gkeMetadataIP, corev1.ProtocolTCP, 988),
+		"a gateway that has not opted in must not reach the GKE metadata server")
+
+	opted := buildAGCNetworkPolicyV2(withGKEIdentity(ag), scoped, nil, false, nil)
+	assert.True(t, egressAdmits(opted, gkeMetadataIP, corev1.ProtocolTCP, 988),
+		"registryIdentity: GKEWorkloadIdentity must admit the GKE metadata server on TCP/988")
+	for _, port := range []int32{80, 443, 8080} {
+		assert.False(t, egressAdmits(opted, gkeMetadataIP, corev1.ProtocolTCP, port),
+			"the opt-in admits TCP/%d to %s; it must open port 988 only", port, gkeMetadataIP)
+	}
+	assert.False(t, egressAdmits(opted, net.ParseIP("169.254.169.253"), corev1.ProtocolTCP, 988),
+		"the opt-in's peer must be the /32, not a wider link-local block")
 }

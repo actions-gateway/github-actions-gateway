@@ -139,6 +139,9 @@ func (c *client) fetchToken(ctx context.Context, params map[string]string) error
 	if u.Scheme != "https" {
 		return fmt.Errorf("registry %s: bearer realm %q is not https", c.ref.Registry, realm)
 	}
+	if c.cred.identity != "" && u.Host != c.ref.Registry {
+		return fmt.Errorf("registry %s: bearer realm host %s is not the registry's, and the %s token is presented only to the registry itself", c.ref.Registry, u.Host, c.cred.identity)
+	}
 	q := u.Query()
 	if s := params["service"]; s != "" {
 		q.Set("service", s)
@@ -217,6 +220,9 @@ func cutQuotedComma(s string) (string, string) {
 func describeCred(c Credential) string {
 	if c == (Credential{}) {
 		return "anonymous"
+	}
+	if c.identity != "" {
+		return "as " + c.identity
 	}
 	return "as " + c.Username
 }

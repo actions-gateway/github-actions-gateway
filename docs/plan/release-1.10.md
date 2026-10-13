@@ -38,7 +38,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
-| [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none, under a `get` on `serviceaccounts`. Stage two 🔲 ready |
+| [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none. Artifact Registry 🔲 in review: `registryIdentity: GKEWorkloadIdentity` ([plan](q1066-gke-workload-identity.md)). ECR 🔲 ready |
 | [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | 🔲 ready |
 
 **The split is the maintainer's, chosen 2026-10-09; the reasons below are this plan's, offered with it.** The theme is in the maintainer's own words: the storage advance plus scale-set correctness.
@@ -49,7 +49,7 @@ Q1069 gates as the one feature: the gateway-level attribution flag reads `0` whe
 
 **The riders are planned and worked, and the tag does not wait for them.** Each can come back short for a reason a gate should not absorb.
 Q540 is a measurement whose answer may be a fix of unknown size: [Q539](../plan/q539-dragonfly-mirror-backend.md#8-what-this-plan-does-not-cover) measured Dragonfly's node proxy as an open forward proxy.
-Q1066's second stage adds a cloud dependency and an identity grant per provider; its first stage has landed, so the second can slip without costing the air-gapped install path.
+Q1066's second stage adds an identity grant per provider, and its ECR half a dependency; its first stage has landed, so the rest can slip without costing the air-gapped install path.
 Q1070 keys on Q1069's per-set gauge, whose `reason` label is what the panel filters on.
 
 `scripts/release/semver-floor.sh v1.9.0` read `FLOOR: NONE` on 2026-10-09 over two commits, so nothing merged yet rides beyond the three above.

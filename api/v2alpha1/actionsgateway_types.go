@@ -172,6 +172,26 @@ type ActionsGatewaySpec struct {
 	// +kubebuilder:default=Off
 	AuditLogging string `json:"auditLogging,omitempty"`
 
+	// RegistryIdentity selects a cloud identity this tenant's AGC presents to the
+	// worker image's registry for the runner-version read behind
+	// RunnerVersionTooOld (Q1066). None (the default) presents only the
+	// imagePullSecrets the pod template or the worker ServiceAccount names.
+	//
+	// GKEWorkloadIdentity presents an access token for the AGC's own Workload
+	// Identity to Artifact Registry hosts (*-docker.pkg.dev, gcr.io, *.gcr.io) where
+	// no pull Secret supplies a login. The GMC admits the AGC's egress to the GKE
+	// metadata server at 169.254.169.252:988 and nothing else on link-local, so a
+	// node pool without Workload Identity yields no token rather than the node's.
+	// It needs Workload Identity on the AGC's node pool and an IAM grant of
+	// roles/artifactregistry.reader to the AGC's Kubernetes ServiceAccount.
+	//
+	// Changing it is a rolling restart of the AGC, not a hot reload.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=None;GKEWorkloadIdentity
+	// +kubebuilder:default=None
+	RegistryIdentity string `json:"registryIdentity,omitempty"`
+
 	// Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's
 	// AGC. Tracing stays off unless tracing.endpoint is set.
 	//
@@ -195,6 +215,15 @@ type ActionsGatewaySpec struct {
 	// +optional
 	ClusterCapacity *ClusterCapacity `json:"clusterCapacity,omitempty"`
 }
+
+// Registry identities, selectable via ActionsGatewaySpec.RegistryIdentity (Q1066).
+const (
+	// RegistryIdentityNone presents no cloud identity to a registry.
+	RegistryIdentityNone = "None"
+	// RegistryIdentityGKEWorkloadIdentity presents the AGC's GKE Workload Identity
+	// to Artifact Registry hosts.
+	RegistryIdentityGKEWorkloadIdentity = "GKEWorkloadIdentity"
+)
 
 // Node-autoscaler presence, selectable via ClusterCapacity.NodeAutoscaling (Q470).
 const (

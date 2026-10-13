@@ -976,6 +976,20 @@ func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
 		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
 }
 
+// TestBuildAGCDeploymentV2_RegistryIdentity pins both directions of the registry
+// identity opt-in (Q1066): unset and None inject nothing, so an AGC that has not
+// opted in keeps an unchanged pod template, and GKEWorkloadIdentity reaches the AGC.
+func TestBuildAGCDeploymentV2_RegistryIdentity(t *testing.T) {
+	build := func(identity string) map[string]string {
+		ag := v2Gateway("gw", "team-a", "github-app", "")
+		ag.Spec.RegistryIdentity = identity
+		return agcEnv(buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))
+	}
+	assert.NotContains(t, build(""), "AGC_REGISTRY_IDENTITY", "an unset registryIdentity must inject nothing")
+	assert.NotContains(t, build(gmcv2alpha1.RegistryIdentityNone), "AGC_REGISTRY_IDENTITY", "an explicit None must inject nothing")
+	assert.Equal(t, "GKEWorkloadIdentity", build(gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity)["AGC_REGISTRY_IDENTITY"])
+}
+
 // TestEgressAuditAttribution covers all five states of the Q986 pair the
 // EgressAuditUnattributed condition reports (Q1062), including the two half-on ones —
 // each names the half still to turn on, because that is what the operator does next.

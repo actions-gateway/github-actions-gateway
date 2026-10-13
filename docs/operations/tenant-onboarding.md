@@ -552,7 +552,25 @@ GitHub refuses to register a runner below its enforced minimum, currently `2.329
 
 A digest-only or custom tag is no longer unchecked: the registry read reaches it.
 The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` gives a verdict from the tag while the read runs and from the image once it lands.
-A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; the AGC reads those Secrets to log in for this check and never stores or copies them; a registry kubelet reaches through the node's identity is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
+A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; the AGC reads those Secrets to log in for this check and never stores or copies them; an ECR registry kubelet reaches through the node's role is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
+
+**An Artifact Registry repository with no pull Secret, on GKE.** Set `spec.registryIdentity: GKEWorkloadIdentity` on the `ActionsGateway`, and the AGC presents an access token for its own Workload Identity to Artifact Registry hosts (`*-docker.pkg.dev`, `gcr.io`, `*.gcr.io`) where no pull Secret supplies a login.
+It needs two things the platform sets up:
+
+- **Workload Identity on the AGC's node pool** (`workloadMetadataConfig.mode: GKE_METADATA`).
+  The GMC opens the AGC's egress to the GKE metadata server's own address and nothing else on link-local, so on a pool without it the read finds no token and the verdict falls back to the tag, rather than borrowing the node's identity ([why](../design/05-security.md#the-gke-workload-identity-opt-in-admits-one-metadata-address)).
+- **A read grant to the AGC's Kubernetes ServiceAccount**, which is `<gateway>-agc` in the gateway's namespace.
+  Grant it per gateway, on the repositories that gateway's worker images come from, so one tenant's image reference cannot read what another tenant's grant covers:
+
+    ```bash
+    gcloud artifacts repositories add-iam-policy-binding <repository> \
+      --project=<project-id> --location=<location> \
+      --role=roles/artifactregistry.reader \
+      --member=principal://iam.googleapis.com/projects/<project-number>/locations/global/workloadIdentityPools/<project-id>.svc.id.goog/subject/ns/<namespace>/sa/<gateway>-agc
+    ```
+
+Changing the field restarts the AGC.
+Read the result off `RunnerVersionTooOld`, whose message names the digest it read at; a refusal names `GKE Workload Identity` as the login presented ([troubleshooting](troubleshooting.md#worker-image-runner-version)).
 
 **Reading the version a running worker actually shipped.** Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:
 

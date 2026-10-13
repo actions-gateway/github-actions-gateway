@@ -90,7 +90,11 @@ type Resolver struct {
 	// when the pod names none, so they stand in for an empty Request.PullSecrets
 	// and are never merged with a non-empty one. Nil skips the read.
 	ReadServiceAccountPullSecrets func(ctx context.Context) ([]string, error)
-	Log                           *slog.Logger
+	// WorkloadIdentityToken returns an access token for the AGC's own GKE Workload
+	// Identity, presented to an Artifact Registry host no pull Secret covers
+	// (Q1066). Nil means the gateway has not opted in.
+	WorkloadIdentityToken func(ctx context.Context) (string, error)
+	Log                   *slog.Logger
 	// Now is the clock; nil means time.Now (tests).
 	Now func() time.Time
 
@@ -262,11 +266,38 @@ func (r *Resolver) run(ctx context.Context, req Request, known string) (Reading,
 			return Reading{}, false, fmt.Errorf("imagePullSecret %q: %w", name, err)
 		}
 	}
+	wiErr := r.addWorkloadIdentity(ctx, req.Image, creds)
 	reading, unchanged, err := inspect(ctx, r.HTTP, req.Image, creds, known)
 	if err != nil && saErr != nil {
 		err = fmt.Errorf("%w (worker ServiceAccount imagePullSecrets unread: %v)", err, saErr)
 	}
+	if err != nil && wiErr != nil {
+		err = fmt.Errorf("%w (GKE Workload Identity token unavailable: %v)", err, wiErr)
+	}
 	return reading, unchanged, err
+}
+
+// addWorkloadIdentity adds the AGC's Workload Identity login for image's registry
+// when it is an Artifact Registry host and no pull Secret already covers it. A
+// failure degrades to whatever creds already hold and is returned for the message,
+// the same as a failed ServiceAccount read.
+func (r *Resolver) addWorkloadIdentity(ctx context.Context, image string, creds Credentials) error {
+	if r.WorkloadIdentityToken == nil {
+		return nil
+	}
+	ref, err := ParseReference(image)
+	if err != nil || !isArtifactRegistryHost(ref.Registry) {
+		return nil
+	}
+	if _, ok := creds.lookup(ref.Registry); ok {
+		return nil
+	}
+	token, err := r.WorkloadIdentityToken(ctx)
+	if err != nil {
+		return err
+	}
+	creds[ref.Registry] = Credential{Username: artifactRegistryUser, Password: token, identity: "GKE Workload Identity"}
+	return nil
 }
 
 func (r *Resolver) acquire() {
