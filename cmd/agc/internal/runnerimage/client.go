@@ -106,13 +106,20 @@ func (c *client) do(ctx context.Context, u, accept string) (*http.Response, erro
 	case c.auth:
 		req.SetBasicAuth(c.cred.Username, c.cred.Password)
 	}
+	return c.send(req)
+}
+
+// send issues a request on a copy of the client that runs checkRedirect, so every
+// request that can carry a login, the token exchange included, is held to it.
+func (c *client) send(req *http.Request) (*http.Response, error) {
 	hc := *c.http
 	hc.CheckRedirect = c.checkRedirect(c.http.CheckRedirect)
 	return hc.Do(req)
 }
 
 // checkRedirect refuses a redirect that would carry a login off https, or carry
-// the Workload Identity login off the registry's own host. Go forwards
+// the Workload Identity login off the registry's own host, which is also the only
+// realm host fetchToken accepts for it. Go forwards
 // Authorization to the same host and its subdomains whatever the scheme (go1.27.2,
 // pinned by TestRedirectOffHTTPSDropsTheLogin).
 func (c *client) checkRedirect(next func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
@@ -190,7 +197,7 @@ func (c *client) fetchToken(ctx context.Context, params map[string]string) error
 	if c.cred != (Credential{}) {
 		req.SetBasicAuth(c.cred.Username, c.cred.Password)
 	}
-	resp, err := c.http.Do(req)
+	resp, err := c.send(req)
 	if err != nil {
 		return fmt.Errorf("token exchange with %s: %w", u.Host, err)
 	}

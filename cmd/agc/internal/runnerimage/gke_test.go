@@ -170,8 +170,8 @@ func TestWorkloadIdentityLoginIsSentOnlyToTheRegistryHost(t *testing.T) {
 	creds := Credentials{registry: {Username: artifactRegistryUser, Password: "ya29.secret", identity: "GKE Workload Identity"}}
 
 	_, _, err := inspect(context.Background(), srv.Client(), registry+"/p/r/runner:2.335.1", creds, "")
-	require.ErrorContains(t, err, "presented only to the registry itself")
 	assert.Empty(t, rec.authorizations(), "a URL whose host is not the registry's never carries the login")
+	require.ErrorContains(t, err, "presented only to the registry itself")
 }
 
 func TestRedirectOffHTTPSDropsTheLogin(t *testing.T) {
@@ -190,8 +190,32 @@ func TestRedirectOffHTTPSDropsTheLogin(t *testing.T) {
 	registry := strings.TrimPrefix(srv.URL, "https://")
 
 	_, _, err := inspect(context.Background(), srv.Client(), registry+"/p/r/runner:2.335.1", Credentials{registry: {Username: "u", Password: "p"}}, "")
-	require.ErrorContains(t, err, "refusing a redirect to http://")
 	assert.Empty(t, plain.authorizations(), "the plaintext hop never receives the login")
+	require.ErrorContains(t, err, "refusing a redirect to http://")
+}
+
+func TestTokenExchangeRedirectOffHTTPSDropsTheLogin(t *testing.T) {
+	plain := &authRecorder{}
+	plainSrv := httptest.NewServer(plain)
+	defer plainSrv.Close()
+	var realm string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/token" {
+			http.Redirect(w, r, plainSrv.URL+"/v2/token", http.StatusFound)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Bearer realm="`+realm+`",service="registry"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	realm = srv.URL + "/v2/token"
+	registry := strings.TrimPrefix(srv.URL, "https://")
+	creds := Credentials{registry: {Username: artifactRegistryUser, Password: "ya29.secret", identity: "GKE Workload Identity"}}
+
+	_, _, err := inspect(context.Background(), srv.Client(), registry+"/p/r/runner:2.335.1", creds, "")
+	assert.Empty(t, plain.authorizations(), "the plaintext hop of the token exchange never receives the login")
+	require.ErrorContains(t, err, "refusing a redirect to http://")
+	assert.NotContains(t, err.Error(), "ya29")
 }
 
 func TestWorkloadIdentityRedirectStaysOnTheRegistryHost(t *testing.T) {
