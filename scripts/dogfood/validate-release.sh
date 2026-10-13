@@ -1388,10 +1388,6 @@ preflight_cosign() {
 	COSIGN_BIN="${cosign}"
 }
 
-# crd_smoke — download the RC's signed v2 CRD manifest, verify its blob signature
-# against the publish identity, apply it server-side, and assert all five v2 CRDs
-# register — the helm-free install path operators actually use. Consumes the
-# COSIGN_BIN that preflight_cosign resolved before anything billable ran.
 # spec_canon <json> — the spec with empty strings, objects, arrays and nulls
 # dropped, so a read that skips the webhook (at the storage version) compares
 # equal to one converted through the webhook's Go types. Those types drop an
@@ -1638,6 +1634,12 @@ EOF
 	fi
 }
 
+# crd_smoke — download the RC's signed v2 CRD manifest, verify its blob signature
+# against the publish identity, apply it server-side, and assert all five v2 CRDs
+# register — the helm-free install path operators actually use. Consumes the
+# COSIGN_BIN that preflight_cosign resolved before anything billable ran. Each
+# step returns explicitly, so the apply never follows a failed verify under a
+# caller with errexit off (bash-style.md).
 crd_smoke() {
 	# Re-pin the cluster context (fail-closed) before the apply, independent of
 	# which child last fetched credentials.
@@ -1647,7 +1649,7 @@ crd_smoke() {
 	gh_retry release download "${GAG_IMAGE_TAG}" --repo "${REPO}" \
 		--pattern 'actions-gateway-crds-v2.yaml' \
 		--pattern 'actions-gateway-crds-v2.yaml.cosign.bundle' \
-		--dir "${WORKDIR}" --clobber
+		--dir "${WORKDIR}" --clobber || return 1
 
 	local manifest="${WORKDIR}/actions-gateway-crds-v2.yaml"
 	local bundle="${manifest}.cosign.bundle"
@@ -1656,14 +1658,14 @@ crd_smoke() {
 	"${COSIGN_BIN}" verify-blob --bundle "${bundle}" \
 		--certificate-identity-regexp "$(release_identity_regexp)" \
 		--certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-		"${manifest}" >/dev/null
+		"${manifest}" >/dev/null || return 1
 	echo "  signature OK"
 
 	echo "Applying the signed manifest (server-side) and asserting registration..."
-	kubectl apply --server-side -f "${manifest}"
+	kubectl apply --server-side -f "${manifest}" || return 1
 	local crd
 	for crd in "${V2_CRDS[@]}"; do
-		kubectl get crd "${crd}" >/dev/null
+		kubectl get crd "${crd}" >/dev/null || return 1
 		echo "  ${crd} OK"
 	done
 }
