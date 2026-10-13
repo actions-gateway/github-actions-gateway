@@ -526,7 +526,7 @@ ARC has neither the re-run machinery nor the metrics plumbing, so this extends a
 1. **Flaky-job detection (no behavior change).** Record re-run-then-pass transitions per job name (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs metric, K8s events, and an advisory condition.
    This is pure observability, zero masking risk, and no CI product offers it per *tenant* on shared runners.
    It also builds the history an only-known-flakes mode needs.
-   Its prerequisite is a real per-job outcome, which the AGC does not read today — see the signal note below.
+   Its prerequisite, a real per-job outcome, already arrives on the scale-set tier as `JobCompleted.result` and is only counted today ([Q555 draft](../plan/q555-flaky-job-retry.md#the-prerequisite-already-exists)).
 2. **Opt-in retry (`spec.flakyRetry` on the `RunnerSet`).** Bounded per-run budget separate from `maxEvictionRetries`, its own `cause` value on the existing counters, driven by the same paced `rerun-failed-jobs` loop.
    Candidate scoping knobs, cheapest first: max retries per run, per-window cap per set (a stampede guard, like the Q512 latch), and later a known-flakes-only mode fed by phase 1.
 
@@ -538,10 +538,11 @@ ARC has neither the re-run machinery nor the metrics plumbing, so this extends a
    The feature must be off by default, per-set opt-in, loudly metered, and framed as "retry *and* surface" — detection metrics keep the flake visible while retry buys throughput.
    Never silent.
 3. **Cost attribution.** A retried job spends the tenant's own quota and compute; per-set counters must make the spend visible (the [cost-attribution doc](../operations/cost-attribution.md) would gain a flake-spend line).
-4. **Failure classification is thin at the platform layer, but less thin than it looks.** The AGC polls no jobs API; its only outcome signal is the pod phase, used as a proxy (`PodFailed`→failed, else succeeded).
+4. **Failure classification is thin at the platform layer, but less thin than it looks.** The AGC polls no jobs API.
+   On the scale-set tier GitHub pushes the job's `result` in `JobCompleted`; the classic tier has only the pod phase, used as a proxy (`PodFailed`→failed, else succeeded).
    One layer down there is more: `Runner.Worker` encodes the job's real `TaskResult` as exit code `100 + result`, and the wrapper flattens only 100/101 (the two GitHub concludes as `success`) to 0, passing 102 failed / 103 canceled / 104 skipped through verbatim ([`translateWorkerExitCode`](../../cmd/worker/main.go)).
    Nothing in the AGC reads `ContainerStatuses[].State.Terminated.ExitCode`.
-   Reading it is the cheap prerequisite for phase 1's detector; a GitLab-style taxonomy past that still needs log or annotation heuristics.
+   On the classic tier, reading it would be the prerequisite for phase 1's detector; a GitLab-style taxonomy past either signal still needs log or annotation heuristics.
    Phase 2 ships without matchers first: budget and scope knobs only.
 
 **Signals, and why an explicit one from the job is a separate question.**
@@ -582,9 +583,39 @@ Two things are worth stating plainly before anything is built on this:
 That argues for the wrapper as the translator rather than the job writing a pod-visible file directly.
 It sits on the runner-container side of every one of these boundaries, already owns the exit code, and can read a workspace-relative marker the job wrote from wherever it ran.
 
-**Trigger.** Q555 tracks the design decision.
-Promote when a design session commits the CRD shape, or an operator asks for it (the demand signal that reorders everything else on the roadmap).
+**Trigger.** Fired 2026-10-10: the maintainer ruled that this repository's own CI, which runs on GAG, is the operator ask.
+Q555 is in the Queue and tracks the design decision; the [draft](../plan/q555-flaky-job-retry.md) holds the requirements and the questions a design session settles.
+Its direction differs from the sketch above: phase 2 retries newly *classified* platform failures on the existing arms, and the blanket opt-in retry is not scheduled.
 
+
+## G.18. The Egress Proxy as a Platform Sensor
+
+**The idea.** Every outbound fetch a tenant's job makes goes through the tenant's egress proxy, and this repository's own flake record is dominated by exactly those fetches failing: registry pulls, release-CDN downloads, GitHub API calls ([Q555 draft](../plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor)).
+Kubernetes objects show none of them.
+An operator can point ARC's runners at a proxy they run themselves, so the proxy is not the moat; joining a proxy event to the job, the set and the controller that can act on it is.
+
+**What is already committed.** [Q1178](../queue/Q1178.md) labels the proxy's outcome counters by allowlist entry and outcome, and [Q1184](../queue/Q1184.md) attributes failures to the job that hit them, for retry.
+Everything below is a non-commitment.
+
+**Choosing the channel.** A use goes to **metrics** when its reader is a person, a dashboard or an alert reading aggregates over bounded labels, a scrape interval late and lossy.
+It needs a **bespoke endpoint** when the reader is a control loop acting on one job or pod: per-instance identity is unbounded for metrics, the answer has to be exact for that instance, and per-job egress is too sensitive for a shared, long-retention time-series store.
+It goes to the **Kubernetes API** when it is derived state other controllers or operators act on, written only when it changes, never per flow: an outage would otherwise turn every failed dial into a write to the shared control plane.
+A useful shorthand is *now or later*: metrics are slow, lossy and cheap, so they suit a reader who can wait; a reader acting now pays to be fast, complete and consistent.
+It is a proxy for the real question, *one instance or an aggregate*, and the two counterexamples show where it breaks: the AGC reading per-destination counters to call a destination degraded is a now-use that metrics serve, and the opt-in audit records are read later yet are per-job and exact, so they could never be metrics.
+The tenant's AGC is the aggregator: it is a single replica in the same namespace as its proxy pool, and it holds the pod-to-job join.
+It pulls rather than being pushed to, so the proxy's data path never depends on the AGC's health.
+
+**Further uses, unscheduled:**
+
+- **Cluster-level destination health.** The GMC reads every tenant's per-destination counters, never per-job data, to tell "github.com is unreachable from this cluster" from one tenant's problem.
+  It aggregates across tenants, so it needs its own security review.
+- **Egress IP refused by GitHub.** The proxy probes an unauthenticated GitHub endpoint from the tenant's egress IP, the probe this repository's CI already built (#1217, #1977), and a 403 becomes a condition that holds retries until it clears.
+- **Rate-limit early warning.** Connection rate from one egress IP to a registry, against that registry's published per-IP limits, before the 429s start, since the 429 itself is inside TLS.
+- **Mirror bypass.** A job pulling from an upstream registry the set has a mirror for, which costs rate-limit headroom and egress.
+- **Egress bytes per job**, for [cost attribution](../operations/cost-attribution.md).
+- **Tunnel close reason.** A mid-tunnel reset is not recorded today, and it is the shape of a registry or CDN dropping a long download.
+
+**Trigger.** Promote one when a retry class, an operator or a cost question needs it, and route anything per-job through Q1184's security review.
 ---
 
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
