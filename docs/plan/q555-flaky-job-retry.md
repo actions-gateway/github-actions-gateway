@@ -95,7 +95,7 @@ Pull request and merge queue jobs are the ones built to be thrown away, and they
 
 **Budget state has to outlive the AGC.** The disruption budget lives in process memory (`reserveEvictionRetry`, [`eviction.go`](../../cmd/agc/internal/provisioner/eviction.go)), so an AGC restart refills it.
 That is tolerable for disruptions; for a retry triggered by a deterministic failure it means a restart loop re-runs a broken job without limit.
-GitHub already keeps a durable per-run counter, `run_attempt`, which no restart can reset and which also counts human re-runs, so capping on it is conservative in the right direction.
+GitHub keeps a durable per-run counter, `run_attempt`, which no restart can reset, but it also counts human re-runs; [the design](q555-automatic-recovery-design.md#the-budget-is-gags-own-count-in-the-ledger-r15) keeps GAG's own count in a persisted ledger instead (maintainer's decision, 2026-10-12), with `run_attempt` as the check against GitHub's 50-attempt cap.
 
 **A retry is safe when the failure is classified as platform-caused, temporary and self-resolving.** That is the property GAG's existing arms are meant to have.
 Preemption, a drain or hand-delete (both the `deletion` cause), a worker that never started (`abandoned`), and one that vanished while the AGC was down are each recognised from Kubernetes facts, come from a temporary situation, and clear once capacity or the node comes back.
@@ -218,7 +218,7 @@ A class is a failure shape GAG recognises and retries automatically, the way it 
 - **R14.** The AGC MUST measure each cause's retry success rate (re-runs that then passed, over re-runs), using detection's pairing.
   A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape would read near zero.
 - **R15.** The per-run budget MUST survive an AGC restart before classes that fire more often are added.
-  It lives in process memory today ([`reserveEvictionRetry`](../../cmd/agc/internal/provisioner/eviction.go)); capping on GitHub's `run_attempt` is one way, and keeps the AGC well inside GitHub's 50-re-run limit, which humans share.
+  It lives in process memory today ([`reserveEvictionRetry`](../../cmd/agc/internal/provisioner/eviction.go)); [the design](q555-automatic-recovery-design.md#the-budget-is-gags-own-count-in-the-ledger-r15) persists GAG's own count, and checks `run_attempt` against GitHub's 50-re-run limit, which humans share.
 - **R16.** Every classified retry MUST be counted and evented with its cause, and its compute attributable per set ([cost attribution](../operations/cost-attribution.md)).
 - **R17.** Classified retry MUST need no GitHub App permission beyond what disruption recovery already uses.
 
@@ -328,7 +328,7 @@ The design if it is revived:
 
 - Off by default, opted in per `RunnerSet` by its owner, never by anything a workflow emits.
 - Only on `result == failed`; never on succeeded, cancelled or skipped jobs, nor a run a user cancelled.
-- One retry per run by default, capped on `run_attempt`, with its own budget and `cause`.
+- One retry per run by default, with its own budget and `cause`, counted in the same ledger as the classes' budget.
 - A set-wide failure-rate breaker and a retry rate cap.
 - Scoped by event, defaulting to `pull_request`, with `merge_group` an open question (where a flake costs most, and where Mergify declines to retry).
 - A retry that passes counts as a detected flake under R1.
