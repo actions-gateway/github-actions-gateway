@@ -1864,9 +1864,9 @@ check "readings: none of them reads as a pass" "0" "$(jq -s 'map(select(.id=="Q5
 # --- --legs: run one leg alone, record each leg, mark the candidate once all pass ---
 
 select_legs ""
-check "legs: no --legs selects every leg in order" "kata crd-smoke soak dind dragonfly" "${GATE_LEGS[*]}"
+check "legs: no --legs selects every leg in order" "kata crd-smoke soak storage dind dragonfly" "${GATE_LEGS[*]}"
 select_legs all
-check "legs: 'all' selects every leg" "kata crd-smoke soak dind dragonfly" "${GATE_LEGS[*]}"
+check "legs: 'all' selects every leg" "kata crd-smoke soak storage dind dragonfly" "${GATE_LEGS[*]}"
 # Order is the gate's, never the caller's: dind and dragonfly each take down the
 # tenant the leg before them left up.
 select_legs "dragonfly, kata,dragonfly"
@@ -1874,7 +1874,7 @@ check "legs: a list runs in the gate's order, once each" "kata dragonfly" "${GAT
 rc=0
 select_legs "kata,dragonfli" 2>"${SCRATCH}/legs-err" || rc=$?
 check "legs: an unknown leg is a usage error" "2" "${rc}"
-check_contains "  ...that names the legs the gate runs" "kata crd-smoke soak dind dragonfly" "$(cat "${SCRATCH}/legs-err")"
+check_contains "  ...that names the legs the gate runs" "kata crd-smoke soak storage dind dragonfly" "$(cat "${SCRATCH}/legs-err")"
 rc=0
 select_legs "," 2>/dev/null || rc=$?
 check "legs: a list naming no leg is a usage error" "2" "${rc}"
@@ -1923,6 +1923,119 @@ evidence_leg kata
 check "evidence: a non-candidate tag writes none" "absent" "$([[ -e "${SCRATCH}/evidence.txt" ]] && echo present || echo absent)"
 GATE_EVIDENCE_FILE=""
 gh() { scripted_gh "$@"; }
+
+# --- Q1171: the storage leg runs the RC's signed sweep and reads storedVersions -
+#
+# Stubbed at the edges — release download, cosign, helm, kubectl, the binary —
+# so each case is the evidence one tool hands back. What is asserted is that an
+# unverified binary never runs and a CRD left listing an older version fails.
+
+(
+	uname() { case "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac; }
+	check "storage: linux x86_64 maps to the linux-amd64 asset" "linux-amd64" "$(migrate_platform)"
+	uname() { case "$1" in -s) echo Darwin ;; -m) echo arm64 ;; esac; }
+	check "storage: darwin arm64 maps to the darwin-arm64 asset" "darwin-arm64" "$(migrate_platform)"
+	uname() { case "$1" in -s) echo Linux ;; -m) echo riscv64 ;; esac; }
+	rc=0
+	migrate_platform >/dev/null 2>&1 || rc=$?
+	check "storage: an arch with no release asset is refused" "1" "${rc}"
+)
+
+STORAGE_DIR="${SCRATCH}/storage"
+mkdir -p "${STORAGE_DIR}"
+STORAGE_LOG="${STORAGE_DIR}/calls.log"
+# sha256_of FILE — the digest SHA256SUMS records, on whichever tool this host has.
+sha256_of() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | awk '{ print $1 }'
+	else
+		shasum -a 256 "$1" | awk '{ print $1 }'
+	fi
+}
+
+# The fake binary logs its argv, so a case can tell whether it ever ran.
+storage_fixture() {
+	local sums_entry="$1" cosign_rc="$2"
+	rm -rf "${STORAGE_DIR}/work" && mkdir -p "${STORAGE_DIR}/work"
+	: >"${STORAGE_LOG}"
+	printf '#!/bin/sh\necho "gag-migrate $*" >>"%s"\n' "${STORAGE_LOG}" >"${STORAGE_DIR}/bin"
+	# shellcheck disable=SC2016 # $1 is the stub's own argument, expanded when it runs
+	printf '#!/bin/sh\necho "cosign $1" >>"%s"\nexit %s\n' "${STORAGE_LOG}" "${cosign_rc}" >"${STORAGE_DIR}/cosign"
+	chmod +x "${STORAGE_DIR}/cosign"
+	local digest
+	digest="$(sha256_of "${STORAGE_DIR}/bin")"
+	case "${sums_entry}" in
+	match) printf '%s  gag-migrate-v1.10.0-rc.1-linux-amd64\n' "${digest}" >"${STORAGE_DIR}/SHA256SUMS" ;;
+	mismatch) printf '%064d  gag-migrate-v1.10.0-rc.1-linux-amd64\n' 0 >"${STORAGE_DIR}/SHA256SUMS" ;;
+	absent) printf '%s  gag-migrate-v1.10.0-rc.1-darwin-arm64\n' "${digest}" >"${STORAGE_DIR}/SHA256SUMS" ;;
+	esac
+}
+
+# storedVersions as `kubectl get crd -o json` returns them; FAKE_STORED overrides
+# one CRD's value.
+FAKE_STORED=""
+fake_crd_json() {
+	local crd items=() stored
+	for crd in "${STORAGE_CRDS[@]}"; do
+		stored='["v2"]'
+		[[ "${FAKE_STORED%% *}" == "${crd}" ]] && stored="${FAKE_STORED#* }"
+		items+=("{\"metadata\":{\"name\":\"${crd}\"},\"status\":{\"storedVersions\":${stored}}}")
+	done
+	local IFS=,
+	printf '{"items":[%s]}\n' "${items[*]}"
+}
+
+storage_case() (
+	WORKDIR="${STORAGE_DIR}/work"
+	COSIGN_BIN="${STORAGE_DIR}/cosign"
+	GAG_IMAGE_TAG="v1.10.0-rc.1"
+	REPO="octo/repo" PROJECT=p ZONE=z CLUSTER=c
+	migrate_platform() { echo linux-amd64; }
+	gke_get_credentials_and_verify() { echo "pin" >>"${STORAGE_LOG}"; }
+	gh_retry() {
+		cp "${STORAGE_DIR}/bin" "${WORKDIR}/gag-migrate-v1.10.0-rc.1-linux-amd64"
+		cp "${STORAGE_DIR}/SHA256SUMS" "${WORKDIR}/SHA256SUMS"
+		: >"${WORKDIR}/SHA256SUMS.cosign.bundle"
+	}
+	helm() { echo "helm $*" >>"${STORAGE_LOG}"; }
+	kubectl() {
+		case "$1" in
+		apply) echo "kubectl $*" >>"${STORAGE_LOG}" ;;
+		get) fake_crd_json ;;
+		esac
+	}
+	storage_leg
+)
+
+storage_fixture match 0
+rc=0
+storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+check "storage: a verified binary and a pruned cluster pass" "0" "${rc}"
+check "storage: the order is pin, chart CRDs, apply, verify, preview, sweep" \
+	"pin|helm show crds oci://ghcr.io/octo/charts/actions-gateway --version 1.10.0-rc.1|kubectl apply -f ${STORAGE_DIR}/work/actions-gateway-crds.yaml|cosign verify-blob|gag-migrate storage-version --context gke_p_z_c|gag-migrate storage-version --context gke_p_z_c --apply --assume-yes" \
+	"$(paste -sd'|' "${STORAGE_LOG}")"
+
+storage_fixture match 0
+FAKE_STORED='egressproxies.actions-gateway.com ["v2beta1","v2"]'
+rc=0
+storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+FAKE_STORED=""
+check "storage: a CRD still listing v2beta1 after the sweep fails the leg" "1" "${rc}"
+check_contains "  ...and names it" 'egressproxies.actions-gateway.com ["v2beta1","v2"]' "$(cat "${STORAGE_DIR}/out")"
+
+for sums in mismatch absent; do
+	storage_fixture "${sums}" 0
+	rc=0
+	storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+	check "storage: a checksum ${sums} fails the leg" "1" "${rc}"
+	check_not_contains "  ...before the binary runs (${sums})" "gag-migrate" "$(cat "${STORAGE_LOG}")"
+done
+
+storage_fixture match 1
+rc=0
+storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+check "storage: a SHA256SUMS signature cosign rejects fails the leg" "1" "${rc}"
+check_not_contains "  ...before the binary runs (signature)" "gag-migrate" "$(cat "${STORAGE_LOG}")"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

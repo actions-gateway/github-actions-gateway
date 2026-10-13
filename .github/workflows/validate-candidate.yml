@@ -28,7 +28,7 @@ on:
         required: true
         type: string
       legs:
-        description: 'Legs to run, comma-separated (kata, crd-smoke, soak, dind, dragonfly); empty runs all. Each passing leg is recorded, and the tag is validated once all have passed.'
+        description: 'Legs to run, comma-separated (kata, crd-smoke, soak, storage, dind, dragonfly); empty runs all. Each passing leg is recorded, and the tag is validated once all have passed.'
         required: false
         default: ''
         type: string

@@ -5,7 +5,8 @@
 #   deploy (setup.sh) -> route CI (start.sh) -> on-demand e2e (e2e-start.sh)
 #   -> dispatch the e2e matrix on GAG runners (gh workflow run, run-scoped
 #   routing) -> sizing-profile assertion -> signed v2 CRD artifact smoke ->
-#   v2 soak readings -> the e2e matrix again on privileged-dind (Q1159) ->
+#   v2 soak readings -> the storage-version sweep and storedVersions check
+#   (Q1171) -> the e2e matrix again on privileged-dind (Q1159) ->
 #   the e2e matrix on Kata with the Dragonfly mirror back end (Q1160) ->
 #   teardown (e2e-stop.sh + stop.sh)
 #
@@ -138,6 +139,10 @@ V2_CRDS=(
 	runnersets.actions-gateway.com
 	runnertemplates.actions-gateway.com
 )
+
+# Every actions-gateway.com CRD the storage sweep prunes: the five above and
+# PriorityClassAllowlist, which ships in the main chart's crds/ directory.
+STORAGE_CRDS=("${V2_CRDS[@]}" priorityclassallowlists.actions-gateway.com)
 
 # WORKDIR holds every artifact the legs write — the sampled worker sizing, the
 # downloaded JUnit report, the CRD manifest. main() creates it before the first
@@ -273,7 +278,7 @@ tears the environment back down on exit. Requires PROJECT, CLUSTER, ZONE, and
 REPO to be exported. See the script header for the optional knobs.
 
 --legs runs only the named legs (default: all), in the gate's own order:
-  kata, crd-smoke, soak, dind, dragonfly
+  kata, crd-smoke, soak, storage, dind, dragonfly
 A stable tag publishes once CI gate runs (validate-candidate.yml) have passed
 every leg for one candidate commit, so a failed leg is re-run on its own there.
 A local run writes no evidence publish reads.
@@ -1663,6 +1668,108 @@ crd_smoke() {
 	done
 }
 
+# migrate_platform — print the `<os>-<arch>` suffix of the gag-migrate release
+# asset that runs on this host, as build-migrate-binaries.sh names them.
+migrate_platform() {
+	local os arch
+	os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+	case "$(uname -m)" in
+	x86_64 | amd64) arch=amd64 ;;
+	arm64 | aarch64) arch=arm64 ;;
+	*)
+		echo "no gag-migrate release binary for $(uname -m)" >&2
+		return 1
+		;;
+	esac
+	printf '%s-%s\n' "${os}" "${arch}"
+}
+
+# fetch_gag_migrate — download the RC's gag-migrate binary for this host, verify
+# the signed SHA256SUMS against the publish identity and the binary against it,
+# and print the binary's path. Nothing is executable until both checks pass, and
+# every step returns explicitly so that holds under a caller with errexit off.
+fetch_gag_migrate() {
+	local platform name
+	platform="$(migrate_platform)" || return 1
+	name="gag-migrate-${GAG_IMAGE_TAG}-${platform}"
+	gh_retry release download "${GAG_IMAGE_TAG}" --repo "${REPO}" \
+		--pattern "${name}" \
+		--pattern 'SHA256SUMS' \
+		--pattern 'SHA256SUMS.cosign.bundle' \
+		--dir "${WORKDIR}" --clobber >&2 || return 1
+
+	"${COSIGN_BIN}" verify-blob --bundle "${WORKDIR}/SHA256SUMS.cosign.bundle" \
+		--certificate-identity-regexp "$(release_identity_regexp)" \
+		--certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+		"${WORKDIR}/SHA256SUMS" >/dev/null || return 1
+
+	local want got
+	want="$(awk -v f="${name}" '$2 == f { print $1 }' "${WORKDIR}/SHA256SUMS")"
+	if command -v sha256sum >/dev/null 2>&1; then
+		got="$(sha256sum "${WORKDIR}/${name}" | awk '{ print $1 }')"
+	else
+		got="$(shasum -a 256 "${WORKDIR}/${name}" | awk '{ print $1 }')"
+	fi
+	if [[ -z "${want}" || "${want}" != "${got}" ]]; then
+		echo "${name}: checksum ${got} does not match SHA256SUMS (${want:-no entry})" >&2
+		return 1
+	fi
+	chmod +x "${WORKDIR}/${name}"
+	printf '%s\n' "${WORKDIR}/${name}"
+}
+
+# stored_versions_not_v2 — print `<crd> <storedVersions>` for each STORAGE_CRDS
+# entry whose status.storedVersions is anything but exactly [v2], and nothing
+# when all six are pruned. The reading upgrade.md's pre-upgrade check takes.
+stored_versions_not_v2() {
+	kubectl get crd "${STORAGE_CRDS[@]}" -o json |
+		jq -r '.items[] | select(.status.storedVersions != ["v2"])
+			| "\(.metadata.name) \(.status.storedVersions | tojson)"'
+}
+
+# storage_leg — the 1.10 storage advance on a cluster that has run 1.x (Q1171):
+# apply the main chart's PriorityClassAllowlist CRD, which `helm upgrade` never
+# re-applies, run the RC's signed `gag-migrate storage-version`, and assert every
+# actions-gateway.com CRD's storedVersions reads [v2].
+#
+# Mutates dogfood for good: once pruned, storedVersions stays [v2], so later runs
+# take the sweep's "nothing to do" path and still assert the reading. The sweep's
+# own preconditions (every CRD storing v2, no EgressProxy naming a CiliumFQDN or
+# CalicoFQDN alias) are checked by its dry run, which writes nothing and names
+# what blocks it.
+storage_leg() {
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	local context="gke_${PROJECT}_${ZONE}_${CLUSTER}"
+
+	echo "Applying the main chart's PriorityClassAllowlist CRD for ${GAG_IMAGE_TAG}..."
+	helm show crds "oci://ghcr.io/${REPO%%/*}/charts/actions-gateway" \
+		--version "${GAG_IMAGE_TAG#v}" >"${WORKDIR}/actions-gateway-crds.yaml" || return 1
+	kubectl apply -f "${WORKDIR}/actions-gateway-crds.yaml" || return 1
+
+	echo "Downloading and verifying the signed gag-migrate binary for ${GAG_IMAGE_TAG}..."
+	local gag_migrate
+	gag_migrate="$(fetch_gag_migrate)" || return 1
+	echo "  signature and checksum OK"
+
+	echo "Previewing the storage sweep (writes nothing)..."
+	"${gag_migrate}" storage-version --context "${context}" || return 1
+	echo "Running the storage sweep..."
+	"${gag_migrate}" storage-version --context "${context}" --apply --assume-yes || return 1
+
+	echo "Asserting every actions-gateway.com CRD stores only v2..."
+	local unpruned
+	unpruned="$(stored_versions_not_v2)" || return 1
+	if [[ -n "${unpruned}" ]]; then
+		echo "storedVersions is not [\"v2\"] after the sweep:" >&2
+		printf '  %s\n' "${unpruned}" >&2
+		return 1
+	fi
+	local crd
+	for crd in "${STORAGE_CRDS[@]}"; do
+		echo "  ${crd} storedVersions [\"v2\"]"
+	done
+}
+
 # dump_diagnostics — snapshot the cluster's scheduling state to stdout before
 # teardown destroys it. Scaling the pool to 0 cordons the nodes and evicts
 # every pod, which erases the FailedScheduling (or crash-loop) evidence that
@@ -1885,7 +1992,7 @@ reclaim_orphaned_gate() {
 # any billable/cluster write. Honors ASSUME_YES for the operator (set BEFORE the
 # child ASSUME_YES=1 export, so the human still gates the wrapper itself).
 confirm_target() {
-	confirm_or_exit "$(printf 'About to run the full pre-GA dogfood validation gate:\n  RC tag:  %s\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\nThis scales up billable GKE nodes, deploys the RC, re-runs the e2e matrix on GAG,\nsmoke-tests the signed CRD artifact, then tears the environment back down to 0 nodes.' \
+	confirm_or_exit "$(printf 'About to run the full pre-GA dogfood validation gate:\n  RC tag:  %s\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\nThis scales up billable GKE nodes, deploys the RC, re-runs the e2e matrix on GAG,\nsmoke-tests the signed CRD artifact,\nruns the storage-version sweep (it rewrites stored objects for good), then tears the environment back down to 0 nodes.' \
 		"${GAG_IMAGE_TAG}" "${PROJECT}" "${CLUSTER}" "${ZONE}" "${REPO}")"
 }
 
@@ -2130,6 +2237,13 @@ main() {
 		soak_leg
 		progress_event soak "done"
 		evidence_leg soak
+	fi
+
+	if leg_selected storage; then
+		progress_phase storage "Running the storage-version sweep and reading storedVersions (Q1171)"
+		storage_leg
+		progress_event storage "done"
+		evidence_leg storage
 	fi
 
 	if leg_selected dind; then
