@@ -243,6 +243,17 @@ When adding a new plan:
 - Once everything in a plan ships, leave the plan in place with the status table updated to ✅ Done.
   Don't delete it — the rationale is more valuable than the diff.
 
+Before a design goes to sign-off, walk each piece of state it persists or shares through five cases:
+
+- **A restart**, which loses everything held in memory.
+- **A rollout**, where two versions of the component run at once.
+- **A rollback**, where the older version reads what the newer one wrote.
+- **Concurrent writers**, including two disruptions of one run, or two replicas.
+- **A human acting in between**, such as a manual re-run or cancel.
+
+Then have an independent review session read it before it goes to sign-off.
+The Q555 design ([q555-automatic-recovery-design.md](q555-automatic-recovery-design.md)) took two independent reviews and 29 findings to reach sign-off, and 12 of them were one of these five cases left unwalked.
+
 When writing a plan's Status cell:
 
 - Link a backlog item that is still open as `[QNNN](../queue/QNNN.md)`, and write a closed one bare.
