@@ -297,6 +297,7 @@ A gateway can be proxied and still unattributed by job, and that is the common s
 A tenant that never opted in has no row rather than a permanently red one, which would otherwise light most of a fleet and teach the eye to discount the three neighbours where a `1` is a fault.
 How many tenants have opted in is not on this dashboard.
 A green row says the pair is configured, not that a pipeline runs the join, and a set whose references have not resolved has no row at all.
+It can also outlive its pool: a set whose `EgressProxy` is deleted keeps its last reading rather than turning red ([Q1079](../queue/Q1079.md)).
 
 **Row 2: Admission Decisions**
 
