@@ -111,7 +111,7 @@ func (c *client) authenticate(ctx context.Context, challenge string) error {
 	switch strings.ToLower(scheme) {
 	case "basic":
 		if c.cred == (Credential{}) {
-			return fmt.Errorf("registry %s requires a login and the pod template names no imagePullSecret for it", c.ref.Registry)
+			return fmt.Errorf("registry %s requires a login and no imagePullSecret names it (pod template, else worker ServiceAccount)", c.ref.Registry)
 		}
 		c.auth = true
 		return nil

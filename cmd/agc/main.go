@@ -415,7 +415,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	imageResolver, err := setupRunnerImageResolver(mgr, namespace)
+	imageResolver, err := setupRunnerImageResolver(mgr, namespace, cfg.WorkerServiceAccount)
 	if err != nil {
 		return err
 	}
@@ -888,8 +888,9 @@ func workerUsageSampleInterval(v string) (interval time.Duration, enabled bool, 
 // egress proxy and trusts its CA like every other outbound call. No overall client
 // Timeout: an inspection streams ~100 MB and the resolver bounds it per inspection.
 // Pull secrets are read through the uncached reader, since the AGC deliberately runs
-// no Secret informer (the tenant Role omits watch).
-func setupRunnerImageResolver(mgr ctrl.Manager, namespace string) (*runnerimage.Resolver, error) {
+// no Secret informer (the tenant Role omits watch). The worker ServiceAccount is read
+// the same way, under the tenant Role's get-only serviceaccounts grant (Q1066).
+func setupRunnerImageResolver(mgr ctrl.Manager, namespace, workerSA string) (*runnerimage.Resolver, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = httpx.DefaultResponseHeaderTimeout
 	reader := mgr.GetAPIReader()
@@ -907,6 +908,23 @@ func setupRunnerImageResolver(mgr ctrl.Manager, namespace string) (*runnerimage.
 			}
 			return data, nil
 		},
+	}
+	// Without WORKER_SERVICE_ACCOUNT the provisioner keeps whatever ServiceAccount
+	// the pod template names, which the resolver cannot see, so it reads none.
+	if workerSA != "" {
+		r.ReadServiceAccountPullSecrets = func(ctx context.Context) ([]string, error) {
+			var sa corev1.ServiceAccount
+			if err := reader.Get(ctx, client.ObjectKey{Namespace: namespace, Name: workerSA}, &sa); err != nil {
+				return nil, err
+			}
+			names := make([]string, 0, len(sa.ImagePullSecrets))
+			for _, s := range sa.ImagePullSecrets {
+				if s.Name != "" {
+					names = append(names, s.Name)
+				}
+			}
+			return names, nil
+		}
 	}
 	if err := mgr.Add(r); err != nil {
 		return nil, fmt.Errorf("add runner-image resolver: %w", err)

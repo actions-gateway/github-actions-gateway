@@ -41,7 +41,8 @@ type Request struct {
 	// Image is the effective worker image reference.
 	Image string
 	// PullSecrets names the kubernetes.io/dockerconfigjson Secrets the pod template
-	// lists; each is read through Resolver.ReadSecret at inspection time.
+	// lists; each is read through Resolver.ReadSecret at inspection time. Empty
+	// means the worker ServiceAccount's, as admission would apply them.
 	PullSecrets []string
 	// Wake is called once the lookup's state changes, so the caller can reconcile
 	// again. It must not block.
@@ -84,7 +85,12 @@ type Resolver struct {
 	HTTP *http.Client
 	// ReadSecret returns a named imagePullSecret's .dockerconfigjson payload.
 	ReadSecret func(ctx context.Context, name string) ([]byte, error)
-	Log        *slog.Logger
+	// ReadServiceAccountPullSecrets returns the imagePullSecrets the worker
+	// ServiceAccount names. ServiceAccount admission copies them onto a pod only
+	// when the pod names none, so they stand in for an empty Request.PullSecrets
+	// and are never merged with a non-empty one. Nil skips the read.
+	ReadServiceAccountPullSecrets func(ctx context.Context) ([]string, error)
+	Log                           *slog.Logger
 	// Now is the clock; nil means time.Now (tests).
 	Now func() time.Time
 
@@ -235,8 +241,16 @@ func (r *Resolver) run(ctx context.Context, req Request, known string) (Reading,
 	if r.HTTP == nil {
 		return Reading{}, false, fmt.Errorf("no HTTP client configured for the registry read")
 	}
+	names := req.PullSecrets
+	// A failed ServiceAccount read degrades to anonymous rather than failing the
+	// lookup, since a public image needs no credentials; it is quoted only when
+	// the registry then refuses the anonymous read.
+	var saErr error
+	if len(names) == 0 && r.ReadServiceAccountPullSecrets != nil {
+		names, saErr = r.ReadServiceAccountPullSecrets(ctx)
+	}
 	creds := Credentials{}
-	for _, name := range req.PullSecrets {
+	for _, name := range names {
 		if r.ReadSecret == nil {
 			return Reading{}, false, fmt.Errorf("imagePullSecret %q: no secret reader configured", name)
 		}
@@ -248,7 +262,11 @@ func (r *Resolver) run(ctx context.Context, req Request, known string) (Reading,
 			return Reading{}, false, fmt.Errorf("imagePullSecret %q: %w", name, err)
 		}
 	}
-	return inspect(ctx, r.HTTP, req.Image, creds, known)
+	reading, unchanged, err := inspect(ctx, r.HTTP, req.Image, creds, known)
+	if err != nil && saErr != nil {
+		err = fmt.Errorf("%w (worker ServiceAccount imagePullSecrets unread: %v)", err, saErr)
+	}
+	return reading, unchanged, err
 }
 
 func (r *Resolver) acquire() {

@@ -4,6 +4,9 @@
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;delete
+// serviceaccounts get-only: the worker-image registry read presents the worker
+// ServiceAccount's imagePullSecrets when the pod template names none (Q1066).
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get
 // configmaps: the per-RunnerSet guard ConfigMap persisting a scale-set listener's
 // concluded-job state across a hard kill (Q606). get/create/update only — reads are
 // uncached (no informer, so no list/watch), and the ConfigMap is owner-ref'd to its

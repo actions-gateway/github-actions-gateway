@@ -551,7 +551,7 @@ GitHub refuses to register a runner below its enforced minimum, currently `2.329
 
 A digest-only or custom tag is no longer unchecked: the registry read reaches it.
 The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` gives a verdict from the tag while the read runs and from the image once it lands.
-A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, which is also where kubelet reads it; a registry kubelet reaches through the node's identity is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
+A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; a registry kubelet reaches through the node's identity is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
 
 **Reading the version a running worker actually shipped.** Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:
 

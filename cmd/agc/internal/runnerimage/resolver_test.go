@@ -217,6 +217,61 @@ func TestResolverReadsPullSecrets(t *testing.T) {
 	assert.Equal(t, Failed, got.State, "the secret set is part of the key, so no credentials is its own lookup")
 }
 
+func TestResolverFallsBackToServiceAccountPullSecrets(t *testing.T) {
+	f := runnerimagetest.New(t)
+	f.Auth = runnerimagetest.AuthBasic
+	f.Login = runnerimagetest.Credential{Username: "bot", Password: "s3cret"}
+	f.Tag("acme/runner", "v", f.Manifest("acme/runner", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1")))).Digest)
+	secrets := map[string][]byte{
+		"sa-regcred": runnerimagetest.DockerConfigJSON(f.Host(), f.Login),
+		"wrong":      runnerimagetest.DockerConfigJSON(f.Host(), runnerimagetest.Credential{Username: "bot", Password: "nope"}),
+	}
+	var saReads atomic.Int32
+	r := &Resolver{
+		HTTP: f.Client(),
+		ReadSecret: func(_ context.Context, name string) ([]byte, error) {
+			b, ok := secrets[name]
+			if !ok {
+				return nil, errors.New("not found")
+			}
+			return b, nil
+		},
+		ReadServiceAccountPullSecrets: func(context.Context) ([]string, error) {
+			saReads.Add(1)
+			return []string{"sa-regcred"}, nil
+		},
+	}
+
+	got := waitFor(t, r, Request{Image: f.Image("acme/runner", ":v")})
+	assert.Equal(t, Done, got.State, "a template naming no secret reads with the ServiceAccount's")
+	assert.Equal(t, "2.335.1", got.Result.Version)
+	assert.Equal(t, int32(1), saReads.Load())
+
+	got = waitFor(t, r, Request{Image: f.Image("acme/runner", ":v"), PullSecrets: []string{"wrong"}})
+	assert.Equal(t, Failed, got.State, "a template naming its own secret replaces the ServiceAccount's, as admission does")
+	assert.Equal(t, int32(1), saReads.Load(), "the ServiceAccount is not read when the template names a secret")
+}
+
+func TestResolverServiceAccountReadFailureDegradesToAnonymous(t *testing.T) {
+	saErr := func(context.Context) ([]string, error) { return nil, errors.New("forbidden") }
+
+	public := runnerimagetest.New(t)
+	public.Tag("acme/runner", "v", public.Manifest("acme/runner", "linux", "amd64", public.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1")))).Digest)
+	r := &Resolver{HTTP: public.Client(), ReadServiceAccountPullSecrets: saErr}
+	got := waitFor(t, r, Request{Image: public.Image("acme/runner", ":v")})
+	assert.Equal(t, Done, got.State, "a public image still reads when the ServiceAccount cannot be")
+
+	private := runnerimagetest.New(t)
+	private.Auth = runnerimagetest.AuthBasic
+	private.Login = runnerimagetest.Credential{Username: "bot", Password: "s3cret"}
+	private.Tag("acme/runner", "v", private.Manifest("acme/runner", "linux", "amd64", private.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1")))).Digest)
+	r = &Resolver{HTTP: private.Client(), ReadServiceAccountPullSecrets: saErr}
+	got = waitFor(t, r, Request{Image: private.Image("acme/runner", ":v")})
+	assert.Equal(t, Failed, got.State)
+	assert.Contains(t, got.Err, "worker ServiceAccount imagePullSecrets unread: forbidden",
+		"the refused anonymous read names why no credentials were presented")
+}
+
 func TestResolverStopsWithManagerContext(t *testing.T) {
 	f := runnerimagetest.New(t)
 	f.Tag("acme/runner", "v", f.Manifest("acme/runner", "linux", "amd64", f.GzipLayer(runnerimagetest.E(runnerimagetest.DepsPath, runnerimagetest.DepsJSON("2.335.1")))).Digest)
