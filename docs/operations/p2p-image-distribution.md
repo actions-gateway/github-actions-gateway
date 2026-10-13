@@ -111,6 +111,7 @@ This composes with an [air-gapped install](air-gapped-install.md): the private m
   GAG's isolation boundary is the *tenant* NetworkPolicy on worker and proxy pods, not host-level node traffic, so the two generally do not collide — but if you run a default-deny policy at the node/host layer, allow the P2P tool's ports per its docs.
 - **Keep worker pods off Dragonfly's proxy port.** dfdaemon's proxy (port 4001 by default) forwards requests to any host, including pushes, and no setting restricts it, so a worker that can reach it has unrestricted egress (measured on client v1.5.7).
   Admit only the clients you mean to serve, by NetworkPolicy on a pod-network deployment; a `hostNetwork` dfdaemon listens on every node address, where pod-level policy cannot select it.
+  GAG's worker egress policy does block a worker from that port on every node, its own included (measured with a Kata worker on GKE Dataplane V2), but any pod without its own egress policy reaches it.
 - **Verify with the upstream guides.** Installation, runtime compatibility (containerd settings, mirror configuration), and tuning are owned by the tools.
   Start at Spegel's [Getting Started](https://spegel.dev/docs/getting-started/) or Dragonfly's [documentation](https://d7y.io/docs/).
 
