@@ -116,11 +116,11 @@
     },
     {
       "type": "state-timeline",
-      "title": "Egress posture per gateway",
+      "title": "Egress posture per gateway and RunnerSet",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 24, "x": 0, "y": 11 },
       "id": 5,
-      "description": "GMC-exported condition gauges (1 = flagged) that decide whether a tenant's egress is attributable at all. EgressUnattributed: the gateway runs in direct egress mode, so its GitHub traffic leaves from no per-tenant proxy and no egress record or per-tenant IP can name it; expected on a deploy meant to be direct, a misconfiguration on one meant to be proxied. EgressRulesStale: the GitHub IP-range allowlist has not refreshed within its window, so the pool's NetworkPolicy may have drifted from GitHub's published ranges. GitHubEgressIncomplete: a GHES tenant's appliance is outside the CIDR-mode allowlist. All from the GMC scrape; EgressRulesStale is emitted for v1 and v2 gateways, the other two for v2 only.",
+      "description": "Condition gauges (1 = flagged) that decide whether a tenant's egress is attributable at all. EgressUnattributed: the gateway runs in direct egress mode, so its GitHub traffic leaves from no per-tenant proxy and no egress record or per-tenant IP can name it; expected on a deploy meant to be direct, a misconfiguration on one meant to be proxied. EgressRulesStale: the GitHub IP-range allowlist has not refreshed within its window, so the pool's NetworkPolicy may have drifted from GitHub's published ranges. GitHubEgressIncomplete: a GHES tenant's appliance is outside the CIDR-mode allowlist. These three are from the GMC scrape; EgressRulesStale is emitted for v1 and v2 gateways, the other two for v2 only. egress audit is per RunnerSet, from the AGC scrape: either half of the egress-attribution pair (the gateway's auditLogging WorkerAddresses, the set's pool's ConnectionsWithSource) is off for that set's workers, so no egress audit record joins to a tenant and a job, and the series' reason label, or the RunnerSet's EgressAuditUnattributed condition, names the half that is off. It plots only tenants that turned on at least one half: reason EgressAuditDisabled and DirectEgress mean neither, and are filtered out, so a lit band is a tenant that turned on one half and is missing the other (WorkerAuditWithoutProxy: the gateway logs WorkerAddresses but the set egresses with no pool to log the source) rather than a tenant that never opted in. Emitted only once the set's references have resolved, so a set whose references have not resolved has no row either, which is not a joined pair.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -150,6 +150,12 @@
           "expr": "actions_gateway_github_egress_incomplete{namespace=~\"$namespace\"}",
           "legendFormat": "github egress incomplete {{namespace}}/{{name}}",
           "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max by (namespace, runner_set) (actions_gateway_runnerset_egress_audit_unattributed{namespace=~\"$namespace\", reason!~\"EgressAuditDisabled|DirectEgress\"})",
+          "legendFormat": "egress audit {{namespace}}/{{runner_set}}",
+          "refId": "D"
         }
       ]
     },
