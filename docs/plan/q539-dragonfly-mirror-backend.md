@@ -209,3 +209,18 @@ The middle column is the inversion: the same runtime, namespace and node without
 **Every pod without an egress policy can reach one, on every node.** Pod-level policy cannot select a `hostNetwork` listener, so the only thing between a pod and the open proxy of §2 is that pod's own egress policy.
 That covers any tenant pod the GMC does not label as a workload, and every pod in a namespace with no default-deny.
 Q540's build has to answer that before a node client ships, for example by binding the proxy to loopback for the node's own containerd rather than to `0.0.0.0`; that remedy is not measured here.
+
+### 8.2 Measured: the proxy binds to loopback, and five ports stay on every address
+
+Measured on kind with Calico on 2026-10-13: chart 1.8.5's node client alone (`dragonflyoss/client:v1.5.7`, the digest `deploy/dragonfly/` pins), dfinit enabled, against this plan's manager-less scheduler, on two worker nodes.
+
+- **The chart can bind the proxy to loopback without a patch.** It passes `client.config` through with `toYaml`, so `proxy.server.ip: 127.0.0.1` reaches dfdaemon; `ss -ltnp` on a node then showed `127.0.0.1:4001` and nothing else on 4001.
+- **containerd pulls through it.** dfinit's default `proxy.addr` is already `http://127.0.0.1:4001`, and it wrote that into `/etc/containerd/certs.d/docker.io/hosts.toml`. kind's containerd reads that directory per pull, so dfinit's containerd restart was turned off and not needed.
+  A `crictl pull` of `busybox:1.36.1` sent its two blobs by the P2P rule and five requests direct.
+  Whether GKE's containerd reads `certs.d` the same way is unmeasured.
+- **Peer-to-peer still works.** Pulling `debian:bookworm-slim` on the second node after the first, the scheduler named the first node as parent and the second logged "all pieces are downloaded with scheduler".
+  Blobs of 4 MiB or less skip the scheduler and go to the registry (`MIN_PIECE_LENGTH` in `dragonfly-client-config/src/lib.rs`), which is why busybox's 1.9 MB layer showed no peer transfer.
+- **Five TCP ports and one UDP port stay on `0.0.0.0`:** upload gRPC 4000, metrics 4002, health 4003, stats 4004, and piece storage on TCP 4005 and QUIC 4006.
+  Each takes a listen `ip` in dfdaemon's config, but the upload and storage ports carry peer traffic between nodes, so they cannot go to loopback.
+  Read from the v1.5.7 source, not probed: the upload gRPC service includes task download and delete calls, it loads TLS only when certificates are configured, and no authentication interceptor is installed on it.
+  So loopback on the proxy alone does not settle what a pod without an egress policy can do at a node address; how those ports are restricted is the open design question.
