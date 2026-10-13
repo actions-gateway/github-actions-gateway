@@ -52,6 +52,16 @@ WEBHOOKS = (
     ("/validate-actions-gateway-com-v2-runnertemplate", "vrunnertemplate-v2.kb.io", 0.01, 0.010),
 )
 
+# The per-set egress-audit gauge's reason (Q1069), one per scale set. Both halves of
+# the pair are opt-in, so the preview carries one set with the pair joined, one with a
+# gap in a configured pair, and one that never opted in, which the security
+# dashboard filters out (Q1070): the render shows two rows, not three.
+EGRESS_AUDIT_REASONS = {
+    ("team-a", "gpu-a100"): ("EgressAuditJoined", 0),
+    ("team-a", "cpu-standard"): ("ProxySourceAuditDisabled", 1),
+    ("team-b", "cpu-standard"): ("EgressAuditDisabled", 1),
+}
+
 # Declared worker ceiling per scale set: the total the admission rungs subtract from,
 # and therefore the height of the withheld stack on the budget dashboard (Q969).
 SCALESET_CEILINGS = {
@@ -249,6 +259,8 @@ def render():
         # gate evaluated and found room, not the latched AwaitingProbe (Q512/Q643).
         if (ns, rs) in GATED_SCALESETS:
             L.append(f'actions_gateway_runnerset_worker_capacity_declined{{namespace="{ns}",runner_set="{rs}",reason="CapacityAvailable"}} 0')
+        reason, flagged = EGRESS_AUDIT_REASONS[(ns, rs)]
+        L.append(f'actions_gateway_runnerset_egress_audit_unattributed{{namespace="{ns}",runner_set="{rs}",reason="{reason}"}} {flagged}')
 
         # The admission ladder in this tier's own form: slots each rung took off the
         # declared ceiling, and the advertisement left over (Q443). Rungs compose as a
