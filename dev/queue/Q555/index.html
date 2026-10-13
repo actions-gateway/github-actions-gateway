@@ -23,7 +23,7 @@
     
     
       
-        <title>Opt-in auto-retry for flaky jobs - GitHub Actions Gateway</title>
+        <title>Detect flaky jobs and record each failure's platform context - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#opt-in-auto-retry-for-flaky-jobs" class="md-skip">
+        <a href="#detect-flaky-jobs-and-record-each-failures-platform-context" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Opt-in auto-retry for flaky jobs
+              Detect flaky jobs and record each failure's platform context
             
           </span>
         </div>
@@ -2597,9 +2597,14 @@
   
 
 
-<h1 id="opt-in-auto-retry-for-flaky-jobs">Opt-in auto-retry for flaky jobs<a class="headerlink" href="#opt-in-auto-retry-for-flaky-jobs" title="Permanent link">&para;</a></h1>
-<p><strong>Demand:</strong> an operator asks for flaky-job retry, OR the runner exit code becomes readable: detection needs a real job outcome and nothing carries one.
-Then <code>spec.flakyRetry</code> on the re-run machinery.</p>
+<h1 id="detect-flaky-jobs-and-record-each-failures-platform-context">Detect flaky jobs and record each failure's platform context<a class="headerlink" href="#detect-flaky-jobs-and-record-each-failures-platform-context" title="Permanent link">&para;</a></h1>
+<p><strong>Goal:</strong> automatic recovery that cuts human intervention and so operating cost; success is a falling rate of manual re-runs per set (draft R8).
+<strong>Demand:</strong> this repository's own CI, which runs on GAG, is the operator ask (maintainer decision, 2026-10-10).
+This row is phase 1 of <a href="../../plan/q555-flaky-job-retry/">the draft</a>, detection only (R1 to R8): pair a job's <code>failed</code> completion with a later <code>succeeded</code> attempt, record the platform context of each failure in a form that outlives the AGC pod, and report the rate of re-runs nobody automated.
+The job outcome it needs already arrives on the scale-set tier as <code>JobCompleted.result</code>.
+First, one dogfood turn-up reads <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code> for a failed step, a cancelled run and a timed-out job: only a disruption's <code>failed</code> has been observed live.
+<a href="../../plan/q555-automatic-recovery-design/">The design</a> settles the draft's open questions; detection adds the <code>failures</code> map, the snapshot and the pairing to the ledger store Q1182 creates.
+Retry lives in its own rows: Q1183 (classified retry, blocked on this row), Q1181 (futile re-runs on the existing arms), Q1182 (a restart-proof budget); a blanket flake retry is not scheduled.</p>
 
 
 

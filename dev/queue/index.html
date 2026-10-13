@@ -2974,6 +2974,78 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.</td>
 </tr>
 <tr>
+<td><a href="Q1177/">Q1177</a></td>
+<td><a href="../plan/q555-flaky-job-retry/#first-principles">The eviction arm re-runs a job evicted for its own storage limit</a></td>
+<td><code>bug</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The <code>eviction</code> recovery cause keys on pod <code>reason: Evicted</code> alone (<code>eviction_scaleset.go</code>, and <code>provisioner.go</code> on classic), and the …</td>
+</tr>
+<tr>
+<td><a href="Q1179/">Q1179</a></td>
+<td><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Spot preemption of a running worker may reach no re-run arm</a></td>
+<td><code>bug</code> <code>dogfood</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Dogfood's Cloud Logging and audit logs for 2026-09-13 to 2026-10-05 hold 16 <code>compute.instances.preempted</code> events on the <code>workers</code> Spot …</td>
+</tr>
+<tr>
+<td><a href="Q1180/">Q1180</a></td>
+<td><a href="../plan/gke-dogfood/">Dogfood keeps no AGC or proxy metrics past the pod's life</a></td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Google Managed Prometheus is enabled on the dogfood cluster, but its only scrape targets are <code>kube-state-metrics</code> and <code>dcgm</code>: no …</td>
+</tr>
+<tr>
+<td><a href="Q1181/">Q1181</a></td>
+<td><a href="../plan/q555-flaky-job-retry/#known-futile-retries">Skip known-futile re-runs on the existing disruption arms</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The disruption arms (eviction, preemption, deletion, abandoned, vanished) spend a slot of <code>maxEvictionRetries</code> on any re-run they fire, and …</td>
+</tr>
+<tr>
+<td><a href="Q1182/">Q1182</a></td>
+<td><a href="../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">The re-run budget resets when the AGC restarts</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>reserveEvictionRetry</code> keeps each run's re-run count in a process-local <code>sync.Map</code>, and nothing reloads it on start (read from …</td>
+</tr>
+<tr>
+<td><a href="Q555/">Q555</a></td>
+<td><a href="../plan/q555-flaky-job-retry/">Detect flaky jobs and record each failure's platform context</a></td>
+<td><code>tests</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Goal:</strong> automatic recovery that cuts human intervention and so operating cost; success is a falling rate of manual re-runs per set (draft …</td>
+</tr>
+<tr>
+<td><a href="Q1183/">Q1183</a></td>
+<td><a href="../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">Retry classified platform failures, starting with OOM under right-sizing</a></td>
+<td><code>feature</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked on Q555, whose detection measures each class's retry success rate (R14), and on Q1182, since more classes on a budget a restart …</td>
+</tr>
+<tr>
+<td><a href="Q1178/">Q1178</a></td>
+<td><a href="../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Label egress proxy outcome metrics by allowlist entry and outcome</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The proxy's <code>actions_gateway_proxy_dial_errors_total</code> and <code>_connect_denied_total</code> carry no labels, so neither an operator nor the AGC can …</td>
+</tr>
+<tr>
+<td><a href="Q1184/">Q1184</a></td>
+<td><a href="../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Attribute egress proxy failures to the job that hit them</a></td>
+<td><code>feature</code> <code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Two retry uses need to know which job's pod a proxy failure came from: an upstream dial failure as a retry class, and a policy denial as a …</td>
+</tr>
+<tr>
 <td><a href="Q1130/">Q1130</a></td>
 <td><a href="../development/parallel-dispatch/">Nothing spaces a batch across the registry files that still collide</a></td>
 <td><code>ci</code> <code>debt</code> <code>open-question</code></td>
@@ -3468,14 +3540,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>M</td>
 <td><strong>Event:</strong> a real GHES appliance becomes reachable.</td>
-</tr>
-<tr>
-<td><a href="Q555/">Q555</a></td>
-<td><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></td>
-<td><code>tests</code> <code>feature</code></td>
-<td>💤</td>
-<td>M</td>
-<td><strong>Demand:</strong> an operator asks for flaky-job retry, OR the runner exit code becomes readable: detection needs a real job outcome and nothing …</td>
 </tr>
 <tr>
 <td><a href="Q565/">Q565</a></td>

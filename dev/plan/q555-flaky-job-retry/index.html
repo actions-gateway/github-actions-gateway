@@ -1,0 +1,3453 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q555-flaky-job-retry/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Q555 flaky-job detection and classified retry: problem, requirements, scope - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#q555-flaky-job-detection-and-classified-retry-problem-requirements-scope" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.9.0 is here.</strong>
+      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
+    <a href="../../queue/">See the working backlog.</a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Q555 flaky-job detection and classified retry: problem, requirements, scope
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-prerequisite-already-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The prerequisite already exists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-this-splits-into-backlog-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How this splits into backlog items
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem statement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior art
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prior art">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-github-itself-does-and-refuses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What GitHub itself does and refuses
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#systems-that-decide-what-to-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Systems that decide what to retry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#systems-that-decide-whether-retry-is-acceptable-at-all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Systems that decide whether retry is acceptable at all
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-evidence-says-about-the-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the evidence says about the cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#detection-phase-1-no-behaviour-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection (phase 1, no behaviour change)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classified-platform-retry-phase-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classified platform retry (phase 2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-futile-retries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known-futile retries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#candidate-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidate classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oomkilled-under-right-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OOMKilled under right-sizing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-egress-proxy-as-a-failure-sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The egress proxy as a failure sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unclassified-retry-not-scheduled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unclassified retry (not scheduled)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-for-the-design-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions for the design session
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="q555-flaky-job-detection-and-classified-retry-problem-requirements-scope">Q555 flaky-job detection and classified retry: problem, requirements, scope<a class="headerlink" href="#q555-flaky-job-detection-and-classified-retry-problem-requirements-scope" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> ⓘ draft for a design session, written 2026-10-10.
+Nothing is built and no CRD shape is committed; the work is split across the rows <a href="#how-this-splits-into-backlog-items">below</a>.
+<a href="../../queue/Q555/">Q555</a> is in the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
+<a href="../q555-automatic-recovery-design/">The design</a> proposes how to build it and recommends answers to the <a href="#open-questions-for-the-design-session">open questions</a>, pending sign-off.
+It extends <a href="../../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">G.17</a> rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.</p>
+<h2 id="the-prerequisite-already-exists">The prerequisite already exists<a class="headerlink" href="#the-prerequisite-already-exists" title="Permanent link">&para;</a></h2>
+<p>Q555, G.17 and the <a href="../release-ladder/">release ladder</a> all say detection is blocked because nothing gives the AGC a real job outcome.
+That is false on the scale-set tier, and was false before Q555 was filed on 2026-07-31.</p>
+<ul>
+<li>The scale-set queue delivers a terminal <code>JobCompleted</code> message per job, carrying <code>result</code>, the owner, repository, <code>workflowRunId</code>, and <code>jobDisplayName</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/types.go"><code>scaleset/types.go</code></a>, <code>JobMessage</code>).</li>
+<li>The Q264 spike live-observed <code>result: "failed"</code> on 2026-07-05 (<a href="../archive/q264-scale-set-protocol-phases/">phases record</a>, finding 6).</li>
+<li>The listener already counts it, as <code>actions_gateway_scaleset_jobs_completed_total{result}</code>; nothing else reads it.</li>
+</ul>
+<p>So the AGC holds, for every scale-set job, the outcome plus the <code>(owner, repo, run_id)</code> triple that <code>rerun-failed-jobs</code> takes.
+The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a href="../v1-classic-sunset-review/">sunset review</a>), so nothing here should be built for it.</p>
+<p>The live evidence is thinner than "the outcome is delivered" suggests, and each gap matters to a requirement below:</p>
+<ol>
+<li><strong>The one observed <code>failed</code> was almost certainly a disruption.</strong> Finding 6 follows finding 5 in the same spike, which SIGKILLed the runner mid-job, and GitHub concluded that job <code>failure</code>; the record does not say outright that they were the same job.
+   If they were, a disrupted job reads <code>failed</code>, the same as a flake would (R2 exists for this).
+   A job that failed on its own merits, a red test step, has not been observed on this channel.</li>
+<li><strong>The full <code>result</code> vocabulary.</strong> Only <code>succeeded</code> and <code>failed</code> are observed on live GitHub.
+   The unit tests use both <code>cancelled</code> and <code>canceled</code>, so the canceled spelling is a guess on at least one side.</li>
+<li><strong>Whether a timed-out job is distinguishable</strong> from a failed one.</li>
+</ol>
+<p>All three are one dogfood turn-up to settle: fail a step, cancel a run, and time a job out, then read <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code>, which needs no code change.</p>
+<h2 id="how-this-splits-into-backlog-items">How this splits into backlog items<a class="headerlink" href="#how-this-splits-into-backlog-items" title="Permanent link">&para;</a></h2>
+<p>The requirements below span several separable pieces of work, filed 2026-10-10 so each can be prioritised on its own:</p>
+<table>
+<thead>
+<tr>
+<th>Row</th>
+<th>Covers</th>
+<th>Depends on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../../queue/Q555/">Q555</a></td>
+<td>Detection, R1 to R8</td>
+<td>A dogfood measurement of the <code>result</code> vocabulary</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1181/">Q1181</a></td>
+<td>R18's futility checks, on the arms that exist today</td>
+<td>Nothing</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1182/">Q1182</a></td>
+<td>R15, a budget that survives an AGC restart</td>
+<td>Nothing</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1183/">Q1183</a></td>
+<td>Classified retry, R9 to R17, starting with <code>OOMKilled</code> under right-sizing</td>
+<td>Q555 and Q1182</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1177/">Q1177</a>, <a href="../../queue/Q1179/">Q1179</a></td>
+<td>Two possible defects in the existing arms</td>
+<td>A measurement each</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1180/">Q1180</a></td>
+<td>Keeping dogfood's retry metrics at all</td>
+<td>Nothing</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1178/">Q1178</a>, <a href="../../queue/Q1184/">Q1184</a></td>
+<td>The proxy's outcome metrics, and per-job failure attribution</td>
+<td>Q1184 needs a security review</td>
+</tr>
+</tbody>
+</table>
+<h2 id="problem-statement">Problem statement<a class="headerlink" href="#problem-statement" title="Permanent link">&para;</a></h2>
+<p><strong>The goal is automatic recovery that reduces the need for human intervention, and with it the operating cost of running CI on GAG</strong> (maintainer, 2026-10-10).
+Every requirement below is judged by that: a manual re-run, a triage of a failure the author could not have fixed, and a hunt for which job is flaky are each an intervention.
+A mechanism that removes interventions now by hiding a regression that costs more to find later does not meet it, which is why a blanket retry is <a href="#unclassified-retry-not-scheduled">not scheduled</a>.</p>
+<p>A flaky job fails for reasons unrelated to the change under test, and today a human has to notice, judge that it is a flake, and click re-run.
+On a pull request that costs one round trip of human attention and however long the author takes to come back.
+In a merge queue it costs more: the failed entry is ejected, and with batching, entries behind it are rebuilt.</p>
+<p>GAG already re-runs a job the <em>cluster</em> broke (eviction, preemption, drain, deletion), and deliberately never re-runs a job that failed on its own merits, because re-running a genuine failure hides it.
+That boundary is right for genuine failures and leaves flakes, the commonest CI annoyance, entirely manual.</p>
+<p>Two problems hide inside "flaky-job retry", and they need different things:</p>
+<ul>
+<li><strong>Toil.</strong> Someone has to click re-run.
+  Retry fixes this.</li>
+<li><strong>Invisibility.</strong> Nobody knows which jobs flake, how often, or what they cost.
+  Each re-run is one person's private judgement, and the aggregate is lost.
+  Detection fixes this.</li>
+</ul>
+<p>Retry without detection makes the suite worse over time: flakes stop hurting, so nobody fixes them, and real intermittent regressions slip through with them.
+Detection without retry leaves the toil but makes it fixable.
+The platform layer is the only place both can be done without editing every workflow, and it is also the layer that knows least about <em>why</em> a job failed.</p>
+<p><strong>A probe of this repo's own CI shows why detection must be per job, not per run.</strong> Over 1,944 runs from 2026-10-03 to 2026-10-09, 59 had <code>run_attempt &gt; 1</code>, all on <code>pull_request</code>, and they came from just 4 head SHAs, each re-running 10 to 17 workflows at once.
+That is a whole PR being re-run, for reasons the run record cannot show; a flake and a re-run to force a gate look the same.
+The sample is also uneven (2026-10-07 and 2026-10-08 returned one run each, which the API's search window may explain), so treat the counts as illustrative.
+<code>run_attempt</code> counts human intent, not flakes.</p>
+<h2 id="first-principles">First principles<a class="headerlink" href="#first-principles" title="Permanent link">&para;</a></h2>
+<p><strong>What a flake is, operationally.</strong> Same inputs, different outcome.
+A re-run keeps its <code>run_id</code>, and GitHub re-runs a run against the same commit and workflow file it ran originally, so "job <em>J</em> in run <em>R</em> failed on attempt <em>n</em> and succeeded on a later attempt" is a flake by construction, with one caveat: the inputs a job pulls from outside the commit (a registry, a package index, a secret, the clock) can change between attempts.
+At the platform layer that caveat does not matter, because both readings mean "not the change's fault".</p>
+<p><strong>A retry is a bet, and the platform does not know the odds.</strong> Retrying a failed job pays off when the failure was a flake and wastes one job's compute when it was real.
+Without history the AGC has no prior for either, which is why detection comes first: it is what turns a blanket policy into an informed one.</p>
+<p><strong>Masking has a number.</strong> If a change introduces a failure that fires with probability <em>p</em> per attempt, one automatic retry lets it through with probability 1 − <em>p</em>² instead of 1 − <em>p</em>.
+At <em>p</em> = 0.5 that is 75% instead of 50%; at <em>p</em> = 0.1, 99% instead of 90%.
+Retry is therefore always a trade against catching intermittent regressions, which is why it must be opt-in and why every retry must leave a counted trace.</p>
+<p><strong>The failure that retries worst is the correlated one.</strong> When a shared dependency is down (a registry, the egress proxy, GitHub itself), every job fails, every job qualifies for retry, and retry doubles the load on the thing that is already failing.
+A per-run budget cannot see this; only a set-wide rate can.</p>
+<p><strong>Not every job is safe to run twice.</strong> A failed deploy, release or publish job may have half-applied, and re-running it repeats the side effects.
+Disruption recovery already accepts this, but disruptions are rare and a cluster event; flakes are common and a property of the job.
+Pull request and merge queue jobs are the ones built to be thrown away, and they are where flakes cost the most human time.</p>
+<p><strong>Budget state has to outlive the AGC.</strong> The disruption budget lives in process memory (<code>reserveEvictionRetry</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>eviction.go</code></a>), so an AGC restart refills it.
+That is tolerable for disruptions; for a retry triggered by a deterministic failure it means a restart loop re-runs a broken job without limit.
+GitHub keeps a durable per-run counter, <code>run_attempt</code>, which no restart can reset, but it also counts human re-runs; <a href="../q555-automatic-recovery-design/#the-budget-is-gags-own-count-in-the-ledger-r15">the design</a> keeps GAG's own count in a persisted ledger instead (maintainer's decision, 2026-10-12), with <code>run_attempt</code> as the check against GitHub's 50-attempt cap.</p>
+<p><strong>A retry is safe when the failure is classified as platform-caused, temporary and self-resolving.</strong> That is the property GAG's existing arms are meant to have.
+Preemption, a drain or hand-delete (both the <code>deletion</code> cause), a worker that never started (<code>abandoned</code>), and one that vanished while the AGC was down are each recognised from Kubernetes facts, come from a temporary situation, and clear once capacity or the node comes back.
+Retrying one of those masks nothing, because the tenant's code never got a fair run.
+So the low-risk way to retry more is to recognise more classes that pass that test, and only after that to retry failures nobody has classified.
+Classifying is where GAG is strong: no GitHub-layer product can see the pod, the node, the egress proxy or the mirror a job depended on.</p>
+<p><strong>The <code>eviction</code> arm does not fully pass that test today.</strong> It keys on <code>reason: Evicted</code> alone (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go"><code>eviction_scaleset.go</code></a>), and the kubelet sets that reason when a pod exceeds its <em>own</em> <code>ephemeral-storage</code> limit, as well as when the node is short.
+The live eviction-recovery e2e triggers eviction exactly that way, with a job that outgrows its own limit, and expects the re-run (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/github_scaleset_test.go"><code>github_scaleset_test.go</code></a>).
+That is a tenant-caused, likely deterministic failure, the storage analogue of <code>OOMKilled</code>, retried up to <code>maxEvictionRetries</code> (default 2) and documented as "node pressure".
+Whether the kubelet's <code>status.message</code> separates the two shapes is unmeasured; <a href="../../queue/Q1177/">Q1177</a> tracks it, and R10's test applies to it as much as to any new class.</p>
+<p><strong>Retry moves the flake away from the person who can fix it.</strong> Today the pull request author sees the red run.
+After a GAG retry the run is green, and the flake survives only in operator metrics and Events, because writing back to GitHub is out of scope (R17).
+Removing that friction also removes some of the pressure to fix the test, which is why Kubernetes bans automatic retries outright.
+On 2026-10-10 the maintainer first kept unclassified retry as an opt-in phase 2 with this cost understood, then preferred classified retry, which does not pay it; unclassified retry is now <a href="#unclassified-retry-not-scheduled">not scheduled</a>.</p>
+<p><strong>Whoever pays decides.</strong> The operator pays for compute; the repository owner owns the correctness of their checks.
+An unclassified retry spends both, so it would need an explicit opt-in from whoever owns the <code>RunnerSet</code>, and a job's own workflow must never be able to switch it on (G.17 already holds this line for the tenant-signal channel).</p>
+<h2 id="prior-art">Prior art<a class="headerlink" href="#prior-art" title="Permanent link">&para;</a></h2>
+<p>G.17's table covers GitLab, Buildkite, CircleCI, Azure Pipelines, Datadog, Bazel, Argo and Tekton.
+This section adds what that table lacks, researched 2026-10-10.
+Each line was read at its source unless it says otherwise.</p>
+<h3 id="what-github-itself-does-and-refuses">What GitHub itself does and refuses<a class="headerlink" href="#what-github-itself-does-and-refuses" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>No native auto-retry or flaky-test feature as of 2026-10-10.</strong> The Actions changelog from 2026-09-03 to 2026-10-02 has nothing on either, and the feature request (<a href="https://github.com/orgs/community/discussions/72195">#72195</a>) has had no staff reply since it was opened.</li>
+<li><strong>A run can be re-run at most 50 times</strong>, counting full and failed-only re-runs together, a cap <a href="https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/">added on 2026-04-10</a> because automations were retrying hundreds of times.
+  Re-runs are allowed for 30 days, and reuse the original <code>GITHUB_SHA</code>, <code>GITHUB_REF</code> and the triggering actor's privileges (<a href="https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/re-running-workflows-and-jobs">docs</a>).</li>
+<li><strong>Both re-run endpoints re-run dependents</strong>: <code>jobs/{id}/rerun</code> re-runs "a job and its dependent jobs", <code>rerun-failed-jobs</code> "failed jobs and their dependent jobs" (<a href="https://docs.github.com/en/rest/actions/workflow-runs">REST docs</a>).</li>
+<li><strong>Neither works while the run is in progress.</strong> The docs are silent; <a href="https://github.com/orgs/community/discussions/67654">#67654</a> shows both refusals, and the AGC already handles the run-level one as <code>errRunNotConcluded</code>.
+  So a platform retry waits for the whole run, whichever endpoint it uses.</li>
+<li><strong>The merge queue never retries.</strong> A failed required check removes the PR and the remaining groups are rebuilt (<a href="https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue">docs</a>).</li>
+<li><strong>Marketplace retries run inside the job.</strong> <a href="https://github.com/nick-fields/retry"><code>nick-fields/retry</code></a> wraps a shell command; <a href="https://github.com/Wandalen/wretry.action"><code>Wandalen/wretry.action</code></a> wraps an action, and retries its pre, main and post stages together.
+  Either way GitHub records one green step, and the flake survives only in the log.</li>
+</ul>
+<h3 id="systems-that-decide-what-to-retry">Systems that decide <em>what</em> to retry<a class="headerlink" href="#systems-that-decide-what-to-retry" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Mechanism</th>
+<th>The idea worth taking</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://zuul-ci.org/docs/zuul/latest/config/job.html">Zuul</a></td>
+<td><code>attempts</code> (default 3) retries <strong>only</strong> a failure in the pre-run playbook or a node going unreachable; a failure in the job's own playbook never retries. Exhausting it concludes <code>RETRY_LIMIT</code>, not <code>FAILURE</code></td>
+<td>Classify by <em>phase</em>: setup and infrastructure retry, the tenant's payload does not. A distinct terminal result names why</td>
+</tr>
+<tr>
+<td><a href="https://www.jenkins.io/doc/pipeline/steps/workflow-basic-steps/">Jenkins <code>retry</code></a></td>
+<td><code>conditions: [kubernetesAgent()]</code> retries a lost agent pod but ignores termination reasons "likely under the Pipeline author's control", such as <code>OOMKilled</code></td>
+<td>The closest precedent to GAG's disruption arm, including the line it draws</td>
+</tr>
+<tr>
+<td><a href="https://argo-workflows.readthedocs.io/en/latest/retries/">Argo Workflows</a></td>
+<td><code>retryPolicy</code>: <code>OnFailure</code> (main container failed), <code>OnError</code> (controller or sidecar failed), <code>OnTransientError</code>; an <code>expression</code> reads the last exit code and message</td>
+<td>Error versus failure as a first-class split</td>
+</tr>
+<tr>
+<td><a href="https://docs.mergify.com/ci-insights/auto-retry">Mergify Auto-Retry</a></td>
+<td>Rules on job name, log regex, branch, conclusion and known-flaky status; 1 to 10 retries; waits for the whole workflow, then re-runs failed jobs</td>
+<td>The nearest product to this one, on the same GitHub API, and it <strong>excludes merge-queue batch PRs</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="systems-that-decide-whether-retry-is-acceptable-at-all">Systems that decide <em>whether</em> retry is acceptable at all<a class="headerlink" href="#systems-that-decide-whether-retry-is-acceptable-at-all" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Kubernetes forbids it.</strong> Its <a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-testing/flaky-tests.md">flaky-tests policy</a> bans automatic retries inside test jobs and tracks every flake as a <code>kind/flake</code> issue.
+  Its one automatic retest, a <a href="https://github.com/kubernetes/test-infra/blob/master/config/jobs/kubernetes/sig-k8s-infra/trusted/sig-contribex-triage-robot-retester.yaml">robot</a>, re-tests only approved PRs, at most one PR per 20 minutes project-wide, and posts a visible comment a human can stop with <code>/hold</code>.</li>
+<li><strong>Gradle's <a href="https://github.com/gradle/test-retry-gradle-plugin">test-retry plugin</a></strong> has <code>maxFailures</code>, which stops retrying when one round fails too many tests (a full disk), and <code>failOnPassedAfterRetry</code>.
+  Its README says retry alone "is not a viable flaky test mitigation strategy".</li>
+<li><strong>Trunk <a href="https://docs.trunk.io/flaky-tests/quarantining">quarantines</a> instead of retrying</strong>: a quarantined test still runs and is still reported, and only its effect on the exit code is removed.</li>
+<li><strong>Meta's <a href="https://engineering.fb.com/2020/12/10/developer-tools/probabilistic-flakiness/">probabilistic flakiness score</a></strong> treats a retry as a sample rather than a verdict: every attempt feeds a per-test estimate of how often it fails in a good state.</li>
+<li><strong>Chromium</strong> re-runs a failing test without the patch to tell a broken tip of tree from a broken change (2018 to 2020 docs, found by search; current behaviour not verified).</li>
+</ul>
+<h3 id="what-the-evidence-says-about-the-cost">What the evidence says about the cost<a class="headerlink" href="#what-the-evidence-says-about-the-cost" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Retry usually works.</strong> On GitHub Actions across 1,960 Java projects, 3.2% of builds are re-run, 67.73% of re-runs change the outcome, 91.6% are a single attempt, and 99% of flaky jobs pass within 5 (<a href="https://arxiv.org/html/2602.02307v1">Ge &amp; Zhang, 2026</a>).</li>
+<li><strong>Ignoring what looks flaky hides real regressions.</strong> On Chromium, treating predicted-flaky failures as ignorable missed about 76.2% of regression faults (<a href="https://arxiv.org/abs/2302.10594">Haben et al., 2023</a>).
+  This is the strongest evidence for the masking cost the first-principles section computes.</li>
+<li><strong>No source recommends a retry count.</strong> One automatic retry matches what people already do by hand (91.6% single attempts).</li>
+</ul>
+<h3 id="what-this-changes">What this changes<a class="headerlink" href="#what-this-changes" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>The merge queue is where retry pays most and where the only product on the same API refuses to go.</strong> It matters only to <a href="#unclassified-retry-not-scheduled">unclassified retry</a>, which is not scheduled.</li>
+<li><strong>Classification is the idea G.17 lacked, and GAG is already good at it.</strong> Zuul retries only setup and infrastructure failures; Jenkins' <code>kubernetesAgent()</code> retries a lost pod but not <code>OOMKilled</code>.
+   GAG's disruption arms are the same idea, and phase 2 widens them (<a href="#classified-platform-retry-phase-2">classified retry</a>).</li>
+<li><strong>A global rate cap belongs beside the per-run cap</strong> (Kubernetes' one per 20 minutes, Gradle's <code>maxFailures</code>); classified retry keeps one beside R11's per-class waits.</li>
+<li><strong>The 50-re-run cap is shared with humans</strong>, and a re-run by the AGC runs with the original actor's privileges, which the existing disruption path already accepts.</li>
+</ol>
+<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<p>MUST and SHOULD are used in their usual sense.
+Each requirement is written to be testable.</p>
+<p><strong>Direction, set 2026-10-10.</strong> The maintainer judged classified platform retry more practical and useful than a blanket flake retry: every class GAG can recognise and retry is a failure nobody has to re-run by hand to triage.
+So phase 2 is classified retry.
+A blanket retry of unclassified failures is <a href="#unclassified-retry-not-scheduled">not scheduled</a>, and its design is kept below in case detection shows it is still wanted.</p>
+<h3 id="detection-phase-1-no-behaviour-change">Detection (phase 1, no behaviour change)<a class="headerlink" href="#detection-phase-1-no-behaviour-change" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>R1.</strong> The AGC MUST classify a job as flaky when, for the same <code>(owner, repo, run_id, job display name)</code>, a <code>failed</code> completion is followed by a <code>succeeded</code> completion on a later attempt.</li>
+<li><strong>R2.</strong> A failure the AGC attributes to a disruption it recovered (any <code>cause</code> on the existing re-run counters) MUST NOT count toward R1.
+  Otherwise every eviction reads as a flake.</li>
+<li><strong>R3.</strong> Detection MUST be surfaced per <code>RunnerSet</code> as a counter with bounded label cardinality: job and repository names MUST NOT be metric labels.
+  The identity of each flaky job MUST be reachable through Kubernetes Events or another per-occurrence surface.</li>
+<li><strong>R4.</strong> Detection SHOULD be on by default.
+  It changes nothing a job sees and makes a hidden cost visible, so it passes the <a href="../../design/05-security/">secure-by-default</a> test that retry does not.</li>
+<li><strong>R5.</strong> Detection MUST state its blind spots: a pairing lost to an AGC restart, a re-run that lands on another set, and a job that is never re-run all undercount.
+  An undercount is acceptable; a false flake is not.</li>
+<li><strong>R6.</strong> Detection MUST NOT need a GitHub API call per completed job.
+  Calls are for the rare case (a failure, or a re-run), never the common one.</li>
+<li><strong>R7.</strong> For each failed attempt, detection MUST record the platform context GAG could read at the time: the pod's phase, reason and message, each container's termination reason and restart count (sidecars included), the node's conditions, and the readiness of the set's egress proxy pool and registry mirror.
+  The record of failures that later passed is the evidence that proposes new classes; without it, a candidate is a guess.
+  It MUST outlive the AGC pod: on dogfood today no AGC metric is scraped and Cloud Logging keeps warn lines for 30 days (<a href="../../queue/Q1180/">Q1180</a>), so one structured line per concluded job, carrying run, job, result, cause and node, is the cheapest durable form.</li>
+<li><strong>R8.</strong> Detection MUST tell the re-runs GAG triggered from the ones it did not, and report per set the rate of re-runs nobody automated.
+  That rate is this feature's success metric: each class shipped should lower it, and a class that does not is not paying for itself.</li>
+</ul>
+<h3 id="classified-platform-retry-phase-2">Classified platform retry (phase 2)<a class="headerlink" href="#classified-platform-retry-phase-2" title="Permanent link">&para;</a></h3>
+<p>A class is a failure shape GAG recognises and retries automatically, the way it already retries eviction, preemption, deletion, abandoned and vanished workers.</p>
+<ul>
+<li><strong>R9.</strong> A class MUST be recognised from facts GAG owns (Kubernetes objects, its own components, protocol messages), never from job logs or anything tenant code writes.</li>
+<li><strong>R10.</strong> A class MUST be caused outside the tenant's code and configuration.
+  A job exceeding its own limits (memory, <code>ephemeral-storage</code>, <code>timeout-minutes</code>) does not qualify on that fact alone; <a href="../../queue/Q1177/">Q1177</a> is the existing arm that misses this.</li>
+<li><strong>R11.</strong> A class MUST NOT spend the budget while its cause still holds.
+  How it waits depends on how the cause clears, and each class MUST declare which of three applies:</li>
+<li><strong>A fresh pod clears it.</strong> A re-run builds a new pod, and the scheduler will not place it on a <code>NotReady</code> node, so the retry is already the change.
+    The existing delay and pacing are enough.</li>
+<li><strong>GAG can observe it clearing.</strong> The cause is state GAG owns or computes (proxy pool readiness, mirror readiness, schedulable capacity, the next pod's memory limit), so the retry waits on that state, as the <code>abandoned</code> arm already waits for a worker pod to bind before it re-runs (Q691, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/abandoned_rerun.go"><code>abandoned_rerun.go</code></a>).</li>
+<li><strong>Neither.</strong> The cause is outside GAG and unobservable from it, such as GitHub or an upstream registry, so it gets the standard answer: backoff and a circuit breaker.</li>
+</ul>
+<p>A set-wide breaker applies to every class regardless, because a cause can be misdeclared.
+  The timing is coarser than request-level retry: a re-run cannot start until the whole run concludes, up to about 10 minutes after a killed runner (Q396), so a backoff schedule matters less than not spending one of a run's two slots too early.
+- <strong>R12.</strong> Each class MUST arrive with evidence: a dogfood reproduction that produces it, and its discriminator shown to separate it from the nearest tenant-caused shape.
+- <strong>R13.</strong> Each class MUST get its own <code>cause</code> label on the existing counters and spend the existing per-run budget (<code>maxEvictionRetries</code>), so a run cannot collect one budget per class.
+  It is on by default like the existing arms, and reuses the paced re-run path (<code>rerunUntilAccepted</code>).
+- <strong>R14.</strong> The AGC MUST measure each cause's retry success rate (re-runs that then passed, over re-runs), using detection's pairing.
+  A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape would read near zero.
+- <strong>R15.</strong> The per-run budget MUST survive an AGC restart before classes that fire more often are added.
+  It lives in process memory today (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>reserveEvictionRetry</code></a>); <a href="../q555-automatic-recovery-design/#the-budget-is-gags-own-count-in-the-ledger-r15">the design</a> persists GAG's own count, and checks <code>run_attempt</code> against GitHub's 50-re-run limit, which humans share.
+- <strong>R16.</strong> Every classified retry MUST be counted and evented with its cause, and its compute attributable per set (<a href="../../operations/cost-attribution/">cost attribution</a>).
+- <strong>R17.</strong> Classified retry MUST need no GitHub App permission beyond what disruption recovery already uses.</p>
+<h3 id="known-futile-retries">Known-futile retries<a class="headerlink" href="#known-futile-retries" title="Permanent link">&para;</a></h3>
+<p>The inverse of a class: a failure GAG can recognise as one a retry will not fix.
+Skipping it saves a budget slot, a node, queue time and throughput, and in a correlated failure it is the difference between one failed job and a stampede.
+It also gives the person who has to act a reason, where today an exhausted budget only says a manual re-run is needed.</p>
+<ul>
+<li><strong>R18.</strong> Before any retry spends a budget slot, on the existing arms and every new class alike, the AGC MUST check it against the known-futile shapes below.
+  A futile retry is skipped, counted under its own reason label, and evented with the reason and the action that would fix it (raise the limit, fix the image, nothing because the run was superseded).</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Futile shape</th>
+<th>What GAG would observe</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The worker's <em>shape</em> cannot run: an unpullable image, or a pod no node can host</td>
+<td>The capacity gate's startup and placeability verdicts (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/worker_startup_verdict.go"><code>worker_startup_verdict.go</code></a>, Q714)</td>
+<td>Built for intake: the gate stops new work when every next pod would fail the same way. Whether the re-run paths consult it is unverified</td>
+</tr>
+<tr>
+<td>The job exceeded its own limit</td>
+<td><code>OOMKilled</code> at its limit under <code>Static</code> sizing, an <code>ephemeral-storage</code> limit eviction, <code>timeout-minutes</code></td>
+<td>The eviction arm retries the storage case today (<a href="../../queue/Q1177/">Q1177</a>)</td>
+</tr>
+<tr>
+<td>A newer commit superseded the run</td>
+<td>The pull request's head no longer matches the run's <code>head_sha</code>, or the run was cancelled by a concurrency group</td>
+<td>Not checked: nothing in the re-run path reads either. One API call per retry, which is affordable because retries are rare</td>
+</tr>
+<tr>
+<td>GitHub will refuse the re-run</td>
+<td><code>run_attempt</code> at 50, a run older than 30 days, a <code>cancelled</code> conclusion</td>
+<td>The deletion arm already stands down on <code>cancelled</code> (Q811); the other two are unchecked</td>
+</tr>
+<tr>
+<td>The same class failed this job again</td>
+<td>A second failure of the same class on a later attempt, after its cause was judged cleared</td>
+<td>Per-run counterpart of R14: the class is wrong for this job, so stop and say so</td>
+</tr>
+<tr>
+<td>A correlated outage</td>
+<td>A set-wide failure rate past the breaker's threshold</td>
+<td>R11's breaker</td>
+</tr>
+<tr>
+<td>The platform's own image or config is broken</td>
+<td>A setup step the worker image provides exits 127, the same on every pod</td>
+<td>8 <code>gag-ci</code> jobs did this 2026-06-28 to 07-12; like an unpullable image, every next pod fails the same way</td>
+</tr>
+<tr>
+<td>The account cannot run jobs</td>
+<td><code>The job was not started because recent account payments have failed</code></td>
+<td>4 in 2026-05; GitHub refuses before any pod exists</td>
+</tr>
+</tbody>
+</table>
+<h3 id="candidate-classes">Candidate classes<a class="headerlink" href="#candidate-classes" title="Permanent link">&para;</a></h3>
+<p>None is reproduced yet; each needs R12's reproduction before it becomes a class, and the CI history below shows which ones occur.</p>
+<table>
+<thead>
+<tr>
+<th>Candidate</th>
+<th>What GAG would observe</th>
+<th>Clears by (R11)</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Out of memory under a <a href="../runner-sizing-profiles/">right-sizing</a> profile</td>
+<td>Container <code>OOMKilled</code> at its limit, on a set whose profile derives limits from history</td>
+<td>Observable: GAG computes the next limit</td>
+<td>Qualifies under R11 only when the retry's pod gets a strictly higher memory limit; see <a href="#oomkilled-under-right-sizing">below</a></td>
+</tr>
+<tr>
+<td>Setup failure before the first step</td>
+<td>The job failed while the runner was registering or downloading actions</td>
+<td>Neither, when the cause is GitHub: backoff and breaker</td>
+<td>Needs the worker to report where setup ends; unmeasured</td>
+</tr>
+<tr>
+<td>Egress proxy pool unavailable</td>
+<td>The pool had no ready endpoint during the job's window</td>
+<td>Observable: pool readiness</td>
+<td>GAG owns the pool</td>
+</tr>
+<tr>
+<td>Registry mirror unavailable</td>
+<td>The mirror was unready while the job pulled an image</td>
+<td>Observable: mirror readiness</td>
+<td>Same shape as the proxy</td>
+</tr>
+<tr>
+<td>Node lost under a running worker</td>
+<td>Node <code>NotReady</code> or unreachable; the pod never publishes a terminal phase</td>
+<td>Fresh pod</td>
+<td>The <code>deletion</code> arm needs a published terminal phase, so whether this is already covered is unverified. Dogfood logged 16 Spot preemptions against one recovery line in 2026-09 (<a href="../../queue/Q1179/">Q1179</a>)</td>
+</tr>
+<tr>
+<td>Node-level out-of-memory kill</td>
+<td>Container killed below its own limit, with a <code>SystemOOM</code> node event (the kubelet's name, from recall)</td>
+<td>Fresh pod, not guaranteed: it can land on the same packed node</td>
+<td>Overcommitted packing is the platform's doing; a kill at the container's own limit is not</td>
+</tr>
+<tr>
+<td><code>dockerd</code> sidecar crash</td>
+<td>The Docker-in-Docker sidecar's restart count rose during the job</td>
+<td>Fresh pod</td>
+<td>Mixed: <code>dockerd</code> also dies of tenant disk use, so it needs a discriminator</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What this repository's CI history shows</strong> (failed jobs from 2026-05-18 to 2026-10-11, classified 2026-10-10 from annotations on 2,588 of 2,590 failed jobs and 523 logs; jobs on GAG's own runners are 127 of them):</p>
+<ul>
+<li><strong>Platform-signed failures are a floor of 1 in 13.</strong> 147 carry a platform signature against 1,772 that do not.
+  A network error inside a test step leaves no annotation, so the true platform share is higher.</li>
+<li><strong>Runner lost communication, 55 jobs on GAG's runners</strong>, all concluding at 10 to 11 minutes with no failed step, between 2026-06-30 and 07-20.
+  That is the worker-lost shape the existing arms and <a href="../../queue/Q1179/">Q1179</a> are about.
+  39 were never re-run.
+  Of 16 same-run retries, 9 passed and 5 failed with the identical message, all 5 in the 2026-06-30 incident, which is a cause outliving one pod: R11's case for waiting on the cause, not the clock.
+  Many arms post-date that window, so this does not show a gap today.</li>
+<li><strong>Runner received a shutdown signal, 34 jobs</strong> on the scale-set validation runner, all <code>workflow_dispatch</code> on <code>main</code>.
+  Troubleshooting ties this text to the JIT Secret mount failure Q1154 fixed; whether these were induced by validation teardown is unverified.</li>
+<li><strong><code>dockerd</code> unreachable, 2 jobs</strong>, and <strong>a GAG mirror pull failure, 1 job</strong>, on GAG's runners: the sidecar and mirror candidates above, now each seen at least once.</li>
+<li><strong>On GitHub-hosted runners</strong>, the shapes are the outbound fetches the proxy section covers: Docker Hub auth 504s and blob failures (18), action downloads from <code>codeload.github.com</code> including a 429 (9), and disk full (6), plus GitHub Pages deploys (16) that no runner platform can see.</li>
+</ul>
+<h3 id="oomkilled-under-right-sizing">OOMKilled under right-sizing<a class="headerlink" href="#oomkilled-under-right-sizing" title="Permanent link">&para;</a></h3>
+<p>A job killed at its own memory limit is tenant-caused under R10, and retrying it under a fixed limit fails the same way.
+Right-sizing changes that: under the <code>Throughput</code> and <code>Binpack</code> profiles the next pod's limit is derived from observed usage, so a retry can be the fix rather than a repeat.
+It qualifies under R11 when the AGC can show the retry's pod will get a strictly higher memory limit than the pod that died, and it is easy to get wrong in three ways (all read from source, 2026-10-10):</p>
+<ol>
+<li><strong>The set's history may not move.</strong> The recommended limit is the set's highest sampled per-job peak × 1.4 (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/usage/aggregate.go"><code>aggregate.go</code></a>), sampled from metrics-server every 15 seconds.
+   A job dies at its limit, so its sampled peak is at most that limit, and lower whenever the climb before the kill is shorter than one sample.
+   One OOM may raise the limit by up to 1.4×, or not at all.</li>
+<li><strong>History is not used until it is confident.</strong> A right-sizing profile applies only once every container has 20 sampled jobs (<code>MinSamplesForDrift</code>); until then the set provisions the template as written.</li>
+<li><strong>A clamp can stop it.</strong> A limit already at the profile's ceiling cannot grow, so the retry would repeat.</li>
+</ol>
+<p>So the retry should not count on the aggregate.
+The AGC SHOULD raise the limit for that job's next attempt from the killed pod's own limit (× the same headroom, clamped to the ceiling) and retry only if that is higher.
+That needs the scale-set assignment to carry enough identity to recognise the re-run, which <code>JobAssigned</code> does (run id and job display name).</p>
+<p><strong>It still masks one thing.</strong> A pull request that doubles a job's memory use would get the memory silently.
+The <code>SizingDrift</code> condition already reports a template below observed peaks, and this class's counter must make each bump visible.</p>
+<h3 id="the-egress-proxy-as-a-failure-sensor">The egress proxy as a failure sensor<a class="headerlink" href="#the-egress-proxy-as-a-failure-sensor" title="Permanent link">&para;</a></h3>
+<p>The repo's own flake record is dominated by outbound fetches failing inside a job step: registry pulls, release-CDN downloads, GitHub API calls (24 platform-caused flakes of 118 read, 2026-10-10).
+Kubernetes objects show none of those.
+GAG's per-tenant egress proxy is on the path of every one of them, which no other GitHub-layer product is, and an operator-supplied proxy under ARC is not joined to the jobs it serves.
+That join, from a proxy event to the job it broke, is what makes the proxy a sensor rather than plumbing.</p>
+<p><strong>What it records today is thin</strong> (read from <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/proxy"><code>cmd/proxy</code></a>, 2026-10-10).
+Its counters (<code>actions_gateway_proxy_dial_errors_total</code>, <code>_connect_denied_total</code>) carry no labels.
+A denial or a failed upstream dial is logged with the host and not the client.
+Per-connection records that name a source, and so a job, exist only when the operator opts into <code>ConnectionsWithSource</code>, and cover accepted connections only (Q986).
+It cannot see an HTTP status inside TLS, so a 403 or 429 from the upstream is invisible, and the proxy must never terminate TLS to see one.</p>
+<p>What it could feed into this feature:</p>
+<table>
+<thead>
+<tr>
+<th>Use</th>
+<th>What the proxy would observe</th>
+<th>Kind</th>
+<th>Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Upstream unreachable during the job</td>
+<td>A dial failure to an allowed destination from this job's worker</td>
+<td>Retry class; GAG can watch it clear, because later dials to the same destination succeed</td>
+<td>Failures attributed to a source</td>
+</tr>
+<tr>
+<td>Destination outage across jobs</td>
+<td>Dial failures to one destination from many workers at once</td>
+<td>Per-destination breaker: hold retries that depend on it until dials succeed</td>
+<td>Failures labelled by destination</td>
+</tr>
+<tr>
+<td>Proxy pool unready or saturated</td>
+<td>Pool readiness, active tunnels against capacity</td>
+<td>Retry class</td>
+<td>Already observable from the pool</td>
+</tr>
+<tr>
+<td>Policy denial</td>
+<td>A <code>destination not allowed</code> refusal from this job's worker</td>
+<td>Futile: a retry is refused the same way. The event names the host and the allowlist change that fixes it</td>
+<td>Denials attributed to a source</td>
+</tr>
+<tr>
+<td>Egress IP refused by GitHub</td>
+<td>The proxy probing an unauthenticated GitHub endpoint from the tenant's egress IP and getting a 403 (the probe #1217 and #1977 built for CI)</td>
+<td>Condition on the set; retries wait until it clears</td>
+<td>A periodic self-probe</td>
+</tr>
+</tbody>
+</table>
+<p>Two constraints shape every row.
+<strong>Attribution is a retention decision.</strong> Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so it needs a security review against <a href="../../design/05-security/">05-security.md</a> before anything ships.
+<strong>Destination labels have bounded cardinality only if they name the allowlist entry that matched</strong>, never the raw host.</p>
+<p><a href="../../queue/Q1178/">Q1178</a> labels the proxy's outcome metrics, <a href="../../queue/Q1184/">Q1184</a> attributes failures to jobs, and the uses beyond retry are non-commitments in <a href="../../design/appendix-g-future-enhancements/#g18-the-egress-proxy-as-a-platform-sensor">G.18</a>.</p>
+<h3 id="unclassified-retry-not-scheduled">Unclassified retry (not scheduled)<a class="headerlink" href="#unclassified-retry-not-scheduled" title="Permanent link">&para;</a></h3>
+<p>A blanket retry of failures nobody classified: the flake retry G.17 sketched.
+It is not scheduled, because <a href="#first-principles">moving the flake away from the author</a> is a cost classified retry does not pay.
+Revive it if detection shows flake toil the classes cannot reach and the maintainer accepts that cost.
+The design if it is revived:</p>
+<ul>
+<li>Off by default, opted in per <code>RunnerSet</code> by its owner, never by anything a workflow emits.</li>
+<li>Only on <code>result == failed</code>; never on succeeded, cancelled or skipped jobs, nor a run a user cancelled.</li>
+<li>One retry per run by default, with its own budget and <code>cause</code>, counted in the same ledger as the classes' budget.</li>
+<li>A set-wide failure-rate breaker and a retry rate cap.</li>
+<li>Scoped by event, defaulting to <code>pull_request</code>, with <code>merge_group</code> an open question (where a flake costs most, and where Mergify declines to retry).</li>
+<li>A retry that passes counts as a detected flake under R1.</li>
+</ul>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<p><strong>In scope:</strong></p>
+<ul>
+<li>Flaky-job detection on the scale-set tier, with the platform context of each failure (R7).</li>
+<li>Classified platform retry on the existing re-run arms, one evidenced class at a time.</li>
+<li>Metrics, Events and a condition for the operator.</li>
+</ul>
+<p><strong>Out of scope, and why:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Out</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The classic tier</td>
+<td>It never receives <code>JobCompleted</code>, and it is terminal</td>
+</tr>
+<tr>
+<td>Unclassified retry</td>
+<td>Not scheduled; its design is kept <a href="#unclassified-retry-not-scheduled">above</a></td>
+</tr>
+<tr>
+<td>Test-level retry or quarantine</td>
+<td>Needs the test framework; Datadog, Trunk and Develocity own that layer</td>
+</tr>
+<tr>
+<td>Classifying from job logs</td>
+<td>R9: a class rests on facts GAG owns</td>
+</tr>
+<tr>
+<td>A signal from inside the job asking for retry</td>
+<td>G.17's channel analysis stands; it gives up the "no workflow edits" property and needs its own design</td>
+</tr>
+<tr>
+<td>Writing back to GitHub (check runs, PR comments)</td>
+<td>Needs new App permissions (R17)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="open-questions-for-the-design-session">Open questions for the design session<a class="headerlink" href="#open-questions-for-the-design-session" title="Permanent link">&para;</a></h2>
+<p><a href="../q555-automatic-recovery-design/">The design</a> recommends an answer to each, marked <strong>Decide</strong> there.</p>
+<ol>
+<li><strong>Where pairing state lives.</strong> In memory loses pairs on restart (R5 accepts the undercount); a ConfigMap is an uncached read-modify-write, like the recovery claims; asking GitHub for the previous attempt's jobs is stateless but costs a call per re-run.</li>
+<li><strong>Run-granular or job-granular re-run.</strong> Both endpoints wait for the run to conclude and both re-run dependents, so timing does not decide it.
+   <code>rerun-failed-jobs</code> re-runs every failed job, plus siblings fail-fast cancelled; <code>jobs/{id}/rerun</code> re-runs one, but needs the job's numeric id, which <code>JobCompleted</code> does not carry (it has a UUID), so it costs a jobs-list call per retry.</li>
+<li><strong>Which candidates can be told apart</strong>, and in what order to measure them.</li>
+<li><strong>Event scope.</strong> The existing arms re-run every event, deploy and publish jobs included.
+   Do new classes inherit that?</li>
+<li><strong>The CRD shape</strong>, via <a href="../../development/api-review/">api-review.md</a>: whether detection or any class needs a field, and whether a class needs a per-set off switch.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

@@ -2745,8 +2745,15 @@ Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits u
 Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
 No pill means no release is decided for that item yet.</p>
 <ul>
-<li><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and the classic acquisition protocol</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q273,Q1167 --> <strong><code>v2.0.0</code></strong> removes all four, plus the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> egress aliases, on clusters whose stored objects have already moved to <code>v2</code>.
-  <code>v1.3.0</code> announced the first three; <code>v2beta1</code> was added 2026-09-08, superseded by GA <code>v2</code>.</li>
+<li>
+<p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <!-- q:Q555,Q1183 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
+  Detection counts flaky jobs per runner set first.
+  Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.</p>
+</li>
+<li>
+<p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and the classic acquisition protocol</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q273,Q1167 --> <strong><code>v2.0.0</code></strong> removes all four, plus the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> egress aliases, on clusters whose stored objects have already moved to <code>v2</code>.
+  <code>v1.3.0</code> announced the first three; <code>v2beta1</code> was added 2026-09-08, superseded by GA <code>v2</code>.</p>
+</li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate.
@@ -2762,11 +2769,6 @@ Each waits on a real operator need, a measured limit, or a gating release before
 <p><strong><a href="../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">Pod-per-step <code>container:</code> and <code>services:</code> without Kata</a></strong> <!-- q:Q998 --> Docker-in-Docker under Kata is the answer today, and Kata needs nested virtualization that GKE Autopilot and most AMD, Arm and GPU instances cannot provide.
   ARC's own mechanism is declined permanently: it needs a Kubernetes API token inside the pod running your workflow.
   A broker-mediated design keeps that invariant, and waits on demand.</p>
-</li>
-<li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></strong> <!-- q:Q555 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
-  Same machinery, opted in per runner set with its own budget so a broken test cannot loop.
-  Waits on detection, which needs a real job outcome.</p>
 </li>
 <li>
 <p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The per-tenant controller runs <a href="../design/02-architecture/">one replica by design</a>: the session registry is in-memory, and HA comes from GitHub redelivering an unacquired job.

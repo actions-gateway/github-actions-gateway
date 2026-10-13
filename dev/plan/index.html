@@ -2912,6 +2912,16 @@ Each has inline ✓ markers per item.</p>
 <td>🚧 In progress — filed 2026-07-25 from the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/811">#811</a> feasibility review. Phase 2 (the port) shipped 2026-07-26 (Q417); Phase 1's baseline benchmark (Q396) and Phase 3's fast release (<a href="../queue/Q418/">Q418</a>) remain</td>
 </tr>
 <tr>
+<td><a href="q555-flaky-job-retry/">q555-flaky-job-retry.md</a></td>
+<td>Flaky-job detection and classified platform retry on the scale-set tier: prior art beyond G.17, a first-principles pass (masking odds, correlated failure, restart-proof budgets), 18 requirements, candidate failure classes and known-futile retries including out-of-memory under right-sizing, and the questions a design session must settle</td>
+<td>ⓘ Draft, 2026-10-10. Finds the job outcome <a href="../queue/Q555/">Q555</a> waited on already arrives as <code>JobCompleted.result</code>; the row is revived on this repo's own CI as the demand, and waits on a dogfood measurement and a design session</td>
+</tr>
+<tr>
+<td><a href="q555-automatic-recovery-design/">q555-automatic-recovery-design.md</a></td>
+<td>The design for the Q555 draft: a per-set failure ledger that pairs failed jobs with later attempts, one run read that enforces a restart-proof budget on <code>run_attempt</code> and the futility checks, retry classes that wait on how their cause clears behind a breaker, a per-job memory floor for out-of-memory under right-sizing, and labelled proxy outcome metrics</td>
+<td>ⓘ Proposed, 2026-10-10. Answers the draft's five open questions with recommendations awaiting sign-off; four protocol and kill-shape facts it rests on are unmeasured</td>
+</tr>
+<tr>
 <td><a href="q501-cancel-relay/">q501-cancel-relay.md</a></td>
 <td>Relaying a run cancelled at GitHub to the worker pod, which the Q459 measurement found nothing does — split into the trigger (how the AGC learns) and the actuator (what it then does)</td>
 <td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../queue/Q501/">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
