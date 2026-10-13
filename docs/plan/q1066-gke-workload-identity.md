@@ -45,7 +45,7 @@ Also considered and declined: Google's generic Kubernetes federation through `st
 
 ## 4. Design
 
-- **API.** `ActionsGateway.spec.registryIdentity`, a string enum `None` | `GKEWorkloadIdentity`, empty meaning `None`, defaulted in the controller.
+- **API.** `ActionsGateway.spec.registryIdentity`, a string enum `None` | `GKEWorkloadIdentity`, defaulted to `None` by the API server (`+kubebuilder:default=None`), and empty treated as `None`.
   It is on the gateway because whether its node pools run Workload Identity is the platform's fact, and it names the method so an ECR value can join it.
   Added identically to `v2alpha1`, `v2beta1` and `v2`, whose conversions are identity round-trips.
 - **GMC.** When set, it passes `AGC_REGISTRY_IDENTITY=GKEWorkloadIdentity` to the AGC and adds one egress rule, `169.254.169.252/32` TCP 988, to the AGC's NetworkPolicy.
@@ -53,7 +53,9 @@ Also considered and declined: Google's generic Kubernetes federation through `st
 - **AGC.** A token source requests `/computeMetadata/v1/instance/service-accounts/default/token` from `http://169.254.169.252:988` with `Metadata-Flavor: Google`, over a client with no proxy, since a proxied AGC would otherwise send the request to the egress proxy.
   The token is fetched per inspection and never logged or stored past it.
 - **Where the token goes.** Only to registries on Artifact Registry hosts (`*-docker.pkg.dev`, `gcr.io`, `*.gcr.io`), as the login `oauth2accesstoken`, and only where no pull Secret supplies a login for that host.
-  A Bearer challenge naming a token realm on another host is refused for this credential, since the AGC's own identity must not reach a host the image reference chose.
+  A request, a Bearer realm or a redirect that would carry this credential off the registry's own host is refused, since the AGC's own identity must not reach a host the image reference chose.
+  The host match accepts only a bare DNS name: review on the PR measured `evil.example#-docker.pkg.dev/…` passing a suffix-only match and sending the token to `evil.example`.
+  A redirect carrying any login is refused off `https`, since Go forwards `Authorization` to the same host whatever the scheme (go1.27.2, pinned by `TestRedirectOffHTTPSDropsTheLogin`).
 - **Failure.** A token fetch that fails degrades to the anonymous read, and a refused read quotes why, as the ServiceAccount read does.
 
 ## 5. Out of scope

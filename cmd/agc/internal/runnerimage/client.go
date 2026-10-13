@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,13 +97,42 @@ func (c *client) do(ctx context.Context, u, accept string) (*http.Response, erro
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
+	if c.cred.identity != "" && (c.token != "" || c.auth) && (req.URL.Scheme != "https" || req.URL.Host != c.ref.apiHost()) {
+		return nil, fmt.Errorf("registry %s: request host %s is not the registry's, and the %s login is presented only to the registry itself", c.ref.Registry, req.URL.Host, c.cred.identity)
+	}
 	switch {
 	case c.token != "":
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	case c.auth:
 		req.SetBasicAuth(c.cred.Username, c.cred.Password)
 	}
-	return c.http.Do(req)
+	hc := *c.http
+	hc.CheckRedirect = c.checkRedirect(c.http.CheckRedirect)
+	return hc.Do(req)
+}
+
+// checkRedirect refuses a redirect that would carry a login off https, or carry
+// the Workload Identity login off the registry's own host. Go forwards
+// Authorization to the same host and its subdomains whatever the scheme (go1.27.2,
+// pinned by TestRedirectOffHTTPSDropsTheLogin).
+func (c *client) checkRedirect(next func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if req.Header.Get("Authorization") != "" {
+			if req.URL.Scheme != "https" {
+				return fmt.Errorf("registry %s: refusing a redirect to %s://%s with the login attached", c.ref.Registry, req.URL.Scheme, req.URL.Host)
+			}
+			if c.cred.identity != "" && req.URL.Host != c.ref.apiHost() {
+				return fmt.Errorf("registry %s: refusing a redirect to %s, since the %s login is presented only to the registry itself", c.ref.Registry, req.URL.Host, c.cred.identity)
+			}
+		}
+		if next != nil {
+			return next(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
 }
 
 // authenticate answers a WWW-Authenticate challenge.

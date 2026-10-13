@@ -2114,7 +2114,7 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
   Anything ending `(as <user>)`, whether `unauthorized after authenticating` or `token exchange with <host>: HTTP <n>`, means a Secret the pod template or the worker ServiceAccount names was read and presented and the registry refused it, so the credential is expired, wrong, or carries no pull scope on that repository: replace it rather than naming another.
   `(as GKE Workload Identity)` is the same refusal of the gateway's own identity: the AGC's ServiceAccount, `<gateway>-agc`, holds no `roles/artifactregistry.reader` on that repository, so grant it there.
   A failure ending `(GKE Workload Identity token unavailable: …)` means the AGC asked the GKE metadata server for a token and got none: `HTTP 404` or a dial timeout usually means the AGC's node pool does not run Workload Identity (`workloadMetadataConfig.mode: GKE_METADATA`), so the read went anonymous.
-  `bearer realm host … is not the registry's` means the registry sent the token exchange to another host, and the AGC refuses to present its own identity there.
+  `bearer realm host … is not the registry's`, `request host … is not the registry's` and `refusing a redirect to <host>, since the GKE Workload Identity login…` mean the registry, or a malformed image reference, would have taken the gateway's own identity to another host, and the AGC refused; check the image reference for anything but a plain host before the first `/`.
   Anything ending `(anonymous)`, and `requires a login and no imagePullSecret names it`, means none was presented, and what to do then turns on whether a `kubernetes.io/dockerconfigjson` Secret exists in the namespace (`kubectl get secrets -n <namespace> --field-selector type=kubernetes.io/dockerconfigjson`).
   If one does, name it in `podTemplate.spec.imagePullSecrets`, or on the worker ServiceAccount when the template names none.
   The template's list replaces the ServiceAccount's rather than adding to it, for the pull as for this read, so a template naming one Secret hides every Secret on the ServiceAccount.
@@ -2126,6 +2126,7 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
   `context deadline exceeded` means one inspection ran past its fifteen-minute budget, which starts once the inspection holds its slot, not while it queues behind another image.
   `carries no bin/Runner.Listener.deps.json` means the image is not `actions/runner`-derived in the expected layout, and no tag can fix that.
   `bearer realm "<url>" is not https` is the one authentication failure the remedy below does not fit: the registry answered the `401` with a Bearer challenge naming a plaintext token endpoint, and the AGC refuses it rather than send the login over it.
+  `refusing a redirect to http://<host> with the login attached` is the same refusal for a redirect.
   The registry is reachable and no tag can change the challenge, so the fix is on the registry: serve the token realm over TLS.
   An internal or air-gapped mirror is where this shows up.
   Where the registry is out of reach or cannot be authenticated to, re-tagging with the runner version the image ships restores the tag verdict, or read what a worker actually ran.

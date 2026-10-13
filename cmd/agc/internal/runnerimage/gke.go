@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -64,9 +65,17 @@ func (g *GKEMetadataToken) Token(ctx context.Context) (string, error) {
 	return body.AccessToken, nil
 }
 
+// dnsName matches a bare lowercase DNS name. A reference's registry is not
+// validated when parsed, so a host like "evil.example#-docker.pkg.dev" ends like
+// Artifact Registry's while a URL built from it dials evil.example.
+var dnsName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
+
 // isArtifactRegistryHost reports whether a registry host is Artifact Registry's,
-// the only hosts a Workload Identity token is presented to. A host carrying a port
-// matches nothing.
+// the only hosts a Workload Identity token is presented to. Anything but a bare
+// DNS name, a port included, matches nothing.
 func isArtifactRegistryHost(host string) bool {
+	if !dnsName.MatchString(host) {
+		return false
+	}
 	return strings.HasSuffix(host, "-docker.pkg.dev") || host == "gcr.io" || strings.HasSuffix(host, ".gcr.io")
 }
