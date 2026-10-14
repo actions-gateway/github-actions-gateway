@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,13 +97,49 @@ func (c *client) do(ctx context.Context, u, accept string) (*http.Response, erro
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
+	if c.cred.identity != "" && (c.token != "" || c.auth) && (req.URL.Scheme != "https" || req.URL.Host != c.ref.apiHost()) {
+		return nil, fmt.Errorf("registry %s: request host %s is not the registry's, and the %s login is presented only to the registry itself", c.ref.Registry, req.URL.Host, c.cred.identity)
+	}
 	switch {
 	case c.token != "":
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	case c.auth:
 		req.SetBasicAuth(c.cred.Username, c.cred.Password)
 	}
-	return c.http.Do(req)
+	return c.send(req)
+}
+
+// send issues a request on a copy of the client that runs checkRedirect, so every
+// request that can carry a login, the token exchange included, is held to it.
+func (c *client) send(req *http.Request) (*http.Response, error) {
+	hc := *c.http
+	hc.CheckRedirect = c.checkRedirect(c.http.CheckRedirect)
+	return hc.Do(req)
+}
+
+// checkRedirect refuses a redirect that would carry a login off https, or carry
+// the Workload Identity login off the registry's own host, which is also the only
+// realm host fetchToken accepts for it. Go forwards
+// Authorization to the same host and its subdomains whatever the scheme (go1.27.2,
+// pinned by TestRedirectOffHTTPSDropsTheLogin).
+func (c *client) checkRedirect(next func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if req.Header.Get("Authorization") != "" {
+			if req.URL.Scheme != "https" {
+				return fmt.Errorf("registry %s: refusing a redirect to %s://%s with the login attached", c.ref.Registry, req.URL.Scheme, req.URL.Host)
+			}
+			if c.cred.identity != "" && req.URL.Host != c.ref.apiHost() {
+				return fmt.Errorf("registry %s: refusing a redirect to %s, since the %s login is presented only to the registry itself", c.ref.Registry, req.URL.Host, c.cred.identity)
+			}
+		}
+		if next != nil {
+			return next(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
 }
 
 // authenticate answers a WWW-Authenticate challenge.
@@ -139,6 +176,9 @@ func (c *client) fetchToken(ctx context.Context, params map[string]string) error
 	if u.Scheme != "https" {
 		return fmt.Errorf("registry %s: bearer realm %q is not https", c.ref.Registry, realm)
 	}
+	if c.cred.identity != "" && u.Host != c.ref.Registry {
+		return fmt.Errorf("registry %s: bearer realm host %s is not the registry's, and the %s token is presented only to the registry itself", c.ref.Registry, u.Host, c.cred.identity)
+	}
 	q := u.Query()
 	if s := params["service"]; s != "" {
 		q.Set("service", s)
@@ -157,7 +197,7 @@ func (c *client) fetchToken(ctx context.Context, params map[string]string) error
 	if c.cred != (Credential{}) {
 		req.SetBasicAuth(c.cred.Username, c.cred.Password)
 	}
-	resp, err := c.http.Do(req)
+	resp, err := c.send(req)
 	if err != nil {
 		return fmt.Errorf("token exchange with %s: %w", u.Host, err)
 	}
@@ -217,6 +257,9 @@ func cutQuotedComma(s string) (string, string) {
 func describeCred(c Credential) string {
 	if c == (Credential{}) {
 		return "anonymous"
+	}
+	if c.identity != "" {
+		return "as " + c.identity
 	}
 	return "as " + c.Username
 }

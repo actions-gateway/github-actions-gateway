@@ -197,6 +197,48 @@ func TestV2_ActionsGateway_CredentialsUnion(t *testing.T) {
 	})
 }
 
+// TestV2_ActionsGateway_RegistryIdentities exercises spec.registryIdentities
+// (Q1066) under the real apiserver: each entry's discriminator must be a known
+// type, and a type whose hosts are fixed may appear once, so two entries can
+// never compete for the same registry.
+func TestV2_ActionsGateway_RegistryIdentities(t *testing.T) {
+	const ns = "v2-ag-registry-identities"
+	createNamespace(t, ns)
+	gke := gmcv2alpha1.RegistryIdentity{Type: gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity}
+
+	t.Run("one GKEWorkloadIdentity entry accepted", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "ri-ok")
+		ag.Spec.RegistryIdentities = []gmcv2alpha1.RegistryIdentity{gke}
+		require.NoError(t, k8sClient.Create(ctx, ag))
+		t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+	})
+
+	t.Run("duplicate GKEWorkloadIdentity rejected", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "ri-dup")
+		ag.Spec.RegistryIdentities = []gmcv2alpha1.RegistryIdentity{gke, gke}
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for a repeated GKEWorkloadIdentity, got %v", err)
+		assert.Contains(t, err.Error(), "at most once")
+	})
+
+	t.Run("missing discriminator rejected", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "ri-no-type")
+		ag.Spec.RegistryIdentities = []gmcv2alpha1.RegistryIdentity{{}}
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for an empty registryIdentities type, got %v", err)
+	})
+
+	t.Run("unknown discriminator rejected", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "ri-bad-type")
+		ag.Spec.RegistryIdentities = []gmcv2alpha1.RegistryIdentity{{Type: "Bogus"}}
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for an unknown registryIdentities type, got %v", err)
+	})
+}
+
 func TestV2_ActionsGateway_NameMaxLengthRejected(t *testing.T) {
 	const ns = "v2-ag-name"
 	createNamespace(t, ns)

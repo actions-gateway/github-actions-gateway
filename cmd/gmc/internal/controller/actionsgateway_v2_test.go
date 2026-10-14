@@ -976,6 +976,21 @@ func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
 		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
 }
 
+// TestBuildAGCDeploymentV2_RegistryIdentity pins both directions of the registry
+// identity opt-in (Q1066): no registryIdentities injects nothing, so an AGC that
+// has not opted in keeps an unchanged pod template, and the listed types reach the
+// AGC in spec order.
+func TestBuildAGCDeploymentV2_RegistryIdentity(t *testing.T) {
+	build := func(identities ...gmcv2alpha1.RegistryIdentity) map[string]string {
+		ag := v2Gateway("gw", "team-a", "github-app", "")
+		ag.Spec.RegistryIdentities = identities
+		return agcEnv(buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))
+	}
+	assert.NotContains(t, build(), "AGC_REGISTRY_IDENTITIES", "no registryIdentities must inject nothing")
+	assert.Equal(t, "GKEWorkloadIdentity",
+		build(gmcv2alpha1.RegistryIdentity{Type: gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity})["AGC_REGISTRY_IDENTITIES"])
+}
+
 // TestEgressAuditAttribution covers all five states of the Q986 pair the
 // EgressAuditUnattributed condition reports (Q1062), including the two half-on ones —
 // each names the half still to turn on, because that is what the operator does next.

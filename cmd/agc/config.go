@@ -24,6 +24,11 @@ type agcConfig struct {
 	// worker-address audit record the GMC threads from
 	// ActionsGateway.spec.auditLogging. Off with the variable absent (Q986).
 	AuditLogging string
+	// RegistryIdentities (AGC_REGISTRY_IDENTITIES, comma-separated types such as
+	// GKEWorkloadIdentity) lists the identities the registry read may present,
+	// threaded from ActionsGateway.spec.registryIdentities in spec order. Empty when
+	// the gateway lists none (Q1066).
+	RegistryIdentities string
 	// PodNamespace (POD_NAMESPACE) scopes the controller cache to the AGC's own
 	// tenant namespace.
 	PodNamespace string
@@ -76,6 +81,7 @@ func loadConfig(getenv func(string) string) agcConfig {
 	return agcConfig{
 		LogLevel:                  getenv("LOG_LEVEL"),
 		AuditLogging:              getenv("AGC_AUDIT_LOGGING"),
+		RegistryIdentities:        getenv("AGC_REGISTRY_IDENTITIES"),
 		PodNamespace:              getenv("POD_NAMESPACE"),
 		GatewayName:               getenv("GATEWAY_NAME"),
 		WorkerServiceAccount:      getenv("WORKER_SERVICE_ACCOUNT"),

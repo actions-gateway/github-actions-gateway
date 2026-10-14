@@ -41,9 +41,9 @@ func TestParseDockerConfigJSON(t *testing.T) {
 		"ghcr.io":{"auth":"Ym90OnMzY3JldA=="},
 		"https://index.docker.io/v1/":{"username":"hub","password":"pw"},
 		"registry.example.com:5000/team":{"auth":"dTpw"}}}`)))
-	assert.Equal(t, Credential{"bot", "s3cret"}, creds["ghcr.io"])
-	assert.Equal(t, Credential{"hub", "pw"}, creds["docker.io"], "the legacy Hub key maps to the registry a reference names")
-	assert.Equal(t, Credential{"u", "p"}, creds["registry.example.com:5000"])
+	assert.Equal(t, Credential{Username: "bot", Password: "s3cret"}, creds["ghcr.io"])
+	assert.Equal(t, Credential{Username: "hub", Password: "pw"}, creds["docker.io"], "the legacy Hub key maps to the registry a reference names")
+	assert.Equal(t, Credential{Username: "u", Password: "p"}, creds["registry.example.com:5000"])
 	_, ok := creds.lookup("quay.io")
 	assert.False(t, ok)
 

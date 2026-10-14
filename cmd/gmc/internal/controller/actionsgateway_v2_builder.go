@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -321,7 +323,44 @@ func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []st
 	if rule, ok := vaultEgressRule(ag); ok {
 		np.Spec.Egress = append(np.Spec.Egress, rule)
 	}
+	if rule, ok := gkeMetadataEgressRule(ag); ok {
+		np.Spec.Egress = append(np.Spec.Egress, rule)
+	}
 	return np
+}
+
+// gkeMetadataCIDR and gkeMetadataPort address the GKE metadata server itself rather
+// than 169.254.169.254:80. A NetworkPolicy is evaluated against the address the pod
+// dials, before GKE redirects 169.254.169.254:80 to this server (measured on GKE
+// 1.35.8 under Dataplane V2, docs/design/05-security.md, Q1066), so
+// admitting only this destination leaves the Compute Engine metadata server, and the
+// node credentials it serves on a pool without Workload Identity, unreachable.
+const (
+	gkeMetadataCIDR = "169.254.169.252/32"
+	gkeMetadataPort = 988
+)
+
+// registryIdentityTypes lists the gateway's registry identity methods in spec
+// order, empty when it has opted into none.
+func registryIdentityTypes(ag *gmcv2alpha1.ActionsGateway) []string {
+	var types []string
+	for _, e := range ag.Spec.RegistryIdentities {
+		types = append(types, string(e.Type))
+	}
+	return types
+}
+
+// gkeMetadataEgressRule admits the AGC to the GKE metadata server when the gateway
+// opts into presenting its Workload Identity to Artifact Registry (Q1066).
+func gkeMetadataEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
+	if !slices.Contains(registryIdentityTypes(ag), string(gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity)) {
+		return networkingv1.NetworkPolicyEgressRule{}, false
+	}
+	tcp := corev1.ProtocolTCP
+	return networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcp, Port: ptr(intstr.FromInt32(gkeMetadataPort))}},
+		To:    []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: gkeMetadataCIDR}}},
+	}, true
 }
 
 // remoteProxyEgressRules permits egress to the EgressProxy pools that another
@@ -541,6 +580,11 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 	// does.
 	if ag.Spec.GitHubCABundleRef != nil {
 		env = append(env, corev1.EnvVar{Name: "GITHUB_CA_CONFIGMAP_NAME", Value: ag.Spec.GitHubCABundleRef.Name})
+	}
+	// Registry identity (Q1066). Injected only when opted in, for the same reason
+	// AGC_AUDIT_LOGGING is: an unchanged gateway keeps an unchanged pod template.
+	if types := registryIdentityTypes(ag); len(types) > 0 {
+		env = append(env, corev1.EnvVar{Name: "AGC_REGISTRY_IDENTITIES", Value: strings.Join(types, ",")})
 	}
 	// Credential method (Q196/Q197/Q201). GitHubApp threads no extra env (the AGC
 	// reads the mounted Secret files); WorkloadIdentity threads the non-secret signer

@@ -315,8 +315,8 @@ Three properties bound what the read can cost or leak:
 - **No new credential surface.** The only login the AGC presents is a `kubernetes.io/dockerconfigjson` Secret the pod template's `imagePullSecrets` names, or the worker ServiceAccount's when the template names none, read through the `get` on Secrets the tenant Role already grants; it is the set ServiceAccount admission puts on the worker pod, so the credential kubelet reads for the same pull.
   Reading the ServiceAccount takes a `get` on `serviceaccounts` in the tenant namespace (Q1066), with no `list`, `watch` or write: the AGC can read one named ServiceAccount's Secret references and can neither enumerate ServiceAccounts nor change which Secrets one carries, and every Secret it could reach that way it could already `get` by name.
   The password is never logged or reported; the username reaches the condition message and the warning log when a read fails, so an operator can tell which login was refused.
-  A Bearer challenge's realm must be `https`, since the login rides on that exchange.
-  Node-identity registries are out of reach by construction ([Q1066](../queue/Q1066.md)).
+  A Bearer challenge's realm must be `https`, since the login rides on that exchange, and a redirect that would carry a login off `https` is refused.
+  The one exception is an opt-in: the AGC's own GKE Workload Identity, presented only to Artifact Registry ([below](#the-gke-workload-identity-opt-in-admits-one-metadata-address)); ECR under the node role is out of reach ([Q1066](../queue/Q1066.md)).
 - **Bounded by the AGC, not the image.** A tenant image is untrusted input to the scan, so the stream is capped at 2 GiB of compressed layer bytes, the manifest read at 4 MiB, the dependency file at 4 MiB, and one inspection at fifteen minutes; inspections run one at a time and never touch disk.
   The official image costs about 114 MB per digest per AGC process (measured 2026-09-07): a digest-addressed reference is never re-read, and a tag-addressed one has its manifest re-fetched hourly and its layers streamed again only when the digest moved.
   What reaches the condition message is capped at the resolver boundary, so a hostile image or registry cannot push a status write past the 32 KiB a condition message admits.
@@ -344,6 +344,21 @@ Trading reach for a better diagnostic is the wrong way round for a default, so t
 
 The middle one is the shape to be most careful with: it reads as the convenient default and is the only one that hands the reach decision to the party the scoping is meant to contain.
 Whichever is chosen, it is an explicit opt-in on a policy that is otherwise closed, never a relaxation of the default.
+
+#### The GKE Workload Identity opt-in admits one metadata address
+
+A `GKEWorkloadIdentity` entry in `ActionsGateway.spec.registryIdentities` has the AGC fetch an access token for its own Workload Identity and present it to Artifact Registry where no pull Secret supplies a login (Q1066).
+It defaults to `None`, and it is the one place the generated policies name a metadata address.
+
+- **The AGC dials the GKE metadata server, `169.254.169.252:988`, and its policy admits that `/32` on TCP 988 and nothing else on link-local beyond DNS.** A NetworkPolicy is evaluated against the address a pod dials, before GKE redirects `169.254.169.254:80` to that server, so admitting `.252:988` does not reach the Compute Engine metadata server; measured on GKE 1.35.8 under Dataplane V2 ([the probe](../plan/q1066-gke-workload-identity.md#2-what-the-dogfood-probe-measured)).
+  The standard address was declined because of which way each fails: on a node pool without Workload Identity, `169.254.169.254:80` serves the node's own service-account token, while `.252:988` should have nothing listening, so the read fails and the verdict falls back to the tag.
+  That second half is unmeasured, and the address is a GKE implementation detail rather than a documented API; a GKE change that moves it degrades the read the same way.
+- **Worker and proxy policies are unchanged** and still admit no metadata address, so `TestBuildNetworkPolicy_DeniesCloudMetadataServer` keeps covering every policy, the opted-in AGC's included.
+- **The token reaches only Artifact Registry hosts** (`*-docker.pkg.dev`, `gcr.io`, `*.gcr.io`), and only the registry's own host, since the tenant's image reference chooses the registry.
+  The host must be a bare DNS name, because a reference's registry is not otherwise validated and `evil.example#-docker.pkg.dev` ends like Artifact Registry's while a URL built from it dials `evil.example`.
+  A request, a Bearer realm or a redirect that would carry the login to any other host is refused, independently of that match.
+  It is fetched per inspection and never logged or stored.
+- **What the identity can read is the operator's grant.** The AGC reports only the runner version, digest and platform it reads, but a grant shared across gateways lets one tenant's image reference learn those of an image another tenant's grant covers, so grant `roles/artifactregistry.reader` per gateway, on the repositories that gateway's images use.
 
 ### Proxy egress audit record
 
@@ -749,7 +764,7 @@ Escaping the container is no longer a path to the node, but minting node credent
 Kata must therefore be paired with a metadata control (GKE Workload Identity, AWS IMDSv2 hop-limit 1, or a NetworkPolicy denying `169.254.169.254/32`) and `automountServiceAccountToken: false` — which the AGC already sets unconditionally on worker pods.
 
 On a cluster with a policy-enforcing CNI, the tenant policies this system generates already supply that NetworkPolicy leg, though not in the shape the sentence above implies.
-NetworkPolicy is allowlist-only and has no deny primitive, so nothing here names the metadata address.
+NetworkPolicy is allowlist-only and has no deny primitive, so nothing here names the metadata address (the one exception is an opted-in AGC's `169.254.169.252:988`, [above](#the-gke-workload-identity-opt-in-admits-one-metadata-address), and no worker policy carries it).
 The address falls inside the link-local block `169.254.0.0/16` that the DNS rule admits for NodeLocal DNSCache (§H.5), and what keeps the metadata server out is that this rule is scoped to port 53, which the metadata service does not serve.
 Widening that rule's ports, or adding any egress rule with an empty `to`, hands a worker pod the node's cloud credentials.
 Both halves are now tested: `TestBuildNetworkPolicy_DeniesCloudMetadataServer` pins the authored policy on every PR, and `E2E_V2_DirectEgress_MetadataServerBlocked` proves a real CNI honours the port scoping on the Calico lane (Q716).
