@@ -174,23 +174,13 @@ type ActionsGatewaySpec struct {
 
 	// RegistryIdentity selects a cloud identity this tenant's AGC presents to the
 	// worker image's registry for the runner-version read behind
-	// RunnerVersionTooOld (Q1066). None (the default) presents only the
+	// RunnerVersionTooOld (Q1066). Absent, the AGC presents only the
 	// imagePullSecrets the pod template or the worker ServiceAccount names.
-	//
-	// GKEWorkloadIdentity presents an access token for the AGC's own Workload
-	// Identity to Artifact Registry hosts (*-docker.pkg.dev, gcr.io, *.gcr.io) where
-	// no pull Secret supplies a login. The GMC admits the AGC's egress to the GKE
-	// metadata server at 169.254.169.252:988 and nothing else on link-local, so a
-	// node pool without Workload Identity yields no token rather than the node's.
-	// It needs Workload Identity on the AGC's node pool and an IAM grant of
-	// roles/artifactregistry.reader to the AGC's Kubernetes ServiceAccount.
 	//
 	// Changing it is a rolling restart of the AGC, not a hot reload.
 	//
 	// +optional
-	// +kubebuilder:validation:Enum=None;GKEWorkloadIdentity
-	// +kubebuilder:default=None
-	RegistryIdentity string `json:"registryIdentity,omitempty"`
+	RegistryIdentity *RegistryIdentity `json:"registryIdentity,omitempty"`
 
 	// Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's
 	// AGC. Tracing stays off unless tracing.endpoint is set.
@@ -216,14 +206,42 @@ type ActionsGatewaySpec struct {
 	ClusterCapacity *ClusterCapacity `json:"clusterCapacity,omitempty"`
 }
 
-// Registry identities, selectable via ActionsGatewaySpec.RegistryIdentity (Q1066).
+// RegistryIdentityType is the discriminator of the RegistryIdentity union: it names
+// the method by which the AGC obtains a registry login from its own identity. Each
+// value names both where the credential comes from and which registry accepts it,
+// because the two are fixed together for a cloud's native identity.
+//
+// +kubebuilder:validation:Enum=GKEWorkloadIdentity
+type RegistryIdentityType string
+
 const (
-	// RegistryIdentityNone presents no cloud identity to a registry.
-	RegistryIdentityNone = "None"
 	// RegistryIdentityGKEWorkloadIdentity presents the AGC's GKE Workload Identity
 	// to Artifact Registry hosts.
-	RegistryIdentityGKEWorkloadIdentity = "GKEWorkloadIdentity"
+	RegistryIdentityGKEWorkloadIdentity RegistryIdentityType = "GKEWorkloadIdentity"
 )
+
+// RegistryIdentity is the discriminated union of registry identity methods (Q1066).
+// Type is the explicit discriminator; a method that takes parameters joins as a
+// value plus a pointer member set iff Type names it, enforced by one per-member CEL
+// iff rule as on GitHubCredentials. The union shape exists so a method needing
+// parameters (an IAM role, a client ID, a SPIFFE exchange) adds without reshaping
+// the spec.
+type RegistryIdentity struct {
+	// Type selects the identity method (the union discriminator).
+	//
+	// GKEWorkloadIdentity takes no parameters. It presents an access token for the
+	// AGC's own Workload Identity to Artifact Registry hosts (*-docker.pkg.dev,
+	// gcr.io, *.gcr.io) where no pull Secret supplies a login. The GMC admits the
+	// AGC's egress to the GKE metadata server at 169.254.169.252:988 and nothing
+	// else on link-local, so a node pool without Workload Identity yields no token
+	// rather than the node's. It needs Workload Identity on the AGC's node pool and
+	// an IAM grant of roles/artifactregistry.reader to the AGC's Kubernetes
+	// ServiceAccount.
+	//
+	// +unionDiscriminator
+	// +kubebuilder:validation:Required
+	Type RegistryIdentityType `json:"type"`
+}
 
 // Node-autoscaler presence, selectable via ClusterCapacity.NodeAutoscaling (Q470).
 const (

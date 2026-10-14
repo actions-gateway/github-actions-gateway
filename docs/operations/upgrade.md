@@ -187,8 +187,8 @@ Rolling back further is not: a release that does not serve `v2` cannot read an o
 
 **Who is affected:** nobody until it is set.
 
-The new field defaults to `None`, which changes nothing: no AGC env, no NetworkPolicy rule, and an unchanged AGC pod template, so upgrading does not roll any AGC.
-Setting it to `GKEWorkloadIdentity` has the registry read behind `RunnerVersionTooOld` present the AGC's own Workload Identity to Artifact Registry where no pull Secret covers the host (Q1066), and adds one egress rule to that gateway's AGC NetworkPolicy, `169.254.169.252/32` on TCP 988.
+The new field is absent unless set, which changes nothing: no AGC env, no NetworkPolicy rule, and an unchanged AGC pod template, so upgrading does not roll any AGC.
+Setting `registryIdentity.type: GKEWorkloadIdentity` has the registry read behind `RunnerVersionTooOld` present the AGC's own Workload Identity to Artifact Registry where no pull Secret covers the host (Q1066), and adds one egress rule to that gateway's AGC NetworkPolicy, `169.254.169.252/32` on TCP 988.
 It needs Workload Identity on the AGC's node pool and a `roles/artifactregistry.reader` grant to `<gateway>-agc`; the steps are in [tenant onboarding](tenant-onboarding.md#step-2-create-the-actionsgateway-resource).
 
 **Rolling back** to a release without the field is safe: the older GMC ignores it and rebuilds the AGC's NetworkPolicy without the rule, and the read goes back to pull Secrets alone.

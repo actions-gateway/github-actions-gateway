@@ -45,8 +45,10 @@ Also considered and declined: Google's generic Kubernetes federation through `st
 
 ## 4. Design
 
-- **API.** `ActionsGateway.spec.registryIdentity`, a string enum `None` | `GKEWorkloadIdentity`, defaulted to `None` by the API server (`+kubebuilder:default=None`), and empty treated as `None`.
-  It is on the gateway because whether its node pools run Workload Identity is the platform's fact, and it names the method so an ECR value can join it.
+- **API.** `ActionsGateway.spec.registryIdentity`, an optional discriminated union whose required `type` is `GKEWorkloadIdentity`; absent means no cloud identity.
+  It was first a string enum, and was reshaped before release (decided 2026-10-13 by the maintainer) because the next methods take parameters a bare value cannot carry: an IRSA role ARN, an Azure client ID, a SPIFFE exchange target.
+  Each joins as a type plus a pointer member under a per-member CEL iff rule, the `GitHubCredentials` pattern.
+  It is on the gateway because whether its node pools run Workload Identity is the platform's fact, and it names the method so an ECR type can join it.
   Added identically to `v2alpha1`, `v2beta1` and `v2`, whose conversions are identity round-trips.
 - **GMC.** When set, it passes `AGC_REGISTRY_IDENTITY=GKEWorkloadIdentity` to the AGC and adds one egress rule, `169.254.169.252/32` TCP 988, to the AGC's NetworkPolicy.
   No other policy changes; worker and proxy policies keep denying the metadata server.

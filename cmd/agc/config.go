@@ -26,7 +26,7 @@ type agcConfig struct {
 	AuditLogging string
 	// RegistryIdentity (AGC_REGISTRY_IDENTITY, GKEWorkloadIdentity) selects the cloud
 	// identity the registry read presents, threaded from
-	// ActionsGateway.spec.registryIdentity. None with the variable absent (Q1066).
+	// ActionsGateway.spec.registryIdentity.type. Absent when the gateway sets none (Q1066).
 	RegistryIdentity string
 	// PodNamespace (POD_NAMESPACE) scopes the controller cache to the AGC's own
 	// tenant namespace.

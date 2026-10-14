@@ -890,7 +890,7 @@ func workerUsageSampleInterval(v string) (interval time.Duration, enabled bool, 
 // Pull secrets are read through the uncached reader, since the AGC deliberately runs
 // no Secret informer (the tenant Role omits watch). The worker ServiceAccount is read
 // the same way, under the tenant Role's get-only serviceaccounts grant (Q1066).
-// registryIdentity GKEWorkloadIdentity adds the AGC's own Workload Identity token,
+// registryIdentity type GKEWorkloadIdentity adds the AGC's own Workload Identity token,
 // fetched over a proxy-less client since the metadata server is node-local.
 func setupRunnerImageResolver(mgr ctrl.Manager, namespace, workerSA, registryIdentity string) (*runnerimage.Resolver, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -928,7 +928,7 @@ func setupRunnerImageResolver(mgr ctrl.Manager, namespace, workerSA, registryIde
 			return names, nil
 		}
 	}
-	if registryIdentity == agcv2alpha1.RegistryIdentityGKEWorkloadIdentity {
+	if registryIdentity == string(agcv2alpha1.RegistryIdentityGKEWorkloadIdentity) {
 		src := &runnerimage.GKEMetadataToken{HTTP: &http.Client{Transport: &http.Transport{}, Timeout: 10 * time.Second}}
 		r.WorkloadIdentityToken = src.Token
 	}

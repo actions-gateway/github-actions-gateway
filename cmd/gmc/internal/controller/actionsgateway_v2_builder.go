@@ -338,10 +338,19 @@ const (
 	gkeMetadataPort = 988
 )
 
+// registryIdentityType is the gateway's registry identity method, empty when it
+// has opted into none.
+func registryIdentityType(ag *gmcv2alpha1.ActionsGateway) gmcv2alpha1.RegistryIdentityType {
+	if ag.Spec.RegistryIdentity == nil {
+		return ""
+	}
+	return ag.Spec.RegistryIdentity.Type
+}
+
 // gkeMetadataEgressRule admits the AGC to the GKE metadata server when the gateway
 // opts into presenting its Workload Identity to Artifact Registry (Q1066).
 func gkeMetadataEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
-	if ag.Spec.RegistryIdentity != gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity {
+	if registryIdentityType(ag) != gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity {
 		return networkingv1.NetworkPolicyEgressRule{}, false
 	}
 	tcp := corev1.ProtocolTCP
@@ -571,8 +580,8 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 	}
 	// Registry identity (Q1066). Injected only when opted in, for the same reason
 	// AGC_AUDIT_LOGGING is: an unchanged gateway keeps an unchanged pod template.
-	if ag.Spec.RegistryIdentity == gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity {
-		env = append(env, corev1.EnvVar{Name: "AGC_REGISTRY_IDENTITY", Value: ag.Spec.RegistryIdentity})
+	if t := registryIdentityType(ag); t != "" {
+		env = append(env, corev1.EnvVar{Name: "AGC_REGISTRY_IDENTITY", Value: string(t)})
 	}
 	// Credential method (Q196/Q197/Q201). GitHubApp threads no extra env (the AGC
 	// reads the mounted Secret files); WorkloadIdentity threads the non-secret signer

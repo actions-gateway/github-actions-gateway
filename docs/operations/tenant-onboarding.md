@@ -554,7 +554,14 @@ A digest-only or custom tag is no longer unchecked: the registry read reaches it
 The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` gives a verdict from the tag while the read runs and from the image once it lands.
 A private registry needs its `kubernetes.io/dockerconfigjson` Secret named in the pod template's `imagePullSecrets`, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; the AGC reads those Secrets to log in for this check and never stores or copies them; an ECR registry kubelet reaches through the node's role is not one the AGC can log in to ([Q1066](../queue/Q1066.md)).
 
-**An Artifact Registry repository with no pull Secret, on GKE.** Set `spec.registryIdentity: GKEWorkloadIdentity` on the `ActionsGateway`, and the AGC presents an access token for its own Workload Identity to Artifact Registry hosts (`*-docker.pkg.dev`, `gcr.io`, `*.gcr.io`) where no pull Secret supplies a login.
+**An Artifact Registry repository with no pull Secret, on GKE.** Set `spec.registryIdentity.type: GKEWorkloadIdentity` on the `ActionsGateway`, and the AGC presents an access token for its own Workload Identity to Artifact Registry hosts (`*-docker.pkg.dev`, `gcr.io`, `*.gcr.io`) where no pull Secret supplies a login:
+
+```yaml
+spec:
+  registryIdentity:
+    type: GKEWorkloadIdentity
+```
+
 It needs two things the platform sets up:
 
 - **Workload Identity on the AGC's node pool** (`workloadMetadataConfig.mode: GKE_METADATA`).

@@ -651,26 +651,32 @@ spec:
                 - debug
                 type: string
               registryIdentity:
-                default: None
                 description: |-
                   RegistryIdentity selects a cloud identity this tenant's AGC presents to the
                   worker image's registry for the runner-version read behind
-                  RunnerVersionTooOld (Q1066). None (the default) presents only the
+                  RunnerVersionTooOld (Q1066). Absent, the AGC presents only the
                   imagePullSecrets the pod template or the worker ServiceAccount names.
 
-                  GKEWorkloadIdentity presents an access token for the AGC's own Workload
-                  Identity to Artifact Registry hosts (*-docker.pkg.dev, gcr.io, *.gcr.io) where
-                  no pull Secret supplies a login. The GMC admits the AGC's egress to the GKE
-                  metadata server at 169.254.169.252:988 and nothing else on link-local, so a
-                  node pool without Workload Identity yields no token rather than the node's.
-                  It needs Workload Identity on the AGC's node pool and an IAM grant of
-                  roles/artifactregistry.reader to the AGC's Kubernetes ServiceAccount.
-
                   Changing it is a rolling restart of the AGC, not a hot reload.
-                enum:
-                - None
-                - GKEWorkloadIdentity
-                type: string
+                properties:
+                  type:
+                    description: |-
+                      Type selects the identity method (the union discriminator).
+
+                      GKEWorkloadIdentity takes no parameters. It presents an access token for the
+                      AGC's own Workload Identity to Artifact Registry hosts (*-docker.pkg.dev,
+                      gcr.io, *.gcr.io) where no pull Secret supplies a login. The GMC admits the
+                      AGC's egress to the GKE metadata server at 169.254.169.252:988 and nothing
+                      else on link-local, so a node pool without Workload Identity yields no token
+                      rather than the node's. It needs Workload Identity on the AGC's node pool and
+                      an IAM grant of roles/artifactregistry.reader to the AGC's Kubernetes
+                      ServiceAccount.
+                    enum:
+                    - GKEWorkloadIdentity
+                    type: string
+                required:
+                - type
+                type: object
               scheduling:
                 description: |-
                   Scheduling places this gateway's AGC control-plane pod on specific nodes — for
@@ -2677,26 +2683,32 @@ spec:
                 - debug
                 type: string
               registryIdentity:
-                default: None
                 description: |-
                   RegistryIdentity selects a cloud identity this tenant's AGC presents to the
                   worker image's registry for the runner-version read behind
-                  RunnerVersionTooOld (Q1066). None (the default) presents only the
+                  RunnerVersionTooOld (Q1066). Absent, the AGC presents only the
                   imagePullSecrets the pod template or the worker ServiceAccount names.
 
-                  GKEWorkloadIdentity presents an access token for the AGC's own Workload
-                  Identity to Artifact Registry hosts (*-docker.pkg.dev, gcr.io, *.gcr.io) where
-                  no pull Secret supplies a login. The GMC admits the AGC's egress to the GKE
-                  metadata server at 169.254.169.252:988 and nothing else on link-local, so a
-                  node pool without Workload Identity yields no token rather than the node's.
-                  It needs Workload Identity on the AGC's node pool and an IAM grant of
-                  roles/artifactregistry.reader to the AGC's Kubernetes ServiceAccount.
-
                   Changing it is a rolling restart of the AGC, not a hot reload.
-                enum:
-                - None
-                - GKEWorkloadIdentity
-                type: string
+                properties:
+                  type:
+                    description: |-
+                      Type selects the identity method (the union discriminator).
+
+                      GKEWorkloadIdentity takes no parameters. It presents an access token for the
+                      AGC's own Workload Identity to Artifact Registry hosts (*-docker.pkg.dev,
+                      gcr.io, *.gcr.io) where no pull Secret supplies a login. The GMC admits the
+                      AGC's egress to the GKE metadata server at 169.254.169.252:988 and nothing
+                      else on link-local, so a node pool without Workload Identity yields no token
+                      rather than the node's. It needs Workload Identity on the AGC's node pool and
+                      an IAM grant of roles/artifactregistry.reader to the AGC's Kubernetes
+                      ServiceAccount.
+                    enum:
+                    - GKEWorkloadIdentity
+                    type: string
+                required:
+                - type
+                type: object
               scheduling:
                 description: |-
                   Scheduling places this gateway's AGC control-plane pod on specific nodes — for
@@ -4699,26 +4711,32 @@ spec:
                 - debug
                 type: string
               registryIdentity:
-                default: None
                 description: |-
                   RegistryIdentity selects a cloud identity this tenant's AGC presents to the
                   worker image's registry for the runner-version read behind
-                  RunnerVersionTooOld (Q1066). None (the default) presents only the
+                  RunnerVersionTooOld (Q1066). Absent, the AGC presents only the
                   imagePullSecrets the pod template or the worker ServiceAccount names.
 
-                  GKEWorkloadIdentity presents an access token for the AGC's own Workload
-                  Identity to Artifact Registry hosts (*-docker.pkg.dev, gcr.io, *.gcr.io) where
-                  no pull Secret supplies a login. The GMC admits the AGC's egress to the GKE
-                  metadata server at 169.254.169.252:988 and nothing else on link-local, so a
-                  node pool without Workload Identity yields no token rather than the node's.
-                  It needs Workload Identity on the AGC's node pool and an IAM grant of
-                  roles/artifactregistry.reader to the AGC's Kubernetes ServiceAccount.
-
                   Changing it is a rolling restart of the AGC, not a hot reload.
-                enum:
-                - None
-                - GKEWorkloadIdentity
-                type: string
+                properties:
+                  type:
+                    description: |-
+                      Type selects the identity method (the union discriminator).
+
+                      GKEWorkloadIdentity takes no parameters. It presents an access token for the
+                      AGC's own Workload Identity to Artifact Registry hosts (*-docker.pkg.dev,
+                      gcr.io, *.gcr.io) where no pull Secret supplies a login. The GMC admits the
+                      AGC's egress to the GKE metadata server at 169.254.169.252:988 and nothing
+                      else on link-local, so a node pool without Workload Identity yields no token
+                      rather than the node's. It needs Workload Identity on the AGC's node pool and
+                      an IAM grant of roles/artifactregistry.reader to the AGC's Kubernetes
+                      ServiceAccount.
+                    enum:
+                    - GKEWorkloadIdentity
+                    type: string
+                required:
+                - type
+                type: object
               scheduling:
                 description: |-
                   Scheduling places this gateway's AGC control-plane pod on specific nodes — for
