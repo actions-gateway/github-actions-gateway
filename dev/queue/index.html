@@ -4085,6 +4085,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>The same retry schedule is written out four times: base delay doubled after each sleep, capped, plus up to half again in jitter.</td>
 </tr>
+<tr>
+<td><a href="Q1189/">Q1189</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">Backport candidates run gate legs their release line never had</a></td>
+<td><code>ci</code> <code>dogfood</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>validate-candidate.yml</code> always runs main's <code>validate-release.sh</code>, and with <code>legs</code> empty it runs every leg in main's <code>GATE_LEGS_ALL</code> …</td>
+</tr>
 </tbody>
 </table>
 
