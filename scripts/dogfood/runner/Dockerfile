@@ -39,7 +39,7 @@
 # the root Dockerfile's worker stage and cmd/agc/names (RunnerVersion / WorkerImageDigest) so
 # the dogfood runs the same runner the AGC would otherwise gap-fill. Bump it in
 # lockstep with those when the runner version moves.
-FROM ghcr.io/actions/actions-runner:2.337.0@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4
+FROM ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
 # apt runs as root, then the image drops back to the non-root runner user.
 # DL3066 wants a numeric user-id; `USER 0` names the same user less clearly.
 # hadolint ignore=DL3066
