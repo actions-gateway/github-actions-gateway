@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -338,19 +340,20 @@ const (
 	gkeMetadataPort = 988
 )
 
-// registryIdentityType is the gateway's registry identity method, empty when it
-// has opted into none.
-func registryIdentityType(ag *gmcv2alpha1.ActionsGateway) gmcv2alpha1.RegistryIdentityType {
-	if ag.Spec.RegistryIdentity == nil {
-		return ""
+// registryIdentityTypes lists the gateway's registry identity methods in spec
+// order, empty when it has opted into none.
+func registryIdentityTypes(ag *gmcv2alpha1.ActionsGateway) []string {
+	var types []string
+	for _, e := range ag.Spec.RegistryIdentities {
+		types = append(types, string(e.Type))
 	}
-	return ag.Spec.RegistryIdentity.Type
+	return types
 }
 
 // gkeMetadataEgressRule admits the AGC to the GKE metadata server when the gateway
 // opts into presenting its Workload Identity to Artifact Registry (Q1066).
 func gkeMetadataEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
-	if registryIdentityType(ag) != gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity {
+	if !slices.Contains(registryIdentityTypes(ag), string(gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity)) {
 		return networkingv1.NetworkPolicyEgressRule{}, false
 	}
 	tcp := corev1.ProtocolTCP
@@ -580,8 +583,8 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 	}
 	// Registry identity (Q1066). Injected only when opted in, for the same reason
 	// AGC_AUDIT_LOGGING is: an unchanged gateway keeps an unchanged pod template.
-	if t := registryIdentityType(ag); t != "" {
-		env = append(env, corev1.EnvVar{Name: "AGC_REGISTRY_IDENTITY", Value: string(t)})
+	if types := registryIdentityTypes(ag); len(types) > 0 {
+		env = append(env, corev1.EnvVar{Name: "AGC_REGISTRY_IDENTITIES", Value: strings.Join(types, ",")})
 	}
 	// Credential method (Q196/Q197/Q201). GitHubApp threads no extra env (the AGC
 	// reads the mounted Secret files); WorkloadIdentity threads the non-secret signer

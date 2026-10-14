@@ -163,7 +163,7 @@ _Appears in:_
 | `agcAutoscaling` _[AGCVerticalAutoscaling](#agcverticalautoscaling)_ | AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC Deployment so the autoscaler observes actual usage and sizes the container's resource *requests* for it. Unset (the default) ⇒ no VerticalPodAutoscaler is created and any one the GMC previously stamped is deleted, so the opt-in is off by default and fully reversible.<br />It composes with — it does not replace — agcResources. See AGCVerticalAutoscaling for the precedence rules and the behavior when the VerticalPodAutoscaler CRD is not installed in the cluster. |  | Optional: \{\} |
 | `logLevel` _string_ | LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info (default), debug. Changing it is a rolling restart of the AGC, not a hot reload. Use debug only for a bug repro. | info | Enum: [info debug]<br />Optional: \{\} |
 | `auditLogging` _string_ | AuditLogging selects the worker-address audit record this tenant's AGC writes to its log stream. Off (the default) writes none. WorkerAddresses writes one structured line when a worker pod's address is first observed and one when the pod goes away, each carrying the pod's namespace, its address, and the GitHub run ID and repository of the job it runs.<br />Its only purpose is to make the proxy's per-connection audit record attributable. That record names a destination and, under EgressProxy.spec.auditLogging: ConnectionsWithSource, a source address; this one says which tenant and which job held that address, and names no destination itself. Neither is a movement log alone, the join of the two is, so each half is opted into separately and both default off. Enabling this without the proxy half records addresses nothing ever asks about (Q986).<br />It is written at info, so it never depends on logLevel: debug, and debug adds no field to it. Two lines per worker pod, which is why it is opt-in rather than a widening of the per-pod lines the AGC already writes at debug.<br />Changing it is a rolling restart of the AGC, not a hot reload, the same as logLevel. | Off | Enum: [Off WorkerAddresses]<br />Optional: \{\} |
-| `registryIdentity` _[RegistryIdentity](#registryidentity)_ | RegistryIdentity selects a cloud identity this tenant's AGC presents to the worker image's registry for the runner-version read behind RunnerVersionTooOld (Q1066). Absent, the AGC presents only the imagePullSecrets the pod template or the worker ServiceAccount names.<br />Changing it is a rolling restart of the AGC, not a hot reload. |  | Optional: \{\} |
+| `registryIdentities` _[RegistryIdentity](#registryidentity) array_ | RegistryIdentities lists the identities this tenant's AGC may present to a worker image's registry for the runner-version read behind RunnerVersionTooOld (Q1066). Empty, the AGC presents only the imagePullSecrets the pod template or the worker ServiceAccount names.<br />Each entry covers the registry hosts its type names. A pull Secret for a host wins over every entry, and among entries the first that covers the image's registry host applies. A type whose hosts are fixed, such as GKEWorkloadIdentity, may appear once.<br />Changing it is a rolling restart of the AGC, not a hot reload. |  | MaxItems: 8<br />Optional: \{\} |
 | `tracing` _[TracingConfig](#tracingconfig)_ | Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's AGC. Tracing stays off unless tracing.endpoint is set. |  | Optional: \{\} |
 | `scheduling` _[PodScheduling](#podscheduling)_ | Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in affinity, so the block applies verbatim. See PodScheduling. |  | Optional: \{\} |
 | `clusterCapacity` _[ClusterCapacity](#clustercapacity)_ | ClusterCapacity states facts about the cluster this gateway runs in that the AGC cannot safely determine for itself (Q470). It is platform-operator knowledge, not tenant knowledge, which is why it lives here rather than on the RunnerSets that consume it. |  | Optional: \{\} |
@@ -815,12 +815,14 @@ _Appears in:_
 
 
 
-RegistryIdentity is the discriminated union of registry identity methods (Q1066).
-Type is the explicit discriminator; a method that takes parameters joins as a
-value plus a pointer member set iff Type names it, enforced by one per-member CEL
-iff rule as on GitHubCredentials. The union shape exists so a method needing
-parameters (an IAM role, a client ID, a SPIFFE exchange) adds without reshaping
-the spec.
+RegistryIdentity is one entry of ActionsGatewaySpec.RegistryIdentities: a
+discriminated union of registry identity methods (Q1066). Type is the explicit
+discriminator; a method that takes parameters joins as a value plus a pointer
+member set iff Type names it, enforced by one per-member CEL iff rule as on
+GitHubCredentials. A method whose hosts the operator names (an on-premises
+registry federating the cluster's ServiceAccount tokens, a neocloud issuer, a
+SPIFFE exchange) carries them in its member. The list and the union together
+let such methods join, and coexist on one gateway, without reshaping the spec.
 
 
 
@@ -839,7 +841,8 @@ _Underlying type:_ _string_
 RegistryIdentityType is the discriminator of the RegistryIdentity union: it names
 the method by which the AGC obtains a registry login from its own identity. Each
 value names both where the credential comes from and which registry accepts it,
-because the two are fixed together for a cloud's native identity.
+because the two are fixed together for a cloud's native identity; a federated
+method names its source and target in its member instead.
 
 _Validation:_
 - Enum: [GKEWorkloadIdentity]

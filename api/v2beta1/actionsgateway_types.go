@@ -172,15 +172,23 @@ type ActionsGatewaySpec struct {
 	// +kubebuilder:default=Off
 	AuditLogging string `json:"auditLogging,omitempty"`
 
-	// RegistryIdentity selects a cloud identity this tenant's AGC presents to the
+	// RegistryIdentities lists the identities this tenant's AGC may present to a
 	// worker image's registry for the runner-version read behind
-	// RunnerVersionTooOld (Q1066). Absent, the AGC presents only the
+	// RunnerVersionTooOld (Q1066). Empty, the AGC presents only the
 	// imagePullSecrets the pod template or the worker ServiceAccount names.
+	//
+	// Each entry covers the registry hosts its type names. A pull Secret for a
+	// host wins over every entry, and among entries the first that covers the
+	// image's registry host applies. A type whose hosts are fixed, such as
+	// GKEWorkloadIdentity, may appear once.
 	//
 	// Changing it is a rolling restart of the AGC, not a hot reload.
 	//
 	// +optional
-	RegistryIdentity *RegistryIdentity `json:"registryIdentity,omitempty"`
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:XValidation:rule="self.filter(e, e.type == 'GKEWorkloadIdentity').size() <= 1",message="registryIdentities may list GKEWorkloadIdentity at most once"
+	RegistryIdentities []RegistryIdentity `json:"registryIdentities,omitempty"`
 
 	// Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's
 	// AGC. Tracing stays off unless tracing.endpoint is set.
@@ -209,7 +217,8 @@ type ActionsGatewaySpec struct {
 // RegistryIdentityType is the discriminator of the RegistryIdentity union: it names
 // the method by which the AGC obtains a registry login from its own identity. Each
 // value names both where the credential comes from and which registry accepts it,
-// because the two are fixed together for a cloud's native identity.
+// because the two are fixed together for a cloud's native identity; a federated
+// method names its source and target in its member instead.
 //
 // +kubebuilder:validation:Enum=GKEWorkloadIdentity
 type RegistryIdentityType string
@@ -220,12 +229,14 @@ const (
 	RegistryIdentityGKEWorkloadIdentity RegistryIdentityType = "GKEWorkloadIdentity"
 )
 
-// RegistryIdentity is the discriminated union of registry identity methods (Q1066).
-// Type is the explicit discriminator; a method that takes parameters joins as a
-// value plus a pointer member set iff Type names it, enforced by one per-member CEL
-// iff rule as on GitHubCredentials. The union shape exists so a method needing
-// parameters (an IAM role, a client ID, a SPIFFE exchange) adds without reshaping
-// the spec.
+// RegistryIdentity is one entry of ActionsGatewaySpec.RegistryIdentities: a
+// discriminated union of registry identity methods (Q1066). Type is the explicit
+// discriminator; a method that takes parameters joins as a value plus a pointer
+// member set iff Type names it, enforced by one per-member CEL iff rule as on
+// GitHubCredentials. A method whose hosts the operator names (an on-premises
+// registry federating the cluster's ServiceAccount tokens, a neocloud issuer, a
+// SPIFFE exchange) carries them in its member. The list and the union together
+// let such methods join, and coexist on one gateway, without reshaping the spec.
 type RegistryIdentity struct {
 	// Type selects the identity method (the union discriminator).
 	//

@@ -45,9 +45,12 @@ Also considered and declined: Google's generic Kubernetes federation through `st
 
 ## 4. Design
 
-- **API.** `ActionsGateway.spec.registryIdentity`, an optional discriminated union whose required `type` is `GKEWorkloadIdentity`; absent means no cloud identity.
-  It was first a string enum, and was reshaped before release (decided 2026-10-13 by the maintainer) because the next methods take parameters a bare value cannot carry: an IRSA role ARN, an Azure client ID, a SPIFFE exchange target.
-  Each joins as a type plus a pointer member under a per-member CEL iff rule, the `GitHubCredentials` pattern.
+- **API.** `ActionsGateway.spec.registryIdentities`, an optional list (at most 8) of discriminated unions whose required `type` is today only `GKEWorkloadIdentity`; empty means no cloud identity.
+  A pull Secret for a host wins over every entry, and among entries the first that covers the image's registry host applies; a type with fixed hosts may appear once, a CEL rule on the list.
+  It was first a string enum, then a single union, and was reshaped twice before release (both decided 2026-10-13 by the maintainer).
+  The enum could not carry the parameters the next methods take: an IRSA role ARN, an Azure client ID, a SPIFFE exchange target.
+  The single union allowed one method per gateway, and on-premises and neocloud registries need a second beside a cloud's: Quay, Artifactory and Harbor-based registries accept a federated OIDC token from the cluster's ServiceAccount issuer, at hosts the operator names ([Q1191](../queue/Q1191.md)).
+  The list follows the kubelet credential-provider config, a list of providers each scoped to the images it matches; each method joins as a type plus a pointer member under a per-member CEL iff rule, the `GitHubCredentials` pattern, and a method with operator-named hosts carries them in its member.
   It is on the gateway because whether its node pools run Workload Identity is the platform's fact, and it names the method so an ECR type can join it.
   Added identically to `v2alpha1`, `v2beta1` and `v2`, whose conversions are identity round-trips.
 - **GMC.** When set, it passes `AGC_REGISTRY_IDENTITY=GKEWorkloadIdentity` to the AGC and adds one egress rule, `169.254.169.252/32` TCP 988, to the AGC's NetworkPolicy.

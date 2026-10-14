@@ -347,7 +347,7 @@ Whichever is chosen, it is an explicit opt-in on a policy that is otherwise clos
 
 #### The GKE Workload Identity opt-in admits one metadata address
 
-`ActionsGateway.spec.registryIdentity.type: GKEWorkloadIdentity` has the AGC fetch an access token for its own Workload Identity and present it to Artifact Registry where no pull Secret supplies a login (Q1066).
+A `GKEWorkloadIdentity` entry in `ActionsGateway.spec.registryIdentities` has the AGC fetch an access token for its own Workload Identity and present it to Artifact Registry where no pull Secret supplies a login (Q1066).
 It defaults to `None`, and it is the one place the generated policies name a metadata address.
 
 - **The AGC dials the GKE metadata server, `169.254.169.252:988`, and its policy admits that `/32` on TCP 988 and nothing else on link-local beyond DNS.** A NetworkPolicy is evaluated against the address a pod dials, before GKE redirects `169.254.169.254:80` to that server, so admitting `.252:988` does not reach the Compute Engine metadata server; measured on GKE 1.35.8 under Dataplane V2 ([the probe](../plan/q1066-gke-workload-identity.md#2-what-the-dogfood-probe-measured)).

@@ -153,16 +153,16 @@ func TestBuildNetworkPolicy_DeniesCloudMetadataServer(t *testing.T) {
 	}
 }
 
-// withGKEIdentity returns a copy of ag opted into registryIdentity type GKEWorkloadIdentity.
+// withGKEIdentity returns a copy of ag listing a GKEWorkloadIdentity registry identity.
 func withGKEIdentity(ag *gmcv2alpha1.ActionsGateway) *gmcv2alpha1.ActionsGateway {
 	out := ag.DeepCopy()
 	out.Name += "-gke"
-	out.Spec.RegistryIdentity = &gmcv2alpha1.RegistryIdentity{Type: gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity}
+	out.Spec.RegistryIdentities = []gmcv2alpha1.RegistryIdentity{{Type: gmcv2alpha1.RegistryIdentityGKEWorkloadIdentity}}
 	return out
 }
 
 // TestBuildAGCNetworkPolicyV2_GKEIdentityAdmitsOnlyGKEMetadataServer pins the one
-// link-local destination registryIdentity type GKEWorkloadIdentity opens (Q1066): the GKE
+// link-local destination a GKEWorkloadIdentity registry identity opens (Q1066): the GKE
 // metadata server's own address on its own port, never another port there, and
 // nothing at all for a gateway that has not opted in. The Compute Engine address is
 // covered by TestBuildNetworkPolicy_DeniesCloudMetadataServer, which includes the
@@ -179,7 +179,7 @@ func TestBuildAGCNetworkPolicyV2_GKEIdentityAdmitsOnlyGKEMetadataServer(t *testi
 
 	opted := buildAGCNetworkPolicyV2(withGKEIdentity(ag), scoped, nil, false, nil)
 	assert.True(t, egressAdmits(opted, gkeMetadataIP, corev1.ProtocolTCP, 988),
-		"registryIdentity type GKEWorkloadIdentity must admit the GKE metadata server on TCP/988")
+		"a GKEWorkloadIdentity registry identity must admit the GKE metadata server on TCP/988")
 	for _, port := range []int32{80, 443, 8080} {
 		assert.False(t, egressAdmits(opted, gkeMetadataIP, corev1.ProtocolTCP, port),
 			"the opt-in admits TCP/%d to %s; it must open port 988 only", port, gkeMetadataIP)

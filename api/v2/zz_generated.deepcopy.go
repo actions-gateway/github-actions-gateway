@@ -113,10 +113,10 @@ func (in *ActionsGatewaySpec) DeepCopyInto(out *ActionsGatewaySpec) {
 		*out = new(AGCVerticalAutoscaling)
 		**out = **in
 	}
-	if in.RegistryIdentity != nil {
-		in, out := &in.RegistryIdentity, &out.RegistryIdentity
-		*out = new(RegistryIdentity)
-		**out = **in
+	if in.RegistryIdentities != nil {
+		in, out := &in.RegistryIdentities, &out.RegistryIdentities
+		*out = make([]RegistryIdentity, len(*in))
+		copy(*out, *in)
 	}
 	in.Tracing.DeepCopyInto(&out.Tracing)
 	if in.Scheduling != nil {
