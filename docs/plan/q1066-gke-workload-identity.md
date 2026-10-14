@@ -46,14 +46,15 @@ Also considered and declined: Google's generic Kubernetes federation through `st
 ## 4. Design
 
 - **API.** `ActionsGateway.spec.registryIdentities`, an optional list (at most 8) of discriminated unions whose required `type` is today only `GKEWorkloadIdentity`; empty means no cloud identity.
-  A pull Secret for a host wins over every entry, and among entries the first that covers the image's registry host applies; a type with fixed hosts may appear once, a CEL rule on the list.
+  A host's pull Secrets come before every entry, and entries in list order, and the read presents the first credential that covers the host; a type with fixed hosts may appear once, a CEL rule on the list.
+  The order is the promise, not the exclusivity: kubelet tries each matching credential until one pulls (`kuberuntime_image.go`, Kubernetes `84c1b5620`), so a later read that falls back past a refused Secret stays reachable without an API change.
   It was first a string enum, then a single union, and was reshaped twice before release (both decided 2026-10-13 by the maintainer).
   The enum could not carry the parameters the next methods take: an IRSA role ARN, an Azure client ID, a SPIFFE exchange target.
   The single union allowed one method per gateway, and on-premises and neocloud registries need a second beside a cloud's: Quay, Artifactory and Harbor-based registries accept a federated OIDC token from the cluster's ServiceAccount issuer, at hosts the operator names ([Q1191](../queue/Q1191.md)).
   The list follows the kubelet credential-provider config, a list of providers each scoped to the images it matches; each method joins as a type plus a pointer member under a per-member CEL iff rule, the `GitHubCredentials` pattern, and a method with operator-named hosts carries them in its member.
   It is on the gateway because whether its node pools run Workload Identity is the platform's fact, and it names the method so an ECR type can join it.
   Added identically to `v2alpha1`, `v2beta1` and `v2`, whose conversions are identity round-trips.
-- **GMC.** When set, it passes `AGC_REGISTRY_IDENTITY=GKEWorkloadIdentity` to the AGC and adds one egress rule, `169.254.169.252/32` TCP 988, to the AGC's NetworkPolicy.
+- **GMC.** When the list is non-empty it passes the types to the AGC, comma-separated in list order, as `AGC_REGISTRY_IDENTITIES`; a `GKEWorkloadIdentity` entry also adds one egress rule, `169.254.169.252/32` TCP 988, to the AGC's NetworkPolicy.
   No other policy changes; worker and proxy policies keep denying the metadata server.
 - **AGC.** A token source requests `/computeMetadata/v1/instance/service-accounts/default/token` from `http://169.254.169.252:988` with `Metadata-Flavor: Google`, over a client with no proxy, since a proxied AGC would otherwise send the request to the egress proxy.
   The token is fetched per inspection and never logged or stored past it.

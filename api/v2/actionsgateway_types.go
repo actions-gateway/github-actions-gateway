@@ -177,9 +177,9 @@ type ActionsGatewaySpec struct {
 	// RunnerVersionTooOld (Q1066). Empty, the AGC presents only the
 	// imagePullSecrets the pod template or the worker ServiceAccount names.
 	//
-	// Each entry covers the registry hosts its type names. A pull Secret for a
-	// host wins over every entry, and among entries the first that covers the
-	// image's registry host applies. A type whose hosts are fixed, such as
+	// Each entry covers the registry hosts its type names. A host's pull Secrets
+	// come before every entry, and entries in list order; the read presents the
+	// first credential that covers the host. A type whose hosts are fixed, such as
 	// GKEWorkloadIdentity, may appear once.
 	//
 	// Changing it is a rolling restart of the AGC, not a hot reload.
