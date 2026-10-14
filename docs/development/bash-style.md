@@ -110,6 +110,33 @@ It found one, in `windowserver_reports` in [`validate-throttle.sh`](../../script
 Post-increment evaluates to the *old* value, so the first match returns 1, and as the last command in an `&&` list that aborts the function.
 The count was right only because errexit could not reach it.
 
+## `set -e` stops at a caller's `if`, `||` or `&&`
+
+A function called as the condition of an `if`, or on the left of `||` or `&&`, runs its **whole body** with errexit off, `inherit_errexit` or not.
+A step that fails does not stop it, and the call reports the status of the body's last command.
+Measured on bash 5.3.15, with `f() { false; echo after; }`:
+
+| Caller | `after` printed | Caller sees |
+|---|---|---|
+| `f` | no | exit 1, script aborts |
+| `f \|\| rc=$?` | yes | 0, so `rc=$?` never runs and `rc` keeps its prior value |
+| `if f; then …` | yes | the `then` branch runs |
+| `f && :` | yes | 0 |
+
+A command substitution inside such a body runs past its failure too: `inherit_errexit` passes errexit into `$(…)` only when the caller has it on.
+
+So a function whose safety is *stopping* (verify a signature, then run or apply what it verified) must not lean on errexit for that stop.
+Every such step returns explicitly:
+
+```bash
+"${COSIGN_BIN}" verify-blob … "${manifest}" >/dev/null || return 1
+kubectl apply --server-side -f "${manifest}" || return 1
+```
+
+Tests hit this first, because `fn || rc=$?` is how a suite captures a status.
+A gate leg tested that way ran with errexit off, so a failed signature check fell through to running the binary it had refused (Q1171, caught before merge).
+A production caller that wraps the function later turns the same body into the same hole with no test involved.
+
 ## Shared helpers and Makefile wiring
 
 Before writing a new helper function, check [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — `require_cmd`, `workspace_modules`, `die_if_killed`, and the throttle setup already live there.

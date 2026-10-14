@@ -2037,6 +2037,33 @@ storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
 check "storage: a SHA256SUMS signature cosign rejects fails the leg" "1" "${rc}"
 check_not_contains "  ...before the binary runs (signature)" "gag-migrate" "$(cat "${STORAGE_LOG}")"
 
+# --- crd_smoke: a rejected signature never reaches the apply ------------------
+#
+# Called through `||`, so errexit is off for the whole body: only the explicit
+# returns stop it (bash-style.md § set -e stops at a caller's if, || or &&).
+
+crd_smoke_case() (
+	WORKDIR="${STORAGE_DIR}/work"
+	COSIGN_BIN="${STORAGE_DIR}/cosign"
+	GAG_IMAGE_TAG="v1.10.0-rc.1" REPO="octo/repo" PROJECT=p ZONE=z CLUSTER=c
+	gke_get_credentials_and_verify() { :; }
+	gh_retry() { :; }
+	kubectl() { echo "kubectl $*" >>"${STORAGE_LOG}"; }
+	crd_smoke
+)
+
+storage_fixture match 1
+rc=0
+crd_smoke_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+check "crd-smoke: a signature cosign rejects fails the leg" "1" "${rc}"
+check_not_contains "  ...before the manifest is applied" "kubectl apply" "$(cat "${STORAGE_LOG}")"
+
+storage_fixture match 0
+rc=0
+crd_smoke_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+check "crd-smoke: a verified manifest is applied and checked" "0" "${rc}"
+check_contains "  ...server-side" "kubectl apply --server-side -f ${STORAGE_DIR}/work/actions-gateway-crds-v2.yaml" "$(cat "${STORAGE_LOG}")"
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1
