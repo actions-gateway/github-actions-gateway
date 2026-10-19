@@ -2814,6 +2814,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>Grading Dragonfly against the Q408 mirror contract, and the shape that passes it: Distribution in front, Dragonfly as its outbound proxy and P2P back end</td>
 <td>✅ All three phases done; Q539 closed 2026-10-05. As the worker-facing endpoint dfdaemon v1.5.7 fails the contract by construction, so it is built as the mirrors' back end, measured on kind 2026-10-04 and validated on dogfood 2026-10-05 by <code>v1.9.0-rc.2</code>'s release gate: every mirror passing the battery, a 3/3 Kata e2e run with open egress deleted, and workers unable to reach the seed proxy. Stays active because <a href="../queue/Q540/">Q540</a> and <a href="../queue/Q1163/">Q1163</a> cite its measurements</td>
 </tr>
+<tr>
+<td><a href="q540-node-layer-p2p/">q540-node-layer-p2p.md</a></td>
+<td>Node-layer P2P pod-image distribution for <a href="../queue/Q540/">Q540</a>: Dragonfly's node client and Spegel graded on kind against what a pod with no egress policy can do at a node address</td>
+<td>❌ Graded 2026-10-13, not built. Dragonfly exposes unauthenticated task control on every node address; Spegel exposes read access to cached images, narrowed by NetworkPolicy except across nodes. Recommends Spegel; GKE's containerd behaviour gates dogfood</td>
+</tr>
 </tbody>
 </table>
 <h2 id="test-plans">Test plans<a class="headerlink" href="#test-plans" title="Permanent link">&para;</a></h2>

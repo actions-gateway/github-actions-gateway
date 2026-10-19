@@ -23,7 +23,7 @@
     
     
       
-        <title>Milestone: Kata + Dragonfly at the node, pull-through cache in-guest - GitHub Actions Gateway</title>
+        <title>Milestone: P2P at the node, pull-through cache in-guest - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest" class="md-skip">
+        <a href="#milestone-p2p-at-the-node-pull-through-cache-in-guest" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Milestone: Kata + Dragonfly at the node, pull-through cache in-guest
+              Milestone: P2P at the node, pull-through cache in-guest
             
           </span>
         </div>
@@ -2597,18 +2597,13 @@
   
 
 
-<h1 id="milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest<a class="headerlink" href="#milestone-kata--dragonfly-at-the-node-pull-through-cache-in-guest" title="Permanent link">&para;</a></h1>
+<h1 id="milestone-p2p-at-the-node-pull-through-cache-in-guest">Milestone: P2P at the node, pull-through cache in-guest<a class="headerlink" href="#milestone-p2p-at-the-node-pull-through-cache-in-guest" title="Permanent link">&para;</a></h1>
 <p>Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls.
-Nothing node-layer is built: <code>deploy/dragonfly/</code> holds only Q539's pod-network seed peer.</p>
-<p>The worker half of the reachability question is answered (<a href="../../plan/q539-dragonfly-mirror-backend/#81-measured-the-worker-policy-holds-and-nothing-else-does">Q539 plan §8.1</a>): on dogfood, a Kata worker under the GMC's workload policy times out on port 4001 at every node address, including its own node's and the <code>CiliumInternalIP</code>, while an unlabelled Kata pod beside it reaches all of them.
-That was measured with a stand-in listener, not dfdaemon.</p>
-<p>The open part is the rest of the cluster.
-Chart 1.8.5's node client runs with <code>hostNetwork</code>, and every pod with no egress policy reaches a node address.
-Binding the proxy to loopback works on kind (<a href="../../plan/q539-dragonfly-mirror-backend/#82-measured-the-proxy-binds-to-loopback-and-five-ports-stay-on-every-address">§8.2</a>): the chart sets it from values, containerd pulls through it, and peer transfer still works.
-It leaves upload gRPC, metrics, health, stats and piece storage on <code>0.0.0.0</code>, and the upload service carries task download and delete calls with no authentication (read from source, not probed).
-So the build first needs a design for restricting those ports, for example mutual TLS between peers, before anything reaches dogfood's Kata nodes; whether GKE's containerd reads <code>certs.d</code> per pull, as kind's does, is also unmeasured.
-One deployment for both layers?
-<a href="../../plan/caching-and-worker-storage/">scope</a></p>
+Nothing node-layer is built.</p>
+<p><a href="../../plan/q540-node-layer-p2p/">The plan</a> graded both candidates on kind against what a pod with no egress policy can do at a node address, and recommends Spegel: its worst case is read access to cached images, where Dragonfly's node client exposes unauthenticated task control.
+A Kata worker under the GMC's workload policy reaches no node address on dogfood (<a href="../../plan/q539-dragonfly-mirror-backend/#81-measured-the-worker-policy-holds-and-nothing-else-does">Q539 plan §8.1</a>).</p>
+<p>Next is dogfood, gated on three readings the plan lists as unmeasured: whether GKE's containerd reads <code>certs.d</code> per pull, what Spegel displaces on a GKE node running <code>kata-deploy</code>, and whether <code>resolveTags: false</code> costs a digest-pinned worker image anything.
+Ship with the plan's ingress policy and <code>resolveTags: false</code>; the cross-node hostPort path stays open to pods outside a GAG tenant.</p>
 
 
 
