@@ -12,6 +12,10 @@ import (
 type Credential struct {
 	Username string
 	Password string
+	// identity names a login that belongs to the AGC rather than to the tenant. It
+	// is reported in place of the username, and a Bearer realm on any host but the
+	// registry's own is refused for it, since the image reference picks the registry.
+	identity string
 }
 
 // Credentials maps a registry host to the login to present there, in the shape a

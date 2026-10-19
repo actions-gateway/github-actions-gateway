@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Non-breaking: ActionsGateway.spec.registryIdentities presents GKE Workload Identity to Artifact Registry](#non-breaking-actionsgatewayspecregistryidentities-presents-gke-workload-identity-to-artifact-registry)
   - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
   - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
   - [Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed](#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed)
@@ -181,6 +182,16 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Non-breaking: `ActionsGateway.spec.registryIdentities` presents GKE Workload Identity to Artifact Registry
+
+**Who is affected:** nobody until it is set.
+
+The new field is absent unless set, which changes nothing: no AGC env, no NetworkPolicy rule, and an unchanged AGC pod template, so upgrading does not roll any AGC.
+Listing a `GKEWorkloadIdentity` entry in `registryIdentities` has the registry read behind `RunnerVersionTooOld` present the AGC's own Workload Identity to Artifact Registry where no pull Secret covers the host (Q1066), and adds one egress rule to that gateway's AGC NetworkPolicy, `169.254.169.252/32` on TCP 988.
+It needs Workload Identity on the AGC's node pool and a `roles/artifactregistry.reader` grant to `<gateway>-agc`; the steps are in [tenant onboarding](tenant-onboarding.md#step-2-create-the-actionsgateway-resource).
+
+**Rolling back** to a release without the field is safe: the older GMC ignores it and rebuilds the AGC's NetworkPolicy without the rule, and the read goes back to pull Secrets alone.
 
 ### Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets
 

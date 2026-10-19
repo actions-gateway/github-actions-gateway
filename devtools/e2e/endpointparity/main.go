@@ -44,7 +44,7 @@ import (
 // This is the one hand-kept input. It can only ever silence a demand, never
 // manufacture one — and it cannot silence one quietly, because a pin whose site
 // has started composing a path is itself a failure.
-var pinnedSites = map[string]string{
+var pinnedSites = map[string]string{ //nolint:gosec // G101: request-site names and prose, not credentials
 	"broker/client.go:newJSONRequest": "the broker root is GITHUB_BROKER_URL and the path under it is the caller's argument; broker's own suite holds those against brokerstub",
 
 	"scaleset/client.go:serviceRequest": "the Actions Service root is the admin URL the fake minted in the RemoteAuth hop, and the route under it is the caller's argument",
@@ -57,6 +57,7 @@ var pinnedSites = map[string]string{
 
 	"cmd/agc/internal/runnerimage/client.go:do":         "the worker image's registry, not GitHub: manifest and blob URLs are composed from the tenant's image reference, and the fake serves no part of them (Q988)",
 	"cmd/agc/internal/runnerimage/client.go:fetchToken": "the registry's token realm, handed whole in its own WWW-Authenticate challenge; the fake serves no part of it (Q988)",
+	"cmd/agc/internal/runnerimage/gke.go:Token":         "the GKE metadata server, not GitHub: a fixed node-local address the fake serves no part of (Q1066)",
 }
 
 func main() {
