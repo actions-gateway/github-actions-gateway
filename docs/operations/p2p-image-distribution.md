@@ -37,7 +37,7 @@ It adds **no separate storage** and never mutates or re-packages images: it adve
 - **What it does *not* do:** Spegel is **lazy** — it can only serve images some node in the cluster has *already* pulled.
   It does not pre-fetch or pre-heat, and it distributes container images only.
 - **Choose Spegel when:** you want a low-operational-overhead, drop-in mirror that smooths pull storms with no new stateful component.
-  This is the right default for most GAG fleets.
+  This is the right default for most GAG fleets; on a cluster shared by tenants with private images, read [what it exposes](#operational-notes) first.
   It requires a containerd-based runtime configured to keep unpacked layers (`discard_unpacked_layers = false`) and to honor mirror config — check Spegel's [compatibility requirements](https://spegel.dev/docs/getting-started/) against your node image first.
 
 ### Dragonfly — full P2P distribution with pre-heating
@@ -112,6 +112,14 @@ This composes with an [air-gapped install](air-gapped-install.md): the private m
 - **Keep worker pods off Dragonfly's proxy port.** dfdaemon's proxy (port 4001 by default) forwards requests to any host, including pushes, and no setting restricts it, so a worker that can reach it has unrestricted egress (measured on client v1.5.7).
   Admit only the clients you mean to serve, by NetworkPolicy on a pod-network deployment; a `hostNetwork` dfdaemon listens on every node address, where pod-level policy cannot select it.
   GAG's worker egress policy does block a worker from that port on every node, its own included (measured with a Kata worker on GKE Dataplane V2), but any pod without its own egress policy reaches it.
+- **Binding dfdaemon's proxy to loopback is not enough on its own.** `proxy.server.ip: 127.0.0.1` keeps the proxy off node addresses, and containerd still pulls through it (measured on kind with chart 1.8.5).
+  Upload gRPC, metrics, health, stats and piece storage stay on every node address, and the upload service accepts task download and delete calls with no authentication unless you configure peer TLS (read from the client v1.5.7 source).
+  Treat those ports as reachable by any pod without an egress policy.
+- **Spegel serves cached images to anything that reaches it.** It serves `GET` and `HEAD` only and never fetches from a host a request names (measured on v0.7.4), but it checks no per-request credential, so an image one tenant pulled with its own pull Secret is readable by any pod that reaches Spegel (read from the source; only public images were probed).
+  Spegel runs on the pod network, so an ingress NetworkPolicy can admit only node addresses and other Spegel pods.
+  On kind with Calico that closed the pod ports and a pod's path to its own node's hostPort, but not to another node's hostPort, which arrives from a node address.
+  Set `resolveTags: false` so a peer cannot answer a tag lookup; containerd verifies digests but not tag resolution.
+  Spegel also moves existing per-registry `certs.d` entries to `_backup/` unless `prependExisting` is set.
 - **Verify with the upstream guides.** Installation, runtime compatibility (containerd settings, mirror configuration), and tuning are owned by the tools.
   Start at Spegel's [Getting Started](https://spegel.dev/docs/getting-started/) or Dragonfly's [documentation](https://d7y.io/docs/).
 
