@@ -646,7 +646,7 @@ Decision 2026-07-31: both alternates get validated, sequenced **after** this pla
   So it is built as the Distribution mirrors' outbound proxy instead, which keeps the contract theirs and admits only the mirror pods to Dragonfly.
   That shape passed the Phase-4 battery on dogfood on 2026-10-05, and Q539 closed.
 - **[Q540](../queue/Q540.md) — the composed stack as a milestone: Kata + Dragonfly (node layer) + pull-through cache (guest layer).** The two operate at different layers (§5), so this validates the composition an image-heavy fleet would actually run: Dragonfly accelerating node-level pod-image distribution via containerd mirror config, the in-guest mirror serving untrusted job pulls, each with its own policy scope — and confirms neither weakens the other's posture (in particular that the node-layer P2P mesh stays unreachable from worker pods).
-  Graded in [q540-node-layer-p2p.md](q540-node-layer-p2p.md): workers do not reach node addresses, Dragonfly's node client exposes unauthenticated task control to every other pod, and Spegel is recommended instead.
+  Graded in [q540-node-layer-p2p.md](q540-node-layer-p2p.md): workers do not reach node addresses, so neither Dragonfly's node client nor Spegel is on a worker's path; Dragonfly was chosen for its features.
 
 ## 7. Success criteria
 
