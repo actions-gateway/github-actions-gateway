@@ -162,6 +162,19 @@ main() {
 			-l app=dragonfly --replicas=0
 	fi
 
+	# The Dragonfly node client (Q540), present only after an
+	# E2E_DRAGONFLY_NODES=1 window. Deleted rather than kept, so the next window
+	# runs without it unless it asks again. dfinit's containerd edits stay on any
+	# e2e node still up until the pool scales it away; a pull there finds no
+	# proxy on 127.0.0.1:4001 and falls back to the registry itself.
+	local dragonfly_nodes
+	dragonfly_nodes="$(kubectl get namespace gag-dragonfly-node -o name 2>/dev/null || true)"
+	if [[ -n "${dragonfly_nodes}" ]]; then
+		echo "Deleting the Dragonfly node client..."
+		kubectl delete -k "${REPO_ROOT}/deploy/dragonfly-node" \
+			--ignore-not-found --timeout=180s
+	fi
+
 	# Restore the system pool to the running size now the e2e window is over
 	# (Q335/Q357) — derived from the deployed always-on ActionsGateways unless
 	# pinned. The e2e gateway was deleted above (and its namespace is excluded

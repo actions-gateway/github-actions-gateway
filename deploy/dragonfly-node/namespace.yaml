@@ -1,0 +1,11 @@
+# The node client needs the host network, the host PID namespace (to restart
+# containerd through nsenter) and a privileged init container, so it lives in
+# its own namespace at Pod Security `privileged`. gag-dragonfly stays
+# `restricted`.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gag-dragonfly-node
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest

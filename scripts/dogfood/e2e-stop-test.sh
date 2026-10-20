@@ -65,6 +65,7 @@ RUNS_FILE="${WORKDIR}/runs"
 GATEWAYS_FILE="${WORKDIR}/gateways"
 MIRRORS_FILE="${WORKDIR}/mirrors"
 DRAGONFLY_FILE="${WORKDIR}/dragonfly"
+DRAGONFLY_NODES_FILE="${WORKDIR}/dragonfly-nodes"
 POD_READ_OK=1
 QUEUED_PER_RUN=0
 GH_RUN_LIST_OK=1
@@ -80,6 +81,7 @@ kubectl() {
 		;;
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
 	get\ deployment\ --namespace\ gag-dragonfly*) cat "${DRAGONFLY_FILE}" ;;
+	get\ namespace\ gag-dragonfly-node*) cat "${DRAGONFLY_NODES_FILE}" ;;
 	get\ deployment*) cat "${MIRRORS_FILE}" ;;
 	esac
 	return 0
@@ -114,6 +116,7 @@ reset_stubs() {
 	: >"${RUNS_FILE}"
 	: >"${MIRRORS_FILE}"
 	: >"${DRAGONFLY_FILE}"
+	: >"${DRAGONFLY_NODES_FILE}"
 	POD_READ_OK=1
 	QUEUED_PER_RUN=0
 	GH_RUN_LIST_OK=1
@@ -425,6 +428,18 @@ mirror_deployed
 run_main
 check_not_contains "never scales a Dragonfly back end that is not deployed" \
 	"scale deployment --namespace gag-dragonfly" "$(cat "${CALL_LOG}")"
+check_not_contains "never deletes a Dragonfly node client that is not deployed" \
+	"deploy/dragonfly-node" "$(cat "${CALL_LOG}")"
+
+# --- the Dragonfly node client is deleted, not kept (Q540) -------------------
+
+reset_stubs gag-dogfood gag-dogfood-ci
+mirror_deployed
+echo namespace/gag-dragonfly-node >"${DRAGONFLY_NODES_FILE}"
+run_main
+check "a window with the node client tears down cleanly" 0 "${MAIN_RC}"
+check_contains "deletes the Dragonfly node client" \
+	"kubectl delete -k ${REPO_ROOT}/deploy/dragonfly-node" "$(cat "${CALL_LOG}")"
 
 # --- a mismatched context aborts before anything is deleted ------------------
 

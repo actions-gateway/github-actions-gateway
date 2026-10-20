@@ -1,0 +1,320 @@
+# The Dragonfly node client (Q540): one dfdaemon per Kata node, on the host
+# network, that containerd sends its registry pulls through so a worker image
+# is fetched once per cluster and shared node to node. Rendered from the
+# dragonfly chart 1.8.5 (client only) with the values the Q540 plan §6
+# validated on dogfood, then trimmed of Helm labels and the unused Services.
+# The dfdaemon config is the chart's, unabridged, because that is what was
+# measured.
+#
+# THE PEER PORTS ARE OPEN ON EVERY NODE ADDRESS. 4000 (upload gRPC) and 4002 to
+# 4005 accepted connections on every node address, unauthenticated (4006 is
+# UDP and untested), and no NetworkPolicy polices a host-network listener. A Kata worker under the GMC's workload egress policy
+# reaches none of them (measured, plan §6); a pod with no egress policy reaches
+# all of them. Only the proxy, 4001, is bound to loopback, so containerd on
+# the same node is its one client: it forwards to any host it is asked for.
+# See docs/operations/p2p-image-distribution.md before running this on a
+# cluster with untrusted pods outside GAG's policy.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dragonfly-client
+  namespace: gag-dragonfly-node
+  labels:
+    app: dragonfly
+    component: client
+data:
+  dfdaemon.yaml: |-
+    host:
+      idc: ""
+      location: ""
+      schedulerClusterID: 1
+    server:
+      adaptiveRateLimit:
+        bucketCount: 50
+        bucketInterval: 200ms
+        collectInterval: 3s
+        cpuThreshold: 100
+        memoryThreshold: 90
+        shedCooldown: 5s
+      pluginDir: /usr/local/lib/dragonfly/plugins/dfdaemon/
+    download:
+      backToSourceBandwidthLimit: 50GB
+      backToSourceConcurrentPieceCount: 8
+      bandwidthLimit: 50GB
+      collectedPieceTimeout: 360s
+      concurrentPieceCount: 8
+      pieceTimeout: 360s
+      protocol: tcp
+      server:
+        requestRateLimit: 50
+        requestbufferSize: 20
+        socketPath: /var/run/dragonfly/dfdaemon.sock
+    upload:
+      bandwidthLimit: 50GB
+      disableShared: false
+      server:
+        port: 4000
+        requestRateLimit: 200
+        requestbufferSize: 1000
+    scheduler:
+      announceInterval: 5m
+      enableBackToSource: true
+      maxScheduleCount: 5
+      scheduleTimeout: 3h
+    dynconfig:
+      refreshInterval: 5m
+    storage:
+      dir: /var/lib/dragonfly/
+      keep: true
+      readBufferSize: 2097152
+      server:
+        quicPort: 4006
+        tcpPort: 4005
+      writeBufferSize: 2097152
+      writePieceTimeout: 360s
+      writebackMode: async
+    gc:
+      interval: 900s
+      policy:
+        diskHighThresholdPercent: 90
+        diskLowThresholdPercent: 70
+        persistentCacheTaskTTL: 24h
+        persistentTaskTTL: 24h
+        taskTTL: 720h
+    proxy:
+      disableBackToSource: false
+      prefetch: true
+      prefetchBandwidthLimit: 10GB
+      readBufferSize: 2097152
+      # Verifies upstream TLS on the direct path (tags, tokens). A path it
+      # cannot load fails open, as on the seed peer: ../dragonfly/seed-client.yaml.
+      registryMirror:
+        addr: https://index.docker.io
+        cert: /etc/ssl/certs/ca-certificates.crt
+        enableTaskIDBasedBlobDigest: true
+      # Only blobs take the P2P path, as on the seed peer.
+      rules:
+      - regex: blobs/sha256.*
+      # Loopback only: containerd on this node is the proxy's one client.
+      server:
+        ip: 127.0.0.1
+        port: 4001
+        requestRateLimit: 50
+    health:
+      server:
+        port: 4003
+    metrics:
+      server:
+        port: 4002
+    stats:
+      server:
+        port: 4004
+    tracing:
+      protocol: ""
+    backend:
+      cacheTemporaryRedirectTTL: 600s
+      enableCacheTemporaryRedirect: true
+      maxRetries: 1
+      putChunkSize: 8MiB
+      putConcurrentChunkCount: 16
+      putTimeout: 900s
+      requestHeader: {}
+    network:
+      enableIPv6: false
+  # The Q539 scheduler: one scheduler for the seed peer and the node clients.
+  # ./scheduler-from-nodes.yaml admits the node subnet to it.
+  dynconfig.yaml: |-
+    scheduler:
+      addr: dragonfly-scheduler.gag-dragonfly.svc.cluster.local:8002
+---
+# dfinit rewrites the node's containerd config to read certs.d and writes a
+# hosts.toml per registry below, each sending pulls to the loopback proxy with
+# the registry itself as the fallback. On GKE the switch replaced the node's
+# whole inline registry table, its docker.io mirror (mirror.gcr.io) with it
+# (measured with docker.io listed here, plan §6).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dragonfly-dfinit
+  namespace: gag-dragonfly-node
+  labels:
+    app: dragonfly
+    component: client
+data:
+  dfinit.yaml: |-
+    proxy:
+      addr: http://127.0.0.1:4001
+    containerRuntime:
+      containerd:
+        configPath: /etc/containerd/config.toml
+        proxyAllRegistries: false
+        registries:
+        - capabilities:
+          - pull
+          - resolve
+          hostNamespace: docker.io
+          serverAddr: https://index.docker.io
+          skipVerify: false
+        - capabilities:
+          - pull
+          - resolve
+          hostNamespace: ghcr.io
+          serverAddr: https://ghcr.io
+          skipVerify: false
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: dragonfly-client
+  namespace: gag-dragonfly-node
+  labels:
+    app: dragonfly
+    component: client
+spec:
+  updateStrategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 20
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: dragonfly
+      component: client
+  template:
+    metadata:
+      labels:
+        app: dragonfly
+        component: client
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostPID: true
+      hostIPC: true
+      # The Kata pool: set these to your worker nodes.
+      nodeSelector:
+        cloud.google.com/gke-nodepool: e2e
+      tolerations:
+        - effect: NoSchedule
+          key: dedicated
+          value: e2e
+      initContainers:
+      - name: dfinit
+        image: docker.io/dragonflyoss/dfinit:v1.5.7@sha256:7200d1e4a765140020b16c679b0b03987564c3d7dc4407304591dcbfea68d45a
+        imagePullPolicy: IfNotPresent
+        args:
+        - --log-level=info
+        - --console
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        volumeMounts:
+        - name: dfinit-config
+          mountPath: /etc/dragonfly
+        - name: containerd-config-dir
+          mountPath: /etc/containerd
+      # containerd reads config_path only at startup, so dfinit's rewrite is
+      # inert until this runs: with it off the node client saw no requests. It
+      # runs on every start of this pod. Running pods, Kata ones included, kept
+      # running through it (plan §6).
+      - name: restart-container-runtime
+        image: docker.io/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        command:
+        - /bin/sh
+        - -cx
+        - |-
+          nsenter -t 1 -m -- systemctl restart containerd.service
+          echo "restart container"
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+      containers:
+      - name: client
+        image: docker.io/dragonflyoss/client:v1.5.7@sha256:e5a4479c3e9c57c2b34ac21db346827a2d833be2eacbad474e45b337decc904d
+        imagePullPolicy: IfNotPresent
+        args:
+        - --log-level=info
+        - --console
+        resources:
+          limits:
+            cpu: "4"
+            memory: 8Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - containerPort: 4000
+          protocol: TCP
+        - containerPort: 4003
+          protocol: TCP
+        - containerPort: 4002
+          protocol: TCP
+        - containerPort: 4004
+          protocol: TCP
+        - containerPort: 4005
+          protocol: TCP
+        - containerPort: 4006
+          protocol: UDP
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=unix:///var/run/dragonfly/dfdaemon.sock", "-connect-timeout=3s", "-rpc-timeout=3s"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 2
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=unix:///var/run/dragonfly/dfdaemon.sock", "-connect-timeout=3s", "-rpc-timeout=3s"]
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 2
+        volumeMounts:
+        - name: config
+          mountPath: /etc/dragonfly
+        - name: socket-dir
+          mountPath: /var/run/dragonfly
+        - mountPath: /var/lib/dragonfly/
+          name: storage
+        - mountPath: /var/log/dragonfly/dfdaemon/
+          name: logs
+      volumes:
+      - name: config
+        configMap:
+          name: dragonfly-client
+      - name: socket-dir
+        hostPath:
+          path: /var/run/dragonfly
+          type: DirectoryOrCreate
+      - name: dfinit-config
+        configMap:
+          name: dragonfly-dfinit
+      - name: containerd-config-dir
+        hostPath:
+          path: /etc/containerd
+          type: DirectoryOrCreate
+      - emptyDir: {}
+        name: storage
+      - emptyDir: {}
+        name: logs

@@ -4,7 +4,8 @@
 
 **Goal:** for a platform team running GitHub Actions Gateway (GAG) at scale, decide whether to add a peer-to-peer (P2P) container-image mirror — [Spegel](https://github.com/spegel-org/spegel) or [Dragonfly](https://d7y.io/) — to keep the runner image-pull path fast and resilient when many ephemeral worker pods start at once.
 
-> **This is a recommended companion, not a GAG component.** GAG does not bundle, install, require, or configure either tool.
+> **This is a recommended companion, not a GAG component.** GAG's chart does not install, require, or configure either tool.
+> The repository carries one tested recipe, [Dragonfly's node client](#gags-dragonfly-node-client-recipe), which the release gate runs; you apply it yourself.
 > A P2P mirror is a cluster-wide, node-level concern that lives below GAG, at the container runtime.
 > This page explains *why* it pairs well with GAG's worker model and *how* the two interact; the tools' own documentation is authoritative for installation and tuning.
 
@@ -37,7 +38,7 @@ It adds **no separate storage** and never mutates or re-packages images: it adve
 - **What it does *not* do:** Spegel is **lazy** — it can only serve images some node in the cluster has *already* pulled.
   It does not pre-fetch or pre-heat, and it distributes container images only.
 - **Choose Spegel when:** you want a low-operational-overhead, drop-in mirror that smooths pull storms with no new stateful component.
-  This is the right default for most GAG fleets; on a cluster shared by tenants with private images, read [what it exposes](#operational-notes) first.
+  It is the lighter of the two, though GAG ships and tests a recipe for Dragonfly only; on a cluster shared by tenants with private images, read [what it exposes](#operational-notes) first.
   It requires a containerd-based runtime configured to keep unpacked layers (`discard_unpacked_layers = false`) and to honor mirror config — check Spegel's [compatibility requirements](https://spegel.dev/docs/getting-started/) against your node image first.
 
 ### Dragonfly — full P2P distribution with pre-heating
@@ -102,6 +103,31 @@ That:
 - **Speeds cold starts**, shrinking the gap between job acquisition and the runner coming online.
 
 This composes with an [air-gapped install](air-gapped-install.md): the private mirror remains the back-to-source registry, and P2P keeps load off it the same way it keeps load off GHCR.
+
+## GAG's Dragonfly node-client recipe
+
+[`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md) puts a Dragonfly `dfdaemon` on each Kata node, and containerd pulls worker images through it.
+It shares the scheduler in [`deploy/dragonfly/`](../../deploy/dragonfly/README.md) with the registry mirrors' seed peer, so it needs that applied first.
+It is validated on GKE with containerd 2.2.7 and Kata from `kata-deploy`, and the release gate's Dragonfly leg runs the e2e matrix with it installed.
+
+**What changes on the node:**
+
+- **containerd restarts once on each node.** `dfinit` switches containerd to per-registry `certs.d` files, which containerd reads only on startup.
+  Running pods, Kata ones included, kept running through the restart.
+- **`docker.io` and `ghcr.io` pulls go through Dragonfly.** Only blob requests take the peer path; tags and manifests go to the registry through it directly.
+- **On GKE, the node's `mirror.gcr.io` mirror for Docker Hub is gone.** Docker Hub pulls reach Docker Hub through Dragonfly, once per cluster rather than once per node, so watch Docker Hub's rate limits if your worker images live there.
+- **`kata-deploy`'s containerd config survives.** `dfinit` kept its `imports` line on the nodes tested.
+
+**What it exposes, and to whom:**
+
+- **The peer ports listen on every node address, unauthenticated.** That is upload gRPC on 4000, then metrics, health, stats and piece storage on 4002 to 4006.
+  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one.
+  So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.
+- **The proxy is bound to loopback**, so only the node's own containerd can use it, and it never reaches a worker.
+
+**Set three values before applying it:** the node selector and toleration in `client.yaml` (your worker nodes), the CIDR in `scheduler-from-nodes.yaml` (your node subnet), and the registries in the `dfinit` config.
+
+**Not yet measured:** UDP 4006, and more than one fresh-node startup order, where `dfinit` and `kata-deploy` race to edit containerd's config on a new node.
 
 ## Operational notes
 

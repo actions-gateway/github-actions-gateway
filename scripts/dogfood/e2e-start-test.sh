@@ -89,6 +89,7 @@ reset_stubs() {
 	SEED_LOG='INFO dragonfly-client/src/proxy/mod.rs:119: load registry cert success'
 	unset E2E_ROUTE_VAR
 	unset REGISTRY_MIRROR_PERSISTENT
+	unset E2E_DRAGONFLY_NODES
 }
 
 # run_main — run main() in a subshell and record its status in MAIN_RC and its
@@ -494,6 +495,34 @@ E2E_MIRROR_BACKEND=dragonfly
 REGISTRY_MIRROR_PERSISTENT=1
 run_main
 check "rejects dragonfly with the persistent overlay" 1 "${MAIN_RC}"
+check_not_contains "rejects that combination before any cluster mutation" \
+	"clusters resize" "$(cat "${CALL_LOG}")"
+
+# --- the Dragonfly node client is opt-in on top of the back end (Q540) -------
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+run_main
+check_not_contains "the Dragonfly back end alone never installs the node client" \
+	"deploy/dragonfly-node" "$(cat "${CALL_LOG}")"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_MIRROR_BACKEND=dragonfly
+E2E_DRAGONFLY_NODES=1
+run_main
+check "the node-client bring-up succeeds" 0 "${MAIN_RC}"
+check_contains "applies the node client" \
+	"apply -k ${REPO_ROOT}/deploy/dragonfly-node" "$(cat "${CALL_LOG}")"
+# The node clients register with the scheduler the back end brings up.
+check_before "waits for the scheduler before applying the node client" \
+	"rollout status --namespace gag-dragonfly deployment" "deploy/dragonfly-node"
+check_contains "waits on the node client's rollout" \
+	"rollout status --namespace gag-dragonfly-node daemonset/dragonfly-client" "$(cat "${CALL_LOG}")"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_DRAGONFLY_NODES=1
+run_main
+check "rejects the node client without the Dragonfly back end" 1 "${MAIN_RC}"
 check_not_contains "rejects that combination before any cluster mutation" \
 	"clusters resize" "$(cat "${CALL_LOG}")"
 

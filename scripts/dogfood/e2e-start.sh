@@ -47,6 +47,13 @@
 #                five mirrors either way. Not combinable with
 #                REGISTRY_MIRROR_PERSISTENT=1. Needs helm, which mints the
 #                seed peer's CA. See deploy/registry-mirror/README.md (Q539).
+#   E2E_DRAGONFLY_NODES=1
+#                Also install the Dragonfly node client (Q540,
+#                deploy/dragonfly-node/) on the e2e pool, so containerd pulls
+#                worker images through a loopback dfdaemon that shares blobs
+#                node to node. Needs E2E_MIRROR_BACKEND=dragonfly, whose
+#                scheduler it shares. Restarts containerd on each e2e node it
+#                lands on. e2e-stop.sh deletes it.
 #   GMC_ROLLOUT_TIMEOUT
 #                How long to wait for the GMC rollout that serves the v2beta1
 #                conversion webhook (default: 5m).
@@ -188,6 +195,23 @@ apply_dragonfly_backend() {
 	}
 }
 
+dragonfly_nodes() {
+	[[ "${E2E_DRAGONFLY_NODES:-0}" == "1" || "${E2E_DRAGONFLY_NODES:-0}" == "true" ]]
+}
+
+# apply_dragonfly_nodes — the node client (Q540), after the mirrors and so after
+# the scheduler it registers with. The DaemonSet targets the e2e pool, which is
+# usually empty at this point: its pods land as the autoscaler adds nodes for
+# the first jobs, racing those jobs' pulls, so the rollout below waits only for
+# nodes already up. A pull that dfinit's containerd restart interrupts is
+# retried by the kubelet.
+apply_dragonfly_nodes() {
+	echo "Applying the Dragonfly node client on the e2e pool (Q540)..."
+	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly-node"
+	kubectl rollout status --namespace gag-dragonfly-node \
+		daemonset/dragonfly-client --timeout=300s
+}
+
 apply_registry_mirror() {
 	# Ephemeral caches by default (emptyDir — $0 at rest, cold on the first pull
 	# of each e2e window). Set REGISTRY_MIRROR_PERSISTENT=1 to render the
@@ -237,6 +261,11 @@ main() {
 			exit 1
 			;;
 	esac
+
+	if dragonfly_nodes && [[ "${E2E_MIRROR_BACKEND}" != "dragonfly" ]]; then
+		echo "error: E2E_DRAGONFLY_NODES=1 needs E2E_MIRROR_BACKEND=dragonfly, whose scheduler it shares" >&2
+		exit 1
+	fi
 
 	require_cmd gh "https://cli.github.com/"
 	require_cmd gcloud "https://cloud.google.com/sdk/docs/install"
@@ -289,6 +318,9 @@ main() {
 	# behind five image pulls, and before the routing block below, which is the
 	# first point at which a job can reach this tenant.
 	apply_registry_mirror
+	if dragonfly_nodes; then
+		apply_dragonfly_nodes
+	fi
 
 	# ScaleSet routing (Q231): the v2beta1 RunnerSet declares exactly one
 	# runnerLabel (gag-ci-e2e), which is both the runs-on target and the
