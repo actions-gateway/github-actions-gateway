@@ -39,7 +39,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none, under a `get` on `serviceaccounts`. Stage two 🔲 ready |
-| [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | 🔲 ready |
+| [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | ⚠️ validated on dogfood 2026-10-19, a Kata worker's reachable set unchanged ([plan §6](q540-node-layer-p2p.md#6-dogfood-validation)); shipping the recipe remains |
 
 **The split is the maintainer's, chosen 2026-10-09; the reasons below are this plan's, offered with it.** The theme is in the maintainer's own words: the storage advance plus scale-set correctness.
 Q1086 is what the release is for, and Q1171 is what shows it worked on a cluster that has run 1.x.

@@ -1,8 +1,8 @@
 # Node-Layer P2P Image Distribution — Q540
 
-> **Status (2026-10-19): ❌ Graded, not built.** Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind.
+> **Status (2026-10-19): ⚠️ Validated on dogfood, not shipped.** Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind.
 > Against the goal Q540 serves, running untrusted pull-request checks on GAG's Kata workers, neither candidate is on the worker's path, so security does not choose between them ([§4](#4-against-the-goal)).
-> Chosen 2026-10-19: Dragonfly, for its features and because it is already deployed as the mirrors' back end ([§5](#5-choosing)).
+> Chosen 2026-10-19: Dragonfly, for its features and because it is already deployed as the mirrors' back end ([§5](#5-choosing)); validated on dogfood the same day with a Kata worker's reachable set unchanged ([§6](#6-dogfood-validation)).
 
 [Q540](../queue/Q540.md) is the composed stack: P2P distribution of pod images at the node, the in-cluster pull-through mirrors ([q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md)) for pulls inside a job.
 The attacker Q408 designs against is the job: code from an untrusted pull request, running in a Kata worker whose reachable set is cluster DNS, GitHub and the mirrors.
@@ -102,8 +102,37 @@ Dragonfly reaches them only if they are published as OCI artifacts the mirrors s
 
 Spegel stays a candidate for a simpler reference architecture, tracked as its own row.
 
-Three things are unmeasured and gate dogfood:
+The three readings that gated dogfood are answered in [§6](#6-dogfood-validation).
 
-- Whether GKE's containerd reads `certs.d` per pull, as kind's does, which decides whether dfinit's containerd restart can stay off.
-- What dfinit displaces on a GKE node that also runs `kata-deploy`, which edits the same containerd configuration.
-- Whether the node clients and Q539's seed peer can share one scheduler, so one deployment serves both layers.
+## 6. Dogfood validation
+
+Run on 2026-10-19 on the dogfood cluster (GKE `v1.35.8-gke.1626001`, Dataplane V2, Ubuntu nodes with containerd `2.2.7`, Kata from `kata-deploy`), with the Kata e2e tenant up under the Q408 posture.
+Chart 1.8.5's node client only (`client:v1.5.7` and `dfinit:v1.5.7`, both by digest), on the e2e pool, proxy bound to `127.0.0.1`, dfinit routing docker.io and ghcr.io, against the Q539 scheduler in `gag-dragonfly`.
+Everything was removed afterwards and the e2e nodes scaled away, taking dfinit's edits with them.
+
+**GKE's containerd does not read `certs.d` until restarted.** A fresh e2e node had no `certs.d` and an inline `registry.mirrors."docker.io"` naming `mirror.gcr.io` then Docker Hub. dfinit logged "config_path not set" and rewrote `config.toml` to `config_path = "/etc/containerd/certs.d"`; with its restart off, a pull of `debian:bookworm-slim` went straight to the registry and the node client saw zero requests.
+So dfinit's containerd restart has to stay on, its chart default.
+
+**dfinit drops GKE's Docker Hub mirror.** Its rewrite removed the `mirror.gcr.io` endpoint, so Docker Hub pulls fall back to Docker Hub itself, through Dragonfly, rather than to Google's mirror.
+
+**It coexists with `kata-deploy`.** `kata-deploy` adds an `imports` line naming `/opt/kata/containerd/config.d/kata-deploy.toml`, and dfinit's rewrite kept it, on the node that had Kata first and on a fresh node where the two started together.
+That fresh node is one sample of the startup order, not a proof that every order works.
+
+**The restart did not disturb running pods.** dfinit's `systemctl restart containerd.service` left every pod on the node, two running Kata pods among them, with its start time unchanged and zero restarts, and a running Kata worker still answered `exec` from its guest kernel.
+A Kata pod started afterwards on `ghcr.io/actions-gateway/dogfood-e2e-runner:2.337.0-1` (723 MB) pulled it in 28.5 s through the node client: 15 blob requests by the P2P rule, 5 direct, all to ghcr.io.
+
+**Pod images move between nodes.** The same image on a second e2e node pulled in 36.5 s, and that node's client collected 11 blobs from the first node (11 log lines naming it), with 4 small ones fetched from source.
+The second pull was slower than the first; one pair of timings does not say why.
+
+**One scheduler serves both layers.** The host-network clients registered with the Q539 scheduler once an additive policy admitted the node subnet (`10.142.0.0/20`) to its port 8002: on Dataplane V2 an `ipBlock` on the node subnet does match those clients.
+
+**A worker's reachable set is unchanged.** A TCP connect to ports 4000 to 4005 on both e2e nodes' InternalIPs and on `169.254.4.6`, from three pods on the first node:
+
+| Port | runc pod, no egress policy | Kata pod, no `workload` label | Kata worker |
+|---|---|---|---|
+| 4000, 4002 to 4005 | connects, all three addresses | connects, all three addresses | no connect |
+| 4001 (bound to loopback) | no connect | no connect | no connect |
+| `mirror-docker-io:5000` (control) | refused by the mirror's ingress policy | 200 | 200 |
+
+UDP 4006 was not tested: a TCP connect cannot test it, and the worker policy admits no UDP beyond DNS.
+No full e2e workflow ran with the node client installed; the Kata pods above are the evidence that Kata workloads start and pull through it.
