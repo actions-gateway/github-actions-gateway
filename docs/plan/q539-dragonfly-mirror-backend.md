@@ -186,7 +186,7 @@ Measured on dogfood by the next gate run, 37380198658: the Dragonfly leg's e2e r
 
 ## 8. What this plan does not cover
 
-The node layer, where a `hostNetwork` dfdaemon serves the kubelet's own pulls, is [Q540](../queue/Q540.md). §2 applies there directly: chart 1.8.5's node client listens on `0.0.0.0:4001` on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.
+The node layer, where a `hostNetwork` dfdaemon serves the kubelet's own pulls, is Q540, now [`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md). §2 applies there directly: chart 1.8.5's node client listens on `0.0.0.0:4001` on every node, so whether a worker pod can reach a node address on that port decides whether the open proxy is on the worker's path.
 
 ### 8.1 Measured: the worker policy holds, and nothing else does
 
@@ -208,7 +208,7 @@ The middle column is the inversion: the same runtime, namespace and node without
 
 **Every pod without an egress policy can reach one, on every node.** Pod-level policy cannot select a `hostNetwork` listener, so the only thing between a pod and the open proxy of §2 is that pod's own egress policy.
 That covers any tenant pod the GMC does not label as a workload, and every pod in a namespace with no default-deny.
-Q540's build has to answer that before a node client ships, for example by binding the proxy to loopback for the node's own containerd rather than to `0.0.0.0`; that remedy is not measured here.
+Q540's node client answers it by binding the proxy to loopback for the node's own containerd rather than to `0.0.0.0`, measured in §8.2.
 
 ### 8.2 Measured: the proxy binds to loopback, and five ports stay on every address
 
