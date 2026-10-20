@@ -2816,8 +2816,8 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 </tr>
 <tr>
 <td><a href="q540-node-layer-p2p/">q540-node-layer-p2p.md</a></td>
-<td>Node-layer P2P pod-image distribution for <a href="../queue/Q540/">Q540</a>: Dragonfly's node client and Spegel graded on kind against what a pod with no egress policy can do at a node address</td>
-<td>❌ Graded 2026-10-13, not built. Dragonfly exposes unauthenticated task control on every node address; Spegel exposes read access to cached images, narrowed by NetworkPolicy except across nodes. Recommends Spegel; GKE's containerd behaviour gates dogfood</td>
+<td>Node-layer P2P pod-image distribution for <a href="../queue/Q540/">Q540</a>: Dragonfly's node client and Spegel graded on kind, and against the untrusted-PR goal</td>
+<td>⚠️ Graded 2026-10-13; Dragonfly chosen 2026-10-19 and validated on dogfood the same day, with a Kata worker's reachable set unchanged and pod images moving between Kata nodes. Shipping the recipe remains on <a href="../queue/Q540/">Q540</a></td>
 </tr>
 </tbody>
 </table>

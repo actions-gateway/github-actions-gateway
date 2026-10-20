@@ -3111,11 +3111,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q540/">Q540</a></td>
-<td><a href="../plan/q540-node-layer-p2p/">Milestone: P2P at the node, pull-through cache in-guest</a></td>
+<td><a href="../plan/q540-node-layer-p2p/">Ship Dragonfly's node client as a supported node-layer recipe</a></td>
 <td><code>security</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls.</td>
+<td>The composed stack is validated on dogfood (<a href="../plan/q540-node-layer-p2p/#6-dogfood-validation">plan §6</a>): Dragonfly's node client pulls …</td>
 </tr>
 <tr>
 <td><a href="Q682/">Q682</a></td>
@@ -4092,6 +4092,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>validate-candidate.yml</code> always runs main's <code>validate-release.sh</code>, and with <code>legs</code> empty it runs every leg in main's <code>GATE_LEGS_ALL</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1192/">Q1192</a></td>
+<td><a href="../plan/q540-node-layer-p2p/">Spegel reference architecture as a simpler node-layer P2P alternative</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q540 builds the node layer on Dragonfly, which pre-heats nodes and already backs the registry mirrors (Q539).</td>
 </tr>
 </tbody>
 </table>

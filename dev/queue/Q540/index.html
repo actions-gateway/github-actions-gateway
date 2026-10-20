@@ -23,7 +23,7 @@
     
     
       
-        <title>Milestone: P2P at the node, pull-through cache in-guest - GitHub Actions Gateway</title>
+        <title>Ship Dragonfly's node client as a supported node-layer recipe - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#milestone-p2p-at-the-node-pull-through-cache-in-guest" class="md-skip">
+        <a href="#ship-dragonflys-node-client-as-a-supported-node-layer-recipe" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Milestone: P2P at the node, pull-through cache in-guest
+              Ship Dragonfly's node client as a supported node-layer recipe
             
           </span>
         </div>
@@ -2597,13 +2597,16 @@
   
 
 
-<h1 id="milestone-p2p-at-the-node-pull-through-cache-in-guest">Milestone: P2P at the node, pull-through cache in-guest<a class="headerlink" href="#milestone-p2p-at-the-node-pull-through-cache-in-guest" title="Permanent link">&para;</a></h1>
-<p>Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls.
-Nothing node-layer is built.</p>
-<p><a href="../../plan/q540-node-layer-p2p/">The plan</a> graded both candidates on kind against what a pod with no egress policy can do at a node address, and recommends Spegel: its worst case is read access to cached images, where Dragonfly's node client exposes unauthenticated task control.
-A Kata worker under the GMC's workload policy reaches no node address on dogfood (<a href="../../plan/q539-dragonfly-mirror-backend/#81-measured-the-worker-policy-holds-and-nothing-else-does">Q539 plan §8.1</a>).</p>
-<p>Next is dogfood, gated on three readings the plan lists as unmeasured: whether GKE's containerd reads <code>certs.d</code> per pull, what Spegel displaces on a GKE node running <code>kata-deploy</code>, and whether <code>resolveTags: false</code> costs a digest-pinned worker image anything.
-Ship with the plan's ingress policy and <code>resolveTags: false</code>; the cross-node hostPort path stays open to pods outside a GAG tenant.</p>
+<h1 id="ship-dragonflys-node-client-as-a-supported-node-layer-recipe">Ship Dragonfly's node client as a supported node-layer recipe<a class="headerlink" href="#ship-dragonflys-node-client-as-a-supported-node-layer-recipe" title="Permanent link">&para;</a></h1>
+<p>The composed stack is validated on dogfood (<a href="../../plan/q540-node-layer-p2p/#6-dogfood-validation">plan §6</a>): Dragonfly's node client pulls pod images through a loopback-bound proxy and moves them between Kata nodes, coexists with <code>kata-deploy</code>, shares the Q539 scheduler, and leaves a Kata worker's reachable set unchanged.
+What remains is shipping it, since the validation ran from a hand-installed chart that was removed afterwards.</p>
+<ul>
+<li><strong>Manifests.</strong> A node-layer overlay beside <code>deploy/dragonfly/</code>: chart 1.8.5's client by digest, <code>proxy.server.ip: 127.0.0.1</code>, dfinit with its containerd restart on (GKE's containerd reads <code>certs.d</code> only after one), and the additive policy admitting the node subnet to the scheduler.</li>
+<li><strong>GKE's Docker Hub mirror.</strong> dfinit's rewrite drops the <code>mirror.gcr.io</code> endpoint GKE configures for docker.io; decide whether to keep docker.io out of dfinit's registries or accept Docker Hub as the source.</li>
+<li><strong>Operator docs.</strong> The recipe in <code>docs/operations/p2p-image-distribution.md</code>, including that the restart is required on GKE.</li>
+<li><strong>Release gate.</strong> Whether the Dragonfly leg installs the node layer too, which would also give the composed stack a full e2e run; none ran during validation.</li>
+</ul>
+<p>Not tested in validation: UDP 4006, and more than one fresh-node startup order between dfinit and <code>kata-deploy</code>.</p>
 
 
 

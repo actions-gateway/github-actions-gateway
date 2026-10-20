@@ -3776,7 +3776,7 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   So it is built as the Distribution mirrors' outbound proxy instead, which keeps the contract theirs and admits only the mirror pods to Dragonfly.
   That shape passed the Phase-4 battery on dogfood on 2026-10-05, and Q539 closed.</li>
 <li><strong><a href="../../queue/Q540/">Q540</a> — the composed stack as a milestone: Kata + Dragonfly (node layer) + pull-through cache (guest layer).</strong> The two operate at different layers (§5), so this validates the composition an image-heavy fleet would actually run: Dragonfly accelerating node-level pod-image distribution via containerd mirror config, the in-guest mirror serving untrusted job pulls, each with its own policy scope — and confirms neither weakens the other's posture (in particular that the node-layer P2P mesh stays unreachable from worker pods).
-  Graded in <a href="../q540-node-layer-p2p/">q540-node-layer-p2p.md</a>: workers do not reach node addresses, Dragonfly's node client exposes unauthenticated task control to every other pod, and Spegel is recommended instead.</li>
+  Graded in <a href="../q540-node-layer-p2p/">q540-node-layer-p2p.md</a>: workers do not reach node addresses, so neither Dragonfly's node client nor Spegel is on a worker's path; Dragonfly was chosen for its features.</li>
 </ul>
 <h2 id="7-success-criteria">7. Success criteria<a class="headerlink" href="#7-success-criteria" title="Permanent link">&para;</a></h2>
 <p><strong>Met 2026-08-28.</strong> The dogfood Kata e2e variant ran green with <code>e2e-open-egress</code> deleted, the negative probes confirmed enforcement, and the Phase 5 docs made the recipe the supported posture.

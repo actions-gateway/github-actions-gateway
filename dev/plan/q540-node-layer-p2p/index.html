@@ -2608,10 +2608,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-side-by-side" class="md-nav__link">
+  <a href="#3-side-by-side-for-a-pod-with-no-egress-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Side by side
+        3. Side by side, for a pod with no egress policy
       
     </span>
   </a>
@@ -2619,10 +2619,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-recommendation" class="md-nav__link">
+  <a href="#4-against-the-goal" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Recommendation
+        4. Against the goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-choosing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Choosing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-dogfood-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Dogfood validation
       
     </span>
   </a>
@@ -2651,13 +2673,16 @@
 
 <h1 id="node-layer-p2p-image-distribution--q540">Node-Layer P2P Image Distribution — Q540<a class="headerlink" href="#node-layer-p2p-image-distribution--q540" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-10-13): ❌ Graded, not built.</strong> Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind against one question: what can a pod with no egress policy do at a node's address?
-Dragonfly's node client exposes unauthenticated task control on every node address (<a href="../q539-dragonfly-mirror-backend/#82-measured-the-proxy-binds-to-loopback-and-five-ports-stay-on-every-address">Q539 plan §8.2</a>); Spegel exposes read access to the node's cached images and nothing else, and runs on the pod network, where NetworkPolicy can narrow even that (<a href="#2-spegel-graded">§2</a>).
-Recommendation: build Q540's node layer on Spegel (<a href="#4-recommendation">§4</a>).</p>
+<p><strong>Status (2026-10-19): ⚠️ Validated on dogfood, not shipped.</strong> Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind.
+Against the goal Q540 serves, running untrusted pull-request checks on GAG's Kata workers, neither candidate is on the worker's path, so security does not choose between them (<a href="#4-against-the-goal">§4</a>).
+Chosen 2026-10-19: Dragonfly, for its features and because it is already deployed as the mirrors' back end (<a href="#5-choosing">§5</a>); validated on dogfood the same day with a Kata worker's reachable set unchanged (<a href="#6-dogfood-validation">§6</a>).</p>
 </blockquote>
 <p><a href="../../queue/Q540/">Q540</a> is the composed stack: P2P distribution of pod images at the node, the in-cluster pull-through mirrors (<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>) for pulls inside a job.
-On dogfood, a Kata worker under the Gateway Manager Controller's (GMC's) workload egress policy reaches no node address on a non-allowlisted port (<a href="../q539-dragonfly-mirror-backend/#81-measured-the-worker-policy-holds-and-nothing-else-does">Q539 plan §8.1</a>).
-Every other pod without an egress policy does, so a node-layer component is graded on what it offers that pod.</p>
+The attacker Q408 designs against is the job: code from an untrusted pull request, running in a Kata worker whose reachable set is cluster DNS, GitHub and the mirrors.
+So the security question for a node layer is whether it widens that set.
+On dogfood, a Kata worker under the Gateway Manager Controller's (GMC's) workload egress policy reaches no node address on a non-allowlisted port (<a href="../q539-dragonfly-mirror-backend/#81-measured-the-worker-policy-holds-and-nothing-else-does">Q539 plan §8.1</a>).</p>
+<p>§1 and §2 also record what each candidate offers a pod with <em>no</em> egress policy.
+That is outside this goal, and it matters only to an operator who runs untrusted pods other than GAG workers on the same cluster; the operator guidance is <a href="../../operations/p2p-image-distribution/#operational-notes">p2p-image-distribution.md</a>.</p>
 <h2 id="1-dragonfly-summarised">1. Dragonfly, summarised<a class="headerlink" href="#1-dragonfly-summarised" title="Permanent link">&para;</a></h2>
 <p>Measured on kind with chart 1.8.5 and client v1.5.7 in Q539 plan §8.2: the forward proxy binds to loopback from chart values and containerd pulls through it, but upload gRPC, metrics, health, stats and piece storage stay on <code>0.0.0.0</code>.
 The upload service includes task download and delete calls with no authentication; that is read from the v1.5.7 source and not probed.
@@ -2747,7 +2772,7 @@ A rogue libp2p peer could also advertise content, and containerd verifies blobs 
 Peer distribution kept working under the policy: the second node's hits rose from 4 to 12 over a <code>python:3.12-slim</code> pull.
 Its misses rose from 2 to 25 over the same pull, which these readings do not explain.</p>
 <p><strong>It displaces existing registry config.</strong> On install Spegel moved kind's own <code>certs.d/127.0.0.1:5000</code> entry into <code>certs.d/_backup/</code>, so a node already carrying per-registry config loses it unless <code>prependExisting</code> is set.</p>
-<h2 id="3-side-by-side">3. Side by side<a class="headerlink" href="#3-side-by-side" title="Permanent link">&para;</a></h2>
+<h2 id="3-side-by-side-for-a-pod-with-no-egress-policy">3. Side by side, for a pod with no egress policy<a class="headerlink" href="#3-side-by-side-for-a-pod-with-no-egress-policy" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -2789,17 +2814,103 @@ Its misses rose from 2 to 25 over the same pull, which these readings do not exp
 </tr>
 </tbody>
 </table>
-<h2 id="4-recommendation">4. Recommendation<a class="headerlink" href="#4-recommendation" title="Permanent link">&para;</a></h2>
-<p>Build the node layer on Spegel.
-Its worst case is read access to cached images, where Dragonfly's is control of a node's download client, and the GMC's workload policy already keeps workers off node addresses (§8.1 of the Q539 plan).
-Ship it with the ingress policy of §2 and <code>resolveTags: false</code>, and treat the cross-node hostPort path as known exposure for pods outside a GAG tenant.</p>
-<p>Three things are unmeasured and gate dogfood:</p>
-<ul>
-<li>Whether GKE's containerd reads <code>certs.d</code> per pull, as kind's does; the same question blocked Dragonfly's dfinit.</li>
-<li>What Spegel displaces on a GKE node, and on a node that also runs <code>kata-deploy</code>.</li>
-<li>Whether <code>resolveTags: false</code> costs the worker image anything: GAG pins worker images by digest, so it should not, but nothing here measured it.</li>
-</ul>
-<p>Dragonfly stays the in-guest mirrors' back end (Q539), so "one deployment for both layers" is answered no: the layers want different tools.</p>
+<h2 id="4-against-the-goal">4. Against the goal<a class="headerlink" href="#4-against-the-goal" title="Permanent link">&para;</a></h2>
+<p><strong>Neither candidate is reachable from a worker.</strong> The workload policy admits DNS, the egress proxy, GitHub's ranges on 443 and the mirrors; it admits no node address and no Spegel pod IP, so both Dragonfly's node ports and Spegel's ports in §2 are off the worker's path.
+That is inferred from the policy for Spegel's pod IPs and measured for node addresses, with a stand-in listener rather than either real component.</p>
+<p><strong>A pull request does not choose what the node layer serves.</strong> The kubelet pulls the worker pod's images, which the operator sets on the RunnerGroup; a job's own containers are pulled inside the guest, through the mirrors.
+So tag poisoning by a rogue Spegel peer, or a private image read through Spegel, needs a pod that can reach Spegel, which a worker is not.</p>
+<p><strong>What remains to measure for this goal</strong> is the same reading with the real component installed: a worker's reachable set unchanged, on dogfood, under Kata.</p>
+<h2 id="5-choosing">5. Choosing<a class="headerlink" href="#5-choosing" title="Permanent link">&para;</a></h2>
+<p>With security neutral against the goal, the choice is operational:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Dragonfly</th>
+<th>Spegel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Already deployed here</td>
+<td>yes, as the mirrors' back end (Q539); the node client is not</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Warms worker images on nodes ahead of a burst</td>
+<td>yes</td>
+<td>no: serves only what some node already pulled</td>
+</tr>
+<tr>
+<td>Distributes more than images</td>
+<td>yes, arbitrary files</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Footprint</td>
+<td>node DaemonSet plus a scheduler</td>
+<td>one DaemonSet</td>
+</tr>
+<tr>
+<td>containerd restart on install</td>
+<td>the chart's default, can be turned off</td>
+<td>none on kind</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Chosen: Dragonfly.</strong> Pre-heating and its wider scope matter most for the workloads with the largest pulls: GPU CI, whose images typically run to several gigabytes (not measured here), is where a cold node costs most and where warming nodes ahead of a burst pays.
+It also keeps one P2P system in the cluster rather than two, with one scheduler serving both the node clients and the mirrors' seed peer if that sharing holds up on dogfood.</p>
+<p>Model weights and datasets are a different path: a job downloads them inside the guest, where the Q408 posture admits only DNS, GitHub and the mirrors.
+Dragonfly reaches them only if they are published as OCI artifacts the mirrors serve, which the mirrors' content-class grading in the <a href="../q539-dragonfly-mirror-backend/#5-per-content-class">Q539 plan §5</a> does not cover yet.</p>
+<p>Spegel stays a candidate for a simpler reference architecture, tracked as its own row.</p>
+<p>The three readings that gated dogfood are answered in <a href="#6-dogfood-validation">§6</a>.</p>
+<h2 id="6-dogfood-validation">6. Dogfood validation<a class="headerlink" href="#6-dogfood-validation" title="Permanent link">&para;</a></h2>
+<p>Run on 2026-10-19 on the dogfood cluster (GKE <code>v1.35.8-gke.1626001</code>, Dataplane V2, Ubuntu nodes with containerd <code>2.2.7</code>, Kata from <code>kata-deploy</code>), with the Kata e2e tenant up under the Q408 posture.
+Chart 1.8.5's node client only (<code>client:v1.5.7</code> and <code>dfinit:v1.5.7</code>, both by digest), on the e2e pool, proxy bound to <code>127.0.0.1</code>, dfinit routing docker.io and ghcr.io, against the Q539 scheduler in <code>gag-dragonfly</code>.
+Everything was removed afterwards and the e2e nodes scaled away, taking dfinit's edits with them.</p>
+<p><strong>GKE's containerd does not read <code>certs.d</code> until restarted.</strong> A fresh e2e node had no <code>certs.d</code> and an inline <code>registry.mirrors."docker.io"</code> naming <code>mirror.gcr.io</code> then Docker Hub. dfinit logged "config_path not set" and rewrote <code>config.toml</code> to <code>config_path = "/etc/containerd/certs.d"</code>; with its restart off, a pull of <code>debian:bookworm-slim</code> went straight to the registry and the node client saw zero requests.
+So dfinit's containerd restart has to stay on, its chart default.</p>
+<p><strong>dfinit drops GKE's Docker Hub mirror.</strong> Its rewrite removed the <code>mirror.gcr.io</code> endpoint, so Docker Hub pulls fall back to Docker Hub itself, through Dragonfly, rather than to Google's mirror.</p>
+<p><strong>It coexists with <code>kata-deploy</code>.</strong> <code>kata-deploy</code> adds an <code>imports</code> line naming <code>/opt/kata/containerd/config.d/kata-deploy.toml</code>, and dfinit's rewrite kept it, on the node that had Kata first and on a fresh node where the two started together.
+That fresh node is one sample of the startup order, not a proof that every order works.</p>
+<p><strong>The restart did not disturb running pods.</strong> dfinit's <code>systemctl restart containerd.service</code> left every pod on the node, two running Kata pods among them, with its start time unchanged and zero restarts, and a running Kata worker still answered <code>exec</code> from its guest kernel.
+A Kata pod started afterwards on <code>ghcr.io/actions-gateway/dogfood-e2e-runner:2.337.0-1</code> (723 MB) pulled it in 28.5 s through the node client: 15 blob requests by the P2P rule, 5 direct, all to ghcr.io.</p>
+<p><strong>Pod images move between nodes.</strong> The same image on a second e2e node pulled in 36.5 s, and that node's client collected 11 blobs from the first node (11 log lines naming it), with 4 small ones fetched from source.
+The second pull was slower than the first; one pair of timings does not say why.</p>
+<p><strong>One scheduler serves both layers.</strong> The host-network clients registered with the Q539 scheduler once an additive policy admitted the node subnet (<code>10.142.0.0/20</code>) to its port 8002: on Dataplane V2 an <code>ipBlock</code> on the node subnet does match those clients.</p>
+<p><strong>A worker's reachable set is unchanged.</strong> A TCP connect to ports 4000 to 4005 on both e2e nodes' InternalIPs and on <code>169.254.4.6</code>, from three pods on the first node:</p>
+<table>
+<thead>
+<tr>
+<th>Port</th>
+<th>runc pod, no egress policy</th>
+<th>Kata pod, no <code>workload</code> label</th>
+<th>Kata worker</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4000, 4002 to 4005</td>
+<td>connects, all three addresses</td>
+<td>connects, all three addresses</td>
+<td>no connect</td>
+</tr>
+<tr>
+<td>4001 (bound to loopback)</td>
+<td>no connect</td>
+<td>no connect</td>
+<td>no connect</td>
+</tr>
+<tr>
+<td><code>mirror-docker-io:5000</code> (control)</td>
+<td>refused by the mirror's ingress policy</td>
+<td>200</td>
+<td>200</td>
+</tr>
+</tbody>
+</table>
+<p>UDP 4006 was not tested: a TCP connect cannot test it, and the worker policy admits no UDP beyond DNS.
+No full e2e workflow ran with the node client installed; the Kata pods above are the evidence that Kata workloads start and pull through it.</p>
 
 
 
