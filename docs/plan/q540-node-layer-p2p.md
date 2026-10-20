@@ -1,12 +1,16 @@
 # Node-Layer P2P Image Distribution — Q540
 
-> **Status (2026-10-13): ❌ Graded, not built.** Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind against one question: what can a pod with no egress policy do at a node's address?
-> Dragonfly's node client exposes unauthenticated task control on every node address ([Q539 plan §8.2](q539-dragonfly-mirror-backend.md#82-measured-the-proxy-binds-to-loopback-and-five-ports-stay-on-every-address)); Spegel exposes read access to the node's cached images and nothing else, and runs on the pod network, where NetworkPolicy can narrow even that ([§2](#2-spegel-graded)).
-> Recommendation: build Q540's node layer on Spegel ([§4](#4-recommendation)).
+> **Status (2026-10-19): ❌ Graded, not built.** Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind.
+> Against the goal Q540 serves, running untrusted pull-request checks on GAG's Kata workers, neither candidate is on the worker's path, so security does not choose between them ([§4](#4-against-the-goal)).
+> Chosen 2026-10-19: Dragonfly, for its features and because it is already deployed as the mirrors' back end ([§5](#5-choosing)).
 
 [Q540](../queue/Q540.md) is the composed stack: P2P distribution of pod images at the node, the in-cluster pull-through mirrors ([q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md)) for pulls inside a job.
+The attacker Q408 designs against is the job: code from an untrusted pull request, running in a Kata worker whose reachable set is cluster DNS, GitHub and the mirrors.
+So the security question for a node layer is whether it widens that set.
 On dogfood, a Kata worker under the Gateway Manager Controller's (GMC's) workload egress policy reaches no node address on a non-allowlisted port ([Q539 plan §8.1](q539-dragonfly-mirror-backend.md#81-measured-the-worker-policy-holds-and-nothing-else-does)).
-Every other pod without an egress policy does, so a node-layer component is graded on what it offers that pod.
+
+§1 and §2 also record what each candidate offers a pod with *no* egress policy.
+That is outside this goal, and it matters only to an operator who runs untrusted pods other than GAG workers on the same cluster; the operator guidance is [p2p-image-distribution.md](../operations/p2p-image-distribution.md#operational-notes).
 
 ## 1. Dragonfly, summarised
 
@@ -57,7 +61,7 @@ Its misses rose from 2 to 25 over the same pull, which these readings do not exp
 
 **It displaces existing registry config.** On install Spegel moved kind's own `certs.d/127.0.0.1:5000` entry into `certs.d/_backup/`, so a node already carrying per-registry config loses it unless `prependExisting` is set.
 
-## 3. Side by side
+## 3. Side by side, for a pod with no egress policy
 
 | Question | Dragonfly 1.8.5 node client | Spegel 0.7.4 |
 |---|---|---|
@@ -68,16 +72,38 @@ Its misses rose from 2 to 25 over the same pull, which these readings do not exp
 | Restarts containerd | the chart does, unless turned off | no; it writes `certs.d`, and kind's containerd used it with no restart |
 | Pre-heats ahead of a burst | yes | no: serves only what some node already pulled |
 
-## 4. Recommendation
+## 4. Against the goal
 
-Build the node layer on Spegel.
-Its worst case is read access to cached images, where Dragonfly's is control of a node's download client, and the GMC's workload policy already keeps workers off node addresses (§8.1 of the Q539 plan).
-Ship it with the ingress policy of §2 and `resolveTags: false`, and treat the cross-node hostPort path as known exposure for pods outside a GAG tenant.
+**Neither candidate is reachable from a worker.** The workload policy admits DNS, the egress proxy, GitHub's ranges on 443 and the mirrors; it admits no node address and no Spegel pod IP, so both Dragonfly's node ports and Spegel's ports in §2 are off the worker's path.
+That is inferred from the policy for Spegel's pod IPs and measured for node addresses, with a stand-in listener rather than either real component.
+
+**A pull request does not choose what the node layer serves.** The kubelet pulls the worker pod's images, which the operator sets on the RunnerGroup; a job's own containers are pulled inside the guest, through the mirrors.
+So tag poisoning by a rogue Spegel peer, or a private image read through Spegel, needs a pod that can reach Spegel, which a worker is not.
+
+**What remains to measure for this goal** is the same reading with the real component installed: a worker's reachable set unchanged, on dogfood, under Kata.
+
+## 5. Choosing
+
+With security neutral against the goal, the choice is operational:
+
+| | Dragonfly | Spegel |
+|---|---|---|
+| Already deployed here | yes, as the mirrors' back end (Q539); the node client is not | no |
+| Warms worker images on nodes ahead of a burst | yes | no: serves only what some node already pulled |
+| Distributes more than images | yes, arbitrary files | no |
+| Footprint | node DaemonSet plus a scheduler | one DaemonSet |
+| containerd restart on install | the chart's default, can be turned off | none on kind |
+
+**Chosen: Dragonfly.** Pre-heating and its wider scope matter most for the workloads with the largest pulls: GPU CI, whose images typically run to several gigabytes (not measured here), is where a cold node costs most and where warming nodes ahead of a burst pays.
+It also keeps one P2P system in the cluster rather than two, with one scheduler serving both the node clients and the mirrors' seed peer if that sharing holds up on dogfood.
+
+Model weights and datasets are a different path: a job downloads them inside the guest, where the Q408 posture admits only DNS, GitHub and the mirrors.
+Dragonfly reaches them only if they are published as OCI artifacts the mirrors serve, which the mirrors' content-class grading in the [Q539 plan §5](q539-dragonfly-mirror-backend.md#5-per-content-class) does not cover yet.
+
+Spegel stays a candidate for a simpler reference architecture, tracked as its own row.
 
 Three things are unmeasured and gate dogfood:
 
-- Whether GKE's containerd reads `certs.d` per pull, as kind's does; the same question blocked Dragonfly's dfinit.
-- What Spegel displaces on a GKE node, and on a node that also runs `kata-deploy`.
-- Whether `resolveTags: false` costs the worker image anything: GAG pins worker images by digest, so it should not, but nothing here measured it.
-
-Dragonfly stays the in-guest mirrors' back end (Q539), so "one deployment for both layers" is answered no: the layers want different tools.
+- Whether GKE's containerd reads `certs.d` per pull, as kind's does, which decides whether dfinit's containerd restart can stay off.
+- What dfinit displaces on a GKE node that also runs `kata-deploy`, which edits the same containerd configuration.
+- Whether the node clients and Q539's seed peer can share one scheduler, so one deployment serves both layers.
