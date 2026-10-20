@@ -144,7 +144,7 @@ RUN go build -trimpath -o /bin/fakegithub ./test/fakegithub
 ########################  gmc  ################################################
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
-FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS gmc
+FROM gcr.io/distroless/static:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087 AS gmc
 # OpenContainers image labels carry provenance for SBOM scanners. REVISION and
 # VERSION arrive as build args (wired from GIT_SHA in docker-bake.hcl); the
 # defaults cover a bare `docker build` with no args. Declared in the final stage
@@ -172,7 +172,7 @@ USER 65532:65532
 ENTRYPOINT ["/manager"]
 
 ########################  agc  ################################################
-FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS agc
+FROM gcr.io/distroless/static:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087 AS agc
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -187,7 +187,7 @@ USER 65532:65532
 ENTRYPOINT ["/agc"]
 
 ########################  proxy  ##############################################
-FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS proxy
+FROM gcr.io/distroless/static:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087 AS proxy
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -231,7 +231,7 @@ ENTRYPOINT ["/proxy"]
 ##      automatically).
 ##   4. Update any hardcoded prior runner-version string in
 ##      cmd/agc/internal/agentpool tests so the registered runnerVersion matches.
-FROM ghcr.io/actions/actions-runner:2.337.0@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4 AS worker
+FROM ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807 AS worker
 ENV PATH=/home/runner/bin:$PATH
 ARG REVISION="unknown"
 ARG VERSION="dev"
@@ -319,7 +319,7 @@ ENTRYPOINT ["/wrapper"]
 ##   docker buildx imagetools inspect docker:29-cli
 ## Re-check the source plugin paths when bumping the major: they are set by
 ## docker-library/docker's own Dockerfile, not by the CLI.
-FROM docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c AS docker-cli
+FROM docker:29-cli@sha256:6fae2214c3121a28d5aa639d09032f61310b7c9c75ffbad1025f261a1b621800 AS docker-cli
 
 ## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
 ## the lockstep test over it — is inherited from `worker`, so this image runs
@@ -348,7 +348,7 @@ COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 # published. It intentionally omits the OCI provenance labels and /licenses
 # bundle that the production stages above carry — do NOT copy this as a template
 # for a shipped image.
-FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 AS fakegithub
+FROM gcr.io/distroless/static:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087 AS fakegithub
 COPY --from=build-fakegithub /bin/fakegithub /fakegithub
 USER 65532:65532
 ENTRYPOINT ["/fakegithub"]
