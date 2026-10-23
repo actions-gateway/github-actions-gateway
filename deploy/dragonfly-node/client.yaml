@@ -87,7 +87,7 @@ data:
       prefetchBandwidthLimit: 10GB
       readBufferSize: 2097152
       # Verifies upstream TLS on the direct path (tags, tokens). A path it
-      # cannot load fails open, as on the seed peer: ../dragonfly/seed-client.yaml.
+      # cannot load fails open, as on the seed peer: ../dragonfly-core/seed-client.yaml.
       registryMirror:
         addr: https://index.docker.io
         cert: /etc/ssl/certs/ca-certificates.crt

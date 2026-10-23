@@ -403,7 +403,7 @@ check_not_contains "never deletes the dind lane's own egress policy" \
 reset_stubs gag-dogfood gag-dogfood-ci
 run_main
 check_not_contains "the default backend never applies Dragonfly" \
-	"deploy/dragonfly" "$(cat "${CALL_LOG}")"
+	"deploy/dragonfly-core" "$(cat "${CALL_LOG}")"
 check_not_contains "the default backend never mints a CA" \
 	"helm " "$(cat "${CALL_LOG}")"
 
@@ -412,7 +412,7 @@ E2E_MIRROR_BACKEND=dragonfly
 run_main
 check "the dragonfly bring-up succeeds" 0 "${MAIN_RC}"
 check_contains "applies the Dragonfly back end" \
-	"apply -k ${REPO_ROOT}/deploy/dragonfly" "$(cat "${CALL_LOG}")"
+	"apply -k ${REPO_ROOT}/deploy/dragonfly-core" "$(cat "${CALL_LOG}")"
 check_contains "renders the mirrors with the Dragonfly component" \
 	"deploy/registry-mirror/overlays/dragonfly" "$(call_line 'apply -k '"${REPO_ROOT}"'/deploy/registry-mirror')"
 # A registry container pings its upstream through the seed peer while starting

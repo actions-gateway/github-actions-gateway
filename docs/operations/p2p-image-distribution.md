@@ -107,7 +107,7 @@ This composes with an [air-gapped install](air-gapped-install.md): the private m
 ## GAG's Dragonfly node-client recipe
 
 [`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md) puts a Dragonfly `dfdaemon` on each Kata node, and containerd pulls worker images through it.
-It shares the scheduler in [`deploy/dragonfly/`](../../deploy/dragonfly/README.md) with the registry mirrors' seed peer, so it needs that applied first.
+It shares the scheduler in [`deploy/dragonfly-core/`](../../deploy/dragonfly-core/README.md) with the registry mirrors' seed peer, so it needs that applied first.
 It is validated on GKE with containerd 2.2.7 and Kata from `kata-deploy`, and the release gate's Dragonfly leg runs the e2e matrix with it installed.
 
 **What changes on the node:**
