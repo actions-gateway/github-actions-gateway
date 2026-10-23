@@ -2020,6 +2020,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gags-dragonfly-node-client-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GAG's Dragonfly node-client recipe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#operational-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2869,6 +2880,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gags-dragonfly-node-client-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GAG's Dragonfly node-client recipe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#operational-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2916,7 +2938,8 @@
 </blockquote>
 <p><strong>Goal:</strong> for a platform team running GitHub Actions Gateway (GAG) at scale, decide whether to add a peer-to-peer (P2P) container-image mirror — <a href="https://github.com/spegel-org/spegel">Spegel</a> or <a href="https://d7y.io/">Dragonfly</a> — to keep the runner image-pull path fast and resilient when many ephemeral worker pods start at once.</p>
 <blockquote>
-<p><strong>This is a recommended companion, not a GAG component.</strong> GAG does not bundle, install, require, or configure either tool.
+<p><strong>This is a recommended companion, not a GAG component.</strong> GAG's chart does not install, require, or configure either tool.
+The repository carries one tested recipe, <a href="#gags-dragonfly-node-client-recipe">Dragonfly's node client</a>, which the release gate runs; you apply it yourself.
 A P2P mirror is a cluster-wide, node-level concern that lives below GAG, at the container runtime.
 This page explains <em>why</em> it pairs well with GAG's worker model and <em>how</em> the two interact; the tools' own documentation is authoritative for installation and tuning.</p>
 </blockquote>
@@ -2944,7 +2967,7 @@ It adds <strong>no separate storage</strong> and never mutates or re-packages im
 <li><strong>What it does <em>not</em> do:</strong> Spegel is <strong>lazy</strong> — it can only serve images some node in the cluster has <em>already</em> pulled.
   It does not pre-fetch or pre-heat, and it distributes container images only.</li>
 <li><strong>Choose Spegel when:</strong> you want a low-operational-overhead, drop-in mirror that smooths pull storms with no new stateful component.
-  This is the right default for most GAG fleets; on a cluster shared by tenants with private images, read <a href="#operational-notes">what it exposes</a> first.
+  It is the lighter of the two, though GAG ships and tests a recipe for Dragonfly only; on a cluster shared by tenants with private images, read <a href="#operational-notes">what it exposes</a> first.
   It requires a containerd-based runtime configured to keep unpacked layers (<code>discard_unpacked_layers = false</code>) and to honor mirror config — check Spegel's <a href="https://spegel.dev/docs/getting-started/">compatibility requirements</a> against your node image first.</li>
 </ul>
 <h3 id="dragonfly--full-p2p-distribution-with-pre-heating">Dragonfly — full P2P distribution with pre-heating<a class="headerlink" href="#dragonfly--full-p2p-distribution-with-pre-heating" title="Permanent link">&para;</a></h3>
@@ -3034,6 +3057,27 @@ That:</p>
 <li><strong>Speeds cold starts</strong>, shrinking the gap between job acquisition and the runner coming online.</li>
 </ul>
 <p>This composes with an <a href="../air-gapped-install/">air-gapped install</a>: the private mirror remains the back-to-source registry, and P2P keeps load off it the same way it keeps load off GHCR.</p>
+<h2 id="gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe<a class="headerlink" href="#gags-dragonfly-node-client-recipe" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a> puts a Dragonfly <code>dfdaemon</code> on each Kata node, and containerd pulls worker images through it.
+It shares the scheduler in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly/README.md"><code>deploy/dragonfly/</code></a> with the registry mirrors' seed peer, so it needs that applied first.
+It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</code>, and the release gate's Dragonfly leg runs the e2e matrix with it installed.</p>
+<p><strong>What changes on the node:</strong></p>
+<ul>
+<li><strong>containerd restarts once on each node.</strong> <code>dfinit</code> switches containerd to per-registry <code>certs.d</code> files, which containerd reads only on startup.
+  Running pods, Kata ones included, kept running through the restart.</li>
+<li><strong><code>docker.io</code> and <code>ghcr.io</code> pulls go through Dragonfly.</strong> Only blob requests take the peer path; tags and manifests go to the registry through it directly.</li>
+<li><strong>On GKE, the node's <code>mirror.gcr.io</code> mirror for Docker Hub is gone.</strong> Docker Hub pulls reach Docker Hub through Dragonfly, once per cluster rather than once per node, so watch Docker Hub's rate limits if your worker images live there.</li>
+<li><strong><code>kata-deploy</code>'s containerd config survives.</strong> <code>dfinit</code> kept its <code>imports</code> line on the nodes tested.</li>
+</ul>
+<p><strong>What it exposes, and to whom:</strong></p>
+<ul>
+<li><strong>The peer ports listen on every node address, unauthenticated.</strong> That is upload gRPC on 4000, then metrics, health, stats and piece storage on 4002 to 4006.
+  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one.
+  So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.</li>
+<li><strong>The proxy is bound to loopback</strong>, so only the node's own containerd can use it, and it never reaches a worker.</li>
+</ul>
+<p><strong>Set three values before applying it:</strong> the node selector and toleration in <code>client.yaml</code> (your worker nodes), the CIDR in <code>scheduler-from-nodes.yaml</code> (your node subnet), and the registries in the <code>dfinit</code> config.</p>
+<p><strong>Not yet measured:</strong> UDP 4006, and more than one fresh-node startup order, where <code>dfinit</code> and <code>kata-deploy</code> race to edit containerd's config on a new node.</p>
 <h2 id="operational-notes">Operational notes<a class="headerlink" href="#operational-notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Pull Secrets still matter for the first pull.</strong> The node performing the back-to-source pull authenticates to the registry as usual (the worker's <code>imagePullSecrets</code>; see <a href="../air-gapped-install/">air-gapped install</a> for the secure pull-Secret pattern).

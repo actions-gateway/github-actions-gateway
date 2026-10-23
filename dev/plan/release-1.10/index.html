@@ -2746,10 +2746,10 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>Stage one ✅ landed: the worker ServiceAccount's <code>imagePullSecrets</code> stand in when the template names none, under a <code>get</code> on <code>serviceaccounts</code>. Stage two 🔲 ready</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q540/">Q540</a></td>
+<td>Q540</td>
 <td>Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods</td>
 <td>rides</td>
-<td>⚠️ validated on dogfood 2026-10-19, a Kata worker's reachable set unchanged (<a href="../q540-node-layer-p2p/#6-dogfood-validation">plan §6</a>); shipping the recipe remains</td>
+<td>✅ landed: the node client ships as <code>deploy/dragonfly-node/</code>, validated on dogfood 2026-10-19 with a Kata worker's reachable set unchanged (<a href="../q540-node-layer-p2p/#6-dogfood-validation">plan §6</a>), and this release's Dragonfly leg is its first full e2e run</td>
 </tr>
 </tbody>
 </table>
@@ -2759,7 +2759,7 @@ Q1152, Q1153 and Q1154 are defects on the scale-set tier, the one <code>v2.0.0</
 Q1152 and Q1154 were found reviewing Q1151's fix, and all three follow from the same fact, that GitHub hands a scale-set job to whichever runner asks first.
 Q1069 gates as the one feature: the gateway-level attribution flag reads <code>0</code> where a set's traffic leaves through a pool that logs no source address, the wrong direction for an audit signal.</p>
 <p><strong>The riders are planned and worked, and the tag does not wait for them.</strong> Each can come back short for a reason a gate should not absorb.
-Q540 is a measurement whose answer may be a fix of unknown size: <a href="../q539-dragonfly-mirror-backend/#8-what-this-plan-does-not-cover">Q539</a> measured Dragonfly's node proxy as an open forward proxy.
+Q540 was a measurement whose answer might have been a fix of unknown size, because <a href="../q539-dragonfly-mirror-backend/#8-what-this-plan-does-not-cover">Q539</a> measured Dragonfly's node proxy as an open forward proxy; binding it to loopback was enough.
 Q1066's second stage adds a cloud dependency and an identity grant per provider; its first stage has landed, so the second can slip without costing the air-gapped install path.
 Q1070 keys on Q1069's per-set gauge, whose <code>reason</code> label is what the panel filters on.</p>
 <p><code>scripts/release/semver-floor.sh v1.9.0</code> read <code>FLOOR: NONE</code> on 2026-10-09 over two commits, so nothing merged yet rides beyond the three above.

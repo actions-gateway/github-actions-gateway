@@ -2598,7 +2598,7 @@
 
 
 <h1 id="spegel-reference-architecture-as-a-simpler-node-layer-p2p-alternative">Spegel reference architecture as a simpler node-layer P2P alternative<a class="headerlink" href="#spegel-reference-architecture-as-a-simpler-node-layer-p2p-alternative" title="Permanent link">&para;</a></h1>
-<p>Q540 builds the node layer on Dragonfly, which pre-heats nodes and already backs the registry mirrors (Q539).
+<p>Q540 built the node layer on Dragonfly (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a>), which pre-heats nodes and already backs the registry mirrors (Q539).
 Spegel is the lighter option: one DaemonSet, no scheduler, and on kind no containerd restart, for an operator who wants pull-storm relief without Dragonfly's footprint and does not need pre-heating.</p>
 <p>The <a href="../../plan/q540-node-layer-p2p/#2-spegel-graded">Q540 plan</a> graded Spegel v0.7.4 on kind and is the starting point.
 It shared images between nodes, stayed read-only, and fetched only from peers; an ingress NetworkPolicy closed its pod ports and the same-node hostPort, but not another node's hostPort.

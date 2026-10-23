@@ -2725,7 +2725,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.10/">release-1.10.md</a></td>
 <td>The 1.10 release gate: the storage advance to <code>v2</code> (Q1086), which cannot share an apply with the <code>v2.0.0</code> removals, plus three scale-set correctness fixes and the per-set egress-audit flag; three more items ride</td>
-<td>❌ Scoped 2026-10-09, no candidate cut: Q1086, Q1069, Q1152, Q1153, Q1154, Q1070 and Q1171 landed; <a href="../queue/Q1066/">Q1066</a> and <a href="../queue/Q540/">Q540</a> ride</td>
+<td>❌ Scoped 2026-10-09, no candidate cut: Q1086, Q1069, Q1152, Q1153, Q1154, Q1070 and Q1171 landed; Q540 landed too; <a href="../queue/Q1066/">Q1066</a> rides</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
@@ -2782,7 +2782,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="caching-and-worker-storage/">caching-and-worker-storage.md</a></td>
 <td>The umbrella goal for the three caches routinely conflated as one (image pulls, <code>actions/cache</code>, build layers) plus RWX job storage: why closing untrusted-PR egress removes the cache that works today, why one backend can still serve several content classes, and why the read-only mirror contract cannot cover a writable job cache</td>
-<td>ⓘ Ongoing goal doc. The RWX storage half closed 2026-08-24 (Q719); every cache half is unbuilt. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens Q539/<a href="../queue/Q540/">Q540</a> to grade the contract per content class</td>
+<td>ⓘ Ongoing goal doc. The RWX storage half closed 2026-08-24 (Q719); every cache half is unbuilt. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens Q539/Q540 to grade the contract per content class</td>
 </tr>
 <tr>
 <td><a href="gpu-and-accelerated-ci/">gpu-and-accelerated-ci.md</a></td>
@@ -2807,17 +2807,17 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a></td>
 <td>Untrusted-PR posture for Kata workers (G.14): in-cluster registry pull-through mirrors (the Athens pattern applied to images) + delete the e2e open-egress NetworkPolicy, so a Kata worker's reachable set is DNS + GitHub + mirror only</td>
-<td>⚠️ All five phases done 2026-08-28 and Q408 closed, but the doc stays active because <a href="q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a> owns a live row. Phase 0 measured the egress inventory 2026-08-03; Phase 1 gated <code>get.helm.sh</code> and the Actions cache data plane to the hosted lane, validated 2026-08-24 by grading four self-hosted runs; Phase 2's manifests, five upstreams rather than four, validated 2026-08-28 at 25 of 25 checks; Phase 3's wiring validated the same day, all five instances serving against a measured zero baseline; Phase 4 deleted the open-egress policy and measured the tenant at zero allow-all rules, with in-job negatives passing all eight checks on a Kata worker; Phase 5 published the how-to, marked G.14 shipped, and moved the capability from the roadmap to Features. Open here: <a href="../queue/Q540/">Q540</a>, graded against the contract this validated; Q539 closed 2026-10-05</td>
+<td>ⓘ All five phases done 2026-08-28 and Q408 closed; the doc stays active as the posture's rationale, which <a href="q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">§6</a>'s follow-ons were graded against. Phase 0 measured the egress inventory 2026-08-03; Phase 1 gated <code>get.helm.sh</code> and the Actions cache data plane to the hosted lane, validated 2026-08-24 by grading four self-hosted runs; Phase 2's manifests, five upstreams rather than four, validated 2026-08-28 at 25 of 25 checks; Phase 3's wiring validated the same day, all five instances serving against a measured zero baseline; Phase 4 deleted the open-egress policy and measured the tenant at zero allow-all rules, with in-job negatives passing all eight checks on a Kata worker; Phase 5 published the how-to, marked G.14 shipped, and moved the capability from the roadmap to Features. Both follow-ons have closed, Q539 on 2026-10-05 and Q540 with the node-layer recipe; kept as the standing rationale for the posture the operator docs link</td>
 </tr>
 <tr>
 <td><a href="q539-dragonfly-mirror-backend/">q539-dragonfly-mirror-backend.md</a></td>
 <td>Grading Dragonfly against the Q408 mirror contract, and the shape that passes it: Distribution in front, Dragonfly as its outbound proxy and P2P back end</td>
-<td>✅ All three phases done; Q539 closed 2026-10-05. As the worker-facing endpoint dfdaemon v1.5.7 fails the contract by construction, so it is built as the mirrors' back end, measured on kind 2026-10-04 and validated on dogfood 2026-10-05 by <code>v1.9.0-rc.2</code>'s release gate: every mirror passing the battery, a 3/3 Kata e2e run with open egress deleted, and workers unable to reach the seed proxy. Stays active because <a href="../queue/Q540/">Q540</a> and <a href="../queue/Q1163/">Q1163</a> cite its measurements</td>
+<td>✅ All three phases done; Q539 closed 2026-10-05. As the worker-facing endpoint dfdaemon v1.5.7 fails the contract by construction, so it is built as the mirrors' back end, measured on kind 2026-10-04 and validated on dogfood 2026-10-05 by <code>v1.9.0-rc.2</code>'s release gate: every mirror passing the battery, a 3/3 Kata e2e run with open egress deleted, and workers unable to reach the seed proxy. Stays active because <a href="../queue/Q1163/">Q1163</a> cites its measurements</td>
 </tr>
 <tr>
 <td><a href="q540-node-layer-p2p/">q540-node-layer-p2p.md</a></td>
-<td>Node-layer P2P pod-image distribution for <a href="../queue/Q540/">Q540</a>: Dragonfly's node client and Spegel graded on kind, and against the untrusted-PR goal</td>
-<td>⚠️ Graded 2026-10-13; Dragonfly chosen 2026-10-19 and validated on dogfood the same day, with a Kata worker's reachable set unchanged and pod images moving between Kata nodes. Shipping the recipe remains on <a href="../queue/Q540/">Q540</a></td>
+<td>Node-layer P2P pod-image distribution for Q540: Dragonfly's node client and Spegel graded on kind, and against the untrusted-PR goal</td>
+<td>✅ Graded 2026-10-13; Dragonfly chosen 2026-10-19, validated on dogfood the same day with a Kata worker's reachable set unchanged, and shipped as <code>deploy/dragonfly-node/</code>; Q540 closed. Stays active because <a href="../queue/Q1192/">Q1192</a> starts from its Spegel grading</td>
 </tr>
 </tbody>
 </table>

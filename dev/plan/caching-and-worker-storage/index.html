@@ -2777,7 +2777,7 @@ Do not read this table as three deployments.</p>
 <td><strong>Image pulls</strong></td>
 <td>Container images the node pulls to start a worker</td>
 <td>Upstream registries, over per-tenant egress</td>
-<td>Q408, Q539, <a href="../../queue/Q540/">Q540</a></td>
+<td>Q408, Q539, Q540</td>
 </tr>
 <tr>
 <td><strong>Job cache</strong></td>
@@ -2896,12 +2896,13 @@ ARC has none either, so this is not a reason to prefer ARC; GitLab Runner and th
 Do not repeat that <code>actions/cache</code> has no home.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).</p>
-<p>Open, with rows: <a href="../../queue/Q540/">Q540</a> (composed node-layer and guest-layer stack), <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
+<p>Open, with rows: <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
 <p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether <em>one</em> deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.
 Grade the four contract properties <strong>per content class</strong>, not once: a backend that refuses non-GET for images has said nothing about what it does for a cache save.
-Q539 has answered its half (<a href="../q539-dragonfly-mirror-backend/#5-per-content-class">q539 §5</a>): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class stays Q215's.</p>
+Q539 has answered its half (<a href="../q539-dragonfly-mirror-backend/#5-per-content-class">q539 §5</a>): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class stays Q215's.
+Q540 shipped image-only as well: its node client carries the kubelet's pulls and no job content.</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Each needs a decision before it needs a row:</p>
 <ol>

@@ -3110,14 +3110,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>scripts/dogfood/e2e-mirror-validate.sh</code> proves each mirror instance by fetching one manifest by tag, and a tag lookup takes the Dragonfly …</td>
 </tr>
 <tr>
-<td><a href="Q540/">Q540</a></td>
-<td><a href="../plan/q540-node-layer-p2p/">Ship Dragonfly's node client as a supported node-layer recipe</a></td>
-<td><code>security</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>The composed stack is validated on dogfood (<a href="../plan/q540-node-layer-p2p/#6-dogfood-validation">plan §6</a>): Dragonfly's node client pulls …</td>
-</tr>
-<tr>
 <td><a href="Q682/">Q682</a></td>
 <td><a href="../plan/q645-abandoned-completion/#the-remedy">Measure sibling <code>skipped</code> completion semantics live (Q260 fan-out)</a></td>
 <td><code>tests</code></td>
@@ -4099,7 +4091,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Q540 builds the node layer on Dragonfly, which pre-heats nodes and already backs the registry mirrors (Q539).</td>
+<td>Q540 built the node layer on Dragonfly (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a>), which pre-heats nodes and …</td>
 </tr>
 </tbody>
 </table>
