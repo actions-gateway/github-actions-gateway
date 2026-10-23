@@ -1682,8 +1682,8 @@ fi
 df_leg_stubs() {
 	leg_stubs
 	bash() {
-		printf 'bash %s variant=%s backend=%s\n' "${1##*/}" "${E2E_VARIANT:-}" \
-			"${E2E_MIRROR_BACKEND:-}" >>"${LEG_LOG}"
+		printf 'bash %s variant=%s backend=%s nodes=%s\n' "${1##*/}" "${E2E_VARIANT:-}" \
+			"${E2E_MIRROR_BACKEND:-}" "${E2E_DRAGONFLY_NODES:-}" >>"${LEG_LOG}"
 		[[ "${1##*/}" != e2e-run-watch.sh ]] || return "${FAKE_WATCH_RC:-0}"
 	}
 	dragonfly_readings() { echo "dragonfly-readings" >>"${LEG_LOG}"; }
@@ -1692,8 +1692,8 @@ df_leg_stubs() {
 : >"${LEG_LOG}"
 (df_leg_stubs; E2E_VARIANT=dind; export E2E_VARIANT; unset E2E_MIRROR_BACKEND; dragonfly_leg >/dev/null 2>&1)
 log="$(cat "${LEG_LOG}")"
-check_contains "dragonfly leg: starts the e2e tenant as Kata on the Dragonfly back end" \
-	"bash e2e-start.sh variant=kata backend=dragonfly" "${log}"
+check_contains "dragonfly leg: starts the e2e tenant as Kata on the Dragonfly back end, node client included" \
+	"bash e2e-start.sh variant=kata backend=dragonfly nodes=1" "${log}"
 check_contains "dragonfly leg: takes the mirror census" "census" "${log}"
 check_contains "dragonfly leg: takes the Dragonfly readings" "dragonfly-readings" "${log}"
 stop_at="$(line_of "bash e2e-stop.sh")"
@@ -1715,6 +1715,10 @@ check_not_contains "dind leg: takes no Dragonfly readings" "dragonfly-readings" 
 rc=0
 (df_leg_stubs; FAKE_WATCH_RC=1; unset E2E_VARIANT E2E_MIRROR_BACKEND; dragonfly_leg >/dev/null 2>&1) || rc=$?
 check "dragonfly leg: a red matrix fails the leg" "1" "${rc}"
+: >"${LEG_LOG}"
+(df_leg_stubs; E2E_DRAGONFLY_NODES=0; dragonfly_leg >/dev/null 2>&1)
+check_contains "dragonfly leg: E2E_DRAGONFLY_NODES=0 runs it without the node client" \
+	"bash e2e-start.sh variant=kata backend=dragonfly nodes=0" "$(cat "${LEG_LOG}")"
 check_contains "dragonfly leg: a red matrix still takes the readings" "dragonfly-readings" "$(cat "${LEG_LOG}")"
 
 # The census records one reading per mirror back end, so the Dragonfly leg's
@@ -1827,6 +1831,54 @@ check "connect: a refusal behind a dead control is not-taken" "not-taken" "$(df_
 FAKE_PROBE_OUT=""; run_net dragonfly_connect_reading
 check "connect: no probe output is not-taken" "not-taken" "$(df_reading connect-upstream-tls verdict)"
 
+# The node client's readings (Q540), recorded under Q540.
+node_reading() { jq -r --arg c "$1" --arg f "$2" 'select(.id=="Q540" and .criterion==$c)|.[$f]' "${RELEASE_READINGS_FILE}" | tail -1; }
+node_log() {
+	local i
+	for ((i = 0; i < $1; i++)); do echo "INFO proxy HTTP request via dfdaemon by rule config"; done
+	for ((i = 0; i < $2; i++)); do echo "INFO all pieces are downloaded with scheduler host_id=x"; done
+	for ((i = 0; i < $3; i++)); do echo "INFO all pieces are downloaded from source host_id=x"; done
+}
+run_node_p2p() {
+	: >"${RELEASE_READINGS_FILE}"
+	out="$(kubectl() { [[ "$1" == logs ]] && printf '%s' "${FAKE_NODE_LOG}"; return 0; }; dragonfly_node_p2p_reading 2>&1)"; rc=$?
+}
+FAKE_NODE_LOG="$(node_log 15 11 4)"; run_node_p2p
+check "node p2p: the reading returns 0" "0" "${rc}"
+check "node p2p: a task from peers records a pass" "pass" "$(node_reading node-p2p verdict)"
+check "node p2p: the pass carries the counts" "11 task(s) from peers, 4 from source, 15 request(s) by rule" "$(node_reading node-p2p detail)"
+FAKE_NODE_LOG="$(node_log 15 0 15)"; run_node_p2p
+check "node p2p: requests by rule with no peer are not-taken, never a pass" "not-taken" "$(node_reading node-p2p verdict)"
+FAKE_NODE_LOG="INFO dfdaemon started"; run_node_p2p
+check "node p2p: no request by rule records a finding" "finding" "$(node_reading node-p2p verdict)"
+check_contains "node p2p: the finding names the containerd restart" "not restarted" "${out}"
+FAKE_NODE_LOG=""; run_node_p2p
+check "node p2p: an unreadable log is not-taken" "not-taken" "$(node_reading node-p2p verdict)"
+
+run_node_net() {
+	: >"${RELEASE_READINGS_FILE}"
+	out="$(
+		kubectl() { [[ "$1" == get ]] && printf '%s' "${FAKE_HOST_IP}"; return 0; }
+		dragonfly_probe() { printf '%s\n' "${FAKE_PROBE_OUT}"; }
+		dragonfly_node_worker_reading 2>&1
+	)"; rc=$?
+}
+FAKE_HOST_IP=10.142.0.16
+FAKE_PROBE_OUT=$'control 200\nnode 28'; run_node_net
+check "node worker: the reading returns 0" "0" "${rc}"
+check "node worker: a timeout behind a working control records a pass" "pass" "$(node_reading worker-to-node-client verdict)"
+check_contains "node worker: the pass names the address it aimed at" "10.142.0.16:4000" "$(node_reading worker-to-node-client detail)"
+FAKE_PROBE_OUT=$'control 200\nnode 52'; run_node_net
+check "node worker: an empty reply is a connection, a finding" "finding" "$(node_reading worker-to-node-client verdict)"
+FAKE_PROBE_OUT=$'control 200\nnode 7'; run_node_net
+check "node worker: a refusal is the node answering, a finding" "finding" "$(node_reading worker-to-node-client verdict)"
+FAKE_PROBE_OUT=$'control 000\nnode 28'; run_node_net
+check "node worker: a timeout with a dead control is not-taken" "not-taken" "$(node_reading worker-to-node-client verdict)"
+FAKE_PROBE_OUT=""; run_node_net
+check "node worker: no probe output is not-taken" "not-taken" "$(node_reading worker-to-node-client verdict)"
+FAKE_HOST_IP=""; FAKE_PROBE_OUT=$'control 200\nnode 28'; run_node_net
+check "node worker: no node client to aim at is not-taken, never a pass" "not-taken" "$(node_reading worker-to-node-client verdict)"
+
 # The battery's exit classes. Its stand-in reads the namespace it was handed,
 # because the gate's own TENANT_NAMESPACE is the standing tenant, and a probe
 # run there would not ride a worker's path.
@@ -1858,6 +1910,22 @@ rc=0
 	dragonfly_readings >/dev/null 2>&1
 ) || rc=$?
 check "readings: a cluster that answers nothing does not fail the gate" "0" "${rc}"
+: >"${RELEASE_READINGS_FILE}"
+(
+	kubectl() { return 1; }
+	dragonfly_probe() { :; }
+	E2E_DRAGONFLY_NODES=1
+	dragonfly_readings >/dev/null 2>&1
+)
+check "readings: the node client's readings run when it is installed" "not-taken" "$(node_reading node-p2p verdict)"
+: >"${RELEASE_READINGS_FILE}"
+(
+	kubectl() { return 1; }
+	dragonfly_probe() { :; }
+	E2E_DRAGONFLY_NODES=0
+	dragonfly_readings >/dev/null 2>&1
+)
+check "readings: no node-client reading without the node client" "" "$(node_reading node-p2p verdict)"
 check "readings: all four are recorded" "4" "$(jq -s 'map(select(.id=="Q539"))|length' "${RELEASE_READINGS_FILE}")"
 check "readings: none of them reads as a pass" "0" "$(jq -s 'map(select(.id=="Q539" and .verdict=="pass"))|length' "${RELEASE_READINGS_FILE}")"
 

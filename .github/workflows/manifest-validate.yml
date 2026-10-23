@@ -104,6 +104,8 @@ jobs:
               # Its Dragonfly back end (Q539), validated the same way, plus
               # the proxy-CA chart this gate lints and renders.
               - 'deploy/dragonfly/**'
+              # Its node client (Q540), the same way.
+              - 'deploy/dragonfly-node/**'
               # The consumer half of the same posture: the e2e tenant overlays
               # carry the ConfigMap wiring the job's image clients to those
               # mirrors, which `make registry-mirror-wiring-check` reconciles

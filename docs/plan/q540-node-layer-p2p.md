@@ -1,10 +1,11 @@
 # Node-Layer P2P Image Distribution — Q540
 
-> **Status (2026-10-19): ⚠️ Validated on dogfood, not shipped.** Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind.
+> **Status (2026-10-19): ✅ Shipped as [`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md)** ([§7](#7-what-shipped)); Q540 is closed.
+> Two candidates for peer-to-peer (P2P) pod-image distribution at the node layer, graded on kind.
 > Against the goal Q540 serves, running untrusted pull-request checks on GAG's Kata workers, neither candidate is on the worker's path, so security does not choose between them ([§4](#4-against-the-goal)).
 > Chosen 2026-10-19: Dragonfly, for its features and because it is already deployed as the mirrors' back end ([§5](#5-choosing)); validated on dogfood the same day with a Kata worker's reachable set unchanged ([§6](#6-dogfood-validation)).
 
-[Q540](../queue/Q540.md) is the composed stack: P2P distribution of pod images at the node, the in-cluster pull-through mirrors ([q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md)) for pulls inside a job.
+Q540 was the composed stack: P2P distribution of pod images at the node, the in-cluster pull-through mirrors ([q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md)) for pulls inside a job.
 The attacker Q408 designs against is the job: code from an untrusted pull request, running in a Kata worker whose reachable set is cluster DNS, GitHub and the mirrors.
 So the security question for a node layer is whether it widens that set.
 On dogfood, a Kata worker under the Gateway Manager Controller's (GMC's) workload egress policy reaches no node address on a non-allowlisted port ([Q539 plan §8.1](q539-dragonfly-mirror-backend.md#81-measured-the-worker-policy-holds-and-nothing-else-does)).
@@ -136,3 +137,18 @@ The second pull was slower than the first; one pair of timings does not say why.
 
 UDP 4006 was not tested: a TCP connect cannot test it, and the worker policy admits no UDP beyond DNS.
 No full e2e workflow ran with the node client installed; the Kata pods above are the evidence that Kata workloads start and pull through it.
+
+## 7. What shipped
+
+The §6 configuration, as a kustomization beside the Q539 back end: [`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md).
+It is chart 1.8.5's node client rendered with the §6 values, with the containerd restart on, the restart's `busybox` pinned by digest where the chart names `latest`, and the scheduler policy included.
+The node client gets its own namespace at Pod Security `privileged`, so `gag-dragonfly` stays `restricted`.
+
+**Docker Hub's mirror is not kept.** Leaving `docker.io` out of the `dfinit` registries would not restore `mirror.gcr.io`, because §6 saw `dfinit` replace the whole inline `registry` table on switching to `config_path` (measured with `docker.io` listed only).
+So `docker.io` stays routed through Dragonfly, which at least fetches each Docker Hub blob once per cluster.
+
+**The release gate runs it.** `scripts/dogfood/e2e-start.sh` applies it under `E2E_DRAGONFLY_NODES=1`, which the gate's Dragonfly leg sets, and `e2e-stop.sh` deletes it.
+That leg adds two readings under `Q540`: whether any download task finished from peers (`node-p2p`), and whether a worker-labelled pod times out on a node client's upload port (`worker-to-node-client`).
+So the first full e2e run with the node client is the next candidate's gate run; the manifests have not been applied to a cluster as committed, only as the §6 Helm release they were rendered from.
+
+**Still not measured:** UDP 4006, and fresh-node startup orders beyond the one §6 saw.

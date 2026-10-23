@@ -39,7 +39,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none, under a `get` on `serviceaccounts`. Stage two 🔲 ready |
-| [Q540](../queue/Q540.md) | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | ⚠️ validated on dogfood 2026-10-19, a Kata worker's reachable set unchanged ([plan §6](q540-node-layer-p2p.md#6-dogfood-validation)); shipping the recipe remains |
+| Q540 | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | ✅ landed: the node client ships as `deploy/dragonfly-node/`, validated on dogfood 2026-10-19 with a Kata worker's reachable set unchanged ([plan §6](q540-node-layer-p2p.md#6-dogfood-validation)), and this release's Dragonfly leg is its first full e2e run |
 
 **The split is the maintainer's, chosen 2026-10-09; the reasons below are this plan's, offered with it.** The theme is in the maintainer's own words: the storage advance plus scale-set correctness.
 Q1086 is what the release is for, and Q1171 is what shows it worked on a cluster that has run 1.x.
@@ -48,7 +48,7 @@ Q1152 and Q1154 were found reviewing Q1151's fix, and all three follow from the 
 Q1069 gates as the one feature: the gateway-level attribution flag reads `0` where a set's traffic leaves through a pool that logs no source address, the wrong direction for an audit signal.
 
 **The riders are planned and worked, and the tag does not wait for them.** Each can come back short for a reason a gate should not absorb.
-Q540 is a measurement whose answer may be a fix of unknown size: [Q539](../plan/q539-dragonfly-mirror-backend.md#8-what-this-plan-does-not-cover) measured Dragonfly's node proxy as an open forward proxy.
+Q540 was a measurement whose answer might have been a fix of unknown size, because [Q539](../plan/q539-dragonfly-mirror-backend.md#8-what-this-plan-does-not-cover) measured Dragonfly's node proxy as an open forward proxy; binding it to loopback was enough.
 Q1066's second stage adds a cloud dependency and an identity grant per provider; its first stage has landed, so the second can slip without costing the air-gapped install path.
 Q1070 keys on Q1069's per-set gauge, whose `reason` label is what the panel filters on.
 

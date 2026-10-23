@@ -133,7 +133,7 @@ It is "nobody has pushed this far enough yet, and here is how far we have got".
 **Leg 2: GAG is making it safe.** Kata micro-VM workers give a job root without a shared kernel, already the default in GAG's own end-to-end suite.
 Per-tenant egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close the network half, including the path Kata does not close (a micro-VM does not change the pod's network identity, so cloud metadata still answers from inside the guest).
 Q408 shipped the egress half on 2026-08-28: an in-cluster registry mirror and a tenant carrying no allow-all rule, measured on the dogfood cluster.
-Still open under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella: [Q540](../queue/Q540.md), a variant graded against the contract Q408 validated.
+Q540, the variant graded against the contract Q408 validated, has since shipped as a node-layer recipe under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella.
 Q539 graded the other and closed 2026-10-05.
 
 **Leg 3: GAG keeps it operable.** Quota-aware intake and automatic re-run are consequences of leg 2, not standalone features, and should be presented that way.
@@ -142,7 +142,7 @@ Sharing capacity *requires* eviction and preemption to be safe, and they are saf
 Without both, secured multi-tenancy is an operations nightmare and the team retreats to a cluster per tenant, which is where §2's router started.
 
 **Prioritization consequence:** this leg is not roadmap polish.
-It is what the entire argument rests on, which is why Q408 outranked the proxy-polish set (Q564 to Q567) and most of the feature backlog, and why Q540 still does.
+It is what the entire argument rests on, which is why Q408 outranked the proxy-polish set (Q564 to Q567) and most of the feature backlog, and why Q540 did after it.
 
 ### The persona frame, and how to say it without attacking
 

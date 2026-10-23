@@ -2,6 +2,7 @@
 
 A [Dragonfly](https://d7y.io/) scheduler and one seed peer that the five registry mirrors in [`../registry-mirror`](../registry-mirror/README.md#dragonfly-back-end) use as their outbound HTTPS proxy, so layer blobs are fetched once and shared peer to peer.
 No manager, so no MySQL or Redis: the seed peer finds the scheduler through a static dynconfig.
+The scheduler also serves the node client in [`../dragonfly-node`](../dragonfly-node/README.md), which pulls worker images peer to peer at the node.
 
 **Never route a worker here.** dfdaemon's proxy forwards to any host it is asked for and forwards pushes, and no setting restricts it (measured on client v1.5.7).
 [`networkpolicy.yaml`](networkpolicy.yaml) admits only pods labelled `app=registry-mirror` in `gag-registry-mirror` to port 4001.

@@ -77,8 +77,9 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # them too via standalone_manifests below; the kustomization.yaml files are not
 # Kubernetes manifests and are yamllint-only, as deploy/kata-ci/kata-values.yaml is.
 # deploy/dragonfly is the same class (Q539: the mirrors' P2P back end), and its
-# ca-chart is linted and rendered like the CRD chart below.
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dragonfly deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
+# ca-chart is linted and rendered like the CRD chart below; deploy/dragonfly-node
+# is its node client (Q540).
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dragonfly deploy/dragonfly-node deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
 
 # The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
 # comma survived to whoever imported the file. jq is required-tier already.
@@ -126,7 +127,10 @@ deploy/registry-mirror/overlays/persistent/pvc.yaml
 deploy/dragonfly/namespace.yaml
 deploy/dragonfly/scheduler.yaml
 deploy/dragonfly/seed-client.yaml
-deploy/dragonfly/networkpolicy.yaml"
+deploy/dragonfly/networkpolicy.yaml
+deploy/dragonfly-node/namespace.yaml
+deploy/dragonfly-node/client.yaml
+deploy/dragonfly-node/scheduler-from-nodes.yaml"
 
 echo "==> yamllint (static manifests + chart metadata)"
 # shellcheck disable=SC2086  # path and flag lists word-split intentionally

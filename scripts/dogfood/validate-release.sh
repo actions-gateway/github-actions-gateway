@@ -716,12 +716,17 @@ dind_leg() {
 # A green matrix alone says nothing about Dragonfly, because the mirrors serve
 # either way, so e2e_leg also takes dragonfly_readings. After dind_leg, which
 # leaves the DinD tenant up and E2E_VARIANT exported as dind.
+#
+# It also installs the node client (Q540), so the worker images are pulled
+# through it: this leg is the one full e2e run that recipe gets.
+# E2E_DRAGONFLY_NODES=0 runs the leg without it.
 dragonfly_leg() {
 	echo "Taking the DinD e2e tenant down for the Kata + Dragonfly one (e2e-stop.sh)..."
 	bash "${SCRIPT_DIR}/e2e-stop.sh"
 	E2E_VARIANT=kata
 	E2E_MIRROR_BACKEND=dragonfly
-	export E2E_VARIANT E2E_MIRROR_BACKEND
+	E2E_DRAGONFLY_NODES="${E2E_DRAGONFLY_NODES:-1}"
+	export E2E_VARIANT E2E_MIRROR_BACKEND E2E_DRAGONFLY_NODES
 	e2e_leg
 }
 
@@ -786,6 +791,10 @@ dragonfly_readings() {
 	dragonfly_p2p_reading
 	dragonfly_worker_reading
 	dragonfly_connect_reading
+	if [[ "${E2E_DRAGONFLY_NODES:-0}" == 1 ]]; then
+		dragonfly_node_p2p_reading
+		dragonfly_node_worker_reading
+	fi
 	return 0
 }
 
@@ -847,6 +856,89 @@ dragonfly_p2p_reading() {
 		echo "            dfdaemon log and a seed nothing reached look the same from here."
 		progress_reading Q539 "p2p-path" not-taken \
 			"the seed log carries neither '${DFDAEMON_P2P_LINE}' nor '${DFDAEMON_DIRECT_LINE}'"
+	fi
+}
+
+# The node client (Q540, deploy/dragonfly-node/) and its v1.5.7 log lines, as
+# the Q540 plan §6 read them on dogfood: one per request containerd sent by the
+# P2P rule (plain HTTP, the loopback leg), and one per task finished from peers
+# or from the registry.
+DRAGONFLY_NODE_NAMESPACE="gag-dragonfly-node"
+DRAGONFLY_NODE_SELECTOR="app=dragonfly,component=client"
+DFDAEMON_NODE_RULE_LINE="proxy HTTP request via dfdaemon by rule config"
+DFDAEMON_NODE_PEER_LINE="all pieces are downloaded with scheduler"
+DFDAEMON_NODE_SOURCE_LINE="all pieces are downloaded from source"
+
+# dragonfly_node_p2p_reading — did a worker image's blobs come from another
+# node? Requests by rule with none from peers is not-taken rather than a
+# finding: with one e2e node, or no image on two, there is no peer to use. No
+# request by rule is the finding, the shape plan §6 measured when containerd
+# was not restarted onto dfinit's config.
+dragonfly_node_p2p_reading() {
+	local log rule peer source
+	log="$(kubectl logs --namespace "${DRAGONFLY_NODE_NAMESPACE}" \
+		-l "${DRAGONFLY_NODE_SELECTOR}" -c client --tail=-1 2>/dev/null || true)"
+	if [[ -z "${log}" ]]; then
+		echo "  node P2P: NOT TAKEN — no node client's log could be read"
+		progress_reading Q540 "node-p2p" not-taken "no node client log read back"
+		return 0
+	fi
+	rule="$(grep -cF -- "${DFDAEMON_NODE_RULE_LINE}" <<<"${log}" || true)"
+	peer="$(grep -cF -- "${DFDAEMON_NODE_PEER_LINE}" <<<"${log}" || true)"
+	source="$(grep -cF -- "${DFDAEMON_NODE_SOURCE_LINE}" <<<"${log}" || true)"
+	if ((rule == 0)); then
+		echo "  node P2P: FINDING — containerd sent no request through the node client."
+		echo "            Either containerd was not restarted onto dfinit's config, or"
+		echo "            dfdaemon's wording moved from '${DFDAEMON_NODE_RULE_LINE}'."
+		progress_reading Q540 "node-p2p" finding "0 requests by P2P rule on the node clients"
+	elif ((peer > 0)); then
+		echo "  node P2P: ${peer} task(s) from peers, ${source} from source, ${rule} request(s) by rule"
+		progress_reading Q540 "node-p2p" pass \
+			"${peer} task(s) from peers, ${source} from source, ${rule} request(s) by rule"
+	else
+		echo "  node P2P: NOT TAKEN — ${rule} request(s) by rule, none served by a peer."
+		echo "            One e2e node, or no image pulled on two, leaves no peer to use."
+		progress_reading Q540 "node-p2p" not-taken \
+			"${rule} request(s) by rule, ${source} task(s) from source, none from peers"
+	fi
+}
+
+# dragonfly_node_worker_reading — a worker-labelled pod in the e2e tenant must
+# time out on a node client's upload port, 4000, which is unauthenticated and
+# open on every node address (plan §6). The worker's egress policy is the only
+# thing between them: no NetworkPolicy polices a host-network listener. The
+# control is dragonfly_worker_reading's, the same pod reaching a mirror. A
+# refusal (curl 7) is a finding too: the node answered.
+dragonfly_node_worker_reading() {
+	local node_ip script out control rc
+	node_ip="$(kubectl get pods --namespace "${DRAGONFLY_NODE_NAMESPACE}" \
+		-l "${DRAGONFLY_NODE_SELECTOR}" -o jsonpath='{.items[0].status.hostIP}' 2>/dev/null || true)"
+	if [[ -z "${node_ip}" ]]; then
+		echo "  worker to node client: NOT TAKEN — no node client pod to aim at"
+		progress_reading Q540 "worker-to-node-client" not-taken "no node client pod was running"
+		return 0
+	fi
+	script="c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 ${MIRROR_CONTROL_URL}); echo \"control \${c:-000}\"
+curl -s -o /dev/null --connect-timeout 10 --max-time 15 http://${node_ip}:4000/; echo \"node \$?\""
+	out="$(dragonfly_probe "${E2E_NAMESPACE}" dragonfly-node-worker-probe \
+		'{"actions-gateway/component":"workload"}' "${script}")"
+	control="$(probe_field "${out}" control 1)"
+	rc="$(probe_field "${out}" node 1)"
+	if [[ -z "${control}" || -z "${rc}" ]]; then
+		echo "  worker to node client: NOT TAKEN — the probe produced no output"
+		progress_reading Q540 "worker-to-node-client" not-taken "the worker probe produced no output"
+	elif [[ "${control}" == 000 ]]; then
+		echo "  worker to node client: NOT TAKEN — the probe could not reach the mirror either"
+		progress_reading Q540 "worker-to-node-client" not-taken \
+			"the control GET to mirror-docker-io got no HTTP answer"
+	elif [[ "${rc}" == 28 ]]; then
+		echo "  worker to node client: timed out on ${node_ip}:4000 (the mirror answered HTTP ${control})"
+		progress_reading Q540 "worker-to-node-client" pass \
+			"a workload-labelled pod timed out on ${node_ip}:4000; mirror-docker-io answered HTTP ${control}"
+	else
+		echo "  worker to node client: FINDING — a worker reached ${node_ip}:4000 (curl ${rc})"
+		progress_reading Q540 "worker-to-node-client" finding \
+			"a workload-labelled pod got curl exit ${rc} from ${node_ip}:4000 rather than a timeout"
 	fi
 }
 

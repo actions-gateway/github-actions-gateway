@@ -625,11 +625,13 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    Step 2 runs the Kata variant, the one untrusted pull requests need, so without this the shipped `privileged-dind` template reaches operators with no job ever having run on it; 1.9 moved its daemon from `docker:27-dind` to `docker:28-dind` that way.
    It runs last because the two variants share one namespace, RunnerSet and node pool, and the sizing and capacity legs read the Kata tenant's state.
    The mirror census is Kata-only: nothing on the DinD tenant reaches a mirror.
-9. **Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).** `scripts/dogfood/e2e-stop.sh`, then `E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
+9. **Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).** `scripts/dogfood/e2e-stop.sh`, then `E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1 scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
    The mirrors can fetch through a Dragonfly seed peer instead of from their upstreams directly (Dragonfly is a peer-to-peer image distribution system); without this leg every gate run tests the default Distribution back end alone, and the Dragonfly one has run only on kind.
    It is Kata because only the Kata tenant's egress is mirror-only; on DinD a worker reaches upstreams itself, so the back end would not be on the path under test.
+   It also installs Dragonfly's node client on the e2e pool ([`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md)), so the kubelet pulls worker images through it: this leg is the one full e2e run that recipe gets.
+   `E2E_DRAGONFLY_NODES=0` runs the leg without it.
    A red matrix is a red gate.
-   A green one says nothing about Dragonfly, because the mirrors serve either way, so the leg also takes the mirror census and four readings before `e2e-stop.sh` scales the seed peer, and its log, away:
+   A green one says nothing about Dragonfly, because the mirrors serve either way, so the leg also takes the mirror census and four readings, six with the node client, before `e2e-stop.sh` scales the seed peer, and its log, away:
 
    | Reading | `pass` means |
    |---|---|
@@ -637,8 +639,10 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    | `p2p-path` | At least one request in the seed peer's log took the peer-to-peer rule. Direct requests and none by rule is a `finding`; a log with neither line is `not-taken`, because a reworded log and an unused seed look the same. |
    | `worker-to-seed-proxy` | A worker-labelled pod timed out on the seed's proxy port, which is an open forward proxy, while the same pod reached a mirror. A dead control is `not-taken`. |
    | `connect-upstream-tls` | A `CONNECT` through the seed to `self-signed.badssl.com` was refused, while one to `badssl.com` succeeded. A `finding` means the seed peer carries traffic to hosts whose certificates it should reject. |
+   | `node-p2p` | With the node client installed, at least one download task finished from peers. No request by the peer-to-peer rule at all is a `finding`: containerd is not pulling through the node client. Requests with no peer is `not-taken`, since one e2e node leaves no peer to use. |
+   | `worker-to-node-client` | With the node client installed, a worker-labelled pod timed out on a node client's upload port (4000), which is unauthenticated and listens on every node address, while the same pod reached a mirror. A refusal is a `finding` too: the node answered. |
 
-   **These are readings, not gates**, recorded under `Q539` with the soak readings in step 6 and rendered by the same script.
+   **These are readings, not gates**, recorded under `Q539` (the last two under `Q540`) with the soak readings in step 6 and rendered by the same script.
    A `finding` on either network reading is a security property failing on the candidate's cluster: read it before promoting, even though the gate passed.
 10. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh` (dogfood scales to 0 at rest).
     **Teardown hands the worker and e2e pools to the cluster autoscaler rather than forcing them to zero**, so the gate can report success with a node still billing for several more minutes.
