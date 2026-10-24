@@ -81,6 +81,12 @@ patches:
             effect: NoSchedule
       # Mirror wiring, same three ops as ../kata — the reasoning is there and
       # in ../../base/mirror-wiring.yaml.
+      #
+      # `add` on /volumes creates the list, where ../kata appends with
+      # /volumes/-: privileged-dind declares no volumes, and appending to an
+      # absent list is an error. It also REPLACES a list that exists, so a
+      # volume the library entry gains later is dropped here, and nothing
+      # fails: switch to /volumes/- in the same change.
       - op: add
         path: /spec/podTemplate/spec/volumes
         value:

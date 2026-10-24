@@ -33,6 +33,15 @@ open egress and must say so with E2E_EGRESS_POSTURE=open, or
 scripts/e2e/egress-negatives.sh fails every run there; the Kata overlay must not
 carry it, or the battery that proves Kata's posture skips.
 
+Those per-overlay checks run twice. Against the overlay source they need only
+python3, so they hold in a `make check` without kubectl, but they read one file
+in one YAML style. Against `kubectl kustomize` output they also see a value set
+in flow style, in another key order, or in the template or base the overlay
+pulls in, because kustomize normalizes all of it. Without kubectl that half
+prints a skip; --require-render, which CI passes, turns the skip into a refusal.
+
+Usage: check-registry-mirror-wiring.py [--require-render]
+
 Exit: 0 the three agree, 1 they do not, 2 a read that could not be taken — an
 empty extraction is a parser that stopped matching, and grading a wiring green
 off one is the failure this gate would otherwise become.
@@ -40,6 +49,8 @@ off one is the failure this gate would otherwise become.
 
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -74,6 +85,13 @@ ENV_RE = re.compile(
     r"name: REGISTRY_MIRRORS\n\s+valueFrom:\n\s+configMapKeyRef:\n"
     r"\s+name: registry-mirror-wiring\n\s+key: registry-mirrors\n")
 POSTURE_RE = re.compile(r"name: E2E_EGRESS_POSTURE\n\s+value: (\S+)\n")
+
+# The same facts as kustomize prints them: block style, keys sorted.
+RENDERED_ENV_RE = re.compile(
+    r"- name: REGISTRY_MIRRORS\n\s+valueFrom:\n\s+configMapKeyRef:\n"
+    r"\s+key: registry-mirrors\n\s+name: registry-mirror-wiring\n")
+RENDERED_MOUNT_RE = re.compile(r"^\s+- mountPath: /etc/docker/daemon\.json$", re.M)
+RENDERED_POSTURE_RE = re.compile(r"- name: E2E_EGRESS_POSTURE\n\s+value: (\S+)\n")
 
 
 class Refusal(Exception):
@@ -193,12 +211,49 @@ def overlay_problems():
     return problems
 
 
-def main():
+def rendered_problems(require):
+    """overlay_problems' per-overlay checks, against what kustomize renders."""
+    if not shutil.which("kubectl"):
+        if require:
+            raise Refusal("--require-render was passed and kubectl is not on PATH, so the render checks did not run")
+        print("note: kubectl not on PATH (it is e2e-tier in scripts/ci/check-tools.sh), "
+              "so the render checks were skipped")
+        return []
+    problems = []
+    for path, posture in OVERLAYS.items():
+        overlay = path.parent
+        result = subprocess.run(["kubectl", "kustomize", str(overlay)],
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            problems.append(f"`kubectl kustomize {overlay}` does not render: {result.stderr.strip()}")
+            continue
+        text = result.stdout
+        if not RENDERED_MOUNT_RE.search(text):
+            problems.append(f"{overlay} renders no /etc/docker/daemon.json mount")
+        if not RENDERED_ENV_RE.search(text):
+            problems.append(f"{overlay} renders no REGISTRY_MIRRORS env from registry-mirror-wiring")
+        have = RENDERED_POSTURE_RE.findall(text)
+        want = [posture] if posture else []
+        if have != want or (not posture and "E2E_EGRESS_POSTURE" in text):
+            problems.append(
+                f"{overlay} renders E2E_EGRESS_POSTURE {have or 'absent'}, want {want or 'absent'} "
+                "(scripts/e2e/egress-negatives.sh skips on 'open' alone)")
+    return problems
+
+
+def main(argv):
+    require_render = False
+    for arg in argv:
+        if arg == "--require-render":
+            require_render = True
+        else:
+            print(f"REFUSED: unknown argument {arg}", file=sys.stderr)
+            return 2
     try:
         instances = read_instances()
         services = read_services()
         pairs, daemon = read_wiring()
-        problems = overlay_problems()
+        problems = overlay_problems() + rendered_problems(require_render)
     except Refusal as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
@@ -272,4 +327,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

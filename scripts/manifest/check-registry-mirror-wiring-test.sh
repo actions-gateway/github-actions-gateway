@@ -39,15 +39,20 @@ out=""
 rc=0
 
 # fixture — a fresh copy of the files the gate reads under a throwaway root,
-# printed.
+# printed. The whole e2e tree and the template library come along, because the
+# render half runs `kubectl kustomize` over each overlay and its bases.
 fixture() {
 	local root="${WORKDIR}/case.$$.${RANDOM}" f
-	for f in "${DEPLOYMENTS}" "${SERVICES}" "${WIRING}" "${BASE}" "${KATA}" "${DIND}"; do
+	for f in "${DEPLOYMENTS}" "${SERVICES}"; do
 		mkdir -p "${root}/$(dirname "${f}")"
 		cp "${REPO_ROOT}/${f}" "${root}/${f}"
 	done
+	cp -R "${REPO_ROOT}/deploy/dogfood-e2e" "${REPO_ROOT}/deploy/templates" "${root}/deploy/"
 	printf '%s' "${root}"
 }
+
+have_kubectl=0
+command -v kubectl >/dev/null 2>&1 && have_kubectl=1
 
 # mutate FILE PY — apply a python replace program to FILE in place; the program
 # sees the text as `s` and must assign the result back to it.
@@ -223,6 +228,42 @@ root="$(fixture)"
 mutate "${root}/${KATA}" 's = s.replace("              key: registry-mirrors\n", "              key: registry-mirrors\n      - op: add\n        path: /spec/podTemplate/spec/containers/0/env/-\n        value:\n          name: E2E_EGRESS_POSTURE\n          value: open\n", 1)'
 run_checker "${root}"
 expect 'Kata carrying the open posture fails' 1 "${KATA}: E2E_EGRESS_POSTURE must be absent"
+
+# --- the render half -----------------------------------------------------------
+#
+# The source checks read one file in block style. These are opt-outs they pass
+# and the render does not: a flow-style entry in the Kata overlay, and the marker
+# set in the shipped template rather than the overlay. Either one leaves the Kata
+# runner skipping the egress battery.
+
+if ((have_kubectl)); then
+	root="$(fixture)"
+	cat >>"${root}/${KATA}" <<'EOF'
+      - op: add
+        path: /spec/podTemplate/spec/containers/0/env/-
+        value: {name: E2E_EGRESS_POSTURE, value: open}
+EOF
+	run_checker "${root}"
+	expect 'a flow-style opt-out on Kata fails at render' 1 "overlays/kata renders E2E_EGRESS_POSTURE ['open'], want absent"
+
+	root="$(fixture)"
+	mutate "${root}/deploy/templates/kata-dind/template.yaml" 's = s.replace("            - name: DOCKER_HOST\n", "            - {value: open, name: E2E_EGRESS_POSTURE}\n            - name: DOCKER_HOST\n", 1)'
+	run_checker "${root}"
+	expect 'an opt-out set in the Kata template fails at render' 1 "overlays/kata renders E2E_EGRESS_POSTURE"
+else
+	echo "skip render cases: kubectl not on PATH"
+fi
+
+# --require-render is what CI passes, so a runner that lost kubectl refuses
+# rather than passing with half the gate unrun. The checker is run by python3's
+# absolute path with an empty PATH, which hides kubectl and nothing it needs.
+root="$(fixture)"
+rc=0
+out="$( (cd "${root}" && PATH="${WORKDIR}/empty" "$(command -v python3)" "${CHECKER}" --require-render) 2>&1 )" || rc=$?
+expect '--require-render without kubectl refuses' 2 'kubectl is not on PATH'
+rc=0
+out="$( (cd "${root}" && PATH="${WORKDIR}/empty" "$(command -v python3)" "${CHECKER}") 2>&1 )" || rc=$?
+expect 'without kubectl the render half skips and says so' 0 'render checks were skipped'
 
 # --- refusals ----------------------------------------------------------------
 #
