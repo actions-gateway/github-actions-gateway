@@ -425,7 +425,9 @@ Field names are settled under [api-review.md](../development/api-review.md) when
 
 **A namespace is attributed only when it has opted in itself.** The pool's existing port stays an unattributed port that records nothing, and every namespace starts on it, the pool's own included.
 When a gateway opts in and its pool has too, the GMC gives that gateway's namespace a port of its own and moves the namespace's `HTTPS_PROXY` to it.
-That is the only consumer-side change, and it comes from the consumer's own edit, so a pool edit never rolls a gateway in another namespace.
+That is the only consumer-side change, and it happens when the second of the two switches flips.
+So a pool edit can roll a gateway in another namespace, but only one whose own owner opted in: a gateway that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
+A gateway that has not opted in is never rolled by a pool edit.
 The rule also keeps a namespace that has not opted in from having its failures recorded under someone else's: its traffic arrives on the unattributed port, and nothing reads that.
 The switch is per gateway and the port is per namespace, so once one gateway in a namespace opts in, every gateway there that uses the pool moves to the attributed port; each AGC then joins only its own gateway's pods (below).
 That is one tenant seeing its own other gateways' failures, not a cross-tenant read.
@@ -457,7 +459,8 @@ NetworkPolicy matches the pod's port after Service translation, so each rule nam
 **Where the CNI does not enforce that ingress, NetworkPolicy is not the only defence, and eviction is what is left.** A worker in one namespace can then dial another's port.
 Its records land in that namespace's partition carrying its own pod address, and that namespace's AGC discards them, because the address is no pod of its own in the window it held it.
 So a forged record is never attributed, and what crosses is the dialing job's own failures, sent there by its own code.
-What it can still do is fill the other namespace's partition and push its records out, which degrades that tenant to unclassified failures. kindnet is such a CNI: its enforcer does not drop the NetworkPolicy negatives, and the e2e specs that assert enforcement skip themselves on it ([testing.md](../development/testing.md), *Egress-enforcing CNI profile*).
+What it can still do is fill the other namespace's partition and push its records out, which degrades that tenant to unclassified failures.
+The kindnet CNI is one such: its enforcer does not drop the NetworkPolicy negatives, and the e2e specs that assert enforcement skip themselves on it ([testing.md](../development/testing.md), *Egress-enforcing CNI profile*).
 Cross-namespace sharing already rests on the same ingress policy, so a shared pool on a non-enforcing CNI has no tenant boundary to attribute across in the first place.
 Enforcement of per-port ingress has to be measured on the Calico lane before this ships.
 
