@@ -424,13 +424,14 @@ Either alone attributes nothing.
 Field names are settled under [api-review.md](../development/api-review.md) when the fields are written.
 
 **A namespace is attributed only when it has opted in itself.** The pool's existing port stays an unattributed port that records nothing, and every namespace starts on it, the pool's own included.
-When a gateway opts in and its pool has too, the GMC gives that gateway's namespace a port of its own and moves the namespace's `HTTPS_PROXY` to it.
-That is the only consumer-side change, and it happens when the second of the two switches flips.
-So a pool edit can roll a gateway in another namespace, but only one whose own owner opted in: a gateway that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
-A gateway that has not opted in is never rolled by a pool edit.
+The switch is per gateway and the port is per namespace, so a namespace is opted in once any of its gateways is.
+When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and moves every gateway there that uses the pool to it, by `HTTPS_PROXY`; it moves them back when either side turns off.
+That is the only consumer-side change, and it happens when the later of the two sides turns on.
+So a pool edit can roll gateways in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
+A namespace where no gateway has opted in is never rolled by a pool edit.
+Within an opted-in namespace, a gateway that did not opt in moves with the rest, so one gateway's opt-in rolls its siblings; that is one tenant's own decision.
 The rule also keeps a namespace that has not opted in from having its failures recorded under someone else's: its traffic arrives on the unattributed port, and nothing reads that.
-The switch is per gateway and the port is per namespace, so once one gateway in a namespace opts in, every gateway there that uses the pool moves to the attributed port; each AGC then joins only its own gateway's pods (below).
-That is one tenant seeing its own other gateways' failures, not a cross-tenant read.
+Each AGC joins only its own gateway's pods (below), so an opted-in gateway is served its siblings' failures and discards them, which is one tenant seeing its own records rather than a cross-tenant read.
 
 **The proxy keeps failures only, in memory, and bounded.**
 
