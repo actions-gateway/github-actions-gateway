@@ -23,7 +23,7 @@
 #
 # Bump the base tag in lockstep with scripts/dogfood/runner/Dockerfile's runner
 # version when that moves.
-FROM ghcr.io/actions-gateway/dogfood-runner:2.337.0
+FROM ghcr.io/actions-gateway/dogfood-runner:2.338.1
 USER root
 
 # Docker CLI + buildx plugin from Docker's official apt repo. Unpinned apt
