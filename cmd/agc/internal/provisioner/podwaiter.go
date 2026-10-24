@@ -34,8 +34,8 @@ type PodOutcome struct {
 	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
 	// only kube-scheduler writes (Q497).
 	Preempted bool
-	// NodeShutdown reports that the pod failed because its node shut down or
-	// disappeared (Q1179; see LostToNodeShutdown). Both writers fail the pod before
+	// NodeShutdown reports that the pod failed because its node shut down or its Node
+	// object was deleted (Q1179; see LostToNodeShutdown). Both writers fail the pod before
 	// anything deletes it, so it is read off the terminal phase only.
 	NodeShutdown bool
 	// ExternallyDeleted reports that the pod's terminal phase published while an

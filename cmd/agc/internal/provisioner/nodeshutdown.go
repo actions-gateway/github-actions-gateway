@@ -5,8 +5,10 @@ import (
 )
 
 // Node-shutdown recovery (Q1179): a worker whose node went away under it — a Spot or
-// preemptible reclamation, or any other node shutdown — reaches the same automatic
-// re-run an eviction does.
+// preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted
+// under it — reaches the same automatic re-run an eviction does. A node that goes
+// NotReady and keeps its Node object reaches neither shape until that object is
+// deleted: the taint manager's DeletionByTaintManager delete leaves the phase alone.
 //
 // Neither existing arm sees it. On a graceful node shutdown the kubelet's shutdown
 // manager fails the pod with Status.Reason "Terminated", not "Evicted", and stamps
@@ -23,8 +25,8 @@ import (
 // node no longer exists. k8s.io/api exports no constant for it.
 const podReasonDeletionByPodGC = "DeletionByPodGC"
 
-// LostToNodeShutdown reports whether pod failed because its node shut down or
-// disappeared: a PodFailed pod carrying DisruptionTarget=True with reason
+// LostToNodeShutdown reports whether pod failed because its node shut down or its Node
+// object was deleted: a PodFailed pod carrying DisruptionTarget=True with reason
 // TerminationByKubelet or DeletionByPodGC.
 //
 // Both reasons have only cluster-side writers — the kubelet and the PodGC controller —

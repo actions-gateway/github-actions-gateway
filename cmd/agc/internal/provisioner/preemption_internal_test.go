@@ -224,11 +224,12 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
 		},
 		{
-			// The node vanished before its kubelet wrote anything: PodGC fails the orphan
-			// and force-deletes it. The phase predates the deletion mark, so the deletion
-			// arm alone would read this as cleanup.
-			name:      "orphan failed and deleted by PodGC",
-			pod:       deleted(shutDown(scaleSetWorkerPod("p", identityAnnotations()), podReasonDeletionByPodGC)),
+			// The node vanished before its kubelet wrote anything: PodGC patches the
+			// orphan to Failed, then force-deletes it. The watch sees the Failed update
+			// before any deletion mark, and the deletion arm would read the later delete
+			// as cleanup.
+			name:      "orphan failed by PodGC",
+			pod:       shutDown(scaleSetWorkerPod("p", identityAnnotations()), podReasonDeletionByPodGC),
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
 		},
 		{
