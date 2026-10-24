@@ -200,6 +200,7 @@ type scaleSetWorkerSet struct {
 	started     map[string]string // pod name -> started job ID, "" where none is recorded
 	startedJobs map[string]bool   // job IDs some live worker's runner has started
 	idle        int               // workers not terminal or deleting whose runner has started no job
+	idlePods    map[string]bool   // the pods idle counts, by name
 }
 
 // serving reports whether a live worker is running jobID. That is the worker whose
@@ -217,13 +218,37 @@ func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
 	return live && (started == "" || s.idle > 0)
 }
 
+// startedElsewhere reports whether a worker other than podName has started the job
+// podName was created for. A worker's started job names the pod minted for it through
+// scaleSetPodName, so this needs no job ID off podName itself (Q1169).
+func (s scaleSetWorkerSet) startedElsewhere(ownerName, podName string) bool {
+	for name, jobID := range s.started {
+		if name != podName && jobID != "" && scaleSetPodName(ownerName, jobID) == podName {
+			return true
+		}
+	}
+	return false
+}
+
+// idleBesides reports whether a worker other than podName could still be given a job.
+// podName is left out because a disrupted pod can read as idle while it is still listed:
+// kube-scheduler stamps a preemption victim's condition before it deletes it.
+func (s scaleSetWorkerSet) idleBesides(podName string) bool {
+	n := s.idle
+	if s.idlePods[podName] {
+		n--
+	}
+	return n > 0
+}
+
 // liveScaleSetWorkers lists this owner's scale-set worker pods, in any phase. One List
 // answers a whole in-flight set, rather than a Get per entry.
 //
 // It goes through the uncached reader, unlike the disruption scan's own List: here the
 // verdict is driven by a pod NOT being listed, so an informer cache that has not caught
 // up would read as every worker in the set having been disrupted. Once per process per
-// set, so the uncached read costs nothing in steady state.
+// set, so the uncached read costs nothing in steady state. Recovery of a never-started
+// worker reads it too (assignedJobAccountedFor), once per recovered pod.
 func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (scaleSetWorkerSet, error) {
 	key := target.Key()
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}
@@ -235,11 +260,12 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 		client.InNamespace(key.Namespace),
 		client.MatchingLabels(selector),
 	); err != nil {
-		return scaleSetWorkerSet{}, fmt.Errorf("provisioner: list scale-set worker pods for orphaned-worker recovery: %w", err)
+		return scaleSetWorkerSet{}, fmt.Errorf("provisioner: list scale-set worker pods: %w", err)
 	}
 	set := scaleSetWorkerSet{
 		started:     make(map[string]string, len(pods.Items)),
 		startedJobs: make(map[string]bool, len(pods.Items)),
+		idlePods:    make(map[string]bool, len(pods.Items)),
 	}
 	for i := range pods.Items {
 		jobID := pods.Items[i].Annotations[AnnotationStartedJobID]
@@ -248,16 +274,23 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 			set.startedJobs[jobID] = true
 		} else if canTakeAJob(&pods.Items[i]) {
 			set.idle++
+			set.idlePods[pods.Items[i].Name] = true
 		}
 	}
 	return set, nil
 }
 
 // canTakeAJob reports whether a worker's runner can still be given a job: the pod is
-// neither terminal nor being deleted.
+// neither terminal, being deleted, nor marked a disruption target. The last covers a
+// preemption victim, whose condition is stamped before its delete.
 func canTakeAJob(pod *corev1.Pod) bool {
 	if pod.DeletionTimestamp != nil {
 		return false
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.DisruptionTarget && c.Status == corev1.ConditionTrue {
+			return false
+		}
 	}
 	return pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed
 }
