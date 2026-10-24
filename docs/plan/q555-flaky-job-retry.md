@@ -41,7 +41,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 and Q1182 |
 | [Q1177](../queue/Q1177.md), [Q1179](../queue/Q1179.md) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
-| [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184 needs a security review |
+| [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184: per-port ingress measured on the Calico lane |
 
 ## Problem statement
 
@@ -314,7 +314,7 @@ What it could feed into this feature:
 | Egress IP refused by GitHub | The proxy probing an unauthenticated GitHub endpoint from the tenant's egress IP and getting a 403 (the probe #1217 and #1977 built for CI) | Condition on the set; retries wait until it clears | A periodic self-probe |
 
 Two constraints shape every row.
-**Attribution is a retention decision.** Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so it needs a security review against [05-security.md](../design/05-security.md) before anything ships.
+**Attribution is a retention decision.** Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so its design is in [05-security.md § Proxy failure attribution](../design/05-security.md#proxy-failure-attribution): off by default, failures only, in memory, and attributed to a consumer by the port it arrived on.
 **Destination labels have bounded cardinality only if they name the allowlist entry that matched**, never the raw host.
 
 [Q1178](../queue/Q1178.md) labels the proxy's outcome metrics, [Q1184](../queue/Q1184.md) attributes failures to jobs, and the uses beyond retry are non-commitments in [G.18](../design/appendix-g-future-enhancements.md#g18-the-egress-proxy-as-a-platform-sensor).

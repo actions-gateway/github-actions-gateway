@@ -411,6 +411,78 @@ A refusal and a failed dial already have their warn/error line and their counter
 
 See [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record) for the shape, and [tenant-onboarding.md § Per-pool egress audit record](../operations/tenant-onboarding.md#per-pool-egress-audit-record) for turning it on.
 
+### Proxy failure attribution
+
+Classified retry ([Q555 plan](../plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor)) needs to know which job a proxy failure came from.
+An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
+That is new use of per-job egress data, so it is designed here before it is built ([Q1184](../queue/Q1184.md)).
+Nothing in this section is implemented yet.
+
+**It is off by default, behind two switches, for the audit record's reasons.** One on the `EgressProxy` makes the pool able to keep failures and serve them.
+One on a consuming `ActionsGateway` opts that gateway's namespace in.
+Either alone attributes nothing.
+Field names are settled under [api-review.md](../development/api-review.md) when the fields are written.
+
+**A namespace is attributed only when it has opted in itself.** The pool's existing port stays an unattributed port that records nothing, and every namespace starts on it, the pool's own included.
+The switch is per gateway and the port is per namespace, so a namespace is opted in once any of its gateways is.
+When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and moves every gateway there that uses the pool to it, by `HTTPS_PROXY`; it moves them back when either side turns off.
+That is the only consumer-side change, and it happens when the later of the two sides turns on.
+So a pool edit can roll gateways in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
+A namespace where no gateway has opted in is never rolled by a pool edit.
+Within an opted-in namespace, a gateway that did not opt in moves with the rest, so one gateway's opt-in rolls its siblings; that is one tenant's own decision.
+The rule also keeps a namespace that has not opted in from having its failures recorded under someone else's: its traffic arrives on the unattributed port, and nothing reads that.
+Each AGC joins only its own gateway's pods (below), so an opted-in gateway is served its siblings' failures and discards them, which is one tenant seeing its own records rather than a cross-tenant read.
+
+**The proxy keeps failures only, in memory, and bounded.**
+
+| Kept | Why it is safe to keep |
+|---|---|
+| Consumer namespace | From the port the connection arrived on (below), never the request |
+| Client source address | Read off the accepted connection, so a worker cannot forge it |
+| Time | The proxy's clock |
+| Outcome | `denied` or `dial-failed`, and for a dial failure a class (timeout, refused, DNS, other) rather than the error text, which embeds the address |
+| Destination host and port | Capped as at every other site that logs the authority (see the amplifier note above) |
+
+Not kept: accepted connections, byte counts, any request header, anything from inside the tunnel.
+Records live for minutes in memory and are lost on restart; the feature writes nothing to disk or to the log.
+Untrusted job code decides what goes into the buffer, since a job can produce denials at will, so the buffer is partitioned by consumer namespace and capped per source address within each partition.
+The per-namespace partition keeps one tenant's workers from evicting another tenant's records, which a single shared cap would allow however small the per-source cap.
+The per-source cap keeps one job from evicting the other jobs' records in its own namespace to hide their failures.
+The total is the per-namespace cap times the number of attributed namespaces, which the `allowedNamespaces` cap below bounds.
+
+**The proxy learns the consumer from the port, not the address.** A CONNECT carries no namespace and the proxy has no Kubernetes client, which this design keeps (see the audit record above).
+Each attributed namespace's port is a port on the pool's one Service, targeting a numbered container port.
+One Service rather than one per consumer keeps the proxy's serving certificate unchanged as grants come and go, since it lists a single Service's DNS names.
+The provider's ingress NetworkPolicy admits each namespace on its own port only, so a worker that dials another tenant's port is refused before the proxy sees the connection.
+NetworkPolicy matches the pod's port after Service translation, so each rule names the container port, and by number: a named port resolves against the pod's declared `containerPorts`, which would put the grant list into the pool's pod template and roll the pool on every grant.
+`allowedNamespaces` has no maximum today, so enabling attribution adds one, enforced at admission.
+
+**Where the CNI does not enforce that ingress, NetworkPolicy is not the only defence, and eviction is what is left.** A worker in one namespace can then dial another's port.
+Its records land in that namespace's partition carrying its own pod address, and that namespace's AGC discards them, because the address is no pod of its own in the window it held it.
+So a forged record is never attributed, and what crosses is the dialing job's own failures, sent there by its own code.
+What it can still do is fill the other namespace's partition and push its records out, which degrades that tenant to unclassified failures.
+The kindnet CNI is one such: its enforcer does not drop the NetworkPolicy negatives, and the e2e specs that assert enforcement skip themselves on it ([testing.md](../development/testing.md), *Egress-enforcing CNI profile*).
+Cross-namespace sharing already rests on the same ingress policy, so a shared pool on a non-enforcing CNI has no tenant boundary to attribute across in the first place.
+Enforcement of per-port ingress has to be measured on the Calico lane before this ships.
+
+The same port would also tell the audit record which consumer a connection came from, closing the shared-pool gap above.
+That is a separate change and not part of this design.
+
+**The AGC reads only its own namespace's records.** The endpoint is its own listener with its own per-`EgressProxy` CA, not the metrics port.
+The metrics port admits only `metrics=enabled` namespaces so tenant pods cannot read traffic metrics, and a monitoring certificate must not read per-job data any more than an AGC certificate may read metrics.
+The GMC mints each opted-in gateway's AGC a client certificate naming its namespace, and projects it into that namespace as a Secret.
+The proxy returns only records from the port mapped to the namespace the certificate names.
+It checks that name against its current port map on every request, so removing a grant ends access at the next configuration reload rather than at certificate expiry.
+The listener's ingress rule admits AGC pods of attributed namespaces only, with both selectors in one peer as the sharing rules require; workers never reach it.
+
+**The AGC joins on the pod's lifetime, not the address alone.** A worker's address returns to the CNI's pool when its job ends, so within the buffer's window one address can belong to two jobs.
+The AGC attributes a record to a worker only when the worker is one of its own gateway's pods and the record's time falls inside the window that pod held the address, read from its own pod informer, and it discards a record near either edge rather than guess.
+A discarded record degrades to an unclassified failure, never to a wrong one.
+
+**Residual: the denial Event surfaces the host.** The Event the futile-retry use writes names the blocked host, in the job's own namespace.
+Anyone who can read Events there sees what the job tried to reach, and the cluster's event pipeline keeps it for as long as it keeps Events.
+It is the tenant's own job in the tenant's own namespace and the host is capped, but it is the one place this feature's data outlives the buffer, which is why the gateway carries its own switch.
+
 ### Cross-tenant pod preemption via PriorityClass
 
 A **cluster-scoped** `PriorityClass` carries a priority value and a `preemptionPolicy` (Kubernetes default `PreemptLowerPriority`), so an unvalidated tenant-chosen class would let a tenant name a high-priority, preempting class and have the scheduler **evict other tenants' running worker pods** — and their egress proxies — to schedule its own, defeating per-tenant isolation.
