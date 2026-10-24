@@ -3207,7 +3207,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 |---|---|---|
 | Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` (the kubelet also sets a `DisruptionTarget` condition, reason `TerminationByKubelet`, but the arm does not read it) |
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
-| Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted under it | <code class="gag-nowrap">node_shutdown</code> | pod `Failed` with a `DisruptionTarget` condition, reason `TerminationByKubelet` (the kubelet's graceful shutdown) or `DeletionByPodGC` (the node was gone first) |
+| Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted under it, or a dead node you taint `node.kubernetes.io/out-of-service` | <code class="gag-nowrap">node_shutdown</code> | pod `Failed` with a `DisruptionTarget` condition, reason `TerminationByKubelet` (the kubelet's graceful shutdown), `DeletionByPodGC` (the node was gone first), or `DeletionByTaintManager` with the container still recorded `Running` (the out-of-service taint) |
 | Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
 | Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
 | Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone, or is running another job while no other worker that has not exited is idle to take it |
@@ -3220,8 +3220,11 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
   No slot is spent: `eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}` increments, and a Normal `EvictionRerunWithheld` Event quotes the kubelet's message.
   Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).
 - **A cancelled run.** A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job *is* re-run; see [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)).
-- **A node that goes `NotReady` and keeps its Node object.** The taint manager stamps `DeletionByTaintManager` and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays `Running` and no arm fires.
-  Recovery starts only once the Node object is deleted: PodGC then fails the pod with `DeletionByPodGC` and the `node_shutdown` row above re-runs it.
+- **A node that goes `NotReady` and keeps its Node object, untainted.** The taint manager stamps `DeletionByTaintManager` and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays `Running` and no arm fires.
+  GAG does not force it, because a node that is only partitioned may still be running the job.
+  Once you have confirmed the node is dead, taint it with `kubectl taint node <node> node.kubernetes.io/out-of-service=nodeshutdown:NoExecute`; PodGC then fails and removes the pod, and the `node_shutdown` row above re-runs it.
+  Deleting the Node object works too: PodGC then fails the pod with `DeletionByPodGC`.
+  A `NoExecute` taint of your own on a live node is the drain case instead, recovered as `deletion`.
 - **The AGC's own reaper deletions** — the lifetime cap (`maxWorkerLifetime`), the stuck-`Running` reap deadline, orphan cleanup.
   Each is stamped `actions-gateway.com/deletion-reason` before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
   The stamp is the pod's, so it does not survive the pod: a reaped worker whose job completion a previous AGC process never read is picked up by the `vanished` row above instead, which needs the completion to have gone unread for `completedPodTTL` and then a kill inside that state.
