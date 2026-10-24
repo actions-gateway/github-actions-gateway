@@ -63,8 +63,10 @@ type failureStore struct {
 	mu sync.Mutex
 	// epoch is drawn once per process, so a reader whose cursor came from a
 	// previous process can tell the restart from a quiet period.
-	epoch     string
-	seq       uint64
+	epoch string
+	// seq counts per namespace, so a reader's sequence gaps reveal nothing
+	// about other tenants' failures.
+	seq       map[string]uint64
 	window    time.Duration
 	perNS     int
 	perSource int
@@ -83,6 +85,7 @@ func newFailureStore() (*failureStore, error) {
 		perNS:     maxFailuresPerNamespace,
 		perSource: maxFailuresPerSource,
 		now:       time.Now,
+		seq:       map[string]uint64{},
 		parts:     map[string][]failureRecord{},
 	}, nil
 }
@@ -98,15 +101,15 @@ func (f *failureStore) expire(p []failureRecord, now time.Time) []failureRecord 
 	return append(p[:0], p[i:]...)
 }
 
-// record stamps rec with the time and the next sequence number and adds it to
+// record stamps rec with the time and ns's next sequence number and adds it to
 // ns's partition, evicting that source's oldest record at the per-source cap
 // and the partition's oldest at the per-namespace cap.
 func (f *failureStore) record(ns string, rec failureRecord) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := f.now()
-	f.seq++
-	rec.Seq, rec.Time = f.seq, now
+	f.seq[ns]++
+	rec.Seq, rec.Time = f.seq[ns], now
 
 	p := f.expire(f.parts[ns], now)
 	count, oldest := 0, -1

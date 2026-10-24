@@ -86,7 +86,8 @@ func TestFailureStore_ReadAfterCursorAndEpoch(t *testing.T) {
 
 	epoch, all := f.read("ns", 0)
 	require.Len(t, all, 2)
-	assert.Less(t, all[0].Seq, all[1].Seq)
+	assert.Equal(t, []uint64{1, 2}, []uint64{all[0].Seq, all[1].Seq},
+		"another namespace's record leaves no gap in this one's sequence")
 
 	epoch2, rest := f.read("ns", all[0].Seq)
 	assert.Equal(t, epoch, epoch2, "the epoch is fixed for the life of the process")

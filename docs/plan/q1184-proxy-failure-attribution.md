@@ -22,11 +22,11 @@ Off unless configured: with no attributed ports the proxy behaves exactly as tod
 
 - **Attributed listeners.** `PROXY_ATTRIBUTION_PORTS` is a comma-separated `namespace=port` list.
   Each entry is one more CONNECT listener on the same `http.Server`, so shutdown's linger, drain and `ConnState` stamp cover it with no new code.
-  A wrapped listener tags each accepted connection with its namespace, and `ConnContext` carries it into `handleConnect`.
+  `ConnContext` maps each connection's local port to its namespace and carries it into `handleConnect`; the listener is not wrapped, so the relay keeps its `*net.TCPConn` half-close.
   The existing `PROXY_PORT` listener stays untagged, which is what makes it the unattributed port.
 - **The failure buffer.** On a denial or a dial failure arriving on a tagged listener, `handleConnect` records the namespace, the client source address, the time, the outcome, a dial-failure class, and the capped host and port.
   Records are partitioned by namespace, capped per namespace and per source address within it, and expire after a fixed window.
-  Every record carries a per-process sequence number, and the store a random epoch drawn at start, so a reader can tell a restart from a quiet period.
+  Every record carries a sequence number counted per namespace, so a reader's gaps reveal nothing about other tenants, and the store a random epoch drawn at start, so a reader can tell a restart from a quiet period.
 - **The read endpoint.** `PROXY_ATTRIBUTION_TLS_CERT_FILE`, `_KEY_FILE` and `_CLIENT_CA_FILE` configure an mTLS listener on `PROXY_ATTRIBUTION_PORT` (default 8444).
   `GET /v1/failures?after=<seq>` returns the epoch and the records of the namespace the verified client certificate's common name maps to, after that sequence.
   A name not in the port map is refused 403, so removing a namespace from the map ends its access.
