@@ -17,6 +17,9 @@
 //	PROXY_ALLOWED_CIDRS          - Comma-separated CONNECT destination allowlist by IP range (CIDR); empty ⇒ no CIDR allowance
 //	PROXY_AUDIT_LOGGING          - Per-connection egress audit record: Off (default), Connections, or ConnectionsWithSource (adds the client source address, Q986); anything unrecognized is Off (Q564 G.3)
 //	POD_NAMESPACE                - Pool namespace stamped on the audit record; downward-API supplied, empty omits the field
+//	PROXY_ATTRIBUTION_PORTS      - Comma-separated namespace=port list; each is a CONNECT listener whose failures are kept for that namespace's AGC (Q1184); empty disables attribution
+//	PROXY_ATTRIBUTION_PORT       - mTLS port the AGCs read failures from (default 8444)
+//	PROXY_ATTRIBUTION_TLS_CERT_FILE, PROXY_ATTRIBUTION_TLS_KEY_FILE, PROXY_ATTRIBUTION_CLIENT_CA_FILE - Attribution listener cert, key, and the CA AGC client certs are verified against; required when PROXY_ATTRIBUTION_PORTS is set
 package main
 
 import (
@@ -119,6 +122,18 @@ func run(log *slog.Logger) error {
 	srv.AuditLogging = parseAuditMode(os.Getenv("PROXY_AUDIT_LOGGING"))
 	srv.Namespace = os.Getenv("POD_NAMESPACE")
 
+	// Failure attribution (Q1184). Absent env ⇒ no attributed ports, and the
+	// proxy keeps nothing; ListenAndServe refuses ports without the mTLS bundle.
+	attributed, err := parseAttributionPorts(os.Getenv("PROXY_ATTRIBUTION_PORTS"))
+	if err != nil {
+		return fmt.Errorf("parse PROXY_ATTRIBUTION_PORTS: %w", err)
+	}
+	srv.AttributedAddrs = attributed
+	srv.AttributionAddr = ":" + envOr("PROXY_ATTRIBUTION_PORT", "8444")
+	srv.AttributionTLSCertFile = os.Getenv("PROXY_ATTRIBUTION_TLS_CERT_FILE")
+	srv.AttributionTLSKeyFile = os.Getenv("PROXY_ATTRIBUTION_TLS_KEY_FILE")
+	srv.AttributionClientCAFile = os.Getenv("PROXY_ATTRIBUTION_CLIENT_CA_FILE")
+
 	srv.ShutdownDrainTimeout = drainTimeout
 	srv.ShutdownLinger = shutdownLinger
 
@@ -126,7 +141,7 @@ func run(log *slog.Logger) error {
 	metricsMTLS := srv.MetricsTLSCertFile != "" && srv.MetricsTLSKeyFile != "" && srv.MetricsClientCAFile != ""
 	log.Info("proxy starting", "proxyPort", proxyPort, "healthPort", healthPort,
 		"metricsPort", metricsPort, "tls", tlsEnabled, "metricsMTLS", metricsMTLS,
-		"auditLogging", string(srv.AuditLogging))
+		"auditLogging", string(srv.AuditLogging), "attributedNamespaces", len(srv.AttributedAddrs))
 	// Every rollout, node drain, eviction, and scale-down delivers SIGTERM here.
 	// Without a handler the default action terminates the process outright and
 	// every in-flight CONNECT tunnel dies with it, cutting live CI egress
