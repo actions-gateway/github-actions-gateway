@@ -151,6 +151,7 @@ It is validated on GKE with containerd 2.2.7 and Kata from `kata-deploy`, and th
 
 ## Related
 
+- [Reference architectures](reference-architectures.md): which P2P pairings are supported profiles, and how each was tested.
 - [Air-gapped install](air-gapped-install.md) — relocating images to a private registry with digests preserved; P2P sits in front of that registry.
 - [In-runner image builds](in-runner-image-builds.md) — the sibling scale/PSA companion for build workloads inside workers.
 - [Security § Supply-Chain Compromise of Worker Image](../design/05-security.md) — why worker images are digest-pinned and the `imagePullPolicy` rationale.
