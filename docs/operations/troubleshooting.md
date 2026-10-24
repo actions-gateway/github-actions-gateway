@@ -3205,7 +3205,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 
 | Disruption | <span class="gag-nowrap">`cause` label</span> | Detected by |
 |---|---|---|
-| Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` and condition `DisruptionTarget`, reason `TerminationByKubelet` |
+| Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` (the kubelet also sets a `DisruptionTarget` condition, reason `TerminationByKubelet`, but the arm does not read it) |
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
 | Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted under it | <code class="gag-nowrap">node_shutdown</code> | pod `Failed` with a `DisruptionTarget` condition, reason `TerminationByKubelet` (the kubelet's graceful shutdown) or `DeletionByPodGC` (the node was gone first) |
 | Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
