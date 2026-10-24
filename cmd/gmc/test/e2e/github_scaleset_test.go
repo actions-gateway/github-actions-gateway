@@ -66,12 +66,11 @@ const (
 // proxy pool would add an HPA, an anti-affinity-pinned node, and a second failure mode
 // to a measurement that is about eviction recovery.
 //
-// The ephemeral-storage limit is the eviction lever, sized and justified exactly as the
-// classic tenant's is (utils.WithEphemeralStorageLimit). CPU and memory are declared
-// alongside it because the provisioner's resource defaulting is gap-fill and
-// all-or-nothing: a container naming any resource keeps its values verbatim and gets no
-// defaults, so naming only ephemeral storage would ship an unbounded worker.
-func scaleSetLiveManifest(ns, orgURL, secretName, workerImage, storageLimit string) string {
+// The runner's resources are the node-pressure eviction lever's footprint, the same as
+// the classic tenant's (utils.NodePressureWorkerResources): a low memory request so the
+// kubelet's ranking picks this worker, a limit that clears the spec's fill.
+func scaleSetLiveManifest(ns, orgURL, secretName, workerImage string) string {
+	res := utils.NodePressureWorkerResources()
 	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
@@ -99,13 +98,11 @@ spec:
         image: %[3]s
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
-            ephemeral-storage: %[5]s
+            cpu: %[5]s
+            memory: %[10]s
           limits:
-            cpu: 500m
-            memory: 1Gi
-            ephemeral-storage: %[5]s
+            cpu: %[5]s
+            memory: %[11]s
 ---
 apiVersion: actions-gateway.com/v2alpha1
 kind: RunnerSet
@@ -119,8 +116,9 @@ spec:
     name: %[8]s
   acquisitionProtocol: ScaleSet
   runnerLabels: ["%[9]s"]
-`, ns, secretName, workerImage, orgURL, storageLimit,
-		scaleSetGatewayName, scaleSetName, scaleSetTemplate, scaleSetLabel)
+`, ns, secretName, workerImage, orgURL, res.Requests.Cpu().String(),
+		scaleSetGatewayName, scaleSetName, scaleSetTemplate, scaleSetLabel,
+		res.Requests.Memory().String(), res.Limits.Memory().String())
 }
 
 // runnerSetCondition returns one condition's status and reason off a RunnerSet, both ""

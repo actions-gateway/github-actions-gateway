@@ -43,25 +43,6 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		agName     = "real-ag"
 		secretName = "real-github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 
-		// workerEphemeralStorageLimit is the seam the Q396 eviction measurement needs:
-		// a pod-level cap the spec can deliberately overshoot to make the kubelet evict
-		// that one worker. See utils.WithEphemeralStorageLimit for why this is the only
-		// disruption at this tier that reaches eviction recovery at all.
-		//
-		// Sized from a measurement rather than a guess. The kubelet charges a pod only
-		// its *writable* layer, emptyDirs and logs — image layers are read-only and do
-		// not count — and a worker pod built from the real runner image was measured at
-		// 28KiB against the node's stats/summary endpoint. These fixture jobs add
-		// nothing to that: the `hold` job echoes and sleeps, the green-path job echoes,
-		// and neither checks out a repository. 256Mi is therefore four orders of
-		// magnitude of headroom, which is what makes the deliberate overshoot below the
-		// only thing that can cross it.
-		workerEphemeralStorageLimit = "256Mi"
-		// evictionFillMiB overshoots that cap in one write. Sized to cross it
-		// unambiguously without making the kubelet's own node-level disk-pressure
-		// thresholds a second, uncontrolled cause of eviction.
-		evictionFillMiB = 384
-
 		// The Q422 sibling gateway: a second AGC on the same GitHub runner group, in
 		// its own namespace because a ResourceQuota is namespaced and the experiment
 		// needs one tenant with headroom and one without.
@@ -150,7 +131,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 
 		By("applying ActionsGateway CR with a RunnerGroup pointing at the worker image")
 		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).
-			WithEphemeralStorageLimit(workerEphemeralStorageLimit).
+			WithNodePressureHeadroom().
 			ApplyWithWebhookRetry()
 
 		By("waiting for AGC Deployment to be ready")
@@ -299,17 +280,18 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// `timeout-minutes` at all, so the job can only end because something interrupted
 	// it or because the sleep elapsed, and those two are distinguishable.
 	//
-	// # Why the disruption is an ephemeral-storage overshoot
+	// # Why the disruption is node memory pressure, aimed
 	//
-	// Eviction recovery keys on exactly one shape: PodFailed with reason "Evicted",
-	// the kubelet's node-pressure kill. Q421 measured that the graceful removals — a
-	// drain, a delete — never produce it and reach no recovery at all, so neither can
-	// be used here. Node-wide memory or disk pressure does produce it, but the kubelet
-	// picks the victim by its own ranking, on a node shared with the rest of the
-	// suite. A pod-level ephemeral-storage limit is the one lever that is both genuine
-	// and aimed: exceed it and the kubelet evicts that pod, and only that pod, with a
-	// zero grace period. Nothing about the eviction is simulated — same kubelet code
-	// path, same object shape, same SIGKILL.
+	// The eviction arm re-runs the kubelet's node-pressure kill: PodFailed with reason
+	// "Evicted" and a DisruptionTarget=TerminationByKubelet condition. A pod-level
+	// ephemeral-storage overshoot, this spec's lever until Q1177, writes the same
+	// phase and reason, but it is an eviction for the pod's own limit, which recovery
+	// withholds because a re-run fails the same way. So the spec makes genuine node
+	// pressure on the worker's own node instead (applyNodeMemoryPressureThreshold): the
+	// kubelet's memory threshold is raised to just under what the node has free, and
+	// the worker is made to hold memory past it. The worker's low memory request is
+	// what makes the kubelet's ranking pick it. Nothing about the eviction is simulated
+	// — same kubelet code path, same object shape, same SIGKILL.
 	//
 	// The zero grace period is the point, not a side effect. It is what makes this the
 	// *ungraceful* case: the runner is killed outright, the wrapper's SIGTERM relay
@@ -366,13 +348,12 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			// here turns a ten-minute "job is still queued" timeout into an immediate,
 			// correctly attributed failure. The case that actually happens is another
 			// workload putting the shared node under pressure: the kubelet resolves that
-			// by evicting somebody, and a worker under an explicit ephemeral-storage
-			// limit is a candidate.
+			// by evicting somebody, and a worker using more than its low memory request is
+			// first in line.
 			g.Expect(evictedWorkerNames(tenantNS)).To(BeEmpty(),
 				"a worker pod was evicted before its job ever started, so nothing below "+
-					"would be measuring the eviction this spec performs. Either this node is "+
-					"under pressure from another workload, or %s is too little headroom",
-				workerEphemeralStorageLimit)
+					"would be measuring the eviction this spec performs: this node is under "+
+					"pressure from another workload, or a previous run left its kubelet threshold raised")
 			status, _ := firstJobState(g, repoSlug, runID)
 			g.Expect(status).To(Equal("in_progress"), "job is %q", status)
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
@@ -394,17 +375,18 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// cause rather than leaving it to be inferred from a silent recovery.
 		assertWorkerCarriesRepository(tenantNS, podName)
 
-		By("confirming the worker carries the ephemeral-storage cap this spec overshoots")
-		// Without the cap there is nothing to exceed, the kubelet never evicts, and the
-		// spec would time out on the eviction wait for a reason that has nothing to do
-		// with eviction. Check the premise before acting on it.
-		Expect(podEphemeralStorageLimit(tenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
-			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
+		By("confirming the worker's memory limit clears the fill this spec makes it hold")
+		// Below the fill, the container is OOMKilled at its own limit rather than evicted
+		// for node pressure, and the spec would time out on the eviction wait for a reason
+		// that has nothing to do with eviction. Check the premise before acting on it.
+		Expect(podMemoryLimit(tenantNS, podName)).To(Equal(utils.NodePressureWorkerResources().Limits.Memory().String()),
+			"worker pod does not carry the node-pressure lever's memory limit")
 
 		By("streaming the worker's logs, so anything it manages to say on the way out is captured")
 		// Whether the runner says anything is the outcome under measurement, not a
-		// foregone conclusion: an ephemeral-storage eviction leaves a window measured at
-		// about two seconds, which the runner sometimes clears (Q657). "The runner said
+		// foregone conclusion: a hard-threshold eviction leaves a window measured at about
+		// two seconds under the ephemeral-storage lever, which the runner sometimes clears
+		// (Q657); the node-pressure lever kills on the same immediate grace period. "The runner said
 		// nothing" is what makes GitHub's own detection the only thing that can conclude
 		// the job, so it has to be observed rather than assumed. The stream loses the last
 		// instant before the kill; evictedWorkerLog re-reads the log whole afterwards.
@@ -413,23 +395,30 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		observed := newPhaseRecorder(tenantNS, podName)
 		stopSampling := observed.start(time.Second)
 
-		By(fmt.Sprintf("overshooting the worker's ephemeral-storage limit by writing %dMiB", evictionFillMiB))
+		By("raising the kubelet's memory threshold on the worker's node to just under its free memory")
+		restoreNode := armNodeMemoryPressure("Q396", tenantNS, podName)
+
+		By(fmt.Sprintf("making the worker hold %dMiB, which carries its node past the threshold", nodePressureFillMiB))
 		filledAt := time.Now()
-		fillOutput := overflowEphemeralStorage(tenantNS, podName, evictionFillMiB)
+		fillOutput := fillWorkerMemory(tenantNS, podName, nodePressureFillMiB)
 		AddReportEntry("Q396 fill command output", fillOutput)
 
 		By("waiting for the kubelet to evict the worker")
-		// The kubelet's eviction manager rechecks local storage on its housekeeping
-		// cycle, so this is not instant — measured at roughly a minute on kind. The
-		// wait is bounded well past that; blowing it means the lever did not work and
-		// nothing below would be measuring an eviction.
+		// The eviction manager acts on its housekeeping cycle, so this is not instant —
+		// 17s on kind for a 1GiB fill (Q1177). The wait is bounded well past that; blowing
+		// it means the lever did not work and nothing below would be measuring an eviction.
 		Eventually(func(g Gomega) {
 			g.Expect(podPhaseReason(tenantNS, podName)).To(Equal("Failed/Evicted"),
 				"worker pod has not been evicted")
 		}, 5*time.Minute, 2*time.Second).Should(Succeed())
 		stopSampling()
+		restoreNode()
 
 		evictedAt, exitCode, evictionMessage := evictionFacts(tenantNS, podName)
+		// A limit eviction carries the same phase and reason and is withheld, so the
+		// re-run assertions below would fail for a reason that is not theirs (Q1177).
+		Expect(evictionMessage).To(HavePrefix(nodePressureEvictionPrefix),
+			"the kubelet evicted the worker for something other than node memory pressure")
 		AddReportEntry("Q396 observed pod phase/reason sequence", strings.Join(observed.sequence(), " -> "))
 		AddReportEntry("Q396 kubelet eviction message", evictionMessage)
 		AddReportEntry("Q396 runner container exit code", strconv.Itoa(exitCode))
@@ -1140,7 +1129,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			creds.appID, creds.installationID, creds.privateKeyPEM)
 		Expect(utils.ApplyManifestWithWebhookRetry(
 			scaleSetLiveManifest(scaleSetTenantNS, orgURL, scaleSetSecretName,
-				workerImage, workerEphemeralStorageLimit))).To(Succeed())
+				workerImage))).To(Succeed())
 
 		By("waiting for the per-gateway AGC Deployment to become ready")
 		utils.WaitForDeploymentReady(scaleSetTenantNS, scaleSetAGCDeploy, 5*time.Minute)
@@ -1187,9 +1176,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			// attributed failure.
 			g.Expect(evictedWorkerNames(scaleSetTenantNS)).To(BeEmpty(),
 				"a scale-set worker was evicted before its job started, so nothing below would "+
-					"be measuring the eviction this spec performs. Either the node is under "+
-					"pressure from another workload, or %s is too little headroom",
-				workerEphemeralStorageLimit)
+					"be measuring the eviction this spec performs: the node is under pressure "+
+					"from another workload, or a previous run left its kubelet threshold raised")
 			status, _ := firstJobState(g, repoSlug, runID)
 			g.Expect(status).To(Equal("in_progress"), "job is %q", status)
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
@@ -1213,8 +1201,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			To(Equal("ScaleSet"), "worker %s was not provisioned by the scale-set path", podName)
 		Expect(podAnnotation(scaleSetTenantNS, podName, "actions-gateway.com/repository")).
 			NotTo(BeEmpty(), "scale-set worker %s carries no repository annotation (Q417)", podName)
-		Expect(podEphemeralStorageLimit(scaleSetTenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
-			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
+		Expect(podMemoryLimit(scaleSetTenantNS, podName)).To(Equal(utils.NodePressureWorkerResources().Limits.Memory().String()),
+			"worker pod does not carry the node-pressure lever's memory limit")
 
 		By("confirming this worker is the one GitHub says is executing the job")
 		// Measured 2026-08-03: the run identity is NOT sufficient to name the worker. A
@@ -1239,9 +1227,12 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		observed := newPhaseRecorder(scaleSetTenantNS, podName)
 		stopSampling := observed.start(time.Second)
 
-		By(fmt.Sprintf("overshooting the worker's ephemeral-storage limit by writing %dMiB", evictionFillMiB))
+		By("raising the kubelet's memory threshold on the worker's node to just under its free memory")
+		restoreNode := armNodeMemoryPressure("Q396 scale-set", scaleSetTenantNS, podName)
+
+		By(fmt.Sprintf("making the worker hold %dMiB, which carries its node past the threshold", nodePressureFillMiB))
 		filledAt := time.Now()
-		fillOutput := overflowEphemeralStorage(scaleSetTenantNS, podName, evictionFillMiB)
+		fillOutput := fillWorkerMemory(scaleSetTenantNS, podName, nodePressureFillMiB)
 		AddReportEntry("Q396 scale-set fill command output", fillOutput)
 
 		By("waiting for the kubelet to evict the worker")
@@ -1250,8 +1241,12 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 				"worker pod has not been evicted")
 		}, 5*time.Minute, 2*time.Second).Should(Succeed())
 		stopSampling()
+		restoreNode()
 
 		evictedAt, exitCode, evictionMessage := evictionFacts(scaleSetTenantNS, podName)
+		// See the classic spec: a limit eviction would be withheld (Q1177).
+		Expect(evictionMessage).To(HavePrefix(nodePressureEvictionPrefix),
+			"the kubelet evicted the worker for something other than node memory pressure")
 		AddReportEntry("Q396 scale-set observed pod phase/reason sequence", strings.Join(observed.sequence(), " -> "))
 		AddReportEntry("Q396 scale-set kubelet eviction message", evictionMessage)
 		AddReportEntry("Q396 scale-set runner container exit code", strconv.Itoa(exitCode))
@@ -1884,31 +1879,6 @@ func evictedWorkerNames(ns string) []string {
 	return strings.Fields(out)
 }
 
-// podEphemeralStorageLimit returns the runner container's ephemeral-storage limit, or
-// "" when it declares none.
-func podEphemeralStorageLimit(ns, name string) string {
-	GinkgoHelper()
-	out, err := utils.Run(exec.Command("kubectl", "get", "pod", name, "-n", ns,
-		"-o", `jsonpath={.spec.containers[?(@.name=="runner")].resources.limits.ephemeral-storage}`))
-	Expect(err).NotTo(HaveOccurred())
-	return strings.TrimSpace(out)
-}
-
-// overflowEphemeralStorage writes a file large enough to carry the worker past its
-// ephemeral-storage limit, and returns what the write reported.
-//
-// It writes into /tmp rather than a mounted volume because a worker pod has none that
-// the runner owns: its only volumes are read-only secret and image mounts, so the
-// container's writable layer is where a real job's output lands too. Both count
-// toward the same pod-level limit, which is what the kubelet enforces.
-func overflowEphemeralStorage(ns, podName string, sizeMiB int) string {
-	GinkgoHelper()
-	out, err := utils.Run(exec.Command("kubectl", "exec", "-n", ns, podName, "-c", "runner", "--",
-		"sh", "-c", fmt.Sprintf("dd if=/dev/zero of=/tmp/q396-fill bs=1M count=%d 2>&1 | tail -1", sizeMiB)))
-	Expect(err).NotTo(HaveOccurred(), "fill worker %s past its ephemeral-storage limit", podName)
-	return strings.TrimSpace(out)
-}
-
 // evictionFacts returns when the kubelet actually killed the worker's container, the
 // exit code it died with, and the message the kubelet recorded for the eviction.
 //
@@ -2074,8 +2044,8 @@ func firstJobStepRecords(repoSlug, runID string, attempt int) string {
 // recordEvictionOutcome writes one line classifying a measured eviction, followed by the
 // evidence the classification rests on.
 //
-// A kubelet ephemeral-storage eviction produces one of two outcomes and the spec cannot
-// choose which: measured 2026-08-03, two runs of one spec on one build split 9m38s to
+// A kubelet hard-threshold eviction produces one of two outcomes and the spec cannot
+// choose which: measured 2026-08-03 under the ephemeral-storage lever, two runs of one spec on one build split 9m38s to
 // conclusion against 17s. Latency is what separates them (see reportedItsOwnLoss), but
 // latency alone cannot say *why*, and neither of those runs captured enough to tell —
 // which is the whole of Q657. So every run states its verdict and its evidence in one
@@ -2166,8 +2136,8 @@ const reportedItsOwnLoss = 60 * time.Second
 // absorbed at least one refusal only when the eviction was actually ungraceful.
 //
 // The refusal is not a property of eviction, it is a property of GitHub not yet knowing
-// the job is over. A kubelet ephemeral-storage eviction is not reliably ungraceful:
-// measured 2026-08-03, two runs of one spec on one build saw 9m38s-to-conclusion with 20
+// the job is over. A kubelet hard-threshold eviction is not reliably ungraceful:
+// measured 2026-08-03 under the ephemeral-storage lever, two runs of one spec on one build saw 9m38s-to-conclusion with 20
 // paced calls, and 17s-to-conclusion with the re-run accepted on the first call. Both are
 // correct behaviour — in the second the runner reported, so there was never a refusal to
 // out-wait — and an unconditional "at least two calls" fails the healthy case.

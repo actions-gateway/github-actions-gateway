@@ -59,6 +59,9 @@ func newTestMetrics() *runnercore.Metrics {
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_rerun_failures_total",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_eviction_rerun_withheld_total",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_recovery_identity_unknown_total",
 		}, []string{"namespace", "runner_group", "cause"}),
@@ -935,6 +938,56 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 
 	// H1: EvictionRetries counter must be incremented once.
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
+}
+
+// TestProvisioner_OwnLimitEvictionIsWithheld is the classic half of Q1177: a worker the
+// kubelet evicted for exceeding its own ephemeral-storage limit reaches the eviction
+// arm and is withheld there, with no budget slot spent and no re-run requested. The
+// message is the kubelet's own, measured on kind v1.35.5.
+func TestProvisioner_OwnLimitEvictionIsWithheld(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+
+	var rerunCalls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		rerunCalls.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
+	rec := &fakeEventRecorder{}
+	p.Events = rec
+	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+	done := make(chan error, 1)
+	go func() {
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-evict", stubPayloadFull("myorg", "myrepo", 99), "")
+	}()
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	var live corev1.Pod
+	require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
+	live.Status.Phase = corev1.PodFailed
+	live.Status.Reason = "Evicted"
+	live.Status.Message = "Pod ephemeral local storage usage exceeds the total limit of containers 256Mi. "
+	require.NoError(t, fc.Status().Update(ctx, &live))
+
+	require.NoError(t, <-done)
+
+	assert.Zero(t, rerunCalls.Load(), "an own-limit eviction must not be re-run")
+	assert.Zero(t, testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")),
+		"no budget slot may be reserved for a withheld re-run")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("team-a", "mygroup", "classic", "eviction", "own_limit")))
+	require.Len(t, rec.withReason("EvictionRerunWithheld"), 1)
+	assert.Contains(t, rec.withReason("EvictionRerunWithheld")[0].note, "256Mi")
 }
 
 // TestProvisioner_PreemptionAutoRetry is the classic half of Q497. A worker displaced by
