@@ -2858,7 +2858,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
   The default in v2.</li>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
 <li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
-<li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
+<li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, Spot reclamation, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.</li>

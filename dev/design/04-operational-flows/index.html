@@ -3534,8 +3534,8 @@ The claim is taken <strong>before</strong> the GitHub call and <strong>off</stro
 The recovery scan runs <strong>before</strong> the worker-pod reaper in the same reconcile, so a terminal pod is never deleted before its identity is read.
 And the budget is the same budget, keyed by <code>run_id</code> alone: <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and both disruption causes</strong> together, with the <code>tier</code> and <code>cause</code> metric labels splitting the reporting but not the cap.</p>
 <h4 id="which-disruptions-are-recovered-and-which-are-not">Which disruptions are recovered, and which are not<a class="headerlink" href="#which-disruptions-are-recovered-and-which-are-not" title="Permanent link">&para;</a></h4>
-<p>Four causes reach the recovery above, and the boundary between them and everything else is the whole safety argument.
-Three of them re-run at once; the fourth, an abandoned never-started worker, re-runs only once capacity returns, because it was the absence of capacity that abandoned it (Q691):</p>
+<p>Five causes reach the recovery above, and the boundary between them and everything else is the whole safety argument.
+Four of them re-run at once; the fifth, an abandoned never-started worker, re-runs only once capacity returns, because it was the absence of capacity that abandoned it (Q691):</p>
 <table>
 <thead>
 <tr>
@@ -3557,6 +3557,12 @@ Three of them re-run at once; the fourth, an abandoned never-started worker, re-
 <td>Deleted, with <code>DisruptionTarget=True</code> / <code>PreemptionByScheduler</code></td>
 <td>✅ (Q497)</td>
 <td>The scheduler is the condition's only writer, so the signal is unambiguous</td>
+</tr>
+<tr>
+<td>Node shutdown: a Spot or preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted under the worker</td>
+<td><code>PodFailed</code> with <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code> (the kubelet's graceful shutdown; <code>Status.Reason: Terminated</code>), or <code>DisruptionTarget=True</code> / <code>DeletionByPodGC</code> (PodGC failing and force-deleting the orphan of a node already gone)</td>
+<td>✅ (Q1179)</td>
+<td>Both reasons have only cluster-side writers, so like preemption the signal needs no conclusion check. Neither shape reached an older arm: the reason is not <code>Evicted</code>, the condition reason is not <code>PreemptionByScheduler</code>, and nothing deletes a gracefully shut-down pod, while PodGC writes the phase before its delete, the order the drain row reads as cleanup. A node that goes <code>NotReady</code> and keeps its Node object is <strong>not</strong> covered until that object is deleted: the taint manager stamps <code>DeletionByTaintManager</code> and deletes gracefully without failing the pod, and the kubelet cannot finish that delete while the node stays unreachable. Shapes read from kubernetes v1.35.0 source, not yet from a reclaimed dogfood node</td>
 </tr>
 <tr>
 <td><code>kubectl drain</code> / eviction API, <code>kubectl delete pod</code></td>
@@ -3600,7 +3606,7 @@ A conclusion the AGC cannot read is <strong>not</strong> treated as "not cancell
 The failures are split the way the re-run call's already are: a request that never completed and a 5xx are retried inside the same 15-minute window, and a window that closes on one ends as <code>actions_gateway_eviction_rerun_failures_total{reason="conclusion_unknown"}</code> with an <code>EvictionRerunFailed</code> Warning Event.
 A 4xx, and a 2xx carrying something that will not decode as a run, are terminal at once and counted <code>api_error</code>, because neither becomes a verdict inside the window: a 2xx that is not a run means the configured endpoint is not the API, and re-asking it thirty times only delays the Event that says so.
 Either way no re-run is fired, so a job that lost its recovery is visible rather than silently re-queued against a cancel.
-And only this arm takes the check: an eviction, a preemption and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
+And only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
 The residual is a cancelled run whose worker is <em>also</em> evicted or preempted before it stops, which is re-run as before.</p>
 <h5 id="detecting-a-disruption-is-not-the-same-as-claiming-it">Detecting a disruption is not the same as claiming it<a class="headerlink" href="#detecting-a-disruption-is-not-the-same-as-claiming-it" title="Permanent link">&para;</a></h5>
 <p>The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and recovery reads the pod off the informer (the watch event, or the scan's cached List) while it claims through the live API.

@@ -3416,7 +3416,7 @@ Each bump emits a Normal Event, <code>MemoryLimitRaisedForRetry</code>, naming t
 <p>Each needs R12's dogfood reproduction first.
 In the order the CI history and existing machinery make cheapest:</p>
 <ol>
-<li><strong>Node lost under a running worker</strong> (<code>freshPod</code>), if <a href="../../queue/Q1179/">Q1179</a>'s measurement shows no arm fires: recognised by the pod's <code>DisruptionTarget</code> condition, which needs no node read.</li>
+<li><strong>Node lost under a running worker</strong> (<code>freshPod</code>): no longer a class to build here, because Q1179 added a <code>node_shutdown</code> recovery arm keyed on the pod's <code>DisruptionTarget</code> condition (<code>TerminationByKubelet</code> or <code>DeletionByPodGC</code>) after kubelet and PodGC source showed no existing arm fired.</li>
 <li><strong>Egress proxy pool unavailable</strong> (<code>observable</code>), for a colocated pool: the snapshot's proxy <code>Ready</code> was <code>False</code> or <code>readyReplicas</code> was 0 while the job ran, and <code>ready</code> is the EgressProxy's <code>Ready</code> condition.
    The AGC already watches EgressProxies in its own namespace, so this needs nothing from <a href="../../queue/Q1178/">Q1178</a>.
    A shared pool in another namespace is invisible to it, so the class does not cover one.</li>

@@ -7927,7 +7927,7 @@ UntrustedRoot means one of those steps did not happen.</p>
 <p>The consolidated boundary for the automatic re-run machinery the sections below troubleshoot individually.
 Every firing case spends one slot of the run's shared <code>maxEvictionRetries</code> budget (default 2, max 10).
 All but the last work on <strong>both acquisition tiers</strong>; the <code>vanished</code> row is <code>ScaleSet</code>-only, because the classic tier's provisioning goroutine watches its own worker pod and never has this window.
-A fifth cause, <code>abandoned</code>, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
+A sixth cause, <code>abandoned</code>, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
 It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</p>
 <p><strong>Fires — the interrupted run is re-run via <code>rerun-failed-jobs</code>:</strong></p>
 <table>
@@ -7950,6 +7950,11 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <td><code>DisruptionTarget</code> condition, reason <code>PreemptionByScheduler</code></td>
 </tr>
 <tr>
+<td>Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted under it</td>
+<td><code class="gag-nowrap">node_shutdown</code></td>
+<td>pod <code>Failed</code> with a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code> (the kubelet's graceful shutdown) or <code>DeletionByPodGC</code> (the node was gone first)</td>
+</tr>
+<tr>
 <td>Node drain of a running worker</td>
 <td><code class="gag-nowrap">deletion</code></td>
 <td>terminal phase published while the pod carries a <code>deletionTimestamp</code></td>
@@ -7970,6 +7975,8 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <ul>
 <li><strong>A genuine job failure.</strong> The job ran and failed on its own merits; nothing was disrupted, and re-running it would mask real breakage.</li>
 <li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job <em>is</em> re-run; see <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
+<li><strong>A node that goes <code>NotReady</code> and keeps its Node object.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
+  Recovery starts only once the Node object is deleted: PodGC then fails the pod with <code>DeletionByPodGC</code> and the <code>node_shutdown</code> row above re-runs it.</li>
 <li><strong>The AGC's own reaper deletions</strong> — the lifetime cap (<code>maxWorkerLifetime</code>), the stuck-<code>Running</code> reap deadline, orphan cleanup.
   Each is stamped <code>actions-gateway.com/deletion-reason</code> before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
   The stamp is the pod's, so it does not survive the pod: a reaped worker whose job completion a previous AGC process never read is picked up by the <code>vanished</code> row above instead, which needs the completion to have gone unread for <code>completedPodTTL</code> and then a kill inside that state.</li>
@@ -8046,6 +8053,8 @@ Jobs are being cancelled after eviction despite automatic retries.
   A long job in an opportunistic tier is the usual culprit, since every displacement restarts it from the beginning.
 - <code>cause="deletion"</code> climbing — something outside the gateway is deleting live workers: a node drain (upgrades, autoscaler consolidation), a descheduler, or hand-run <code>kubectl delete pod</code>.
   Find the deleter before raising the budget; see <a href="#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">Draining a Worker Auto-Re-Runs the Jobs It Interrupts</a>.
+- <code>cause="node_shutdown"</code> climbing: workers are landing on nodes that go away under them, usually Spot or preemptible capacity being reclaimed.
+  Every reclamation restarts the job from the beginning, so move long jobs onto on-demand nodes with the RunnerGroup's scheduling constraints.
 - If the retry budget is simply too low for a workload that is legitimately disrupted more than twice per run: increase <code>maxEvictionRetries</code> on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not a disruption): the auto-retry is not appropriate.
   Set <code>maxEvictionRetries: 0</code> and investigate the underlying workload issue.</p>
@@ -8105,7 +8114,7 @@ Consequences an operator should know:</p>
 <a id="__codelineno-138-5" name="__codelineno-138-5" href="#__codelineno-138-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'Evicted|Preempted|Killing|TaintManagerEviction'</span>
 <a id="__codelineno-138-6" name="__codelineno-138-6" href="#__codelineno-138-6"></a>
 <a id="__codelineno-138-7" name="__codelineno-138-7" href="#__codelineno-138-7"></a><span class="c1"># Whether recovery fired for the window in question. The cause label separates the</span>
-<a id="__codelineno-138-8" name="__codelineno-138-8" href="#__codelineno-138-8"></a><span class="c1"># three recovered disruptions (eviction, preemption, deletion):</span>
+<a id="__codelineno-138-8" name="__codelineno-138-8" href="#__codelineno-138-8"></a><span class="c1"># recovered disruptions (eviction, preemption, node_shutdown, deletion):</span>
 <a id="__codelineno-138-9" name="__codelineno-138-9" href="#__codelineno-138-9"></a><span class="c1"># actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}</span>
 <a id="__codelineno-138-10" name="__codelineno-138-10" href="#__codelineno-138-10"></a><span class="c1"># Flat across a drain of RUNNING workers is unexpected — check the AGC log below.</span>
 <a id="__codelineno-138-11" name="__codelineno-138-11" href="#__codelineno-138-11"></a><span class="c1"># Flat across a drain that only caught Pending workers is correct.</span>

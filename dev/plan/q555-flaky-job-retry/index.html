@@ -2925,7 +2925,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>Q555 and Q1182</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1177/">Q1177</a>, <a href="../../queue/Q1179/">Q1179</a></td>
+<td><a href="../../queue/Q1177/">Q1177</a>, Q1179 (closed by the <code>node_shutdown</code> arm)</td>
 <td>Two possible defects in the existing arms</td>
 <td>A measurement each</td>
 </tr>
@@ -3218,7 +3218,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <td>Node lost under a running worker</td>
 <td>Node <code>NotReady</code> or unreachable; the pod never publishes a terminal phase</td>
 <td>Fresh pod</td>
-<td>The <code>deletion</code> arm needs a published terminal phase, so whether this is already covered is unverified. Dogfood logged 16 Spot preemptions against one recovery line in 2026-09 (<a href="../../queue/Q1179/">Q1179</a>)</td>
+<td>Partly recovered since Q1179: the <code>node_shutdown</code> arm fires on the kubelet's graceful shutdown and on PodGC's cleanup once the Node object is deleted. A <code>NotReady</code> node whose Node object stays gets the taint manager's graceful delete instead, which leaves the pod <code>Running</code> and reaches no arm. Before Q1179, dogfood logged 16 Spot preemptions against one recovery line in 2026-09</td>
 </tr>
 <tr>
 <td>Node-level out-of-memory kill</td>
@@ -3239,7 +3239,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <li><strong>Platform-signed failures are a floor of 1 in 13.</strong> 147 carry a platform signature against 1,772 that do not.
   A network error inside a test step leaves no annotation, so the true platform share is higher.</li>
 <li><strong>Runner lost communication, 55 jobs on GAG's runners</strong>, all concluding at 10 to 11 minutes with no failed step, between 2026-06-30 and 07-20.
-  That is the worker-lost shape the existing arms and <a href="../../queue/Q1179/">Q1179</a> are about.
+  That is the worker-lost shape the existing arms, Q1179's <code>node_shutdown</code> among them, are about.
   39 were never re-run.
   Of 16 same-run retries, 9 passed and 5 failed with the identical message, all 5 in the 2026-06-30 incident, which is a cause outliving one pod: R11's case for waiting on the cause, not the clock.
   Many arms post-date that window, so this does not show a gap today.</li>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1179/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1198/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Spot preemption of a running worker may reach no re-run arm - GitHub Actions Gateway</title>
+        <title>Pending worker lost to node shutdown re-runs instead of force-cancelling - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#spot-preemption-of-a-running-worker-may-reach-no-re-run-arm" class="md-skip">
+        <a href="#pending-worker-lost-to-node-shutdown-re-runs-instead-of-force-cancelling" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Spot preemption of a running worker may reach no re-run arm
+              Pending worker lost to node shutdown re-runs instead of force-cancelling
             
           </span>
         </div>
@@ -2627,13 +2627,14 @@
   
 
 
-<h1 id="spot-preemption-of-a-running-worker-may-reach-no-re-run-arm">Spot preemption of a running worker may reach no re-run arm<a class="headerlink" href="#spot-preemption-of-a-running-worker-may-reach-no-re-run-arm" title="Permanent link">&para;</a></h1>
-<p>Dogfood's Cloud Logging and audit logs for 2026-09-13 to 2026-10-05 hold 16 <code>compute.instances.preempted</code> events on the <code>workers</code> Spot pool, every preempted node having hosted a worker pod, against a single "worker pod disrupted; scheduling auto-retry" AGC line (a <code>deletion</code> on an already-cancelled run).
-Not established: that any worker was still running a job when its node went, so the gap is a lead, not a finding.
-The hypothesis is unverified and comes from recall of kubelet behaviour: GKE graceful node shutdown fails the pod with a <code>Terminated</code>-style reason and a <code>DisruptionTarget</code> of <code>TerminationByKubelet</code>, which none of the arms keys on (<code>eviction</code> needs <code>reason: Evicted</code>, <code>preemption</code> needs <code>PreemptionByScheduler</code>, <code>deletion</code> needs a <code>deletionTimestamp</code>), leaving only <code>vanished</code> if the pod object is then removed.
-This is unrelated to Q501 (relaying a cancel), which the near-duplicate search proposed.
-<strong>Measure:</strong> stop a GCE instance under a worker running a long job on dogfood, then read the pod's final status and whether the AGC re-ran the run.
-If no arm fires, the fix is a node-shutdown arm, which is also a classified retry for Q555.</p>
+<h1 id="pending-worker-lost-to-node-shutdown-re-runs-instead-of-force-cancelling">Pending worker lost to node shutdown re-runs instead of force-cancelling<a class="headerlink" href="#pending-worker-lost-to-node-shutdown-re-runs-instead-of-force-cancelling" title="Permanent link">&para;</a></h1>
+<p>A worker still <code>Pending</code> when its node shuts down takes the <code>node_shutdown</code> arm (Q1179) and goes straight to <code>rerun-failed-jobs</code>, ahead of the abandoned arm that force-cancels a never-started worker's run first (Q691/Q766).
+Read from source, not observed: the kubelet's shutdown manager kills every active pod on the node, <code>Pending</code> ones included, and fails each one (kubernetes v1.35.0, <code>pkg/kubelet/nodeshutdown/nodeshutdown_manager.go:153-166</code>); the classic tier sets <code>DeletedBeforeStart</code> only on its deletion paths, so a terminal <code>Failed</code> never reaches the abandon branch, and the scale-set arm keys on the condition alone.
+Unverified: what GitHub does with a re-run of a run whose job never started.
+The abandoned-row reasoning in the design table predicts a refusal until GitHub's ~15-minute unstarted-job timeout concludes the run, which would end as <code>rerun_failures_total{reason="run_never_concluded"}</code> with a spent retry slot.
+It is no regression, because no arm caught this shape before Q1179.
+The likely fix is to route a <code>node_shutdown</code> pod with no container start record (<code>podEverStarted</code>) to the abandoned handling on both tiers.
+Raised as a note in the PR #2108 review.</p>
 
 
 
