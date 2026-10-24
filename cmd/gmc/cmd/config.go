@@ -32,6 +32,7 @@ type resolvedConfig struct {
 	egressDestinationAllowlist  *allowlist.EgressDestinationAllowlist
 	fqdnBackend                 controller.FQDNBackend
 	podNamespace                string
+	podServiceAccount           string
 	cacheOptions                cache.Options
 }
 
@@ -44,7 +45,8 @@ type resolvedConfig struct {
 // backend (Q245); then scope the ConfigMap informer cache to the GMC's own
 // namespace when either allowlist watch is enabled (Q188/Q242 G.1). getenv reads
 // POD_NAMESPACE (os.Getenv in production; a fake in tests). Any malformed value
-// returns an error so the GMC fails closed at startup.
+// returns an error so the GMC fails closed at startup. POD_SERVICE_ACCOUNT is read
+// too, for the tenant Secret reader RoleBinding's subject (Q1188).
 func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, error) {
 	// The PriorityClass allowlist (Q188): a live, shared set the admission webhook
 	// reads and the ConfigMap watch augments. Seeded from the static
@@ -100,6 +102,7 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 		egressDestinationAllowlist:  egressDestinationAllowlist,
 		fqdnBackend:                 fqdnBackend,
 		podNamespace:                podNamespace,
+		podServiceAccount:           getenv("POD_SERVICE_ACCOUNT"),
 		cacheOptions:                cacheOptions,
 	}, nil
 }

@@ -261,6 +261,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 - **Residual risk** *(corrected 2026-06-12 — the original wording understated this)*: the metadata-only informer and cache bypass are client-side hygiene, not authorization.
   The GMC ClusterRole grants `get`/`list`/`create`/`update`/`watch` on Secrets cluster-wide with no `resourceNames` scoping, so a *compromised* GMC can read full `.data` of any Secret in the cluster and create/overwrite Secrets anywhere — not just enumerate metadata.
   Tracked as Q121 (preventive confinement) in [security-audit-2026-06.md](archive/security-audit-2026-06.md); Q29's audit policy is the detective complement — shipped as a sample at [docs/operations/examples/apiserver-audit-policy.yaml](../operations/examples/apiserver-audit-policy.yaml) with operator wiring in [security-operations.md § API server audit policy (sample)](../operations/security-operations.md#api-server-audit-policy-sample).
+- **Superseded by Q1188.** The cluster-wide metadata informer and the cluster-wide `get`/`list`/`watch` behind it are gone: the GMC binds a `gmc-tenant-secret-reader` ClusterRole into each tenant namespace and runs one metadata-only Secret informer per tenant namespace, so the residual above now covers tenant namespaces only.
+  Current design: [05-security.md §5.1](../design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls).
 
 ---
 

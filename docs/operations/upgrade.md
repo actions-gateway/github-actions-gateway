@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -185,6 +186,41 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Action required: the GMC reads Secrets only in marked tenant namespaces
+
+**Who is affected:** a cluster with an `ActionsGateway` or `EgressProxy` in a namespace carrying neither tenant marker, which is possible only while the `gmc-tenant-resource-guard` binding runs in `Audit` mode or `admissionPolicy.enabled=false`.
+An install whose guard runs in the default `Deny` mode already has every tenant namespace marked, and needs nothing.
+
+**What changed.** The GMC's ClusterRole no longer grants `get`, `list` or `watch` on Secrets cluster-wide (Q1188).
+The chart ships a `gmc-tenant-secret-reader` ClusterRole holding those three verbs, and the GMC binds it to its own ServiceAccount with a RoleBinding of the same name in every namespace labelled `actions-gateway.github.com/tenant=true` or `actions-gateway.com/tenant=managed`.
+A compromised GMC can therefore no longer read Secrets in `kube-system` or any other unmarked namespace.
+
+**What you will see.** A RoleBinding named `gmc-tenant-secret-reader` appears in each tenant namespace once the upgraded GMC starts.
+A gateway in an unmarked namespace stops reconciling, and the GMC logs a `secrets is forbidden` error for it on every retry.
+
+- **RBAC:** the manager ClusterRole drops `get`/`list`/`watch` on `secrets`, keeps `create`/`update`, and gains `bind` on `clusterroles` restricted to the name `gmc-tenant-secret-reader`.
+- **Deployment:** the GMC reads its own ServiceAccount name from a new `POD_SERVICE_ACCOUNT` downward-API variable, and refuses to start without it.
+  The chart sets it; a GMC deployed from your own manifests needs the same `env` entry, `fieldRef: {fieldPath: spec.serviceAccountName}`.
+
+**What to do.** Before upgrading, list the namespaces holding gateways or proxies that carry neither marker, and label each one:
+
+```sh
+kubectl get actionsgateways.actions-gateway.github.com -A \
+  -o jsonpath='{range .items[*]}{.metadata.namespace}{"\n"}{end}' | sort -u
+```
+
+On a cluster with the v2 CRDs, run it again for `actionsgateways.actions-gateway.com` and `egressproxies.actions-gateway.com`.
+Label each namespace that `kubectl get namespace <namespace> --show-labels` shows without a marker:
+
+```sh
+kubectl label namespace <namespace> actions-gateway.github.com/tenant=true
+```
+
+Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2 kinds.
+
+**Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
+The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
 
 ### Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically
 
