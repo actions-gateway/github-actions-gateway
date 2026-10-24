@@ -1715,6 +1715,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A worker evicted for its own storage limit is no longer re-run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3573,6 +3584,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A worker evicted for its own storage limit is no longer re-run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4357,6 +4379,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
+<li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
 <li><a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets</a></li>
 <li><a href="#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run">Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run</a></li>
@@ -4497,6 +4520,17 @@ If the apiserver refuses an object, for example because a validating webhook rej
 Fix the named objects and run it again.</p>
 <p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
+<h3 id="a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run<a class="headerlink" href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> a tenant whose jobs outgrow the worker's own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>.</p>
+<p><strong>What changed.</strong> The kubelet marks a pod that exceeds its own storage limit <code>Failed</code> with <code>reason: Evicted</code>, the same phase and reason it writes for node pressure, and eviction recovery used to re-run both.
+A re-run gets the same limit and fails the same way, so such a job spent up to <code>maxEvictionRetries</code> re-runs failing.
+The AGC now tells the two apart by the kubelet's message and its <code>DisruptionTarget</code> condition, and withholds the re-run for the limit case on both acquisition tiers (Q1177).
+A node-pressure eviction is re-run as before, and so is any <code>Evicted</code> shape the AGC does not recognise.</p>
+<p><strong>What you will see.</strong> <code>actions_gateway_eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.
+No retry slot is spent, so <code>eviction_retries_total{cause="eviction"}</code> stops counting these, and the job stays failed at GitHub.</p>
+<p><strong>What to do.</strong> Nothing at upgrade time.
+When the Event appears, raise the limit in the runner template or reduce what the job writes, then re-run the job by hand.
+Behaviour is covered in <a href="../troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a>.</p>
 <h3 id="non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once<a class="headerlink" href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every <code>ScaleSet</code>-protocol <code>RunnerSet</code> with <code>maxEvictionRetries</code> above 0.
 Nothing to do; one new object appears per set that has a worker disrupted.</p>

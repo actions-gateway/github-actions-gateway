@@ -2804,6 +2804,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>check-release-ladder-test</code> is reported KILLED by <code>make scripts-test</code>, or exits 1 with a shell error from a <code>write_*</code> fixture …</td>
 </tr>
 <tr>
+<td><a href="Q1203/">Q1203</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">GMC IP-range retry drains the unauthenticated GitHub quota it waits on</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A GMC that cannot fetch GitHub's IP ranges at startup keeps every proxy pool it manages from reaching GitHub.</td>
+</tr>
+<tr>
+<td><a href="Q1201/">Q1201</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">make e2e runs against the ambient kube context, dogfood included</a></td>
+<td><code>debt</code> <code>tests</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make e2e</code> and <code>make e2e-cluster</code> never name a cluster.</td>
+</tr>
+<tr>
 <td><a href="Q1149/">Q1149</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go">Warn before the pinned runner ages out of GitHub's 30-day window</a></td>
 <td><code>ci</code> <code>dogfood</code></td>
@@ -3002,14 +3018,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A scale-set job replayed while its previous worker pod still exists with a <code>deletionTimestamp</code> gets no worker of its own, and the listener …</td>
-</tr>
-<tr>
-<td><a href="Q1177/">Q1177</a></td>
-<td><a href="../plan/q555-flaky-job-retry/#first-principles">The eviction arm re-runs a job evicted for its own storage limit</a></td>
-<td><code>bug</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The <code>eviction</code> recovery cause keys on pod <code>reason: Evicted</code> alone (<code>eviction_scaleset.go</code>, and <code>provisioner.go</code> on classic), and the …</td>
 </tr>
 <tr>
 <td><a href="Q1198/">Q1198</a></td>

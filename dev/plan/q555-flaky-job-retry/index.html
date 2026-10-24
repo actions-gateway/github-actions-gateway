@@ -2920,7 +2920,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>Q555</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1177/">Q1177</a>, Q1179 (closed by the <code>node_shutdown</code> arm)</td>
+<td>Q1177 (closed by the <code>own_limit</code> withhold), Q1179 (closed by the <code>node_shutdown</code> arm)</td>
 <td>Two possible defects in the existing arms</td>
 <td>A measurement each</td>
 </tr>
@@ -2982,10 +2982,9 @@ Preemption, a drain or hand-delete (both the <code>deletion</code> cause), a wor
 Retrying one of those masks nothing, because the tenant's code never got a fair run.
 So the low-risk way to retry more is to recognise more classes that pass that test, and only after that to retry failures nobody has classified.
 Classifying is where GAG is strong: no GitHub-layer product can see the pod, the node, the egress proxy or the mirror a job depended on.</p>
-<p><strong>The <code>eviction</code> arm does not fully pass that test today.</strong> It keys on <code>reason: Evicted</code> alone (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go"><code>eviction_scaleset.go</code></a>), and the kubelet sets that reason when a pod exceeds its <em>own</em> <code>ephemeral-storage</code> limit, as well as when the node is short.
-The live eviction-recovery e2e triggers eviction exactly that way, with a job that outgrows its own limit, and expects the re-run (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/github_scaleset_test.go"><code>github_scaleset_test.go</code></a>).
-That is a tenant-caused, likely deterministic failure, the storage analogue of <code>OOMKilled</code>, retried up to <code>maxEvictionRetries</code> (default 2) and documented as "node pressure".
-Whether the kubelet's <code>status.message</code> separates the two shapes is unmeasured; <a href="../../queue/Q1177/">Q1177</a> tracks it, and R10's test applies to it as much as to any new class.</p>
+<p><strong>The <code>eviction</code> arm failed that test until Q1177.</strong> It keyed on <code>reason: Evicted</code> alone, and the kubelet sets that reason when a pod exceeds its <em>own</em> <code>ephemeral-storage</code> limit as well as when the node is short: a tenant-caused, deterministic failure, the storage analogue of <code>OOMKilled</code>, retried up to <code>maxEvictionRetries</code> (default 2).
+The kubelet's message and its <code>DisruptionTarget</code> condition separate the two shapes (measured on kind v1.35.5), so the arm now withholds the limit shape as <code>own_limit</code> before spending a slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/own_limit.go"><code>own_limit.go</code></a>; <a href="../../design/04-operational-flows/#an-eviction-for-the-pods-own-limit-is-not-a-disruption">the measurement</a>).
+The live eviction-recovery e2e evicted its worker exactly that way, so it now makes genuine node pressure instead.</p>
 <p><strong>Retry moves the flake away from the person who can fix it.</strong> Today the pull request author sees the red run.
 After a GAG retry the run is green, and the flake survives only in operator metrics and Events, because writing back to GitHub is out of scope (R17).
 Removing that friction also removes some of the pressure to fix the test, which is why Kubernetes bans automatic retries outright.
@@ -3095,7 +3094,7 @@ A blanket retry of unclassified failures is <a href="#unclassified-retry-not-sch
 <ul>
 <li><strong>R9.</strong> A class MUST be recognised from facts GAG owns (Kubernetes objects, its own components, protocol messages), never from job logs or anything tenant code writes.</li>
 <li><strong>R10.</strong> A class MUST be caused outside the tenant's code and configuration.
-  A job exceeding its own limits (memory, <code>ephemeral-storage</code>, <code>timeout-minutes</code>) does not qualify on that fact alone; <a href="../../queue/Q1177/">Q1177</a> is the existing arm that misses this.</li>
+  A job exceeding its own limits (memory, <code>ephemeral-storage</code>, <code>timeout-minutes</code>) does not qualify on that fact alone; the eviction arm missed this until Q1177.</li>
 <li><strong>R11.</strong> A class MUST NOT spend the budget while its cause still holds.
   How it waits depends on how the cause clears, and each class MUST declare which of three applies:</li>
 <li><strong>A fresh pod clears it.</strong> A re-run builds a new pod, and the scheduler will not place it on a <code>NotReady</code> node, so the retry is already the change.
@@ -3109,7 +3108,7 @@ A blanket retry of unclassified failures is <a href="#unclassified-retry-not-sch
 - <strong>R13.</strong> Each class MUST get its own <code>cause</code> label on the existing counters and spend the existing per-run budget (<code>maxEvictionRetries</code>), so a run cannot collect one budget per class.
   It is on by default like the existing arms, and reuses the paced re-run path (<code>rerunUntilAccepted</code>).
 - <strong>R14.</strong> The AGC MUST measure each cause's retry success rate (re-runs that then passed, over re-runs), using detection's pairing.
-  A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape would read near zero.
+  A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape, before it was withheld, would have read near zero.
 - <strong>R15.</strong> The per-run budget MUST survive an AGC restart before classes that fire more often are added.
   It lives in process memory today (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>reserveEvictionRetry</code></a>); <a href="../q555-automatic-recovery-design/#the-budget-is-gags-own-count-in-the-ledger-r15">the design</a> persists GAG's own count, and checks <code>run_attempt</code> against GitHub's 50-re-run limit, which humans share.
 - <strong>R16.</strong> Every classified retry MUST be counted and evented with its cause, and its compute attributable per set (<a href="../../operations/cost-attribution/">cost attribution</a>).
@@ -3139,7 +3138,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <tr>
 <td>The job exceeded its own limit</td>
 <td><code>OOMKilled</code> at its limit under <code>Static</code> sizing, an <code>ephemeral-storage</code> limit eviction, <code>timeout-minutes</code></td>
-<td>The eviction arm retries the storage case today (<a href="../../queue/Q1177/">Q1177</a>)</td>
+<td>The eviction arm withholds the storage case as <code>own_limit</code> (Q1177); <code>OOMKilled</code> and <code>timeout-minutes</code> reach no arm</td>
 </tr>
 <tr>
 <td>A newer commit superseded the run</td>

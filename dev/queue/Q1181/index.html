@@ -2635,7 +2635,7 @@ Add those checks before a slot is spent, skip with a reason label on a counter, 
 This needs no new retry class: the <code>run_cancelled</code> check honours the ledger's <code>selfCancelledAttempt</code>, the attempt the abandoned arm records before it force-cancels, so GAG's own cancel is not withheld and no arm needs an exemption (<a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design</a>).
 On the scale-set tier the checks run on the run read <code>handleScaleSetEviction</code> already makes, before <code>reserveScaleSetRerun</code>, so a withheld re-run spends nothing; the classic tier makes no read before its in-memory reservation.
 It is R18 of <a href="../../plan/q555-flaky-job-retry/#known-futile-retries">the draft</a> applied to the arms that already exist.
-Q1177 covers the futile storage-limit eviction separately.</p>
+The futile storage-limit eviction is already withheld as <code>own_limit</code> on the eviction arm (Q1177).</p>
 
 
 

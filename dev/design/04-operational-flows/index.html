@@ -1158,6 +1158,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#an-eviction-for-the-pods-own-limit-is-not-a-disruption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An eviction for the pod's own limit is not a disruption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3060,6 +3071,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#an-eviction-for-the-pods-own-limit-is-not-a-disruption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An eviction for the pod's own limit is not a disruption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3473,7 +3495,8 @@ The port relocates both of the classic path's inputs onto the worker pod; see <a
     end</code></pre>
 <p>Three disruptions reach this flow, and each is detected differently:</p>
 <ul>
-<li><strong>Kubelet node-pressure eviction</strong> leaves the pod <code>PodFailed</code> with <code>Status.Reason: Evicted</code>.</li>
+<li><strong>Kubelet node-pressure eviction</strong> leaves the pod <code>PodFailed</code> with <code>Status.Reason: Evicted</code> and a <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code> condition.
+  The kubelet writes the same phase and reason when a pod exceeds its <em>own</em> storage limit, and that shape is withheld before any re-run (<a href="#an-eviction-for-the-pods-own-limit-is-not-a-disruption">below</a>, Q1177).</li>
 <li><strong>kube-scheduler preemption</strong> — what a <code>priorityTiers</code> <code>PriorityClass</code> drives — instead <em>deletes</em> the victim after stamping a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code>, so it is recognised by that condition, which travels out of the pod wait alongside the phase (Q497).</li>
 <li><strong>External graceful deletion</strong> — a <code>kubectl drain</code> or a bare <code>kubectl delete pod</code> — is recognised by the pod's <code>deletionTimestamp</code> being set at the moment its terminal phase publishes <strong>and</strong> the deletion <em>request</em> — <code>deletionTimestamp</code> less the grace period it carries — predating the container's recorded exit, which also travels out of the pod wait.
   The AGC's own deletions are excluded by the <code>actions-gateway.com/deletion-reason</code> stamp written before each of them (Q502).</li>
@@ -3557,9 +3580,15 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <tbody>
 <tr>
 <td>Kubelet node-pressure eviction</td>
-<td><code>PodFailed</code> + <code>Status.Reason: Evicted</code></td>
+<td><code>PodFailed</code> + <code>Status.Reason: Evicted</code>, with <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code></td>
 <td>✅</td>
 <td>SIGKILL — nothing inside the pod reported, so the job hangs until its lock lapses</td>
+</tr>
+<tr>
+<td>Kubelet eviction for the pod's own limit: its total <code>ephemeral-storage</code>, one container's, or an <code>emptyDir</code> <code>sizeLimit</code></td>
+<td><code>PodFailed</code> + <code>Status.Reason: Evicted</code>, a limit message, and <strong>no</strong> <code>DisruptionTarget</code> condition</td>
+<td>❌ (Q1177)</td>
+<td>The job outgrew a limit its own template sets, so a re-run gets the same limit and fails the same way. Withheld before a budget slot is spent; see <a href="#an-eviction-for-the-pods-own-limit-is-not-a-disruption">below</a></td>
 </tr>
 <tr>
 <td>kube-scheduler preemption (<code>priorityTiers</code>)</td>
@@ -3667,6 +3696,51 @@ Preemption detection matches the full type/status/reason triple; drain detection
   A real kubelet publishes a transient <code>Failed</code>-with-mark even for a drained still-<code>Pending</code> pod (CI's fake-GitHub drain spec caught a mark-only rule firing on exactly that), so the absence of a terminal phase cannot be relied on to exclude it.
   That exclusion keeps such a worker off <em>this</em> path, where a re-run would be issued against a job that never failed; since Q766 it is recovered by a different one, which force-cancels the run first.</li>
 </ul>
+<h4 id="an-eviction-for-the-pods-own-limit-is-not-a-disruption">An eviction for the pod's own limit is not a disruption<a class="headerlink" href="#an-eviction-for-the-pods-own-limit-is-not-a-disruption" title="Permanent link">&para;</a></h4>
+<p>The kubelet writes <code>PodFailed</code> + <code>Evicted</code> for two causes, and only one is a disruption.
+Node pressure evicts whichever pod the kubelet ranks worst, so a fresh pod on a fresh node clears it.
+A pod that outgrows its own storage limit is evicted by the same code path for a cause its job and template own, and a re-run gets the same limit.
+That is the storage analogue of <code>OOMKilled</code>, which the <a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">automatic-recovery design</a> withholds as <code>own_limit</code>.
+Until Q1177 the eviction arm keyed on the reason alone and re-ran these up to <code>maxEvictionRetries</code> times.</p>
+<p>Two kubelet signals separate them, measured on kind v1.35.5 (2026-10-23) and matching the kubelet source at that version (<code>pkg/kubelet/eviction/eviction_manager.go</code>, <code>helpers.go</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Eviction</th>
+<th><code>status.message</code></th>
+<th><code>DisruptionTarget</code> condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pod total over its <code>ephemeral-storage</code> limit</td>
+<td><code>Pod ephemeral local storage usage exceeds the total limit of containers 16Mi.</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>One container over its own limit</td>
+<td><code>Container w exceeded its local ephemeral storage limit "16Mi".</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>emptyDir</code> over its <code>sizeLimit</code></td>
+<td><code>Usage of EmptyDir volume "scratch" exceeds the limit "16Mi".</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>Node memory pressure</td>
+<td><code>The node was low on resource: memory. Threshold quantity: 6400Mi, available: 6181172Ki. …</code></td>
+<td><code>True</code>, reason <code>TerminationByKubelet</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both signals must agree before the re-run is withheld: a limit message <strong>and</strong> no <code>TerminationByKubelet</code> condition.
+An <code>Evicted</code> pod that matches neither, from a kubelet whose wording changed or a cluster too old to stamp the condition, keeps its re-run, so an unrecognised shape costs at most the futile re-runs it cost before, never a disruption's recovery.
+The withhold is decided at detection, before the budget is touched, so it spends no slot: <code>actions_gateway_eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event quotes the kubelet's message and names the fix.</p>
+<p>The live eviction specs (Q396) evicted through exactly this shape, with a 256Mi pod-level limit they overshot, so they now make genuine node pressure instead.
+They raise the kubelet's <code>memory.available</code> hard threshold on the worker's own node to just under what that node has free, read from its <code>stats/summary</code> at the moment of use, and make the worker hold 1GiB; a low memory request is what makes the kubelet's ranking pick it.
+The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
+Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code>.</p>
 <h4 id="why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Why preemption <em>deletes</em> rather than <em>evicts</em>, and what that costs us<a class="headerlink" href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" title="Permanent link">&para;</a></h4>
 <p>A recurring question, because the answer decides three things we measured and could not change: why the worker's disruption-safety annotations did not deflect the preemption, why adding a <code>PodDisruptionBudget</code> would not either, and why scale-set preemption recovery cannot be made restart-safe.</p>
 <p><strong>"Evict" and "delete" are not a gracefulness distinction.</strong> The Eviction API (<code>pods/&lt;name&gt;/eviction</code>) is essentially <em>a DELETE that checks PodDisruptionBudgets first</em> and returns <code>429</code> if the budget would be violated.

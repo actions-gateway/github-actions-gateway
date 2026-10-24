@@ -7026,8 +7026,8 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>An externally deleted worker's run had already concluded <code>cancelled</code>, so recovery deliberately did not ask GitHub to re-run it and the cancel stands (Q811). The budget slot is spent; no manual re-run is wanted. Normal, because nothing is wrong.</td>
-<td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a></td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either an externally deleted worker's run had already concluded <code>cancelled</code>, so the cancel stands and the budget slot is spent (Q811); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, so no slot is spent and the Event quotes the kubelet's message (Q1177).</td>
+<td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
 <td><code>JobProvisionStalled</code></td>
@@ -7942,7 +7942,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <tr>
 <td>Kubelet eviction (node pressure)</td>
 <td><code class="gag-nowrap">eviction</code></td>
-<td>pod <code>Failed</code> with <code>reason: Evicted</code></td>
+<td>pod <code>Failed</code> with <code>reason: Evicted</code> (the kubelet also sets a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code>, but the arm does not read it)</td>
 </tr>
 <tr>
 <td>Scheduler preemption (a preempting <code>priorityTiers</code> floor)</td>
@@ -7974,6 +7974,10 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <p><strong>Never fires, by design:</strong></p>
 <ul>
 <li><strong>A genuine job failure.</strong> The job ran and failed on its own merits; nothing was disrupted, and re-running it would mask real breakage.</li>
+<li><strong>A worker evicted for its own limit.</strong> The kubelet writes <code>Failed</code> / <code>Evicted</code> too when a pod exceeds its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, but with a limit message and no <code>DisruptionTarget</code> condition.
+  The job outgrew a limit its template sets, so a re-run gets the same limit and fails the same way.
+  No slot is spent: <code>eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.
+  Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).</li>
 <li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job <em>is</em> re-run; see <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
 <li><strong>A node that goes <code>NotReady</code> and keeps its Node object.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
   Recovery starts only once the Node object is deleted: PodGC then fails the pod with <code>DeletionByPodGC</code> and the <code>node_shutdown</code> row above re-runs it.</li>
@@ -8285,6 +8289,10 @@ Either one missing makes recovery inert for that pod.</p>
 <tr>
 <td><code>REASON</code> is empty rather than <code>Evicted</code></td>
 <td>Not a kubelet eviction. Only <code>PodFailed</code>/<code>Evicted</code> triggers recovery — anything else ran and reported its own outcome, so re-running it would double-report</td>
+</tr>
+<tr>
+<td><code>REASON</code> is <code>Evicted</code>, <code>HANDLED</code> set, no re-run, and an <code>EvictionRerunWithheld</code> Event</td>
+<td>The kubelet evicted the worker for exceeding its own storage limit; read its message with <code>kubectl get pod &lt;name&gt; -o jsonpath='{.status.message}'</code>. Working as intended: raise the limit (Q1177)</td>
 </tr>
 <tr>
 <td><code>RUN</code>/<code>REPO</code> empty</td>
