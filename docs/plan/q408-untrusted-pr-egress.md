@@ -393,7 +393,7 @@ What the wiring landed as, and the readings behind each decision.
 All of it is off-cluster: the clients are configured and their configuration is gated, and **nothing here says a pull rode a mirror**.
 That is the booked session's, and [§3.10](#310-the-phase-3-validation-reading) is the instrument for it.
 
-**The endpoint set lives in one ConfigMap, in the two forms the clients can read.** `registry-mirror-wiring` in the tenant namespace ([`mirror-wiring.yaml`](../../deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml)) carries `daemon.json` for the inner dockerd and a `<upstream>=<mirror>` map for everything else.
+**The endpoint set lives in one ConfigMap, in the two forms the clients can read.** `registry-mirror-wiring` in the tenant namespace ([`mirror-wiring.yaml`](../../deploy/dogfood-e2e/base/mirror-wiring.yaml)) carries `daemon.json` for the inner dockerd and a `<upstream>=<mirror>` map for everything else.
 Two forms because no two of the four clients read the same configuration, and one object because they are copies of one fact.
 
 **dockerd is wired by a mounted `daemon.json`, not by a flag.** [§3.2](#32-wiring-the-clients) said "dind sidecar `args`", and the sidecar's `args` are a 60-line entrypoint in the *shipped library entry* `deploy/templates/kata-dind`, which Q554 made the artifact an operator applies.

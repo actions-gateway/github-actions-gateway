@@ -1,8 +1,10 @@
 # Q408 Phase 3: how a worker in this tenant reaches the in-cluster pull-through
-# caches (../../../registry-mirror) instead of the upstream registries.
+# caches (../../registry-mirror) instead of the upstream registries.
 #
-# Kata-overlay only. The dind overlay is the explicit trusted-CI fallback and
-# keeps talking to the upstreams directly, so nothing here belongs in ../../base.
+# Both overlays mount it (Q1193). On ../overlays/kata it is the worker's only
+# registry path; on ../overlays/dind, which keeps its allow-all egress, it is a
+# route rather than a fence, there so a job's pulls reach Dragonfly when the
+# mirrors fetch through it (E2E_MIRROR_BACKEND=dragonfly).
 #
 # ONE ConfigMap holds BOTH representations of the same fact, because the job has
 # two kinds of client and neither can read the other's form:
@@ -18,13 +20,13 @@
 #                     pull, and buildkit's generated config.
 #
 # The two are hand-kept copies of one endpoint set, and so is
-# ../../../registry-mirror/base/service.yaml, which names the Services they both
+# ../../registry-mirror/base/service.yaml, which names the Services they both
 # address. scripts/manifest/check-registry-mirror-wiring.sh reconciles all three
 # — a drift here costs a booked dogfood session to discover, which is why it is
 # gated rather than commented.
 #
 # NOTHING HERE ENFORCES ANYTHING — this says where a client should go, and the
-# tenant's policy set is what leaves it nowhere else (kustomization.yaml ships no
+# tenant's policy set is what leaves it nowhere else (the Kata overlay ships no
 # additive egress policy, which is the Q408 deliverable). Two readings, because
 # they answer different questions: scripts/dogfood/e2e-mirror-hits.sh reads the
 # mirror's access log, which attributes a pull to the client that made it, and

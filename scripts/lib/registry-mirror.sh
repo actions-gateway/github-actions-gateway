@@ -15,8 +15,9 @@
 #
 # Unset or empty means no rewriting, which is what every caller outside the
 # dogfood e2e tenant sees: the hosted lane, a developer's `make e2e`, and
-# publish.yml all pull direct. The dogfood Kata tenant sets it on the worker
-# from deploy/dogfood-e2e/overlays/kata (the registry-mirror-wiring ConfigMap),
+# publish.yml all pull direct. The dogfood e2e tenant sets it on the worker, on
+# both overlays, from deploy/dogfood-e2e/base/mirror-wiring.yaml (the
+# registry-mirror-wiring ConfigMap),
 # so the address of a cluster-local Service never enters this repo's workflows.
 #
 # docker.io is IN that map, alongside the four hosts whose clients have no

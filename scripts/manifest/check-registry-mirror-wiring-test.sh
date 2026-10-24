@@ -26,7 +26,10 @@ CHECKER="${REPO_ROOT}/scripts/manifest/check-registry-mirror-wiring.py"
 
 DEPLOYMENTS=deploy/registry-mirror/base/deployment.yaml
 SERVICES=deploy/registry-mirror/base/service.yaml
-WIRING=deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml
+WIRING=deploy/dogfood-e2e/base/mirror-wiring.yaml
+BASE=deploy/dogfood-e2e/base/kustomization.yaml
+KATA=deploy/dogfood-e2e/overlays/kata/kustomization.yaml
+DIND=deploy/dogfood-e2e/overlays/dind/kustomization.yaml
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "${WORKDIR}"' EXIT
@@ -35,14 +38,21 @@ fails=0
 out=""
 rc=0
 
-# fixture — a fresh copy of the three files under a throwaway root, printed.
+# fixture — a fresh copy of the files the gate reads under a throwaway root,
+# printed.
 fixture() {
-	local root="${WORKDIR}/case.$$.${RANDOM}"
-	mkdir -p "${root}/$(dirname "${DEPLOYMENTS}")" "${root}/$(dirname "${WIRING}")"
-	cp "${REPO_ROOT}/${DEPLOYMENTS}" "${root}/${DEPLOYMENTS}"
-	cp "${REPO_ROOT}/${SERVICES}" "${root}/${SERVICES}"
-	cp "${REPO_ROOT}/${WIRING}" "${root}/${WIRING}"
+	local root="${WORKDIR}/case.$$.${RANDOM}" f
+	for f in "${DEPLOYMENTS}" "${SERVICES}" "${WIRING}" "${BASE}" "${KATA}" "${DIND}"; do
+		mkdir -p "${root}/$(dirname "${f}")"
+		cp "${REPO_ROOT}/${f}" "${root}/${f}"
+	done
 	printf '%s' "${root}"
+}
+
+# mutate FILE PY — apply a python replace program to FILE in place; the program
+# sees the text as `s` and must assign the result back to it.
+mutate() {
+	python3 -c "import sys; p = sys.argv[1]; s = open(p).read(); exec(sys.argv[2]); open(p, 'w').write(s)" "$1" "$2"
 }
 
 # run_checker ROOT — run the gate against a fixture root, capturing rc and output.
@@ -73,7 +83,7 @@ expect() {
 
 root="$(fixture)"
 run_checker "${root}"
-expect 'the shipped tree is consistent' 0 'consistent over 5 upstreams'
+expect 'the shipped tree is consistent' 0 'consistent over 5 upstreams and 2 overlays'
 
 # --- an upstream gained on one side only -------------------------------------
 #
@@ -176,6 +186,44 @@ PY
 run_checker "${root}"
 expect 'an instance with no Service fails' 1 'mirror-gcr-io: a Deployment with no Service'
 
+# --- each overlay reaches the wiring ------------------------------------------
+#
+# The ConfigMap is shared, so it can be right while an overlay never mounts it:
+# that overlay renders clean and its worker pulls direct (Q1193).
+
+root="$(fixture)"
+mutate "${root}/${DIND}" 's = s.replace("mountPath: /etc/docker/daemon.json", "mountPath: /etc/docker/other.json")'
+run_checker "${root}"
+expect 'an overlay that does not mount daemon.json fails' 1 "${DIND}: nothing mounts /etc/docker/daemon.json"
+
+root="$(fixture)"
+mutate "${root}/${KATA}" 's = s.replace("key: registry-mirrors", "key: registry-mirror")'
+run_checker "${root}"
+expect 'an overlay without the REGISTRY_MIRRORS env fails' 1 "${KATA}: no REGISTRY_MIRRORS env"
+
+root="$(fixture)"
+mutate "${root}/${DIND}" 's = s.replace("- key: daemon.json", "- key: daemon.jsn")'
+run_checker "${root}"
+expect 'an overlay projecting the wrong key fails' 1 "${DIND}: no volume projecting daemon.json"
+
+root="$(fixture)"
+mutate "${root}/${BASE}" 's = s.replace("  - mirror-wiring.yaml\n", "")'
+run_checker "${root}"
+expect 'a base without the ConfigMap fails' 1 'does not list mirror-wiring.yaml'
+
+# The posture marker, in both directions: absent on DinD fails every run of the
+# egress battery there, and present on Kata skips the battery that proves Kata.
+
+root="$(fixture)"
+mutate "${root}/${DIND}" 's = s.replace("value: open", "value: closed")'
+run_checker "${root}"
+expect 'DinD without the open posture fails' 1 "${DIND}: E2E_EGRESS_POSTURE must be ['open']"
+
+root="$(fixture)"
+mutate "${root}/${KATA}" 's = s.replace("              key: registry-mirrors\n", "              key: registry-mirrors\n      - op: add\n        path: /spec/podTemplate/spec/containers/0/env/-\n        value:\n          name: E2E_EGRESS_POSTURE\n          value: open\n", 1)'
+run_checker "${root}"
+expect 'Kata carrying the open posture fails' 1 "${KATA}: E2E_EGRESS_POSTURE must be absent"
+
 # --- refusals ----------------------------------------------------------------
 #
 # An empty extraction is a parser that stopped matching, and every check above
@@ -213,6 +261,11 @@ root="$(fixture)"
 rm "${root}/${SERVICES}"
 run_checker "${root}"
 expect 'an unreadable file refuses' 2 'cannot read'
+
+root="$(fixture)"
+rm "${root}/${DIND}"
+run_checker "${root}"
+expect 'an unreadable overlay refuses' 2 "cannot read ${DIND}"
 
 if ((fails)); then
 	echo "${fails} assertion(s) failed" >&2

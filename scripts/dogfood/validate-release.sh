@@ -668,9 +668,10 @@ e2e_leg() {
 	# resolvable client into an exit 2. Before the watch_rc check for
 	# mirror-timing's reason: a red matrix leaves a client set as informative as
 	# a green one's, and the booked window is the scarce resource.
-	# Kata only: its tenant is the one whose egress is mirror-only, so on any
-	# other variant nothing reaches a mirror and the census would record a
-	# not-taken that says nothing about the release.
+	# Kata only: its tenant is the one whose egress is mirror-only, which is
+	# what makes the client set complete. The DinD tenant is wired to the
+	# mirrors too (Q1193), but a client there that skips them still succeeds,
+	# so its census would be a partial set nothing could size.
 	if [[ "${E2E_VARIANT:-kata}" == kata ]]; then
 		census_mirror_clients
 	fi
@@ -709,9 +710,9 @@ dind_leg() {
 
 # dragonfly_leg — Q1160: the e2e matrix on Kata again, with the registry mirrors
 # fetching through the Dragonfly seed peer (Q539) instead of from their upstreams
-# directly. Kata because only its tenant's egress is mirror-only; on DinD a
-# worker reaches upstreams itself, so the back end would not be on the path
-# under test. A red matrix fails the gate, as on the other two legs.
+# directly. Kata because only its tenant's egress is mirror-only; DinD is wired
+# to the mirrors (Q1193) but keeps open egress, so a pull there that skips the
+# back end still succeeds and the leg could not show it was on the path. A red matrix fails the gate, as on the other two legs.
 #
 # A green matrix alone says nothing about Dragonfly, because the mirrors serve
 # either way, so e2e_leg also takes dragonfly_readings. After dind_leg, which

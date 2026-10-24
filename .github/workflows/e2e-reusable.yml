@@ -204,7 +204,7 @@ jobs:
         # Q408 Phase 3. buildkit is the one image client that reads neither
         # dockerd's registry-mirrors nor a rewritten ref: its base images are
         # named in the Dockerfile. REGISTRY_MIRRORS comes from the worker's own
-        # environment on the dogfood Kata lane (the tenant's
+        # environment on the dogfood lanes (the tenant's
         # registry-mirror-wiring ConfigMap), so this is a no-op everywhere else:
         # the output is empty, which is falsy in the action, so no --config
         # reaches `docker buildx create`.
@@ -237,7 +237,8 @@ jobs:
         # selecting the worker is invisible in a green suite.
         #
         # No `if:` — the script reads REGISTRY_MIRRORS, which only the dogfood
-        # Kata tenant sets, and reports a skip everywhere else. A step condition
+        # tenant sets, and reports a skip everywhere else, and on the DinD
+        # overlay, which sets E2E_EGRESS_POSTURE=open (Q1193). A step condition
         # cannot express that: the variable is set on the runner process by the
         # cluster, and the `env` context holds only what a workflow declares.
         # Placed before the build so a lost posture fails here rather than after
@@ -723,7 +724,7 @@ jobs:
         # take at all is non-zero.
         #
         # No `if:`, for egress-negatives.sh's reason: the script reads
-        # REGISTRY_MIRRORS, which only the dogfood Kata tenant sets, and reports
+        # REGISTRY_MIRRORS, which only the dogfood tenant sets, and reports
         # a skip everywhere else. `if: always()` so a failed suite still yields
         # the reading — the booked window is the scarce resource, and the cache
         # state a failing run leaves is as informative as a passing one's.

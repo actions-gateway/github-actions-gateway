@@ -7,8 +7,7 @@ Three files hold one fact between them, and none of them can see the others:
   deploy/registry-mirror/base/deployment.yaml   the instances, each with the one
                                                 upstream its proxy mode fetches
   deploy/registry-mirror/base/service.yaml      the ClusterIPs clients address
-  deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml
-                                                the tenant ConfigMap, holding
+  deploy/dogfood-e2e/base/mirror-wiring.yaml    the tenant ConfigMap, holding
                                                 dockerd's daemon.json and the
                                                 <upstream>=<mirror> map the ref
                                                 rewriting reads
@@ -26,6 +25,14 @@ rather than at pull time. Docker Hub is the one instance whose remote URL is not
 its upstream host (registry-1.docker.io is the v2 API host), and that is spelt
 out below rather than pattern-matched.
 
+Both e2e overlays consume that ConfigMap (Q1193), and each one's template patch
+is what reaches the worker: the daemon.json mount on the dind sidecar and the
+REGISTRY_MIRRORS env on the runner. An overlay that drops either renders clean
+and pulls direct, so each overlay is checked for both. The DinD overlay keeps
+open egress and must say so with E2E_EGRESS_POSTURE=open, or
+scripts/e2e/egress-negatives.sh fails every run there; the Kata overlay must not
+carry it, or the battery that proves Kata's posture skips.
+
 Exit: 0 the three agree, 1 they do not, 2 a read that could not be taken — an
 empty extraction is a parser that stopped matching, and grading a wiring green
 off one is the failure this gate would otherwise become.
@@ -38,7 +45,14 @@ from pathlib import Path
 
 MIRROR_DEPLOYMENTS = Path("deploy/registry-mirror/base/deployment.yaml")
 MIRROR_SERVICES = Path("deploy/registry-mirror/base/service.yaml")
-WIRING = Path("deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml")
+WIRING = Path("deploy/dogfood-e2e/base/mirror-wiring.yaml")
+BASE_KUSTOMIZATION = Path("deploy/dogfood-e2e/base/kustomization.yaml")
+
+# Overlay kustomization -> the E2E_EGRESS_POSTURE it must set (None: must not).
+OVERLAYS = {
+    Path("deploy/dogfood-e2e/overlays/kata/kustomization.yaml"): None,
+    Path("deploy/dogfood-e2e/overlays/dind/kustomization.yaml"): "open",
+}
 
 PORT = "5000"
 CLUSTER_DOMAIN = "svc.cluster.local"
@@ -51,6 +65,15 @@ NAME_RE = re.compile(r"^  name: (\S+)$", re.M)
 NAMESPACE_RE = re.compile(r"^  namespace: (\S+)$", re.M)
 KIND_RE = re.compile(r"^kind: (\S+)$", re.M)
 REMOTEURL_RE = re.compile(r"^\s+- name: REGISTRY_PROXY_REMOTEURL\n\s+value: (\S+)$", re.M)
+
+WIRING_RESOURCE_RE = re.compile(r"^  - mirror-wiring\.yaml$", re.M)
+VOLUME_RE = re.compile(
+    r"configMap:\n\s+name: registry-mirror-wiring\n\s+items:\n\s+- key: daemon\.json\n")
+MOUNT_RE = re.compile(r"^\s+mountPath: /etc/docker/daemon\.json$", re.M)
+ENV_RE = re.compile(
+    r"name: REGISTRY_MIRRORS\n\s+valueFrom:\n\s+configMapKeyRef:\n"
+    r"\s+name: registry-mirror-wiring\n\s+key: registry-mirrors\n")
+POSTURE_RE = re.compile(r"name: E2E_EGRESS_POSTURE\n\s+value: (\S+)\n")
 
 
 class Refusal(Exception):
@@ -139,16 +162,46 @@ def read_wiring():
     return pairs, daemon
 
 
+def read_text(path):
+    try:
+        return path.read_text()
+    except OSError as exc:
+        raise Refusal(f"cannot read {path}: {exc}") from exc
+
+
+def overlay_problems():
+    """What each overlay is missing to put its worker on the wiring."""
+    problems = []
+    if not WIRING_RESOURCE_RE.search(read_text(BASE_KUSTOMIZATION)):
+        problems.append(f"{BASE_KUSTOMIZATION}: does not list mirror-wiring.yaml, so no overlay has the ConfigMap")
+    for path, posture in OVERLAYS.items():
+        text = read_text(path)
+        if not VOLUME_RE.search(text):
+            problems.append(f"{path}: no volume projecting daemon.json from registry-mirror-wiring")
+        if not MOUNT_RE.search(text):
+            problems.append(f"{path}: nothing mounts /etc/docker/daemon.json, so dockerd pulls Hub direct")
+        if not ENV_RE.search(text):
+            problems.append(
+                f"{path}: no REGISTRY_MIRRORS env from registry-mirror-wiring, so the ref rewrite, "
+                "helm and buildkit pull direct")
+        have = POSTURE_RE.findall(text)
+        want = [posture] if posture else []
+        if have != want:
+            problems.append(
+                f"{path}: E2E_EGRESS_POSTURE must be {want or 'absent'}, have {have or 'absent'} "
+                "(scripts/e2e/egress-negatives.sh skips on 'open' alone)")
+    return problems
+
+
 def main():
     try:
         instances = read_instances()
         services = read_services()
         pairs, daemon = read_wiring()
+        problems = overlay_problems()
     except Refusal as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
-
-    problems = []
 
     for name in sorted(set(instances) - services):
         problems.append(f"{name}: a Deployment with no Service of the same name")
@@ -205,14 +258,16 @@ def main():
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         print(
-            "\nThe three files that must agree:\n"
-            f"  {MIRROR_DEPLOYMENTS}\n  {MIRROR_SERVICES}\n  {WIRING}",
+            "\nThe files that must agree:\n"
+            f"  {MIRROR_DEPLOYMENTS}\n  {MIRROR_SERVICES}\n  {WIRING}\n"
+            f"  {BASE_KUSTOMIZATION}\n"
+            + "".join(f"  {path}\n" for path in OVERLAYS),
             file=sys.stderr,
         )
         return 1
 
-    print(f"registry-mirror wiring is consistent over {len(expected)} upstreams: "
-          + ", ".join(sorted(expected)))
+    print(f"registry-mirror wiring is consistent over {len(expected)} upstreams and "
+          f"{len(OVERLAYS)} overlays: " + ", ".join(sorted(expected)))
     return 0
 
 

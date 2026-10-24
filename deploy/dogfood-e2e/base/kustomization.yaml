@@ -7,5 +7,9 @@ kind: Kustomization
 #
 # The GitHub App credential Secret is NOT here — it is a credential, created
 # out-of-band. See ../README.md.
+#
+# mirror-wiring.yaml is here because both overlays mount it; each overlay's
+# template patch is what points its worker at it.
 resources:
   - resources.yaml
+  - mirror-wiring.yaml

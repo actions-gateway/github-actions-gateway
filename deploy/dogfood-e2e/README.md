@@ -31,9 +31,10 @@ Two consequences worth knowing before editing an overlay:
 | DinD sidecar | `privileged: true` | unprivileged (micro-VM is the boundary); six-step entrypoint; ephemeral Block PVC |
 | CPU sizing | requests-only (bursts) | explicit CPU **limits** — Kata sizes the guest's vCPUs from them |
 | Runner CPU request | derived — the shared `NodeShare` profile overrides the template² | derived the same way; the CPU **limit** is untouched, so guest vCPU sizing is unaffected |
-| Egress | broad (open) — trusted only | same for now; the untrusted-PR posture needs a tighter policy + in-cluster mirror (future) |
+| Egress | broad (open) — trusted only | mirror-only: cluster DNS, GitHub and the in-cluster mirrors, nothing else (Q408) |
+| Registry pulls | through the in-cluster mirrors ([`base/mirror-wiring.yaml`](base/mirror-wiring.yaml)), so through Dragonfly under `E2E_MIRROR_BACKEND=dragonfly`; a route, not a fence (Q1193) | same wiring, and the only path |
 | Cost | lower | higher (C2 + nested virt + 100Gi ephemeral PD per worker) |
-| Use for | **trusted CI / dogfood only** | **untrusted / OSS PRs** (once egress is tightened) |
+| Use for | **trusted CI / dogfood only** | **untrusted / OSS PRs** |
 
 ¹ PSS **baseline** forbids the capability adds the unprivileged dockerd needs (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) and PSA is not Kata-aware, so the namespace still needs the privileged PSA level (envtest-verified — see [`templates/kata-dind/template.yaml`](../templates/kata-dind/template.yaml)).
 What pins the pod unprivileged is the platform-owned `ClusterRunnerTemplate`, not the PSA label.

@@ -12,6 +12,12 @@ kind: Kustomization
 #
 # The delta vs any other overlay is exactly: the namespace security profile
 # (below), which library entry is the base, and the egress policy.
+#
+# The mirror wiring is the same as ../kata's (Q1193): one ConfigMap in
+# ../../base, mounted the same way. Here it routes rather than fences, since
+# the open egress in resources.yaml stays, and its point is that a job's pulls
+# reach Dragonfly when the mirrors fetch through it
+# (E2E_MIRROR_BACKEND=dragonfly), which an unwired dockerd never would.
 resources:
   - ../../base
   - ../../../templates/privileged-dind
@@ -73,3 +79,38 @@ patches:
           - key: dedicated
             value: e2e
             effect: NoSchedule
+      # Mirror wiring, same three ops as ../kata — the reasoning is there and
+      # in ../../base/mirror-wiring.yaml.
+      - op: add
+        path: /spec/podTemplate/spec/volumes
+        value:
+          - name: docker-config
+            configMap:
+              name: registry-mirror-wiring
+              items:
+                - key: daemon.json
+                  path: daemon.json
+      - op: add
+        path: /spec/podTemplate/spec/initContainers/0/volumeMounts
+        value:
+          - name: docker-config
+            mountPath: /etc/docker/daemon.json
+            subPath: daemon.json
+            readOnly: true
+      - op: add
+        path: /spec/podTemplate/spec/containers/0/env/-
+        value:
+          name: REGISTRY_MIRRORS
+          valueFrom:
+            configMapKeyRef:
+              name: registry-mirror-wiring
+              key: registry-mirrors
+      # The wiring is egress-negatives.sh's trigger, and on this overlay every
+      # upstream it must find blocked is reachable. This tells the battery the
+      # posture is open on purpose. Kata never sets it, so a marker lost there
+      # cannot skip the battery: absent means enforce.
+      - op: add
+        path: /spec/podTemplate/spec/containers/0/env/-
+        value:
+          name: E2E_EGRESS_POSTURE
+          value: open

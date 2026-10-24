@@ -34,7 +34,6 @@ kind: Kustomization
 resources:
   - ../../base
   - ../../../templates/kata-dind
-  - mirror-wiring.yaml
 patches:
   # Namespace -> privileged PSA, same four gates as ../dind. NOT because the pod
   # is privileged (it is not — that is the point of this variant) but because
@@ -111,8 +110,8 @@ patches:
       - op: add
         path: /spec/podTemplate/spec/volumes/0/ephemeral/volumeClaimTemplate/spec/storageClassName
         value: standard-rwo
-      # Q408 Phase 3 wiring — mirror-wiring.yaml carries both halves and the
-      # reasoning. dockerd reads /etc/docker/daemon.json without being told to,
+      # Q408 Phase 3 wiring — ../../base/mirror-wiring.yaml carries both halves
+      # and the reasoning. dockerd reads /etc/docker/daemon.json without being told to,
       # so the sidecar needs no flag and the shipped library entry stays
       # untouched by a change that is this cluster's, not the template's.
       - op: add

@@ -36,8 +36,8 @@ check() {
 	fi
 }
 
-# The map the dogfood Kata tenant supplies, verbatim in shape:
-# deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml.
+# The map the dogfood tenant supplies, verbatim in shape:
+# deploy/dogfood-e2e/base/mirror-wiring.yaml.
 NS=gag-registry-mirror.svc.cluster.local:5000
 FULL_MAP="docker.io=mirror-docker-io.${NS} ghcr.io=mirror-ghcr-io.${NS}"
 FULL_MAP+=" quay.io=mirror-quay-io.${NS} registry.k8s.io=mirror-registry-k8s-io.${NS}"
