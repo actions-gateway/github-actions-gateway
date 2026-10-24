@@ -21,7 +21,7 @@ scripts/ci/check-tools.sh --floors
 ```
 
 Most floors are not a second copy of a number.
-`shellcheck`, `kind`, `yamllint`, `kubeconform` and `polaris` already have exact versions pinned in `.github/workflows/`, so the registry points at the pin (`@ci:SHELLCHECK_VERSION`) instead of restating it.
+`shellcheck`, `kind`, `yamllint`, `kubeconform` and `polaris` already have exact versions pinned for CI, in `scripts/ci/pins.env` or `.github/workflows/`, so the registry points at the pin (`@ci:SHELLCHECK_VERSION`) instead of restating it.
 Three of the five are bumped by updatecli, and a bump carries the floor with it.
 `go` works the same way, reading the `go` directive out of `go.work` (`@go.work`).
 For the linters and validators among them the floor bites in only one direction, which is the one that costs: a version older than CI's finds fewer problems, so your local run goes green and CI goes red.

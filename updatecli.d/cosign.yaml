@@ -42,6 +42,10 @@ actions:
         - dependencies
 
 sources:
+  # The semver filter has no major constraint, so this resolves the newest
+  # release whatever its major. While the pin is on v2, the next run proposes
+  # v3, which changes the signer publish.yml uses: review that PR as a major
+  # bump rather than a routine one.
   cosignVersion:
     name: 'Latest cosign release tag'
     kind: githubrelease
