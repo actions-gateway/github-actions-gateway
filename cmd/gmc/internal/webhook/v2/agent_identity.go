@@ -14,18 +14,19 @@ import (
 // (Q1011). The agentidentity package doc carries why the two halves have different
 // boundaries and why the reverse direction is guarded on the v1 gateway instead.
 //
-// The check is fail-closed, like the Q791 label guard: admitting an unverifiable
+// It reads the request's shared read (runnerSetRead), so a ScaleSet set lists each kind
+// once across both guards. The check is fail-closed, like the Q791 label guard: admitting an unverifiable
 // claim is the collision this prevents. An admitted collision costs one of the two
 // tenants its entire agent pool and does not self-heal — the AGC reports
 // `agent identity is owned by another pool` on every reconcile until an operator
 // renames one of the CRs (Q979).
-func (v *RunnerSetCustomValidator) validateAgentIdentityUniqueness(ctx context.Context, rs *agcv2.RunnerSet) error {
+func (v *RunnerSetCustomValidator) validateAgentIdentityUniqueness(ctx context.Context, read *runnerSetRead, rs *agcv2.RunnerSet) error {
 	if v.reader == nil {
 		// No reader wired (direct-construction unit-test path); the integration/e2e
 		// and production paths always wire the uncached API reader.
 		return nil
 	}
-	inv, err := agentidentity.Of(ctx, v.reader, nil)
+	inv, err := read.agentIdentities(ctx)
 	if err != nil {
 		return fmt.Errorf(
 			"cannot verify agent-identity uniqueness for RunnerSet %q in namespace %q: %w",

@@ -140,26 +140,43 @@ func (inv Inventory) V2Scope(namespace, gateway string) string {
 // just-created sibling may not be in the informer cache yet and admitting a colliding
 // claim through a stale cache is the race the guard exists to prevent.
 func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inventory, error) {
-	v1Scopes, err := v1GatewayScopes(ctx, reader)
-	if err != nil {
-		return Inventory{}, err
+	var v1Gateways gmcv1alpha1.ActionsGatewayList
+	if err := reader.List(ctx, &v1Gateways); err != nil {
+		return Inventory{}, fmt.Errorf("list v1alpha1 ActionsGateways: %w", err)
 	}
-	v2Scopes, err := v2GatewayScopes(ctx, reader)
-	if err != nil {
-		return Inventory{}, err
+	var v2Gateways agcv2alpha1.ActionsGatewayList
+	if err := reader.List(ctx, &v2Gateways); err != nil {
+		return Inventory{}, fmt.Errorf("list v2alpha1 ActionsGateways: %w", err)
 	}
+	var groups agcv1alpha1.RunnerGroupList
+	if err := reader.List(ctx, &groups); err != nil {
+		return Inventory{}, fmt.Errorf("list RunnerGroups: %w", err)
+	}
+	var sets agcv2alpha1.RunnerSetList
+	if err := reader.List(ctx, &sets); err != nil {
+		return Inventory{}, fmt.Errorf("list RunnerSets: %w", err)
+	}
+	return FromLists(v1Gateways.Items, v2Gateways.Items, groups.Items, sets.Items, pending), nil
+}
+
+// FromLists derives the inventory [Of] returns from lists the caller has already
+// read, for a caller whose other guards read the same kinds (Q1075).
+func FromLists(
+	v1Gateways []gmcv1alpha1.ActionsGateway,
+	v2Gateways []agcv2alpha1.ActionsGateway,
+	groups []agcv1alpha1.RunnerGroup,
+	sets []agcv2alpha1.RunnerSet,
+	pending *PendingGateway,
+) Inventory {
+	v1Scopes := v1GatewayScopes(v1Gateways)
+	v2Scopes := v2GatewayScopes(v2Gateways)
 	if pending != nil {
 		v1Scopes[pending.Key] = pending.Scope
 	}
 
 	inv := Inventory{v1Scopes: v1Scopes, v2Scopes: v2Scopes}
-
-	var groups agcv1alpha1.RunnerGroupList
-	if err := reader.List(ctx, &groups); err != nil {
-		return Inventory{}, fmt.Errorf("list RunnerGroups: %w", err)
-	}
-	for i := range groups.Items {
-		rg := &groups.Items[i]
+	for i := range groups {
+		rg := &groups[i]
 		owner := v1GatewayOf(rg, v1Scopes)
 		// A pending gateway supplies its own referrers below; its stored ones are
 		// the generation this write replaces.
@@ -174,13 +191,8 @@ func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inv
 			Scope:     v1Scopes[owner],
 		})
 	}
-
-	var sets agcv2alpha1.RunnerSetList
-	if err := reader.List(ctx, &sets); err != nil {
-		return Inventory{}, fmt.Errorf("list RunnerSets: %w", err)
-	}
-	for i := range sets.Items {
-		rs := &sets.Items[i]
+	for i := range sets {
+		rs := &sets[i]
 		inv.Claims = append(inv.Claims, Claim{
 			Namespace: rs.Namespace,
 			Kind:      KindRunnerSet,
@@ -189,7 +201,7 @@ func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inv
 			Scope:     v2Scopes[client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}],
 		})
 	}
-	return inv, nil
+	return inv
 }
 
 // Collision returns the first stored claim self collides with, or nil when the stem
@@ -234,33 +246,25 @@ func RunnerGroupClaim(namespace, name, scope string) Claim {
 // v1GatewayScopes maps each stored v1alpha1 ActionsGateway to the GitHub scope it
 // binds. A gateway whose gitHubURL yields no key is present with an empty scope, so
 // v1GatewayOf can still attribute its RunnerGroups to it.
-func v1GatewayScopes(ctx context.Context, reader client.Reader) (map[client.ObjectKey]string, error) {
-	var gateways gmcv1alpha1.ActionsGatewayList
-	if err := reader.List(ctx, &gateways); err != nil {
-		return nil, fmt.Errorf("list v1alpha1 ActionsGateways: %w", err)
-	}
-	scopes := make(map[client.ObjectKey]string, len(gateways.Items))
-	for i := range gateways.Items {
-		gw := &gateways.Items[i]
+func v1GatewayScopes(gateways []gmcv1alpha1.ActionsGateway) map[client.ObjectKey]string {
+	scopes := make(map[client.ObjectKey]string, len(gateways))
+	for i := range gateways {
+		gw := &gateways[i]
 		scopes[client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name}] = scalesetscope.GitHubScope(gw.Spec.GitHubURL)
 	}
-	return scopes, nil
+	return scopes
 }
 
 // v2GatewayScopes maps each stored v2 ActionsGateway to the GitHub scope it binds.
-func v2GatewayScopes(ctx context.Context, reader client.Reader) (map[client.ObjectKey]string, error) {
-	var gateways agcv2alpha1.ActionsGatewayList
-	if err := reader.List(ctx, &gateways); err != nil {
-		return nil, fmt.Errorf("list v2alpha1 ActionsGateways: %w", err)
-	}
-	scopes := make(map[client.ObjectKey]string, len(gateways.Items))
-	for i := range gateways.Items {
-		gw := &gateways.Items[i]
+func v2GatewayScopes(gateways []agcv2alpha1.ActionsGateway) map[client.ObjectKey]string {
+	scopes := make(map[client.ObjectKey]string, len(gateways))
+	for i := range gateways {
+		gw := &gateways[i]
 		if s := scalesetscope.GitHubScope(gw.Spec.GitHubURL); s != "" {
 			scopes[client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name}] = s
 		}
 	}
-	return scopes, nil
+	return scopes
 }
 
 // v1GatewayOf names the v1alpha1 ActionsGateway a RunnerGroup belongs to. The GMC
