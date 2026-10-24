@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1174/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1199/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A replayed scale-set provision can hand its pod a Secret being deleted - GitHub Actions Gateway</title>
+        <title>A scale-set replay during its old worker's termination acks with no pod - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-replayed-scale-set-provision-can-hand-its-pod-a-secret-being-deleted" class="md-skip">
+        <a href="#a-scale-set-replay-during-its-old-workers-termination-acks-with-no-pod" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A replayed scale-set provision can hand its pod a Secret being deleted
+              A scale-set replay during its old worker's termination acks with no pod
             
           </span>
         </div>
@@ -2627,16 +2627,16 @@
   
 
 
-<h1 id="a-replayed-scale-set-provision-can-hand-its-pod-a-secret-being-deleted">A replayed scale-set provision can hand its pod a Secret being deleted<a class="headerlink" href="#a-replayed-scale-set-provision-can-hand-its-pod-a-secret-being-deleted" title="Permanent link">&para;</a></h1>
-<p>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.
-Suppose a provision for the same job is replayed in the window between the pod's deletion and the collector's delete of the Secret (a re-created session replays its assignments from cursor 0).
-<code>ProvisionScaleSetWorker</code> names both objects from the job ID, so the replay finds the old Secret, treats its <code>AlreadyExists</code> as success, creates a new pod, and patches the Secret's owner to that pod.
-If the collector has already decided to delete the Secret, the new pod is left <code>Pending</code> on a Secret that no longer exists.</p>
-<p>Reasoned from code by the Q1154 reviewer; not reproduced, and whether the collector re-checks owners after the patch is unmeasured.
-It needs a replay of an assignment whose worker was deleted moments before, which the listener's held-message bookkeeping (Q583) makes rare but does not exclude.</p>
-<p><strong>A likely fix</strong>: on the <code>AlreadyExists</code> path, read the Secret and treat one with a <code>deletionTimestamp</code>, or one owned by a Pod that no longer exists, as absent: wait for it to go and re-create it.
-A <code>Pending</code> worker on a missing Secret falls to the RunnerSet's <code>spec.pendingPodDeadline</code> reap, so the cost should be bounded by one worker's deadline rather than a stuck slot; that bound is read from the reaper, not exercised for this case.</p>
-<p><strong>Reach.</strong> Any scale-set tenant whose session is re-created while a worker is being deleted: a replayed job's worker waits out its <code>Pending</code> deadline instead of starting.</p>
+<h1 id="a-scale-set-replay-during-its-old-workers-termination-acks-with-no-pod">A scale-set replay during its old worker's termination acks with no pod<a class="headerlink" href="#a-scale-set-replay-during-its-old-workers-termination-acks-with-no-pod" title="Permanent link">&para;</a></h1>
+<p>A scale-set job replayed while its previous worker pod still exists with a <code>deletionTimestamp</code> gets no worker of its own, and the listener acks the job anyway.
+<code>ProvisionScaleSetWorker</code> names the pod from the job ID, so the replay's pod create returns <code>AlreadyExists</code> for the terminating pod; that path reads as "the replayed job already has its worker" and returns nil.
+<code>ownerPodsGone</code> reports the terminating pod live (it exists under the owner reference's UID), so the Secret is kept too, still holding the old runner's spent JIT config.
+The runner registered for this delivery (<code>generateJITConfig</code> in <code>scalesetlistener/listener.go</code>, just before <code>Provision</code>) then never starts.</p>
+<p>Unmeasured: read from code by the Q1174 reviewer and confirmed by reading <code>ProvisionScaleSetWorker</code> and <code>ownerPodsGone</code>, not reproduced.
+Whether GitHub hands the job to another of the set's runners in the meantime is also unmeasured, and decides how much this costs.
+A pod's graceful termination lasts seconds to minutes, so this window is likely wider than Q1174's, which lasted only until the garbage collector ran.</p>
+<p><strong>A likely fix</strong>: on the pod create's <code>AlreadyExists</code>, read the pod; one with a <code>deletionTimestamp</code> is not this job's worker, so fail the delivery with an error the listener retries (<code>provisionRetry</code>) until the old pod is gone.</p>
+<p><strong>Reach.</strong> Any scale-set tenant whose session is re-created while one of its workers is terminating: the replayed job's freshly registered runner never gets a pod.</p>
 
 
 

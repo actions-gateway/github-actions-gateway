@@ -2988,12 +2988,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A scale-set worker reaped <code>Pending</code> past <code>pendingPodDeadline</code> takes one runner out of its set, so one of the set's assigned jobs is left …</td>
 </tr>
 <tr>
-<td><a href="Q1174/">Q1174</a></td>
-<td><a href="../design/04-operational-flows/">A replayed scale-set provision can hand its pod a Secret being deleted</a></td>
+<td><a href="Q1199/">Q1199</a></td>
+<td><a href="../design/04-operational-flows/">A scale-set replay during its old worker's termination acks with no pod</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Since Q1154 a scale-set worker's JIT-config Secret is owned by its pod alone, so the garbage collector deletes the Secret after the pod goes.</td>
+<td>A scale-set job replayed while its previous worker pod still exists with a <code>deletionTimestamp</code> gets no worker of its own, and the listener …</td>
 </tr>
 <tr>
 <td><a href="Q1177/">Q1177</a></td>
