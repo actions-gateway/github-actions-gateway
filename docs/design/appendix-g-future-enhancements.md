@@ -502,7 +502,7 @@ Building the `ProvisioningRequest` machinery first would also mean choosing a ca
 
 ## G.17. Opt-In Auto-Retry for Flaky Jobs (beyond disruptions)
 
-**Current behavior.** The auto-re-run machinery fires only for infrastructure disruptions — eviction, preemption, drain, hand-delete — and a genuine job failure is deliberately never re-run ([the boundary](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)), because re-running a legitimate failure masks real breakage.
+**Current behavior.** The auto-re-run machinery fires only for infrastructure disruptions — eviction, preemption, node shutdown, drain, hand-delete — and a genuine job failure is deliberately never re-run ([the boundary](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)), because re-running a legitimate failure masks real breakage.
 That leaves the most common CI annoyance untouched: a *flaky* test fails the run for reasons unrelated to the change, and a human clicks re-run.
 
 **The gap this closes.** GitHub Actions has no native job-level auto-retry — the ask sits in open community discussions ([#72195](https://github.com/orgs/community/discussions/72195), [#27121](https://github.com/orgs/community/discussions/27121)) and the workarounds are marketplace step wrappers that require editing every workflow.

@@ -39,7 +39,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | [Q1181](../queue/Q1181.md) | R18's futility checks, on the arms that exist today | Nothing |
 | [Q1182](../queue/Q1182.md) | R15, a budget that survives an AGC restart | Nothing |
 | [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 and Q1182 |
-| [Q1177](../queue/Q1177.md), [Q1179](../queue/Q1179.md) | Two possible defects in the existing arms | A measurement each |
+| [Q1177](../queue/Q1177.md), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
 | [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184: per-port ingress measured on the Calico lane |
 
@@ -252,7 +252,7 @@ None is reproduced yet; each needs R12's reproduction before it becomes a class,
 | Setup failure before the first step | The job failed while the runner was registering or downloading actions | Neither, when the cause is GitHub: backoff and breaker | Needs the worker to report where setup ends; unmeasured |
 | Egress proxy pool unavailable | The pool had no ready endpoint during the job's window | Observable: pool readiness | GAG owns the pool |
 | Registry mirror unavailable | The mirror was unready while the job pulled an image | Observable: mirror readiness | Same shape as the proxy |
-| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | Fresh pod | The `deletion` arm needs a published terminal phase, so whether this is already covered is unverified. Dogfood logged 16 Spot preemptions against one recovery line in 2026-09 ([Q1179](../queue/Q1179.md)) |
+| Node lost under a running worker | Node `NotReady` or unreachable; the pod never publishes a terminal phase | Fresh pod | Partly recovered since Q1179: the `node_shutdown` arm fires on the kubelet's graceful shutdown and on PodGC's cleanup once the Node object is deleted. A `NotReady` node whose Node object stays gets the taint manager's graceful delete instead, which leaves the pod `Running` and reaches no arm. Before Q1179, dogfood logged 16 Spot preemptions against one recovery line in 2026-09 |
 | Node-level out-of-memory kill | Container killed below its own limit, with a `SystemOOM` node event (the kubelet's name, from recall) | Fresh pod, not guaranteed: it can land on the same packed node | Overcommitted packing is the platform's doing; a kill at the container's own limit is not |
 | `dockerd` sidecar crash | The Docker-in-Docker sidecar's restart count rose during the job | Fresh pod | Mixed: `dockerd` also dies of tenant disk use, so it needs a discriminator |
 
@@ -261,7 +261,7 @@ None is reproduced yet; each needs R12's reproduction before it becomes a class,
 - **Platform-signed failures are a floor of 1 in 13.** 147 carry a platform signature against 1,772 that do not.
   A network error inside a test step leaves no annotation, so the true platform share is higher.
 - **Runner lost communication, 55 jobs on GAG's runners**, all concluding at 10 to 11 minutes with no failed step, between 2026-06-30 and 07-20.
-  That is the worker-lost shape the existing arms and [Q1179](../queue/Q1179.md) are about.
+  That is the worker-lost shape the existing arms, Q1179's `node_shutdown` among them, are about.
   39 were never re-run.
   Of 16 same-run retries, 9 passed and 5 failed with the identical message, all 5 in the 2026-06-30 incident, which is a cause outliving one pod: R11's case for waiting on the cause, not the clock.
   Many arms post-date that window, so this does not show a gap today.

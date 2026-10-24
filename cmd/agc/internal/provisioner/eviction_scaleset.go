@@ -273,16 +273,18 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 // adjudicated yet. The returned cause labels which one, for the metrics and the
 // operator-facing wording.
 //
-// Three causes qualify — the kubelet's node-pressure eviction (PodFailed + Status.Reason
+// Four causes qualify — the kubelet's node-pressure eviction (PodFailed + Status.Reason
 // "Evicted"), kube-scheduler preemption (a DisruptionTarget=True/PreemptionByScheduler
-// condition, Q497), and an external graceful deletion — a drain or a `kubectl delete
-// pod` — whose victim reached PodFailed before the object went away (Q502; see
-// deletion.go for the discriminator and its AGC-own-deletion exclusion). A pod deleted
-// without ever publishing a terminal phase is NOT recovered here: it never ran its job
-// to a reportable end, so there is no failed job for rerun-failed-jobs to act on. That
-// shape has its own predicate and its own action, which concludes the run before
-// re-running it (abandonedAwaitingRecovery, Q766). A human cancelling the run at GitHub
-// deletes nothing, so it never enters any arm (measured, Q459).
+// condition, Q497), a node shutdown (PodFailed + a TerminationByKubelet or
+// DeletionByPodGC DisruptionTarget, Q1179), and an external graceful deletion — a drain
+// or a `kubectl delete pod` — whose victim reached PodFailed before the object went
+// away (Q502; see deletion.go for the discriminator and its AGC-own-deletion
+// exclusion). A pod deleted without ever publishing a terminal phase is NOT recovered
+// here: it never ran its job to a reportable end, so there is no failed job for
+// rerun-failed-jobs to act on. That shape has its own predicate and its own action,
+// which concludes the run before re-running it (abandonedAwaitingRecovery, Q766). A
+// human cancelling the run at GitHub deletes nothing, so it never enters any arm
+// (measured, Q459).
 //
 // The full boundary, with the row-by-row reasoning for what is in and out, is the table
 // in docs/design/04-operational-flows.md §4.2 ("Which disruptions are recovered").
@@ -322,6 +324,8 @@ func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 		return recoveryCauseEviction, true
 	case PreemptedByScheduler(pod):
 		return recoveryCausePreemption, true
+	case LostToNodeShutdown(pod):
+		return recoveryCauseNodeShutdown, true
 	case pod.Status.Phase == corev1.PodFailed && externallyDeletedBeforeTerminal(pod):
 		return recoveryCauseDeletion, true
 	default:

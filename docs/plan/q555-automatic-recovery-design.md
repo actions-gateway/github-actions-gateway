@@ -322,7 +322,7 @@ Each bump emits a Normal Event, `MemoryLimitRaisedForRetry`, naming the job, bot
 Each needs R12's dogfood reproduction first.
 In the order the CI history and existing machinery make cheapest:
 
-1. **Node lost under a running worker** (`freshPod`), if [Q1179](../queue/Q1179.md)'s measurement shows no arm fires: recognised by the pod's `DisruptionTarget` condition, which needs no node read.
+1. **Node lost under a running worker** (`freshPod`): no longer a class to build here, because Q1179 added a `node_shutdown` recovery arm keyed on the pod's `DisruptionTarget` condition (`TerminationByKubelet` or `DeletionByPodGC`) after kubelet and PodGC source showed no existing arm fired.
 2. **Egress proxy pool unavailable** (`observable`), for a colocated pool: the snapshot's proxy `Ready` was `False` or `readyReplicas` was 0 while the job ran, and `ready` is the EgressProxy's `Ready` condition.
    The AGC already watches EgressProxies in its own namespace, so this needs nothing from [Q1178](../queue/Q1178.md).
    A shared pool in another namespace is invisible to it, so the class does not cover one.

@@ -993,6 +993,60 @@ func TestProvisioner_PreemptionAutoRetry(t *testing.T) {
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
 }
 
+// TestProvisioner_NodeShutdownAutoRetry is the classic half of Q1179. A worker whose
+// node shut down fails with reason Terminated and a kubelet DisruptionTarget, which
+// neither the eviction nor the preemption arm keys on, and nothing deletes it, so the
+// deletion arm never fires either.
+func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+
+	rerunCalled := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCalled <- r.URL.Path
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+	payload := stubPayloadFull("myorg", "myrepo", 78)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-shutdown", payload, "")
+	}()
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	var live corev1.Pod
+	require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
+	live.Status.Phase = corev1.PodFailed
+	live.Status.Reason = "Terminated"
+	live.Status.Conditions = append(live.Status.Conditions, corev1.PodCondition{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: corev1.PodReasonTerminationByKubelet,
+	})
+	require.NoError(t, fc.Status().Update(ctx, &live))
+
+	require.NoError(t, <-done)
+
+	select {
+	case path := <-rerunCalled:
+		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/78/rerun-failed-jobs", path)
+	case <-time.After(2 * time.Second):
+		t.Fatal("a node-shutdown worker's run was not re-run within timeout")
+	}
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "node_shutdown")))
+}
+
 // TestProvisioner_OrdinaryCompletionIsNotRetried is the negative that bounds the change
 // above: a worker that simply finished — no disruption marker of any kind — must not be
 // re-run, whatever its phase. Without this, "recover on preemption" could silently

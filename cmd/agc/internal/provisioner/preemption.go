@@ -63,6 +63,9 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // count means something (a drain, an operator, an autoscaler) is removing live workers
 // — and troubleshooting sends an operator looking for different things in each case.
 //
+// A climbing node_shutdown count means workers are landing on nodes that go away under
+// them — usually Spot or preemptible capacity being reclaimed (Q1179).
+//
 // recoveryCauseAbandoned is the one whose re-run is not immediate: the worker never
 // started, so the run was force-cancelled (Q683) and the re-run waits for capacity to
 // return before spending its slot (Q691, abandoned_rerun.go).
@@ -72,9 +75,10 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // causes took it is exactly what the missing pod no longer says (Q844,
 // orphaned_scaleset.go).
 const (
-	recoveryCauseEviction   = "eviction"
-	recoveryCausePreemption = "preemption"
-	recoveryCauseDeletion   = "deletion"
-	recoveryCauseAbandoned  = "abandoned"
-	recoveryCauseVanished   = "vanished"
+	recoveryCauseEviction     = "eviction"
+	recoveryCausePreemption   = "preemption"
+	recoveryCauseDeletion     = "deletion"
+	recoveryCauseNodeShutdown = "node_shutdown"
+	recoveryCauseAbandoned    = "abandoned"
+	recoveryCauseVanished     = "vanished"
 )

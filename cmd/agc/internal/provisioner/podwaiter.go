@@ -34,6 +34,10 @@ type PodOutcome struct {
 	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
 	// only kube-scheduler writes (Q497).
 	Preempted bool
+	// NodeShutdown reports that the pod failed because its node shut down or its Node
+	// object was deleted (Q1179; see LostToNodeShutdown). Both writers fail the pod before
+	// anything deletes it, so it is read off the terminal phase only.
+	NodeShutdown bool
 	// ExternallyDeleted reports that the pod's terminal phase published while an
 	// external (non-AGC) deletion that interrupted its running container was in
 	// flight — the drained/deleted-worker discriminator Q459 measured: a human cancel
@@ -72,6 +76,7 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 			Phase:             pod.Status.Phase,
 			Reason:            pod.Status.Reason,
 			Preempted:         PreemptedByScheduler(pod),
+			NodeShutdown:      LostToNodeShutdown(pod),
 			ExternallyDeleted: externallyDeletedBeforeTerminal(pod),
 		}, true
 	default:

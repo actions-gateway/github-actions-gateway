@@ -54,6 +54,60 @@ func preempted(pod *corev1.Pod) *corev1.Pod {
 	return pod
 }
 
+// shutDown marks a pod as a node shutdown leaves it (Q1179): PodFailed and a
+// DisruptionTarget with reason — TerminationByKubelet from the kubelet's shutdown
+// manager, which also sets Status.Reason "Terminated", or DeletionByPodGC once the node
+// is gone.
+func shutDown(pod *corev1.Pod, reason string) *corev1.Pod {
+	pod.Status.Phase = corev1.PodFailed
+	if reason == corev1.PodReasonTerminationByKubelet {
+		pod.Status.Reason = "Terminated"
+	}
+	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: reason,
+	})
+	return pod
+}
+
+// TestLostToNodeShutdown pins the node-shutdown discriminator: both writers' reasons, on
+// a failed pod, with a true status — and nothing else that shares the condition type.
+func TestLostToNodeShutdown(t *testing.T) {
+	cond := func(s corev1.ConditionStatus, reason string) []corev1.PodCondition {
+		return []corev1.PodCondition{{Type: corev1.DisruptionTarget, Status: s, Reason: reason}}
+	}
+	tests := []struct {
+		name       string
+		phase      corev1.PodPhase
+		conditions []corev1.PodCondition
+		want       bool
+	}{
+		{name: "failed, no conditions", phase: corev1.PodFailed},
+		{name: "kubelet shutdown", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), want: true},
+		{name: "PodGC orphan", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC), want: true},
+		{
+			// The kubelet leaves a Succeeded phase alone: the job finished and reported.
+			name: "kubelet shutdown after the job succeeded", phase: corev1.PodSucceeded,
+			conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet),
+		},
+		{name: "still running", phase: corev1.PodRunning, conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet)},
+		{name: "status False", phase: corev1.PodFailed, conditions: cond(corev1.ConditionFalse, corev1.PodReasonTerminationByKubelet)},
+		{name: "scheduler preemption", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, corev1.PodReasonPreemptionByScheduler)},
+		{name: "eviction API", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, "EvictionByEvictionAPI")},
+		{
+			name: "right reason on the wrong condition type", phase: corev1.PodFailed,
+			conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue, Reason: corev1.PodReasonTerminationByKubelet}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := &corev1.Pod{Status: corev1.PodStatus{Phase: tc.phase, Conditions: tc.conditions}}
+			assert.Equal(t, tc.want, LostToNodeShutdown(pod))
+		})
+	}
+}
+
 // TestPreemptedByScheduler_RequiresTheFullTriple pins the discriminator itself. The
 // whole safety argument for recovering this path rests on PreemptionByScheduler having
 // exactly one writer, so anything short of the full type/status/reason triple must read
@@ -161,6 +215,37 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 				return pod
 			}(),
 			wantCause: recoveryCausePreemption, wantOK: true,
+		},
+		{
+			// Q1179: a graceful node shutdown fails the pod with reason Terminated and a
+			// kubelet DisruptionTarget, and deletes nothing.
+			name:      "node shutdown",
+			pod:       shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet),
+			wantCause: recoveryCauseNodeShutdown, wantOK: true,
+		},
+		{
+			// The node vanished before its kubelet wrote anything: PodGC patches the
+			// orphan to Failed, then force-deletes it. The watch sees the Failed update
+			// before any deletion mark, and the deletion arm would read the later delete
+			// as cleanup.
+			name:      "orphan failed by PodGC",
+			pod:       shutDown(scaleSetWorkerPod("p", identityAnnotations()), podReasonDeletionByPodGC),
+			wantCause: recoveryCauseNodeShutdown, wantOK: true,
+		},
+		{
+			// A kubelet eviction carries the same TerminationByKubelet condition; the
+			// eviction arm, ordered first, keeps it attributed to node pressure.
+			name: "kubelet eviction carrying the kubelet DisruptionTarget",
+			pod: func() *corev1.Pod {
+				pod := shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet)
+				pod.Status.Reason = podReasonEvicted
+				return pod
+			}(),
+			wantCause: recoveryCauseEviction, wantOK: true,
+		},
+		{
+			name: "already-claimed node shutdown",
+			pod:  handled(shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet)),
 		},
 		{
 			name: "running worker, untouched",
