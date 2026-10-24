@@ -12,12 +12,16 @@
 # actions-gateway.github.com/tenant=true — the same marker the namespace-psa-guard
 # policy keys on, applied by a trusted admin at onboarding and never by the GMC.
 #
+# It also restricts the GMC's ClusterRoleBinding writes to the
+# agc-clusterrunnertemplate-reader role. The GMC holds `bind` on roles that grant
+# Secret reads, and a ClusterRoleBinding to one of them would grant those reads in
+# every namespace (Q1188).
+#
 # Scope limits this policy deliberately does NOT cover:
 #   - Secret READS (get/list/watch). Admission only runs on create/update/delete, so
-#     no ValidatingAdmissionPolicy can confine a read. Secret read confinement is not
-#     achievable via VAP/RBAC alone (tenant Secret names are dynamic, and the metadata
-#     informer needs cluster-wide list/watch); the read scope is documented honestly
-#     in docs/design/05-security.md §5.1 with its compensating controls (Q121).
+#     no ValidatingAdmissionPolicy can confine a read. RBAC confines them instead: the
+#     GMC reads Secrets only through per-namespace RoleBindings that this policy
+#     restricts to tenant namespaces (docs/design/05-security.md §5.1).
 #
 # Kept OUT of the prefixed config/default kustomize tree (applied separately by
 # `make deploy`, like namespace-psa-guard.yaml) so its cluster-scoped names stay
@@ -54,6 +58,12 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["rolebindings", "roles"]
+      # ClusterRoleBindings are cluster-scoped, so the namespace marker cannot
+      # confine them; the roleRef rule below does instead.
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["clusterrolebindings"]
       - apiGroups: ["actions-gateway.github.com"]
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
@@ -84,8 +94,20 @@ spec:
       expression: >-
         (('actions-gateway.github.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.github.com/tenant'] == 'true')
         || ('actions-gateway.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.com/tenant'] == 'managed'))
+    # The GMC holds `bind` on agc-tenant-role, gmc-tenant-secret-reader and
+    # agc-clusterrunnertemplate-reader, and RBAC lets a `bind` grant back a
+    # ClusterRoleBinding as well as a RoleBinding. A ClusterRoleBinding to either of
+    # the first two would grant Secret reads in every namespace, so the only
+    # ClusterRoleBinding the GMC may write is the per-gateway one to the third.
+    - name: isClusterRoleBinding
+      expression: "request.resource.resource == 'clusterrolebindings'"
+    - name: bindingRoleRef
+      expression: "request.operation == 'DELETE' ? oldObject.roleRef.name : object.roleRef.name"
   validations:
-    - expression: "variables.isManagedTenant"
+    - expression: "!variables.isClusterRoleBinding || variables.bindingRoleRef == 'agc-clusterrunnertemplate-reader'"
+      messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
+      reason: Forbidden
+    - expression: "variables.isClusterRoleBinding || variables.isManagedTenant"
       messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed (or the legacy actions-gateway.github.com/tenant=true); namespace ' + request.namespace + ' is not a managed tenant namespace'"
       reason: Forbidden
 ---
