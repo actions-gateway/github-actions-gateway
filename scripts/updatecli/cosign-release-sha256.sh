@@ -27,11 +27,16 @@
 # being fetched.
 #
 # sigstore signs its releases under a Google service-account identity rather than
-# a GitHub Actions workflow one (measured on v2.5.2, 2026-08-19). Both are pinned
-# below, so a change of release identity fails this closed and reaches a human
-# instead of silently widening what counts as cosign.
+# a GitHub Actions workflow one (measured on v2.5.2, 2026-08-19, and on v3.1.4,
+# 2026-10-23). Both are pinned below, so a change of release identity fails this
+# closed and reaches a human instead of silently widening what counts as cosign.
 #
-# Usage: cosign-release-sha256.sh <version-tag> <os-arch>   # e.g. v2.5.3 darwin-arm64
+# The signature arrives as one Sigstore bundle, cosign_checksums.txt.sigstore.json.
+# v3 releases ship only that, and v2 releases only a detached -keyless.pem and
+# -keyless.sig pair, so a v2 tag 404s here and fails closed. The pinned v2.5.2
+# verifies a v3 bundle under --new-bundle-format (measured on v3.1.4, 2026-10-23).
+#
+# Usage: cosign-release-sha256.sh <version-tag> <os-arch>   # e.g. v3.1.4 darwin-arm64
 #
 # Env:
 #   COSIGN  Path to the verifying cosign (default .build/cosign at the repo root)
@@ -62,7 +67,7 @@ main() {
 	# --retry-all-errors covers the 403 the releases CDN serves under load, which
 	# plain --retry does not (the reason scripts/fetch/download-verified.sh exists).
 	local asset
-	for asset in cosign_checksums.txt{,-keyless.pem,-keyless.sig}; do
+	for asset in cosign_checksums.txt{,.sigstore.json}; do
 		curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
 			-o "${work}/${asset}" "${base}/${asset}"
 	done
@@ -72,8 +77,8 @@ main() {
 	# printed, and cosign announces "Verified OK" on stderr. On failure the held
 	# output is the diagnosis, so it goes out then.
 	if ! "$cosign" verify-blob \
-		--certificate "${work}/cosign_checksums.txt-keyless.pem" \
-		--signature "${work}/cosign_checksums.txt-keyless.sig" \
+		--bundle "${work}/cosign_checksums.txt.sigstore.json" \
+		--new-bundle-format \
 		--certificate-identity "$SIGNER_IDENTITY" \
 		--certificate-oidc-issuer "$SIGNER_ISSUER" \
 		"${work}/cosign_checksums.txt" > "${work}/verify.log" 2>&1; then

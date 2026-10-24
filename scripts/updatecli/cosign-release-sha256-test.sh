@@ -53,8 +53,7 @@ $DARWIN_SHA  cosign-darwin-arm64
 $LINUX_SHA  cosign-linux-amd64
 3333333333333333333333333333333333333333333333333333333333333333  cosign_checksums.txt
 EOF
-printf 'stand-in certificate\n' > "$ASSET_DIR/cosign_checksums.txt-keyless.pem"
-printf 'stand-in signature\n' > "$ASSET_DIR/cosign_checksums.txt-keyless.sig"
+printf '{"stand-in": "bundle"}\n' > "$ASSET_DIR/cosign_checksums.txt.sigstore.json"
 
 # --- stubs -----------------------------------------------------------------
 
@@ -206,6 +205,24 @@ fi
 assert_arg_pair --certificate-identity keyless@projectsigstore.iam.gserviceaccount.com
 assert_arg_pair --certificate-oidc-issuer https://accounts.google.com
 
+# The signature is the release's Sigstore bundle. Without --new-bundle-format
+# the pinned v2 cosign rejects a v3 bundle, so its absence would fail every run.
+bundle_arg=""
+for ((i = 0; i < ${#cosign_args[@]} - 1; i++)); do
+	[[ "${cosign_args[i]}" == --bundle ]] && bundle_arg="${cosign_args[i + 1]}"
+done
+if [[ "$bundle_arg" == */cosign_checksums.txt.sigstore.json ]]; then
+	pass 'verify-blob reads the release bundle'
+else
+	fail 'verify-blob reads the release bundle' "--bundle was '$bundle_arg'"
+fi
+if [[ " ${cosign_args[*]} " == *' --new-bundle-format '* ]]; then
+	pass 'verify-blob is told the bundle is in the new format'
+else
+	fail 'verify-blob is told the bundle is in the new format' \
+		"cosign args were: ${cosign_args[*]}"
+fi
+
 # A release signed by anyone else, or tampered with, must yield no digest at all
 # — updatecli would otherwise pin whatever the CDN served.
 STUB_COSIGN_RC=1 run v2.5.2 darwin-arm64
@@ -221,11 +238,11 @@ assert_rc 'a platform absent from the checksums file is fatal' 1
 assert_stdout 'a platform absent from the checksums file prints no digest' ''
 assert_stderr_contains 'the absent platform is named' 'cosign-linux-arm64'
 
-mv "$ASSET_DIR/cosign_checksums.txt-keyless.sig" "$ASSET_DIR/.sig-hidden"
+mv "$ASSET_DIR/cosign_checksums.txt.sigstore.json" "$ASSET_DIR/.bundle-hidden"
 run v2.5.2 darwin-arm64
-assert_rc 'a release with no signature asset is fatal' 22
-assert_stdout 'a release with no signature asset prints no digest' ''
-mv "$ASSET_DIR/.sig-hidden" "$ASSET_DIR/cosign_checksums.txt-keyless.sig"
+assert_rc 'a release with no signature bundle is fatal' 22
+assert_stdout 'a release with no signature bundle prints no digest' ''
+mv "$ASSET_DIR/.bundle-hidden" "$ASSET_DIR/cosign_checksums.txt.sigstore.json"
 
 if ((fails > 0)); then
 	printf '\n%d assertion(s) failed\n' "$fails" >&2
