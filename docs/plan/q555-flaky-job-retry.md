@@ -41,7 +41,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 and Q1182 |
 | [Q1177](../queue/Q1177.md), [Q1179](../queue/Q1179.md) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
-| [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184: per-port ingress measured in both CNI lanes |
+| [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184: per-port ingress measured on the Calico lane |
 
 ## Problem statement
 
