@@ -1,6 +1,6 @@
 module github.com/actions-gateway/github-actions-gateway/gmc
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/actions-gateway/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 // workspace-local

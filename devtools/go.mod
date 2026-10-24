@@ -1,6 +1,6 @@
 module github.com/actions-gateway/github-actions-gateway/devtools
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/prometheus/prometheus v0.313.2
