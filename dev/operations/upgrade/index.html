@@ -1715,6 +1715,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3562,6 +3573,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4335,6 +4357,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
+<li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
 <li><a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets</a></li>
 <li><a href="#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run">Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run</a></li>
 <li><a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started</a></li>
@@ -4474,6 +4497,34 @@ If the apiserver refuses an object, for example because a validating webhook rej
 Fix the named objects and run it again.</p>
 <p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
+<h3 id="non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once<a class="headerlink" href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every <code>ScaleSet</code>-protocol <code>RunnerSet</code> with <code>maxEvictionRetries</code> above 0.
+Nothing to do; one new object appears per set that has a worker disrupted.</p>
+<p><code>maxEvictionRetries</code> counted GAG's re-runs of each run in AGC memory, so an AGC restart refilled every run's budget.
+And two workers of one run disrupted in the same attempt each spent a slot and each re-ran the run: the second waited out <code>403 This workflow is already running</code> until the first re-run concluded, then re-ran it again.
+The count now lives in a per-<code>RunnerSet</code> ConfigMap, and a second disruption of an attempt GAG has already re-run merges into that re-run (Q1182).
+The field's meaning is unchanged: it counts GAG's own re-runs, never a human's.</p>
+<p>Operational consequences:</p>
+<ul>
+<li><strong>A third ConfigMap per set.</strong> <code>scaleset-failures-&lt;set&gt;</code> appears the first time one of that set's workers is disrupted, beside <code>scaleset-guards-&lt;set&gt;</code> and <code>scaleset-recovery-claims-&lt;set&gt;</code>.
+  It carries the same <code>actions-gateway.com/runner-set</code> label and is owner-ref'd to the set.
+  Each run's entry expires 30 days after GAG last reserved a re-run for it, GitHub's re-run window, and the object is capped at 512 KiB, about 1,100 runs re-run inside 30 days at the default budget of 2 (measured by the AGC's unit test).
+  Past the cap a new reservation is refused rather than an old budget dropped.</li>
+<li><strong>Fewer re-runs and fewer <code>eviction_retries_total</code> increments for multi-job runs.</strong> A drain that takes three workers of one run now re-runs it once and counts once; the merged disruptions log <code>a re-run is already reserved for this run attempt</code>, and re-run the attempt themselves only if that re-run never lands.</li>
+<li><strong>Every scale-set recovery now reads the run.</strong> The eviction, preemption and vanished arms did not call GitHub before the re-run; they now <code>GET</code> the run once to learn the attempt the job failed in, and again before each re-run call, standing down once the run is already past that attempt.
+  A run that cannot be read, or that names no <code>run_attempt</code>, is not re-run, and counts as <code>eviction_rerun_failures_total{reason="conclusion_unknown"}</code> or <code>{reason="api_error"}</code>.
+  The call needs only Actions read access, which the re-run already requires.</li>
+<li><strong>A new failure reason.</strong> <code>eviction_rerun_failures_total{reason="budget_unrecorded"}</code> counts a recovery whose budget decision could not be written, which withholds the re-run.
+  Expected to be zero; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</li>
+<li><strong>The budget is per set, not shared with the classic tier.</strong> A run whose workers span a classic <code>RunnerGroup</code> and a scale-set <code>RunnerSet</code>, or two <code>RunnerSet</code>s, can be re-run up to <code>maxEvictionRetries</code> times on each.
+  A classic <code>RunnerGroup</code> keeps its in-memory count.</li>
+<li><strong>A drained worker of a run whose other job was abandoned now re-runs.</strong> GAG force-cancels an abandoned run, and the drain recovery used to read that cancel as a human's and stand down; the AGC now records the attempt it cancels and treats that cancel as its own.</li>
+<li><strong>RBAC:</strong> unchanged.
+  The AGC already holds <code>get</code>, <code>create</code> and <code>update</code> on <code>configmaps</code>.</li>
+</ul>
+<p><strong>Rolling back</strong> restores the in-memory count, so the next restart refills budgets and a multi-job disruption re-runs once per worker again.
+A leftover <code>scaleset-failures-&lt;set&gt;</code> is inert on older versions, which never read it, and is collected with its <code>RunnerSet</code>.
+Rolling forward again reads it as it was left, including budgets spent before the rollback that have not expired.</p>
 <h3 id="non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets<a class="headerlink" href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose worker image sits in a registry that requires a login, with the pull Secret on the worker ServiceAccount rather than in the pod template, as the <a href="../air-gapped-install/#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">air-gapped install</a> wires it.</p>
 <p>The registry read behind <code>RunnerVersionTooOld</code> used to present only the Secrets the pod template's <code>imagePullSecrets</code> names, so on that wiring it failed authentication on every reconcile while the pull itself worked.

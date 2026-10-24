@@ -3046,7 +3046,7 @@ Onboarding a new team is approving a namespace, not standing up a deployment.</p
   Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.</p>
 </li>
 <li>
-<p><strong>Worker eviction is no longer a paging event.</strong> Evicted, preempted, and drained workers have their runs recovered automatically, under one shared per-run budget.
+<p><strong>Worker eviction is no longer a paging event.</strong> Evicted, preempted, and drained workers have their runs recovered automatically, under one per-run budget that an AGC restart does not refill on the scale-set tier.
   The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.</p>
 </li>
 <li>
@@ -3084,7 +3084,7 @@ Two disruptions qualify.
 The <strong>kubelet's node-pressure eviction</strong> (memory or disk exhaustion) is detected from the <code>Evicted</code> pod status.
 <strong>kube-scheduler preemption</strong> — what a floor tier actually drives — deletes its victim instead, and is detected from the <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).</p>
 <p>Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417).
-A configurable retry budget, shared across both tiers <em>and</em> both causes per workflow run, prevents infinite loops on persistently failing workloads.
+A configurable retry budget per workflow run, shared across every disruption cause, prevents infinite loops on persistently failing workloads.
 Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.</p>
 <p><strong>What about a drain?</strong> An operator's <code>kubectl drain</code> or <code>kubectl delete pod</code> leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is <strong>also re-run automatically</strong>, keyed on the pod's <code>deletionTimestamp</code> at the moment its terminal phase publishes.
 That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run).

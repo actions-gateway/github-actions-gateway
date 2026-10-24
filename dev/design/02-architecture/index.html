@@ -3283,7 +3283,7 @@ No warm standby pool is needed.
   Retries are counted per original <code>run_id</code>; a job that succeeds after one retry resets no counters (the retry state is per-job-acquisition, not persistent).
   The renewer distinguishes a disruption from an ordinary outcome by checking <code>pod.status.reason == "Evicted"</code>; separately, for a <code>DisruptionTarget=True</code> condition whose reason is exactly <code>PreemptionByScheduler</code> (matching the condition <em>type</em> alone would also match the eviction API's <code>EvictionByEvictionAPI</code>); and separately again, for a <code>Failed</code> phase that published while the pod carried a <code>deletionTimestamp</code> not stamped as the AGC's own and predating the container's recorded exit (Q502 — the mark is measured to be absent on a human cancel, so recovering on it cannot fight one; the ordering excludes both cleanup deletes of already-failed pods and deleted workers that never ran anything).
   Everything else follows the normal completion path and is not auto-retried: workflow errors, image pull failures, an OOM without the eviction annotation, the reaper's own stamped deletions, and any deleted worker with no container exit on record.
-  The retry budget is one budget per <code>run_id</code> across both tiers and all causes, so no combination can spend it twice.</p>
+  The retry budget is one budget per <code>run_id</code> across all causes, so no combination of causes can spend it twice; each tier keeps its own, and the scale-set tier's survives a restart (§4.2, Q1182).</p>
 <p>The description above is the <strong>classic</strong> acquisition tier, where one goroutine holds the job's identity and watches its own pod.
   The <strong>scale-set</strong> tier reaches the same outcome by a different route, because it has neither: it provisions fire-and-forget, so nothing is watching the pod, and it receives no acquired payload to read <code>run_id</code> from (Q417).
   Two substitutions close the gap, both durable rather than process-scoped:</p>
@@ -3545,7 +3545,7 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Disrupted jobs where retry budget was exhausted; requires manual re-run. The budget is shared across both tiers and both causes</td>
+<td>Disrupted jobs where retry budget was exhausted; requires manual re-run. The budget is shared across causes and kept per tier</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>

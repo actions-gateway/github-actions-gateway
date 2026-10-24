@@ -3036,12 +3036,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The disruption arms (eviction, preemption, node_shutdown, deletion, abandoned, vanished) spend a slot of <code>maxEvictionRetries</code> on any re-run …</td>
 </tr>
 <tr>
-<td><a href="Q1182/">Q1182</a></td>
-<td><a href="../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">The re-run budget resets when the AGC restarts</a></td>
+<td><a href="Q1197/">Q1197</a></td>
+<td>Recovery claims give up after five write conflicts with another replica</td>
 <td><code>bug</code></td>
 <td>🔲</td>
-<td>M</td>
-<td><code>reserveEvictionRetry</code> keeps each run's re-run count in a process-local <code>sync.Map</code>, and nothing reloads it on start (read from …</td>
+<td>S</td>
+<td><code>claimDisruptionRecovery</code> (<code>recovery_claims.go</code>) retries a conflicting write <code>recoveryClaimConflictRetries = 5</code> times, sized as "the …</td>
 </tr>
 <tr>
 <td><a href="Q555/">Q555</a></td>
@@ -3057,7 +3057,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>feature</code></td>
 <td>🚫</td>
 <td>M</td>
-<td>Blocked on Q555, whose detection measures each class's retry success rate (R14), and on Q1182, since more classes on a budget a restart …</td>
+<td>Blocked on Q555, whose detection measures each class's retry success rate (R14); the budget a class spends survives a restart …</td>
 </tr>
 <tr>
 <td><a href="Q1178/">Q1178</a></td>

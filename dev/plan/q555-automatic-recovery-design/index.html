@@ -3008,7 +3008,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Nothing here is built.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3110,6 +3110,7 @@ That is one of R5's stated blind spots.</p>
 <p>The AGC's ConfigMap verbs are <code>get</code>, <code>create</code> and <code>update</code>, with no informer, so every read is an uncached API call.
 The AGC loads the ledger once at start and keeps an in-memory copy, updated on each of its own writes and re-read when a compare-and-swap loses.
 Lookups, including the per-provision floor lookup below, read that copy and cost nothing.
+Q1182 ships without the copy: its only reads are a reservation's own compare-and-swap and the deletion arm's <code>selfCancelledAttempt</code> check on a cancelled run, both rare, so each reads uncached; the copy arrives with the first lookup on a hot path, Q1183's floor.
 Writes happen on a failed completion, a GAG re-run (its budget reservation) and a pairing, never on a succeeded job with no record, so the write rate tracks failures and not throughput.</p>
 <p>It holds a version and three maps, every entry carrying its own <code>expiresAt</code> so any AGC version can age any map, including one it does not understand:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
@@ -3150,8 +3151,8 @@ Whether <code>JobCompleted</code> carries them too is inferred from upstream's s
 <li><strong>Expiry:</strong> failure and pending entries after 7 days and 24 hours respectively; <code>reruns</code> entries after 30 days, GitHub's re-run window from recall, so a budget cannot refill while the run can still be re-run.</li>
 <li><strong>The cap evicts failures, never budgets.</strong> Past a cap sized so the object stays under 512 KiB, the oldest failure entries go first, except one holding a <code>memoryFloor</code> whose re-run has not completed.
   A <code>reruns</code> or <code>pending</code> entry is never evicted to make room: if those alone reach the cap, new reservations fail and their re-runs are withheld, because evicting one would refill its run's budget.</li>
-<li><strong>The size, estimated rather than measured:</strong> a <code>reruns</code> entry is about 300 bytes with two attempts recorded, so the 512 KiB cap holds about 1,700 runs that GAG re-ran inside 30 days on one set before failures are crowded out entirely.
-  A unit test asserts the worst case against maximal entries in every map.</li>
+<li><strong>The size, measured</strong> by <code>TestRerunLedger_CapHoldsEnoughBudgets</code> with 63-character pod names: a <code>reruns</code> entry is 476 bytes at the default budget of 2 with 40-character job names, so the cap holds about 1,100 runs GAG re-ran inside 30 days on one set, and 2,533 bytes at the field's ceiling of 10 with 100-character names, about 206 runs.
+  Q555 extends the test to the <code>failures</code> map when it adds it.</li>
 </ul>
 <h3 id="pairing-and-attribution-r1-r2-r8">Pairing and attribution (R1, R2, R8)<a class="headerlink" href="#pairing-and-attribution-r1-r2-r8" title="Permanent link">&para;</a></h3>
 <p>On a completion for a key with a failure entry, the completion is a later attempt of that job (M2):</p>
@@ -3334,7 +3335,7 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 <p>Notes on the table:</p>
 <ul>
 <li><strong><code>selfCancelledAttempt</code> replaces an arm exemption.</strong> The abandoned arm records the attempt it force-cancels before cancelling, so the check holds on whichever arm a merge lets through, and a user's cancel of a later attempt is never mistaken for GAG's.
-  Until Q1182 creates the ledger, Q1181 keeps the arm exemption, which is sound while there is no merge.
+  Q1182 shipped first, so Q1181 reads <code>selfCancelledAttempt</code> on every arm from the start and needs no arm exemption; until Q1181, only the deletion arm checks the conclusion, and it already honours the record.
   The abandoned arm also reads the conclusion <strong>before</strong> force-cancelling: a run a user or a concurrency group already cancelled is withheld, not cancelled again and re-run.</li>
 <li><strong><code>already_rerun</code> asks about the job, not the run.</strong> A single-job re-run moves <code>run_attempt</code> (from recall) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.</li>
@@ -3534,7 +3535,7 @@ Nothing in this section ships with the first rows; it fixes the shape the first 
 <p>The disruption arms call it too, so a rule can turn one off for one workflow, not only the classes.
 With no <code>spec.retry</code>, it returns today's behaviour.</p>
 <h3 id="the-storage-shape">The storage shape<a class="headerlink" href="#the-storage-shape" title="Permanent link">&para;</a></h3>
-<p><strong>Decide:</strong> the ledger's compatibility rules below.
+<p><strong>Built</strong> (Q1182): the ledger's compatibility rules below.
 The ledger is internal, not API, but two AGC versions share it during every rollout and every rollback, so it is built to be read and written by a version that does not understand all of it:</p>
 <ul>
 <li><strong>Additive changes need no version gate.</strong> Unknown fields survive a rewrite and every entry ages itself by <code>expiresAt</code>, so a new field or a new map needs nothing from an older AGC, and a rollback across one changes nothing.
@@ -3682,8 +3683,8 @@ Job-granular avoids that, and costs:</p>
 <h2 id="order-of-work">Order of work<a class="headerlink" href="#order-of-work" title="Permanent link">&para;</a></h2>
 <ol>
 <li>The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.</li>
-<li>Q1181, which needs no ledger: the futility checks on the widened run read, keeping the abandoned arm's exemption for <code>run_cancelled</code>.</li>
-<li>Q1182 creates the ledger store, with its version rules, <code>reruns</code> map and reservation, moves the budget onto it, and swaps Q1181's exemption for <code>selfCancelledAttempt</code>.</li>
+<li>Q1182 (built) created the ledger store, with its version rules, <code>reruns</code> map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as <code>selfCancelledAttempt</code>.</li>
+<li>Q1181: the futility checks on the widened run read, honouring <code>selfCancelledAttempt</code> for <code>run_cancelled</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>.</li>
 <li>Q555 adds the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.</li>
 <li>Q1183: the <code>pending</code> map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.</li>
 <li>Q1178 any time; Q1184 after its review.</li>

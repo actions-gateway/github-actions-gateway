@@ -2632,7 +2632,9 @@
 Only a <code>cancelled</code> conclusion is checked, and only on the deletion arm (Q811).
 A futile re-run costs a node, queue time and a budget slot, and ends in an Event saying a manual re-run is needed when nothing would help.
 Add those checks before a slot is spent, skip with a reason label on a counter, and event the reason and its fix.
-This needs no new retry class and no ledger, and helps today, independently of Q555 and Q1182: the abandoned arm keeps its exemption from the <code>run_cancelled</code> check, which Q1182 later replaces with a per-attempt record of GAG's own force-cancel (<a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design</a>); it is it is R18 of <a href="../../plan/q555-flaky-job-retry/#known-futile-retries">the draft</a> applied to the arms that already exist.
+This needs no new retry class: the <code>run_cancelled</code> check honours the ledger's <code>selfCancelledAttempt</code>, the attempt the abandoned arm records before it force-cancels, so GAG's own cancel is not withheld and no arm needs an exemption (<a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design</a>).
+On the scale-set tier the checks run on the run read <code>handleScaleSetEviction</code> already makes, before <code>reserveScaleSetRerun</code>, so a withheld re-run spends nothing; the classic tier makes no read before its in-memory reservation.
+It is R18 of <a href="../../plan/q555-flaky-job-retry/#known-futile-retries">the draft</a> applied to the arms that already exist.
 Q1177 covers the futile storage-limit eviction separately.</p>
 
 
