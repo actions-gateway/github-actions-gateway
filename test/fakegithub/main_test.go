@@ -1019,3 +1019,55 @@ func TestRunStatusReadTracksRunState(t *testing.T) {
 		t.Fatalf("GET on a sub-resource returned %d, want 404", status)
 	}
 }
+
+// TestRunStatusReadCountsAttempts pins run_attempt, which the scale-set tier keys
+// its re-run budget on and refuses a run without (Q1182): it starts at 1 and each
+// accepted re-run of the run starts the next, while a refused one does not.
+func TestRunStatusReadCountsAttempts(t *testing.T) {
+	s := newServer()
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	attempt := func(runID string) int {
+		t.Helper()
+		resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/" + runID)
+		if err != nil {
+			t.Fatalf("read run %s: %v", runID, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var body struct {
+			Attempt int `json:"run_attempt"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode run %s: %v", runID, err)
+		}
+		return body.Attempt
+	}
+	post := func(path string) {
+		t.Helper()
+		resp, err := http.Post(path, "", nil)
+		if err != nil {
+			t.Fatalf("post %s: %v", path, err)
+		}
+		_ = resp.Body.Close()
+	}
+	rerun := main.URL + "/repos/o/r/actions/runs/4242/rerun-failed-jobs"
+
+	if got := attempt("4242"); got != 1 {
+		t.Fatalf("unrerun run attempt %d, want 1", got)
+	}
+	post(rerun)
+	if got := attempt("4242"); got != 2 {
+		t.Fatalf("after one accepted re-run, attempt %d, want 2", got)
+	}
+	post(control.URL + "/control/runstate?run=4242&concluded=false")
+	post(rerun)
+	if got := attempt("4242"); got != 2 {
+		t.Fatalf("after a refused re-run, attempt %d, want 2", got)
+	}
+	if got := attempt("4343"); got != 1 {
+		t.Fatalf("another run's attempt %d, want 1: attempts are per run", got)
+	}
+}

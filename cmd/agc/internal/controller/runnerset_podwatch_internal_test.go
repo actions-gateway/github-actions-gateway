@@ -74,7 +74,7 @@ func fakeRerunAPI(t *testing.T) (*httptest.Server, *atomic.Int64) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"status":"completed","conclusion":"failure"}`)
+			_, _ = io.WriteString(w, `{"status":"completed","conclusion":"failure","run_attempt":1}`)
 			return
 		}
 		reruns.Add(1)
