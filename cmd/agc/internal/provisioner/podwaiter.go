@@ -29,8 +29,12 @@ type PodOutcome struct {
 	// Phase is the terminal phase, or PodSucceeded for a pod deleted before it
 	// reached one.
 	Phase corev1.PodPhase
-	// Reason is Pod.Status.Reason; "Evicted" is the kubelet's node-pressure eviction.
+	// Reason is Pod.Status.Reason; "Evicted" is a kubelet eviction, for node pressure
+	// or for the pod's own limit (OwnLimitEviction tells them apart).
 	Reason string
+	// OwnLimitEviction is the kubelet's message when the pod was evicted for exceeding
+	// its own local-storage limit, and empty otherwise (ownLimitEviction, Q1177).
+	OwnLimitEviction string
 	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
 	// only kube-scheduler writes (Q497).
 	Preempted bool
@@ -75,6 +79,7 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 		return PodOutcome{
 			Phase:             pod.Status.Phase,
 			Reason:            pod.Status.Reason,
+			OwnLimitEviction:  ownLimitEviction(pod),
 			Preempted:         PreemptedByScheduler(pod),
 			NodeShutdown:      LostToNodeShutdown(pod),
 			ExternallyDeleted: externallyDeletedBeforeTerminal(pod),
