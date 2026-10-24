@@ -881,4 +881,5 @@ The blockquote is a comma-separated list of those tags and never a sentence: the
 There is no CI check — it's two lines kept in sync by hand (deliberately not worth automating).
 
 The per-doc pills also **deep-link** to `operations/?persona=<persona>`, and the index reads that query param on load to pre-apply the matching chip.
+The href starts from the site root, read from the `base` field of the `__config` JSON Material writes into every page, so a pill works on a page at any depth, `reference/` included; on a page served as `*.html`, as in the offline export, it names `operations/index.html` because no directory index is served there.
 The link is generated from the blockquote, so keeping (1) and (2) in agreement is enough — just don't rename a persona in only one place.
