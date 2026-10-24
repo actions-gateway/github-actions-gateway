@@ -20,9 +20,10 @@
 # contention that is SIGTERM. Both are still reported and both still exit
 # non-zero — a killed command did not do its work, and 137 is the OOM killer's.
 #
-# Every run ends with per-label wall time, slowest first. A fan-out's total is
-# its slowest member, so that block is the only place a gate's cost is legible
-# (Q819).
+# Every run ends with per-label wall time, slowest first (Q819). Uncapped, a
+# fan-out's total is its slowest member. Capped, it can be the queue draining
+# instead, and a member's wall time then includes the cores it shared, so the
+# block ranks waiting as well as work (Q1196).
 #
 # RUN_PARALLEL_JOBS — how many commands may run at once. Unset or 0 starts every
 # command immediately, so a 130-suite fan-out is 130 concurrent processes by
