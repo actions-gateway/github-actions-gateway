@@ -4109,7 +4109,7 @@ A refusal and a failed dial already have their warn/error line and their counter
 <p>Classified retry (<a href="../../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Q555 plan</a>) needs to know which job a proxy failure came from.
 An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
 That is new use of per-job egress data, so it is designed here before it is built (<a href="../../queue/Q1184/">Q1184</a>).
-Nothing in this section is implemented yet.</p>
+The proxy's half is built (<code>cmd/proxy/attribution.go</code>) behind environment the GMC does not set yet; the GMC and AGC halves are not (<a href="../../plan/q1184-proxy-failure-attribution/">plan</a>).</p>
 <p><strong>It is off by default, behind two switches, for the audit record's reasons.</strong> One on the <code>EgressProxy</code> makes the pool able to keep failures and serve them.
 One on a consuming <code>ActionsGateway</code> opts that gateway's namespace in.
 Either alone attributes nothing.
