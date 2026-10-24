@@ -43,7 +43,7 @@
 #                What the registry mirrors fetch through: "distribution" (the
 #                default, each mirror fetches its upstream itself) or "dragonfly"
 #                (Q539: the mirrors send their upstream traffic through a
-#                Dragonfly seed peer, deploy/dragonfly/). Workers reach the same
+#                Dragonfly seed peer, deploy/dragonfly-core/). Workers reach the same
 #                five mirrors either way. Not combinable with
 #                REGISTRY_MIRROR_PERSISTENT=1. Needs helm, which mints the
 #                seed peer's CA. See deploy/registry-mirror/README.md (Q539).
@@ -134,7 +134,7 @@ mirror_persistent() {
 # upstream through the seed peer while starting and exits if it cannot.
 #
 # The CA is minted only when its Secret is absent, because every render of
-# deploy/dragonfly/ca-chart is a new key. It goes from helm to kubectl through a
+# deploy/dragonfly-core/ca-chart is a new key. It goes from helm to kubectl through a
 # pipe and never touches disk, and through `create` rather than `apply`, which
 # would copy the key into a last-applied-configuration annotation. The
 # certificate-only ConfigMap the mirrors mount is then rewritten from the Secret
@@ -159,12 +159,12 @@ mirror_persistent() {
 # logging neither passes while a terminating old pod still shows success.
 apply_dragonfly_backend() {
 	echo "Applying the Dragonfly back end for the registry mirrors (Q539)..."
-	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly"
+	kubectl apply -k "${REPO_ROOT}/deploy/dragonfly-core"
 	kubectl apply -f "${REPO_ROOT}/deploy/registry-mirror/base/namespace.yaml"
 	local minted=0
 	if ! kubectl get secret dragonfly-proxy-ca --namespace gag-dragonfly >/dev/null 2>&1; then
 		echo "  Minting the seed peer's CA..."
-		helm template dragonfly-proxy-ca "${REPO_ROOT}/deploy/dragonfly/ca-chart" | kubectl create -f -
+		helm template dragonfly-proxy-ca "${REPO_ROOT}/deploy/dragonfly-core/ca-chart" | kubectl create -f -
 		minted=1
 	fi
 	local cert
@@ -190,7 +190,7 @@ apply_dragonfly_backend() {
 	[[ "${seed_log}" == *"load registry cert success"* &&
 		"${seed_log}" != *"load registry cert failed"* ]] || {
 		echo "error: the Dragonfly seed peer did not load proxy.registryMirror.cert, so it is" >&2
-		echo "       not verifying upstream TLS; see deploy/dragonfly/seed-client.yaml" >&2
+		echo "       not verifying upstream TLS; see deploy/dragonfly-core/seed-client.yaml" >&2
 		return 1
 	}
 }

@@ -730,7 +730,7 @@ dragonfly_leg() {
 	e2e_leg
 }
 
-# The seed peer's proxy, as deploy/dragonfly/seed-client.yaml serves it, and the
+# The seed peer's proxy, as deploy/dragonfly-core/seed-client.yaml serves it, and the
 # lines dfdaemon logs per request routed peer-to-peer and direct. Both strings
 # are v1.5.7's wording as Q539 measured it on kind; a client bump can change
 # them, which is why neither line matching is not-taken rather than a pass.

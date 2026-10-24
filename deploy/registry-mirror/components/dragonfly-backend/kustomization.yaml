@@ -15,8 +15,8 @@ kind: Component
 # the remote's own registrable domain, so a remote naming the Dragonfly Service
 # could never fetch a Docker Hub token (measured for Q539).
 #
-# PREREQUISITES. ../../../dragonfly applied, and the dragonfly-proxy-ca
-# ConfigMap in this namespace, which ../../../dragonfly/ca-chart renders beside
+# PREREQUISITES. ../../../dragonfly-core applied, and the dragonfly-proxy-ca
+# ConfigMap in this namespace, which ../../../dragonfly-core/ca-chart renders beside
 # the seed peer's Secret. Without the ConfigMap the mirror pods do not start.
 #
 # STARTUP ORDER. Distribution pings its remote while starting and exits if the

@@ -76,10 +76,10 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # registry path). Its base manifests are plain native kinds, so kubeconform covers
 # them too via standalone_manifests below; the kustomization.yaml files are not
 # Kubernetes manifests and are yamllint-only, as deploy/kata-ci/kata-values.yaml is.
-# deploy/dragonfly is the same class (Q539: the mirrors' P2P back end), and its
+# deploy/dragonfly-core is the same class (Q539: the mirrors' P2P back end), and its
 # ca-chart is linted and rendered like the CRD chart below; deploy/dragonfly-node
 # is its node client (Q540).
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dragonfly deploy/dragonfly-node deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dragonfly-core deploy/dragonfly-node deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
 
 # The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
 # comma survived to whoever imported the file. jq is required-tier already.
@@ -124,10 +124,10 @@ deploy/registry-mirror/base/deployment.yaml
 deploy/registry-mirror/base/service.yaml
 deploy/registry-mirror/base/networkpolicy.yaml
 deploy/registry-mirror/overlays/persistent/pvc.yaml
-deploy/dragonfly/namespace.yaml
-deploy/dragonfly/scheduler.yaml
-deploy/dragonfly/seed-client.yaml
-deploy/dragonfly/networkpolicy.yaml
+deploy/dragonfly-core/namespace.yaml
+deploy/dragonfly-core/scheduler.yaml
+deploy/dragonfly-core/seed-client.yaml
+deploy/dragonfly-core/networkpolicy.yaml
 deploy/dragonfly-node/namespace.yaml
 deploy/dragonfly-node/client.yaml
 deploy/dragonfly-node/scheduler-from-nodes.yaml"
@@ -156,9 +156,9 @@ helm template ag-crds-v2 "$crds_v2_chart" >"$crds_v2_render_dir/crds-v2.yaml"
 # shellcheck disable=SC2086
 kubeconform $kubeconform_flags "$crds_v2_render_dir/crds-v2.yaml"
 
-echo "==> helm lint + kubeconform: deploy/dragonfly/ca-chart (Q539 proxy CA)"
-helm lint "$REPO_ROOT/deploy/dragonfly/ca-chart"
-helm template dragonfly-proxy-ca "$REPO_ROOT/deploy/dragonfly/ca-chart" >"$crds_v2_render_dir/dragonfly-ca.yaml"
+echo "==> helm lint + kubeconform: deploy/dragonfly-core/ca-chart (Q539 proxy CA)"
+helm lint "$REPO_ROOT/deploy/dragonfly-core/ca-chart"
+helm template dragonfly-proxy-ca "$REPO_ROOT/deploy/dragonfly-core/ca-chart" >"$crds_v2_render_dir/dragonfly-ca.yaml"
 # shellcheck disable=SC2086
 kubeconform $kubeconform_flags "$crds_v2_render_dir/dragonfly-ca.yaml"
 

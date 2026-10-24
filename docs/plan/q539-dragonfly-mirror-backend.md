@@ -116,9 +116,9 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
 ## 7. Phases
 
 - **Phase 1 — grade Dragonfly against the contract. ✅ Done (2026-10-04, local).** §2–§6.
-- **Phase 2 — build the back end. ✅ Done (2026-10-04, kind).** `deploy/dragonfly/`: a scheduler and one seed peer with no manager, node DaemonSet or injector (so no MySQL and no Redis; the seed finds the scheduler through a static dynconfig), digest-pinned, non-root under PSA `restricted`, with NetworkPolicies admitting only the mirror pods to the proxy port.
+- **Phase 2 — build the back end. ✅ Done (2026-10-04, kind).** `deploy/dragonfly-core/`: a scheduler and one seed peer with no manager, node DaemonSet or injector (so no MySQL and no Redis; the seed finds the scheduler through a static dynconfig), digest-pinned, non-root under PSA `restricted`, with NetworkPolicies admitting only the mirror pods to the proxy port.
   `deploy/registry-mirror/components/dragonfly-backend` points the five registry containers at it, and `overlays/dragonfly` applies it.
-  The CA comes from `deploy/dragonfly/ca-chart`, Helm's built-in certificate functions as the GAG chart already uses them for its webhook certificate, so no cert-manager; its key goes from `helm template` to `kubectl create` through a pipe and never touches disk.
+  The CA comes from `deploy/dragonfly-core/ca-chart`, Helm's built-in certificate functions as the GAG chart already uses them for its webhook certificate, so no cert-manager; its key goes from `helm template` to `kubectl create` through a pipe and never touches disk.
   `scripts/dogfood/e2e-start.sh` gains `E2E_MIRROR_BACKEND=dragonfly`, minting the CA only when its Secret is absent and restarting both sides when it does; the default stays Distribution alone, and `e2e-stop.sh` scales Dragonfly to zero but keeps the CA.
 
   Measured by running the script's own functions against a kind cluster with kindnet enforcing NetworkPolicy:
@@ -140,7 +140,7 @@ So the namespace can enforce PSA `restricted`, and the security context is a pat
   The release gate's Dragonfly leg (Q1160) runs the battery, the Kata e2e run and all three readings on every candidate (`dragonfly_readings` in `scripts/dogfood/validate-release.sh`).
   The first run was red on gcr.io pulls ([§7.1](#71-the-first-dogfood-run-gcrio-manifests-on-the-p2p-path)).
 
-  Read from `v1.9.0-rc.2`'s gate run 37380198658 (`validate-candidate.yml` on `main` at `aa1178e31`, candidate `65ba797c2`, 2026-10-05), whose Dragonfly leg applied `deploy/dragonfly/` from that checkout and so ran with the blobs-only rule:
+  Read from `v1.9.0-rc.2`'s gate run 37380198658 (`validate-candidate.yml` on `main` at `aa1178e31`, candidate `65ba797c2`, 2026-10-05), whose Dragonfly leg applied `deploy/dragonfly/` (since renamed `deploy/dragonfly-core/`) from that checkout and so ran with the blobs-only rule:
 
   | Reading | Result |
   |---|---|
@@ -171,7 +171,7 @@ The probe discarded docker's stderr, so the run itself does not say why.
 | The probe | Ruled out | The pull really fails: reproduced with plain `docker pull` and the same ref |
 | The Dragonfly back end | **Cause** | Below |
 
-**Reproduced in local Docker** with the digests `deploy/dragonfly/` and `deploy/registry-mirror/` pin, the seed peer's ConfigMap verbatim, and a Distribution instance with `REGISTRY_PROXY_REMOTEURL=https://gcr.io` behind it: the pull failed with `error from registry: unknown error`.
+**Reproduced in local Docker** with the digests `deploy/dragonfly-core/` and `deploy/registry-mirror/` pin, the seed peer's ConfigMap verbatim, and a Distribution instance with `REGISTRY_PROXY_REMOTEURL=https://gcr.io` behind it: the pull failed with `error from registry: unknown error`.
 The seed peer's log shows the tag lookup going direct and succeeding, then the platform manifest by digest taking the P2P rule and failing: `download task failed: BackendError { message: "404 Not Found" … "server": "Docker Registry" }`.
 The download task it logs carries `request_header: {"user-agent": "Go-http-client/1.1"}` alone, while the request Distribution sent it carried four `Accept` values.
 
@@ -212,7 +212,7 @@ Q540's node client answers it by binding the proxy to loopback for the node's ow
 
 ### 8.2 Measured: the proxy binds to loopback, and five ports stay on every address
 
-Measured on kind with Calico on 2026-10-13: chart 1.8.5's node client alone (`dragonflyoss/client:v1.5.7`, the digest `deploy/dragonfly/` pins), dfinit enabled, against this plan's manager-less scheduler, on two worker nodes.
+Measured on kind with Calico on 2026-10-13: chart 1.8.5's node client alone (`dragonflyoss/client:v1.5.7`, the digest `deploy/dragonfly-core/` pins), dfinit enabled, against this plan's manager-less scheduler, on two worker nodes.
 
 - **The chart can bind the proxy to loopback without a patch.** It passes `client.config` through with `toYaml`, so `proxy.server.ip: 127.0.0.1` reaches dfdaemon; `ss -ltnp` on a node then showed `127.0.0.1:4001` and nothing else on 4001.
 - **containerd pulls through it.** dfinit's default `proxy.addr` is already `http://127.0.0.1:4001`, and it wrote that into `/etc/containerd/certs.d/docker.io/hosts.toml`. kind's containerd reads that directory per pull, so dfinit's containerd restart was turned off and not needed.

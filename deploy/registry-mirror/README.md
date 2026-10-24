@@ -64,7 +64,7 @@ Each registry container trusts the seed peer's interception CA alone (`SSL_CERT_
 Whoever holds that CA's key can serve the mirrors any content for a tag.
 It is stored in `gag-dragonfly`, and anything with cluster-wide Secret read can read it.
 
-`E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh` applies [`deploy/dragonfly`](../dragonfly/kustomization.yaml), mints the CA on first use, waits for the seed peer, then applies this overlay; it cannot be combined with the persistent one.
+`E2E_MIRROR_BACKEND=dragonfly scripts/dogfood/e2e-start.sh` applies [`deploy/dragonfly-core`](../dragonfly-core/kustomization.yaml), mints the CA on first use, waits for the seed peer, then applies this overlay; it cannot be combined with the persistent one.
 The grading and its measurements are in [q539-dragonfly-mirror-backend.md](../../docs/plan/q539-dragonfly-mirror-backend.md).
 
 ## What the NetworkPolicies do

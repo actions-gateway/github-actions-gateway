@@ -2,7 +2,7 @@
 
 A [Dragonfly](https://d7y.io/) `dfdaemon` on every Kata node, which containerd sends its registry pulls through.
 The first node to need a worker image fetches it from the registry, and every other node collects its blobs from that node instead.
-It registers with the scheduler in [`../dragonfly`](../dragonfly/README.md), which it shares with the registry mirrors' seed peer, so apply that first.
+It registers with the scheduler in [`../dragonfly-core`](../dragonfly-core/README.md), which it shares with the registry mirrors' seed peer, so apply that first.
 
 What it changes on each node, and what it leaves alone, is measured in the [Q540 plan §6](../../docs/plan/q540-node-layer-p2p.md#6-dogfood-validation) on GKE with containerd 2.2.7 and `kata-deploy`.
 Why an operator would want it, and what it exposes, is in [Peer-to-peer image distribution](../../docs/operations/p2p-image-distribution.md#gags-dragonfly-node-client-recipe).

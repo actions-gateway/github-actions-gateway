@@ -1,5 +1,5 @@
 # The node clients reach the Q539 scheduler from their node's address, not a
-# pod IP, so ../dragonfly/networkpolicy.yaml's pod selectors do not admit them.
+# pod IP, so ../dragonfly-core/networkpolicy.yaml's pod selectors do not admit them.
 # On GKE Dataplane V2 an ipBlock on the node subnet does (measured, Q540 plan
 # §6). Set the CIDR to your node subnet; this is dogfood's.
 apiVersion: networking.k8s.io/v1
