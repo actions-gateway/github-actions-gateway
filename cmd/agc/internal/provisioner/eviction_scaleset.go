@@ -277,6 +277,10 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 		return closedChan()
 	}
 
+	if msg := ownLimitEviction(pod); cause == recoveryCauseEviction && msg != "" {
+		p.withholdOwnLimitRerun(target, runID, evictionTierScaleSet, podLog, msg)
+		return closedChan()
+	}
 	return p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause)
 }
 
@@ -286,7 +290,8 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 // operator-facing wording.
 //
 // Four causes qualify — the kubelet's node-pressure eviction (PodFailed + Status.Reason
-// "Evicted"), kube-scheduler preemption (a DisruptionTarget=True/PreemptionByScheduler
+// "Evicted"; one evicted for its own limit is still claimed here, then withheld before
+// any re-run by withholdOwnLimitRerun, Q1177), kube-scheduler preemption (a DisruptionTarget=True/PreemptionByScheduler
 // condition, Q497), a node shutdown (PodFailed + a TerminationByKubelet or
 // DeletionByPodGC DisruptionTarget, Q1179), and an external graceful deletion — a drain
 // or a `kubectl delete pod` — whose victim reached PodFailed before the object went
@@ -366,8 +371,9 @@ func externallyDeletedTerminalWorker(pod *corev1.Pod) bool {
 	return pod.Status.Phase == corev1.PodFailed
 }
 
-// podReasonEvicted is the Pod.Status.Reason the kubelet sets when it evicts a pod
-// under node pressure — the single signal both tiers branch on.
+// podReasonEvicted is the Pod.Status.Reason the kubelet sets when it evicts a pod,
+// under node pressure or for exceeding the pod's own limit — the signal both tiers
+// branch on, with ownLimitEviction withholding the re-run for the second.
 const podReasonEvicted = "Evicted"
 
 // stampEvictionHandled marks pod as adjudicated, so the recovery scan's cache-level

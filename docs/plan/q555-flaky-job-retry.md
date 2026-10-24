@@ -39,7 +39,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | [Q1181](../queue/Q1181.md) | R18's futility checks, on the arms that exist today | Nothing |
 | [Q1182](../queue/Q1182.md) | R15, a budget that survives an AGC restart | Nothing |
 | [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 and Q1182 |
-| [Q1177](../queue/Q1177.md), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
+| Q1177 (closed by the `own_limit` withhold), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
 | [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184: per-port ingress measured on the Calico lane |
 
@@ -103,10 +103,9 @@ Retrying one of those masks nothing, because the tenant's code never got a fair 
 So the low-risk way to retry more is to recognise more classes that pass that test, and only after that to retry failures nobody has classified.
 Classifying is where GAG is strong: no GitHub-layer product can see the pod, the node, the egress proxy or the mirror a job depended on.
 
-**The `eviction` arm does not fully pass that test today.** It keys on `reason: Evicted` alone ([`eviction_scaleset.go`](../../cmd/agc/internal/provisioner/eviction_scaleset.go)), and the kubelet sets that reason when a pod exceeds its *own* `ephemeral-storage` limit, as well as when the node is short.
-The live eviction-recovery e2e triggers eviction exactly that way, with a job that outgrows its own limit, and expects the re-run ([`github_scaleset_test.go`](../../cmd/gmc/test/e2e/github_scaleset_test.go)).
-That is a tenant-caused, likely deterministic failure, the storage analogue of `OOMKilled`, retried up to `maxEvictionRetries` (default 2) and documented as "node pressure".
-Whether the kubelet's `status.message` separates the two shapes is unmeasured; [Q1177](../queue/Q1177.md) tracks it, and R10's test applies to it as much as to any new class.
+**The `eviction` arm failed that test until Q1177.** It keyed on `reason: Evicted` alone, and the kubelet sets that reason when a pod exceeds its *own* `ephemeral-storage` limit as well as when the node is short: a tenant-caused, deterministic failure, the storage analogue of `OOMKilled`, retried up to `maxEvictionRetries` (default 2).
+The kubelet's message and its `DisruptionTarget` condition separate the two shapes (measured on kind v1.35.5), so the arm now withholds the limit shape as `own_limit` before spending a slot ([`own_limit.go`](../../cmd/agc/internal/provisioner/own_limit.go); [the measurement](../design/04-operational-flows.md#an-eviction-for-the-pods-own-limit-is-not-a-disruption)).
+The live eviction-recovery e2e evicted its worker exactly that way, so it now makes genuine node pressure instead.
 
 **Retry moves the flake away from the person who can fix it.** Today the pull request author sees the red run.
 After a GAG retry the run is green, and the flake survives only in operator metrics and Events, because writing back to GitHub is out of scope (R17).
@@ -202,7 +201,7 @@ A class is a failure shape GAG recognises and retries automatically, the way it 
 
 - **R9.** A class MUST be recognised from facts GAG owns (Kubernetes objects, its own components, protocol messages), never from job logs or anything tenant code writes.
 - **R10.** A class MUST be caused outside the tenant's code and configuration.
-  A job exceeding its own limits (memory, `ephemeral-storage`, `timeout-minutes`) does not qualify on that fact alone; [Q1177](../queue/Q1177.md) is the existing arm that misses this.
+  A job exceeding its own limits (memory, `ephemeral-storage`, `timeout-minutes`) does not qualify on that fact alone; the eviction arm missed this until Q1177.
 - **R11.** A class MUST NOT spend the budget while its cause still holds.
   How it waits depends on how the cause clears, and each class MUST declare which of three applies:
   - **A fresh pod clears it.** A re-run builds a new pod, and the scheduler will not place it on a `NotReady` node, so the retry is already the change.
@@ -216,7 +215,7 @@ A class is a failure shape GAG recognises and retries automatically, the way it 
 - **R13.** Each class MUST get its own `cause` label on the existing counters and spend the existing per-run budget (`maxEvictionRetries`), so a run cannot collect one budget per class.
   It is on by default like the existing arms, and reuses the paced re-run path (`rerunUntilAccepted`).
 - **R14.** The AGC MUST measure each cause's retry success rate (re-runs that then passed, over re-runs), using detection's pairing.
-  A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape would read near zero.
+  A class whose retries keep failing is misclassified, and the rate is what says so: Q1177's shape, before it was withheld, would have read near zero.
 - **R15.** The per-run budget MUST survive an AGC restart before classes that fire more often are added.
   It lives in process memory today ([`reserveEvictionRetry`](../../cmd/agc/internal/provisioner/eviction.go)); [the design](q555-automatic-recovery-design.md#the-budget-is-gags-own-count-in-the-ledger-r15) persists GAG's own count, and checks `run_attempt` against GitHub's 50-re-run limit, which humans share.
 - **R16.** Every classified retry MUST be counted and evented with its cause, and its compute attributable per set ([cost attribution](../operations/cost-attribution.md)).
@@ -234,7 +233,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 | Futile shape | What GAG would observe | Status |
 |---|---|---|
 | The worker's *shape* cannot run: an unpullable image, or a pod no node can host | The capacity gate's startup and placeability verdicts ([`worker_startup_verdict.go`](../../cmd/agc/internal/controller/worker_startup_verdict.go), Q714) | Built for intake: the gate stops new work when every next pod would fail the same way. Whether the re-run paths consult it is unverified |
-| The job exceeded its own limit | `OOMKilled` at its limit under `Static` sizing, an `ephemeral-storage` limit eviction, `timeout-minutes` | The eviction arm retries the storage case today ([Q1177](../queue/Q1177.md)) |
+| The job exceeded its own limit | `OOMKilled` at its limit under `Static` sizing, an `ephemeral-storage` limit eviction, `timeout-minutes` | The eviction arm withholds the storage case as `own_limit` (Q1177); `OOMKilled` and `timeout-minutes` reach no arm |
 | A newer commit superseded the run | The pull request's head no longer matches the run's `head_sha`, or the run was cancelled by a concurrency group | Not checked: nothing in the re-run path reads either. One API call per retry, which is affordable because retries are rare |
 | GitHub will refuse the re-run | `run_attempt` at 50, a run older than 30 days, a `cancelled` conclusion | The deletion arm already stands down on `cancelled` (Q811); the other two are unchecked |
 | The same class failed this job again | A second failure of the same class on a later attempt, after its cause was judged cleared | Per-run counterpart of R14: the class is wrong for this job, so stop and say so |

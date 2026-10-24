@@ -223,57 +223,50 @@ func (f TenantFixture) WithPriorityTier(priorityClassName string, threshold int3
 	return f
 }
 
-// WithEphemeralStorageLimit caps every runner container's local ephemeral storage,
-// which is what lets a spec provoke a genuine kubelet eviction of one chosen worker
-// pod (Q396).
+// WithNodePressureHeadroom gives every runner container the memory footprint the
+// node-pressure eviction lever needs (Q1177): a request well below what the spec will
+// make the worker use, and a limit well above it.
 //
-// It is the only disruption available at this tier that produces the shape eviction
-// recovery actually keys on. `kubectl drain` and `kubectl delete pod` are graceful
-// deletions and reach no recovery at all — Q421 measured exactly that — and node-wide
-// memory or disk pressure would evict whatever the kubelet ranks worst rather than the
-// worker under test, on a node shared with the rest of the suite. A pod-level
-// ephemeral-storage limit is enforced per pod: exceed it and the kubelet evicts that
-// pod, and only that pod, into PodFailed with reason "Evicted" and a zero grace period
-// — the node-pressure kill both tiers detect, with no pressure on the node.
+// Both halves are load-bearing. The kubelet's node-pressure ranking puts the pods using
+// more than they requested first, ordered by how far over they are, so a low request is
+// what makes this worker the victim rather than whatever else shares its node. The limit
+// has to clear the spec's fill with room for the runner itself, or the container is
+// OOMKilled at its own limit — an own-limit failure the eviction arm rightly declines,
+// and exactly the shape this lever exists to avoid.
 //
-// Pick a limit far above anything a fixture job legitimately writes. The spec that
-// uses it fills the gap deliberately; every other spec sharing the tenant must never
-// come near it, or an unrelated green run turns red as a runner is evicted mid-job.
+// It is the eviction lever because a pod-level ephemeral-storage limit, the lever before
+// it, evicts the pod for its own limit: the kubelet writes that as Failed/Evicted too,
+// but recovery withholds it (Q1177), so it can no longer prove a re-run lands.
 //
-// Declaring it means declaring CPU and memory too. The provisioner's resource
-// defaulting is gap-fill and all-or-nothing (applyResourceDefaults): a container that
-// sets *any* resource keeps the tenant's values verbatim and gets no defaults, so a
-// fixture that named only ephemeral storage would silently ship an unbounded-CPU,
-// unbounded-memory worker. The CPU/memory values below therefore mirror
-// provisioner.DefaultWorkerResources — they cannot be imported (separate module), so
-// they are duplicated here and must be kept in step with it.
+// CPU is declared because the provisioner's resource defaulting is gap-fill and
+// all-or-nothing (applyResourceDefaults): a container that sets *any* resource keeps the
+// tenant's values verbatim and gets no defaults. The CPU value mirrors
+// provisioner.DefaultWorkerResources, which cannot be imported from this module.
 //
 // Rides on WorkerResources rather than adding a field of its own: that is already the
 // fixture's one way to give the runner container a footprint, and two mechanisms
 // writing the same container's Resources would silently race on which one wins.
-func (f TenantFixture) WithEphemeralStorageLimit(limit string) TenantFixture {
-	GinkgoHelper()
-	storage, err := resource.ParseQuantity(limit)
-	Expect(err).NotTo(HaveOccurred(), "parse ephemeral-storage limit %q", limit)
+func (f TenantFixture) WithNodePressureHeadroom() TenantFixture {
 	f.RunnerGroups = cloneGroups(f.RunnerGroups)
 	for i := range f.RunnerGroups {
-		f.RunnerGroups[i].WorkerResources = &corev1.ResourceRequirements{
-			// Requested as well as limited. Kubernetes would copy the limit into the
-			// request anyway; stating it keeps the pod's scheduling footprint readable
-			// in the rendered manifest rather than materializing at admission.
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:              resource.MustParse("500m"),
-				corev1.ResourceMemory:           resource.MustParse("1Gi"),
-				corev1.ResourceEphemeralStorage: storage,
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:              resource.MustParse("500m"),
-				corev1.ResourceMemory:           resource.MustParse("1Gi"),
-				corev1.ResourceEphemeralStorage: storage,
-			},
-		}
+		f.RunnerGroups[i].WorkerResources = NodePressureWorkerResources()
 	}
 	return f
+}
+
+// NodePressureWorkerResources is WithNodePressureHeadroom's footprint, exported for
+// the specs that render their own RunnerTemplate.
+func NodePressureWorkerResources() *corev1.ResourceRequirements {
+	return &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		},
+	}
 }
 
 // cloneGroups copies the runner-group slice so a With* method returns a modified
