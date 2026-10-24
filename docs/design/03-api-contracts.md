@@ -582,8 +582,9 @@ type RunnerGroupSpec struct {
     // Live on both acquisition tiers as of Q417. A RunnerGroup is always classic;
     // the same field on a ScaleSet-protocol RunnerSet is honored too, with the
     // eviction detected by the owning reconciler from the worker pod rather than
-    // by a goroutine watching it. The budget is keyed by run ID alone, so the cap
-    // is shared across tiers. See §4 Worker Pod Eviction and Auto-Retry.
+    // by a goroutine watching it. Each tier keeps its own budget per run, and a
+    // RunnerSet keeps its in a ConfigMap that an AGC restart does not reset (Q1182).
+    // See §4 Worker Pod Eviction and Auto-Retry.
     //
     // Defaults to 2 when omitted. This default is applied in-code by the AGC,
     // not via a CRD +kubebuilder:default marker.
