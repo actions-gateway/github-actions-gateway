@@ -71,21 +71,63 @@ func shutDown(pod *corev1.Pod, reason string) *corev1.Pod {
 	return pod
 }
 
+// outOfService marks a pod as a dead node's out-of-service taint leaves it (Q1207): the
+// taint manager's DisruptionTarget and graceful delete, then PodFailed from PodGC over a
+// container no kubelet ever recorded stopping.
+func outOfService(pod *corev1.Pod) *corev1.Pod {
+	delTime := metav1.NewTime(time.Now().Add(-10 * time.Second))
+	pod.DeletionTimestamp = &delTime
+	pod.Finalizers = []string{"test.actions-gateway.com/hold"} // fake client rejects a delete-marked object without one
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  "runner",
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: metav1.NewTime(delTime.Add(-time.Minute))}},
+	}}
+	return shutDown(pod, podReasonDeletionByTaintManager)
+}
+
 // TestLostToNodeShutdown pins the node-shutdown discriminator: both writers' reasons, on
 // a failed pod, with a true status — and nothing else that shares the condition type.
 func TestLostToNodeShutdown(t *testing.T) {
 	cond := func(s corev1.ConditionStatus, reason string) []corev1.PodCondition {
 		return []corev1.PodCondition{{Type: corev1.DisruptionTarget, Status: s, Reason: reason}}
 	}
+	status := func(st corev1.ContainerState) []corev1.ContainerStatus {
+		return []corev1.ContainerStatus{{Name: "runner", State: st}}
+	}
+	running := status(corev1.ContainerState{Running: &corev1.ContainerStateRunning{}})
+	terminated := status(corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}})
+	waiting := status(corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}})
 	tests := []struct {
 		name       string
 		phase      corev1.PodPhase
 		conditions []corev1.PodCondition
+		containers []corev1.ContainerStatus
 		want       bool
 	}{
 		{name: "failed, no conditions", phase: corev1.PodFailed},
 		{name: "kubelet shutdown", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), want: true},
 		{name: "PodGC orphan", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC), want: true},
+		{
+			// PodGC failed the pod over a dead kubelet: the container is still recorded Running.
+			name: "out-of-service node", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager), containers: running, want: true,
+		},
+		{
+			// A live kubelet finishing the taint manager's delete records the exit first;
+			// that pod is the deletion arm's.
+			name: "NoExecute taint on a live node", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager), containers: terminated,
+		},
+		{
+			// Never started: the abandoned handling's, not a re-run of a job that never ran.
+			name: "out-of-service node, worker never started", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager), containers: waiting,
+		},
+		{
+			// A NotReady node with no out-of-service taint: the delete never completes.
+			name: "taint-manager delete stuck terminating", phase: corev1.PodRunning,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager), containers: running,
+		},
 		{
 			// The kubelet leaves a Succeeded phase alone: the job finished and reported.
 			name: "kubelet shutdown after the job succeeded", phase: corev1.PodSucceeded,
@@ -102,7 +144,7 @@ func TestLostToNodeShutdown(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			pod := &corev1.Pod{Status: corev1.PodStatus{Phase: tc.phase, Conditions: tc.conditions}}
+			pod := &corev1.Pod{Status: corev1.PodStatus{Phase: tc.phase, Conditions: tc.conditions, ContainerStatuses: tc.containers}}
 			assert.Equal(t, tc.want, LostToNodeShutdown(pod))
 		})
 	}
@@ -231,6 +273,32 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			name:      "orphan failed by PodGC",
 			pod:       shutDown(scaleSetWorkerPod("p", identityAnnotations()), podReasonDeletionByPodGC),
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
+		},
+		{
+			// Q1207: an admin tainted the dead node out-of-service; PodGC failed the pod and
+			// no kubelet wrote the termination record the deletion arm orders against.
+			name:      "out-of-service node",
+			pod:       outOfService(scaleSetWorkerPod("p", identityAnnotations())),
+			wantCause: recoveryCauseNodeShutdown, wantOK: true,
+		},
+		{
+			// A NoExecute taint on a live node: the kubelet records the exit after the
+			// delete, so the deletion arm keeps it and its run-conclusion check.
+			name: "NoExecute taint on a live node",
+			pod: func() *corev1.Pod {
+				pod := drained(scaleSetWorkerPod("p", identityAnnotations()))
+				return shutDown(pod, podReasonDeletionByTaintManager)
+			}(),
+			wantCause: recoveryCauseDeletion, wantOK: true,
+		},
+		{
+			// Never started on the out-of-service node: abandonedAwaitingRecovery's.
+			name: "out-of-service node, worker never started",
+			pod: func() *corev1.Pod {
+				pod := outOfService(scaleSetWorkerPod("p", identityAnnotations()))
+				pod.Status.ContainerStatuses = nil
+				return pod
+			}(),
 		},
 		{
 			// A kubelet eviction carries the same TerminationByKubelet condition; the

@@ -1046,11 +1046,42 @@ func TestProvisioner_PreemptionAutoRetry(t *testing.T) {
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
 }
 
-// TestProvisioner_NodeShutdownAutoRetry is the classic half of Q1179. A worker whose
-// node shut down fails with reason Terminated and a kubelet DisruptionTarget, which
+// TestProvisioner_NodeShutdownAutoRetry is the classic half of Q1179 and Q1207. A worker
+// whose node shut down fails with reason Terminated and a kubelet DisruptionTarget, which
 // neither the eviction nor the preemption arm keys on, and nothing deletes it, so the
-// deletion arm never fires either.
+// deletion arm never fires either. One on a dead node tainted out-of-service is failed by
+// PodGC over a container still recorded Running, which leaves the deletion arm no
+// termination record to order against.
 func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		shape func(*corev1.Pod)
+	}{
+		{name: "kubelet shutdown", shape: func(pod *corev1.Pod) {
+			pod.Status.Reason = "Terminated"
+			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
+				Type:   corev1.DisruptionTarget,
+				Status: corev1.ConditionTrue,
+				Reason: corev1.PodReasonTerminationByKubelet,
+			})
+		}},
+		{name: "out-of-service node", shape: func(pod *corev1.Pod) {
+			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
+				Type:   corev1.DisruptionTarget,
+				Status: corev1.ConditionTrue,
+				Reason: "DeletionByTaintManager",
+			})
+			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+				Name:  "runner",
+				State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+			}}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testNodeShutdownAutoRetry(t, tc.shape) })
+	}
+}
+
+func testNodeShutdownAutoRetry(t *testing.T, shape func(*corev1.Pod)) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
 	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
@@ -1081,12 +1112,7 @@ func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
 	var live corev1.Pod
 	require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
 	live.Status.Phase = corev1.PodFailed
-	live.Status.Reason = "Terminated"
-	live.Status.Conditions = append(live.Status.Conditions, corev1.PodCondition{
-		Type:   corev1.DisruptionTarget,
-		Status: corev1.ConditionTrue,
-		Reason: corev1.PodReasonTerminationByKubelet,
-	})
+	shape(&live)
 	require.NoError(t, fc.Status().Update(ctx, &live))
 
 	require.NoError(t, <-done)
