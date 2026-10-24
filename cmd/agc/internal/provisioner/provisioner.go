@@ -936,14 +936,14 @@ func (p *Provisioner) handScaleSetSecretToPod(ctx context.Context, namespace, po
 
 // replaceStaleScaleSetSecret decides what a delivery that found its job's Secret already
 // staged does with it, and reports whether it created secret in its place. A Secret whose
-// owners are all Pods that no longer exist belongs to a worker that is gone: the garbage
-// collector deletes it regardless of a later owner patch, and it holds that worker's
-// spent JIT config rather than the one this delivery minted, so handing it to a new pod
-// leaves the pod Pending on a missing Secret (Q1174). It is deleted under a UID
-// precondition and re-created, which gives the collector's pending delete a different
-// object to miss. A Secret already being deleted is waited out by an error the listener
-// retries. Any other Secret, staged by a delivery still in flight or mounted by a live
-// worker, is left alone (Q373).
+// owners are all Pods that no longer exist belongs to a worker that is gone: it holds
+// that worker's spent JIT config rather than the one this delivery minted, and the
+// garbage collector can delete it before the new pod is handed it, leaving that pod
+// Pending on a missing Secret (Q1174). It is deleted under a UID precondition, so a
+// concurrent replay's fresh Secret is never the one removed, and re-created from secret.
+// A Secret already being deleted is waited out by an error the listener retries. Any
+// other Secret, staged by a delivery still in flight or mounted by a live worker, is
+// left alone (Q373).
 func (p *Provisioner) replaceStaleScaleSetSecret(ctx context.Context, secret *corev1.Secret, log *slog.Logger) (bool, error) {
 	var existing corev1.Secret
 	err := p.liveReader().Get(ctx, client.ObjectKeyFromObject(secret), &existing)

@@ -16,9 +16,9 @@ import (
 )
 
 // Q1174: a scale-set job is replayed to a re-created session after its worker was
-// deleted and before the garbage collector deleted the worker's Secret. The collector
-// has already read the Secret as orphaned, so its delete is pending; the replay must not
-// hand that Secret to the new worker.
+// deleted and before the garbage collector deleted the worker's Secret. The collector can
+// delete that Secret at any point after the pod went, so the replay must not hand it to
+// the new worker.
 
 func q1174Secret(ctx context.Context, t *testing.T, c client.Client, jobID string) corev1.Secret {
 	t.Helper()
@@ -27,8 +27,10 @@ func q1174Secret(ctx context.Context, t *testing.T, c client.Client, jobID strin
 	return s
 }
 
-// collectorDeletes is the collector's pending delete: the API server applies it only to
-// the object whose UID the collector read, which the fake client's Delete does not check.
+// collectorDeletes is the collector's delete of the Secret it read as orphaned, applied as
+// late as possible. The API server applies it only to the object whose UID the collector
+// read, which the fake client's Delete does not check; the real collector also backs off
+// when the owners changed, so this is the harsher of the two.
 func collectorDeletes(ctx context.Context, t *testing.T, c client.Client, jobID string, uid types.UID) {
 	t.Helper()
 	var s corev1.Secret
@@ -88,6 +90,27 @@ func TestProvisionScaleSetWorker_ReplayLeavesAnInFlightSecretAlone(t *testing.T)
 	got := q1174Secret(ctx, t, fc, "job-a")
 	assert.Equal(t, staged.UID, got.UID, "the in-flight delivery's Secret is not replaced")
 	assert.Equal(t, "aW5mbGlnaHQ=", string(got.Data[jitConfigKey]))
+}
+
+// A Secret handed to a worker that is still there is that worker's mount, so a replay
+// finding it must leave it as it is (Q373).
+func TestProvisionScaleSetWorker_ReplayLeavesALiveWorkersSecretAlone(t *testing.T) {
+	ctx := context.Background()
+	fc := uidAssigningClient()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+
+	provisionHolder(ctx, t, p, target, "job-a")
+	before := q1174Secret(ctx, t, fc, "job-a")
+	require.Len(t, before.OwnerReferences, 1)
+	require.Equal(t, "Pod", before.OwnerReferences[0].Kind, "the Secret is handed to the live worker before the replay")
+
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target,
+		ScaleSetJob{JobID: "job-a", JITConfig: "cmVwbGF5", RunnerName: "gpu-job-a-2"}))
+
+	got := q1174Secret(ctx, t, fc, "job-a")
+	assert.Equal(t, before.UID, got.UID, "the live worker's Secret is not replaced")
+	assert.Equal(t, before.Data[jitConfigKey], got.Data[jitConfigKey])
 }
 
 // A Secret already being deleted cannot be re-created until it is gone, so the delivery
