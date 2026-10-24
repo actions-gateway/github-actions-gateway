@@ -82,17 +82,20 @@ type Metrics struct {
 	// window closed) versus api_error (a terminal API failure).
 	EvictionRerunFailures *prometheus.CounterVec
 	// EvictionRerunWithheld counts disruption recoveries that deliberately did not ask
-	// GitHub to re-run, because doing so would undo a decision GitHub already recorded
-	// (Q811). Split by reason: run_cancelled (the run concluded `cancelled`, which
-	// rerun-failed-jobs accepts, so the graceful-deletion arm would re-queue a job a
-	// human stopped — the cancel runbook's own remedy for a worker that will not stop is
-	// to delete its pod, which supplies the deletion mark that arm keys on).
+	// GitHub to re-run. Split by reason:
 	//
-	// Like EvictionRerunFailures it accompanies a spent budget slot: the reservation is
-	// taken at detection, minutes before GitHub concludes the run, so the conclusion
-	// cannot be read before the slot is claimed. Unlike it, this is the correct outcome
-	// and needs no operator action — it is counted so a re-run that did not happen is
-	// visible rather than indistinguishable from a recovery that never armed.
+	//   - run_cancelled (cause deletion, Q811): the run concluded `cancelled`, which
+	//     rerun-failed-jobs accepts, so the graceful-deletion arm would re-queue a job a
+	//     human stopped — the cancel runbook's own remedy for a worker that will not stop
+	//     is to delete its pod, which supplies the deletion mark that arm keys on. It
+	//     accompanies a spent budget slot: the reservation is taken at detection, minutes
+	//     before GitHub concludes the run, so the conclusion cannot be read first.
+	//   - own_limit (cause eviction, Q1177): the kubelet evicted the worker for exceeding
+	//     its own ephemeral-storage or emptyDir limit, which a re-run with the same limit
+	//     repeats. Decided at detection, so no slot is spent.
+	//
+	// It is counted so a re-run that did not happen is visible rather than
+	// indistinguishable from a recovery that never armed.
 	EvictionRerunWithheld *prometheus.CounterVec
 	// AbandonedRunForceCancels counts the provisioner's REST force-cancels of a run
 	// whose worker pod was removed before it ran (Q683). Nothing will ever report
@@ -259,7 +262,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_withheld_total",
-			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (deletion), and reason (run_cancelled: the run concluded cancelled, so a re-run would undo a human's cancel — Q811). The retry slot is spent, but no operator action is needed.",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (deletion, eviction), and reason (run_cancelled: cause deletion, the run concluded cancelled, so a re-run would undo a human's cancel — Q811, with the retry slot spent and no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit).",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{

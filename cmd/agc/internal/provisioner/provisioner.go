@@ -662,7 +662,10 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	case outcome.Phase == corev1.PodFailed && outcome.ExternallyDeleted:
 		cause = recoveryCauseDeletion
 	}
-	if cause != "" {
+	switch {
+	case cause == recoveryCauseEviction && outcome.OwnLimitEviction != "":
+		p.withholdOwnLimitRerun(target, runID, evictionTierClassic, log, outcome.OwnLimitEviction)
+	case cause != "":
 		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, cause)
 	}
 

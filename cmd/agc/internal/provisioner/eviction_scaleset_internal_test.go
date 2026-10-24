@@ -50,6 +50,9 @@ func evictionRecoveryMetrics() *runnercore.Metrics {
 		EvictionRecoveryEvidenceLost: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q809_eviction_recovery_evidence_lost_total",
 		}, []string{"namespace", "runner_group", "cause"}),
+		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_q1177_eviction_rerun_withheld_total",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 	}
 }
 
