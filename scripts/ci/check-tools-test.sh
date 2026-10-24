@@ -313,7 +313,11 @@ fake_repo() {
 	# OTHER_STUB_VERSION ends in the same text and is lower still: if the lookup
 	# matched a suffix rather than the whole key, it would answer here.
 	printf 'env:\n  STUB_VERSION: v2.5.0\n  OTHER_STUB_VERSION: v0.1.0\n' >"$root/.github/workflows/a.yml"
-	printf 'env:\n  STUB_VERSION: v2.4.0\n' >"$root/.github/workflows/b.yml"
+	printf 'env:\n  STUB_VERSION: v2.4.0\n  MIXED_STUB_VERSION: v3.1.0\n' >"$root/.github/workflows/b.yml"
+	# scripts/ci/pins.env is the other source. PINNED_STUB_VERSION is pinned only
+	# there; MIXED_STUB_VERSION is lower there than in b.yml, so the floor must
+	# take the lowest across both files rather than either one alone.
+	printf '# comment\nPINNED_STUB_VERSION=v1.7.0\nMIXED_STUB_VERSION=v3.0.0\n' >"$root/scripts/ci/pins.env"
 	awk -v rowsfile="$FIXTURE_DIR/rows.txt" '
 		/^tools_registry\(\) \{$/ { print; getline; print
 		                            while ((getline line < rowsfile) > 0) print line
@@ -343,6 +347,8 @@ floor_case() {
 
 floor_case ci-pin-lowest-of-several 'stubtool|required|||https://example.invalid||@ci:STUB_VERSION|' 0 'stubtool	2.4.0'
 floor_case ci-pin-key-not-suffix 'stubtool|required|||https://example.invalid||@ci:OTHER_STUB_VERSION|' 0 'stubtool	0.1.0'
+floor_case ci-pin-read-from-pins-env 'stubtool|required|||https://example.invalid||@ci:PINNED_STUB_VERSION|' 0 'stubtool	1.7.0'
+floor_case ci-pin-lowest-across-sources 'stubtool|required|||https://example.invalid||@ci:MIXED_STUB_VERSION|' 0 'stubtool	3.0.0'
 floor_case gowork-floor-read 'stubtool|required|||https://example.invalid||@go.work|' 0 'stubtool	1.23.4'
 floor_case literal-floor-passes-through 'stubtool|required|||https://example.invalid||3.0|' 0 'stubtool	3.0'
 floor_case unresolvable-pin-is-a-failure 'stubtool|required|||https://example.invalid||@ci:NO_SUCH_VERSION|' 1 'UNRESOLVED'

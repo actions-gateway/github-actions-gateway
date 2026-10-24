@@ -111,6 +111,7 @@ jobs:
               - 'scripts/go/go-test-integration.sh'
               - 'scripts/lib/**'
               - '.github/workflows/integration-test.yml'
+              - 'scripts/ci/pins.env'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
@@ -140,16 +141,10 @@ jobs:
     # budget plus setup and the -race build is ~15m worst case; a normal entry is
     # ~6m (measured 2026-08-12).
     timeout-minutes: 20
-    # ENVTEST_K8S_VERSION pins the Kubernetes API-server version the integration
-    # tier tests against. Single-sourced here (the cache key + the `use` below both
-    # read it) and kept in lockstep with the same pin in cmd/{gmc,agc}/Makefile by
-    # updatecli (updatecli.d/envtest.yaml, weekly), which rewrites all three. It is
-    # the envtest twin of KIND_NODE_IMAGE — keep the two on the same Kubernetes
-    # minor so the integration and e2e tiers test the same version. Multi-gateway
-    # AGC scoping (KEP-4358 field selectors) needs ≥ 1.31; older fails the field
-    # selector. The ".x" patch wildcard lets setup-envtest pick the newest patch.
+    # ENVTEST_K8S_VERSION, the Kubernetes API-server version the integration tier
+    # tests against, is pinned in scripts/ci/pins.env and loaded by the `pins`
+    # step; the cache key and the `use` below both read it.
     env:
-      ENVTEST_K8S_VERSION: 1.35.x
       # The module this entry tests, as a directory under cmd/. Surfaced as an
       # env var rather than interpolated into the run: script below, matching the
       # KIND_CNI handling in e2e-reusable.yml — a matrix value is workflow-authored
@@ -158,6 +153,9 @@ jobs:
       MODULE: ${{ matrix.module }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
@@ -166,7 +164,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/envtest-bins
-          key: envtest-${{ runner.os }}-${{ env.ENVTEST_K8S_VERSION }}
+          key: envtest-${{ runner.os }}-${{ steps.pins.outputs.ENVTEST_K8S_VERSION }}
       - name: Install envtest binaries
         run: |
           KUBEBUILDER_ASSETS=$(.build/setup-envtest use "$ENVTEST_K8S_VERSION" --bin-dir /tmp/envtest-bins -p path)

@@ -45,21 +45,9 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # Buildkit image docker/setup-buildx-action boots its builder from; pre-pulled
-  # with retry below so the buildx boot never touches Docker Hub uncached.
-  # DIGEST-PINNED (Q127): the `buildx-stable-1` tag floats, so an unpinned
-  # reference would let the builder that assembles signed release images change
-  # underfoot. Pin it by digest; updatecli.d/buildkit.yaml (Q151) resolves the
-  # tag's current digest and auto-bumps it here and in the e2e/security-scan
-  # workflows together so the three pins can't drift.
-  BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
-  # syft release that scans the pushed images, and the SHA256 of its linux/amd64
-  # tarball taken from the release's published checksums file (Q127 — release
-  # assets are mutable for an existing tag, so verify before trusting).
-  # Auto-bumped by updatecli.d/syft.yaml, which rewrites the pair here and in
-  # security-scan.yml together so the two cannot drift.
-  SYFT_VERSION: v1.45.1
-  SYFT_SHA256: 20c84195e24927f50a3b2269946be51f4c4abc9d2f145fee7388b4199149f716
+  # The buildkit builder image, syft and cosign this workflow installs are pinned
+  # in scripts/ci/pins.env (BUILDKIT_IMAGE, SYFT_VERSION + SYFT_SHA256,
+  # COSIGN_VERSION) and loaded per job by its `pins` step.
 
 jobs:
   # Stop-ship gate, ahead of every publishing job. A stable tag push makes
@@ -228,6 +216,9 @@ jobs:
         name: [gmc, agc, proxy, worker, wrapper, build-runner]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
       - name: Resolve publish tag
         id: tag
         # On a tag push GITHUB_REF_NAME is the tag; workflow_dispatch may override
@@ -260,7 +251,7 @@ jobs:
         run: scripts/fetch/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
-          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          driver-opts: image=${{ steps.pins.outputs.BUILDKIT_IMAGE }}
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -416,10 +407,11 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          # Pin the signer version (the action otherwise floats to latest). Keep
-          # in step with COSIGN_VERSION in the Makefile so a local
-          # `make verify-release` verifies with the same version that signed.
-          cosign-release: v2.5.2
+          # Pin the signer version (the action otherwise floats to latest).
+          # `make cosign-pin-check` holds pins.env's COSIGN_VERSION to the
+          # Makefile's, so `make verify-release` verifies with the version that
+          # signed.
+          cosign-release: ${{ steps.pins.outputs.COSIGN_VERSION }}
       - name: Install syft
         # Installed from the pinned release rather than via
         # anchore/sbom-action/download-syft: that action fetches anchore's
@@ -533,6 +525,9 @@ jobs:
       id-token: write # KEYLESS cosign — same Fulcio/Rekor flow as the images
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
       - name: Resolve publish tag
         id: tag
         # Same guard as the image job: refuse to publish from a non-tag ref with
@@ -580,10 +575,11 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          # Pin the signer version (the action otherwise floats to latest). Keep
-          # in step with COSIGN_VERSION in the Makefile so a local
-          # `make verify-release` verifies with the same version that signed.
-          cosign-release: v2.5.2
+          # Pin the signer version (the action otherwise floats to latest).
+          # `make cosign-pin-check` holds pins.env's COSIGN_VERSION to the
+          # Makefile's, so `make verify-release` verifies with the version that
+          # signed.
+          cosign-release: ${{ steps.pins.outputs.COSIGN_VERSION }}
       - name: Log in to GHCR (docker — for cosign)
         # cosign authenticates via the docker credential store
         # (~/.docker/config.json), NOT helm's separate OCI store, so it needs its

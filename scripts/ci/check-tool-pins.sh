@@ -161,11 +161,15 @@ build_rules() {
 	'
 }
 
-# The `*_VERSION` variables the makefile itself sets. `# default` marks make's
-# own (MAKE_VERSION), which is not a pin and is read-only.
+# The `*_VERSION` variables the makefile sets, and those the environment set
+# first: a CI job exports scripts/ci/pins.env, so `COSIGN_VERSION ?=` never
+# assigns and make reports the variable's origin as `# environment`. Skipping it
+# would leave the cosign sentinel unprobed and report it unpinned. Overriding an
+# environment variable no rule reads moves nothing. `# default` marks make's own
+# (MAKE_VERSION), which is not a pin and is read-only.
 version_vars() {
 	awk '
-		/^# makefile/ { from_makefile = 1; next }
+		/^# (makefile|environment)/ { from_makefile = 1; next }
 		/^[A-Za-z_][A-Za-z0-9_]*_VERSION[ \t]*[:?]?=/ {
 			if (from_makefile) { split($0, f, /[ \t]*[:?]?=/); print f[1] }
 		}

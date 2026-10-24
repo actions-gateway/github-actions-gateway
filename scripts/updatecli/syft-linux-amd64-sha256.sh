@@ -3,12 +3,12 @@
 # syft version tag, with no trailing newline.
 #
 # Used by updatecli (updatecli.d/syft.yaml) as a shell source so SYFT_SHA256 in
-# .github/workflows/publish.yml and .github/workflows/security-scan.yml stays in
+# scripts/ci/pins.env, which publish.yml and security-scan.yml both read, stays in
 # lockstep with SYFT_VERSION: updatecli resolves the latest syft tag, then calls
 # this with that tag to pull the matching hash from the release's published
 # checksums file (the same file a human would copy by hand). This
 # version+checksum pair is exactly what Dependabot cannot track, because the pins
-# are workflow env vars rather than a package-manifest entry — and syft is a
+# are env-file lines rather than a package-manifest entry — and syft is a
 # runtime tool download, so nothing else bumps it either (Q806).
 #
 # syft embeds the version WITHOUT the leading "v" in both the asset names and the

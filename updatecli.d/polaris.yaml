@@ -1,10 +1,9 @@
-# Keep the polaris version + its linux/amd64 checksum in
-# .github/workflows/security-scan.yml current. polaris publishes a combined
+# Keep the polaris version + its linux/amd64 checksum in scripts/ci/pins.env
+# current; security-scan.yml loads them from there. polaris publishes a combined
 # checksums.txt per release, so the checksum source pulls our asset's line from
 # it (scripts/updatecli/polaris-linux-amd64-sha256.sh). updatecli bumps
 # POLARIS_VERSION and POLARIS_SHA256 together in one PR — the version+checksum
-# pair Dependabot cannot track because the pins are workflow env vars, not a
-# package-manifest entry. Run by .github/workflows/updatecli.yml.
+# pair Dependabot cannot track because it is not a package-manifest entry. Run by .github/workflows/updatecli.yml.
 #
 # polaris is a security gate: a new release can add checks that change the
 # danger-findings verdict, so the bump PR may go red. That is the intended
@@ -55,20 +54,20 @@ sources:
 
 targets:
   version:
-    name: 'POLARIS_VERSION in security-scan.yml'
+    name: 'POLARIS_VERSION in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/security-scan.yml
-      matchpattern: '(POLARIS_VERSION: )v\d+\.\d+\.\d+'
+      file: scripts/ci/pins.env
+      matchpattern: '(POLARIS_VERSION=)v\d+\.\d+\.\d+'
       replacepattern: '${1}{{ source "polarisVersion" }}'
   checksum:
-    name: 'POLARIS_SHA256 in security-scan.yml'
+    name: 'POLARIS_SHA256 in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/security-scan.yml
-      matchpattern: '(POLARIS_SHA256: )[0-9a-f]{64}'
+      file: scripts/ci/pins.env
+      matchpattern: '(POLARIS_SHA256=)[0-9a-f]{64}'
       replacepattern: '${1}{{ source "polarisChecksum" }}'
