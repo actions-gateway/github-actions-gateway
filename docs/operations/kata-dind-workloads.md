@@ -339,7 +339,7 @@ Each instance is pinned to exactly one upstream in its pod spec, and refuses upl
 |---|---|---|
 | The mirrors | [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md) | One [CNCF Distribution](https://github.com/distribution/distribution) instance in pull-through cache mode per upstream registry your jobs pull from, each fronted by a proxy that refuses `GET /v2/_catalog` |
 | The mirror's policies | [`base/networkpolicy.yaml`](../../deploy/registry-mirror/base/networkpolicy.yaml) | Workers may reach mirror pods on 5000; mirror pods accept ingress from the tenant namespace and nothing else. Under the shared topology the ingress is narrowed further, to workload-labelled pods |
-| The worker wiring | [`overlays/kata/mirror-wiring.yaml`](../../deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml) | Points the job's image clients at the mirrors, in the two forms those clients can read |
+| The worker wiring | [`base/mirror-wiring.yaml`](../../deploy/dogfood-e2e/base/mirror-wiring.yaml) | Points the job's image clients at the mirrors, in the two forms those clients can read |
 | The absence of an allow-all | your tenant namespace | No additive egress policy, so the gateway's default-deny is the whole story |
 
 The first three are additive.
@@ -387,7 +387,7 @@ Tenants who must not learn what each other build should take isolation without w
 ### Wiring the job's image clients
 
 No two image clients read the same configuration, so one endpoint set has to reach them four ways.
-[`mirror-wiring.yaml`](../../deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml) holds it once, as a `daemon.json` and as an `<upstream>=<mirror>` map:
+[`mirror-wiring.yaml`](../../deploy/dogfood-e2e/base/mirror-wiring.yaml) holds it once, as a `daemon.json` and as an `<upstream>=<mirror>` map:
 
 | Client | Reads | Covers |
 |---|---|---|

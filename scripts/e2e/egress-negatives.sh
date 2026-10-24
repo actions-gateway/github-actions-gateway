@@ -51,6 +51,12 @@
 #                      Unset or empty means no mirror is wired and no tight
 #                      policy is in place — the hosted lane and a developer's
 #                      `make e2e` — so the battery reports a skip and exits 0.
+#   E2E_EGRESS_POSTURE — `open` on a worker that is wired to the mirrors and
+#                      keeps open egress on purpose: the dogfood DinD overlay
+#                      (Q1193), whose upstreams are reachable by design. The
+#                      battery then reports a skip and exits 0. Unset means
+#                      enforce; any other value fails, so a mistyped opt-out
+#                      runs nothing rather than skipping.
 #
 # Exit: 0 when every check passes, 1 when any fails or reports nothing.
 set -euo pipefail
@@ -240,6 +246,21 @@ main() {
 		echo "    no tight egress policy is in place. Nothing to enforce here."
 		return 0
 	fi
+	case "${E2E_EGRESS_POSTURE:-}" in
+	'') ;;
+	open)
+		echo "==> Q408 egress negatives: SKIPPED"
+		echo "    E2E_EGRESS_POSTURE=open: this worker is wired to the mirrors but keeps"
+		echo "    open egress on purpose (the DinD overlay), so its upstreams are"
+		echo "    reachable by design. Nothing to enforce here."
+		return 0
+		;;
+	*)
+		echo "ERROR: E2E_EGRESS_POSTURE is '${E2E_EGRESS_POSTURE}'; the only opt-out is" >&2
+		echo "       'open', and unset means enforce." >&2
+		return 1
+		;;
+	esac
 
 	local hub mirrored
 	hub="$(mirror_for docker.io)"

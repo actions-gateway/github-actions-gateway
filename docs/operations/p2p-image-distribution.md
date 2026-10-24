@@ -121,13 +121,29 @@ It is validated on GKE with containerd 2.2.7 and Kata from `kata-deploy`, and th
 **What it exposes, and to whom:**
 
 - **The peer ports listen on every node address, unauthenticated.** That is upload gRPC on 4000, then metrics, health, stats and piece storage on 4002 to 4006.
-  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one.
+  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one, and so did a DinD worker whose tenant adds an allow-all egress policy ([below](#on-privileged-dind)).
   So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.
 - **The proxy is bound to loopback**, so only the node's own containerd can use it, and it never reaches a worker.
 
 **Set three values before applying it:** the node selector and toleration in `client.yaml` (your worker nodes), the CIDR in `scheduler-from-nodes.yaml` (your node subnet), and the registries in the `dfinit` config.
 
 **Not yet measured:** UDP 4006, and more than one fresh-node startup order, where `dfinit` and `kata-deploy` race to edit containerd's config on a new node.
+
+### On privileged DinD
+
+The same recipe runs under the privileged-DinD worker, the fallback for jobs Kata cannot run, such as GPU jobs on hardware Kata does not support.
+It was validated once rather than on every release: one dogfood e2e run on 2026-10-24 (UTC), with `E2E_VARIANT=dind E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1`, was green.
+
+What the readings from that run showed:
+
+- **The job's pulls rode the mirrors.** All five instances served it: 161 content requests across 15 repositories, from the inner `dockerd`, the rewritten refs, helm and buildkit.
+- **The mirrors fetched through Dragonfly.** The seed peer sent 123 blob requests by its peer-to-peer rule and 374 direct.
+- **The node client served the worker pod's own image.** containerd sent 34 requests through it, the runner image's blobs among them, and 17 tasks were served by peers and 14 from the registry.
+- **A DinD worker reached the node client's upload port, 4000.** The tenant's allow-all egress policy adds to GAG's workload policy, so it admits node addresses too.
+  The seed peer's proxy held: the same worker timed out on it, because the seed's own ingress policy refuses it.
+
+So DinD with this recipe gives every job a path to an unauthenticated gRPC port on its node.
+That fits the trusted-CI use DinD is already limited to, and it is one more reason never to run untrusted code there.
 
 ## Operational notes
 

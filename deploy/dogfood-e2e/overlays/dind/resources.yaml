@@ -8,10 +8,10 @@
 # e2e pulls from Docker Hub / quay / registry.k8s.io / get.helm.sh, all CDN-fronted
 # (a CIDR allowlist would rot; an FQDN allowlist isn't enforceable on GKE DPv2 —
 # Q245). The durable hardening is the in-cluster pull-through mirror, which is
-# built (../../../registry-mirror) and wired on the Kata overlay, where this
-# policy is deliberately absent (Q408). It stays here because this variant is the
-# explicit trusted-CI fallback: privileged DinD was never a candidate for
-# untrusted code, so tightening its egress would buy nothing.
+# built (../../../registry-mirror) and wired on both overlays; on the Kata
+# overlay this policy is deliberately absent (Q408). It stays here because this
+# variant is the explicit trusted-CI fallback: privileged DinD was never a
+# candidate for untrusted code, so tightening its egress would buy nothing.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

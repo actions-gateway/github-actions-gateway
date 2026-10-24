@@ -94,13 +94,13 @@ E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
 # pool is exactly the cost Q231 keeps the e2e AGC off it to avoid. e2e-stop.sh
 # scales them back to zero.
 #
-# Idempotent server-side apply. The Kata overlay wires dockerd, the docker-client
-# refs, buildkit and helm to these instances (Q408 Phase 3,
-# deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml), and the dind overlay does
-# not, so both variants are safe to bring up either way: on the dind overlay,
-# whose allow-all e2e-open-egress remains, the mirror's additive policy is a
-# no-op and an unwired client simply reaches its upstream. On the Kata overlay it
-# is the whole of a worker's registry reach (Q408 Phase 4).
+# Idempotent server-side apply. Both overlays wire dockerd, the docker-client
+# refs, buildkit and helm to these instances (Q408 Phase 3 for Kata, Q1193 for
+# dind; deploy/dogfood-e2e/base/mirror-wiring.yaml), so a worker on either needs
+# them up. On the dind overlay, whose allow-all e2e-open-egress remains, the
+# mirror's additive policy is a no-op and the wiring is a route rather than a
+# fence. On the Kata overlay it is the whole of a worker's registry reach (Q408
+# Phase 4).
 # enforce_kata_egress — remove the allow-all `e2e-open-egress` policy when the
 # Kata overlay is selected (Q408 Phase 4).
 #

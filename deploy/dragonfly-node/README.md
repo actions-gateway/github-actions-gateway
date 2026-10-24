@@ -25,7 +25,7 @@ Docker Hub pulls then go to Docker Hub through Dragonfly, once per cluster rathe
 Leaving `docker.io` out of `dfinit.yaml` is unlikely to bring `mirror.gcr.io` back, since the table goes with the switch to `config_path` (measured only with `docker.io` listed); a `certs.d/docker.io/hosts.toml` naming it is the untested way back.
 
 **The peer ports listen on every node address.** Upload gRPC (4000), metrics (4002), health (4003), stats (4004) and piece storage (4005 TCP, 4006 UDP) are unauthenticated, and no NetworkPolicy can select a host-network listener.
-A Kata worker under the GMC's workload egress policy reached none of them; a pod with no egress policy reached all of the TCP ones.
+A Kata worker under the GMC's workload egress policy reached none of them; a pod with no egress policy reached all of the TCP ones, and so did a DinD worker on 4000, because its tenant's allow-all egress policy adds to the GMC's ([measured once](../../docs/operations/p2p-image-distribution.md#on-privileged-dind)).
 The proxy (4001) is bound to loopback, so only the node's own containerd reaches it.
 
 `scripts/dogfood/e2e-start.sh` applies it under `E2E_DRAGONFLY_NODES=1`, which the release gate's Dragonfly leg sets, and `e2e-stop.sh` deletes it.

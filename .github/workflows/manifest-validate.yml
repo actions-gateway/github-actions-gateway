@@ -228,7 +228,9 @@ jobs:
       # already the one that reads deploy/registry-mirror/**, and the check needs
       # only python3 — no helm, no kubeconform, no git history.
       - name: mirrors and their wiring name one endpoint set (make registry-mirror-wiring-check)
-        run: make registry-mirror-wiring-check
+        # --require-render for registry-mirror-render-check's reason below: the
+        # render half skips without kubectl, and CI must not.
+        run: scripts/manifest/check-registry-mirror-wiring.sh --require-render
       # The other half of the same tree's posture (Q1022): every mirror instance
       # behind the proxy that refuses GET /v2/_catalog, with its registry on
       # loopback. Same job for the same reason — it reads deploy/registry-mirror/**

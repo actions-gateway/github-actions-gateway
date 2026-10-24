@@ -171,6 +171,24 @@ set -e
 check 'no map skips cleanly' 0 "${skip_rc}"
 check 'no map says it skipped' 'yes' "$(grep -q 'SKIPPED' <<<"${skip_out}" && echo yes)"
 
+# A worker wired to the mirrors with open egress on purpose (the DinD overlay)
+# opts out by name. Only that name skips: a mistyped one must fail, because a
+# value that skipped would be indistinguishable from the posture holding.
+set +e
+open_out="$(REGISTRY_MIRRORS='docker.io=mirror-docker-io:5000' E2E_EGRESS_POSTURE=open main 2>&1)"
+open_rc=$?
+set -e
+check 'an open posture skips cleanly' 0 "${open_rc}"
+check 'an open posture says it skipped' 'yes' "$(grep -q 'SKIPPED' <<<"${open_out}" && echo yes)"
+
+set +e
+typo_out="$(REGISTRY_MIRRORS='docker.io=mirror-docker-io:5000' E2E_EGRESS_POSTURE=Open main 2>&1)"
+typo_rc=$?
+set -e
+check 'an unknown posture fails rather than skipping' 1 "${typo_rc}"
+check 'an unknown posture names the only opt-out' 'yes' \
+	"$(grep -q "the only opt-out is" <<<"${typo_out}" && echo yes)"
+
 # A map that omits an upstream the battery names is NOT a skip: it is a battery
 # that would have run without its control, which must fail loudly instead.
 set +e

@@ -204,7 +204,7 @@ The workload label selector is not cluster-specific: `actions-gateway/component=
 ## How the job is wired to these instances
 
 The clients live in the e2e job, and no two of them read the same configuration, so the wiring is in four places.
-The tenant's [`registry-mirror-wiring` ConfigMap](../dogfood-e2e/overlays/kata/mirror-wiring.yaml) holds the endpoint set once, in the two forms those clients can read:
+The tenant's [`registry-mirror-wiring` ConfigMap](../dogfood-e2e/base/mirror-wiring.yaml) holds the endpoint set once, in the two forms those clients can read:
 
 | Client | Reads | Covers |
 |---|---|---|
@@ -247,3 +247,4 @@ The posture is **enforced**: on the Kata lane a worker's registry path is these 
 The tenant's live rules carry zero allow-all, and [`scripts/e2e/egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh) passed all eight of its checks inside a green Kata run: three destinations that answered nothing (a mirrored upstream reached by its own hostname, the plain internet, and the metadata server), each against a control that did answer, so the silence is the policy rather than a worker with no network.
 It runs on every run of the lane rather than once, because a policy that stops selecting the worker is invisible in a green suite.
 The dind overlay keeps its open-egress policy: it is the explicit trusted-CI fallback, and privileged DinD was never a candidate for untrusted code.
+It carries the same wiring, so its pulls ride the mirrors and reach Dragonfly under `E2E_MIRROR_BACKEND=dragonfly`, but nothing stops a client that ignores it, and it sets `E2E_EGRESS_POSTURE=open` so the egress battery reports a skip rather than failing on reachable upstreams.

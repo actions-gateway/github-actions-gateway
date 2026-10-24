@@ -25,7 +25,7 @@ Each is a leg of the release gate, which dispatches the e2e matrix onto GAG runn
 |---|---|---|---|---|---|---|
 | **Untrusted pull requests** | Kata micro-VM | Tight: mirrors, GitHub and DNS only | Per tenant, ephemeral | Distribution | None | `kata` |
 | **Untrusted pull requests at scale** | Kata micro-VM | Tight | Per tenant, ephemeral | Dragonfly seed peer | Dragonfly node client, from the next candidate | `dragonfly`, isolation readings not gated |
-| **Trusted CI fallback** | Privileged Docker-in-Docker (DinD) | Open | None on the job's path | — | None | `dind` |
+| **Trusted CI fallback** | Privileged Docker-in-Docker (DinD) | Open | Per tenant, ephemeral: a route, not a fence | Distribution | None | `dind` |
 
 ### Untrusted pull requests
 
@@ -51,16 +51,30 @@ Those readings are recorded, not gated: a `finding` does not fail the release, a
 
 Privileged DinD with open egress, for clusters without nested virtualization and for jobs Kata cannot run.
 It is never a candidate for untrusted code.
-The registry mirrors are deployed beside it, but the DinD worker carries no mirror wiring, so its pulls go to the upstream registries directly.
+Its job's pulls go through the same registry mirrors as Kata's, but with open egress nothing stops a client that skips them, so the in-job egress probes report a skip here rather than a pass.
 The worker shape is the `privileged-dind` entry in the [runner template library](runner-template-library.md).
 
 ## Validated once
 
-None yet.
-
-The first candidate is DinD with the Dragonfly back end and node client, for GPU fleets that land on DinD because AMD GPUs do not run under Kata today, which needs the DinD overlay wired to the mirrors before it can run ([Q1193](../queue/Q1193.md)).
-
 An entry here records the profile's six axes, the date, the dogfood run, the readings it took, and what would prompt a re-run.
+
+| Profile | Worker isolation | Egress posture | Mirror topology | Mirror back end | Node-layer P2P | Validated |
+|---|---|---|---|---|---|---|
+| **DinD at scale** | Privileged DinD | Open | Per tenant, ephemeral | Dragonfly seed peer | Dragonfly node client | 2026-10-24 |
+
+### DinD at scale
+
+The trusted CI fallback with Dragonfly in both places, for GPU fleets that land on DinD because AMD GPUs do not run under Kata today.
+The CNI is the dogfood cluster's, GKE Dataplane V2.
+It ran once, in [e2e run 40047669565](https://github.com/actions-gateway/github-actions-gateway/actions/runs/40047669565) on 2026-10-24 (UTC), which was green; the readings are in [p2p-image-distribution.md § On privileged DinD](p2p-image-distribution.md#on-privileged-dind):
+
+- **The job's pulls rode all five mirrors**, and the seed peer took 123 blob requests by its P2P rule.
+- **The node client served the worker image**, 17 tasks of it from peers.
+- **The seed peer's proxy held**: a worker timed out on it.
+- **A worker reached the node client's upload port, 4000**, because the tenant's open egress admits node addresses.
+  On this profile every job has a path to that unauthenticated port, which is one more reason it stays trusted-only.
+
+Re-run it when the DinD overlay's mirror wiring, the `privileged-dind` template's daemon, or the Dragonfly pins change.
 
 ## Combinations not validated
 

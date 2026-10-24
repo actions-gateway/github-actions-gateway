@@ -250,7 +250,7 @@ main() {
 	if ((failed)); then
 		echo "Q408 Phase 3 validation: FAIL — at least one instance served no pull," >&2
 		echo "so a client is still reaching its upstream directly. Read its wiring in" >&2
-		echo "deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml." >&2
+		echo "deploy/dogfood-e2e/base/mirror-wiring.yaml." >&2
 		return 1
 	fi
 	echo "Q408: PASS — every declared instance served content."

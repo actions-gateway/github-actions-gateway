@@ -624,10 +624,11 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 8. **Run the e2e matrix again on privileged DinD (Q1159).** `scripts/dogfood/e2e-stop.sh`, then `E2E_VARIANT=dind scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
    Step 2 runs the Kata variant, the one untrusted pull requests need, so without this the shipped `privileged-dind` template reaches operators with no job ever having run on it; 1.9 moved its daemon from `docker:27-dind` to `docker:28-dind` that way.
    It runs last because the two variants share one namespace, RunnerSet and node pool, and the sizing and capacity legs read the Kata tenant's state.
-   The mirror census is Kata-only: nothing on the DinD tenant reaches a mirror.
+   The DinD tenant pulls through the mirrors too, so a mirror outage can redden this leg as well as step 2's: the rewritten refs have no fallback to their upstream.
+   The mirror census is still Kata-only: the DinD tenant keeps open egress, so a client there that skips the mirrors succeeds anyway and its census would be a partial set.
 9. **Run the e2e matrix on Kata with the Dragonfly mirror back end (Q1160).** `scripts/dogfood/e2e-stop.sh`, then `E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1 scripts/dogfood/e2e-start.sh`, then step 2's dispatch and watch.
    The mirrors can fetch through a Dragonfly seed peer instead of from their upstreams directly (Dragonfly is a peer-to-peer image distribution system); without this leg every gate run tests the default Distribution back end alone, and the Dragonfly one has run only on kind.
-   It is Kata because only the Kata tenant's egress is mirror-only; on DinD a worker reaches upstreams itself, so the back end would not be on the path under test.
+   It is Kata because only the Kata tenant's egress is mirror-only; DinD is wired to the mirrors but keeps open egress, so a pull that skipped the back end would still succeed there.
    It also installs Dragonfly's node client on the e2e pool ([`deploy/dragonfly-node/`](../../deploy/dragonfly-node/README.md)), so the kubelet pulls worker images through it: this leg is the one full e2e run that recipe gets.
    `E2E_DRAGONFLY_NODES=0` runs the leg without it.
    A red matrix is a red gate.
