@@ -3216,7 +3216,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 
 - **A genuine job failure.** The job ran and failed on its own merits; nothing was disrupted, and re-running it would mask real breakage.
 - **A cancelled run.** A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job *is* re-run; see [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)).
-- **A node that goes `NotReady` and keeps its Node object.** The taint manager stamps `DeletionByTaintManager` and deletes the worker gracefully without failing it, and the unreachable kubelet never finishes that delete, so the pod stays `Running` and no arm fires.
+- **A node that goes `NotReady` and keeps its Node object.** The taint manager stamps `DeletionByTaintManager` and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays `Running` and no arm fires.
   Recovery starts only once the Node object is deleted: PodGC then fails the pod with `DeletionByPodGC` and the `node_shutdown` row above re-runs it.
 - **The AGC's own reaper deletions** — the lifetime cap (`maxWorkerLifetime`), the stuck-`Running` reap deadline, orphan cleanup.
   Each is stamped `actions-gateway.com/deletion-reason` before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
