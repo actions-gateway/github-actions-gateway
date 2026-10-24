@@ -176,6 +176,26 @@ func (r *EgressProxyReconciler) referrerToEgressProxies(ctx context.Context, obj
 	for _, ref := range remoteProxyRefsOf(obj) {
 		reqs = append(reqs, ctrl.Request{NamespacedName: ref})
 	}
+	// A gateway's proxyFailureAttribution opts in its whole namespace (Q1184), so it
+	// moves the ports of every pool any referrer there names, not only its own.
+	if _, ok := obj.(*gmcv2alpha1.ActionsGateway); ok {
+		var runnerSets gmcv2alpha1.RunnerSetList
+		if err := r.List(ctx, &runnerSets, client.InNamespace(obj.GetNamespace())); err == nil {
+			for i := range runnerSets.Items {
+				for _, ref := range remoteProxyRefsOf(&runnerSets.Items[i]) {
+					reqs = append(reqs, ctrl.Request{NamespacedName: ref})
+				}
+			}
+		}
+		var gateways gmcv2alpha1.ActionsGatewayList
+		if err := r.List(ctx, &gateways, client.InNamespace(obj.GetNamespace())); err == nil {
+			for i := range gateways.Items {
+				for _, ref := range remoteProxyRefsOf(&gateways.Items[i]) {
+					reqs = append(reqs, ctrl.Request{NamespacedName: ref})
+				}
+			}
+		}
+	}
 	return reqs
 }
 

@@ -72,6 +72,7 @@ const (
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",message="minReplicas must not exceed maxReplicas"
 // +kubebuilder:validation:XValidation:rule="!has(self.destinationFQDNs) || self.destinationFQDNs.size() == 0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == 'FQDN' || self.egressPolicyMode == 'CiliumFQDN' || self.egressPolicyMode == 'CalicoFQDN'))",message="destinationFQDNs requires an FQDN egressPolicyMode (FQDN, or deprecated CiliumFQDN/CalicoFQDN)"
+// +kubebuilder:validation:XValidation:rule="!has(self.failureAttribution) || self.failureAttribution != 'PerConsumerPort' || !has(self.sharing) || !has(self.sharing.allowedNamespaces) || self.sharing.allowedNamespaces.size() <= 32",message="sharing.allowedNamespaces must list at most 32 namespaces while failureAttribution is PerConsumerPort"
 type EgressProxySpec struct {
 	// MinReplicas is the floor of the proxy pool's HPA.
 	//
@@ -172,6 +173,39 @@ type EgressProxySpec struct {
 	// +kubebuilder:validation:Enum=Off;Connections;ConnectionsWithSource
 	// +kubebuilder:default=Off
 	AuditLogging string `json:"auditLogging,omitempty"`
+
+	// FailureAttribution selects whether this pool keeps the CONNECT failures of
+	// the namespaces that consume it, for each namespace's AGC to read and attribute
+	// to the job that hit them. Disabled (the default) keeps none.
+	//
+	// PerConsumerPort gives each consuming namespace its own CONNECT port on the
+	// pool's Service, and the proxy records which namespace a failure came from by
+	// the port it arrived on, never from anything in the request. A namespace gets a
+	// port only once one of its own ActionsGateways sets proxyFailureAttribution:
+	// PerJob; every other namespace, this pool's own included, stays on the shared
+	// port, where nothing is recorded. The pool's ingress NetworkPolicy admits each
+	// namespace on its own port only.
+	//
+	// Only failures are kept: a policy denial or an upstream dial failure, with the
+	// client address, the time, the capped destination host and port, and for a
+	// dial failure its class rather than the error text. They are held in memory for
+	// minutes, partitioned per namespace and capped per source address, and are lost
+	// when a replica restarts; nothing is written to disk or to the log. Each AGC
+	// reads only its own namespace's records, over a dedicated mutual-TLS listener
+	// with its own certificate authority.
+	//
+	// While it is PerConsumerPort, sharing.allowedNamespaces is capped at 32, which
+	// bounds the ports and the buffer. Granting or revoking a namespace's port is a
+	// rolling restart of the pool, as is the certificate authority's renewal.
+	// Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184).
+	//
+	// Not yet effective: the GMC provisions the ports and the listener, but no
+	// consumer is moved onto its port and no AGC reads the records yet.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Disabled;PerConsumerPort
+	// +kubebuilder:default=Disabled
+	FailureAttribution string `json:"failureAttribution,omitempty"`
 
 	// NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy
 	// (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY

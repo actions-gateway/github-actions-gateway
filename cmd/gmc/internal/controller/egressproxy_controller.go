@@ -155,11 +155,22 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.ensureMetricsCerts(ctx, ep); err != nil {
 		return &provisioningError{step: "ensure metrics TLS certs", err: err}
 	}
-	if err := r.applyDeployment(ctx, ep, buildEgressProxyDeployment(ep, r.ProxyImage, gitHubHosts)); err != nil {
+	ports, attributionCA, err := r.reconcileAttribution(ctx, ep)
+	if err != nil {
+		return &provisioningError{step: "reconcile failure attribution", err: err}
+	}
+	dep := buildEgressProxyDeployment(ep, r.ProxyImage, gitHubHosts)
+	applyAttributionToDeployment(dep, ep, ports, attributionCA)
+	if err := r.applyDeployment(ctx, ep, dep); err != nil {
 		return &provisioningError{step: "apply proxy Deployment", err: err}
 	}
-	if err := r.applyService(ctx, ep, buildEgressProxyService(ep)); err != nil {
+	svc := buildEgressProxyService(ep)
+	applyAttributionToService(svc, ports)
+	if err := r.applyService(ctx, ep, svc); err != nil {
 		return &provisioningError{step: "apply proxy Service", err: err}
+	}
+	if err := r.reconcileAttributionService(ctx, ep, ports); err != nil {
+		return &provisioningError{step: "reconcile attribution Service", err: err}
 	}
 	if err := r.reconcileHPA(ctx, ep); err != nil {
 		return &provisioningError{step: "reconcile proxy HPA", err: err}
@@ -167,7 +178,9 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.applyPDB(ctx, ep, buildEgressProxyPDB(ep)); err != nil {
 		return &provisioningError{step: "apply proxy PDB", err: err}
 	}
-	if err := r.applyNetworkPolicy(ctx, ep, buildEgressProxyNetworkPolicy(ep, githubCIDRs)); err != nil {
+	np := buildEgressProxyNetworkPolicy(ep, githubCIDRs)
+	applyAttributionToNetworkPolicy(np, ep, ports)
+	if err := r.applyNetworkPolicy(ctx, ep, np); err != nil {
 		return &provisioningError{step: "apply proxy NetworkPolicy", err: err}
 	}
 	if err := r.reconcileFQDNPolicy(ctx, ep, gitHubHosts); err != nil {
