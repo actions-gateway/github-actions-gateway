@@ -1396,6 +1396,8 @@
       
         
       
+        
+      
     
     
     
@@ -1877,6 +1879,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1932,10 +1962,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -1953,8 +1983,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2598,23 +2628,29 @@
 
 
 <h1 id="updatecli-fails-every-run-github_token-cannot-write-workflow-files">updatecli fails every run: GITHUB_TOKEN cannot write workflow files<a class="headerlink" href="#updatecli-fails-every-run-github_token-cannot-write-workflow-files" title="Permanent link">&para;</a></h1>
-<p>The scheduled <code>updatecli</code> workflow has concluded <code>failure</code> on all 16 of its runs, every Monday from 2026-06-22 to 2026-10-05, and has opened one bump PR in that time: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1695">#1695</a>, Karpenter.
-Eight of the ten manifests under <code>updatecli.d/</code> write a workflow file; Karpenter's and cluster-autoscaler's do not, and cluster-autoscaler's pin is already current.
-Measured 2026-10-09 with <code>gh run list --workflow updatecli.yml</code>.</p>
-<p>Two causes are live in the latest run (37327993420, 2026-10-05):</p>
+<p>The scheduled <code>updatecli</code> workflow has concluded <code>failure</code> on every run from 2026-06-22 through 2026-10-19, and has opened one bump PR in that time: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1695">#1695</a>, Karpenter.
+Measured 2026-10-23 with <code>gh run list --workflow updatecli.yml</code>.</p>
+<p><strong>Every pin in a workflow file is refused at push.</strong> The job hands updatecli <code>secrets.GITHUB_TOKEN</code>, and GitHub refuses that token any write under <code>.github/workflows/</code>: run 37327993420 (2026-10-05) logs 48 <code>refusing to allow a GitHub App to create or update workflow … without workflows permission</code> lines.
+The <code>workflows</code> permission is not one the job's <code>permissions:</code> block can grant <code>GITHUB_TOKEN</code>, so no edit inside the workflow fixes this.
+8 of the 10 manifests under <code>updatecli.d/</code> write one of six workflows (<code>e2e-reusable</code>, <code>autoscaler-drift</code>, <code>integration-test</code>, <code>publish</code>, <code>security-scan</code>, <code>unit-test</code>), so kind, Calico, shellcheck, cosign, syft, buildkit, polaris and envtest have never been bumped by the lane that owns them.
+<a href="../../development/dependency-updates/">dependency-updates.md</a> tells a maintainer to watch for "a silent green with no PR for a long-stale pin", and this run is never green, so that advice does not reach it.</p>
+<p><strong>Decision: move each workflow pin into a file updatecli may write; do not give updatecli a credential carrying <code>workflows: write</code>.</strong> The bump job can already push any non-workflow file with <code>GITHUB_TOKEN</code>, and every bump still lands only through a PR a maintainer merges, so moving the pins adds no capability to any credential.
+A GitHub App or fine-grained token with <code>workflows: write</code> would fix the push in one line and clear the bump PRs' <code>action_required</code> hold, at the price of a stored secret that can rewrite <code>.github/workflows/</code> on any branch; dependency-updates.md already declines a stored App token for the hold alone.</p>
+<p><strong>What the move touches</strong> (measured 2026-10-23):</p>
 <ul>
-<li><strong>Every pin in a workflow file is refused at push.</strong> The job hands updatecli <code>secrets.GITHUB_TOKEN</code>, and GitHub refuses that token any write under <code>.github/workflows/</code>: the log carries 48 <code>refusing to allow a GitHub App to create or update workflow … without workflows permission</code> lines across <code>e2e-reusable.yml</code>, <code>autoscaler-drift.yml</code>, <code>publish.yml</code>, <code>integration-test.yml</code> and <code>security-scan.yml</code>.
-  The <code>workflows</code> permission is not one the job's <code>permissions:</code> block can grant <code>GITHUB_TOKEN</code>, so no edit inside the workflow fixes this.</li>
-<li><strong>The cosign manifest 404s.</strong> <code>updatecli.d/cosign.yaml</code>'s <code>shaDarwinAmd64</code> source exits 22 on six <code>curl: (22) The requested URL returned error: 404</code> lines, so that pipeline fails before it reaches a push.
-  The log does not print which URL 404'd; the bootstrap download of the pinned <code>v2.5.2</code> just before it succeeded, so the pin itself still resolves.</li>
+<li>One pins file (for example <code>ci/pins.env</code>), and the 8 manifests retargeted to it.
+  Pins carried by several workflows today collapse to one copy: kind and syft in two each, buildkit in three (<code>e2e-reusable</code>, <code>publish</code>, <code>security-scan</code>).</li>
+<li>Each job using a pin loads the file into <code>$GITHUB_ENV</code> after <code>actions/checkout</code>, since a workflow- or job-level <code>env:</code> cannot read a file; a small composite action keeps that to one line per job.</li>
+<li><code>cosign-release</code> is an action input, so it reads a step output instead of a literal: <code>.github/workflows/publish.yml:422:cosign-release: v2.5.2</code> and <code>.github/workflows/publish.yml:586:cosign-release: v2.5.2</code>.</li>
+<li>Two gates parse pins out of workflow files and must retarget: <code>scripts/ci/check-cosign-pin.sh</code> (reads <code>publish.yml</code>), and <code>scripts/ci/check-tools.sh</code>'s <code>@ci:&lt;VAR&gt;</code> floor (<code>ci_pin</code>, an <code>awk</code> over <code>.github/workflows/*.yml</code>).
+  <code>ci_pin</code> fails closed, so a missed retarget reddens <code>make doctor</code> rather than passing: an unresolved floor is counted as a broken registry row and added to the exit status (<code>scripts/ci/check-tools.sh:391:exit $(( missing_required + broken_floors ))</code>).
+  The yamllint and kubeconform floors (<code>@ci:YAMLLINT_VERSION</code>, <code>@ci:KUBECONFORM_VERSION</code>) have no updatecli manifest and keep their pins in the workflows, so the retargeted <code>ci_pin</code> reads both the pins file and the workflows.</li>
+<li>The heavy jobs' path filters key on their own workflow files (for example <code>.github/workflows/unit-test.yml:137:- '.github/workflows/unit-test.yml'</code> and <code>.github/workflows/e2e-calico.yml:71:- '.github/workflows/e2e-reusable.yml'</code>), so each filter that guards a lane using a moved pin must also list the pins file.
+  Otherwise a bump that touches only the pins file goes green without running the lane it bumps.</li>
+<li>The bump PRs' <code>action_required</code> hold stays, and the maintainer still releases them with <strong>Approve and run</strong>.</li>
 </ul>
-<p>So kind, Calico, shellcheck, cosign, syft, buildkit, polaris and envtest have never been bumped by the lane that owns them.
-<a href="../../development/dependency-updates/">dependency-updates.md</a> tells a maintainer to watch for "a silent green with no PR for a long-stale pin", and this run is never green, so that advice does not reach it.
-<a href="../Q944/">Q944</a> is the neighbouring gap, that no manifest can be dry-run locally; this row owns the measurement of the scheduled runs.</p>
-<p><strong>Ask:</strong> what turns on the maintainer is which credential may write workflow files unattended.
-A GitHub App token or a fine-grained token carrying <code>workflows: write</code> fixes the first cause in one line, and widens what an automated credential can change to the files that decide what runs with the repo's secrets.
-The alternative keeps the token as it is and moves each workflow pin into a file updatecli may write (a <code>scripts/</code> env file, or a <code>vars.mk</code> the workflows read), which is more edits and no new credential.
-The cosign 404 is a manifest defect either way and needs no decision.</p>
+<p>The first cosign bump this unblocks moves the signer in <code>publish.yml</code> from v2.5.2 to v3, since <code>updatecli.d/cosign.yaml</code> tracks the latest release with no major constraint; review that PR as a major bump.
+<a href="../Q944/">Q944</a> is the neighbouring gap, that no manifest can be dry-run locally.</p>
 
 
 

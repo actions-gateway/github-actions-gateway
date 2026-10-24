@@ -1396,6 +1396,8 @@
       
         
       
+        
+      
     
     
     
@@ -1877,6 +1879,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1932,10 +1962,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -1953,8 +1983,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2598,12 +2628,19 @@
 
 
 <h1 id="attribute-egress-proxy-failures-to-the-job-that-hit-them">Attribute egress proxy failures to the job that hit them<a class="headerlink" href="#attribute-egress-proxy-failures-to-the-job-that-hit-them" title="Permanent link">&para;</a></h1>
-<p>Two retry uses need to know which job's pod a proxy failure came from: an upstream dial failure as a retry class, and a policy denial as a futile retry whose Event names the blocked host.
-Per-job identity is unbounded for metrics and per-job egress is sensitive, so this is a bespoke endpoint, not a label on Q1178's metrics: each proxy replica keeps recent failures by source in memory for minutes, and the tenant's single AGC pulls them with a cursor over the proxy's existing mTLS port, then joins them to jobs.
-Separate from Q1178, which counts outcomes by destination for operators and holds no per-job data.
-Today the proxy logs a denial or dial failure with the host but not the client, and per-job records exist only behind the opt-in <code>ConnectionsWithSource</code> audit mode (Q986).
-<strong>Ask:</strong> whether failure-only, in-memory attribution is acceptable against <code>05-security.md</code>, since it is new use of per-job egress data even though nothing is retained.
-Costs: attribution needs the pod's lifetime as well as its IP, and the AGC needs a client certificate the proxy's metrics port accepts, which is unverified.</p>
+<p>Build <a href="../../design/05-security/#proxy-failure-attribution">05-security.md § Proxy failure attribution</a>, which settles the posture: off by default on two switches (one on the <code>EgressProxy</code>, one on the consuming <code>ActionsGateway</code>), failures only, held for minutes in an in-memory buffer partitioned by consumer namespace and capped per source address.
+Two retry uses consume it: an upstream dial failure as a retry class, and a policy denial as a futile retry whose Event names the blocked host.
+Separate from Q1178, which counts outcomes by destination for operators and holds no per-job data.</p>
+<p>The proxy has no client identity on the CONNECT path today: it reads no <code>Proxy-Authorization</code> and requires a client certificate only on its metrics listener (<code>cmd/proxy/proxy.go:596</code>), and its denial and dial-failure lines log the host and not the client (<code>cmd/proxy/proxy.go:713</code>, <code>:721</code>).
+So the proxy learns the consumer from the port a connection arrives on: the existing port stays unattributed and records nothing, and a namespace gets a port of its own on the pool's one Service only when one of its own gateways opts in, admitted by NetworkPolicy (by container port number) to that namespace only, with the GMC moving that namespace's <code>HTTPS_PROXY</code> to it.
+That keeps a pool edit from rolling gateways in any namespace where no gateway has opted in, and keeps a namespace that has not opted in from having its failures served to another's certificate.
+One Service, not one per consumer, because the proxy's serving certificate lists a single Service's DNS names (<code>cmd/gmc/internal/controller/egressproxy_cert.go:34</code>) and per-consumer Services would reissue it on every grant change.</p>
+<p>The AGC reads its records over a dedicated mTLS listener with its own CA, presenting a GMC-minted client certificate that names its namespace.
+The metrics port is not usable: its ingress admits only <code>metrics=enabled</code> namespaces (<code>metricsScrapeIngressRule</code>, L-8), and <code>&lt;ep&gt;-metrics-client</code> lives in the proxy's namespace for the monitoring stack.
+The AGC attributes a record to a worker only inside the window that pod held the address, from its pod informer, because worker addresses are reused.</p>
+<p><strong>Before it ships:</strong> measure on the Calico lane that per-port ingress is enforced, with a worker in one namespace refused on another consumer's port (the kindnet lane cannot show it: its enforcer does not drop NetworkPolicy negatives, and every enforcement spec skips there); and cap <code>spec.sharing.allowedNamespaces</code>, which has no maximum (<code>api/v2/shared_types.go:236</code>), at admission when attribution is on.
+Open implementation questions: how the proxy learns its port map without a rollout on every grant change, and how the AGC reaches each replica's buffer.
+Q1183 is the consumer and is blocked, so nothing reads this data until it lands.</p>
 
 
 

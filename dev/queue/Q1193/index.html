@@ -1396,6 +1396,8 @@
       
         
       
+        
+      
     
     
     
@@ -1877,6 +1879,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1932,10 +1962,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -1953,8 +1983,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2599,7 +2629,7 @@
 
 <h1 id="validate-a-dind--dragonfly-profile-once-job-pulls-through-the-mirrors">Validate a DinD + Dragonfly profile once, job pulls through the mirrors<a class="headerlink" href="#validate-a-dind--dragonfly-profile-once-job-pulls-through-the-mirrors" title="Permanent link">&para;</a></h1>
 <p>DinD is the fallback for workloads Kata cannot run yet, GPUs above all: AMD GPUs do not work under Kata today, so a GPU fleet can land on DinD with Dragonfly for its large images.
-That pairing runs in production elsewhere with ARC, so it is a profile users will ask about, worth validating once rather than adding to the release gate (<a href="../Q1194/">Q1194</a>'s validated-once tier).</p>
+That pairing runs in production elsewhere with ARC, so it is a profile users will ask about, worth validating once rather than adding to the release gate (the validated-once tier of <a href="../../operations/reference-architectures/#validated-once">reference-architectures.md</a>).</p>
 <p>It has two halves, in different states:</p>
 <ul>
 <li><strong>The worker pod's own image.</strong> Q540's node client runs per node and does not depend on the runtime, and on dogfood the DinD and Kata tenants share the e2e node pool, so it should already serve the DinD worker image.
@@ -2608,7 +2638,7 @@ That pairing runs in production elsewhere with ARC, so it is a profile users wil
 </ul>
 <p>Decided 2026-10-23: route the inner <code>dockerd</code> through the in-cluster mirrors, which already fetch through Dragonfly under <code>E2E_MIRROR_BACKEND=dragonfly</code>, by giving the DinD overlay the Kata overlay's <code>daemon.json</code> mirror wiring.
 Rejected: pointing <code>dockerd</code> at the node's <code>dfdaemon</code> directly, the usual ARC shape, because it means binding the node proxy to the node address, and that proxy forwards to any host, so every pod on the node would gain an open egress proxy.</p>
-<p>Done when the DinD overlay carries the wiring with <code>make registry-mirror-wiring-check</code> covering it, one dogfood run with <code>E2E_VARIANT=dind E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1</code> is green, and the Dragonfly readings show the mirrors serving the DinD job's pulls and the node client serving its pod image, recorded where Q1194's page can cite them.
+<p>Done when the DinD overlay carries the wiring with <code>make registry-mirror-wiring-check</code> covering it, one dogfood run with <code>E2E_VARIANT=dind E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1</code> is green, and the Dragonfly readings show the mirrors serving the DinD job's pulls and the node client serving its pod image, recorded as an entry under <a href="../../operations/reference-architectures/#validated-once">reference-architectures.md § Validated once</a>.
 <code>e2e-start.sh</code> does not reject DinD with the Dragonfly back end today, but nothing has run that combination.</p>
 
 

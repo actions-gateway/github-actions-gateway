@@ -1396,6 +1396,8 @@
       
         
       
+        
+      
     
     
     
@@ -1877,6 +1879,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1932,10 +1962,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -1953,8 +1983,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2907,7 +2937,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <tr>
 <td><a href="../../queue/Q1178/">Q1178</a>, <a href="../../queue/Q1184/">Q1184</a></td>
 <td>The proxy's outcome metrics, and per-job failure attribution</td>
-<td>Q1184 needs a security review</td>
+<td>Q1184: per-port ingress measured on the Calico lane</td>
 </tr>
 </tbody>
 </table>
@@ -3288,7 +3318,7 @@ It cannot see an HTTP status inside TLS, so a 403 or 429 from the upstream is in
 </tbody>
 </table>
 <p>Two constraints shape every row.
-<strong>Attribution is a retention decision.</strong> Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so it needs a security review against <a href="../../design/05-security/">05-security.md</a> before anything ships.
+<strong>Attribution is a retention decision.</strong> Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so its design is in <a href="../../design/05-security/#proxy-failure-attribution">05-security.md § Proxy failure attribution</a>: off by default, failures only, in memory, and attributed to a consumer by the port it arrived on.
 <strong>Destination labels have bounded cardinality only if they name the allowlist entry that matched</strong>, never the raw host.</p>
 <p><a href="../../queue/Q1178/">Q1178</a> labels the proxy's outcome metrics, <a href="../../queue/Q1184/">Q1184</a> attributes failures to jobs, and the uses beyond retry are non-commitments in <a href="../../design/appendix-g-future-enhancements/#g18-the-egress-proxy-as-a-platform-sensor">G.18</a>.</p>
 <h3 id="unclassified-retry-not-scheduled">Unclassified retry (not scheduled)<a class="headerlink" href="#unclassified-retry-not-scheduled" title="Permanent link">&para;</a></h3>

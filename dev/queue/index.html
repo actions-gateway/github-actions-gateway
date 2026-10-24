@@ -1396,6 +1396,8 @@
       
         
       
+        
+      
     
     
     
@@ -1877,6 +1879,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1932,10 +1962,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -1953,8 +1983,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2776,10 +2806,10 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1166/">Q1166</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/updatecli.yml">updatecli fails every run: GITHUB_TOKEN cannot write workflow files</a></td>
-<td><code>ci</code> <code>bug</code> <code>open-question</code></td>
+<td><code>ci</code> <code>bug</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>The scheduled <code>updatecli</code> workflow has concluded <code>failure</code> on all 16 of its runs, every Monday from 2026-06-22 to 2026-10-05, and has …</td>
+<td>M</td>
+<td>The scheduled <code>updatecli</code> workflow has concluded <code>failure</code> on every run from 2026-06-22 through 2026-10-19, and has opened one bump PR in …</td>
 </tr>
 <tr>
 <td><a href="Q1119/">Q1119</a></td>
@@ -3032,10 +3062,10 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1184/">Q1184</a></td>
 <td><a href="../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Attribute egress proxy failures to the job that hit them</a></td>
-<td><code>feature</code> <code>security</code> <code>open-question</code></td>
+<td><code>feature</code> <code>security</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>Two retry uses need to know which job's pod a proxy failure came from: an upstream dial failure as a retry class, and a policy denial as a …</td>
+<td>L</td>
+<td>Build <a href="../design/05-security/#proxy-failure-attribution">05-security.md § Proxy failure attribution</a>, which settles the posture: off by …</td>
 </tr>
 <tr>
 <td><a href="Q1130/">Q1130</a></td>
@@ -4084,14 +4114,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Q540 built the node layer on Dragonfly (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a>), which pre-heats nodes and …</td>
-</tr>
-<tr>
-<td><a href="Q1194/">Q1194</a></td>
-<td>Reference-architecture profiles page: gated vs validated-once</td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Users choose a shape across several axes (worker isolation, egress posture, mirror topology, mirror back end, node-layer P2P, CNI), and no …</td>
 </tr>
 <tr>
 <td><a href="Q1193/">Q1193</a></td>
