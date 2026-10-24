@@ -52,15 +52,13 @@ const (
 const nodePressureEvictionPrefix = "The node was low on resource: memory."
 
 // armNodeMemoryPressure raises the memory threshold on the node running the worker and
-// returns an idempotent restore, also registered with DeferCleanup. Call the restore as
-// soon as the eviction is observed, so the node is back to normal before the re-run's
-// worker needs scheduling.
+// returns its idempotent restore, which is also registered with DeferCleanup. Call the
+// restore as soon as the eviction is observed, so the node is back to normal before the
+// re-run's worker needs scheduling.
 func armNodeMemoryPressure(prefix, ns, podName string) (restore func()) {
 	GinkgoHelper()
 	node := podNodeName(ns, podName)
-	threshold, undo := applyNodeMemoryPressureThreshold(node)
-	restore = sync.OnceFunc(undo)
-	DeferCleanup(restore)
+	threshold, restore := applyNodeMemoryPressureThreshold(node)
 	AddReportEntry(prefix+" node-pressure lever",
 		fmt.Sprintf("node %s, memory.available hard threshold %dMi, fill %dMi", node, threshold, nodePressureFillMiB))
 	return restore
@@ -105,19 +103,21 @@ func kindNodeExec(node, script string) (string, error) {
 
 // applyNodeMemoryPressureThreshold sets node's kubelet memory.available hard threshold
 // just under its free memory and restarts the kubelet, returning the threshold set and
-// a restore func that puts the original config back. Register the restore with
-// DeferCleanup as soon as this returns; a run killed before it ran leaves the backup on
-// the node, and the next call restores it first.
+// an idempotent restore that puts the original config back. The restore is registered
+// with DeferCleanup before the config is touched, so a failure partway through the patch
+// still restores it; a run killed outright leaves the backup on the node, and the next
+// call restores it first.
 func applyNodeMemoryPressureThreshold(node string) (thresholdMiB int64, restore func()) {
 	GinkgoHelper()
+	restoreScript := fmt.Sprintf(
+		"if [ -f %[2]s ]; then cp %[2]s %[1]s && rm %[2]s && systemctl restart kubelet; fi", kubeletConfigPath, kubeletConfigBackupPath)
 
 	out, err := utils.Run(exec.Command("docker", "inspect", "-f", "{{.State.Running}}", node)) //nolint:gosec // G204: node is the API server's node name.
 	Expect(err).NotTo(HaveOccurred(),
 		"node %s has no container of that name; the node-pressure lever needs a kind cluster", node)
 	Expect(strings.TrimSpace(out)).To(Equal("true"), "kind node container %s is not running", node)
 
-	_, err = kindNodeExec(node, fmt.Sprintf(
-		"if [ -f %[2]s ]; then cp %[2]s %[1]s && rm %[2]s && systemctl restart kubelet; fi", kubeletConfigPath, kubeletConfigBackupPath))
+	_, err = kindNodeExec(node, restoreScript)
 	Expect(err).NotTo(HaveOccurred(), "restore a kubelet config a previous run left patched on %s", node)
 	waitForKubeletHealthy(node)
 
@@ -128,18 +128,19 @@ func applyNodeMemoryPressureThreshold(node string) (thresholdMiB int64, restore 
 	// kind's kubelet config carries an evictionHard block (its nodefs/imagefs entries),
 	// so the threshold is inserted as its first entry; the grep is what proves it landed.
 	entry := fmt.Sprintf("memory.available: %dMi", thresholdMiB)
+	restore = sync.OnceFunc(func() {
+		_, err := kindNodeExec(node, restoreScript)
+		Expect(err).NotTo(HaveOccurred(), "restore node %s's kubelet config", node)
+		waitForKubeletHealthy(node)
+	})
+	DeferCleanup(restore)
 	_, err = kindNodeExec(node, fmt.Sprintf(
 		`cp %[1]s %[2]s && sed -i 's/^evictionHard:$/evictionHard:\n  %[3]s/' %[1]s && grep -q '^  %[3]s$' %[1]s && systemctl restart kubelet`,
 		kubeletConfigPath, kubeletConfigBackupPath, entry))
 	Expect(err).NotTo(HaveOccurred(), "set %s on node %s", entry, node)
 	waitForKubeletHealthy(node)
 
-	return thresholdMiB, func() {
-		_, err := kindNodeExec(node, fmt.Sprintf(
-			"cp %[2]s %[1]s && rm %[2]s && systemctl restart kubelet", kubeletConfigPath, kubeletConfigBackupPath))
-		Expect(err).NotTo(HaveOccurred(), "restore node %s's kubelet config", node)
-		waitForKubeletHealthy(node)
-	}
+	return thresholdMiB, restore
 }
 
 // waitForKubeletHealthy waits for a restarted kubelet to answer healthz through the
