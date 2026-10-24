@@ -123,7 +123,8 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 	fctx := context.WithoutCancel(ctx)
 	go func() {
 		defer close(done)
-		p.forceCancelAbandonedRun(fctx, target, owner, repo, runID, evictionTierScaleSet, log)
+		p.forceCancelAbandonedRun(fctx, target, owner, repo, runID, evictionTierScaleSet, log,
+			rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName]})
 	}()
 	return done
 }

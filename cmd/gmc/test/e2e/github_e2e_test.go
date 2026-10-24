@@ -1316,10 +1316,9 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			"the AGC saw the eviction but had no run identity to recover with. Log:\n%s", agcLog)
 
 		By("asserting the retry budget was spent exactly once, on the scale-set tier")
-		// The Q106 sharded-reservation invariant again, and additionally the tier label:
-		// the budget is keyed by run ID alone and shared across tiers, so a recovery
-		// attributed to the wrong tier would still spend the slot while telling an
-		// operator the wrong thing about which path detected it.
+		// The Q106 budget invariant again, and additionally the tier label: each tier
+		// keeps its own budget, so a recovery attributed to the wrong tier would spend
+		// the wrong tier's slot and tell an operator the wrong path detected it.
 		scheduled := strings.Count(agcLog, "worker pod disrupted; scheduling auto-retry")
 		Expect(scheduled).To(Equal(1),
 			"one eviction must reserve exactly one retry slot, saw %d. Log:\n%s", scheduled, agcLog)

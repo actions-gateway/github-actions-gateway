@@ -267,11 +267,13 @@ func TestRecoverEvictedScaleSetWorkers_IdentityUnknownIsSurfaced(t *testing.T) {
 	assert.Contains(t, pod.Annotations, AnnotationEvictionHandledAt)
 }
 
-// TestRecoverEvictedScaleSetWorkers_BudgetExhaustionSurfaces verifies the shared Q106
-// budget governs this tier too: past maxEvictionRetries evictions of one run, further
-// evicted workers of that run get no re-run and the exhausted counter is attributed to
-// the scale-set tier.
-func TestRecoverEvictedScaleSetWorkers_BudgetExhaustionSurfaces(t *testing.T) {
+// TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun pins the merge (Q1182): three
+// evicted workers of one run attempt cost one re-run and one budget slot, because
+// rerun-failed-jobs re-runs every failed job of the attempt at once. Each used to
+// reserve a slot and run its own loop, so the second landed another re-run once the
+// first concluded and the third found the budget exhausted. Deleting the merge branch
+// of reserveScaleSetRerun turns this red with exactly that shape.
+func TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun(t *testing.T) {
 	ctx := context.Background()
 	pods := []*corev1.Pod{
 		evicted(scaleSetWorkerPod("runner-gpu-a", identityAnnotations())),
@@ -285,11 +287,20 @@ func TestRecoverEvictedScaleSetWorkers_BudgetExhaustionSurfaces(t *testing.T) {
 	require.NoError(t, err)
 	<-done
 
-	// Three evicted workers, one run, a budget of two.
-	assert.Equal(t, int64(2), rerunCount.Load())
+	assert.Equal(t, int64(1), rerunCount.Load(), "one attempt's disruptions share one re-run")
 	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)),
+		"one slot reserved; the other two merged")
+	assert.Equal(t, float64(0),
 		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)))
-	assert.Contains(t, target.events, "EvictionRetriesExhausted")
+	assert.NotContains(t, target.events, "EvictionRetriesExhausted")
+
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	require.Contains(t, l.Reruns, "4242")
+	assert.Equal(t, 1, l.Reruns["4242"].Count)
+	assert.ElementsMatch(t, []string{"runner-gpu-a", "runner-gpu-b", "runner-gpu-c"},
+		l.Reruns["4242"].Attempts["0"].Disruptions, "the re-run records every disruption it covered")
 }
 
 // TestRecoverEvictedScaleSetWorkers_NoEvictedPodsIsCheap asserts the common path returns

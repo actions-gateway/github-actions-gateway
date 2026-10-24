@@ -35,14 +35,23 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // worker pod again (Q691) — not immediately, because the job was abandoned for want of
 // capacity and re-queueing it into the same starved pool is how a shortage compounds.
 //
-// tier labels the metric only; both acquisition tiers run the identical call (Q766).
-func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID, tier string, log *slog.Logger) {
+// tier labels the metric; both acquisition tiers run the identical call (Q766). On the
+// scale-set tier the run's attempt is read and recorded in the owner's failure ledger
+// as GAG's own cancel before cancelling, so the cancelled conclusion it produces is not
+// taken for a user's (Q1182), and the re-run it registers is judged against that
+// attempt. Neither step blocks the cancel: without them the run is cancelled as before,
+// and a later deletion-arm check reads the cancel as a user's, the safe direction. d
+// names the abandoned worker to the ledger, and is ignored on the classic tier.
+func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID, tier string, log *slog.Logger, d rerunDisruption) {
 	outcome := "cancelled"
 	if owner == "" || repo == "" || runID == "" || runID == "0" {
 		log.Warn("run identity unknown; cannot force-cancel the abandoned job's run; GitHub cancels it at its ~15-minute unstarted-job timeout")
 		outcome = "identity_unknown"
 	} else {
 		cctx, cancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
+		if tier == evictionTierScaleSet {
+			d.failedAttempt = p.recordAbandonedAttempt(cctx, target, owner, repo, runID, log)
+		}
 		err := p.forceCancelRun(cctx, owner, repo, runID)
 		cancel()
 		if err != nil {
@@ -55,13 +64,30 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 			// Only this outcome is re-runnable: the cancelled conclusion is the state
 			// rerun-failed-jobs was measured to accept, and it is the one outcome in
 			// which we know the run concluded at all (Q691, abandoned_rerun.go).
-			p.registerAbandonedRerun(target, owner, repo, runID, tier)
+			p.registerAbandonedRerun(target, owner, repo, runID, tier, d)
 		}
 	}
 	if p.Metrics != nil {
 		key := target.Key()
 		p.Metrics.AbandonedRunForceCancels.WithLabelValues(key.Namespace, key.Name, tier, outcome).Inc()
 	}
+}
+
+// recordAbandonedAttempt reads the run's attempt and records it in target's failure
+// ledger as the one GAG is about to force-cancel, returning it, or 0 where either step
+// failed.
+func (p *Provisioner) recordAbandonedAttempt(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) int {
+	run, err := p.runConclusion(ctx, owner, repo, runID)
+	if err != nil || run.attempt == 0 {
+		log.Warn("could not read the abandoned job's run attempt; force-cancelling without recording it, so the cancel may read as a user's",
+			"runID", runID, "error", err)
+		return 0
+	}
+	if err := p.recordSelfCancel(ctx, target, runID, run.attempt); err != nil {
+		log.Warn("could not record GAG's own force-cancel in the failure ledger; force-cancelling anyway, so the cancel may read as a user's",
+			"runID", runID, "runAttempt", run.attempt, "error", err)
+	}
+	return run.attempt
 }
 
 // forceCancelRun calls POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel.
