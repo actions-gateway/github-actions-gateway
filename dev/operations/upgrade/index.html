@@ -1715,6 +1715,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3584,6 +3595,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4379,6 +4401,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
+<li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
 <li><a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets</a></li>
@@ -4520,6 +4543,14 @@ If the apiserver refuses an object, for example because a validating webhook rej
 Fix the named objects and run it again.</p>
 <p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
+<h3 id="non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically<a class="headerlink" href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> clusters where nodes go <code>NotReady</code> without being deleted (network failure, kernel panic, power loss, hardware failure) and an admin applies Kubernetes' <code>node.kubernetes.io/out-of-service</code> taint to confirm the node is dead.
+Nothing to do.</p>
+<p>A job whose worker ran on such a node used to stay failed: PodGC failed and removed the pod, and no recovery arm recognised the shape it left.
+It is now re-run under <code>cause="node_shutdown"</code>, the same counter a Spot reclamation uses (Q1207).
+A <code>NotReady</code> node with no taint is unchanged: its worker stays <code>Running</code> until you taint the node or delete its Node object, because a node that is only partitioned may still be running the job.
+The command is in <a href="../troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a>.</p>
+<p><strong>Rolling back</strong> returns the job on such a node to staying failed.</p>
 <h3 id="a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run<a class="headerlink" href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose jobs outgrow the worker's own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>.</p>
 <p><strong>What changed.</strong> The kubelet marks a pod that exceeds its own storage limit <code>Failed</code> with <code>reason: Evicted</code>, the same phase and reason it writes for node pressure, and eviction recovery used to re-run both.

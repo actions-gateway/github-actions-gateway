@@ -7950,9 +7950,9 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <td><code>DisruptionTarget</code> condition, reason <code>PreemptionByScheduler</code></td>
 </tr>
 <tr>
-<td>Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted under it</td>
+<td>Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted under it, or a dead node you taint <code>node.kubernetes.io/out-of-service</code></td>
 <td><code class="gag-nowrap">node_shutdown</code></td>
-<td>pod <code>Failed</code> with a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code> (the kubelet's graceful shutdown) or <code>DeletionByPodGC</code> (the node was gone first)</td>
+<td>pod <code>Failed</code> with a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code> (the kubelet's graceful shutdown), <code>DeletionByPodGC</code> (the node was gone first), or <code>DeletionByTaintManager</code> with the container still recorded <code>Running</code> (the out-of-service taint)</td>
 </tr>
 <tr>
 <td>Node drain of a running worker</td>
@@ -7979,8 +7979,11 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
   No slot is spent: <code>eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.
   Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).</li>
 <li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job <em>is</em> re-run; see <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
-<li><strong>A node that goes <code>NotReady</code> and keeps its Node object.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
-  Recovery starts only once the Node object is deleted: PodGC then fails the pod with <code>DeletionByPodGC</code> and the <code>node_shutdown</code> row above re-runs it.</li>
+<li><strong>A node that goes <code>NotReady</code> and keeps its Node object, untainted.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
+  GAG does not force it, because a node that is only partitioned may still be running the job.
+  Once you have confirmed the node is dead, taint it with <code>kubectl taint node &lt;node&gt; node.kubernetes.io/out-of-service=nodeshutdown:NoExecute</code>; PodGC then fails and removes the pod, and the <code>node_shutdown</code> row above re-runs it.
+  Deleting the Node object works too: PodGC then fails the pod with <code>DeletionByPodGC</code>.
+  A <code>NoExecute</code> taint of your own on a live node is the drain case instead, recovered as <code>deletion</code>.</li>
 <li><strong>The AGC's own reaper deletions</strong> — the lifetime cap (<code>maxWorkerLifetime</code>), the stuck-<code>Running</code> reap deadline, orphan cleanup.
   Each is stamped <code>actions-gateway.com/deletion-reason</code> before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
   The stamp is the pod's, so it does not survive the pod: a reaped worker whose job completion a previous AGC process never read is picked up by the <code>vanished</code> row above instead, which needs the completion to have gone unread for <code>completedPodTTL</code> and then a kill inside that state.</li>

@@ -2633,6 +2633,7 @@ Read from source, not observed: the kubelet's shutdown manager kills every activ
 Unverified: what GitHub does with a re-run of a run whose job never started.
 The abandoned-row reasoning in the design table predicts a refusal until GitHub's ~15-minute unstarted-job timeout concludes the run, which would end as <code>rerun_failures_total{reason="run_never_concluded"}</code> with a spent retry slot.
 It is no regression, because no arm caught this shape before Q1179.
+A never-started classic worker on a dead node tainted <code>node.kubernetes.io/out-of-service</code> ends the same way, <code>Failed</code> with no recovery: Q1207's arm requires a <code>Running</code> container, and on the scale-set tier <code>abandonedAwaitingRecovery</code> takes that pod, by source reading.
 The likely fix is to route a <code>node_shutdown</code> pod with no container start record (<code>podEverStarted</code>) to the abandoned handling on both tiers.
 Raised as a note in the PR #2108 review.</p>
 
