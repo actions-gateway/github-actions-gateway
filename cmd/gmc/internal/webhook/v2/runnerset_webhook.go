@@ -172,8 +172,8 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.Ru
 // its v2alpha1 write carries through the conversion (acquisitionProtocolOf).
 //
 // The inventory comes from the request's shared read (runnerSetRead). The check is
-// fail-closed: if a List errors, the request is rejected rather than admitted on faith — admitting a possible collision is the failure mode this guards
-// against.
+// fail-closed: if a List errors, the request is rejected rather than admitted on
+// faith — admitting a possible collision is the failure mode this guards against.
 func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, read *runnerSetRead, rs *agcv2.RunnerSet) error {
 	if acquisitionProtocolOf(rs) != acquisitionProtocolScaleSet {
 		return nil
