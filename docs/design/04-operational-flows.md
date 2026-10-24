@@ -727,7 +727,10 @@ The set still holds one runner more than it has jobs then, so the completion sta
 Any idle runner can take any of the set's jobs, so which one goes does not change how many jobs keep a runner; a busy or `Pending` worker is never picked.
 The listener records each `JobStarted` on its runner's pod as `actions-gateway.com/started-job-id`, handling a batch's starts before its completions.
 The same start replaces the pod's `run-id` and `repository` with the started job's run, which is what eviction recovery re-runs (Q1152).
-A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job, or one whose runner has started nothing could still take it (Q1169).
+A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job (Q1169).
+Where its container never ran, the same holds while another worker that can still be given a job has started nothing, since that worker may take it.
+A container that ran is not judged that way, because the `started-job-id` stamp lands asynchronously and is never written on a terminal pod, so a runner that took its own job and was disrupted before the stamp also reads as having started nothing.
+A pod marked as a disruption target never counts as able to take a job, so the victims of one preemption do not stand in for each other.
 A start also lifts a deadline set while that runner was idle, and moves it to another idle worker, since the runner that would have taken that job is now the one with nothing to run.
 The grace is a constant, not a tunable: it measures runner shutdown — a runner that actually ran the job reports completion and exits within seconds — and the job is already over at GitHub either way, so the only thing a premature reap costs is the terminal pod's `completedPodTTL` inspection window.
 The stamp is set once, so a completion replayed to a re-created session cannot push the deadline back, and it lives on the pod rather than in AGC memory, so the deadline survives an AGC restart.

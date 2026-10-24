@@ -252,8 +252,11 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 
 	// A worker whose runner started no job carries the identity of the job it was
 	// created for. Where another worker started that job, or an idle one can still take
-	// it, its run lost nothing here (Q1169).
-	if pod.Annotations[AnnotationStartedJobID] == "" && p.assignedJobAccountedFor(ctx, target, pod, true, podLog) {
+	// it, its run lost nothing here (Q1169). The idle half needs a container that never
+	// ran: the started-job-id stamp lands asynchronously and is never written on a
+	// terminal pod, so a runner that took its own job and was disrupted before the stamp
+	// also reads as having started nothing.
+	if pod.Annotations[AnnotationStartedJobID] == "" && p.assignedJobAccountedFor(ctx, target, pod, !podEverStarted(pod), podLog) {
 		podLog.Info("scale-set worker was disrupted before its runner started a job, and the job it was created for is running or can still be taken by another worker; not re-running that job's run",
 			"cause", cause, "runID", pod.Annotations[AnnotationRunID])
 		return closedChan()

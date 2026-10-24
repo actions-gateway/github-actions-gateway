@@ -203,7 +203,8 @@ Recovery used to force-cancel that run when the worker was reaped `Pending`, and
 
 Recovery now lists the set's workers first.
 A reaped or deleted `Pending` worker's run is left alone when another worker carries its job as `actions-gateway.com/started-job-id`.
-An evicted, preempted or drained worker with no `started-job-id` is not re-run when another worker started its job, or a live worker whose runner has started nothing could still take it.
+An evicted, preempted or drained worker with no `started-job-id` is not re-run when another worker started its job.
+Where its container never ran, it is also not re-run while a live worker whose runner has started nothing could still take that job; a pod marked as a disruption target is never counted as that worker.
 The AGC logs each skip at `info`; no metric or Event changes.
 
 No action is required at upgrade time.

@@ -110,18 +110,60 @@ func TestRecoverEvictedScaleSetWorkers_AStartedWorkerIgnoresIdleOnes(t *testing.
 // take a job. Counted as one, it would talk its own recovery out of re-running.
 func TestRecoverDisruptedScaleSetWorker_APreemptedWorkerIsNotItsOwnIdleWorker(t *testing.T) {
 	ctx := context.Background()
-	victim := mintedWorker("job-a", "myorg/repo-a", "111")
-	victim.Status.Phase = corev1.PodPending
-	victim.Status.Conditions = append(victim.Status.Conditions, corev1.PodCondition{
-		Type:   corev1.DisruptionTarget,
-		Status: corev1.ConditionTrue,
-		Reason: corev1.PodReasonPreemptionByScheduler,
-	})
-	p, target, _, _, paths := recoveryFixture(t, victim)
+	p, target, _, _, paths := recoveryFixture(t, preemptionVictim("job-a", "myorg/repo-a", "111"))
 
 	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
 	require.NoError(t, err)
 	<-done
 
 	assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths))
+}
+
+// preemptionVictim is a worker kube-scheduler has selected for preemption but not yet
+// deleted: Pending, no container ever started, the condition stamped ahead of the delete.
+func preemptionVictim(jobID, repository, runID string) *corev1.Pod {
+	pod := mintedWorker(jobID, repository, runID)
+	pod.Status.Phase = corev1.PodPending
+	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: corev1.PodReasonPreemptionByScheduler,
+	})
+	return pod
+}
+
+// TestRecoverEvictedScaleSetWorkers_AnUnstampedWorkerThatRanIgnoresIdleOnes is the
+// stamp race: job-a's runner took job-a, and the worker was evicted before the
+// started-job-id stamp landed, which is never written on a terminal pod. Its container
+// ran, so an empty stamp does not mean its runner started nothing, and run 111 did lose
+// a job.
+func TestRecoverEvictedScaleSetWorkers_AnUnstampedWorkerThatRanIgnoresIdleOnes(t *testing.T) {
+	ctx := context.Background()
+	victim := evicted(mintedWorker("job-a", "myorg/repo-a", "111"))
+	victim.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  "runner",
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+	}}
+	p, target, _, _, paths := recoveryFixture(t, victim, mintedWorker("job-c", "myorg/repo-c", "333"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths))
+}
+
+// TestRecoverEvictedScaleSetWorkers_PreemptionVictimsAreNotEachOthersIdleWorkers covers
+// a preemption that takes several workers at once: each victim is still listed, Pending,
+// when the other is recovered, and neither can take a job.
+func TestRecoverEvictedScaleSetWorkers_PreemptionVictimsAreNotEachOthersIdleWorkers(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, rerunCount, _ := recoveryFixture(t,
+		preemptionVictim("job-a", "myorg/repo-a", "111"), preemptionVictim("job-b", "myorg/repo-b", "222"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(2), rerunCount.Load(), "both victims' runs must be re-run")
 }

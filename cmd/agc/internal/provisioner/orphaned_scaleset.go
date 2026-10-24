@@ -281,10 +281,16 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 }
 
 // canTakeAJob reports whether a worker's runner can still be given a job: the pod is
-// neither terminal nor being deleted.
+// neither terminal, being deleted, nor marked a disruption target. The last covers a
+// preemption victim, whose condition is stamped before its delete.
 func canTakeAJob(pod *corev1.Pod) bool {
 	if pod.DeletionTimestamp != nil {
 		return false
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.DisruptionTarget && c.Status == corev1.ConditionTrue {
+			return false
+		}
 	}
 	return pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed
 }
