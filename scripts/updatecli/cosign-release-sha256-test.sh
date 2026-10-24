@@ -205,8 +205,8 @@ fi
 assert_arg_pair --certificate-identity keyless@projectsigstore.iam.gserviceaccount.com
 assert_arg_pair --certificate-oidc-issuer https://accounts.google.com
 
-# The signature is the release's Sigstore bundle. Without --new-bundle-format
-# the pinned v2 cosign rejects a v3 bundle, so its absence would fail every run.
+# The signature is the release's Sigstore bundle, and verify-blob is told its
+# format rather than left to detect it.
 bundle_arg=""
 for ((i = 0; i < ${#cosign_args[@]} - 1; i++)); do
 	[[ "${cosign_args[i]}" == --bundle ]] && bundle_arg="${cosign_args[i + 1]}"

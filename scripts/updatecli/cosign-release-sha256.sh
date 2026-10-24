@@ -34,7 +34,8 @@
 # The signature arrives as one Sigstore bundle, cosign_checksums.txt.sigstore.json.
 # v3 releases ship only that, and v2 releases only a detached -keyless.pem and
 # -keyless.sig pair, so a v2 tag 404s here and fails closed. The pinned v2.5.2
-# verifies a v3 bundle under --new-bundle-format (measured on v3.1.4, 2026-10-23).
+# verifies a v3 bundle with or without --new-bundle-format (measured on v3.1.4,
+# 2026-10-23); the flag names the format rather than leaving it to detection.
 #
 # Usage: cosign-release-sha256.sh <version-tag> <os-arch>   # e.g. v3.1.4 darwin-arm64
 #
