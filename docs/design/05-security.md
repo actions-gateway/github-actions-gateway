@@ -472,6 +472,7 @@ That is a separate change and not part of this design.
 **The AGC reads only its own namespace's records.** The endpoint is its own listener with its own per-`EgressProxy` CA, not the metrics port.
 The metrics port admits only `metrics=enabled` namespaces so tenant pods cannot read traffic metrics, and a monitoring certificate must not read per-job data any more than an AGC certificate may read metrics.
 The GMC mints each opted-in gateway's AGC a client certificate naming its namespace, and projects it into that namespace as a Secret.
+Every namespace's client key is also held in the pool's own namespace, in `<ep>-attribution-clients`, because the bundle is generated whole; whoever can read Secrets there already administers the pool, which sees every connection.
 The proxy returns only records from the port mapped to the namespace the certificate names.
 It checks that name against its current port map on every request, so removing a grant ends access at the next configuration reload rather than at certificate expiry.
 The listener's ingress rule admits AGC pods of attributed namespaces only, with both selectors in one peer as the sharing rules require; workers never reach it.
