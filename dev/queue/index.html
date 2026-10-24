@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1205/">Q1205</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">lease-test's renewer-exit check reads a zombie as alive on GAG runners</a></td>
+<td><code>tests</code> <code>ci</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**Deterministic on GitHub Actions Gateway (GAG) runners, not a flake, so this row does not follow the [flake …</td>
+</tr>
+<tr>
 <td><a href="Q1202/">Q1202</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">Flake: lease-test's lost-lease renewer races the owner's sleep 2</a></td>
 <td><code>flake</code> <code>tests</code></td>
