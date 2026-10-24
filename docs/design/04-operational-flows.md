@@ -342,7 +342,8 @@ sequenceDiagram
 
 Three disruptions reach this flow, and each is detected differently:
 
-* **Kubelet node-pressure eviction** leaves the pod `PodFailed` with `Status.Reason: Evicted`.
+* **Kubelet node-pressure eviction** leaves the pod `PodFailed` with `Status.Reason: Evicted` and a `DisruptionTarget=True` / `TerminationByKubelet` condition.
+  The kubelet writes the same phase and reason when a pod exceeds its *own* storage limit, and that shape is withheld before any re-run ([below](#an-eviction-for-the-pods-own-limit-is-not-a-disruption), Q1177).
 * **kube-scheduler preemption** — what a `priorityTiers` `PriorityClass` drives — instead *deletes* the victim after stamping a `DisruptionTarget` condition with reason `PreemptionByScheduler`, so it is recognised by that condition, which travels out of the pod wait alongside the phase (Q497).
 * **External graceful deletion** — a `kubectl drain` or a bare `kubectl delete pod` — is recognised by the pod's `deletionTimestamp` being set at the moment its terminal phase publishes **and** the deletion *request* — `deletionTimestamp` less the grace period it carries — predating the container's recorded exit, which also travels out of the pod wait.
   The AGC's own deletions are excluded by the `actions-gateway.com/deletion-reason` stamp written before each of them (Q502).
@@ -436,7 +437,8 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 
 | Disruption | Pod shape | Recovered | Why |
 |---|---|---|---|
-| Kubelet node-pressure eviction | `PodFailed` + `Status.Reason: Evicted` | ✅ | SIGKILL — nothing inside the pod reported, so the job hangs until its lock lapses |
+| Kubelet node-pressure eviction | `PodFailed` + `Status.Reason: Evicted`, with `DisruptionTarget=True` / `TerminationByKubelet` | ✅ | SIGKILL — nothing inside the pod reported, so the job hangs until its lock lapses |
+| Kubelet eviction for the pod's own limit: its total `ephemeral-storage`, one container's, or an `emptyDir` `sizeLimit` | `PodFailed` + `Status.Reason: Evicted`, a limit message, and **no** `DisruptionTarget` condition | ❌ (Q1177) | The job outgrew a limit its own template sets, so a re-run gets the same limit and fails the same way. Withheld before a budget slot is spent; see [below](#an-eviction-for-the-pods-own-limit-is-not-a-disruption) |
 | kube-scheduler preemption (`priorityTiers`) | Deleted, with `DisruptionTarget=True` / `PreemptionByScheduler` | ✅ (Q497) | The scheduler is the condition's only writer, so the signal is unambiguous |
 | Node shutdown: a Spot or preemptible reclamation the kubelet shuts down gracefully, or a Node object deleted under the worker | `PodFailed` with `DisruptionTarget=True` / `TerminationByKubelet` (the kubelet's graceful shutdown; `Status.Reason: Terminated`), or `DisruptionTarget=True` / `DeletionByPodGC` (PodGC failing and force-deleting the orphan of a node already gone) | ✅ (Q1179) | Both reasons have only cluster-side writers, so like preemption the signal needs no conclusion check. Neither shape reached an older arm: the reason is not `Evicted`, the condition reason is not `PreemptionByScheduler`, and nothing deletes a gracefully shut-down pod, while PodGC writes the phase before its delete, the order the drain row reads as cleanup. A node that goes `NotReady` and keeps its Node object is **not** covered until that object is deleted: the taint manager stamps `DeletionByTaintManager` and deletes gracefully without failing the pod, and the kubelet cannot finish that delete while the node stays unreachable. Shapes read from kubernetes v1.35.0 source, not yet from a reclaimed dogfood node |
 | `kubectl drain` / eviction API, `kubectl delete pod` | `PodFailed` + empty reason, publishing **with** `deletionTimestamp` set | ✅ (Q502) | Measured discriminator: a cancel and a genuine failure publish the same shape with **no** mark. Gated on the mark, not on the `EvictionByEvictionAPI` condition, so a bare delete is covered too. This arm alone also reads the run's conclusion before re-running, and stands down on `cancelled` (Q811), because an operator following the cancel runbook supplies the mark by hand |
@@ -527,6 +529,32 @@ That ordering carries two exclusions at once:
 * A deleted worker with *no* exit record never ran its job.
   A real kubelet publishes a transient `Failed`-with-mark even for a drained still-`Pending` pod (CI's fake-GitHub drain spec caught a mark-only rule firing on exactly that), so the absence of a terminal phase cannot be relied on to exclude it.
   That exclusion keeps such a worker off *this* path, where a re-run would be issued against a job that never failed; since Q766 it is recovered by a different one, which force-cancels the run first.
+
+#### An eviction for the pod's own limit is not a disruption
+
+The kubelet writes `PodFailed` + `Evicted` for two causes, and only one is a disruption.
+Node pressure evicts whichever pod the kubelet ranks worst, so a fresh pod on a fresh node clears it.
+A pod that outgrows its own storage limit is evicted by the same code path for a cause its job and template own, and a re-run gets the same limit.
+That is the storage analogue of `OOMKilled`, which the [automatic-recovery design](../plan/q555-automatic-recovery-design.md#the-futility-checks-r18-in-order) withholds as `own_limit`.
+Until Q1177 the eviction arm keyed on the reason alone and re-ran these up to `maxEvictionRetries` times.
+
+Two kubelet signals separate them, measured on kind v1.35.5 (2026-10-23) and matching the kubelet source at that version (`pkg/kubelet/eviction/eviction_manager.go`, `helpers.go`):
+
+| Eviction | `status.message` | `DisruptionTarget` condition |
+|---|---|---|
+| Pod total over its `ephemeral-storage` limit | `Pod ephemeral local storage usage exceeds the total limit of containers 16Mi.` | none |
+| One container over its own limit | `Container w exceeded its local ephemeral storage limit "16Mi".` | none |
+| `emptyDir` over its `sizeLimit` | `Usage of EmptyDir volume "scratch" exceeds the limit "16Mi".` | none |
+| Node memory pressure | `The node was low on resource: memory. Threshold quantity: 6400Mi, available: 6181172Ki. …` | `True`, reason `TerminationByKubelet` |
+
+Both signals must agree before the re-run is withheld: a limit message **and** no `TerminationByKubelet` condition.
+An `Evicted` pod that matches neither, from a kubelet whose wording changed or a cluster too old to stamp the condition, keeps its re-run, so an unrecognised shape costs at most the futile re-runs it cost before, never a disruption's recovery.
+The withhold is decided at detection, before the budget is touched, so it spends no slot: `actions_gateway_eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}` increments and a **Normal** `EvictionRerunWithheld` Event quotes the kubelet's message and names the fix.
+
+The live eviction specs (Q396) evicted through exactly this shape, with a 256Mi pod-level limit they overshot, so they now make genuine node pressure instead.
+They raise the kubelet's `memory.available` hard threshold on the worker's own node to just under what that node has free, read from its `stats/summary` at the moment of use, and make the worker hold 1GiB; a low memory request is what makes the kubelet's ranking pick it.
+The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
+Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, `DisruptionTarget=True` / `TerminationByKubelet`.
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 

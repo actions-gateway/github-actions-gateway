@@ -218,7 +218,7 @@ The `EvictionRerunWithheld` Event names the reason and the fix.
 | `same_class_again` | Class only: this job's failure entry already records a re-run by the same cause that failed again | The class does not fit this job; investigate |
 | `budget_exhausted` | The budget above | As today's `EvictionRetriesExhausted` |
 | `worker_unstartable` | The set's capacity gate holds a startup or placeability verdict (Q714) that every next pod fails | The verdict's own remediation |
-| `own_limit` | Class only: the job hit its own limit (see [Component 3](#the-first-class-out-of-memory-under-right-sizing)) | Raise the limit, or enable a sizing profile |
+| `own_limit` | A class hit its own limit (see [Component 3](#the-first-class-out-of-memory-under-right-sizing)), or the eviction arm saw a storage-limit eviction (shipped, Q1177) | Raise the limit, or enable a sizing profile |
 
 Notes on the table:
 
@@ -233,7 +233,7 @@ Notes on the table:
 - **`worker_unstartable` is new wiring**: no re-run path consults `worker_startup_verdict.go` today.
   It matters most on the abandoned arm, which by design releases on any pod of the set being bound to a node (Q512's test for capacity), including one stuck pulling an image that every next pod will fail to pull too.
 - **`budget_exhausted` keeps its own counter**, `eviction_retries_exhausted_total`, so existing alerts keep working.
-- Storage-limit eviction ([Q1177](../queue/Q1177.md)) becomes an `own_limit` hit on the eviction arm once its measurement settles the discriminator.
+- Storage-limit eviction is already an `own_limit` hit on the eviction arm (Q1177): the kubelet's limit message with no `TerminationByKubelet` condition, withheld before the budget is touched ([the measurement](../design/04-operational-flows.md#an-eviction-for-the-pods-own-limit-is-not-a-disruption)).
 
 **Two of the draft's futile shapes get no check, because GAG cannot see them:**
 
