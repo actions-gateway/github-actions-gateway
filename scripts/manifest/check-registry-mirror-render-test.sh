@@ -18,6 +18,14 @@
 #
 # Fixtures live under the repo's gitignored tmp/ rather than host temp, because
 # the checker resolves its tree against `git rev-parse --show-toplevel`.
+#
+# Every case runs concurrently and reports in source order. Each checker run
+# renders five targets, about 1.2 CPU-seconds, and run one after another the
+# fourteen of them made this the last suite to finish on CI: 152s of a 155s
+# scripts-test job, measured 2026-10-24 (Q1117). Concurrency overlaps that work
+# rather than removing it, so it shortens this suite and not the job, which is
+# bound by total work (Q1196). Cases share nothing but WORKDIR, so the only
+# ordering left is the order their output is read back in.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -30,9 +38,19 @@ CHECKER=scripts/manifest/check-registry-mirror-render.sh
 SRC=deploy/registry-mirror
 WORKDIR=tmp/registry-mirror-render-test
 
+pids=()
+cleanup() {
+	((${#pids[@]} == 0)) || kill "${pids[@]}" 2>/dev/null || true
+	rm -rf "${WORKDIR}"
+}
 rm -rf "${WORKDIR}"
 mkdir -p "${WORKDIR}"
-trap 'rm -rf "${WORKDIR}"' EXIT
+# A signal must still end the suite at 128+n, which run-parallel.sh reads as
+# KILLED. A trap that only cleaned up would return into the replay loop with
+# WORKDIR gone and exit 1 there instead; `exit` in the trap runs the EXIT trap.
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 fails=0
 out=""
@@ -40,16 +58,14 @@ rc=0
 
 # fixture — a fresh copy of the shipped tree, printed as a repo-relative path.
 #
-# The directory is removed before it is filled, and named uniquely rather than
-# from a counter: fixture runs in a command substitution, so a counter increment
-# here never reaches the caller. Every case would then reuse one directory, `cp`
-# would nest the tree inside the copy already there, and each case would run
-# against the accumulated mutations of the ones before it.
+# Named by mktemp rather than from a counter or $$: fixture runs in a command
+# substitution, so a counter increment never reaches the caller, and every case
+# is a subshell of one parent, so $$ is the same in all of them. A shared name
+# would have `cp` nest the tree inside a copy already there, and a case would run
+# against another's mutations.
 fixture() {
 	local root
-	root="${WORKDIR}/case.$$.${RANDOM}.${SECONDS}"
-	rm -rf "${root}"
-	mkdir -p "${root}"
+	root="$(mktemp -d "${WORKDIR}/case.XXXXXX")"
 	cp -R "${SRC}" "${root}/registry-mirror"
 	printf '%s' "${root}/registry-mirror"
 }
@@ -117,14 +133,20 @@ echo "scripts/manifest/check-registry-mirror-render-test.sh"
 have_kubectl=0
 command -v kubectl >/dev/null 2>&1 && have_kubectl=1
 
+# Each case_* function is one fixture, its checker run, and its assertions. It
+# runs in its own subshell and exits with its failure count, so `fails` and the
+# `out`/`rc` pair it asserts over are its own.
+
 # --- the tree as shipped -----------------------------------------------------
 
-run_checker "$(fixture)"
-if ((have_kubectl)); then
-	expect 'the shipped tree renders' 0 '5 targets (2 shared, 2 persistent, 1 Dragonfly), 5 PVCs'
-else
-	expect 'the shipped tree renders' 0 'renders not checked'
-fi
+case_shipped() {
+	run_checker "$(fixture)"
+	if ((have_kubectl)); then
+		expect 'the shipped tree renders' 0 '5 targets (2 shared, 2 persistent, 1 Dragonfly), 5 PVCs'
+	else
+		expect 'the shipped tree renders' 0 'renders not checked'
+	fi
+}
 
 # --- rule 1: the declared list against the tree ------------------------------
 #
@@ -132,32 +154,41 @@ fi
 # check. This is the case that makes the list enumerated rather than counted —
 # and it must fire with or without kubectl, since it reads no render.
 
-root="$(fixture)"
-mkdir -p "${root}/overlays/regional"
-cp "${root}/overlays/shared-tenants/kustomization.yaml" "${root}/overlays/regional/kustomization.yaml"
-run_checker "${root}"
-expect 'a new overlay nothing declares is caught' 1 'neither a declared render target nor a declared non-target'
+case_undeclared_overlay() {
+	local root
+	root="$(fixture)"
+	mkdir -p "${root}/overlays/regional"
+	cp "${root}/overlays/shared-tenants/kustomization.yaml" "${root}/overlays/regional/kustomization.yaml"
+	run_checker "${root}"
+	expect 'a new overlay nothing declares is caught' 1 'neither a declared render target nor a declared non-target'
+}
 
-root="$(fixture)"
-rm -rf "${root}/overlays/persistent"
-run_checker "${root}"
-expect 'a declared target that left the tree is caught' 1 "declares 'overlays/persistent', which has no kustomization.yaml"
+case_target_left_tree() {
+	local root
+	root="$(fixture)"
+	rm -rf "${root}/overlays/persistent"
+	run_checker "${root}"
+	expect 'a declared target that left the tree is caught' 1 "declares 'overlays/persistent', which has no kustomization.yaml"
+}
 
 # --- rule 2: a target that does not render -----------------------------------
 
-root="$(fixture)"
-edit "${root}/overlays/shared-tenants/kustomization.yaml" '  - ../../base' '  - ../../nonexistent'
-run_checker "${root}"
-# Reads a render, so it needs kubectl, which rule 1's cases deliberately do
-# without. Unguarded, this was the one assertion that failed on a runner shipping
-# no kubectl, wanting the active answer from a checker that had already skipped
-# (Q1116). The else branch holds the skip to its contract rather than dropping
-# the case, so the assertion still fires on a lane without kubectl.
-if ((have_kubectl)); then
-	expect 'a target that does not render is caught' 1 'does not render, so an operator cannot apply it'
-else
-	expect 'a target that does not render is caught' 0 'renders not checked'
-fi
+case_does_not_render() {
+	local root
+	root="$(fixture)"
+	edit "${root}/overlays/shared-tenants/kustomization.yaml" '  - ../../base' '  - ../../nonexistent'
+	run_checker "${root}"
+	# Reads a render, so it needs kubectl, which rule 1's cases deliberately do
+	# without. Unguarded, this was the one assertion that failed on a runner shipping
+	# no kubectl, wanting the active answer from a checker that had already skipped
+	# (Q1116). The else branch holds the skip to its contract rather than dropping
+	# the case, so the assertion still fires on a lane without kubectl.
+	if ((have_kubectl)); then
+		expect 'a target that does not render is caught' 1 'does not render, so an operator cannot apply it'
+	else
+		expect 'a target that does not render is caught' 0 'renders not checked'
+	fi
+}
 
 # --- rule 4: THE silent one --------------------------------------------------
 #
@@ -167,8 +198,10 @@ fi
 # 5999 renders under the root and is absent from overlays/shared-tenants. This is
 # the case the gate exists for and the one nothing else in CI can see.
 
-root="$(fixture)"
-cat >>"${root}/base/networkpolicy.yaml" <<'YAML'
+case_base_rule_dropped() {
+	local root
+	root="$(fixture)"
+	cat >>"${root}/base/networkpolicy.yaml" <<'YAML'
     - from:
         - namespaceSelector:
             matchLabels:
@@ -177,68 +210,83 @@ cat >>"${root}/base/networkpolicy.yaml" <<'YAML'
         - protocol: TCP
           port: 5999
 YAML
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a base ingress rule the shared render drops is caught' 1 'WITHOUT line(s) the base declares'
-	expect 'and the dropped line itself is named' 1 'gag-probe-canary'
-else
-	expect 'a base ingress rule the shared render drops is caught' 0 'renders not checked'
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a base ingress rule the shared render drops is caught' 1 'WITHOUT line(s) the base declares'
+		expect 'and the dropped line itself is named' 1 'gag-probe-canary'
+	else
+		expect 'a base ingress rule the shared render drops is caught' 0 'renders not checked'
+	fi
+}
 
 # --- rule 3: the two topologies keep their own posture -----------------------
 
-root="$(fixture)"
-edit "${root}/components/shared-tenants/kustomization.yaml" '                podSelector:
+case_no_workload_selector() {
+	local root
+	root="$(fixture)"
+	edit "${root}/components/shared-tenants/kustomization.yaml" '                podSelector:
                   matchLabels:
                     actions-gateway/component: workload
 ' ''
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a shared render with no workload podSelector is caught' 1 'WITHOUT the workload podSelector'
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a shared render with no workload podSelector is caught' 1 'WITHOUT the workload podSelector'
+	fi
+}
 
 # The AND/OR widening (Q1026). Both forms render at exit 0 and differ only in
 # depth: as a second KEY the peer is a managed namespace AND a workload pod; as a
 # second list ELEMENT it is either, which is strictly wider. The line set alone
 # cannot tell them apart, which is why the assertion pins the indent.
-root="$(fixture)"
-edit "${root}/components/shared-tenants/kustomization.yaml" '                podSelector:' '              - podSelector:'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a peer widened from AND to OR is caught' 1 'renders the podSelector at the wrong depth'
-fi
+case_and_widened_to_or() {
+	local root
+	root="$(fixture)"
+	edit "${root}/components/shared-tenants/kustomization.yaml" '                podSelector:' '              - podSelector:'
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a peer widened from AND to OR is caught' 1 'renders the podSelector at the wrong depth'
+	fi
+}
 
 # A patch that ADDS its peer instead of replacing the base's leaves the isolated
 # single-namespace peer in a shared render — the topology half-applied.
-root="$(fixture)"
-edit "${root}/components/shared-tenants/kustomization.yaml" '          - from:
+case_base_peer_kept() {
+	local root
+	root="$(fixture)"
+	edit "${root}/components/shared-tenants/kustomization.yaml" '          - from:
               - namespaceSelector:' '          - from:
               - namespaceSelector:
                   matchLabels:
                     kubernetes.io/metadata.name: gag-dogfood-e2e
               - namespaceSelector:'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a shared render still carrying the base peer is caught' 1 'still carrying the base'\''s single-namespace peer'
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a shared render still carrying the base peer is caught' 1 'still carrying the base'\''s single-namespace peer'
+	fi
+}
 
 # The other direction: the isolated targets must not quietly acquire the shared
 # marker. Applying the component to the ROOT kustomization is how that happens.
-root="$(fixture)"
-edit "${root}/kustomization.yaml" 'resources:
+case_isolated_given_marker() {
+	local root
+	root="$(fixture)"
+	edit "${root}/kustomization.yaml" 'resources:
   - base' 'resources:
   - base
 components:
   - components/shared-tenants'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'an isolated target given the tenant marker is caught' 1 'WITH the shared topology'\''s tenant marker'
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'an isolated target given the tenant marker is caught' 1 'WITH the shared topology'\''s tenant marker'
+	fi
+}
 
 # --- rule 5: the storage tells the two persistent targets apart --------------
 
-root="$(fixture)"
-edit "${root}/overlays/persistent/pvc.yaml" '---
+case_pvc_missing() {
+	local root
+	root="$(fixture)"
+	edit "${root}/overlays/persistent/pvc.yaml" '---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -247,10 +295,11 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mirror-gcr-io-storage-renamed'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a PVC missing from a persistent target is caught' 1 "renders no PVC 'mirror-gcr-io-storage'"
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a PVC missing from a persistent target is caught' 1 "renders no PVC 'mirror-gcr-io-storage'"
+	fi
+}
 
 # The inverse, and the assertion that gives shared-tenants its own identity: a
 # PVC reaching an ephemeral target bills continuously where $0 at rest was the
@@ -259,8 +308,10 @@ fi
 # target acquires it: a PVC in the base would reach overlays/persistent too,
 # where it collides with pvc.yaml's own copy and fails the render instead —
 # a different assertion firing, and this one never exercised.
-root="$(fixture)"
-cat >"${root}/stray-pvc.yaml" <<'YAML'
+case_pvc_ephemeral() {
+	local root
+	root="$(fixture)"
+	cat >"${root}/stray-pvc.yaml" <<'YAML'
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -273,47 +324,57 @@ spec:
       storage: 10Gi
   storageClassName: standard-rwo
 YAML
-edit "${root}/kustomization.yaml" 'resources:
+	edit "${root}/kustomization.yaml" 'resources:
   - base' 'resources:
   - base
   - stray-pvc.yaml'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a PVC reaching an ephemeral target is caught' 1 'but it is an ephemeral target'
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a PVC reaching an ephemeral target is caught' 1 'but it is an ephemeral target'
+	fi
+}
 
 # --- rule 6: the Dragonfly back end reaches every instance, and only there ---
 #
 # The component selects by label, so a selector that stops matching renders the
 # plain base and exits 0: the overlay would read as applied with nothing proxied.
 
-root="$(fixture)"
-edit "${root}/components/dragonfly-backend/kustomization.yaml" 'labelSelector: app=registry-mirror' 'labelSelector: app=registry-mirror-renamed'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a Dragonfly selector that matches nothing is caught' 1 'routes 0 of 5 mirror instances'
-fi
+case_dragonfly_selector() {
+	local root
+	root="$(fixture)"
+	edit "${root}/components/dragonfly-backend/kustomization.yaml" 'labelSelector: app=registry-mirror' 'labelSelector: app=registry-mirror-renamed'
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a Dragonfly selector that matches nothing is caught' 1 'routes 0 of 5 mirror instances'
+	fi
+}
 
 # The trust store: without SSL_CERT_DIR the public roots are trusted too.
-root="$(fixture)"
-edit "${root}/components/dragonfly-backend/kustomization.yaml" '                  - name: SSL_CERT_DIR
+case_dragonfly_trust_store() {
+	local root
+	root="$(fixture)"
+	edit "${root}/components/dragonfly-backend/kustomization.yaml" '                  - name: SSL_CERT_DIR
                     value: /etc/dragonfly-proxy-ca
 ' ''
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'a Dragonfly instance trusting the public roots is caught' 1 'pins the trust store of 0 of 5'
-fi
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'a Dragonfly instance trusting the public roots is caught' 1 'pins the trust store of 0 of 5'
+	fi
+}
 
 # The inverse: the back end composed into a default target makes it the default.
-root="$(fixture)"
-edit "${root}/overlays/persistent/kustomization.yaml" 'resources:' 'components:
+case_dragonfly_elsewhere() {
+	local root
+	root="$(fixture)"
+	edit "${root}/overlays/persistent/kustomization.yaml" 'resources:' 'components:
   - ../../components/dragonfly-backend
 resources:'
-run_checker "${root}"
-if ((have_kubectl)); then
-	expect 'the back end reaching a non-Dragonfly target is caught' 1 'but only the
+	run_checker "${root}"
+	if ((have_kubectl)); then
+		expect 'the back end reaching a non-Dragonfly target is caught' 1 'but only the
        Dragonfly target may'
-fi
+	fi
+}
 
 # --- the kubectl guard -------------------------------------------------------
 #
@@ -341,35 +402,39 @@ fi
 # cases run against PATH as it stands. Gating the whole block on have_kubectl
 # left them unrun exactly where the render rules skip and these are the only
 # assertions still covering the gate (Q1116).
-nopath=""
-shim_n=0
-if ((have_kubectl)); then
-	while IFS= read -r d; do
-		[[ -n "$d" ]] || continue
-		if [[ -x "$d/kubectl" ]]; then
-			shim_n=$((shim_n + 1))
-			shim="${WORKDIR}/shim-${shim_n}"
-			mkdir -p "${shim}"
-			for f in "$d"/*; do
-				b="$(basename "$f")"
-				[[ "$b" == kubectl ]] && continue
-				[[ -e "${shim}/${b}" ]] || ln -s "$f" "${shim}/${b}"
-			done
-			d="${shim}"
-		fi
-		nopath="${nopath:+${nopath}:}${d}"
-	done < <(tr ':' '\n' <<<"${PATH}")
-else
-	nopath="${PATH}"
-fi
+case_kubectl_absent() {
+	local nopath="" shim_n=0 shim d f b root
+	if ((have_kubectl)); then
+		while IFS= read -r d; do
+			[[ -n "$d" ]] || continue
+			if [[ -x "$d/kubectl" ]]; then
+				shim_n=$((shim_n + 1))
+				shim="${WORKDIR}/shim-${shim_n}"
+				mkdir -p "${shim}"
+				for f in "$d"/*; do
+					b="${f##*/}"
+					[[ "$b" == kubectl ]] && continue
+					[[ -e "${shim}/${b}" ]] || ln -s "$f" "${shim}/${b}"
+				done
+				d="${shim}"
+			fi
+			nopath="${nopath:+${nopath}:}${d}"
+		done < <(tr ':' '\n' <<<"${PATH}")
+	else
+		nopath="${PATH}"
+	fi
 
-if ((have_kubectl)) && PATH="${nopath}" command -v kubectl >/dev/null 2>&1; then
-	echo "skip kubectl-absent cases: kubectl is still reachable with every providing directory shimmed"
-elif ! PATH="${nopath}" bash -c 'shopt -s inherit_errexit' 2>/dev/null; then
-	# The shim has to leave a bash 4+ reachable, or every case below reports a
-	# shell error as though it were the verdict it was asserting.
-	echo "skip kubectl-absent cases: the shimmed PATH provides no bash supporting inherit_errexit"
-else
+	if ((have_kubectl)) && PATH="${nopath}" command -v kubectl >/dev/null 2>&1; then
+		echo "skip kubectl-absent cases: kubectl is still reachable with every providing directory shimmed"
+		return
+	fi
+	if ! PATH="${nopath}" bash -c 'shopt -s inherit_errexit' 2>/dev/null; then
+		# The shim has to leave a bash 4+ reachable, or every case below reports a
+		# shell error as though it were the verdict it was asserting.
+		echo "skip kubectl-absent cases: the shimmed PATH provides no bash supporting inherit_errexit"
+		return
+	fi
+
 	root="$(fixture)"
 	rc=0
 	out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" 2>&1)" || rc=$?
@@ -391,13 +456,55 @@ else
 	out="$(PATH="${nopath}" ./"${CHECKER}" --tree "${root}" --require-render 2>&1)" || rc=$?
 	expect '--require-render fails rather than skipping' 1 'nothing below ran'
 	expect_absent 'and does not also print the skip note' 1 'the render assertions were skipped'
-fi
+}
 
 # --- argument handling -------------------------------------------------------
 
-rc=0
-out="$(./"${CHECKER}" --nonsense 2>&1)" || rc=$?
-expect 'an unknown argument is rejected' 2 'unknown argument'
+case_unknown_argument() {
+	rc=0
+	out="$(./"${CHECKER}" --nonsense 2>&1)" || rc=$?
+	expect 'an unknown argument is rejected' 2 'unknown argument'
+}
+
+# --- run, then report in source order ----------------------------------------
+#
+# A case that dies before its verdict (a mutation that did not match, under
+# set -e) exits 1 and counts as one failure, its output saying why. A signal
+# death is handed back as the suite's own status, as die_if_killed does inline.
+
+cases=(
+	case_shipped
+	case_undeclared_overlay
+	case_target_left_tree
+	case_does_not_render
+	case_base_rule_dropped
+	case_no_workload_selector
+	case_and_widened_to_or
+	case_base_peer_kept
+	case_isolated_given_marker
+	case_pvc_missing
+	case_pvc_ephemeral
+	case_dragonfly_selector
+	case_dragonfly_trust_store
+	case_dragonfly_elsewhere
+	case_kubectl_absent
+	case_unknown_argument
+)
+
+for c in "${cases[@]}"; do
+	("${c}"; exit "${fails}") >"${WORKDIR}/${c}.log" 2>&1 &
+	pids+=("$!")
+done
+
+for i in "${!cases[@]}"; do
+	c="${cases[i]}"
+	case_rc=0
+	wait "${pids[i]}" || case_rc=$?
+	cat "${WORKDIR}/${c}.log"
+	die_if_killed "${c}" "${case_rc}"
+	fails=$((fails + case_rc))
+done
+pids=()
 
 # --- verdict -----------------------------------------------------------------
 
