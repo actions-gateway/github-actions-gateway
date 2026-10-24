@@ -37,10 +37,7 @@
   - secrets
   verbs:
   - create
-  - get
-  - list
   - update
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -255,6 +252,14 @@
   - rbac.authorization.k8s.io
   resourceNames:
   - agc-tenant-role
+  resources:
+  - clusterroles
+  verbs:
+  - bind
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - gmc-tenant-secret-reader
   resources:
   - clusterroles
   verbs:

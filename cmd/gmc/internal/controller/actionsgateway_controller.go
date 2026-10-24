@@ -14,7 +14,9 @@
 // least-privilege posture (it cannot create or mutate the quota).
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
+// Secret reads are not granted here: they come from the per-namespace
+// gmc-tenant-secret-reader RoleBinding (tenant_secret_access.go, Q1188).
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;update
 // events: the reconciler emits Kubernetes Events on teardown and PSA-label
 // failures. Both groups are required — the manager's new-style recorder
 // (mgr.GetEventRecorder) writes events.k8s.io/v1 Events, so with only the core
@@ -84,6 +86,9 @@ import (
 type ActionsGatewayReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// SecretWatches delivers credential Secret events from each tenant namespace
+	// (Q1188). Nil in unit tests, which then reconcile on their own triggers only.
+	SecretWatches *TenantSecretWatches
 	// IPCache supplies cached GitHub IP CIDRs for the proxy NetworkPolicy
 	// egress rule. It is populated and refreshed by IPRangeReconciler;
 	// reads here are non-blocking and never perform network I/O (see
@@ -603,7 +608,7 @@ func (r *ActionsGatewayReconciler) evalProxyQuota(ctx context.Context, ag *gmcv1
 // setCredentialUnavailable sets CredentialUnavailable=True and Ready=False on the
 // ActionsGateway. It returns RequeueAfter: 30s as a fallback so the reconciler
 // periodically re-checks even if a watch event is missed (e.g. on controller
-// restart). The WatchesMetadata watch on Secrets typically re-triggers faster.
+// restart). The tenant-namespace Secret watch typically re-triggers faster.
 func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, msg string) (ctrl.Result, error) {
 	now := metav1.Now()
 	gen := ag.Generation
@@ -888,7 +893,7 @@ func runnerGroupImpairingConditionsChanged() predicate.Predicate {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv1alpha1.ActionsGateway{}).
 		// The reconciler mutates per-tenant in-memory state and assumes a single
 		// writer; serialise it explicitly rather than relying on the implicit
@@ -896,14 +901,8 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// safe under concurrent reconciles of distinct ActionsGateways first.
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Owns(&appsv1.Deployment{}).
-		// WatchesMetadata caches only ObjectMeta (name, namespace, resourceVersion)
-		// for Secrets — no .data ever enters the in-process cache. This gives
-		// event-driven reconciliation on credential Secret create/delete without
-		// buffering secret material in memory.
-		WatchesMetadata(
-			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(r.secretToActionsGateway),
-		).
+		// Credential Secret events arrive through SecretWatches, one
+		// metadata-only cache per tenant namespace (Q1188).
 		// Full (not metadata-only) watch: the predicate needs .spec.hard. Quotas
 		// are small and carry no secret material, so caching them is cheap.
 		Watches(
@@ -921,7 +920,14 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(runnerGroupImpairingConditionsChanged()),
 		).
 		Named("actionsgateway").
-		Complete(r)
+		Build(r)
+	if err != nil {
+		return err
+	}
+	if r.SecretWatches != nil {
+		r.SecretWatches.AddSink(c, r.secretToActionsGateway)
+	}
+	return nil
 }
 
 // The apply* helpers below all delegate to applyManagedChild (apply_helpers.go),
