@@ -79,7 +79,9 @@ type Metrics struct {
 	// incremented, but the job was not re-run, so without this the metrics read
 	// as a recovery that happened (Q503). Split by reason: run_never_concluded
 	// (GitHub still answered "This workflow is already running" when the re-run
-	// window closed) versus api_error (a terminal API failure).
+	// window closed) versus api_error (a terminal API failure), and on the scale-set
+	// tier budget_unrecorded (the failure ledger could not record the budget decision,
+	// so the re-run was withheld, Q1182).
 	EvictionRerunFailures *prometheus.CounterVec
 	// EvictionRerunWithheld counts disruption recoveries that deliberately did not ask
 	// GitHub to re-run, because doing so would undo a decision GitHub already recorded
@@ -254,7 +256,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_failures_total",
-			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished), and reason (run_never_concluded, api_error, conclusion_unknown). cause=vanished is scale-set only, as above; reason=conclusion_unknown is the deletion arm only, whose cancel check never reached a verdict inside the window.",
+			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished), and reason (run_never_concluded, api_error, conclusion_unknown, budget_unrecorded). cause=vanished is scale-set only, as above; reason=conclusion_unknown is a run read that never reached a verdict inside the window, on the deletion arm's cancel check or, on the scale-set tier, the read before the budget is reserved; reason=budget_unrecorded is scale-set only, a budget decision the failure ledger could not record, so the re-run was withheld.",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{

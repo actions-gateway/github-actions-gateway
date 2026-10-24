@@ -125,8 +125,10 @@ type RunnerSetSpec struct {
 	// Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this
 	// API version offers — the worker is provisioned fire-and-forget, so the eviction
 	// is detected by the owning reconciler from the worker pod rather than by a
-	// goroutine watching it; the budget itself is shared, keyed by workflow run, so
-	// this cap applies per run across both tiers rather than once each.
+	// goroutine watching it. The cap counts the AGC's own re-runs of each workflow
+	// run, across every disruption cause, and is kept per RunnerSet in a ConfigMap
+	// that an AGC restart does not reset. Disruptions of one run attempt share one
+	// re-run.
 	//
 	// +optional
 	// +kubebuilder:validation:Minimum=0

@@ -442,6 +442,10 @@ type Provisioner struct {
 	// the goroutines of one AGC (Q1108, recovery_claims.go).
 	claimMu sync.Mutex
 
+	// ledgerMu serialises this process's writes to a failure ledger, for the same
+	// reason claimMu does (Q1182, rerun_ledger.go).
+	ledgerMu sync.Mutex
+
 	// orphanScans records which owners have already had their persisted in-flight set
 	// adjudicated by this process (Q844), which is what makes that scan a startup
 	// question rather than a per-reconcile one. Its zero value is ready to use. See
@@ -663,7 +667,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		cause = recoveryCauseDeletion
 	}
 	if cause != "" {
-		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, cause)
+		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, cause, rerunDisruption{})
 	}
 
 	// Pod-phase proxy of the job outcome, which the listener reports for this job's
@@ -687,7 +691,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		result = broker.TaskResultAbandoned
 		log.Warn("worker pod was removed before it ran; reporting the job as abandoned and force-cancelling its run",
 			"phase", outcome.Phase, "duration", duration)
-		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, evictionTierClassic, log)
+		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, evictionTierClassic, log, rerunDisruption{})
 	case outcome.Phase == corev1.PodFailed:
 		result = broker.TaskResultFailed
 	default:

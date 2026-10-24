@@ -37,8 +37,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 |---|---|---|
 | [Q555](../queue/Q555.md) | Detection, R1 to R8 | A dogfood measurement of the `result` vocabulary |
 | [Q1181](../queue/Q1181.md) | R18's futility checks, on the arms that exist today | Nothing |
-| [Q1182](../queue/Q1182.md) | R15, a budget that survives an AGC restart | Nothing |
-| [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 and Q1182 |
+| [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 |
 | [Q1177](../queue/Q1177.md), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
 | [Q1178](../queue/Q1178.md), [Q1184](../queue/Q1184.md) | The proxy's outcome metrics, and per-job failure attribution | Q1184: per-port ingress measured on the Calico lane |

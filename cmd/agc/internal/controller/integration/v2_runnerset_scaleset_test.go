@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -426,6 +427,10 @@ func TestV2_RunnerSet_ScaleSet_EvictedWorkerTriggersRerun(t *testing.T) {
 			case rerunPaths <- r.URL.Path:
 			default:
 			}
+		} else if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(runAttemptBody(rerunCalls.Load()))
+			return
 		}
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{}`))

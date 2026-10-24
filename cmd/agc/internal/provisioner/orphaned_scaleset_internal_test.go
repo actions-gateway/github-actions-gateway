@@ -160,9 +160,10 @@ func TestRecoverOrphanedScaleSetWorkers_SpendsTheSharedRetryBudget(t *testing.T)
 	p, target, m, rerunCount, _ := recoveryFixture(t)
 	target.spec.MaxEvictionRetries = 1
 
-	// Spend the run's only slot on an ordinary eviction first.
+	// Spend the run's only slot on an ordinary eviction first, in an earlier attempt
+	// than the orphan's, so the orphan's disruption is not merged into it.
 	spent := p.handleEviction(ctx, target, "myorg", "myrepo", "4242", p.logForKey(target.key),
-		1, 0, evictionTierScaleSet, recoveryCauseEviction)
+		1, 0, evictionTierScaleSet, recoveryCauseEviction, rerunDisruption{key: "runner-gpu-evicted", failedAttempt: 1})
 	<-spent
 	require.Equal(t, int64(1), rerunCount.Load())
 

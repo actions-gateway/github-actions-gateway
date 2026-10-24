@@ -33,11 +33,9 @@ import (
 // maxRetries times. Run under -race (make test-race) — this is the data-race
 // class -race exists to catch.
 //
-// Half the evictions arrive on the classic tier and half on the scale-set tier, which
-// is the Q417 half of the invariant: the budget is keyed by run_id alone, so one run's
-// worth of concurrent evictions can never collectively exceed maxRetries even when the
-// two tiers detect them by different machinery. A budget that were per-tier would
-// silently allow 2×maxRetries re-runs for a run whose workers span both.
+// It drives the classic tier, whose budget is this in-process map. The scale-set tier's
+// is the owner's failure ledger, and its concurrency is pinned in rerun_ledger_internal_test.go
+// (Q1182).
 func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	const (
 		maxRetries  = 2
@@ -74,15 +72,11 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	// All goroutines target the same run_id (and therefore the same lock shard),
 	// so the read-modify-write is maximally contended — exactly the interleaving
 	// the fix must defend against. retryDelay=0 keeps the test fast.
-	// Both tiers AND both disruption causes are interleaved, because the budget is one
-	// budget across every combination: a run that is alternately evicted and preempted
-	// on either tier must still be capped at maxRetries re-runs in total (Q497).
+	// Both disruption causes are interleaved, because the budget is one budget across
+	// them: a run that is alternately evicted and preempted must still be capped at
+	// maxRetries re-runs in total (Q497).
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
-		tier := evictionTierClassic
-		if i%2 == 1 {
-			tier = evictionTierScaleSet
-		}
 		cause := recoveryCauseEviction
 		if i%3 == 1 {
 			cause = recoveryCausePreemption
@@ -90,26 +84,24 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, tier, cause)
+			<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, evictionTierClassic, cause, rerunDisruption{})
 		}()
 	}
 	wg.Wait()
 
 	got := rerunCount.Load()
 	require.LessOrEqualf(t, got, int64(maxRetries),
-		"rerun API must be called at most maxRetries (%d) times across BOTH tiers, got %d", maxRetries, got)
+		"rerun API must be called at most maxRetries (%d) times, got %d", maxRetries, got)
 	// With concurrency far above the budget the budget should be fully consumed.
 	require.Equal(t, int64(maxRetries), got,
 		"budget should be fully used when evictions far exceed it")
 
 	// The EvictionRetries metric is incremented exactly once per reserved slot, so every
-	// tier×cause series must SUM to the number of rerun calls — the labels split the
+	// cause series must SUM to the number of rerun calls — the labels split the
 	// reporting without splitting the budget.
 	var total float64
-	for _, tier := range []string{evictionTierClassic, evictionTierScaleSet} {
-		for _, cause := range []string{recoveryCauseEviction, recoveryCausePreemption} {
-			total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", tier, cause))
-		}
+	for _, cause := range []string{recoveryCauseEviction, recoveryCausePreemption} {
+		total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", evictionTierClassic, cause))
 	}
 	assert.Equal(t, float64(got), total)
 }
@@ -140,7 +132,7 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	for i := 0; i < evictions; i++ {
-		<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction)
+		<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 	}
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),
@@ -269,7 +261,7 @@ func TestHandleEviction_RetriesUntilTheRunConcludes(t *testing.T) {
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "12345", log, 2, 0, evictionTierClassic, recoveryCauseEviction)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "12345", log, 2, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 
 	assert.Equal(t, int64(3), calls.Load(), "two refusals then the accepted call")
 	assert.Equal(t, float64(1),
@@ -351,11 +343,11 @@ func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "777", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "777", log, 2, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 
 	assert.Equal(t, int64(refusals), calls.Load(), "the window spans every refused attempt the handler makes, then closes")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
 	assert.Contains(t, target.events, "EvictionRerunFailed",
 		"a re-run that never landed needs an owner-visible Event, not just a log line")
 }
@@ -388,10 +380,10 @@ func TestHandleEviction_TheUnseamedWindowCloses(t *testing.T) {
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "1089", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "1089", log, 2, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
 		"a real timer must end the loop; the never-concluded reason pins it to the window branch")
 }
 
@@ -429,7 +421,7 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 			log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-			<-p.handleEviction(context.Background(), target, "owner", "repo", "888", log, 2, 0, evictionTierClassic, recoveryCauseEviction)
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "888", log, 2, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 
 			assert.Equal(t, int64(1), calls.Load(), "a terminal failure must not be retried")
 			assert.Equal(t, float64(1),
@@ -442,7 +434,7 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 // runConcludedFailure is the shape a drained or evicted run concludes on, measured at
 // live GitHub (Q459). It is what a fake must answer the Q811 conclusion check with for a
 // recovery to proceed to its re-run.
-const runConcludedFailure = `{"status":"completed","conclusion":"failure"}`
+const runConcludedFailure = `{"status":"completed","conclusion":"failure","run_attempt":1}`
 
 // answeredRunConclusion answers the run GET the Q811 conclusion check makes, reporting
 // whether it did. Every fake a disruption recovery can reach owes this arm: the deletion
@@ -476,7 +468,7 @@ func (s *runAPIStub) server() *httptest.Server {
 				i = len(s.states) - 1
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"status":%q,"conclusion":%q}`, s.states[i][0], s.states[i][1])
+			_, _ = fmt.Fprintf(w, `{"status":%q,"conclusion":%q,"run_attempt":1}`, s.states[i][0], s.states[i][1])
 			return
 		}
 		s.reruns.Add(1)
@@ -508,7 +500,7 @@ func TestHandleEviction_CancelledRunIsNotReRun(t *testing.T) {
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "811", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "811", log, 2, 0, evictionTierClassic, recoveryCauseDeletion, rerunDisruption{})
 
 	assert.Equal(t, int64(0), stub.reruns.Load(), "a cancelled run must never be asked to re-run")
 	assert.Equal(t, float64(1),
@@ -546,11 +538,11 @@ func TestHandleEviction_DrainedRunStillReRuns(t *testing.T) {
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "459", log, 2, 0, evictionTierScaleSet, recoveryCauseDeletion)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "459", log, 2, 0, evictionTierClassic, recoveryCauseDeletion, rerunDisruption{})
 
 	assert.GreaterOrEqual(t, stub.reruns.Load(), int64(1), "a drained worker's job must still be re-run")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
+		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
 	assert.Empty(t, target.events, "an accepted re-run is not an operator incident")
 }
 
@@ -577,7 +569,7 @@ func TestHandleEviction_UngatedCausesDoNotReadTheConclusion(t *testing.T) {
 			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 			log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-			<-p.handleEviction(context.Background(), target, "owner", "repo", "497", log, 2, 0, evictionTierClassic, cause)
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "497", log, 2, 0, evictionTierClassic, cause, rerunDisruption{})
 
 			assert.Equal(t, int64(0), stub.gets.Load(), "only the deletion arm reads the run's conclusion")
 			assert.Equal(t, int64(1), stub.reruns.Load(), "the re-run must still fire")
@@ -618,7 +610,7 @@ func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) 
 	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	<-p.handleEviction(context.Background(), target, "owner", "repo", "812", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "812", log, 2, 0, evictionTierClassic, recoveryCauseDeletion, rerunDisruption{})
 
 	assert.Equal(t, int64(0), reruns.Load(), "an unreadable conclusion must not be read as 'not cancelled'")
 	assert.Equal(t, int64(rereads), gets.Load(), "the window spans every re-read the handler makes, not just the first error")
@@ -668,7 +660,7 @@ func TestHandleEviction_UnanswerableConclusionIsTerminal(t *testing.T) {
 			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 			log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-			<-p.handleEviction(context.Background(), target, "owner", "repo", "813", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "813", log, 2, 0, evictionTierClassic, recoveryCauseDeletion, rerunDisruption{})
 
 			assert.Equal(t, int64(1), gets.Load(), "a verdict that cannot change must not be re-asked")
 			assert.Equal(t, int64(0), reruns.Load(), "an unanswerable conclusion is not a licence to re-run")

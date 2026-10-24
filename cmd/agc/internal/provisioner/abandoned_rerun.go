@@ -48,9 +48,11 @@ type pendingAbandonedRerun struct {
 	runID       string
 	abandonedAt time.Time
 	// tier is the acquisition tier the abandonment was detected on, carried through
-	// to the recovery's metric labels. Both tiers wait on the same evidence and
-	// spend the same budget, so it labels reporting and nothing else (Q766).
+	// to the recovery's metric labels and its choice of budget (Q766, Q1182).
 	tier string
+	// disruption names the abandoned worker and the attempt GAG force-cancelled to the
+	// scale-set budget, so the re-run merges into one already reserved for that attempt.
+	disruption rerunDisruption
 }
 
 // registerAbandonedRerun records a force-cancelled run to re-run once capacity returns
@@ -61,7 +63,7 @@ type pendingAbandonedRerun struct {
 // The re-run is deliberately not fired here. The job was abandoned because its worker
 // could not be placed, so re-queueing it immediately puts it back into the pool that
 // was starved, and a shortage would compound into a re-run storm.
-func (p *Provisioner) registerAbandonedRerun(target Target, owner, repo, runID, tier string) {
+func (p *Provisioner) registerAbandonedRerun(target Target, owner, repo, runID, tier string, d rerunDisruption) {
 	key := abandonedRerunKey{owner: target.Key(), runID: runID}
 	p.abandonedRerunsMu.Lock()
 	defer p.abandonedRerunsMu.Unlock()
@@ -78,6 +80,7 @@ func (p *Provisioner) registerAbandonedRerun(target Target, owner, repo, runID, 
 		runID:       runID,
 		abandonedAt: p.nowFn(),
 		tier:        tier,
+		disruption:  d,
 	}
 }
 
@@ -164,13 +167,12 @@ func (p *Provisioner) sweepAbandonedReruns(ctx context.Context) []<-chan struct{
 		p.countAbandonedRerunWait(e.target, e.tier, abandonedRerunOutcomeCapacityReturned)
 		log.Info("a worker pod was placed for this owner since the run was abandoned; re-running it",
 			"runID", key.runID, "tier", e.tier)
-		// The budget is the shared per-run_id one (Q106), so an abandoned run that is
-		// re-run and abandoned again is capped exactly like a repeatedly evicted one —
-		// and, since Q766 registers on both tiers, across the two of them together.
+		// The budget is the tier's per-run one (Q106, Q1182), so an abandoned run that
+		// is re-run and abandoned again is capped exactly like a repeatedly evicted one.
 		// No retry delay: the force-cancel already concluded the run, which is the
 		// state rerun-failed-jobs was measured to accept (Q683).
 		armed = append(armed, p.handleEviction(ctx, e.target, e.owner, e.repo, e.runID, log,
-			p.abandonedRerunMaxRetries(ctx, e.target), 0, e.tier, recoveryCauseAbandoned))
+			p.abandonedRerunMaxRetries(ctx, e.target), 0, e.tier, recoveryCauseAbandoned, e.disruption))
 	}
 	return armed
 }

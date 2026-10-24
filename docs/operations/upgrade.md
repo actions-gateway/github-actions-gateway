@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
   - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
   - [Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run](#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run)
   - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
@@ -182,6 +183,38 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once
+
+**Who is affected:** every `ScaleSet`-protocol `RunnerSet` with `maxEvictionRetries` above 0.
+Nothing to do; one new object appears per set that has a worker disrupted.
+
+`maxEvictionRetries` counted GAG's re-runs of each run in AGC memory, so an AGC restart refilled every run's budget.
+And two workers of one run disrupted in the same attempt each spent a slot and each re-ran the run: the second waited out `403 This workflow is already running` until the first re-run concluded, then re-ran it again.
+The count now lives in a per-`RunnerSet` ConfigMap, and a second disruption of an attempt GAG has already re-run merges into that re-run (Q1182).
+The field's meaning is unchanged: it counts GAG's own re-runs, never a human's.
+
+Operational consequences:
+
+- **A third ConfigMap per set.** `scaleset-failures-<set>` appears the first time one of that set's workers is disrupted, beside `scaleset-guards-<set>` and `scaleset-recovery-claims-<set>`.
+  It carries the same `actions-gateway.com/runner-set` label and is owner-ref'd to the set.
+  Each run's entry expires 30 days after GAG last reserved a re-run for it, GitHub's re-run window, and the object is capped at 512 KiB, about 1,100 runs re-run inside 30 days at the default budget of 2 (measured by the AGC's unit test).
+  Past the cap a new reservation is refused rather than an old budget dropped.
+- **Fewer re-runs and fewer `eviction_retries_total` increments for multi-job runs.** A drain that takes three workers of one run now re-runs it once and counts once; the merged disruptions log `a re-run is already reserved for this run attempt`, and re-run the attempt themselves only if that re-run never lands.
+- **Every scale-set recovery now reads the run.** The eviction, preemption and vanished arms did not call GitHub before the re-run; they now `GET` the run once to learn the attempt the job failed in, and again before each re-run call, standing down once the run is already past that attempt.
+  A run that cannot be read, or that names no `run_attempt`, is not re-run, and counts as `eviction_rerun_failures_total{reason="conclusion_unknown"}` or `{reason="api_error"}`.
+  The call needs only Actions read access, which the re-run already requires.
+- **A new failure reason.** `eviction_rerun_failures_total{reason="budget_unrecorded"}` counts a recovery whose budget decision could not be written, which withholds the re-run.
+  Expected to be zero; see the [runbook](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget).
+- **The budget is per set, not shared with the classic tier.** A run whose workers span a classic `RunnerGroup` and a scale-set `RunnerSet`, or two `RunnerSet`s, can be re-run up to `maxEvictionRetries` times on each.
+  A classic `RunnerGroup` keeps its in-memory count.
+- **A drained worker of a run whose other job was abandoned now re-runs.** GAG force-cancels an abandoned run, and the drain recovery used to read that cancel as a human's and stand down; the AGC now records the attempt it cancels and treats that cancel as its own.
+- **RBAC:** unchanged.
+  The AGC already holds `get`, `create` and `update` on `configmaps`.
+
+**Rolling back** restores the in-memory count, so the next restart refills budgets and a multi-job disruption re-runs once per worker again.
+A leftover `scaleset-failures-<set>` is inert on older versions, which never read it, and is collected with its `RunnerSet`.
+Rolling forward again reads it as it was left, including budgets spent before the rollback that have not expired.
 
 ### Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets
 
