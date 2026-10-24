@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
   - [Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run](#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run)
   - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
@@ -182,6 +183,22 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### A worker evicted for its own storage limit is no longer re-run
+
+**Who is affected:** a tenant whose jobs outgrow the worker's own `ephemeral-storage` limit, one container's limit, or an `emptyDir` `sizeLimit`.
+
+**What changed.** The kubelet marks a pod that exceeds its own storage limit `Failed` with `reason: Evicted`, the same phase and reason it writes for node pressure, and eviction recovery used to re-run both.
+A re-run gets the same limit and fails the same way, so such a job spent up to `maxEvictionRetries` re-runs failing.
+The AGC now tells the two apart by the kubelet's message and its `DisruptionTarget` condition, and withholds the re-run for the limit case on both acquisition tiers (Q1177).
+A node-pressure eviction is re-run as before, and so is any `Evicted` shape the AGC does not recognise.
+
+**What you will see.** `actions_gateway_eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}` increments, and a **Normal** `EvictionRerunWithheld` Event quotes the kubelet's message.
+No retry slot is spent, so `eviction_retries_total{cause="eviction"}` stops counting these, and the job stays failed at GitHub.
+
+**What to do.** Nothing at upgrade time.
+When the Event appears, raise the limit in the runner template or reduce what the job writes, then re-run the job by hand.
+Behaviour is covered in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 ### Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets
 
