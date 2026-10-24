@@ -3059,7 +3059,7 @@ That:</p>
 <p>This composes with an <a href="../air-gapped-install/">air-gapped install</a>: the private mirror remains the back-to-source registry, and P2P keeps load off it the same way it keeps load off GHCR.</p>
 <h2 id="gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe<a class="headerlink" href="#gags-dragonfly-node-client-recipe" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a> puts a Dragonfly <code>dfdaemon</code> on each Kata node, and containerd pulls worker images through it.
-It shares the scheduler in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly/README.md"><code>deploy/dragonfly/</code></a> with the registry mirrors' seed peer, so it needs that applied first.
+It shares the scheduler in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-core/README.md"><code>deploy/dragonfly-core/</code></a> with the registry mirrors' seed peer, so it needs that applied first.
 It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</code>, and the release gate's Dragonfly leg runs the e2e matrix with it installed.</p>
 <p><strong>What changes on the node:</strong></p>
 <ul>
