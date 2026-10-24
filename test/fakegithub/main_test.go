@@ -1045,25 +1045,25 @@ func TestRunStatusReadCountsAttempts(t *testing.T) {
 		}
 		return body.Attempt
 	}
-	post := func(path string) {
+	post := func(base, path string) {
 		t.Helper()
-		resp, err := http.Post(path, "", nil)
+		resp, err := http.Post(base+path, "", nil)
 		if err != nil {
 			t.Fatalf("post %s: %v", path, err)
 		}
 		_ = resp.Body.Close()
 	}
-	rerun := main.URL + "/repos/o/r/actions/runs/4242/rerun-failed-jobs"
+	const rerun = "/repos/o/r/actions/runs/4242/rerun-failed-jobs"
 
 	if got := attempt("4242"); got != 1 {
 		t.Fatalf("unrerun run attempt %d, want 1", got)
 	}
-	post(rerun)
+	post(main.URL, rerun)
 	if got := attempt("4242"); got != 2 {
 		t.Fatalf("after one accepted re-run, attempt %d, want 2", got)
 	}
-	post(control.URL + "/control/runstate?run=4242&concluded=false")
-	post(rerun)
+	post(control.URL, "/control/runstate?run=4242&concluded=false")
+	post(main.URL, rerun)
 	if got := attempt("4242"); got != 2 {
 		t.Fatalf("after a refused re-run, attempt %d, want 2", got)
 	}
