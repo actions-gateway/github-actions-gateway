@@ -2008,6 +2008,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Validated once">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dind-at-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DinD at scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2807,6 +2824,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Validated once">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dind-at-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DinD at scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2892,8 +2926,8 @@ Each is a leg of the release gate, which dispatches the e2e matrix onto GAG runn
 <td><strong>Trusted CI fallback</strong></td>
 <td>Privileged Docker-in-Docker (DinD)</td>
 <td>Open</td>
-<td>None on the job's path</td>
-<td>—</td>
+<td>Per tenant, ephemeral: a route, not a fence</td>
+<td>Distribution</td>
 <td>None</td>
 <td><code>dind</code></td>
 </tr>
@@ -2915,12 +2949,46 @@ Those readings are recorded, not gated: a <code>finding</code> does not fail the
 <h3 id="trusted-ci-fallback">Trusted CI fallback<a class="headerlink" href="#trusted-ci-fallback" title="Permanent link">&para;</a></h3>
 <p>Privileged DinD with open egress, for clusters without nested virtualization and for jobs Kata cannot run.
 It is never a candidate for untrusted code.
-The registry mirrors are deployed beside it, but the DinD worker carries no mirror wiring, so its pulls go to the upstream registries directly.
+Its job's pulls go through the same registry mirrors as Kata's, but with open egress nothing stops a client that skips them, so the in-job egress probes report a skip here rather than a pass.
 The worker shape is the <code>privileged-dind</code> entry in the <a href="../runner-template-library/">runner template library</a>.</p>
 <h2 id="validated-once">Validated once<a class="headerlink" href="#validated-once" title="Permanent link">&para;</a></h2>
-<p>None yet.</p>
-<p>The first candidate is DinD with the Dragonfly back end and node client, for GPU fleets that land on DinD because AMD GPUs do not run under Kata today, which needs the DinD overlay wired to the mirrors before it can run (<a href="../../queue/Q1193/">Q1193</a>).</p>
 <p>An entry here records the profile's six axes, the date, the dogfood run, the readings it took, and what would prompt a re-run.</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Worker isolation</th>
+<th>Egress posture</th>
+<th>Mirror topology</th>
+<th>Mirror back end</th>
+<th>Node-layer P2P</th>
+<th>Validated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>DinD at scale</strong></td>
+<td>Privileged DinD</td>
+<td>Open</td>
+<td>Per tenant, ephemeral</td>
+<td>Dragonfly seed peer</td>
+<td>Dragonfly node client</td>
+<td>2026-10-24</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dind-at-scale">DinD at scale<a class="headerlink" href="#dind-at-scale" title="Permanent link">&para;</a></h3>
+<p>The trusted CI fallback with Dragonfly in both places, for GPU fleets that land on DinD because AMD GPUs do not run under Kata today.
+The CNI is the dogfood cluster's, GKE Dataplane V2.
+It ran once, in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/40047669565">e2e run 40047669565</a> on 2026-10-24 (UTC), which was green; the readings are in <a href="../p2p-image-distribution/#on-privileged-dind">p2p-image-distribution.md § On privileged DinD</a>:</p>
+<ul>
+<li><strong>The job's pulls rode all five mirrors</strong>, and the seed peer took 123 blob requests by its P2P rule.</li>
+<li><strong>The node client served the worker image</strong>, 17 tasks of it from peers.</li>
+<li><strong>The seed peer's proxy held</strong>: a worker timed out on it.</li>
+<li><strong>A worker reached the node client's upload port, 4000</strong>, because the tenant's open egress admits node addresses.
+  On this profile every job has a path to that unauthenticated port, which is one more reason it stays trusted-only.</li>
+</ul>
+<p>Re-run it when the DinD overlay's mirror wiring, the <code>privileged-dind</code> template's daemon, or the Dragonfly pins change.</p>
 <h2 id="combinations-not-validated">Combinations not validated<a class="headerlink" href="#combinations-not-validated" title="Permanent link">&para;</a></h2>
 <p>These compose on paper and have not run end to end as a profile.
 Each line says how far the evidence goes, read from the scripts and manifests on 2026-10-23.</p>

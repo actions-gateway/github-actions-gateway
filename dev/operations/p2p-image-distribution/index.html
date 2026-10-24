@@ -2030,6 +2030,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="GAG&#39;s Dragonfly node-client recipe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-privileged-dind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On privileged DinD
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2918,6 +2935,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="GAG&#39;s Dragonfly node-client recipe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-privileged-dind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On privileged DinD
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3102,12 +3136,25 @@ It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</co
 <p><strong>What it exposes, and to whom:</strong></p>
 <ul>
 <li><strong>The peer ports listen on every node address, unauthenticated.</strong> That is upload gRPC on 4000, then metrics, health, stats and piece storage on 4002 to 4006.
-  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one.
+  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one, and so did a DinD worker whose tenant adds an allow-all egress policy (<a href="#on-privileged-dind">below</a>).
   So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.</li>
 <li><strong>The proxy is bound to loopback</strong>, so only the node's own containerd can use it, and it never reaches a worker.</li>
 </ul>
 <p><strong>Set three values before applying it:</strong> the node selector and toleration in <code>client.yaml</code> (your worker nodes), the CIDR in <code>scheduler-from-nodes.yaml</code> (your node subnet), and the registries in the <code>dfinit</code> config.</p>
 <p><strong>Not yet measured:</strong> UDP 4006, and more than one fresh-node startup order, where <code>dfinit</code> and <code>kata-deploy</code> race to edit containerd's config on a new node.</p>
+<h3 id="on-privileged-dind">On privileged DinD<a class="headerlink" href="#on-privileged-dind" title="Permanent link">&para;</a></h3>
+<p>The same recipe runs under the privileged-DinD worker, the fallback for jobs Kata cannot run, such as GPU jobs on hardware Kata does not support.
+It was validated once rather than on every release: one dogfood e2e run on 2026-10-24 (UTC), with <code>E2E_VARIANT=dind E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1</code>, was green.</p>
+<p>What the readings from that run showed:</p>
+<ul>
+<li><strong>The job's pulls rode the mirrors.</strong> All five instances served it: 161 content requests across 15 repositories, from the inner <code>dockerd</code>, the rewritten refs, helm and buildkit.</li>
+<li><strong>The mirrors fetched through Dragonfly.</strong> The seed peer sent 123 blob requests by its peer-to-peer rule and 374 direct.</li>
+<li><strong>The node client served the worker pod's own image.</strong> containerd sent 34 requests through it, the runner image's blobs among them, and 17 tasks were served by peers and 14 from the registry.</li>
+<li><strong>A DinD worker reached the node client's upload port, 4000.</strong> The tenant's allow-all egress policy adds to GAG's workload policy, so it admits node addresses too.
+  The seed peer's proxy held: the same worker timed out on it, because the seed's own ingress policy refuses it.</li>
+</ul>
+<p>So DinD with this recipe gives every job a path to an unauthenticated gRPC port on its node.
+That fits the trusted-CI use DinD is already limited to, and it is one more reason never to run untrusted code there.</p>
 <h2 id="operational-notes">Operational notes<a class="headerlink" href="#operational-notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Pull Secrets still matter for the first pull.</strong> The node performing the back-to-source pull authenticates to the registry as usual (the worker's <code>imagePullSecrets</code>; see <a href="../air-gapped-install/">air-gapped install</a> for the secure pull-Secret pattern).

@@ -3510,7 +3510,7 @@ Each instance is pinned to exactly one upstream in its pod spec, and refuses upl
 </tr>
 <tr>
 <td>The worker wiring</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml"><code>overlays/kata/mirror-wiring.yaml</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/base/mirror-wiring.yaml"><code>base/mirror-wiring.yaml</code></a></td>
 <td>Points the job's image clients at the mirrors, in the two forms those clients can read</td>
 </tr>
 <tr>
@@ -3554,7 +3554,7 @@ It reports and never fails the run.</p>
 Tenants who must not learn what each other build should take isolation without waiting for it.</p>
 <h3 id="wiring-the-jobs-image-clients">Wiring the job's image clients<a class="headerlink" href="#wiring-the-jobs-image-clients" title="Permanent link">&para;</a></h3>
 <p>No two image clients read the same configuration, so one endpoint set has to reach them four ways.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/mirror-wiring.yaml"><code>mirror-wiring.yaml</code></a> holds it once, as a <code>daemon.json</code> and as an <code>&lt;upstream&gt;=&lt;mirror&gt;</code> map:</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/base/mirror-wiring.yaml"><code>mirror-wiring.yaml</code></a> holds it once, as a <code>daemon.json</code> and as an <code>&lt;upstream&gt;=&lt;mirror&gt;</code> map:</p>
 <table>
 <thead>
 <tr>

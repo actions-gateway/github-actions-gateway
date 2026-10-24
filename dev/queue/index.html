@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1202/">Q1202</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">Flake: lease-test's lost-lease renewer races the owner's sleep 2</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Observed 2026-10-23 at about 20:00 …</td>
+</tr>
+<tr>
 <td><a href="Q1173/">Q1173</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged-test.sh">check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -4106,14 +4114,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Q540 built the node layer on Dragonfly (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a>), which pre-heats nodes and …</td>
-</tr>
-<tr>
-<td><a href="Q1193/">Q1193</a></td>
-<td>Validate a DinD + Dragonfly profile once, job pulls through the mirrors</td>
-<td><code>dogfood</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>DinD is the fallback for workloads Kata cannot run yet, GPUs above all: AMD GPUs do not work under Kata today, so a GPU fleet can land on …</td>
 </tr>
 </tbody>
 </table>
