@@ -5,7 +5,8 @@ Most combinations are nobody's real choice, so this page names the handful of **
 
 Every profile is in one of two tiers:
 
-- **Gated every release.** The release gate runs it on the dogfood cluster for every release candidate, and a red run stops the release.
+- **Gated every release.** The release gate runs it on the dogfood cluster for every release candidate, and a red e2e matrix stops the release.
+  Readings a leg records beside the matrix are not gated; the profile says which.
 - **Validated once.** It ran once on the dogfood cluster, and this page records the date, the run and the readings.
   It is re-run on demand, or when something it depends on changes.
 
@@ -19,7 +20,7 @@ Each is a leg of the release gate, which dispatches the e2e matrix onto GAG runn
 | Profile | Worker isolation | Egress posture | Mirror topology | Mirror back end | Node-layer P2P | Gate leg |
 |---|---|---|---|---|---|---|
 | **Untrusted pull requests** | Kata micro-VM | Tight: mirrors, GitHub and DNS only | Per tenant, ephemeral | Distribution | None | `kata` |
-| **Untrusted pull requests at scale** | Kata micro-VM | Tight | Per tenant, ephemeral | Dragonfly seed peer | Dragonfly node client | `dragonfly` |
+| **Untrusted pull requests at scale** | Kata micro-VM | Tight | Per tenant, ephemeral | Dragonfly seed peer | Dragonfly node client, from the next candidate | `dragonfly`, isolation readings not gated |
 | **Trusted CI fallback** | Privileged Docker-in-Docker (DinD) | Open | None on the job's path | — | None | `dind` |
 
 ### Untrusted pull requests
@@ -34,6 +35,9 @@ Nodes need nested virtualization.
 
 The same posture with Dragonfly, a P2P image distribution system, in two places: the registry mirrors fetch layer blobs through a Dragonfly seed peer, and a Dragonfly client on each node serves the kubelet's pulls of the worker image.
 The mirror half is in [`deploy/registry-mirror/` § Dragonfly back end](../../deploy/registry-mirror/README.md#dragonfly-back-end); the node half is [GAG's Dragonfly node-client recipe](p2p-image-distribution.md#gags-dragonfly-node-client-recipe).
+
+The node client joined the leg on 2026-10-23, after the last release candidate, so no candidate has run it yet: `v1.9.0`'s gate ran the Dragonfly back end without it.
+The next candidate's gate is the first to run the profile as the table shows it.
 
 A green matrix proves little here, because the mirrors serve whether or not Dragonfly does.
 The leg therefore also records six readings, including whether any blob actually came from a peer and whether a worker can reach the seed peer's open proxy or the node client's upload port.
@@ -66,7 +70,8 @@ Each line says how far the evidence goes, read from the scripts and manifests on
   The dogfood cluster runs one tenant, so the gated profiles use one set per tenant.
 - **The Dragonfly back end with a persistent cache, or with a shared set.** No overlay renders either, and `scripts/dogfood/e2e-start.sh` refuses `E2E_MIRROR_BACKEND=dragonfly` together with `REGISTRY_MIRROR_PERSISTENT=1`.
 - **Spegel as the node layer.** Graded on kind against Dragonfly, and not yet a supported recipe ([Q1192](../queue/Q1192.md)).
-- **A CNI other than GKE Dataplane V2.** The kindnet and Calico e2e lanes run the controller suite on every merge, but on GitHub-hosted runners, so they test the controllers rather than any profile's worker or mirror wiring.
+- **A CNI other than GKE Dataplane V2.** The kindnet and Calico e2e lanes run the controller suite on merges whose diff touches the paths each lane covers.
+  They run on GitHub-hosted runners, so they test the controllers rather than any profile's worker or mirror wiring.
 
 **A combination you need that is not on this page** goes on the backlog as a validated-once candidate.
 New legs join the release gate only on demand, because each one lengthens a gate that already runs three e2e legs.
