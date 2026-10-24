@@ -200,6 +200,7 @@ type scaleSetWorkerSet struct {
 	started     map[string]string // pod name -> started job ID, "" where none is recorded
 	startedJobs map[string]bool   // job IDs some live worker's runner has started
 	idle        int               // workers not terminal or deleting whose runner has started no job
+	idlePods    map[string]bool   // the pods idle counts, by name
 }
 
 // serving reports whether a live worker is running jobID. That is the worker whose
@@ -229,6 +230,17 @@ func (s scaleSetWorkerSet) startedElsewhere(ownerName, podName string) bool {
 	return false
 }
 
+// idleBesides reports whether a worker other than podName could still be given a job.
+// podName is left out because a disrupted pod can read as idle while it is still listed:
+// kube-scheduler stamps a preemption victim's condition before it deletes it.
+func (s scaleSetWorkerSet) idleBesides(podName string) bool {
+	n := s.idle
+	if s.idlePods[podName] {
+		n--
+	}
+	return n > 0
+}
+
 // liveScaleSetWorkers lists this owner's scale-set worker pods, in any phase. One List
 // answers a whole in-flight set, rather than a Get per entry.
 //
@@ -253,6 +265,7 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 	set := scaleSetWorkerSet{
 		started:     make(map[string]string, len(pods.Items)),
 		startedJobs: make(map[string]bool, len(pods.Items)),
+		idlePods:    make(map[string]bool, len(pods.Items)),
 	}
 	for i := range pods.Items {
 		jobID := pods.Items[i].Annotations[AnnotationStartedJobID]
@@ -261,6 +274,7 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 			set.startedJobs[jobID] = true
 		} else if canTakeAJob(&pods.Items[i]) {
 			set.idle++
+			set.idlePods[pods.Items[i].Name] = true
 		}
 	}
 	return set, nil

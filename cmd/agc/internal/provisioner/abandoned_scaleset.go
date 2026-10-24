@@ -182,5 +182,5 @@ func (p *Provisioner) assignedJobAccountedFor(ctx context.Context, target Target
 			"error", err)
 		return false
 	}
-	return workers.startedElsewhere(target.Key().Name, pod.Name) || (idleTakes && workers.idle > 0)
+	return workers.startedElsewhere(target.Key().Name, pod.Name) || (idleTakes && workers.idleBesides(pod.Name))
 }

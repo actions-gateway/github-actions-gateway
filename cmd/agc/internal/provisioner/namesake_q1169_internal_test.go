@@ -103,3 +103,25 @@ func TestRecoverEvictedScaleSetWorkers_AStartedWorkerIgnoresIdleOnes(t *testing.
 
 	assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths))
 }
+
+// TestRecoverDisruptedScaleSetWorker_APreemptedWorkerIsNotItsOwnIdleWorker is the
+// preemption victim inside the window kube-scheduler opens by stamping the condition
+// before the delete: still Pending, no deletion mark, so it reads as a worker that could
+// take a job. Counted as one, it would talk its own recovery out of re-running.
+func TestRecoverDisruptedScaleSetWorker_APreemptedWorkerIsNotItsOwnIdleWorker(t *testing.T) {
+	ctx := context.Background()
+	victim := mintedWorker("job-a", "myorg/repo-a", "111")
+	victim.Status.Phase = corev1.PodPending
+	victim.Status.Conditions = append(victim.Status.Conditions, corev1.PodCondition{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: corev1.PodReasonPreemptionByScheduler,
+	})
+	p, target, _, _, paths := recoveryFixture(t, victim)
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, []string{"/repos/myorg/repo-a/actions/runs/111/rerun-failed-jobs"}, reruns(paths))
+}
