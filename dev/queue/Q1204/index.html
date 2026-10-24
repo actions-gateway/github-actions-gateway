@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1166/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1204/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>updatecli fails every run: GITHUB_TOKEN cannot write workflow files - GitHub Actions Gateway</title>
+        <title>Nothing fails a job that reads a pins.env key in run: without loading it - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#updatecli-fails-every-run-github_token-cannot-write-workflow-files" class="md-skip">
+        <a href="#nothing-fails-a-job-that-reads-a-pinsenv-key-in-run-without-loading-it" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              updatecli fails every run: GITHUB_TOKEN cannot write workflow files
+              Nothing fails a job that reads a pins.env key in run: without loading it
             
           </span>
         </div>
@@ -2627,30 +2627,20 @@
   
 
 
-<h1 id="updatecli-fails-every-run-github_token-cannot-write-workflow-files">updatecli fails every run: GITHUB_TOKEN cannot write workflow files<a class="headerlink" href="#updatecli-fails-every-run-github_token-cannot-write-workflow-files" title="Permanent link">&para;</a></h1>
-<p>The scheduled <code>updatecli</code> workflow has concluded <code>failure</code> on every run from 2026-06-22 through 2026-10-19, and has opened one bump PR in that time: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1695">#1695</a>, Karpenter.
-Measured 2026-10-23 with <code>gh run list --workflow updatecli.yml</code>.</p>
-<p><strong>Every pin in a workflow file is refused at push.</strong> The job hands updatecli <code>secrets.GITHUB_TOKEN</code>, and GitHub refuses that token any write under <code>.github/workflows/</code>: run 37327993420 (2026-10-05) logs 48 <code>refusing to allow a GitHub App to create or update workflow … without workflows permission</code> lines.
-The <code>workflows</code> permission is not one the job's <code>permissions:</code> block can grant <code>GITHUB_TOKEN</code>, so no edit inside the workflow fixes this.
-8 of the 10 manifests under <code>updatecli.d/</code> write one of six workflows (<code>e2e-reusable</code>, <code>autoscaler-drift</code>, <code>integration-test</code>, <code>publish</code>, <code>security-scan</code>, <code>unit-test</code>), so kind, Calico, shellcheck, cosign, syft, buildkit, polaris and envtest have never been bumped by the lane that owns them.
-<a href="../../development/dependency-updates/">dependency-updates.md</a> tells a maintainer to watch for "a silent green with no PR for a long-stale pin", and this run is never green, so that advice does not reach it.</p>
-<p><strong>Decision: move each workflow pin into a file updatecli may write; do not give updatecli a credential carrying <code>workflows: write</code>.</strong> The bump job can already push any non-workflow file with <code>GITHUB_TOKEN</code>, and every bump still lands only through a PR a maintainer merges, so moving the pins adds no capability to any credential.
-A GitHub App or fine-grained token with <code>workflows: write</code> would fix the push in one line and clear the bump PRs' <code>action_required</code> hold, at the price of a stored secret that can rewrite <code>.github/workflows/</code> on any branch; dependency-updates.md already declines a stored App token for the hold alone.</p>
-<p><strong>What the move touches</strong> (measured 2026-10-23):</p>
+<h1 id="nothing-fails-a-job-that-reads-a-pinsenv-key-in-run-without-loading-it">Nothing fails a job that reads a pins.env key in run: without loading it<a class="headerlink" href="#nothing-fails-a-job-that-reads-a-pinsenv-key-in-run-without-loading-it" title="Permanent link">&para;</a></h1>
+<p>CI jobs read their tool pins from <code>scripts/ci/pins.env</code> through a <code>pins</code> step running <code>scripts/ci/load-pins.sh</code> (Q1166).
+An expression reads a pin as <code>steps.pins.outputs.&lt;KEY&gt;</code>, and actionlint rejects that reference in a job with no <code>pins</code> step, so the expression half is gated.
+A <code>run:</code> step reads <code>$KIND_VERSION</code> straight from the environment, and nothing checks that the job loaded it: a job that gains a pin read and forgets the <code>pins</code> step expands it to empty.</p>
+<p>What empty does depends on the consumer (measured 2026-10-24):</p>
 <ul>
-<li>One pins file (for example <code>ci/pins.env</code>), and the 8 manifests retargeted to it.
-  Pins carried by several workflows today collapse to one copy: kind and syft in two each, buildkit in three (<code>e2e-reusable</code>, <code>publish</code>, <code>security-scan</code>).</li>
-<li>Each job using a pin loads the file into <code>$GITHUB_ENV</code> after <code>actions/checkout</code>, since a workflow- or job-level <code>env:</code> cannot read a file; a small composite action keeps that to one line per job.</li>
-<li><code>cosign-release</code> is an action input, so it reads a step output instead of a literal: <code>.github/workflows/publish.yml:422:cosign-release: v2.5.2</code> and <code>.github/workflows/publish.yml:586:cosign-release: v2.5.2</code>.</li>
-<li>Two gates parse pins out of workflow files and must retarget: <code>scripts/ci/check-cosign-pin.sh</code> (reads <code>publish.yml</code>), and <code>scripts/ci/check-tools.sh</code>'s <code>@ci:&lt;VAR&gt;</code> floor (<code>ci_pin</code>, an <code>awk</code> over <code>.github/workflows/*.yml</code>).
-  <code>ci_pin</code> fails closed, so a missed retarget reddens <code>make doctor</code> rather than passing: an unresolved floor is counted as a broken registry row and added to the exit status (<code>scripts/ci/check-tools.sh:391:exit $(( missing_required + broken_floors ))</code>).
-  The yamllint and kubeconform floors (<code>@ci:YAMLLINT_VERSION</code>, <code>@ci:KUBECONFORM_VERSION</code>) have no updatecli manifest and keep their pins in the workflows, so the retargeted <code>ci_pin</code> reads both the pins file and the workflows.</li>
-<li>The heavy jobs' path filters key on their own workflow files (for example <code>.github/workflows/unit-test.yml:137:- '.github/workflows/unit-test.yml'</code> and <code>.github/workflows/e2e-calico.yml:71:- '.github/workflows/e2e-reusable.yml'</code>), so each filter that guards a lane using a moved pin must also list the pins file.
-  Otherwise a bump that touches only the pins file goes green without running the lane it bumps.</li>
-<li>The bump PRs' <code>action_required</code> hold stays, and the maintainer still releases them with <strong>Approve and run</strong>.</li>
+<li><strong>A <code>*_SHA256</code> fails closed.</strong> <code>scripts/fetch/download-verified.sh</code> exits 2 with a usage line on an empty digest.</li>
+<li><strong><code>CALICO_VERSION</code> does not.</strong> <code>scripts/e2e/kind-with-registry.sh:38:CALICO_VERSION=${CALICO_VERSION:-v3.31.5}</code> falls back on empty as well as unset, so an unloaded pin silently runs that hardcoded default, which nothing bumps.</li>
 </ul>
-<p>The first cosign bump this unblocks moves the signer in <code>publish.yml</code> from v2.5.2 to v3, since <code>updatecli.d/cosign.yaml</code> tracks the latest release with no major constraint; review that PR as a major bump.
-<a href="../Q944/">Q944</a> is the neighbouring gap, that no manifest can be dry-run locally.</p>
+<p>Today there are no instances: the review of PR #2113 scanned every job at <code>a048b02</code> and found no <code>run:</code> read of a <code>pins.env</code> key without a <code>pins</code> step, where the same scanner flagged 54 reads on <code>main</code> before the move.
+The gap is the next edit that adds one.</p>
+<p>A gate would list the keys in <code>pins.env</code>, find each workflow job whose <code>run:</code> bodies reference one, and require a step with <code>id: pins</code> before the first such step.
+<code>scripts/ci/workflow-step-body.sh</code> already extracts a step's <code>run:</code> body.
+The <code>kind-with-registry.sh</code> fallback is a second, independent fix: reading <code>pins.env</code> there, or failing on an empty <code>CALICO_VERSION</code>, would remove the stale default whatever the gate does.</p>
 
 
 

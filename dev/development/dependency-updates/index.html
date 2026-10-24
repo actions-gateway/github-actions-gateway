@@ -2624,6 +2624,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What updates each surface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-cis-tool-pins-live-in-pinsenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why CI's tool pins live in pins.env
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2742,43 +2759,43 @@ This doc is the map of those channels: what is automated, by what, and where the
 <td><strong>Dependabot</strong> (<code>pip</code>, weekly, grouped; <code>mkdocs</code> majors ignored because Material 9.x requires <code>mkdocs &lt; 2</code>). A bump to <code>requirements-docs.txt</code> runs the <code>pages</code> site build, and a bump to either docs file runs <code>doc-links</code>, which includes the render-overflow browser check. No CI job installs <code>claude-usage/requirements.txt</code>, so a bump there is unvalidated until someone runs its charts</td>
 </tr>
 <tr>
-<td>kind version + binary checksum (2 files)</td>
-<td><code>KIND_VERSION</code> / <code>KIND_BINARY_SHA256</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> <strong>and</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/autoscaler-drift.yml"><code>autoscaler-drift.yml</code></a></td>
-<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/kind.yaml"><code>updatecli.d/kind.yaml</code></a>, weekly — rewrites both, so they can't drift. This PR doubles as the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate's</a> trigger: the autoscaler harness pins no node image, so a kind bump that moves the default node image's Kubernetes minor is the moment <code>CA_VERSION</code> must move too)</td>
+<td>kind version + binary checksum</td>
+<td><code>KIND_VERSION</code> / <code>KIND_BINARY_SHA256</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/pins.env"><code>scripts/ci/pins.env</code></a>, read by the e2e and live-autoscaler drift workflows</td>
+<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/kind.yaml"><code>updatecli.d/kind.yaml</code></a>, weekly. This PR doubles as the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate's</a> trigger: the autoscaler harness pins no node image, so a kind bump that moves the default node image's Kubernetes minor is the moment <code>CA_VERSION</code> must move too)</td>
 </tr>
 <tr>
 <td>Calico version (2 files)</td>
-<td><code>CALICO_VERSION</code> in <code>e2e-reusable.yml</code> <strong>and</strong> the root <code>Makefile</code></td>
+<td><code>CALICO_VERSION</code> in <code>pins.env</code> <strong>and</strong> the root <code>Makefile</code></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/calico.yaml"><code>updatecli.d/calico.yaml</code></a>, weekly — rewrites both, so they can't drift)</td>
 </tr>
 <tr>
 <td>shellcheck version + checksum</td>
-<td><code>SHELLCHECK_VERSION</code> / <code>SHELLCHECK_SHA256</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a></td>
+<td><code>SHELLCHECK_VERSION</code> / <code>SHELLCHECK_SHA256</code> in <code>pins.env</code></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/shellcheck.yaml"><code>updatecli.d/shellcheck.yaml</code></a>, weekly)</td>
 </tr>
 <tr>
 <td>polaris version + checksum</td>
-<td><code>POLARIS_VERSION</code> / <code>POLARIS_SHA256</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a></td>
+<td><code>POLARIS_VERSION</code> / <code>POLARIS_SHA256</code> in <code>pins.env</code></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/polaris.yaml"><code>updatecli.d/polaris.yaml</code></a>, weekly)</td>
 </tr>
 <tr>
-<td>syft version + checksum (2 files)</td>
-<td><code>SYFT_VERSION</code> / <code>SYFT_SHA256</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> <strong>and</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a></td>
-<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a>, weekly, rewriting both so the release-time and PR-time SBOM generators can't drift apart)</td>
+<td>syft version + checksum</td>
+<td><code>SYFT_VERSION</code> / <code>SYFT_SHA256</code> in <code>pins.env</code>, read by both <code>publish.yml</code> and <code>security-scan.yml</code> so the release-time and PR-time SBOM generators can't drift apart</td>
+<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a>, weekly)</td>
 </tr>
 <tr>
 <td>cosign version + 4 per-platform digests (3 files)</td>
-<td><code>COSIGN_VERSION</code> in the root <code>Makefile</code>, both <code>cosign-release</code> inputs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a>, and the digest table in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign.sh"><code>scripts/release/download-cosign.sh</code></a></td>
+<td><code>COSIGN_VERSION</code> in the root <code>Makefile</code> and in <code>pins.env</code> (which both <code>cosign-release</code> inputs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> read), and the digest table in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign.sh"><code>scripts/release/download-cosign.sh</code></a></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cosign.yaml"><code>updatecli.d/cosign.yaml</code></a>, weekly, rewriting all three, which is what keeps <code>make cosign-pin-check</code> green through a bump. The digests come from the release's <strong>signed</strong> checksums file, verified before they are read; see the strategy note below)</td>
 </tr>
 <tr>
-<td>buildkit builder image digest (3 files)</td>
-<td><code>BUILDKIT_IMAGE</code> in <code>e2e-reusable.yml</code>, <code>security-scan.yml</code> <strong>and</strong> <code>publish.yml</code></td>
-<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>updatecli.d/buildkit.yaml</code></a>, weekly — rewrites all three, so they can't drift)</td>
+<td>buildkit builder image digest</td>
+<td><code>BUILDKIT_IMAGE</code> in <code>pins.env</code>, read by <code>e2e-reusable.yml</code>, <code>security-scan.yml</code> <strong>and</strong> <code>publish.yml</code></td>
+<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>updatecli.d/buildkit.yaml</code></a>, weekly)</td>
 </tr>
 <tr>
 <td>envtest Kubernetes version (3 files)</td>
-<td><code>ENVTEST_K8S_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/integration-test.yml"><code>integration-test.yml</code></a> <strong>and</strong> <code>cmd/gmc/Makefile</code> + <code>cmd/agc/Makefile</code></td>
+<td><code>ENVTEST_K8S_VERSION</code> in <code>pins.env</code> (read by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/integration-test.yml"><code>integration-test.yml</code></a>) <strong>and</strong> <code>cmd/gmc/Makefile</code> + <code>cmd/agc/Makefile</code></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/envtest.yaml"><code>updatecli.d/envtest.yaml</code></a>, weekly — rewrites all three, so they can't drift; resolved from controller-tools' <code>envtest-releases.yaml</code>, <strong>no auto-merge</strong> since it moves the tested Kubernetes version — keep it on the same minor as <code>KIND_NODE_IMAGE</code>. The review-gated PR doubles as a <strong>latest-Kubernetes compatibility canary</strong>: it runs the integration tier against the newest envtest release, so a green PR confirms the project still works on the latest version)</td>
 </tr>
 <tr>
@@ -2808,11 +2825,20 @@ This doc is the map of those channels: what is automated, by what, and where the
 </tr>
 </tbody>
 </table>
-<p>Dependabot config: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>.
+<p>Dependabot config: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>.</p>
+<h3 id="why-cis-tool-pins-live-in-pinsenv">Why CI's tool pins live in <code>pins.env</code><a class="headerlink" href="#why-cis-tool-pins-live-in-pinsenv" title="Permanent link">&para;</a></h3>
+<p>No updatecli manifest writes under <code>.github/workflows/</code>. updatecli pushes with the workflow's <code>GITHUB_TOKEN</code>, and GitHub refuses that token any write to a workflow file: the <code>workflows</code> permission is not one a job's <code>permissions:</code> block can grant it.
+Until Q1166 every manifest that rewrote a workflow failed at push, so kind, Calico, shellcheck, cosign, syft, buildkit, polaris and envtest went unbumped from June to October 2026.</p>
+<p>So the workflows read those pins from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/pins.env"><code>scripts/ci/pins.env</code></a>, one <code>KEY=value</code> per line.
+Each job that needs one loads the file right after checkout with a step that has <code>id: pins</code> and runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/load-pins.sh"><code>scripts/ci/load-pins.sh</code></a>.
+A <code>run:</code> step reads a pin as <code>$KIND_VERSION</code>; a <code>with:</code> input, cache key or step name reads it as <code>${{ steps.pins.outputs.KIND_VERSION }}</code>.
+Use the <code>steps</code> form there, never <code>env.&lt;KEY&gt;</code>: actionlint rejects a reference to a step id the job does not define, so a job missing its <code>pins</code> step fails <code>make actionlint</code>, where <code>env.&lt;KEY&gt;</code> would expand to empty and an action such as cosign-installer would install its own default.</p>
+<p>A GitHub App token with <code>workflows: write</code> was the alternative, and is not used: it would add a stored secret that can rewrite workflows on any branch, for a change the existing token can already make to any other file.
+A pin moved here needs <code>scripts/ci/pins.env</code> added to the path filter of every lane that reads it, or a bump that touches only this file goes green without running the lane it bumps.
 The supply-chain gates that catch drift on any of these (<code>vendor-check</code>, <code>tidy-check</code>, <code>license-notices</code>, trivy, govulncheck) run in CI and via <code>make check</code>.</p>
 <h2 id="why-updatecli-and-not-just-dependabot">Why updatecli, and not just Dependabot<a class="headerlink" href="#why-updatecli-and-not-just-dependabot" title="Permanent link">&para;</a></h2>
 <p>Dependabot only updates dependencies it can recognise inside a package manifest (a <code>go.mod</code>, a <code>Dockerfile</code> <code>FROM</code>, a workflow <code>uses:</code>).
-Several versions we pin are plain <strong>shell env vars</strong> in CI workflows — <code>KIND_VERSION</code>, <code>CALICO_VERSION</code>, <code>POLARIS_VERSION</code>, <code>SHELLCHECK_VERSION</code> — and Dependabot is blind to them.
+Several versions we pin are plain <strong><code>KEY=value</code> lines</strong> in <code>scripts/ci/pins.env</code> or Makefile variables — <code>KIND_VERSION</code>, <code>CALICO_VERSION</code>, <code>POLARIS_VERSION</code>, <code>SHELLCHECK_VERSION</code> — and Dependabot is blind to them.
 Worse, some pair a version with a <strong>companion checksum</strong> (<code>KIND_BINARY_SHA256</code>, and the polaris/shellcheck SHAs): even a regex-based bumper would update the version and leave the checksum stale.</p>
 <p><a href="https://www.updatecli.io/">updatecli</a> closes that gap.
 Its declarative manifests resolve an upstream version <em>and</em> fetch/compute the matching checksum, then open a PR updating both together — the version+checksum coupling no manifest-aware bot handles.</p>
@@ -2833,8 +2859,8 @@ They share a shape:</p>
 <li><strong>File targets</strong> — regex-replace each pin in place and open one PR.</li>
 </ol>
 <p>Three exceptions to the <code>githubrelease</code> source.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>buildkit.yaml</code></a> pins a Docker image <em>digest</em>, not a release tarball, so its source is a <code>dockerdigest</code> (resolving the current digest of the floating <code>buildx-stable-1</code> tag); it still ends in file targets — rewriting the <code>@sha256:…</code> suffix across all three workflows that boot a buildx builder.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/envtest.yaml"><code>envtest.yaml</code></a> has no GitHub release to track (envtest binaries are an index, not tagged releases), so its source is a <code>shell</code> script (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-envtest-version.sh"><code>scripts/updatecli/latest-envtest-version.sh</code></a>) that reads controller-tools' <code>envtest-releases.yaml</code> and prints the latest stable <code>1.&lt;minor&gt;.x</code> — guaranteeing the chosen minor has published binaries — then rewrites <code>ENVTEST_K8S_VERSION</code> across the workflow and both controller Makefiles.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>buildkit.yaml</code></a> pins a Docker image <em>digest</em>, not a release tarball, so its source is a <code>dockerdigest</code> (resolving the current digest of the floating <code>buildx-stable-1</code> tag); it still ends in a file target, rewriting the <code>@sha256:…</code> suffix of <code>BUILDKIT_IMAGE</code> in <code>pins.env</code>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/envtest.yaml"><code>envtest.yaml</code></a> has no GitHub release to track (envtest binaries are an index, not tagged releases), so its source is a <code>shell</code> script (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-envtest-version.sh"><code>scripts/updatecli/latest-envtest-version.sh</code></a>) that reads controller-tools' <code>envtest-releases.yaml</code> and prints the latest stable <code>1.&lt;minor&gt;.x</code> — guaranteeing the chosen minor has published binaries — then rewrites <code>ENVTEST_K8S_VERSION</code> in <code>pins.env</code> and both controller Makefiles.</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a> is the third, and the only manifest that resolves a version <strong>relative to the pin it is replacing</strong>.
 It reads the current <code>CA_VERSION</code> out of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> with a <code>file</code> source, then hands it to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-cluster-autoscaler-patch.sh"><code>scripts/updatecli/latest-cluster-autoscaler-patch.sh</code></a>, which returns the newest patch published <strong>inside that same Kubernetes minor</strong> — never a newer minor, never older than the pin.
 The minor belongs to the kind bump (cluster-autoscaler ships one series per Kubernetes minor, and the harness runs kind's default node image), so letting this manifest cross one would manufacture exactly the version skew the drift gate exists to report.
@@ -2851,12 +2877,12 @@ Its source is the registry's own OCI tag list rather than GitHub releases: the h
 <tbody>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/kind.yaml"><code>kind.yaml</code></a></td>
-<td><code>KIND_VERSION</code> + <code>KIND_BINARY_SHA256</code> in two files</td>
+<td><code>KIND_VERSION</code> + <code>KIND_BINARY_SHA256</code> in <code>pins.env</code></td>
 <td>published <code>.sha256sum</code></td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/calico.yaml"><code>calico.yaml</code></a></td>
-<td><code>CALICO_VERSION</code> in two files</td>
+<td><code>CALICO_VERSION</code> in <code>pins.env</code> and the root <code>Makefile</code></td>
 <td>none (version-only)</td>
 </tr>
 <tr>
@@ -2871,22 +2897,22 @@ Its source is the registry's own OCI tag list rather than GitHub releases: the h
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>syft.yaml</code></a></td>
-<td><code>SYFT_VERSION</code> + <code>SYFT_SHA256</code> in two files</td>
+<td><code>SYFT_VERSION</code> + <code>SYFT_SHA256</code> in <code>pins.env</code></td>
 <td>published <code>syft_&lt;version&gt;_checksums.txt</code> line</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cosign.yaml"><code>cosign.yaml</code></a></td>
-<td><code>COSIGN_VERSION</code>, both <code>cosign-release</code> inputs, and the four per-platform digests in <code>download-cosign.sh</code></td>
+<td><code>COSIGN_VERSION</code> in the <code>Makefile</code> and <code>pins.env</code>, and the four per-platform digests in <code>download-cosign.sh</code></td>
 <td>signature-verified <code>cosign_checksums.txt</code> lines (one shell source per platform)</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>buildkit.yaml</code></a></td>
-<td><code>BUILDKIT_IMAGE</code> digest in three files</td>
+<td><code>BUILDKIT_IMAGE</code> digest in <code>pins.env</code></td>
 <td>none (<code>dockerdigest</code> resolves the digest directly)</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/envtest.yaml"><code>envtest.yaml</code></a></td>
-<td><code>ENVTEST_K8S_VERSION</code> in three files</td>
+<td><code>ENVTEST_K8S_VERSION</code> in <code>pins.env</code> and both controller Makefiles</td>
 <td>none (version-only; <code>shell</code> source from the envtest-releases index)</td>
 </tr>
 <tr>
@@ -2933,7 +2959,8 @@ Their PRs exist so the <a href="../testing/#its-cadence-the-version-bump-not-a-c
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-rebase-stale.yml"><code>dependabot-rebase-stale.yml</code></a> replays the bumps of both onto current <code>main</code> instead (Q427).
   Resolving that conflict by hand can silently downgrade a module; see <a href="../go-workspaces/#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you">go-workspaces.md</a>.</li>
 <li><strong>Manifest rot.</strong> A manifest is bespoke: if an upstream renames a release asset or changes its checksum-file layout, the run fails or no-ops.
-  Watch the scheduled run's status; a silent green with no PR for a long-stale pin is the signal to check the manifest.</li>
+  Watch the scheduled run's status: a red run, or a silent green with no PR for a long-stale pin, is the signal to check the manifests.
+  A red run is not a flake to rerun, since nothing alerts on it: the run failed every week from June to October 2026 before anyone read why.</li>
 </ul>
 <h2 id="deliberately-manual-pins">Deliberately manual pins<a class="headerlink" href="#deliberately-manual-pins" title="Permanent link">&para;</a></h2>
 <p>These are pinned but <strong>not</strong> on the updatecli cadence, for a concrete reason rather than because automation is missing:</p>
