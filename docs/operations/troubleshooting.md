@@ -3198,7 +3198,7 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 The consolidated boundary for the automatic re-run machinery the sections below troubleshoot individually.
 Every firing case spends one slot of the run's shared `maxEvictionRetries` budget (default 2, max 10).
 All but the last work on **both acquisition tiers**; the `vanished` row is `ScaleSet`-only, because the classic tier's provisioning goroutine watches its own worker pod and never has this window.
-A fifth cause, `abandoned`, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
+A sixth cause, `abandoned`, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
 It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Fires — the interrupted run is re-run via `rerun-failed-jobs`:**
@@ -3207,6 +3207,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 |---|---|---|
 | Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` |
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
+| Node shutdown under a running worker: Spot or preemptible reclamation, or any node that goes away | <code class="gag-nowrap">node_shutdown</code> | pod `Failed` with a `DisruptionTarget` condition, reason `TerminationByKubelet` (the kubelet's graceful shutdown) or `DeletionByPodGC` (the node was gone first) |
 | Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
 | Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
 | Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone, or is running another job while no other worker that has not exited is idle to take it |
@@ -3301,6 +3302,8 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExh
   A long job in an opportunistic tier is the usual culprit, since every displacement restarts it from the beginning.
 - `cause="deletion"` climbing — something outside the gateway is deleting live workers: a node drain (upgrades, autoscaler consolidation), a descheduler, or hand-run `kubectl delete pod`.
   Find the deleter before raising the budget; see [Draining a Worker Auto-Re-Runs the Jobs It Interrupts](#draining-a-worker-auto-re-runs-the-jobs-it-interrupts).
+- `cause="node_shutdown"` climbing: workers are landing on nodes that go away under them, usually Spot or preemptible capacity being reclaimed.
+  Every reclamation restarts the job from the beginning, so move long jobs onto on-demand nodes with the RunnerGroup's scheduling constraints.
 - If the retry budget is simply too low for a workload that is legitimately disrupted more than twice per run: increase `maxEvictionRetries` on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not a disruption): the auto-retry is not appropriate.
   Set `maxEvictionRetries: 0` and investigate the underlying workload issue.
@@ -3368,7 +3371,7 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' \
   | grep -E 'Evicted|Preempted|Killing|TaintManagerEviction'
 
 # Whether recovery fired for the window in question. The cause label separates the
-# three recovered disruptions (eviction, preemption, deletion):
+# recovered disruptions (eviction, preemption, node_shutdown, deletion):
 # actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}
 # Flat across a drain of RUNNING workers is unexpected — check the AGC log below.
 # Flat across a drain that only caught Pending workers is correct.

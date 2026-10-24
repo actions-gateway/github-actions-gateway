@@ -620,6 +620,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		attribute.String("gateway.pod.phase", string(outcome.Phase)),
 		attribute.String("gateway.pod.reason", outcome.Reason),
 		attribute.Bool("gateway.pod.preempted", outcome.Preempted),
+		attribute.Bool("gateway.pod.node_shutdown", outcome.NodeShutdown),
 		attribute.Bool("gateway.pod.externally_deleted", outcome.ExternallyDeleted),
 		attribute.Bool("gateway.pod.deleted_before_start", outcome.DeletedBeforeStart),
 		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
@@ -627,7 +628,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod completed",
 		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted,
-		"externallyDeleted", outcome.ExternallyDeleted,
+		"nodeShutdown", outcome.NodeShutdown, "externallyDeleted", outcome.ExternallyDeleted,
 		"deletedBeforeStart", outcome.DeletedBeforeStart, "duration", duration)
 
 	// 6. Disruption recovery. Started here because this goroutine owns the pod and
@@ -639,10 +640,11 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// the fan-out completion behind it) for that long is not an option — so the
 	// done channel is deliberately not waited on.
 	//
-	// Three causes reach the same recovery. The kubelet's node-pressure eviction is the
+	// Four causes reach the same recovery. The kubelet's node-pressure eviction is the
 	// PodFailed/Evicted shape; kube-scheduler preemption deletes its victim instead, so
 	// it is recognised by the DisruptionTarget condition the outcome carried out of the
-	// wait (Q497); and a graceful external deletion — a drain, or a `kubectl delete pod`
+	// wait (Q497); a node shutdown is recognised by its own DisruptionTarget reasons
+	// (Q1179); and a graceful external deletion — a drain, or a `kubectl delete pod`
 	// — is recognised by the deletion mark the outcome carried out of the wait (Q502).
 	// The deletion arm requires PodFailed: a worker whose job finished cleanly inside
 	// the termination grace period reported its own success and has nothing to re-run.
@@ -655,6 +657,8 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		cause = recoveryCauseEviction
 	case outcome.Preempted:
 		cause = recoveryCausePreemption
+	case outcome.NodeShutdown:
+		cause = recoveryCauseNodeShutdown
 	case outcome.Phase == corev1.PodFailed && outcome.ExternallyDeleted:
 		cause = recoveryCauseDeletion
 	}
