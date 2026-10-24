@@ -77,10 +77,11 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 	if err := v.validatePriorityTiers(obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
+	read := &runnerSetRead{reader: v.reader}
+	if err := v.validateScaleSetLabelUniqueness(ctx, read, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateAgentIdentityUniqueness(ctx, obj); err != nil {
+	if err := v.validateAgentIdentityUniqueness(ctx, read, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateProxyGitHubBypass(ctx, obj); err != nil {
@@ -105,10 +106,11 @@ func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	if err := v.validatePriorityTiers(newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
+	read := &runnerSetRead{reader: v.reader}
+	if err := v.validateScaleSetLabelUniqueness(ctx, read, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateAgentIdentityUniqueness(ctx, newObj); err != nil {
+	if err := v.validateAgentIdentityUniqueness(ctx, read, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateProxyGitHubBypass(ctx, newObj); err != nil {
@@ -169,10 +171,10 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.Ru
 // v2 has no acquisitionProtocol field, so a Classic set is recognised by the annotation
 // its v2alpha1 write carries through the conversion (acquisitionProtocolOf).
 //
-// The check is fail-closed: if the List errors, the request is rejected rather than
-// admitted on faith — admitting a possible collision is the failure mode this guards
-// against.
-func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2.RunnerSet) error {
+// The inventory comes from the request's shared read (runnerSetRead). The check is
+// fail-closed: if a List errors, the request is rejected rather than admitted on
+// faith — admitting a possible collision is the failure mode this guards against.
+func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, read *runnerSetRead, rs *agcv2.RunnerSet) error {
 	if acquisitionProtocolOf(rs) != acquisitionProtocolScaleSet {
 		return nil
 	}
@@ -185,7 +187,7 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		// and production paths always wire the uncached API reader.
 		return nil
 	}
-	inv, err := scalesetscope.Of(ctx, v.reader, nil)
+	inv, err := read.scaleSets(ctx)
 	if err != nil {
 		return fmt.Errorf(
 			"cannot verify ScaleSet runnerLabel uniqueness for %q in namespace %q: %w",
