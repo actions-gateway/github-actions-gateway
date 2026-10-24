@@ -169,9 +169,6 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.applyService(ctx, ep, svc); err != nil {
 		return &provisioningError{step: "apply proxy Service", err: err}
 	}
-	if err := r.reconcileAttributionService(ctx, ep, ports); err != nil {
-		return &provisioningError{step: "reconcile attribution Service", err: err}
-	}
 	if err := r.reconcileHPA(ctx, ep); err != nil {
 		return &provisioningError{step: "reconcile proxy HPA", err: err}
 	}

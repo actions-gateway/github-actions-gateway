@@ -60,11 +60,15 @@ The AGC computes each worker's `HTTPS_PROXY` itself on every acquired job (`cmd/
   Worker pods never carry the AGC's name label: the provisioner builds their labels from a fixed set and does not pass template labels through.
 - **The PKI, regenerated rather than kept.** One bundle holds a CA, a server certificate for the `<ep>-proxy` Service names, and a client certificate per attributed namespace with that namespace as its common name.
   The CA key is never persisted, as with the metrics bundle: the whole bundle regenerates when the namespace set changes or nears expiry.
-  A namespace-set change already rolls the pool through `PROXY_ATTRIBUTION_PORTS`, and a hash of the CA in the pod template rolls it on renewal, so the proxy never holds a CA its clients' certificates do not chain to.
+  A namespace-set change already rolls the pool through `PROXY_ATTRIBUTION_PORTS`, and a hash of the CA in the pod template rolls it on renewal.
+  The proxy reads its CA only at start, so until each replica rolls, it rejects the new client certificates: phase 3's reader treats a failed handshake with one replica as a gap in that replica's records, not as an error.
   The client certificates wait in the provider namespace until 2b projects them.
+  The GMC holds no delete verb on Secrets, so when nothing is attributed it empties the two Secrets rather than deleting them; a pool that never attributed makes no call for them at all.
 - **Off is unchanged.** A pool with no attributed namespace gets none of the above, and its pod template is byte-for-byte what it was, so upgrading the GMC rolls no pool.
 
 **2b, the consumer side.** Projecting each namespace's client certificate into it and pruning it on revocation, carrying the attributed port to the AGC for a pool in its own namespace as well as another, the AGC moving its workers' `HTTPS_PROXY`, the AGC's egress to the read port, and the operator docs.
+It also owes the port-reuse window: lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace, so a joiner's failures can land in the leaver's partition until the roll completes.
+Moving a namespace only after the pool has rolled, or not reusing a port freed in the same rollout, closes it.
 
 ## Phase 3 and 4 outline
 

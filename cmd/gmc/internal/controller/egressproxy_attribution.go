@@ -408,13 +408,24 @@ func attributionClientNamespaces(s *corev1.Secret) []string {
 // ensureAttributionCerts keeps the attribution bundle in step with namespaces and
 // returns the CA it holds. It regenerates when either Secret is missing, the two
 // disagree on the CA, the clients Secret names a different namespace set, or the
-// server cert is near expiry. No namespaces deletes both Secrets.
+// server cert is near expiry. With no namespaces it empties both Secrets rather
+// than deleting them, since the GMC holds no delete verb on Secrets.
 func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *gmcv2alpha1.EgressProxy, namespaces []string) ([]byte, error) {
 	if len(namespaces) == 0 {
 		for _, name := range []string{egressProxyAttributionTLSSecretName(ep), egressProxyAttributionClientsSecretName(ep)} {
-			s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: ep.Namespace, Name: name}}
-			if err := r.Delete(ctx, s); err != nil && !apierrors.IsNotFound(err) {
+			var s corev1.Secret
+			if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: name}, &s); err != nil {
+				if apierrors.IsNotFound(err) {
+					continue
+				}
 				return nil, err
+			}
+			if len(s.Data) == 0 {
+				continue
+			}
+			s.Data = nil
+			if err := r.Update(ctx, &s); err != nil {
+				return nil, fmt.Errorf("empty %s: %w", name, err)
 			}
 		}
 		return nil, nil
@@ -498,9 +509,18 @@ func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gm
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &live); err != nil && !apierrors.IsNotFound(err) {
 		return nil, nil, fmt.Errorf("read proxy Deployment: %w", err)
 	}
-	ports := allocateAttributionPorts(namespaces, liveAttributionPorts(&live))
+	current := liveAttributionPorts(&live)
+	ports := allocateAttributionPorts(namespaces, current)
+	// A pool that attributes nothing now and attributed nothing at its last
+	// rollout has nothing to clean up, so the default path makes no further call.
+	if len(ports) == 0 && len(current) == 0 {
+		return nil, nil, nil
+	}
 	caPEM, err := r.ensureAttributionCerts(ctx, ep, namespaces)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := r.reconcileAttributionService(ctx, ep, ports); err != nil {
 		return nil, nil, err
 	}
 	return ports, caPEM, nil

@@ -17,6 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func attributingPool(allowed ...string) *gmcv2alpha1.EgressProxy {
@@ -252,4 +253,38 @@ func TestEgressProxyReconcile_PortsAndBundleAreStableAcrossGrantChanges(t *testi
 	reconcilePool(t, c)
 	assert.Equal(t, "team-a=8101,team-b=8100", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "the freed port is reused")
 	assert.NotEqual(t, second, caHash())
+}
+
+// The GMC's role grants no delete on Secrets, so a reconcile that deletes one is
+// refused 403 on a real cluster. The fake client and envtest run as admin, so the
+// refusal is injected here.
+func TestEgressProxyReconcile_NeverDeletesSecrets(t *testing.T) {
+	ep := attributingPool("team-a")
+	teamA := gatewayUsing("team-a", true)
+	base := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, teamA).WithStatusSubresource(ep).Build()
+	c := interceptor.NewClient(base, interceptor.Funcs{
+		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if _, ok := obj.(*corev1.Secret); ok {
+				return apierrors.NewForbidden(corev1.Resource("secrets"), obj.GetName(), nil)
+			}
+			return cl.Delete(ctx, obj, opts...)
+		},
+	})
+	ctx := context.Background()
+
+	reconcilePool(t, c)
+	require.Equal(t, "team-a=8100", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"])
+
+	teamA.Spec.ProxyFailureAttribution = ""
+	require.NoError(t, c.Update(ctx, teamA))
+	reconcilePool(t, c) // a pool that stops attributing
+	reconcilePool(t, c) // and one that never did, in steady state
+	assert.Empty(t, poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"])
+	for _, name := range []string{"shared-attribution-tls", "shared-attribution-clients"} {
+		var s corev1.Secret
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: name}, &s))
+		assert.Empty(t, s.Data, "%s must hold no key material once nothing is attributed", name)
+	}
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy-attr"}, &corev1.Service{})))
 }
