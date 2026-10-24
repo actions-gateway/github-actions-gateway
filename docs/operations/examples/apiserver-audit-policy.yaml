@@ -9,7 +9,9 @@
 # Actions Gateway Controller (AGC) binary exercising its standing,
 # RBAC-permitted-but-anomalous access. The legitimate code paths avoid these
 # calls (the GMC reads each credential Secret only during reconcile via a
-# cache-bypassing Get; the AGC lists Secret *metadata* only, per security
+# cache-bypassing Get and lists Secret metadata only in tenant namespaces,
+# where it holds a gmc-tenant-secret-reader RoleBinding; the AGC lists Secret
+# *metadata* only, per security
 # finding H-2), so any matching event from a control-plane ServiceAccount is a
 # compromise indicator, not normal operation.
 #
@@ -71,11 +73,13 @@ omitStages:
 omitManagedFields: true
 rules:
   # 1. GMC Secret reads (cluster-wide). The GMC reads each gitHubAppRef Secret
-  #    only during reconcile, via a cache-bypassing Get, and never lists or
-  #    watches Secret bodies. A get rate far above the reconcile/requeue cadence
-  #    — or any list/watch at all — is credential harvesting. Cluster-wide
-  #    (no `namespaces:`) on purpose: a compromised GMC could read Secrets in
-  #    kube-system or any other namespace, which is exactly what we want to see.
+  #    during reconcile via a cache-bypassing Get, and lists and watches Secret
+  #    metadata in each tenant namespace. RBAC grants these reads only in tenant
+  #    namespaces (Q1188), so a 403, or a list/watch with no namespace, is the
+  #    binary trying a read its source never makes; a get rate far above the
+  #    reconcile/requeue cadence is credential harvesting inside the tenants.
+  #    Cluster-wide (no `namespaces:`) on purpose: the refused reads outside the
+  #    tenant namespaces are exactly what we want to see.
   - level: Metadata
     users:
       - system:serviceaccount:gmc-system:gmc-controller-manager
@@ -101,7 +105,7 @@ rules:
       - group: "apps"
         resources: ["deployments"]
       - group: "rbac.authorization.k8s.io"
-        resources: ["roles", "rolebindings"]
+        resources: ["roles", "rolebindings", "clusterrolebindings"]
       - group: "networking.k8s.io"
         resources: ["networkpolicies"]
       - group: "autoscaling"

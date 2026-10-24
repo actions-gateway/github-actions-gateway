@@ -25,9 +25,9 @@ import (
 
 // newManager constructs the controller-runtime manager from the resolved config,
 // metrics server options, and webhook server. The options include the two-layer
-// Secret isolation (a metadata-only Secret informer via WatchesMetadata on the
-// controllers, plus DisableFor here so r.Get() bypasses the cache and reads
-// Secret bodies fresh) and LeaderElectionReleaseOnCancel for fast failover
+// Secret isolation (metadata-only Secret informers, one per tenant namespace,
+// plus DisableFor here so r.Get() bypasses the cache and reads Secret bodies
+// fresh) and LeaderElectionReleaseOnCancel for fast failover
 // (safe because main() exits immediately after mgr.Start returns).
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
@@ -133,6 +133,29 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	// allowlist goes unrefreshed for just over two of these intervals.
 	ipInterval := 24 * time.Hour
 
+	// The GMC reads Secrets only through a RoleBinding it creates in each tenant
+	// namespace, naming its own ServiceAccount (Q1188); without that identity no
+	// gateway could read its credential, so refuse to start.
+	if rc.podNamespace == "" || rc.podServiceAccount == "" {
+		return fmt.Errorf("POD_NAMESPACE and POD_SERVICE_ACCOUNT must both be set: " +
+			"the GMC binds its own ServiceAccount to read Secrets in tenant namespaces")
+	}
+	secretWatches := &controller.TenantSecretWatches{
+		Config:     mgr.GetConfig(),
+		HTTPClient: mgr.GetHTTPClient(),
+		Scheme:     mgr.GetScheme(),
+		Mapper:     mgr.GetRESTMapper(),
+	}
+	if err := (&controller.TenantSecretAccessReconciler{
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		ServiceAccountName:      rc.podServiceAccount,
+		ServiceAccountNamespace: rc.podNamespace,
+		Watches:                 secretWatches,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("create tenant-secret-access controller: %w", err)
+	}
+
 	if err := (&controller.ActionsGatewayReconciler{
 		Client:                      mgr.GetClient(),
 		Scheme:                      mgr.GetScheme(),
@@ -144,6 +167,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		APIServerCIDRs:              parsedAPIServerCIDRs,
 		EgressStaleThreshold:        2*ipInterval + time.Hour,
 		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
+		SecretWatches:               secretWatches,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create actionsgateway controller: %w", err)
 	}
@@ -161,6 +185,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 			EnableServiceMonitor: cfg.enableTenantServiceMonitors,
 			Recorder:             mgr.GetEventRecorder("actionsgateway-v2-controller"),
 			Reader:               mgr.GetAPIReader(),
+			SecretWatches:        secretWatches,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create actionsgateway-v2 controller: %w", err)
 		}

@@ -90,6 +90,9 @@ import (
 type ActionsGatewayV2Reconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// SecretWatches delivers credential Secret events from each tenant namespace
+	// (Q1188). Nil in unit tests, which then reconcile on their own triggers only.
+	SecretWatches *TenantSecretWatches
 	// AGCImage is the AGC container image injected into the Deployment.
 	AGCImage string
 	// AGCExtraEnv is the testing-only AGC_EXTRA_* passthrough (gated by the GMC's
@@ -1203,12 +1206,13 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 }
 
 // SetupWithManager wires the v2 ActionsGateway reconciler: it owns the AGC
-// Deployment (so its readiness change refreshes status), watches the credential
-// Secret (metadata-only — no secret bodies cached), and watches EgressProxy so a
+// Deployment (so its readiness change refreshes status), receives credential
+// Secret events through SecretWatches (metadata-only, per tenant namespace,
+// Q1188), and watches EgressProxy so a
 // gateway sitting Ready=False/ProxyNotFound flips when its defaultProxyRef'd proxy
 // appears.
 func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv2alpha1.ActionsGateway{}).
 		// Serialise reconciles explicitly, matching the v1 gateway reconciler
 		// (Q328): the shared apply/cert helpers assume a single writer per
@@ -1216,10 +1220,6 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// concurrent reconciles of distinct ActionsGateways first.
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Owns(&appsv1.Deployment{}).
-		WatchesMetadata(
-			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(r.secretToActionsGateways),
-		).
 		Watches(
 			&gmcv2alpha1.EgressProxy{},
 			handler.EnqueueRequestsFromMapFunc(r.proxyToActionsGateways),
@@ -1235,7 +1235,14 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(runnerSetImpairmentChanged()),
 		).
 		Named("actionsgateway-v2").
-		Complete(r)
+		Build(r)
+	if err != nil {
+		return err
+	}
+	if r.SecretWatches != nil {
+		r.SecretWatches.AddSink(c, r.secretToActionsGateways)
+	}
+	return nil
 }
 
 // runnerSetToActionsGateway maps a RunnerSet event to the ActionsGateway it binds to

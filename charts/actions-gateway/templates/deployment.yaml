@@ -120,6 +120,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        # POD_SERVICE_ACCOUNT names the subject of the RoleBinding the GMC creates
+        # in each tenant namespace to read Secrets there (Q1188).
+        - name: POD_SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
         # AGC_IMAGE / PROXY_IMAGE are injected into every gateway the GMC
         # provisions. Required; digest-pinned unless allowFloatingImageTags.
         - name: AGC_IMAGE
