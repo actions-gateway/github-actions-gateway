@@ -107,4 +107,25 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-attribution-clients"}, &clients) == nil
 	}, 30*time.Second, 250*time.Millisecond)
 	assert.NotEmpty(t, clients.Data[consumerNS+".crt"])
+
+	// Turning the gateway's opt-in off must clear the pool against real Secret
+	// validation: the TLS Secret keeps its required keys, blanked.
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, ag))
+	ag.Spec.ProxyFailureAttribution = "Disabled"
+	require.NoError(t, k8sClient.Update(ctx, ag))
+	require.Eventually(t, func() bool {
+		var s corev1.Secret
+		if k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-attribution-tls"}, &s) != nil {
+			return false
+		}
+		return len(s.Data[corev1.TLSPrivateKeyKey]) == 0 &&
+			k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-proxy-attr"}, &corev1.Service{}) != nil
+	}, 30*time.Second, 250*time.Millisecond, "the pool never cleared its attribution key material and read Service")
+	var ready v2alpha1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool"}, &ready))
+	for _, c := range ready.Status.Conditions {
+		if c.Type == "Degraded" {
+			assert.Equal(t, metav1.ConditionFalse, c.Status, "the pool must not go Degraded clearing attribution: %s", c.Message)
+		}
+	}
 }

@@ -420,10 +420,14 @@ func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *
 				}
 				return nil, err
 			}
-			if len(s.Data) == 0 {
+			if !slices.ContainsFunc(slices.Collect(maps.Values(s.Data)), func(v []byte) bool { return len(v) > 0 }) {
 				continue
 			}
+			// A kubernetes.io/tls Secret must keep its two keys, so they are blanked.
 			s.Data = nil
+			if s.Type == corev1.SecretTypeTLS {
+				s.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
+			}
 			if err := r.Update(ctx, &s); err != nil {
 				return nil, fmt.Errorf("empty %s: %w", name, err)
 			}

@@ -284,7 +284,9 @@ func TestEgressProxyReconcile_NeverDeletesSecrets(t *testing.T) {
 	for _, name := range []string{"shared-attribution-tls", "shared-attribution-clients"} {
 		var s corev1.Secret
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: name}, &s))
-		assert.Empty(t, s.Data, "%s must hold no key material once nothing is attributed", name)
+		for k, v := range s.Data {
+			assert.Empty(t, v, "%s[%s] must hold no key material once nothing is attributed", name, k)
+		}
 	}
 	assert.True(t, apierrors.IsNotFound(c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy-attr"}, &corev1.Service{})))
 }
