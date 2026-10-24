@@ -38,28 +38,33 @@ const podReasonDeletionByPodGC = "DeletionByPodGC"
 const podReasonDeletionByTaintManager = "DeletionByTaintManager"
 
 // LostToNodeShutdown reports whether pod failed because its node shut down, its Node
-// object was deleted, or its dead node was tainted out-of-service: a PodFailed pod
-// carrying DisruptionTarget=True with reason TerminationByKubelet or DeletionByPodGC, or
-// with reason DeletionByTaintManager while a container is still recorded Running.
+// object was deleted, or its dead node was tainted out-of-service: a PodFailed pod the
+// AGC did not delete itself, carrying DisruptionTarget=True with reason
+// TerminationByKubelet or DeletionByPodGC, or with reason DeletionByTaintManager while
+// the runner container is still recorded Running.
 //
-// All three reasons have only cluster-side writers — the kubelet, the PodGC controller
-// and the taint manager — so, like PreemptionByScheduler, no failing job produces them,
-// and the arm takes no conclusion check. TerminationByKubelet is also what the kubelet
+// All three reasons are written by cluster components — the kubelet, the PodGC
+// controller and the taint manager — so, like PreemptionByScheduler, no failing job
+// produces them, and the arm takes no conclusion check. The AGC's own deletions
+// (AnnotationDeletionReason) are excluded as on the deletion arm: a reaped or reclaimed
+// worker whose node later died is cleanup, not a disruption. TerminationByKubelet is also what the kubelet
 // stamps on a node-pressure eviction and on a kubelet critical-pod preemption; the
 // eviction arm, ordered ahead of this one, keeps the first labelled as an eviction, and
 // the second is a node-side kill of a running job like the shutdown it is grouped with.
 //
 // DeletionByTaintManager follows any untolerated NoExecute taint, including one a human
 // applies to a healthy node. There a live kubelet stops the containers and records their
-// exit before it publishes PodFailed, and the deletion arm takes the pod; the Running
-// container is what only PodGC's out-of-service path leaves, because it fails the pod
-// over a kubelet that is gone. A worker that never started has no Running container
-// either, and belongs to the abandoned handling instead.
+// exit before it publishes PodFailed, and the deletion arm takes the pod; a Running
+// runner is what only PodGC's out-of-service path leaves, because it fails the pod over
+// a kubelet that is gone. Only the runner counts: a regular sidecar such as dind can
+// outlive a runner whose job already ended, and that pod's delete is cleanup. A worker
+// that never started has no Running runner either, and belongs to the abandoned
+// handling instead.
 //
 // PodFailed is required because the kubelet leaves an already-Succeeded pod's phase
 // alone: a job that finished before the shutdown reported its own success.
 func LostToNodeShutdown(pod *corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodFailed {
+	if pod.Status.Phase != corev1.PodFailed || deletedByAGC(pod) {
 		return false
 	}
 	for i := range pod.Status.Conditions {
@@ -71,17 +76,17 @@ func LostToNodeShutdown(pod *corev1.Pod) bool {
 		case corev1.PodReasonTerminationByKubelet, podReasonDeletionByPodGC:
 			return true
 		case podReasonDeletionByTaintManager:
-			return containerStillRunning(pod)
+			return runnerStillRunning(pod)
 		}
 	}
 	return false
 }
 
-// containerStillRunning reports whether any of pod's containers is last recorded Running.
-func containerStillRunning(pod *corev1.Pod) bool {
+// runnerStillRunning reports whether pod's runner container is last recorded Running.
+func runnerStillRunning(pod *corev1.Pod) bool {
 	for i := range pod.Status.ContainerStatuses {
-		if pod.Status.ContainerStatuses[i].State.Running != nil {
-			return true
+		if cs := &pod.Status.ContainerStatuses[i]; cs.Name == WorkerContainerName {
+			return cs.State.Running != nil
 		}
 	}
 	return false

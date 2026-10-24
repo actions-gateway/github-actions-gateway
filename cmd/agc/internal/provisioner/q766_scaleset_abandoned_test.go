@@ -284,7 +284,7 @@ func TestQ766_AbandonedAwaitingRecovery(t *testing.T) {
 		},
 		{
 			name: "never started on an out-of-service node",
-			// Q1207: LostToNodeShutdown declines a worker with no Running container, so
+			// Q1207: LostToNodeShutdown declines a worker with no Running runner, so
 			// this arm is the one that has to take it.
 			pod: func() *corev1.Pod {
 				pod := outOfService(scaleSetWorkerPod("g", identityAnnotations()))
