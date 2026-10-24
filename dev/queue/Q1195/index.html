@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1169/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1195/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A never-started scale-set worker's recovery acts on its namesake's run - GitHub Actions Gateway</title>
+        <title>A reaped scale-set worker leaves an unnamed job with no runner - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-never-started-scale-set-workers-recovery-acts-on-its-namesakes-run" class="md-skip">
+        <a href="#a-reaped-scale-set-worker-leaves-an-unnamed-job-with-no-runner" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A never-started scale-set worker's recovery acts on its namesake's run
+              A reaped scale-set worker leaves an unnamed job with no runner
             
           </span>
         </div>
@@ -2627,23 +2627,19 @@
   
 
 
-<h1 id="a-never-started-scale-set-workers-recovery-acts-on-its-namesakes-run">A never-started scale-set worker's recovery acts on its namesake's run<a class="headerlink" href="#a-never-started-scale-set-workers-recovery-acts-on-its-namesakes-run" title="Permanent link">&para;</a></h1>
-<p>When a scale-set worker is removed before its container ever ran — the reaper's <code>pendingPodDeadline</code> delete, or an external delete of a <code>Pending</code> worker — abandoned-run recovery (Q766, <code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>) force-cancels the run named by the pod's <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code>.
-A worker that never ran has no <code>JobStarted</code>, so those are the identity of the job the pod was created for.
-GitHub gives a scale-set job to whichever of the set's runners asks first, so that job can be running on another worker when this one is abandoned.
-Recovery then force-cancels a run with a live job, and the job that actually lost a runner, if any, is a different one that nothing names.</p>
-<p>Eviction recovery (Q417) has the same keying on a worker that never started a job: evicted, preempted or drained before its runner took one, it re-runs the run the pod was created for.
-Measured with a throwaway internal test on the Q1152 branch: one <code>mintedWorker</code> for job-a in run 111, no start recorded, evicted in place, then <code>RecoverEvictedScaleSetWorkers</code> issued one re-run, of run 111.
-That job is queued or running elsewhere, so the re-run is asked of a run that lost nothing; what GitHub does with it while that run is in progress is unmeasured.
-Q1152 left both paths as they were, because neither has a <code>JobStarted</code> to read.</p>
-<p>This is the same keying Q1152 corrected for a worker that started a job, on the two recovery paths whose pod has none to read instead.
-Found from source while working Q1152; not observed on a cluster, and the rate is unmeasured.
+<h1 id="a-reaped-scale-set-worker-leaves-an-unnamed-job-with-no-runner">A reaped scale-set worker leaves an unnamed job with no runner<a class="headerlink" href="#a-reaped-scale-set-worker-leaves-an-unnamed-job-with-no-runner" title="Permanent link">&para;</a></h1>
+<p>A scale-set worker reaped <code>Pending</code> past <code>pendingPodDeadline</code> takes one runner out of its set, so one of the set's assigned jobs is left with no runner to start it.
+Abandoned-run recovery (Q766) force-cancels and re-runs the run of the job the pod was created for.
+Since Q1169 it skips that when another worker's runner started that job, because that run lost nothing (<code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>, <code>assignedJobAccountedFor</code>).
+The job that did lose its runner is then a different one, and nothing names it, so it is recovered by nothing.
+This is the open part Q1169 left: before Q1169 the same job was stranded too, and a live run was cancelled beside it.</p>
+<p><strong>What becomes of the stranded job is unmeasured.</strong> The design doc and the identity-unknown Event say GitHub cancels an unstarted job at its ~15-minute timeout, and that a manual re-run is then required; that is the expected outcome here, not one measured for this shape.</p>
+<p><strong>The likely record is the listener's in-flight set</strong> (<code>scalesetlistener.GuardState.InFlight</code>, Q606), which already holds the run identity of every job whose worker the listener built.
+At the reap, the stranded job is an in-flight entry with no <code>actions-gateway.com/started-job-id</code> on any live worker and no live worker minted for it, the same reading the orphan scan's <code>scaleSetWorkerSet.serving</code> takes after a restart (Q844).
+Two things make it harder than reusing that: the reconciler only reads the guard ConfigMap, once per process, and a job whose <code>JobStarted</code> has not arrived yet reads exactly like a stranded one, so the check needs a settle window or a later re-check.</p>
+<p>Found from source while working Q1169; not observed on a cluster, and the rate is unmeasured.
 It needs a worker stuck <code>Pending</code> past its deadline while another runner of the same set took that worker's job, so it shows on a set whose workers schedule unevenly (a node pool scaling up while others are warm).</p>
-<p><strong>A likely fix</strong>: before force-cancelling, look for a live worker whose <code>actions-gateway.com/started-job-id</code> is the abandoned pod's job (the pod name is <code>scaleSetPodName(set, jobID)</code>, so the job ID needs recording on the pod or matching by name).
-Where one exists the job is running and nothing is cancelled or re-run; on the eviction path, an idle live worker that could still take the job means the same.
-Which job, if any, is stranded instead is the open part: it is one assigned job that never sees a <code>JobStarted</code>, and the listener's in-flight set is the only record that could name it.</p>
-<p><strong>Reach.</strong> Any scale-set tenant whose worker is abandoned while its job runs elsewhere: a live run is cancelled and re-run, costing the run's progress and one slot of its retry budget.
-On the eviction path a re-run is requested for a run that lost nothing, and its cost is unmeasured.</p>
+<p><strong>Reach.</strong> Any scale-set tenant hitting that shape: one job's run waits out GitHub's unstarted-job timeout and needs a manual re-run, where Q766 meant it to be force-cancelled and re-run automatically.</p>
 
 
 

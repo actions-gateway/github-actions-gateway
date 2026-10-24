@@ -2980,12 +2980,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
 </tr>
 <tr>
-<td><a href="Q1169/">Q1169</a></td>
-<td><a href="../design/04-operational-flows/">A never-started scale-set worker's recovery acts on its namesake's run</a></td>
+<td><a href="Q1195/">Q1195</a></td>
+<td><a href="../design/04-operational-flows/">A reaped scale-set worker leaves an unnamed job with no runner</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>When a scale-set worker is removed before its container ever ran — the reaper's <code>pendingPodDeadline</code> delete, or an external delete of a …</td>
+<td>M</td>
+<td>A scale-set worker reaped <code>Pending</code> past <code>pendingPodDeadline</code> takes one runner out of its set, so one of the set's assigned jobs is left …</td>
 </tr>
 <tr>
 <td><a href="Q1174/">Q1174</a></td>

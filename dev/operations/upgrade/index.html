@@ -1726,6 +1726,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3562,6 +3573,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4314,6 +4336,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
 <li><a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets</a></li>
+<li><a href="#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run">Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run</a></li>
 <li><a href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started</a></li>
 <li><a href="#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed">Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed</a></li>
 <li><a href="#non-breaking-a-scale-set-workers-jit-config-secret-is-now-owned-by-its-pod">Non-breaking: a scale-set worker's JIT-config Secret is now owned by its pod</a></li>
@@ -4460,6 +4483,15 @@ When the template names none, the AGC now presents the worker ServiceAccount's <
   An AGC running against a Role without the grant reads anonymously as before, and a refused read names the unread ServiceAccount in its message.</li>
 <li>A pull Secret named in both places can come out of the pod template, since the ServiceAccount's is now read too; leaving it in changes nothing.</li>
 </ul>
+<p>No action is required at upgrade time.</p>
+<h3 id="non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run">Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run<a class="headerlink" href="#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run" title="Permanent link">&para;</a></h3>
+<p>A worker whose runner started no job carries the run identity of the job it was created for, and GitHub can give that job to another runner of the set.
+Recovery used to force-cancel that run when the worker was reaped <code>Pending</code>, and re-run it when the worker was evicted, preempted or drained, though the job was running elsewhere (Q1169).</p>
+<p>Recovery now lists the set's workers first.
+A reaped or deleted <code>Pending</code> worker's run is left alone when another worker carries its job as <code>actions-gateway.com/started-job-id</code>.
+An evicted, preempted or drained worker with no <code>started-job-id</code> is not re-run when another worker started its job.
+Where its container never ran, it is also not re-run while a live worker whose runner has started nothing could still take that job; a pod marked as a disruption target is never counted as that worker.
+The AGC logs each skip at <code>info</code>; no metric or Event changes.</p>
 <p>No action is required at upgrade time.</p>
 <h3 id="non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started">Non-breaking: a scale-set worker's run identity follows the job its runner started<a class="headerlink" href="#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started" title="Permanent link">&para;</a></h3>
 <p>GitHub gives a scale-set job to whichever of the set's runners asks first, so a worker can run a different job, from a different run, than the one it was created for.

@@ -8287,11 +8287,15 @@ Either one missing makes recovery inert for that pod.</p>
 <td><code>HANDLED</code> set but no re-run</td>
 <td>The claim succeeded and the rerun call failed. Look for <code>eviction auto-retry failed</code> in the AGC log, or an exhausted budget</td>
 </tr>
+<tr>
+<td><code>HANDLED</code> set, no re-run, and the pod has no <code>started-job-id</code></td>
+<td>Deliberate. Another worker has started the job this pod was created for, or the pod's container never ran and an idle worker can still take that job, so that run lost nothing. The AGC logs <code>not re-running that job's run</code> (Q1169)</td>
+</tr>
 </tbody>
 </table>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a><span class="c1"># The AGC's own account of what it did with the eviction.</span>
 <a id="__codelineno-142-2" name="__codelineno-142-2" href="#__codelineno-142-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed'</span>
+<a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed|not re-running that job'</span>
 <a id="__codelineno-142-4" name="__codelineno-142-4" href="#__codelineno-142-4"></a>
 <a id="__codelineno-142-5" name="__codelineno-142-5" href="#__codelineno-142-5"></a><span class="c1"># The identity the queue actually delivered (raise the AGC to debug first).</span>
 <a id="__codelineno-142-6" name="__codelineno-142-6" href="#__codelineno-142-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
