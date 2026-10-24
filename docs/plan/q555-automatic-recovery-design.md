@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Nothing here is built.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -79,6 +79,7 @@ That is one of R5's stated blind spots.
 The AGC's ConfigMap verbs are `get`, `create` and `update`, with no informer, so every read is an uncached API call.
 The AGC loads the ledger once at start and keeps an in-memory copy, updated on each of its own writes and re-read when a compare-and-swap loses.
 Lookups, including the per-provision floor lookup below, read that copy and cost nothing.
+Q1182 ships without the copy: its only reads are a reservation's own compare-and-swap and the deletion arm's `selfCancelledAttempt` check on a cancelled run, both rare, so each reads uncached; the copy arrives with the first lookup on a hot path, Q1183's floor.
 Writes happen on a failed completion, a GAG re-run (its budget reservation) and a pairing, never on a succeeded job with no record, so the write rate tracks failures and not throughput.
 
 It holds a version and three maps, every entry carrying its own `expiresAt` so any AGC version can age any map, including one it does not understand:
@@ -125,8 +126,8 @@ Whether `JobCompleted` carries them too is inferred from upstream's struct and u
 - **Expiry:** failure and pending entries after 7 days and 24 hours respectively; `reruns` entries after 30 days, GitHub's re-run window from recall, so a budget cannot refill while the run can still be re-run.
 - **The cap evicts failures, never budgets.** Past a cap sized so the object stays under 512 KiB, the oldest failure entries go first, except one holding a `memoryFloor` whose re-run has not completed.
   A `reruns` or `pending` entry is never evicted to make room: if those alone reach the cap, new reservations fail and their re-runs are withheld, because evicting one would refill its run's budget.
-- **The size, estimated rather than measured:** a `reruns` entry is about 300 bytes with two attempts recorded, so the 512 KiB cap holds about 1,700 runs that GAG re-ran inside 30 days on one set before failures are crowded out entirely.
-  A unit test asserts the worst case against maximal entries in every map.
+- **The size, measured** by `TestRerunLedger_CapHoldsEnoughBudgets` with 63-character pod names: a `reruns` entry is 476 bytes at the default budget of 2 with 40-character job names, so the cap holds about 1,100 runs GAG re-ran inside 30 days on one set, and 2,533 bytes at the field's ceiling of 10 with 100-character names, about 206 runs.
+  Q555 extends the test to the `failures` map when it adds it.
 
 ### Pairing and attribution (R1, R2, R8)
 
@@ -222,7 +223,7 @@ The `EvictionRerunWithheld` Event names the reason and the fix.
 Notes on the table:
 
 - **`selfCancelledAttempt` replaces an arm exemption.** The abandoned arm records the attempt it force-cancels before cancelling, so the check holds on whichever arm a merge lets through, and a user's cancel of a later attempt is never mistaken for GAG's.
-  Until Q1182 creates the ledger, Q1181 keeps the arm exemption, which is sound while there is no merge.
+  Q1182 shipped first, so Q1181 reads `selfCancelledAttempt` on every arm from the start and needs no arm exemption; until Q1181, only the deletion arm checks the conclusion, and it already honours the record.
   The abandoned arm also reads the conclusion **before** force-cancelling: a run a user or a concurrency group already cancelled is withheld, not cancelled again and re-run.
 - **`already_rerun` asks about the job, not the run.** A single-job re-run moves `run_attempt` (from recall) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.
@@ -450,7 +451,7 @@ With no `spec.retry`, it returns today's behaviour.
 
 ### The storage shape
 
-**Decide:** the ledger's compatibility rules below.
+**Built** (Q1182): the ledger's compatibility rules below.
 The ledger is internal, not API, but two AGC versions share it during every rollout and every rollback, so it is built to be read and written by a version that does not understand all of it:
 
 - **Additive changes need no version gate.** Unknown fields survive a rewrite and every entry ages itself by `expiresAt`, so a new field or a new map needs nothing from an older AGC, and a rollback across one changes nothing.
@@ -550,8 +551,8 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 ## Order of work
 
 1. The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.
-2. Q1181, which needs no ledger: the futility checks on the widened run read, keeping the abandoned arm's exemption for `run_cancelled`.
-3. Q1182 creates the ledger store, with its version rules, `reruns` map and reservation, moves the budget onto it, and swaps Q1181's exemption for `selfCancelledAttempt`.
+2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
+3. Q1181: the futility checks on the widened run read, honouring `selfCancelledAttempt` for `run_cancelled`, between the run read and the reservation in `handleScaleSetEviction`.
 4. Q555 adds the `failures` map, the snapshot, the pairing and the metrics on that store.
 5. Q1183: the `pending` map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.
 6. Q1178 any time; Q1184 after its review.

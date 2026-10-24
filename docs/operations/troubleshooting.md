@@ -1574,7 +1574,7 @@ Two bounds apply, and both are visible:
 
 - **The retry budget.** The re-run draws on the same per-run budget as every other disruption recovery, so it reports as `actions_gateway_eviction_retries_total{cause="abandoned"}`, and a run abandoned again after its re-run is capped at `spec.maxEvictionRetries` re-runs in total.
   On exhaustion you get `actions_gateway_eviction_retries_exhausted_total{cause="abandoned"}` and an `EvictionRetriesExhausted` Warning Event on the owner, and the run then needs a manual re-run.
-  The budget is keyed by run ID alone, so a run that is abandoned *and* evicted cannot spend two budgets.
+  The budget covers every disruption cause, so a run that is abandoned *and* evicted cannot spend two budgets.
 - **The wait window.** Capacity may never return, because `pending_deadline` also reaps a pod no amount of waiting will place (an unpullable image, a constraint no node satisfies).
   After 30 minutes the wait is given up and counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`; the successful case is `{outcome="capacity_returned"}`.
 
@@ -2172,7 +2172,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `SessionUnauthorized` | Warning | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. Also sets the `Degraded` condition. | [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration) |
 | `QuotaRetriesExhausted` | Warning | Worker pod creation was abandoned after exhausting the namespace `ResourceQuota` retry budget (`maxQuotaRetries`). | [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
-| `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
+| `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, each of which keeps its own per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
 | `EvictionRerunWithheld` | Normal | An externally deleted worker's run had already concluded `cancelled`, so recovery deliberately did not ask GitHub to re-run it and the cancel stands (Q811). The budget slot is spent; no manual re-run is wanted. Normal, because nothing is wrong. | [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod) |
 | `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
@@ -3245,7 +3245,11 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 
 ## Evicted Worker Pods Exhausting Retry Budget
 
-> **Applies to both acquisition tiers.** The budget is keyed by workflow run alone, so `maxEvictionRetries` caps re-runs per run across classic and scale-set together, not once each — several evicted workers of one run share one budget whichever tier they came from.
+> **Applies to both acquisition tiers, each with its own budget.** `maxEvictionRetries` caps GAG's re-runs per run across every disruption cause.
+> A scale-set `RunnerSet` counts them in its `scaleset-failures-<set>` ConfigMap, so an AGC restart does not refill the budget, and several disrupted workers of one run attempt share one re-run rather than each spending a slot (Q1182).
+> A classic `RunnerGroup` counts in AGC memory.
+> A run whose workers span a classic group and a scale-set set, or two sets, has a budget in each, so it can be re-run up to `maxEvictionRetries` times per set.
+> A human's re-runs never count.
 > Split the counters by the `tier` label to see where the evictions are landing.
 > If the counters are flat at **zero** on a scale-set set rather than exhausted, the recovery is not firing at all: see [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) below.
 >
@@ -3261,6 +3265,13 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 > `reason="run_never_concluded"` means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); `reason="api_error"` means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem.
 > `reason="conclusion_unknown"` is the deletion arm only: its cancel check (Q811) spent the whole window unable to reach the run (the request never completing, or a 5xx), so no re-run was fired rather than one fired blind against a possible cancel.
 > A 4xx or an undecodable 2xx on that same check lands in `api_error` instead, and fails immediately rather than at the window: neither answer changes inside fifteen minutes, and a 2xx that is not a run means the configured endpoint is not the API.
+> On the scale-set tier every cause reads the run once before reserving its budget, to learn the attempt the job failed in, and the same two reasons cover that read.
+> `reason="budget_unrecorded"` is the scale-set tier only: the budget decision could not be written to `scaleset-failures-<set>`, so the re-run was withheld rather than made without a slot (Q1182).
+> The AGC log line `could not record the run's re-run budget decision` carries the cause: a `configmaps` write the tenant `Role` refuses, a ledger at its 512 KiB cap, or `requires writer version`: a newer AGC wrote the ConfigMap with a schema this one may not write, which a rollback produces and which clears once the newer AGC is back.
+> Inspect it with `kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='{.data.failures\.json}'`.
+> **A disrupted worker with no re-run and no counter at all**, on the scale-set tier, was most likely merged: the AGC log says `a re-run is already reserved for this run attempt`, then `the run was already re-run past the attempt this job failed in`.
+> The re-run another worker's disruption reserved re-ran this job too, because GitHub re-runs every failed job of the attempt at once.
+> If that re-run never lands (its recovery failed, or the AGC restarted first), the merged worker's own loop re-runs the attempt instead, spending no further slot.
 > On an AGC older than the Q503 fix, the single un-retried re-run always lost this race and every evicted job needed a manual re-run.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing.
@@ -3270,7 +3281,7 @@ Jobs are being cancelled after eviction despite automatic retries.
 **Likely causes.**
 - Worker pod keeps being evicted on every attempt (persistent node pressure, OOM loop, or scheduling conflict that prevents the pod from completing).
 - The run is being **repeatedly preempted** by a higher `priorityTiers` floor.
-  The budget is shared across both causes (see the `cause` label below), so a run alternately evicted and preempted exhausts it twice as fast as either alone.
+  The budget is shared across every cause (see the `cause` label below), so a run alternately evicted and preempted exhausts it twice as fast as either alone.
 - `maxEvictionRetries` is set too low for a workload that is disrupted more than twice per run.
 
 **Diagnostics.**
@@ -3278,7 +3289,7 @@ Jobs are being cancelled after eviction despite automatic retries.
 ```sh
 # Check disruption retry metrics. The tier label splits the two acquisition paths
 # (classic, scaleset) and the cause label splits the three disruptions (eviction,
-# preemption, deletion); the retry budget itself is shared across every combination.
+# preemption, deletion); the retry budget is shared across causes and kept per tier.
 # actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}
 # actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier, cause}
 # actions_gateway_eviction_rerun_failures_total{namespace, runner_group, tier, cause, reason}
@@ -3429,7 +3440,7 @@ Expected behaviour is one automatic re-run per preempted run.
 
 1. **The victim was not actually preempted.** A `kubectl drain`, a manual delete, or a descheduler eviction looks similar but is recovered under `cause="deletion"` instead (see the previous runbook) — and only if the worker reached a terminal phase before the object went away.
    Check which cause, if any, actually moved.
-2. **The retry budget is spent.** `maxEvictionRetries` (default 2) is a hard lifetime cap per workflow run, shared across both tiers *and* both disruption causes: a run already re-run twice for node-pressure evictions has nothing left for a preemption.
+2. **The retry budget is spent.** `maxEvictionRetries` (default 2) is a hard lifetime cap per workflow run on each tier, shared across every disruption cause: a run already re-run twice for node-pressure evictions has nothing left for a preemption.
    `actions_gateway_eviction_retries_exhausted_total{cause="preemption"}` confirms it, as does a `Warning` event with reason `EvictionRetriesExhausted`.
 3. **The worker carried no workflow-run identity** (scale-set tier only).
    `actions_gateway_eviction_recovery_identity_unknown_total{cause="preemption"}` increments and a `Warning` event with reason `EvictionRecoveryIdentityUnknown` is recorded on the `RunnerSet`.
@@ -3578,7 +3589,7 @@ kubectl logs -n <namespace> deploy/<agc-deployment> \
 - **Evicted pods disappearing before recovery runs.** Recovery reads the evicted pod, so it must still exist.
   A very short `completedPodTTL` combined with a backlogged AGC can delete the evidence first; raise `completedPodTTL` (default 5 m) if you see terminal workers vanishing within seconds.
 - **Budget exhausted instead.** See [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget).
-  Note the budget is shared across both tiers for a given run, not per tier.
+  Note the budget is per tier, and on the scale-set tier per `RunnerSet`, so a run spanning two of them has a budget in each.
 - **Node drains rather than kubelet evictions.** A drained pod is deleted, not left `PodFailed`/`Evicted`, and the runner reports its own cancellation through the SIGTERM relay — so it is deliberately outside this mechanism, not a gap in it.
 - **Recovery fires but the rerun call fails (GHES).** If the AGC logs `disruption auto-retry failed ... rerun API returned 401: Bad credentials`, the detection worked and the *call* went to the wrong host.
   Before the Q504 fix the rerun always addressed `api.github.com` regardless of `GITHUB_API_BASE_URL`, so on GHES it presented a token that host had never issued.

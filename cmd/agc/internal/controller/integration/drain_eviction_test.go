@@ -78,19 +78,31 @@ func requirePodGone(t *testing.T, namespace, name string) {
 
 // rerunCounter is a stand-in for the GitHub REST API that counts rerun-failed-jobs
 // calls. Both tiers reach GitHub through the same handleEviction → rerunFailedJobs
-// path, so one counter is the observable for "recovery fired" on either.
+// path, so one counter is the observable for "recovery fired" on either. A run read
+// answers with runAttemptBody.
 func rerunCounter(t *testing.T) (*httptest.Server, *atomic.Int64) {
 	t.Helper()
 	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "rerun-failed-jobs") {
 			calls.Add(1)
+		} else if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(runAttemptBody(calls.Load()))
+			return
 		}
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]string{})
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &calls
+}
+
+// runAttemptBody is a run read's answer after reruns accepted re-runs: the scale-set
+// tier keys its re-run budget on run_attempt and refuses a run without one, and live
+// GitHub starts a new attempt for each re-run.
+func runAttemptBody(reruns int64) map[string]int64 {
+	return map[string]int64{"run_attempt": reruns + 1}
 }
 
 // TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun measures the classic tier's

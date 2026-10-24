@@ -42,10 +42,10 @@ import (
 // property Q420 chose a pod annotation over in-memory state to get, for the same
 // fire-and-forget reason.
 //
-// What is reused unchanged: handleEviction, reserveEvictionRetry, the sharded
-// per-run-id lock, and the sweeper. The Q106 invariant — at most maxEvictionRetries
-// re-runs per run_id — is a property of that shared budget, so it holds across both
-// tiers at once rather than per tier.
+// What is reused: handleEviction and its re-run loop. The budget is not: the classic
+// tier's is in process memory, which a restart refills, so this tier's lives in the
+// owner's failure ledger (Q1182, rerun_ledger.go). The Q106 invariant, at most
+// maxEvictionRetries re-runs per run, holds per tier, and per set on this one.
 
 // Eviction-recovery tier labels for the eviction metrics, so an operator can tell a
 // classic recovery from a scale-set one — the two are detected by entirely different
@@ -277,7 +277,8 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 		return closedChan()
 	}
 
-	return p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause)
+	return p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause,
+		rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName]})
 }
 
 // disruptionAwaitingRecovery reports whether pod is a scale-set worker that lost its job

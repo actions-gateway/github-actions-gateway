@@ -77,7 +77,7 @@ Onboarding a new team is approving a namespace, not standing up a deployment.
 - **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, and NetworkPolicies are part of what the controller provisions, all operating within the platform-owned namespace `ResourceQuota`.
   Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
 
-- **Worker eviction is no longer a paging event.** Evicted, preempted, and drained workers have their runs recovered automatically, under one shared per-run budget.
+- **Worker eviction is no longer a paging event.** Evicted, preempted, and drained workers have their runs recovered automatically, under one per-run budget that an AGC restart does not refill on the scale-set tier.
   The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
 
 - **Per-tenant cost and capacity visibility out of the box.** Prometheus metrics scoped per tenant and per runner group make it straightforward to spot under-used GPU quota, hot tenants approaching their limits, and which runner shapes are driving the most cost — without per-tenant deployment-level instrumentation to assemble.
@@ -122,7 +122,7 @@ The **kubelet's node-pressure eviction** (memory or disk exhaustion) is detected
 **kube-scheduler preemption** — what a floor tier actually drives — deletes its victim instead, and is detected from the `DisruptionTarget` condition with reason `PreemptionByScheduler` that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).
 
 Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417).
-A configurable retry budget, shared across both tiers *and* both causes per workflow run, prevents infinite loops on persistently failing workloads.
+A configurable retry budget per workflow run, shared across every disruption cause, prevents infinite loops on persistently failing workloads.
 Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.
 
 **What about a drain?** An operator's `kubectl drain` or `kubectl delete pod` leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is **also re-run automatically**, keyed on the pod's `deletionTimestamp` at the moment its terminal phase publishes.

@@ -378,10 +378,11 @@ The two paths differ by whether the report escapes, and that is what sets both t
 
 **A preemption is on the graceful side of that line, so the refusal window barely arises there.** kube-scheduler deletes its victim rather than SIGKILLing it, the SIGTERM relay gets the runner its grace period, and the job concludes in seconds rather than waiting out the lock — so the first or second re-run call is already past the refusal that an eviction's recovery must out-wait for ~10 minutes.
 A drain (Q502) sits on the same graceful side, with a measured conclusion latency of 15–26s — a few paced retries at most.
-The three causes share one code path, one budget, and one retry loop; they differ only in how long that loop runs.
+The three causes share one code path, one budget per tier, and one retry loop; they differ only in how long that loop runs.
 
 
-`maxEvictionRetries` is a hard lifetime cap per `run_id`, not a per-disruption-wave allowance: once exhausted, every subsequent disruption of that run is a no-op (counted by `eviction_retries_exhausted_total`) until the AGC restarts and the in-memory counters reset.
+`maxEvictionRetries` is a hard lifetime cap per `run_id`, not a per-disruption-wave allowance: once exhausted, every subsequent disruption of that run is a no-op (counted by `eviction_retries_exhausted_total`).
+On the classic tier the counters are in memory, so an AGC restart resets them; the scale-set tier keeps its budget in a ConfigMap that a restart does not touch (below).
 Because a single workflow run can have several worker pods evicted simultaneously under node pressure — or preempted together when a floor tier claims capacity — the check-and-increment of the per-run counter is serialized per `run_id`, so concurrent disruptions can never collectively exceed the budget, whatever mix of causes they are.
 
 #### On the scale-set tier (Q417)
@@ -418,7 +419,15 @@ sequenceDiagram
 Three properties make this equivalent rather than merely similar.
 The claim is taken **before** the GitHub call and **off** the pod, so recovery is at-most-once per disrupted pod across reconciles, restarts and replicas, and survives the pod's own deletion: a duplicate re-run would silently spend another slot of the run's budget, and a lost claim used to cost the run its recovery entirely (Q1108, below).
 The recovery scan runs **before** the worker-pod reaper in the same reconcile, so a terminal pod is never deleted before its identity is read.
-And the budget is the same budget, keyed by `run_id` alone: `maxEvictionRetries` bounds re-runs per run across both tiers **and both disruption causes** together, with the `tier` and `cause` metric labels splitting the reporting but not the cap.
+And the budget survives a restart, which the classic tier's in-memory one does not (Q1182).
+It lives in the set's `scaleset-failures-<set>` ConfigMap as a count of GAG's own re-runs per run plus a record, per run attempt GAG re-ran from, of the disruptions that re-run covered, written with the same read, modify, compare-and-swap loop as the claim.
+A reservation is taken once per disruption, after a run read that names the attempt the job failed in, and does one of four things: it **resumes** a reservation the same worker already holds, **merges** into a re-run already reserved for that attempt (rerun-failed-jobs re-runs every failed job of an attempt, so a second disruption of the same attempt is covered and spends nothing), **refuses** at `maxEvictionRetries`, or **reserves** a slot.
+Every outcome but a refusal then enters the re-run loop, which reads the run before each call and stands down once its attempt is past the one the job failed in.
+That is what stops two disruptions in one run from each landing a re-run (before it, the second retried against `403 This workflow is already running` until GAG's first re-run concluded, then re-ran the run again), and what keeps a merge safe: a merged disruption re-runs the attempt itself if the reservation it joined never lands, because that recovery failed or the AGC restarted before it.
+A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; Q1181's `already_rerun` check closes that.
+The cap covers every disruption cause, so the `cause` label splits the reporting but not the cap; it is per set, so a run whose jobs span two sets, or a set and a classic group, has a budget in each.
+A run that cannot be read, or a decision that cannot be written, withholds the re-run, counted as `eviction_rerun_failures_total{reason="conclusion_unknown"|"api_error"|"budget_unrecorded"}`.
+The ConfigMap's schema and its rules for being shared by two AGC versions are in [the Q555 recovery design](../plan/q555-automatic-recovery-design.md#the-storage-shape).
 
 #### Which disruptions are recovered, and which are not
 
@@ -588,7 +597,7 @@ So the record is written while the AGC still owns the run and cleared when the j
 A record that outlives its worker *pod* is a run whose worker went away unobserved, and the reconciler re-runs it, once per process, ahead of the reaper (so a genuinely failed job's pod is still there to vote against it) and ahead of the listener's first poll (so the preempted job's own `JobCompleted` has not yet retired the record).
 Reported as `cause="vanished"` and an `OrphanedWorkerRecovered` Event, because the pod took the answer to "which disruption" with it.
 
-Two residuals stay, both narrower than the one they replace and both bounded by the shared per-run retry budget:
+Two residuals stay, both narrower than the one they replace and both bounded by the per-run retry budget:
 
 * A previous process that reaped a terminal pod and then died before reading that job's completion re-runs a genuinely failed job once.
   Reaching it needs the completion to have gone unread for at least `completedPodTTL` while the listener was polling, and then a kill inside that state.
@@ -646,7 +655,7 @@ This is unlike the Q260 fan-out's sibling completions, which conclude nothing be
 The job was abandoned because its worker could not be placed, so an immediate re-run re-queues it into the pool that was starved and a shortage compounds into a re-run storm.
 The provisioner registers the run instead and re-runs it when a worker pod of the same owner binds to a node (`PodScheduled=True`) after the abandonment, which is the same evidence-of-capacity test the Q512 capacity-gate latch uses, and for the same reason: binding rather than phase, because a bound pod still pulling images proves the pool has room just as well as a running one.
 Two bounds keep the loop finite.
-The re-run goes through the shared per-run retry budget as `cause="abandoned"`, so a run abandoned again after its re-run is capped at `maxEvictionRetries` re-runs across all disruption causes together, with exhaustion surfaced as `eviction_retries_exhausted_total{cause="abandoned"}` and an `EvictionRetriesExhausted` Event; and a wait that never sees a placement is dropped after 30 minutes, counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`.
+The re-run goes through the tier's per-run retry budget as `cause="abandoned"`, so a run abandoned again after its re-run is capped at `maxEvictionRetries` re-runs across all disruption causes together, with exhaustion surfaced as `eviction_retries_exhausted_total{cause="abandoned"}` and an `EvictionRetriesExhausted` Event; and a wait that never sees a placement is dropped after 30 minutes, counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`.
 
 #### On the scale-set tier (Q766)
 
@@ -674,7 +683,7 @@ The **identity** is the `actions-gateway.com/run-id` / `actions-gateway.com/repo
 A worker that never ran has no `JobStarted` to replace it, so it is the identity of the job the pod was created for, which another runner may be running.
 So the recovery first lists the set's workers, and where one carries that job as its `actions-gateway.com/started-job-id`, the job has a runner and nothing is cancelled (Q1169).
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
-The **budget** is the same shared per-`run_id` one, so `maxEvictionRetries` still bounds re-runs per run across both tiers together; only the `tier` label splits the reporting.
+The **budget** is the scale-set tier's ledger budget (Q1182), and the force-cancel is recorded in it: before cancelling, the AGC reads the run's attempt and stores it as `selfCancelledAttempt`, so the graceful-deletion arm's `cancelled` check reads a cancel of that attempt as GAG's own rather than a user's, and the abandoned run's later re-run merges into one another disruption of the same attempt already reserved.
 And the **wait** is the identical capacity test: a worker pod of the same owner binding after the abandonment.
 
 A second, narrower seam covers an *external* delete of a still-`Pending` worker, a drain catching one before it starts.

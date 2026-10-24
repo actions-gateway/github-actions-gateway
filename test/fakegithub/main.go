@@ -1410,6 +1410,10 @@ func runIDFromRunPath(path string) (string, bool) {
 // A cancelled conclusion — the state that stands the recovery down — is reachable by
 // marking the run cancelled through /control/runstate, so a spec asserting the
 // stand-down and one asserting the re-run drive the same endpoint.
+//
+// run_attempt is 1 plus the re-runs accepted for the run, as live GitHub starts a
+// new attempt for each: the scale-set tier keys its re-run budget on the attempt
+// and refuses a run that names none (Q1182).
 func (s *server) handleRunStatus(w http.ResponseWriter, runID string) {
 	s.mu.Lock()
 	status, conclusion := "completed", "failure"
@@ -1419,11 +1423,17 @@ func (s *server) handleRunStatus(w http.ResponseWriter, runID string) {
 	case s.nonConcludedRuns[runID]:
 		status, conclusion = "in_progress", ""
 	}
+	attempt := 1
+	for _, p := range s.rerunPaths {
+		if rerunRunID(p) == runID {
+			attempt++
+		}
+	}
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	body := map[string]any{"id": runID, "status": status, "conclusion": conclusion}
+	body := map[string]any{"id": runID, "status": status, "conclusion": conclusion, "run_attempt": attempt}
 	if conclusion == "" {
 		body["conclusion"] = nil
 	}

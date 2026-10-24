@@ -408,10 +408,12 @@ It is deleted as soon as the job finishes — independent of `completedPodTTL`, 
 Both objects also carry an `OwnerReference` to their RunnerGroup/RunnerSet as a backstop, so deleting the owner cascade-deletes anything still present.
 If you do see `job-` or `job-ss-` Secrets outliving their pods, check the AGC log for `reclaim completed job's worker Secret` warnings — a persistently failing delete (usually an RBAC regression on `secrets`) falls back to that cascade-GC and leaves credentials in the namespace until the owner is deleted.
 
-**One or two small ConfigMaps per ScaleSet RunnerSet is normal.** Both are labelled `actions-gateway.com/runner-set=<name>`, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
+**Up to three small ConfigMaps per ScaleSet RunnerSet is normal.** All are labelled `actions-gateway.com/runner-set=<name>`, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
 `scaleset-guards-<runnerset>` is the AGC's durable record of jobs it has concluded whose queue messages are not yet deleted, which is what stops a hard-killed AGC from re-running a finished job's assignment (Q606); a hand-edited one fails the listener start, see [troubleshooting](troubleshooting.md#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap).
 `scaleset-recovery-claims-<runnerset>` appears only once a worker of that set has been disrupted: it records which disruptions have already been recovered, so a drained or preempted worker's run is re-run exactly once even though the pod that used to hold that record is gone (Q1108).
 It holds claims rather than work, so deleting it re-opens the at-most-once window for whatever is in flight at that instant and costs nothing else.
+`scaleset-failures-<runnerset>` appears beside it on the same occasion: it holds each run's `maxEvictionRetries` budget and what each automatic re-run covered, so an AGC restart does not refill a budget (Q1182).
+Deleting it resets every run's budget for that set.
 
 **Optional — worker scale-up rate limit (`scaleUp`, opt-in, default-off).** Each `runnerGroups[]` entry accepts an optional `scaleUp` token bucket that caps the **rate** at which the AGC *creates* new worker pods.
 It is **off by default** — omit it and provisioning stays immediate (GAG's zero-idle default).
