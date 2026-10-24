@@ -283,6 +283,21 @@ func TestQ766_AbandonedAwaitingRecovery(t *testing.T) {
 			pod: started(deleted(scaleSetWorkerPod("d", identityAnnotations()))),
 		},
 		{
+			name: "never started on an out-of-service node",
+			// Q1207: LostToNodeShutdown declines a worker with no Running container, so
+			// this arm is the one that has to take it.
+			pod: func() *corev1.Pod {
+				pod := outOfService(scaleSetWorkerPod("g", identityAnnotations()))
+				pod.Status.ContainerStatuses = nil
+				return pod
+			}(),
+			want: true,
+		},
+		{
+			name: "running on an out-of-service node",
+			pod:  outOfService(scaleSetWorkerPod("h", identityAnnotations())),
+		},
+		{
 			name: "not being deleted at all",
 			pod: func() *corev1.Pod {
 				pod := scaleSetWorkerPod("e", identityAnnotations())

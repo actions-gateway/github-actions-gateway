@@ -16,6 +16,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
   - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
@@ -184,6 +185,18 @@ Fix the named objects and run it again.
 
 **Rolling back** to `v1.9.0` is safe, because `v1.9.0` serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically
+
+**Who is affected:** clusters where nodes go `NotReady` without being deleted (network failure, kernel panic, power loss, hardware failure) and an admin applies Kubernetes' `node.kubernetes.io/out-of-service` taint to confirm the node is dead.
+Nothing to do.
+
+A job whose worker ran on such a node used to stay failed: PodGC failed and removed the pod, and no recovery arm recognised the shape it left.
+It is now re-run under `cause="node_shutdown"`, the same counter a Spot reclamation uses (Q1207).
+A `NotReady` node with no taint is unchanged: its worker stays `Running` until you taint the node or delete its Node object, because a node that is only partitioned may still be running the job.
+The command is in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
+
+**Rolling back** returns the job on such a node to staying failed.
 
 ### A worker evicted for its own storage limit is no longer re-run
 
