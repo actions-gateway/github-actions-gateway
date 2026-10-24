@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1117/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1196/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>One suite is the whole of the scripts-test fan-out's wall time - GitHub Actions Gateway</title>
+        <title>run-parallel reports wall time per suite, so scripts-test CPU is unread - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#one-suite-is-the-whole-of-the-scripts-test-fan-outs-wall-time" class="md-skip">
+        <a href="#run-parallel-reports-wall-time-per-suite-so-scripts-test-cpu-is-unread" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              One suite is the whole of the scripts-test fan-out's wall time
+              run-parallel reports wall time per suite, so scripts-test CPU is unread
             
           </span>
         </div>
@@ -2627,19 +2627,55 @@
   
 
 
-<h1 id="one-suite-is-the-whole-of-the-scripts-test-fan-outs-wall-time">One suite is the whole of the scripts-test fan-out's wall time<a class="headerlink" href="#one-suite-is-the-whole-of-the-scripts-test-fan-outs-wall-time" title="Permanent link">&para;</a></h1>
-<p><strong>Measured on CI 2026-09-16</strong> across both capped <code>scripts-test</code> jobs Q1105 produced: 130 suites at a cap of 16 elapsed 129s against a slowest member of 125s, then 103s against 97s.
-The floor is not most of the wall time, it is nearly all of it in both, and the other 129 suites cost 1,766 and 1,394 suite-seconds between them at a median of 4s and 3s.
-So the job cannot finish faster than <code>check-registry-mirror-render-test</code> whatever happens to the rest, and a further widening or narrowing of the cap cannot reach it (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">run-parallel.sh</a>, Q819).</p>
-<p><strong>The suite to shorten is not the one local runs predicted.</strong> On an 18-core M5 Max across four runs at caps of 130, 36, 18 and 9, <code>check-roadmap-test</code> cost 77s, 74s, 88s and 83s and was the slowest every time.
-On CI it comes second in both runs, at 103s and 84s, behind <code>check-registry-mirror-render-test</code> at 125s and 97s, with <code>gate-list-test</code> third at 101s and 78s.
-The ranking is identical across the two, so it is not one reading's noise.
-Neither moves with the width, so both are intrinsically that long rather than stretched by contention; the local ranking simply does not transfer, which is why this row now names the CI reading.</p>
-<p><strong>What makes the reading possible at all</strong> is the cap.
-Uncapped, every suite's wall time inflated toward the step's and the three slowest were only 8% of the total, so no suite was legible as a floor.
-Q1105 capped the fan-out and explicitly does not claim to cut the job's wall time; this row is why it cannot, and the two were flagged as near-duplicates for that reason.
-They stay separate: a cap bounds how many suites are in flight, and nothing about a cap reaches one suite's own duration.</p>
-<p>What these three suites spend their time on is unread, which is the next step.</p>
+<h1 id="run-parallel-reports-wall-time-per-suite-so-scripts-test-cpu-is-unread">run-parallel reports wall time per suite, so scripts-test CPU is unread<a class="headerlink" href="#run-parallel-reports-wall-time-per-suite-so-scripts-test-cpu-is-unread" title="Permanent link">&para;</a></h1>
+<p><strong>The capped <code>scripts-test</code> job is bound by total work, and the one number it prints per suite cannot rank work.</strong> Every green <code>scripts-test</code> job on <code>main</code> from 2026-10-10 to 10-24, plus Q1117's two PR readings, all on <code>ubuntu-latest</code>, put the job's elapsed time at 7.0-7.5% of the summed per-suite wall time:</p>
+<table>
+<thead>
+<tr>
+<th>Reading</th>
+<th>Elapsed</th>
+<th>Summed suite-seconds</th>
+<th>Ratio</th>
+<th>Slowest suite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>all 22 green runs on <code>main</code>, 2026-10-10 to 10-24</td>
+<td>90-155s</td>
+<td>1,272-2,154</td>
+<td>0.0700-0.0747</td>
+<td><code>check-registry-mirror-render-test</code> 87-152s, 3-6s before the end</td>
+</tr>
+<tr>
+<td>Q1117's PR, run 1, 2026-10-24</td>
+<td>158s</td>
+<td>2,259</td>
+<td>0.0699</td>
+<td><code>gate-list-test</code> 118s</td>
+</tr>
+<tr>
+<td>Q1117's PR, run 2, 2026-10-24</td>
+<td>110s</td>
+<td>1,564</td>
+<td>0.0703</td>
+<td><code>check-roadmap-test</code> 78s</td>
+</tr>
+</tbody>
+</table>
+<p>That ratio is the inverse of the mean number of suites in flight, so it shows a bound on total work and says nothing about CPU, which is what the step below is for.</p>
+<p>Q1117 cut the suite that always finished last from 152s to 63s and 30s by running its cases concurrently, and the ratio stayed inside the range <code>main</code> already spans.
+What moved is the gap: the job now ends 32-40s after its slowest suite instead of 3-6s, which is the queue draining at the runner's aggregate rate.
+The four <code>main</code> runs from the same day sit at 0.0731-0.0747, above both PR readings, which would be a ~5% packing gain if it is not noise; two readings cannot tell, and the first runs on <code>main</code> after Q1117 merges can.
+So no single suite is the floor, and shortening <code>check-roadmap-test</code> or <code>gate-list-test</code> the same way would buy no job time either.</p>
+<p><strong>The levers left are fewer CPU-seconds or more cores</strong>, and the first needs a reading nobody has.
+<code>run-parallel.sh</code> reports wall time per label, and under a cap of 16 on 4 vCPUs that time includes every core a suite shared, so it ranks waiting as well as work.
+Q1117's suite shows the gap: about 1.2 CPU-seconds per checker run locally, 14 runs, roughly 17 CPU-seconds, against 152s of wall time on CI.
+Q1105 measured the whole job at 528-582 CPU-seconds locally on 2026-09-16 at 130 suites, which would make that suite about 3% of the work, but that division crosses two dates and two suite counts and is an estimate, not a measurement.</p>
+<p><strong>The step:</strong> have <code>run-parallel.sh</code> record each child's user+sys CPU beside its wall time, in the block it already prints.
+Bash's <code>times</code> in the child subshell, or the rusage of the reaped process, are the two candidates; which survives the <code>( pipeline ) &amp;</code> wrapper and <code>wait -n -p</code> is unmeasured.
+With that column a CI run names the suites holding the throughput bound, and the case for cutting any one of them becomes a share of the job rather than an inference from wall time.</p>
+<p>Not <a href="../Q1122/">Q1122</a>, which the duplicate search flags on the suite and gate-list vocabulary: that row is <code>gate-lists-check</code> accepting an entry listed twice, a correctness gap, where this one is the job's run time.</p>
 
 
 
