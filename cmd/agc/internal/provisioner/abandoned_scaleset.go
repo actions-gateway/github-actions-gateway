@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -90,6 +91,15 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 	key := target.Key()
 	log := p.logForKey(key).With("podName", pod.Name)
 
+	// The pod's run identity is that of the job it was created for, which another runner
+	// of the set may have taken. That run lost nothing, so cancelling it would end a live
+	// job (Q1169).
+	if p.assignedJobAccountedFor(ctx, target, pod, false, log) {
+		log.Info("scale-set worker was removed before it ran, but another worker's runner started the job it was created for; not force-cancelling that job's run",
+			"detection", detection, "runID", pod.Annotations[AnnotationRunID])
+		return closedChan()
+	}
+
 	owner, repo, runID, ok := runIdentityFromPod(pod)
 	if !ok {
 		// Counted as the tier's identity-unknown failure rather than as a force-cancel
@@ -150,4 +160,27 @@ func abandonedAwaitingRecovery(pod *corev1.Pod) bool {
 		return false
 	}
 	return !podEverStarted(pod)
+}
+
+// assignedJobAccountedFor reports whether the job a never-started scale-set worker was
+// created for is held by another worker of its set: one whose runner started it, or,
+// with idleTakes, any live worker whose runner has started nothing and so may yet take
+// it (scaleSetWorkerSet.serving's rule). GitHub gives a scale-set job to whichever of the
+// set's runners asks first, so the pod's run identity, stamped from that job, names a run
+// that lost nothing where either holds (Q1169).
+//
+// The abandoned path passes idleTakes false. Its worker was reaped for never being
+// placed, and the idle workers beside it are most often waiting on the same capacity, so
+// counting them would suppress the recovery Q766 exists for.
+//
+// A failed List answers false, which keeps the recovery as it was before the check: the
+// check only ever withholds an action, so an unreadable set must not withhold it.
+func (p *Provisioner) assignedJobAccountedFor(ctx context.Context, target Target, pod *corev1.Pod, idleTakes bool, log *slog.Logger) bool {
+	workers, err := p.liveScaleSetWorkers(ctx, target)
+	if err != nil {
+		log.Warn("could not list the set's workers to check whether another one holds this worker's job; recovering it by its own run identity",
+			"error", err)
+		return false
+	}
+	return workers.startedElsewhere(target.Key().Name, pod.Name) || (idleTakes && workers.idle > 0)
 }

@@ -217,13 +217,26 @@ func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
 	return live && (started == "" || s.idle > 0)
 }
 
+// startedElsewhere reports whether a worker other than podName has started the job
+// podName was created for. A worker's started job names the pod minted for it through
+// scaleSetPodName, so this needs no job ID off podName itself (Q1169).
+func (s scaleSetWorkerSet) startedElsewhere(ownerName, podName string) bool {
+	for name, jobID := range s.started {
+		if name != podName && jobID != "" && scaleSetPodName(ownerName, jobID) == podName {
+			return true
+		}
+	}
+	return false
+}
+
 // liveScaleSetWorkers lists this owner's scale-set worker pods, in any phase. One List
 // answers a whole in-flight set, rather than a Get per entry.
 //
 // It goes through the uncached reader, unlike the disruption scan's own List: here the
 // verdict is driven by a pod NOT being listed, so an informer cache that has not caught
 // up would read as every worker in the set having been disrupted. Once per process per
-// set, so the uncached read costs nothing in steady state.
+// set, so the uncached read costs nothing in steady state. Recovery of a never-started
+// worker reads it too (assignedJobAccountedFor), once per recovered pod.
 func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (scaleSetWorkerSet, error) {
 	key := target.Key()
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}
@@ -235,7 +248,7 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 		client.InNamespace(key.Namespace),
 		client.MatchingLabels(selector),
 	); err != nil {
-		return scaleSetWorkerSet{}, fmt.Errorf("provisioner: list scale-set worker pods for orphaned-worker recovery: %w", err)
+		return scaleSetWorkerSet{}, fmt.Errorf("provisioner: list scale-set worker pods: %w", err)
 	}
 	set := scaleSetWorkerSet{
 		started:     make(map[string]string, len(pods.Items)),

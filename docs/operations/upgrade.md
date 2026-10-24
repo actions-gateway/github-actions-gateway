@@ -17,6 +17,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
+  - [Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run](#non-breaking-a-scale-set-worker-that-never-started-a-job-no-longer-cancels-or-re-runs-its-namesakes-run)
   - [Non-breaking: a scale-set worker's run identity follows the job its runner started](#non-breaking-a-scale-set-workers-run-identity-follows-the-job-its-runner-started)
   - [Non-breaking: an idle scale-set worker left by a job no runner started is reclaimed](#non-breaking-an-idle-scale-set-worker-left-by-a-job-no-runner-started-is-reclaimed)
   - [Non-breaking: a scale-set worker's JIT-config Secret is now owned by its pod](#non-breaking-a-scale-set-workers-jit-config-secret-is-now-owned-by-its-pod)
@@ -192,6 +193,18 @@ When the template names none, the AGC now presents the worker ServiceAccount's `
 - **RBAC:** the `agc-tenant-role` ClusterRole gains `get` on `serviceaccounts`, no `list`, `watch` or write, and the chart ships it.
   An AGC running against a Role without the grant reads anonymously as before, and a refused read names the unread ServiceAccount in its message.
 - A pull Secret named in both places can come out of the pod template, since the ServiceAccount's is now read too; leaving it in changes nothing.
+
+No action is required at upgrade time.
+
+### Non-breaking: a scale-set worker that never started a job no longer cancels or re-runs its namesake's run
+
+A worker whose runner started no job carries the run identity of the job it was created for, and GitHub can give that job to another runner of the set.
+Recovery used to force-cancel that run when the worker was reaped `Pending`, and re-run it when the worker was evicted, preempted or drained, though the job was running elsewhere (Q1169).
+
+Recovery now lists the set's workers first.
+A reaped or deleted `Pending` worker's run is left alone when another worker carries its job as `actions-gateway.com/started-job-id`.
+An evicted, preempted or drained worker with no `started-job-id` is not re-run when another worker started its job, or a live worker whose runner has started nothing could still take it.
+The AGC logs each skip at `info`; no metric or Event changes.
 
 No action is required at upgrade time.
 

@@ -3552,11 +3552,12 @@ Read the result as follows.
 | `RUN`/`REPO` empty | The assignment carried no run identity. This is the `EvictionRecoveryIdentityUnknown` case |
 | `RUN`/`REPO` present, `HANDLED` empty | The reconciler has not adjudicated it yet, or the scan is failing — check the AGC log for `scale-set eviction recovery scan failed` |
 | `HANDLED` set but no re-run | The claim succeeded and the rerun call failed. Look for `eviction auto-retry failed` in the AGC log, or an exhausted budget |
+| `HANDLED` set, no re-run, and the pod has no `started-job-id` | Deliberate. The worker's runner started no job, and another worker has started the job it was created for, or an idle one can still take it, so that run lost nothing. The AGC logs `not re-running that job's run` (Q1169) |
 
 ```sh
 # The AGC's own account of what it did with the eviction.
 kubectl logs -n <namespace> deploy/<agc-deployment> \
-  | grep -E 'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed'
+  | grep -E 'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed|not re-running that job'
 
 # The identity the queue actually delivered (raise the AGC to debug first).
 kubectl logs -n <namespace> deploy/<agc-deployment> \
