@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -99,6 +100,24 @@ type Server struct {
 	// names the pool rather than whoever sent the request. Attribution there is
 	// per pool, not per tenant.
 	Namespace string
+
+	// AttributedAddrs maps a consumer namespace to the listen address of its own
+	// CONNECT listener (Q1184). A failure on one of these is kept for that
+	// namespace's AGC; the Addr listener stays unattributed and keeps nothing.
+	// Empty disables attribution entirely.
+	AttributedAddrs map[string]string
+	// AttributionAddr is the listen address of the mTLS endpoint the AGCs read
+	// failures from. The three files below must all be set whenever
+	// AttributedAddrs is non-empty: per-job data is never served unauthenticated.
+	AttributionAddr         string
+	AttributionTLSCertFile  string
+	AttributionTLSKeyFile   string
+	AttributionClientCAFile string
+	// failures and portNamespace are built by ListenAndServe from
+	// AttributedAddrs once its listeners are bound.
+	failures      *failureStore
+	portNamespace map[int]string
+
 	// dnsResolver resolves CONNECT hostnames for the CIDR allowlist check; nil uses
 	// net.DefaultResolver. Injected in tests.
 	dnsResolver ipResolver
@@ -264,34 +283,83 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	var metricsTLS *tls.Config
 	if metricsEnabled {
 		var err error
-		metricsTLS, err = s.metricsTLSConfig()
+		metricsTLS, err = mtlsConfig(s.MetricsTLSCertFile, s.MetricsTLSKeyFile, s.MetricsClientCAFile)
 		if err != nil {
 			return fmt.Errorf("configure metrics mTLS: %w", err)
 		}
 	}
 
-	connectLn, err := net.Listen("tcp", s.Addr)
+	attributionEnabled := len(s.AttributedAddrs) > 0
+	var attributionTLS *tls.Config
+	if attributionEnabled {
+		if s.AttributionTLSCertFile == "" || s.AttributionTLSKeyFile == "" || s.AttributionClientCAFile == "" {
+			return errors.New("attributed CONNECT ports need the attribution mTLS cert, key and client CA")
+		}
+		var err error
+		attributionTLS, err = mtlsConfig(s.AttributionTLSCertFile, s.AttributionTLSKeyFile, s.AttributionClientCAFile)
+		if err != nil {
+			return fmt.Errorf("configure attribution mTLS: %w", err)
+		}
+		s.failures, err = newFailureStore()
+		if err != nil {
+			return err
+		}
+	}
+
+	var bound []net.Listener
+	listen := func(what, addr string) (net.Listener, error) {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			for _, l := range bound {
+				_ = l.Close()
+			}
+			return nil, fmt.Errorf("bind %s listener: %w", what, err)
+		}
+		bound = append(bound, ln)
+		return ln, nil
+	}
+
+	connectLn, err := listen("connect", s.Addr)
 	if err != nil {
-		return fmt.Errorf("bind connect listener: %w", err)
+		return err
 	}
 	s.Addr = connectLn.Addr().String()
 
-	healthLn, err := net.Listen("tcp", s.HealthAddr)
+	healthLn, err := listen("health", s.HealthAddr)
 	if err != nil {
-		_ = connectLn.Close()
-		return fmt.Errorf("bind health listener: %w", err)
+		return err
 	}
 	s.HealthAddr = healthLn.Addr().String()
 
 	var metricsLn net.Listener
 	if metricsEnabled {
-		metricsLn, err = net.Listen("tcp", s.MetricsAddr)
+		metricsLn, err = listen("metrics", s.MetricsAddr)
 		if err != nil {
-			_ = connectLn.Close()
-			_ = healthLn.Close()
-			return fmt.Errorf("bind metrics listener: %w", err)
+			return err
 		}
 		s.MetricsAddr = metricsLn.Addr().String()
+	}
+
+	// Attributed CONNECT listeners are bound before ready like the main one, so
+	// /readyz never admits traffic to a namespace's port that is not listening.
+	var attributedLns []net.Listener
+	var attributionLn net.Listener
+	if attributionEnabled {
+		s.portNamespace = make(map[int]string, len(s.AttributedAddrs))
+		for ns, addr := range s.AttributedAddrs {
+			ln, err := listen("attributed connect", addr)
+			if err != nil {
+				return err
+			}
+			s.AttributedAddrs[ns] = ln.Addr().String()
+			s.portNamespace[ln.Addr().(*net.TCPAddr).Port] = ns
+			attributedLns = append(attributedLns, ln)
+		}
+		attributionLn, err = listen("attribution", s.AttributionAddr)
+		if err != nil {
+			return err
+		}
+		s.AttributionAddr = attributionLn.Addr().String()
 	}
 
 	close(s.ready)
@@ -353,6 +421,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 				s.lastConnNanos.Store(time.Now().UnixNano())
 			}
 		},
+		ConnContext: s.connContext,
 	}
 
 	var metricsSrv *http.Server
@@ -370,21 +439,41 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		}
 	}
 
-	errCh := make(chan error, 3)
+	var attributionSrv *http.Server
+	if attributionEnabled {
+		attributionMux := http.NewServeMux()
+		attributionMux.HandleFunc("/v1/failures", s.handleFailures)
+		attributionSrv = &http.Server{
+			Handler:           attributionMux,
+			TLSConfig:         attributionTLS,
+			ReadHeaderTimeout: readHeaderTimeout,
+			IdleTimeout:       httpIdleTimeout,
+			TLSNextProto:      map[string]func(*http.Server, *tls.Conn, http.Handler){},
+		}
+	}
+
+	errCh := make(chan error, 4+len(attributedLns))
 	go func() { errCh <- healthSrv.Serve(healthLn) }()
-	if s.TLSCertFile != "" && s.TLSKeyFile != "" {
-		go func() { errCh <- proxySrv.ServeTLS(connectLn, s.TLSCertFile, s.TLSKeyFile) }()
-	} else {
-		go func() { errCh <- proxySrv.Serve(connectLn) }()
+	// One http.Server serves every CONNECT listener, so shutdown's linger,
+	// drain and ConnState stamp cover the attributed ones unchanged.
+	for _, ln := range append([]net.Listener{connectLn}, attributedLns...) {
+		if s.TLSCertFile != "" && s.TLSKeyFile != "" {
+			go func() { errCh <- proxySrv.ServeTLS(ln, s.TLSCertFile, s.TLSKeyFile) }()
+		} else {
+			go func() { errCh <- proxySrv.Serve(ln) }()
+		}
 	}
 	if metricsSrv != nil {
 		// Cert+key live in metricsSrv.TLSConfig.Certificates, so ServeTLS gets "".
 		go func() { errCh <- metricsSrv.ServeTLS(metricsLn, "", "") }()
 	}
+	if attributionSrv != nil {
+		go func() { errCh <- attributionSrv.ServeTLS(attributionLn, "", "") }()
+	}
 
 	select {
 	case <-ctx.Done():
-		s.shutdown(proxySrv, healthSrv, metricsSrv)
+		s.shutdown(proxySrv, healthSrv, metricsSrv, attributionSrv)
 		return nil
 	case err := <-errCh:
 		return err
@@ -432,7 +521,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 //
 // The health listener is stopped last, so probes get a 503 for the whole
 // sequence rather than a refused connection.
-func (s *Server) shutdown(proxySrv, healthSrv, metricsSrv *http.Server) {
+func (s *Server) shutdown(proxySrv, healthSrv, metricsSrv, attributionSrv *http.Server) {
 	log := s.logger()
 	drainTimeout := s.ShutdownDrainTimeout
 	if drainTimeout == 0 {
@@ -477,6 +566,9 @@ func (s *Server) shutdown(proxySrv, healthSrv, metricsSrv *http.Server) {
 	_ = healthSrv.Shutdown(healthCtx)
 	if metricsSrv != nil {
 		_ = metricsSrv.Shutdown(healthCtx)
+	}
+	if attributionSrv != nil {
+		_ = attributionSrv.Shutdown(healthCtx)
 	}
 }
 
@@ -574,22 +666,22 @@ func (s *Server) logger() *slog.Logger {
 	return slog.Default()
 }
 
-// metricsTLSConfig builds the mTLS server config for the metrics listener:
-// the server cert+key plus the CA that scraper client certificates are verified
-// against. RequireAndVerifyClientCert means the TLS handshake itself rejects any
-// client that does not present a CA-signed certificate.
-func (s *Server) metricsTLSConfig() (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(s.MetricsTLSCertFile, s.MetricsTLSKeyFile)
+// mtlsConfig builds the mTLS server config for the metrics and attribution
+// listeners: the server cert+key plus the CA that client certificates are
+// verified against. RequireAndVerifyClientCert means the TLS handshake itself
+// rejects any client that does not present a CA-signed certificate.
+func mtlsConfig(certFile, keyFile, clientCAFile string) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("load metrics server cert/key: %w", err)
+		return nil, fmt.Errorf("load server cert/key: %w", err)
 	}
-	caPEM, err := os.ReadFile(s.MetricsClientCAFile)
+	caPEM, err := os.ReadFile(clientCAFile)
 	if err != nil {
-		return nil, fmt.Errorf("read metrics client CA %s: %w", s.MetricsClientCAFile, err)
+		return nil, fmt.Errorf("read client CA %s: %w", clientCAFile, err)
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(caPEM) {
-		return nil, fmt.Errorf("no certificates parsed from %s", s.MetricsClientCAFile)
+		return nil, fmt.Errorf("no certificates parsed from %s", clientCAFile)
 	}
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -710,6 +802,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	dialAddr, allowed := s.checkDestination(r.Context(), r.Host)
 	if !allowed {
 		s.connectDenied.WithLabelValues().Inc()
+		s.recordFailure(r, outcomeDenied, nil)
 		s.logger().Warn("CONNECT destination not allowed", "host", truncateHost(r.Host))
 		http.Error(w, "destination not allowed", http.StatusForbidden)
 		return
@@ -718,6 +811,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
 	if err != nil {
 		s.dialErrors.WithLabelValues().Inc()
+		s.recordFailure(r, outcomeDialFailed, err)
 		s.logger().Error("upstream dial failed", "host", truncateHost(r.Host), "error", truncateLogError(err))
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
