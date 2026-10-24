@@ -10,6 +10,10 @@ Every profile is in one of two tiers:
 - **Validated once.** It ran once on the dogfood cluster, and this page records the date, the run and the readings.
   It is re-run on demand, or when something it depends on changes.
 
+The validated-once tier is a compromise on cost: some evidence for a profile without making every release pay for it.
+The dogfood cluster costs nothing at rest, since GKE waives the fee for one zonal cluster and its node pools scale to zero between runs, so what it costs is node time, and every gated leg adds node time to every release.
+With more cluster budget, from a sponsor for instance, more profiles could join the gate and run in parallel.
+
 A combination in neither tier may well work, and [the last section](#combinations-not-validated) lists what is known about the common ones.
 
 ## Gated every release
@@ -74,4 +78,4 @@ Each line says how far the evidence goes, read from the scripts and manifests on
   They run on GitHub-hosted runners, so they test the controllers rather than any profile's worker or mirror wiring.
 
 **A combination you need that is not on this page** goes on the backlog as a validated-once candidate.
-New legs join the release gate only on demand, because each one lengthens a gate that already runs three e2e legs.
+New legs join the release gate only on demand, because each one adds node time to every release.
