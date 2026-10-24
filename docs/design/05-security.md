@@ -411,6 +411,61 @@ A refusal and a failed dial already have their warn/error line and their counter
 
 See [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record) for the shape, and [tenant-onboarding.md § Per-pool egress audit record](../operations/tenant-onboarding.md#per-pool-egress-audit-record) for turning it on.
 
+### Proxy failure attribution
+
+Classified retry ([Q555 plan](../plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor)) needs to know which job a proxy failure came from.
+An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
+That is new use of per-job egress data, so it is designed here before it is built ([Q1184](../queue/Q1184.md)).
+Nothing in this section is implemented yet.
+
+**It is off by default, behind two switches, for the audit record's reasons.** One on the `EgressProxy` makes the pool keep its failures and serve them.
+One on the consuming `ActionsGateway` makes the GMC give that gateway's AGC a credential to read them.
+Either alone attributes nothing, and an `EgressProxy` edit does not roll gateways in other namespaces.
+Field names are settled under [api-review.md](../development/api-review.md) when the fields are written.
+
+**The proxy keeps failures only, in memory, and bounded.**
+
+| Kept | Why it is safe to keep |
+|---|---|
+| Consumer namespace | From the port the connection arrived on (below), never the request |
+| Client source address | Read off the accepted connection, so a worker cannot forge it |
+| Time | The proxy's clock |
+| Outcome | `denied` or `dial-failed`, and for a dial failure a class (timeout, refused, DNS, other) rather than the error text, which embeds the address |
+| Destination host and port | Capped as at every other site that logs the authority (see the amplifier note above) |
+
+Not kept: accepted connections, byte counts, any request header, anything from inside the tunnel.
+Records live for minutes in a fixed-size buffer and are lost on restart; the feature writes nothing to disk or to the log.
+The buffer is capped per source address as well as in total, because untrusted job code decides what goes into it.
+A job can produce denials at will, so without the per-source cap one job could evict other jobs' records to hide their failures, and without the total cap it could grow the proxy's memory.
+
+**The proxy learns the consumer from the port, not the address.** A CONNECT carries no namespace and the proxy has no Kubernetes client, which this design keeps (see the audit record above).
+So on an attribution-enabled pool the GMC gives each consumer namespace its own listener.
+The pool's own namespace keeps the existing port, and each namespace in `spec.sharing.allowedNamespaces` gets one more.
+They are named ports on the pool's one Service, and the GMC writes each consumer's port into that consumer's `HTTPS_PROXY`, as it writes the address today.
+The provider's ingress NetworkPolicy admits each namespace on its own port only, so a worker that dials another tenant's port is refused before the proxy sees the connection.
+NetworkPolicy matches the pod's port after Service translation, so each rule names the container port.
+One Service rather than one per consumer keeps the proxy's serving certificate unchanged as grants come and go, since it lists a single Service's DNS names.
+`allowedNamespaces` has no maximum today, so enabling attribution adds one, enforced at admission.
+Attribution is only as good as the CNI's enforcement of per-port ingress, which has to be measured in both CNI lanes before this ships.
+
+The same port would also tell the audit record which consumer a connection came from, closing the shared-pool gap above.
+That is a separate change and not part of this design.
+
+**The AGC reads only its own namespace's records.** The endpoint is its own listener with its own per-`EgressProxy` CA, not the metrics port.
+The metrics port admits only `metrics=enabled` namespaces so tenant pods cannot read traffic metrics, and a monitoring certificate must not read per-job data any more than an AGC certificate may read metrics.
+The GMC mints each opted-in consumer's AGC a client certificate naming that consumer's namespace, and projects it into that namespace as a Secret.
+The proxy returns only records from the port mapped to the namespace the certificate names.
+It checks that name against its current port map on every request, so removing a grant ends access at the next configuration reload rather than at certificate expiry.
+The listener's ingress rule admits AGC pods of granted namespaces only, with both selectors in one peer as the sharing rules require; workers never reach it.
+
+**The AGC joins on the pod's lifetime, not the address alone.** A worker's address returns to the CNI's pool when its job ends, so within the buffer's window one address can belong to two jobs.
+The AGC attributes a record to a worker only when its time falls inside the window that pod held the address, read from its own pod informer, and discards a record near either edge rather than guess.
+A discarded record degrades to an unclassified failure, never to a wrong one.
+
+**Residual: the denial Event surfaces the host.** The Event the futile-retry use writes names the blocked host, in the job's own namespace.
+Anyone who can read Events there sees what the job tried to reach, and the cluster's event pipeline keeps it for as long as it keeps Events.
+It is the tenant's own job in the tenant's own namespace and the host is capped, but it is the one place this feature's data outlives the buffer, which is why the gateway carries its own switch.
+
 ### Cross-tenant pod preemption via PriorityClass
 
 A **cluster-scoped** `PriorityClass` carries a priority value and a `preemptionPolicy` (Kubernetes default `PreemptLowerPriority`), so an unvalidated tenant-chosen class would let a tenant name a high-priority, preempting class and have the scheduler **evict other tenants' running worker pods** — and their egress proxies — to schedule its own, defeating per-tenant isolation.
