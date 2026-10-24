@@ -753,7 +753,8 @@ func (j ScaleSetJob) jobMeta() jobMeta {
 //
 // It is idempotent per jobID: the Secret and pod are named deterministically from the
 // jobID, so a job replayed to a re-created session is a no-op (an AlreadyExists is
-// treated as success). Capacity is already gated upstream by the listener's advertised
+// treated as success), except for a Secret left by a worker that is already gone, which
+// is replaced (replaceStaleScaleSetSecret). Capacity is already gated upstream by the listener's advertised
 // X-ScaleSetMaxCapacity, so a concurrency-ceiling hit here is a narrow race the
 // listener retries on its next poll.
 //
@@ -799,9 +800,13 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	// ContainerCreating, so a replay cleans up nothing it does not own (Q373).
 	staged := false
 	secret := p.buildSecret(target, secretName, jobID, workerVersion, nil, jitConfig)
+	fresh := secret.DeepCopy()
 	if err := p.Client.Create(ctx, secret); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("provisioner: create scale-set Secret %s: %w", secretName, err)
+		}
+		if staged, err = p.replaceStaleScaleSetSecret(ctx, fresh, log); err != nil {
+			return err
 		}
 	} else {
 		staged = true
@@ -931,6 +936,66 @@ func (p *Provisioner) handScaleSetSecretToPod(ctx context.Context, namespace, po
 		log.Warn("could not hand the scale-set worker Secret to its pod; the Secret stays with the RunnerSet",
 			"secret", secretName, "error", err)
 	}
+}
+
+// replaceStaleScaleSetSecret decides what a delivery that found its job's Secret already
+// staged does with it, and reports whether it created secret in its place. A Secret whose
+// owners are all Pods that no longer exist belongs to a worker that is gone: it holds
+// that worker's spent JIT config rather than the one this delivery minted, and the
+// garbage collector can delete it before the new pod is handed it, leaving that pod
+// Pending on a missing Secret (Q1174). It is deleted under a UID precondition, so a
+// concurrent replay's fresh Secret is never the one removed, and re-created from secret.
+// A Secret already being deleted is waited out by an error the listener retries. Any
+// other Secret, staged by a delivery still in flight or mounted by a live worker, is
+// left alone (Q373).
+func (p *Provisioner) replaceStaleScaleSetSecret(ctx context.Context, secret *corev1.Secret, log *slog.Logger) (bool, error) {
+	var existing corev1.Secret
+	err := p.liveReader().Get(ctx, client.ObjectKeyFromObject(secret), &existing)
+	switch {
+	case apierrors.IsNotFound(err):
+		// Collected between the create and this read.
+	case err != nil:
+		return false, fmt.Errorf("provisioner: read existing scale-set Secret %s: %w", secret.Name, err)
+	case existing.DeletionTimestamp != nil:
+		return false, fmt.Errorf("provisioner: scale-set Secret %s is being deleted; retrying once it is gone", secret.Name)
+	default:
+		gone, err := p.ownerPodsGone(ctx, &existing)
+		if err != nil || !gone {
+			return false, err
+		}
+		log.Info("replacing a scale-set Secret left by a worker that is gone", "secret", secret.Name)
+		uid := existing.UID
+		if err := p.Client.Delete(ctx, &existing, client.Preconditions{UID: &uid}); client.IgnoreNotFound(err) != nil {
+			return false, fmt.Errorf("provisioner: delete stale scale-set Secret %s: %w", secret.Name, err)
+		}
+	}
+	if err := p.Client.Create(ctx, secret); err != nil {
+		return false, fmt.Errorf("provisioner: re-create scale-set Secret %s: %w", secret.Name, err)
+	}
+	return true, nil
+}
+
+// ownerPodsGone reports whether every owner of secret is a Pod that no longer exists
+// under the UID the reference names, which is the test the garbage collector applies
+// before deleting it. A Secret with no owners, or one a non-Pod owns, is not orphaned.
+func (p *Provisioner) ownerPodsGone(ctx context.Context, secret *corev1.Secret) (bool, error) {
+	if len(secret.OwnerReferences) == 0 {
+		return false, nil
+	}
+	for _, ref := range secret.OwnerReferences {
+		if ref.Kind != "Pod" {
+			return false, nil
+		}
+		var pod corev1.Pod
+		err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: secret.Namespace, Name: ref.Name}, &pod)
+		if err == nil && pod.UID == ref.UID {
+			return false, nil
+		}
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("provisioner: read owner pod %s of scale-set Secret %s: %w", ref.Name, secret.Name, err)
+		}
+	}
+	return true, nil
 }
 
 // secretCleanupTimeout bounds a Secret delete issued on a detached context — the
