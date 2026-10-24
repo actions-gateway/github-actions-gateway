@@ -3,12 +3,12 @@
 # kind version tag, with no trailing newline.
 #
 # Used by updatecli (updatecli.d/kind.yaml) as a shell source so KIND_BINARY_SHA256
-# in .github/workflows/e2e-reusable.yml stays in lockstep with KIND_VERSION:
+# in scripts/ci/pins.env stays in lockstep with KIND_VERSION:
 # updatecli resolves the latest kind tag, then calls this with that tag to fetch
 # the matching checksum from the release's published kind-linux-amd64.sha256sum
 # asset — the same file a human would copy by hand. This version+checksum pair is
-# exactly what Dependabot cannot track, because the pins are workflow env vars
-# rather than a package-manifest entry.
+# exactly what Dependabot cannot track, because the pins are env-file lines rather
+# than a package-manifest entry.
 #
 # Usage: kind-linux-amd64-sha256.sh <kind-version-tag>   # e.g. v0.32.0
 set -euo pipefail

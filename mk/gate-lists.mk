@@ -252,7 +252,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-errexit-prologue-test ci/check-tools-test \
                  ci/git-merge-gate-lists-test \
                  docs/git-merge-script-index-test \
-                 ci/check-uses-pinned-test ci/check-cosign-pin-test \
+                 ci/check-uses-pinned-test ci/check-cosign-pin-test ci/load-pins-test \
                  ci/check-publish-digest-test \
                  ci/run-parallel-test ci/check-fixture-maintenance-test \
                  ci/check-script-modes-test \

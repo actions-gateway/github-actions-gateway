@@ -1,5 +1,5 @@
-# Keep CALICO_VERSION current in both files that pin it: the egress-enforcing
-# e2e lane (.github/workflows/e2e-reusable.yml) and the root Makefile, which must
+# Keep CALICO_VERSION current in both files that pin it: scripts/ci/pins.env,
+# which the egress-enforcing e2e lane loads, and the root Makefile, which must
 # match. updatecli resolves the latest projectcalico/calico release and rewrites
 # both in one PR, so the two copies can no longer drift by hand. Version-only:
 # Calico is referenced as a manifest URL built from the version, not a
@@ -42,14 +42,14 @@ sources:
         kind: semver
 
 targets:
-  e2e:
-    name: 'CALICO_VERSION in e2e-reusable.yml'
+  pins:
+    name: 'CALICO_VERSION in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/e2e-reusable.yml
-      matchpattern: '(CALICO_VERSION: )v\d+\.\d+\.\d+'
+      file: scripts/ci/pins.env
+      matchpattern: '(CALICO_VERSION=)v\d+\.\d+\.\d+'
       replacepattern: '${1}{{ source "calicoVersion" }}'
   makefile:
     name: 'CALICO_VERSION in Makefile'

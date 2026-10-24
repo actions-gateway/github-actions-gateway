@@ -99,6 +99,7 @@ jobs:
               - 'Dockerfile'
               - '.github/workflows/e2e-test.yml'
               - '.github/workflows/e2e-reusable.yml'
+              - 'scripts/ci/pins.env'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.

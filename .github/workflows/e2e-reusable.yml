@@ -57,14 +57,6 @@ jobs:
       # scripts/e2e/kind-with-registry.sh; surfaced as an env var rather than
       # interpolated into a run: script directly (no script-injection surface).
       KIND_CNI: ${{ inputs.kind_cni }}
-      # Calico release for the egress-enforcing profile (KIND_CNI=calico).
-      # Auto-bumped in lockstep with the root Makefile's CALICO_VERSION by
-      # updatecli (updatecli.d/calico.yaml), so the two copies cannot drift. Used
-      # to (a) key the
-      # Calico image cache and pre-pull below and (b) pin the version passed to
-      # `make e2e-cluster`, so the pre-pulled images match what the manifest
-      # references. Ignored on the kindnet caller.
-      CALICO_VERSION: v3.31.5
       # cert-manager release applied on every e2e run (both CNIs). Keep in sync
       # with CERTMANAGER_VERSION in cmd/gmc/Makefile. Used to key the image cache
       # and pin the manifest the pre-pull step reads, so the images kind-loaded
@@ -78,15 +70,12 @@ jobs:
       # onto the nodes matches what the suite applies — kubelet never pulls it
       # from registry.k8s.io at test time (Q150).
       METRICSSERVER_VERSION: v0.8.1
-      # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
-      # is digest-pinned to the node image kind v0.32.0 ships for K8s v1.35.5 so
-      # the cluster's K8s version is deterministic and the image is cacheable by
-      # a stable key. KIND_VERSION + KIND_BINARY_SHA256 are bumped together
-      # automatically by updatecli (updatecli.d/kind.yaml); KIND_NODE_IMAGE is
-      # reviewed and bumped by hand in that PR when the tested Kubernetes version
-      # should move (see docs/development/dependency-updates.md).
-      KIND_VERSION: v0.32.0
-      KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
+      # KIND_NODE_IMAGE is digest-pinned to the node image kind v0.32.0 ships
+      # for K8s v1.35.5 so the cluster's K8s version is deterministic and the
+      # image is cacheable by a stable key. KIND_VERSION + KIND_BINARY_SHA256
+      # live in scripts/ci/pins.env, bumped by updatecli (updatecli.d/kind.yaml);
+      # KIND_NODE_IMAGE is reviewed and bumped by hand in that PR when the tested
+      # Kubernetes version should move (see docs/development/dependency-updates.md).
       KIND_NODE_IMAGE: kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
       # All six images live in the local registry the e2e-cluster target
       # stands up. SHA-suffixed so kubelet's IfNotPresent cache cannot serve a
@@ -119,16 +108,17 @@ jobs:
       # Docker Hub (429 flakes). Bump the pinned upstream and mirror tags together.
       E2E_VAULT_UPSTREAM: hashicorp/vault:1.18.3
       E2E_VAULT_IMAGE: 127.0.0.1:5000/hashicorp/vault:1.18.3
-      # The buildkit image docker/setup-buildx-action boots its docker-container
-      # builder from. Named here so the pre-pull step and the builder pin below
-      # reference one source. DIGEST-PINNED (Q151): the buildx-stable-1 tag
-      # floats, so an unpinned reference would let the builder change underfoot
-      # between runs. Pin by digest, kept in step with the security-scan and
-      # publish workflows by updatecli.d/buildkit.yaml.
-      BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
+      # CALICO_VERSION (the egress-enforcing profile's Calico release, keying the
+      # image cache and pinning `make e2e-cluster`), KIND_VERSION +
+      # KIND_BINARY_SHA256, and BUILDKIT_IMAGE (the digest-pinned buildx builder)
+      # come from scripts/ci/pins.env, loaded by the `pins` step.
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
 
       - name: Start freeing runner disk space
         # Drops the preinstalled toolchains this job never touches (~15–20 GB)
@@ -171,7 +161,7 @@ jobs:
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         if: runner.environment == 'github-hosted'
 
-      - name: Install kind ${{ env.KIND_VERSION }}
+      - name: Install kind ${{ steps.pins.outputs.KIND_VERSION }}
         # Pinned release binary + checksum instead of `go install ...@latest`:
         # ~20-40s faster (no compile), reproducible, and integrity-checked.
         run: |
@@ -256,7 +246,7 @@ jobs:
           # registry container published on the runner's 127.0.0.1:5000, and so
           # the builder resolves the mirror's in-cluster DNS name.
           driver-opts: |
-            image=${{ env.BUILDKIT_IMAGE }}
+            image=${{ steps.pins.outputs.BUILDKIT_IMAGE }}
             network=host
           # `buildkitd-config`, not `config`: v4 renamed it, and this action
           # ignores an input it does not declare — a silent no-op, which is the
@@ -479,7 +469,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/calico-images
-          key: calico-images-${{ env.CALICO_VERSION }}
+          key: calico-images-${{ steps.pins.outputs.CALICO_VERSION }}
 
       - name: Pre-pull Calico images
         # Calico-only. The Calico manifest pulls calico/node, calico/cni, and

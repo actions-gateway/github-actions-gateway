@@ -46,23 +46,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Pin the shellcheck version rather than using ubuntu-latest's preinstalled one:
-# that version drifts with the runner image and its SC2015-style heuristics
-# differ between releases, so an unpinned gate gives a different verdict locally
-# vs. CI. Pinning makes `make shellcheck` reproducible; devs install the same
-# version to match (see docs/development/testing.md).
-#
-# Workflow-level so the two jobs that install shellcheck — `shellcheck` (the
-# scripts/ tree) and `actionlint` (inline workflow `run:` blocks) — cannot drift
-# to different versions and disagree about the same script.
-env:
-  SHELLCHECK_VERSION: v0.11.0
-  # SHA256 of shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz (Q127).
-  # GitHub release assets are mutable for an existing tag, so verify the bytes
-  # before trusting the binary. Bumped in lockstep with the version by updatecli
-  # (updatecli.d/shellcheck.yaml; shellcheck publishes no checksum file, so it
-  # hashes the tarball directly).
-  SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+# The `shellcheck` and `actionlint` jobs both install the shellcheck pinned in
+# scripts/ci/pins.env (SHELLCHECK_VERSION + SHELLCHECK_SHA256), so they cannot
+# drift to different versions and disagree about the same script.
 
 jobs:
   # Fine-grained path gate. The coarse paths-ignore above still lets non-code,
@@ -224,6 +210,8 @@ jobs:
               - 'scripts/ci/check-path-filters.sh'
               - 'scripts/ci/actionlint-workflows.sh'
               - 'scripts/ci/check-uses-pinned.sh'
+              # The shellcheck pin the actionlint job installs.
+              - 'scripts/ci/pins.env'
               # The semver-floor-sources job below reads publish.yml, covered by
               # the tree above, but its own checker must re-run the gate too.
               - 'scripts/release/semver-floor.sh'
@@ -370,6 +358,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
       # `make scripts-test` below shells out to go (go-vet-tags-test.sh runs a
       # real `go vet`), and the GAG dogfood runner image omits go by design —
       # without this step every target_gag=true dispatch failed here (Q482).
@@ -629,8 +620,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-      # Same pinned install as the shellcheck job, off the same workflow-level
-      # version + digest, so both jobs lint shell with one shellcheck.
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
+      # Same pinned install as the shellcheck job, off the same pins, so both
+      # jobs lint shell with one shellcheck.
       - name: install pinned shellcheck
         run: |
           set -euo pipefail

@@ -1458,7 +1458,7 @@ The comment is not decoration: it is what Dependabot reads to know which release
 Exempt shapes, because neither is a mutable third-party reference: a local `./…` action or reusable workflow, which is in-tree code the same PR reviews, and a `docker://` image, which must carry an `@sha256:` digest instead.
 An unparseable workflow fails the gate rather than being skipped.
 
-The runtime tool downloads in the publish path are pinned the same way: `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release` (held in step with `COSIGN_VERSION` in the Makefile by `make cosign-pin-check`, so a local `make verify-release` uses the same version that signed), and `syft` by `SYFT_VERSION` plus the `SYFT_SHA256` of its release tarball, downloaded through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh).
+The runtime tool downloads in the publish path are pinned the same way: `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release` read from `COSIGN_VERSION` in [`scripts/ci/pins.env`](../../scripts/ci/pins.env) (held in step with the Makefile's copy by `make cosign-pin-check`, so a local `make verify-release` uses the same version that signed), and `syft` by `SYFT_VERSION` plus the `SYFT_SHA256` of its release tarball, also in `pins.env`, downloaded through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh).
 That download used to go through `anchore/sbom-action/download-syft`, which fetches anchore's `install.sh` and runs it with no retry, so one transient CDN denial failed the step outright (Q806).
 The helper retries and refuses to write bytes that miss the pinned digest, so absorbing the flake tightened the pin rather than loosening it: the release now names the exact syft bytes instead of trusting an installer to resolve them.
 
@@ -1471,7 +1471,7 @@ gh api repos/<owner>/<action>/commits/<tag> --jq '.sha'
 ```
 
 `SYFT_VERSION`/`SYFT_SHA256` are **not** Dependabot-managed (a tool download, not an action ref).
-[`updatecli.d/syft.yaml`](../../updatecli.d/syft.yaml) bumps the pair weekly, in `publish.yml` and `security-scan.yml` together, so the released images and the PR-time scan are described by the same syft.
+[`updatecli.d/syft.yaml`](../../updatecli.d/syft.yaml) bumps the pair weekly in `scripts/ci/pins.env`, which `publish.yml` and `security-scan.yml` both read, so the released images and the PR-time scan are described by the same syft.
 
 The two workflow gates divide the work, and it is worth knowing which answers what.
 `actionlint` checks that a `uses:` ref is present and well formed, so a pin edited down to a bare `owner/repo` fails the PR.
@@ -1500,8 +1500,8 @@ The first two controls protect *who* runs the pipeline and *how* signatures are 
   A Dependabot `go.mod` bump legitimately fails this gate until a follow-up vendor sync lands; that is the intended signal (see [go-workspaces.md § Changing dependencies](../development/go-workspaces.md#changing-dependencies)).
 - **The cosign verify binary is checksummed.** GitHub release assets are mutable for an existing tag, so a raw download of the release verifier can't be trusted on its own.
   The publish pipeline obtains cosign via the SHA-pinned `sigstore/cosign-installer` action (which performs its own signature verification); the *local* verify path (`make verify-release` → `scripts/release/download-cosign.sh`) pins the expected SHA256 per platform in-repo and refuses to install a binary whose bytes don't match.
-  Bumping `COSIGN_VERSION` must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as `KIND_BINARY_SHA256` in `e2e-test.yml`.
-  It must also carry the same version into publish.yml's `cosign-release`, which `make cosign-pin-check` enforces (Q903): a one-sided bump leaves `make verify-release` running a verifier the publish job never signed with, and cosign verifies across versions until it doesn't.
+  Bumping `COSIGN_VERSION` must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as `KIND_BINARY_SHA256` in `scripts/ci/pins.env`.
+  It must also carry the same version into `COSIGN_VERSION` in `scripts/ci/pins.env`, which publish.yml's `cosign-release` reads, and `make cosign-pin-check` enforces both (Q903): a one-sided bump leaves `make verify-release` running a verifier the publish job never signed with, and cosign verifies across versions until it doesn't.
   All three sites move together on the weekly [updatecli](../development/dependency-updates.md#the-manifests) run rather than by hand (Q927), and the digests it writes come from the release's sigstore-signed `cosign_checksums.txt`, verified against a pinned identity by the cosign the repo already pins.
   Automating the copy without automating the trust would pin whatever the releases CDN served.
   The `$(COSIGN)` make rule keys on the pinned version, so a bump re-downloads instead of serving whatever `.build/cosign` already holds (Q857).

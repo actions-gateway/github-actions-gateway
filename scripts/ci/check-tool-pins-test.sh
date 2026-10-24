@@ -112,6 +112,13 @@ expect version-keyed 0 'a tool rule keyed on a version-named sentinel passes' \
 		'$(TRIVY_PIN):' \
 		'	touch $@')"
 
+# The same rule with its version already in the environment, as in a CI job
+# that loaded scripts/ci/pins.env: `?=` then never assigns and make reports the
+# variable as environment-origin, which the probe must still override.
+TRIVY_VERSION=v0.1.0 expect version-in-environment 0 \
+	'a version-keyed rule passes when the version comes from the environment' \
+	"$FIXTURE_DIR/mk.version-keyed"
+
 # Two tools in one makefile, one pinned and one not: the pinned one must not
 # stand in for the other. A gate reporting per file rather than per rule would
 # pass this.

@@ -97,6 +97,8 @@ jobs:
               # The verified kind download both arms run before bring-up.
               - 'scripts/fetch/**'
               - 'scripts/lib/**'
+              # The kind pin both arms install; a kind bump PR touches only this file.
+              - 'scripts/ci/pins.env'
               # The matcher under test, its recorded unit table, and the shared
               # live-test plumbing. A matcher edit that stays consistent with the
               # unit table can still be wrong against a live autoscaler; that is
@@ -133,17 +135,15 @@ jobs:
     timeout-minutes: 20
 
     env:
-      # kind release, pinned (not @latest) for reproducibility, and bumped
-      # together with the copy in e2e-reusable.yml by updatecli
-      # (updatecli.d/kind.yaml) so the two cannot drift.
+      # KIND_VERSION + KIND_BINARY_SHA256 come from scripts/ci/pins.env, loaded
+      # by the `pins` step, the same pin e2e-reusable.yml reads.
       #
       # KIND_NODE_IMAGE is deliberately UNSET — see the header. The harness wants
       # kind's default node image so the Kubernetes minor tracks the kind
       # release; pinning it here would decouple the cluster's minor from
       # CA_VERSION and silently reintroduce the skew this gate is meant to
       # surface.
-      KIND_VERSION: v0.32.0
-      KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
+      #
       # Empty on every trigger but a dispatch that set it; scripts/e2e/autoscaler-cluster.sh
       # uses `${CA_VERSION:-<pin>}`, which falls back on empty as well as unset.
       # Threaded as an env var rather than interpolated into a run: script — no
@@ -153,11 +153,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
 
-      - name: Install kind ${{ env.KIND_VERSION }}
+      - name: Install kind ${{ steps.pins.outputs.KIND_VERSION }}
         # Same pinned-binary + checksum path as e2e-reusable.yml:
         # download-verified.sh retries a transient GitHub releases CDN error and
         # gates on KIND_BINARY_SHA256 before anything lands at the output path.
@@ -208,13 +212,10 @@ jobs:
     timeout-minutes: 25
 
     env:
-      # Pinned together with the copy in the `drift` job above; see the comment
-      # there. KIND_NODE_IMAGE stays unset here too, though for a simpler
-      # reason: Karpenter is not released per Kubernetes minor, so there is no
-      # version coupling to preserve — kind's default is just the cheapest
-      # current cluster.
-      KIND_VERSION: v0.32.0
-      KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
+      # kind is pinned as in the `drift` job above. KIND_NODE_IMAGE stays unset
+      # here too, though for a simpler reason: Karpenter is not released per
+      # Kubernetes minor, so there is no version coupling to preserve — kind's
+      # default is just the cheapest current cluster.
       # Empty on every trigger but a dispatch that set it; scripts/e2e/karpenter-cluster.sh
       # uses `${KARPENTER_VERSION:-<pin>}`, which falls back on empty as well as
       # unset. Threaded as an env var rather than interpolated into a run:
@@ -224,11 +225,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
 
-      - name: Install kind ${{ env.KIND_VERSION }}
+      - name: Install kind ${{ steps.pins.outputs.KIND_VERSION }}
         run: |
           scripts/fetch/download-verified.sh \
             "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \

@@ -3,11 +3,11 @@
 # given polaris version tag, with no trailing newline.
 #
 # Used by updatecli (updatecli.d/polaris.yaml) as a shell source so POLARIS_SHA256
-# in .github/workflows/security-scan.yml stays in lockstep with POLARIS_VERSION:
+# in scripts/ci/pins.env stays in lockstep with POLARIS_VERSION:
 # updatecli resolves the latest polaris tag, then calls this with that tag to pull
 # the matching hash from the release's published checksums.txt (the same file a
 # human would copy by hand). This version+checksum pair is exactly what Dependabot
-# cannot track, because the pins are workflow env vars rather than a
+# cannot track, because the pins are env-file lines rather than a
 # package-manifest entry.
 #
 # polaris embeds the version WITHOUT the leading "v" in its v10+ asset names
