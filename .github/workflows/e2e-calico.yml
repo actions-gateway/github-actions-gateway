@@ -69,6 +69,7 @@ on:
       - 'Makefile'
       - '.github/workflows/e2e-calico.yml'
       - '.github/workflows/e2e-reusable.yml'
+      - 'scripts/ci/pins.env'
   workflow_dispatch:
     inputs:
       # Run-scoped routing for the release gate (E2E_WORKFLOW=e2e-calico.yml):
@@ -134,6 +135,7 @@ jobs:
               - 'Makefile'             # e2e targets + CALICO_VERSION
               - '.github/workflows/e2e-calico.yml'
               - '.github/workflows/e2e-reusable.yml'
+              - 'scripts/ci/pins.env'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.

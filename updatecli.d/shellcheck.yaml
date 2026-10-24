@@ -1,5 +1,5 @@
-# Keep the shellcheck version + checksum in .github/workflows/unit-test.yml
-# current. shellcheck publishes no checksum file, so the checksum source hashes
+# Keep the shellcheck version + checksum in scripts/ci/pins.env current;
+# unit-test.yml's shellcheck and actionlint jobs load them from there. shellcheck publishes no checksum file, so the checksum source hashes
 # the release tarball directly (scripts/updatecli/sha256-of-url.sh). updatecli
 # bumps SHELLCHECK_VERSION and SHELLCHECK_SHA256 together in one PR — the
 # version+checksum pair Dependabot cannot track. Run by
@@ -52,20 +52,20 @@ sources:
 
 targets:
   version:
-    name: 'SHELLCHECK_VERSION in unit-test.yml'
+    name: 'SHELLCHECK_VERSION in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/unit-test.yml
-      matchpattern: '(SHELLCHECK_VERSION: )v\d+\.\d+\.\d+'
+      file: scripts/ci/pins.env
+      matchpattern: '(SHELLCHECK_VERSION=)v\d+\.\d+\.\d+'
       replacepattern: '${1}{{ source "shellcheckVersion" }}'
   checksum:
-    name: 'SHELLCHECK_SHA256 in unit-test.yml'
+    name: 'SHELLCHECK_SHA256 in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/unit-test.yml
-      matchpattern: '(SHELLCHECK_SHA256: )[0-9a-f]{64}'
+      file: scripts/ci/pins.env
+      matchpattern: '(SHELLCHECK_SHA256=)[0-9a-f]{64}'
       replacepattern: '${1}{{ source "shellcheckChecksum" }}'

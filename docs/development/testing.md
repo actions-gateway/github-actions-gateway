@@ -687,7 +687,7 @@ All run under `make scripts-test`.
 The selection is fail-closed: a script written outside `scripts/`, such as an operator example under `docs/` or a harness under `deploy/`, is covered unless it sits under an excluded path (Q1088).
 The dedicated `shellcheck` job in `.github/workflows/unit-test.yml` runs the same `make shellcheck` target, gated on a `scripts` paths-filter (`scripts/**`, `**/*.sh`, the `Makefile`, and the workflow itself) so a scripts-only change doesn't also trigger the full Go lint.
 
-**The CI job pins shellcheck** (`SHELLCHECK_VERSION` in [`unit-test.yml`](../../.github/workflows/unit-test.yml) is the source of truth) rather than using `ubuntu-latest`'s preinstalled copy — that version drifts with the runner image, and shellcheck's heuristics (e.g. when SC2015 fires on `A && B || true`) differ between releases, so an unpinned gate gives a different verdict locally vs. CI.
+**The CI job pins shellcheck** (`SHELLCHECK_VERSION` in [`scripts/ci/pins.env`](../../scripts/ci/pins.env) is the source of truth) rather than using `ubuntu-latest`'s preinstalled copy — that version drifts with the runner image, and shellcheck's heuristics (e.g. when SC2015 fires on `A && B || true`) differ between releases, so an unpinned gate gives a different verdict locally vs. CI.
 Install the **same** version locally so `make shellcheck` matches the gate: see <https://github.com/koalaman/shellcheck#installing> (the target prints this hint if shellcheck is missing).
 The pin is bumped automatically by updatecli (see [dependency-updates.md](dependency-updates.md)); when its PR lands, install the new version locally to match.
 
@@ -729,7 +729,7 @@ The jobs that reach their runner through `fromJSON(vars.GAG_RUNNER)` need no ent
 There is no version env var to bump; it rides the `tools/` Dependabot channel with the other Go tooling.
 
 **The shellcheck dependency is a false-green hazard, so the gate asserts it.** actionlint delegates inline `run:` blocks to shellcheck and, when shellcheck is absent from `PATH`, silently disables that integration and still exits 0 — half the gate reporting green having linted nothing, the same class as Q404 and Q432.
-The script therefore fails outright on a missing shellcheck rather than running degraded. shellcheck is already a `required`-tier tool in [`check-tools.sh`](../../scripts/ci/check-tools.sh), so `make doctor` covers it; the CI job installs the same pinned version the shellcheck job does, off a workflow-level `SHELLCHECK_VERSION`/`SHELLCHECK_SHA256` pair so the two cannot drift apart.
+The script therefore fails outright on a missing shellcheck rather than running degraded. shellcheck is already a `required`-tier tool in [`check-tools.sh`](../../scripts/ci/check-tools.sh), so `make doctor` covers it; the CI job installs the same pinned version the shellcheck job does, off the one `SHELLCHECK_VERSION`/`SHELLCHECK_SHA256` pair in `pins.env`, so the two cannot drift apart.
 `make doctor` reads that same `SHELLCHECK_VERSION` as shellcheck's version floor, so a local shellcheck older than CI's is reported rather than left to surface as a red CI job on a branch whose `make shellcheck` was green: an older linter finds fewer problems, which is the same false-green in the other direction.
 
 Accepted findings inside a `run:` block carry the same targeted `# shellcheck disable=SCxxxx` directive as a standalone script — placed above a `{ … }` group it covers the whole group, which is how `publish.yml`'s single-quoted `printf` format strings (a genuine SC2016 false positive) are justified once rather than per line.
@@ -3309,8 +3309,8 @@ What makes that fire without anyone remembering to run it is a coupling worth kn
 > The harness pins no `KIND_NODE_IMAGE`, so its cluster runs **kind's default node image** — Kubernetes 1.36.1 for kind v0.32.0. cluster-autoscaler is released per Kubernetes minor, so the kind release chooses the Kubernetes minor, which chooses the CA minor.
 > That is why `CA_VERSION` (v1.36.x) tracks kind's default rather than the deliberately-pinned-down `KIND_NODE_IMAGE` the e2e tier uses (v1.35.5).
 
-`KIND_VERSION` is pinned in this workflow as well as [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml), and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) rewrites both weekly.
-So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands.
+`KIND_VERSION` is the one pin in [`scripts/ci/pins.env`](../../scripts/ci/pins.env) that this workflow and [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) both read, and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) bumps it weekly.
+`pins.env` is in this workflow's `changes` filter, so the kind bump PR runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands.
 **A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
 
 `KARPENTER_VERSION` has no such coupling: Karpenter is not released per Kubernetes minor (one release supports a wide range), so no kind bump ever prompts that pin.
@@ -4047,7 +4047,7 @@ Calico applies from its own retried temp-file fetch (`install_calico`) and metri
 The metrics-server key carries an `-m2` generation anyway, for a different reason: its entry predated the tar's rename to `images.tar`, so it restored, failed the script's hit predicate and re-pulled on every run (Q1138).
 Calico keeps its original key, because its skewed entry was evicted and rewritten by the current script.
 
-The pinned versions live in the workflow env (`E2E_CURL_UPSTREAM`, `CERTMANAGER_VERSION`, `METRICSSERVER_VERSION`, `CALICO_VERSION`) and must be kept in sync with their source of truth (`CERTMANAGER_VERSION` in `cmd/gmc/Makefile`, `metricsServerVersion` in `cmd/gmc/test/e2e/e2e_suite_test.go`, `CALICO_VERSION` in the root `Makefile`) — bump together.
+The pinned versions live in the workflow env (`E2E_CURL_UPSTREAM`, `CERTMANAGER_VERSION`, `METRICSSERVER_VERSION`) and in `scripts/ci/pins.env` (`CALICO_VERSION`), and must be kept in sync with their source of truth (`CERTMANAGER_VERSION` in `cmd/gmc/Makefile`, `metricsServerVersion` in `cmd/gmc/test/e2e/e2e_suite_test.go`, `CALICO_VERSION` in the root `Makefile`) — bump together.
 The first-party images (`gmc`/`agc`/`proxy`/`fakegithub`/`worker`) are built and pushed to the local registry by the bake step, whose buildx `GHA_CACHE` exports and restores the shared `deps` layer through the `scope=images` Actions cache.
 Both halves are measured (2026-08-25): run 32805101179 wrote the scope, emitting an `exporting to GitHub Actions Cache` vertex for all six targets, and run 32806162619 restored it, with all six `[<target> deps 15/15] RUN` vertices reporting `CACHED` in place of the ~99 s compile the cold run does.
 Grade a restore on the `[<target> deps 15/15] RUN` vertex rather than on a `CACHED` count: the bake shows 73 cached vertices even with the cache cold, because six targets in one buildkit invocation share `deps` intra-bake.
@@ -4159,7 +4159,7 @@ Scoring is a pure function over log text (`ScoreProxyReplicaLog`/`AttributeProxy
   Instead the lane pre-pulls the exact image refs the pinned manifest references into the runner's Docker daemon (cached via `actions/cache`, keyed on `CALICO_VERSION`, retried), and `scripts/e2e/kind-with-registry.sh` `kind load`s whatever is present onto the nodes so the rollout never touches quay.io.
   This keeps the per-PR Calico cost bounded and quay.io off the critical path.
   Calico still gets a 60-minute timeout vs. the kindnet leg's 45 for rollout headroom.
-  `CALICO_VERSION` is pinned in both the root `Makefile` and the workflow env — bump them together.
+  `CALICO_VERSION` is pinned in both the root `Makefile` and `scripts/ci/pins.env`; updatecli bumps them together.
 
 ### The Dockerfile-lint gate
 

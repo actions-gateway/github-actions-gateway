@@ -1,10 +1,10 @@
 # Keep the envtest Kubernetes version (ENVTEST_K8S_VERSION) the integration-test
 # tier runs against current, in lockstep across all three places it appears:
-# .github/workflows/integration-test.yml and the two controller Makefiles
-# (cmd/gmc/Makefile, cmd/agc/Makefile). updatecli resolves the latest stable
+# scripts/ci/pins.env (which integration-test.yml loads) and the two controller
+# Makefiles (cmd/gmc/Makefile, cmd/agc/Makefile). updatecli resolves the latest stable
 # envtest release from controller-tools' envtest-releases.yaml index (the same
 # index setup-envtest reads, so the chosen minor provably has published binaries)
-# and rewrites all three together — the version is a workflow env var / Makefile
+# and rewrites all three together — the version is an env-file / Makefile
 # variable, not a package-manifest entry, so Dependabot cannot track it. Run by
 # .github/workflows/updatecli.yml.
 #
@@ -56,14 +56,14 @@ sources:
         - name: PATH
 
 targets:
-  workflow:
-    name: 'ENVTEST_K8S_VERSION in integration-test.yml'
+  pins:
+    name: 'ENVTEST_K8S_VERSION in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
-    scmid: repo
+    scmid: workflow
     spec:
-      file: .github/workflows/integration-test.yml
-      matchpattern: '(ENVTEST_K8S_VERSION: )1\.\d+\.x'
+      file: scripts/ci/pins.env
+      matchpattern: '(ENVTEST_K8S_VERSION=)1\.\d+\.x'
       replacepattern: '${1}{{ source "envtestVersion" }}'
   gmcMakefile:
     name: 'ENVTEST_K8S_VERSION in cmd/gmc/Makefile'

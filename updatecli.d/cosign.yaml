@@ -1,7 +1,7 @@
 # Keep the cosign pin current across all three files that carry it: the
-# Makefile's COSIGN_VERSION, both `cosign-release` inputs in
-# .github/workflows/publish.yml, and the four per-platform SHA-256 digests in
-# scripts/release/download-cosign.sh. Run by .github/workflows/updatecli.yml.
+# Makefile's COSIGN_VERSION, COSIGN_VERSION in scripts/ci/pins.env (which both
+# `cosign-release` inputs in publish.yml read), and the four per-platform SHA-256
+# digests in scripts/release/download-cosign.sh. Run by .github/workflows/updatecli.yml.
 #
 # cosign was the last pinned tool nothing bumped (Q927). Dependabot cannot see a
 # Makefile variable or a shell `case` block, and Q903's check-cosign-pin.sh holds
@@ -105,14 +105,14 @@ targets:
       file: Makefile
       matchpattern: '(COSIGN_VERSION \?= )v\d+\.\d+\.\d+'
       replacepattern: '${1}{{ source "cosignVersion" }}'
-  publishRelease:
-    name: 'cosign-release in publish.yml (both signing steps)'
+  pinsVersion:
+    name: 'COSIGN_VERSION in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/publish.yml
-      matchpattern: '(cosign-release: )v\d+\.\d+\.\d+'
+      file: scripts/ci/pins.env
+      matchpattern: '(COSIGN_VERSION=)v\d+\.\d+\.\d+'
       replacepattern: '${1}{{ source "cosignVersion" }}'
   # Version and digest move together: a key naming one release beside a digest
   # from another would fail download-cosign.sh closed at the next `make cosign`.

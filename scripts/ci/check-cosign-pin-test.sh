@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/ci/check-cosign-pin.sh (Q903): drift between the
-# Makefile's COSIGN_VERSION and publish.yml's cosign-release fails, agreement
-# passes, an installer step that lost its pin fails, and every shape that would
-# leave the gate comparing nothing refuses with rc 2 instead of reporting green.
+# Unit tests for scripts/ci/check-cosign-pin.sh (Q903, Q1166): drift between
+# the Makefile's COSIGN_VERSION and scripts/ci/pins.env's fails, agreement
+# passes, an installer step whose cosign-release is not the pins reference fails
+# (a literal, or no input at all), and every shape that would leave the gate
+# comparing nothing refuses with rc 2 instead of reporting green.
 #
 # Both directions are asserted because the gate's own failure mode is silence:
 # a pattern that stopped matching would find no pins to compare and — without
@@ -43,8 +44,26 @@ write_makefile() {
 	printf '%s\n' "$out"
 }
 
+# The literal workflow text, unexpanded.
+# shellcheck disable=SC2016
+REF='${{ steps.pins.outputs.COSIGN_VERSION }}'
+
+# write_pins NAME LINE... — a pins.env fixture with a neighbouring pin, so the
+# awk selection is exercised against more than a lone line.
+write_pins() {
+	local out="$FIXTURE_DIR/pins.$1.env" line
+	shift
+	{
+		printf 'KIND_VERSION=v0.32.0\n'
+		for line in "$@"; do
+			printf '%s\n' "$line"
+		done
+	} > "$out"
+	printf '%s\n' "$out"
+}
+
 # write_workflow NAME STEP... — a publish.yml fixture, one argument per
-# installer step, each either a version to pin or the literal "unpinned".
+# installer step, each either the cosign-release value or the literal "unpinned".
 write_workflow() {
 	local out="$FIXTURE_DIR/publish.$1.yml" step
 	shift
@@ -61,12 +80,12 @@ write_workflow() {
 	printf '%s\n' "$out"
 }
 
-# expect NAME EXPECT_RC MAKEFILE WORKFLOW [SUBSTRING] — run the gate over the
-# fixtures and assert the exit code, and that any SUBSTRING is reported.
+# expect NAME EXPECT_RC MAKEFILE WORKFLOW PINS [SUBSTRING] — run the gate over
+# the fixtures and assert the exit code, and that any SUBSTRING is reported.
 expect() {
-	local name="$1" want_rc="$2" makefile="$3" workflow="$4" want_text="${5:-}"
+	local name="$1" want_rc="$2" makefile="$3" workflow="$4" pins="$5" want_text="${6:-}"
 	local got_rc=0 out
-	out="$("$CHECKER" "$makefile" "$workflow" 2>&1)" || got_rc=$?
+	out="$("$CHECKER" "$makefile" "$workflow" "$pins" 2>&1)" || got_rc=$?
 	die_if_killed "$name" "$got_rc" "$want_rc"
 	if [[ "$got_rc" != "$want_rc" ]]; then
 		printf 'FAIL %-30s want rc=%s got rc=%s\n%s\n' "$name" "$want_rc" "$got_rc" "$out" >&2
@@ -82,48 +101,59 @@ expect() {
 }
 
 mk_in_step="$(write_makefile in-step 'COSIGN_VERSION ?= v2.5.2')"
+pins_in_step="$(write_pins in-step 'COSIGN_VERSION=v2.5.2')"
+wf_in_step="$(write_workflow in-step "$REF" "$REF")"
 
 # --- the comparison itself --------------------------------------------------
 
-wf="$(write_workflow in-step v2.5.2 v2.5.2)"
-expect in-step 0 "$mk_in_step" "$wf" 'v2.5.2'
+expect in-step 0 "$mk_in_step" "$wf_in_step" "$pins_in_step" 'v2.5.2'
 
 # The defect Q903 names: the workflow signs with one cosign, `make
 # verify-release` verifies with another.
-wf="$(write_workflow drift-both v2.6.0 v2.6.0)"
-expect drift-both-pins 1 "$mk_in_step" "$wf" 'v2.6.0'
+expect pins-ahead-of-makefile 1 "$mk_in_step" "$wf_in_step" \
+	"$(write_pins ahead 'COSIGN_VERSION=v2.6.0')" 'v2.6.0'
+expect makefile-ahead-of-pins 1 "$(write_makefile ahead 'COSIGN_VERSION ?= v2.6.0')" \
+	"$wf_in_step" "$pins_in_step" 'v2.6.0'
 
-# A partial bump is the likelier shape — two installer steps, one edited.
-wf="$(write_workflow drift-one v2.5.2 v2.6.0)"
-expect drift-one-pin 1 "$mk_in_step" "$wf" 'v2.6.0'
+# A literal stops moving with the pin, so even one that agrees today is refused:
+# the next bump would leave it behind.
+wf="$(write_workflow literal-agrees "$REF" v2.5.2)"
+expect literal-version-in-workflow 1 "$mk_in_step" "$wf" "$pins_in_step" 'must read'
+# shellcheck disable=SC2016
+wf="$(write_workflow env-ref "$REF" '${{ env.COSIGN_VERSION }}')"
+expect env-reference-in-workflow 1 "$mk_in_step" "$wf" "$pins_in_step" 'must read'
 
 # --- drift arriving by omission ---------------------------------------------
 #
 # cosign-installer floats to the latest release with no cosign-release input, so
-# a deleted pin diverges exactly like an edited one. Comparing only the pins
+# a deleted input diverges exactly like an edited one. Comparing only the inputs
 # that remain would report this tree in step.
-wf="$(write_workflow half-pinned v2.5.2 unpinned)"
-expect installer-lost-its-pin 1 "$mk_in_step" "$wf" 'cosign-release pin'
+wf="$(write_workflow half-pinned "$REF" unpinned)"
+expect installer-lost-its-pin 1 "$mk_in_step" "$wf" "$pins_in_step" 'cosign-release input'
 
 wf="$(write_workflow unpinned unpinned unpinned)"
-expect no-pins-at-all 1 "$mk_in_step" "$wf" 'cosign-release pin'
+expect no-pins-at-all 1 "$mk_in_step" "$wf" "$pins_in_step" 'cosign-release input'
 
 # --- shapes that must refuse rather than pass -------------------------------
 #
 # Each of these leaves the gate with nothing to compare. Reporting green would
 # be indistinguishable from a tree that is genuinely in step, which is the
 # failure mode the gate exists to remove.
-wf="$(write_workflow refusals v2.5.2 v2.5.2)"
-
-expect makefile-pin-gone 2 "$(write_makefile no-pin 'COSIGN         := unrelated')" "$wf" 'COSIGN_VERSION'
+expect makefile-pin-gone 2 "$(write_makefile no-pin 'COSIGN         := unrelated')" \
+	"$wf_in_step" "$pins_in_step" 'COSIGN_VERSION'
 expect makefile-pin-twice 2 \
-	"$(write_makefile two-pins 'COSIGN_VERSION ?= v2.5.2' 'COSIGN_VERSION ?= v2.6.0')" "$wf" 'COSIGN_VERSION'
+	"$(write_makefile two-pins 'COSIGN_VERSION ?= v2.5.2' 'COSIGN_VERSION ?= v2.6.0')" \
+	"$wf_in_step" "$pins_in_step" 'COSIGN_VERSION'
+expect pins-env-pin-gone 2 "$mk_in_step" "$wf_in_step" "$(write_pins no-pin)" 'COSIGN_VERSION='
+expect pins-env-pin-twice 2 "$mk_in_step" "$wf_in_step" \
+	"$(write_pins two-pins 'COSIGN_VERSION=v2.5.2' 'COSIGN_VERSION=v2.6.0')" 'COSIGN_VERSION='
 
 printf 'jobs:\n  publish:\n    steps:\n      - run: echo no cosign here\n' > "$FIXTURE_DIR/nocosign.yml"
-expect workflow-installs-nothing 2 "$mk_in_step" "$FIXTURE_DIR/nocosign.yml" 'installs cosign nowhere'
+expect workflow-installs-nothing 2 "$mk_in_step" "$FIXTURE_DIR/nocosign.yml" "$pins_in_step" 'installs cosign nowhere'
 
-expect makefile-missing 2 "$FIXTURE_DIR/no-such-Makefile" "$wf" 'does not exist'
-expect workflow-missing 2 "$mk_in_step" "$FIXTURE_DIR/no-such.yml" 'does not exist'
+expect makefile-missing 2 "$FIXTURE_DIR/no-such-Makefile" "$wf_in_step" "$pins_in_step" 'does not exist'
+expect workflow-missing 2 "$mk_in_step" "$FIXTURE_DIR/no-such.yml" "$pins_in_step" 'does not exist'
+expect pins-env-missing 2 "$mk_in_step" "$wf_in_step" "$FIXTURE_DIR/no-such.env" 'does not exist'
 
 # --- the tracked tree -------------------------------------------------------
 #

@@ -72,7 +72,8 @@ shopt -s inherit_errexit
 #                        is installed; declare one only for a floor the project
 #                        actually depends on. Three forms:
 #                          4.4                    a dotted literal
-#                          @ci:SHELLCHECK_VERSION the lowest version any
+#                          @ci:SHELLCHECK_VERSION the lowest version
+#                                                 scripts/ci/pins.env or any
 #                                                 .github/workflows/*.yml pins
 #                                                 for that env var
 #                          @go.work               the go directive in go.work
@@ -230,8 +231,9 @@ version_ge() {
   return 0
 }
 
-# ci_pin VAR — print the lowest version any workflow pins for env var VAR, or
-# nothing when none declares one. Lowest rather than first because the floor
+# ci_pin VAR — print the lowest version scripts/ci/pins.env or any workflow
+# pins for env var VAR, or nothing when none declares one. Both are read because
+# the pins updatecli bumps live in pins.env and the rest stay in the workflows. Lowest rather than first because the floor
 # must not exceed what any CI job actually runs; it is also stable under a pin
 # moving between files, which `first match` is not. Matched on the whole key, so
 # a longer var name ending in VAR cannot answer for it.
@@ -240,9 +242,14 @@ ci_pin() {
   while IFS= read -r v; do
     [[ -n "$v" ]] || continue
     if [[ -z "$low" ]] || ! version_ge "$v" "$low"; then low="$v"; fi
-  done < <(awk -v key="${var}:" '
-    $1 == key && $2 ~ /^v?[0-9]+(\.[0-9]+)+$/ { sub(/^v/, "", $2); print $2 }
-  ' "$repo_root"/.github/workflows/*.yml 2>/dev/null)
+  done < <(
+    awk -v key="${var}:" '
+      $1 == key && $2 ~ /^v?[0-9]+(\.[0-9]+)+$/ { sub(/^v/, "", $2); print $2 }
+    ' "$repo_root"/.github/workflows/*.yml 2>/dev/null
+    awk -F= -v key="$var" '
+      $1 == key && $2 ~ /^v?[0-9]+(\.[0-9]+)+$/ { sub(/^v/, "", $2); print $2 }
+    ' "$repo_root/scripts/ci/pins.env" 2>/dev/null
+  )
   printf '%s' "$low"
 }
 

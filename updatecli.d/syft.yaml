@@ -1,10 +1,9 @@
-# Keep the syft version and its linux/amd64 checksum in
-# .github/workflows/publish.yml and .github/workflows/security-scan.yml current.
-# updatecli resolves the latest syft release, fetches the matching upstream
-# checksum, and opens a PR bumping SYFT_VERSION and SYFT_SHA256 together in both
-# files — the version+checksum pair Dependabot cannot track because the pins are
-# workflow env vars, not a package-manifest entry. Rewriting both copies here is
-# what keeps the release-time and PR-time scanners on the same syft. Run by
+# Keep the syft version and its linux/amd64 checksum in scripts/ci/pins.env
+# current. publish.yml and security-scan.yml both load them from there, so the
+# release-time and PR-time scanners run the same syft. updatecli resolves the
+# latest syft release, fetches the matching upstream checksum, and opens a PR
+# bumping SYFT_VERSION and SYFT_SHA256 together — the version+checksum pair
+# Dependabot cannot track because it is not a package-manifest entry. Run by
 # .github/workflows/updatecli.yml.
 #
 # syft used to be pinned through the `syft-version` input on
@@ -56,39 +55,21 @@ sources:
         - name: PATH
 
 targets:
-  publishVersion:
-    name: 'SYFT_VERSION in publish.yml'
+  version:
+    name: 'SYFT_VERSION in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/publish.yml
-      matchpattern: '(SYFT_VERSION: )v\d+\.\d+\.\d+'
+      file: scripts/ci/pins.env
+      matchpattern: '(SYFT_VERSION=)v\d+\.\d+\.\d+'
       replacepattern: '${1}{{ source "syftVersion" }}'
-  publishChecksum:
-    name: 'SYFT_SHA256 in publish.yml'
+  checksum:
+    name: 'SYFT_SHA256 in scripts/ci/pins.env'
     kind: file
     disablesourceinput: true
     scmid: workflow
     spec:
-      file: .github/workflows/publish.yml
-      matchpattern: '(SYFT_SHA256: )[0-9a-f]{64}'
-      replacepattern: '${1}{{ source "syftChecksum" }}'
-  scanVersion:
-    name: 'SYFT_VERSION in security-scan.yml'
-    kind: file
-    disablesourceinput: true
-    scmid: workflow
-    spec:
-      file: .github/workflows/security-scan.yml
-      matchpattern: '(SYFT_VERSION: )v\d+\.\d+\.\d+'
-      replacepattern: '${1}{{ source "syftVersion" }}'
-  scanChecksum:
-    name: 'SYFT_SHA256 in security-scan.yml'
-    kind: file
-    disablesourceinput: true
-    scmid: workflow
-    spec:
-      file: .github/workflows/security-scan.yml
-      matchpattern: '(SYFT_SHA256: )[0-9a-f]{64}'
+      file: scripts/ci/pins.env
+      matchpattern: '(SYFT_SHA256=)[0-9a-f]{64}'
       replacepattern: '${1}{{ source "syftChecksum" }}'
