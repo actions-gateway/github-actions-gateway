@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -98,10 +99,24 @@ func recoveryFixture(t *testing.T, pods ...*corev1.Pod) (*Provisioner, *stubTarg
 func recoveryFixtureWith(t *testing.T, ic interceptor.Funcs, pods ...*corev1.Pod) (*Provisioner, *stubTarget, *runnercore.Metrics, *atomic.Int64, chan string) {
 	t.Helper()
 
+	// One run state per run ID, answering as GitHub does: an accepted re-run starts the
+	// next attempt, which refuses another re-run while it is in progress.
+	var (
+		runsMu sync.Mutex
+		runs   = map[string]*ledgerRunAPI{}
+	)
 	rerunCount := &atomic.Int64{}
 	paths := make(chan string, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if answeredRunConclusion(w, r, runConcludedFailure) {
+		_, runID, _ := strings.Cut(strings.TrimSuffix(r.URL.Path, "/rerun-failed-jobs"), "/runs/")
+		runsMu.Lock()
+		run, ok := runs[runID]
+		if !ok {
+			run = &ledgerRunAPI{conclusion: "failure", attempt: 1}
+			runs[runID] = run
+		}
+		runsMu.Unlock()
+		if !run.handle(w, r) {
 			return
 		}
 		rerunCount.Add(1)
@@ -109,7 +124,6 @@ func recoveryFixtureWith(t *testing.T, ic interceptor.Funcs, pods ...*corev1.Pod
 		case paths <- r.URL.Path:
 		default:
 		}
-		w.WriteHeader(http.StatusCreated)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -280,14 +294,26 @@ func TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun(t *testing.T) {
 		evicted(scaleSetWorkerPod("runner-gpu-b", identityAnnotations())),
 		evicted(scaleSetWorkerPod("runner-gpu-c", identityAnnotations())),
 	}
-	p, target, m, rerunCount, _ := recoveryFixture(t, pods...)
+	p, target, m, _, _ := recoveryFixture(t, pods...)
 	target.spec.MaxEvictionRetries = 2
+	p.EvictionRerunRetryInterval = time.Millisecond
+	// The run stays in progress until all three disruptions are recorded, as GitHub
+	// holds it until every disrupted job concludes.
+	api := &ledgerRunAPI{conclusion: "failure", attempt: 1, holdUntil: func() bool {
+		l, _, err := p.readRerunLedger(ctx, target)
+		if err != nil || l.Reruns["4242"] == nil || l.Reruns["4242"].Attempts["1"] == nil {
+			return false
+		}
+		return len(l.Reruns["4242"].Attempts["1"].Disruptions) == len(pods)
+	}}
+	srv := api.server(t)
+	p.GitHubAPIURL, p.HTTPClient = srv.URL, srv.Client()
 
 	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
 	require.NoError(t, err)
 	<-done
 
-	assert.Equal(t, int64(1), rerunCount.Load(), "one attempt's disruptions share one re-run")
+	assert.Equal(t, int64(1), api.reruns.Load(), "one attempt's disruptions share one re-run")
 	assert.Equal(t, float64(1),
 		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)),
 		"one slot reserved; the other two merged")
@@ -300,7 +326,7 @@ func TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun(t *testing.T) {
 	require.Contains(t, l.Reruns, "4242")
 	assert.Equal(t, 1, l.Reruns["4242"].Count)
 	assert.ElementsMatch(t, []string{"runner-gpu-a", "runner-gpu-b", "runner-gpu-c"},
-		l.Reruns["4242"].Attempts["0"].Disruptions, "the re-run records every disruption it covered")
+		l.Reruns["4242"].Attempts["1"].Disruptions, "the re-run records every disruption it covered")
 }
 
 // TestRecoverEvictedScaleSetWorkers_NoEvictedPodsIsCheap asserts the common path returns

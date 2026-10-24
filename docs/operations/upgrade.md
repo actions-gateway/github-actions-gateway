@@ -200,9 +200,9 @@ Operational consequences:
   It carries the same `actions-gateway.com/runner-set` label and is owner-ref'd to the set.
   Each run's entry expires 30 days after GAG last reserved a re-run for it, GitHub's re-run window, and the object is capped at 512 KiB, about 1,100 runs re-run inside 30 days at the default budget of 2 (measured by the AGC's unit test).
   Past the cap a new reservation is refused rather than an old budget dropped.
-- **Fewer re-runs and fewer `eviction_retries_total` increments for multi-job runs.** A drain that takes three workers of one run now re-runs it once and counts once; the merged disruptions log `a re-run already reserved for this run attempt covers the disrupted job`.
-- **Every scale-set recovery now reads the run first.** The eviction, preemption and vanished arms did not call GitHub before the re-run; they now make one `GET` of the run to learn the attempt the job failed in.
-  A run that cannot be read is not re-run, and counts as `eviction_rerun_failures_total{reason="conclusion_unknown"}` or `{reason="api_error"}`.
+- **Fewer re-runs and fewer `eviction_retries_total` increments for multi-job runs.** A drain that takes three workers of one run now re-runs it once and counts once; the merged disruptions log `a re-run is already reserved for this run attempt`, and re-run the attempt themselves only if that re-run never lands.
+- **Every scale-set recovery now reads the run.** The eviction, preemption and vanished arms did not call GitHub before the re-run; they now `GET` the run once to learn the attempt the job failed in, and again before each re-run call, standing down once the run is already past that attempt.
+  A run that cannot be read, or that names no `run_attempt`, is not re-run, and counts as `eviction_rerun_failures_total{reason="conclusion_unknown"}` or `{reason="api_error"}`.
   The call needs only Actions read access, which the re-run already requires.
 - **A new failure reason.** `eviction_rerun_failures_total{reason="budget_unrecorded"}` counts a recovery whose budget decision could not be written, which withholds the re-run.
   Expected to be zero; see the [runbook](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget).

@@ -32,34 +32,65 @@ import (
 // attempt landing two re-runs — plus the reservation's four outcomes, GAG's own
 // force-cancel record, and the version rules that let two AGC versions share the object.
 
-// ledgerRunAPI fakes the run GET and the rerun POST. The GET answers status, conclusion
-// and run_attempt from the fields, which a test may change between calls.
+// ledgerRunAPI fakes the run GET and the rerun POST the way GitHub answers them: an
+// accepted re-run starts the next attempt, and a POST while that attempt is in progress
+// is refused "already running". The GET reports the current attempt.
 type ledgerRunAPI struct {
 	mu         sync.Mutex
 	conclusion string
 	attempt    int
+	inProgress bool
 	reruns     atomic.Int64
+	// holdUntil, where set, keeps the run in progress until it reports true: GitHub does
+	// not conclude a run until every disrupted job has concluded too.
+	holdUntil func() bool
 }
 
+// set concludes the run's current attempt as attempt, with conclusion.
 func (a *ledgerRunAPI) set(conclusion string, attempt int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.conclusion, a.attempt = conclusion, attempt
+	a.conclusion, a.attempt, a.inProgress = conclusion, attempt, false
+}
+
+// handle answers r, reporting whether it accepted a re-run.
+func (a *ledgerRunAPI) handle(w http.ResponseWriter, r *http.Request) bool {
+	held := a.holdUntil != nil && !a.holdUntil()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if held {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"status":"in_progress","conclusion":"","run_attempt":%d}`, a.attempt)
+			return false
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = io.WriteString(w, alreadyRunningBody)
+		return false
+	}
+	if r.Method == http.MethodGet {
+		status, conclusion := "completed", a.conclusion
+		if a.inProgress {
+			status, conclusion = "in_progress", ""
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"status":%q,"conclusion":%q,"run_attempt":%d}`, status, conclusion, a.attempt)
+		return false
+	}
+	if a.inProgress {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = io.WriteString(w, alreadyRunningBody)
+		return false
+	}
+	a.attempt++
+	a.inProgress = true
+	a.reruns.Add(1)
+	w.WriteHeader(http.StatusCreated)
+	return true
 }
 
 func (a *ledgerRunAPI) server(t *testing.T) *httptest.Server {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			a.mu.Lock()
-			body := fmt.Sprintf(`{"status":"completed","conclusion":%q,"run_attempt":%d}`, a.conclusion, a.attempt)
-			a.mu.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, body)
-			return
-		}
-		a.reruns.Add(1)
-		w.WriteHeader(http.StatusCreated)
-	}))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { a.handle(w, r) }))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -92,6 +123,9 @@ func ledgerProvisioner(c client.Client, srv *httptest.Server) *Provisioner {
 	p.GitHubAPIURL = srv.URL
 	p.HTTPClient = srv.Client()
 	p.EvictionRerunRetryInterval = time.Millisecond
+	// A loop refused for this long has re-run twice or been swallowed; fail on it
+	// rather than wait out the 15-minute default.
+	p.EvictionRerunWindow = 5 * time.Second
 	return p
 }
 
@@ -132,6 +166,62 @@ func TestScaleSetBudget_SurvivesARestart(t *testing.T) {
 	assert.Contains(t, target.events, "EvictionRetriesExhausted")
 }
 
+// TestScaleSetBudget_AMergeIntoADeadReservationStillReRuns is the review finding on
+// the merge: disruption A reserved attempt 1 and its process died before its re-run
+// landed, so A's claim keeps it from ever being re-driven. B, a later disruption of the
+// same attempt, merges into that reservation, and must re-run the run itself rather than
+// trust a re-run nobody will make. It spends no slot doing it.
+func TestScaleSetBudget_AMergeIntoADeadReservationStillReRuns(t *testing.T) {
+	ctx := context.Background()
+	c, api, srv, target := ledgerFixture(t)
+	dead := ledgerProvisioner(c, srv)
+	got, _, err := dead.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
+	require.NoError(t, err)
+	require.Equal(t, rerunReserved, got)
+
+	after := ledgerProvisioner(c, srv)
+	evictScaleSet(after, target, "4242", 2, recoveryCauseDeletion, rerunDisruption{key: "pod-b"})
+
+	assert.Equal(t, int64(1), api.reruns.Load(), "the merged disruption re-runs the attempt the dead reservation never did")
+	l, _, err := after.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Equal(t, 1, l.Reruns["4242"].Count, "taking over a reservation spends no slot")
+}
+
+// TestScaleSetBudget_ALandedReservationCoversLaterDisruptions is the other side: once
+// the reserved re-run has landed, the run is past the attempt, and neither a merged
+// disruption nor the same disruption resumed after its claim expired re-runs it again.
+func TestScaleSetBudget_ALandedReservationCoversLaterDisruptions(t *testing.T) {
+	ctx := context.Background()
+	c, api, srv, target := ledgerFixture(t)
+	p := ledgerProvisioner(c, srv)
+	evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a"})
+	require.Equal(t, int64(1), api.reruns.Load())
+	api.set("failure", 2) // GAG's re-run concluded
+
+	evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-b", failedAttempt: 1})
+	evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a", failedAttempt: 1})
+
+	assert.Equal(t, int64(1), api.reruns.Load(), "an attempt GAG already re-ran is not re-run again")
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Equal(t, 1, l.Reruns["4242"].Count)
+}
+
+// TestScaleSetBudget_ARunWithNoAttemptIsNotBudgeted pins the guard on a run read that
+// names no run_attempt: every attempt would merge into one key, so it withholds.
+func TestScaleSetBudget_ARunWithNoAttemptIsNotBudgeted(t *testing.T) {
+	c, api, srv, target := ledgerFixture(t)
+	api.set("failure", 0)
+	p := ledgerProvisioner(c, srv)
+
+	evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a"})
+
+	assert.Equal(t, int64(0), api.reruns.Load())
+	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonAPIError)))
+}
+
 // TestScaleSetBudget_ConcurrentDisruptionsOfOneAttemptMerge runs many disruptions of one
 // attempt at once, across two replicas, under -race: exactly one re-run and one slot,
 // with every disruption recorded against it.
@@ -139,6 +229,15 @@ func TestScaleSetBudget_ConcurrentDisruptionsOfOneAttemptMerge(t *testing.T) {
 	const disruptions = 16
 	c, api, srv, target := ledgerFixture(t)
 	replicas := []*Provisioner{ledgerProvisioner(c, srv), ledgerProvisioner(c, srv)}
+	api.mu.Lock()
+	api.holdUntil = func() bool {
+		l, _, err := replicas[0].readRerunLedger(context.Background(), target)
+		if err != nil || l.Reruns["4242"] == nil || l.Reruns["4242"].Attempts["1"] == nil {
+			return false
+		}
+		return len(l.Reruns["4242"].Attempts["1"].Disruptions) == disruptions
+	}
+	api.mu.Unlock()
 
 	var wg sync.WaitGroup
 	for i := range disruptions {
@@ -156,6 +255,9 @@ func TestScaleSetBudget_ConcurrentDisruptionsOfOneAttemptMerge(t *testing.T) {
 		assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
 			"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonBudgetUnrecorded)),
 			"a replica's burst of writes must not exhaust the other's conflict retries")
+		assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+			"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
+			"every merged disruption sees the landed re-run and stops, rather than retrying into a second one")
 	}
 	l, _, err := replicas[0].readRerunLedger(context.Background(), target)
 	require.NoError(t, err)

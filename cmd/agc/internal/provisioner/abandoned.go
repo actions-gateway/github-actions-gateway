@@ -48,10 +48,13 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 		log.Warn("run identity unknown; cannot force-cancel the abandoned job's run; GitHub cancels it at its ~15-minute unstarted-job timeout")
 		outcome = "identity_unknown"
 	} else {
-		cctx, cancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
 		if tier == evictionTierScaleSet {
-			d.failedAttempt = p.recordAbandonedAttempt(cctx, target, owner, repo, runID, log)
+			// Its own deadline, so a slow ledger write cannot spend the cancel's.
+			rctx, rcancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
+			d.failedAttempt = p.recordAbandonedAttempt(rctx, target, owner, repo, runID, log)
+			rcancel()
 		}
+		cctx, cancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
 		err := p.forceCancelRun(cctx, owner, repo, runID)
 		cancel()
 		if err != nil {

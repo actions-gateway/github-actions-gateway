@@ -434,7 +434,7 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 // runConcludedFailure is the shape a drained or evicted run concludes on, measured at
 // live GitHub (Q459). It is what a fake must answer the Q811 conclusion check with for a
 // recovery to proceed to its re-run.
-const runConcludedFailure = `{"status":"completed","conclusion":"failure"}`
+const runConcludedFailure = `{"status":"completed","conclusion":"failure","run_attempt":1}`
 
 // answeredRunConclusion answers the run GET the Q811 conclusion check makes, reporting
 // whether it did. Every fake a disruption recovery can reach owes this arm: the deletion
@@ -468,7 +468,7 @@ func (s *runAPIStub) server() *httptest.Server {
 				i = len(s.states) - 1
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"status":%q,"conclusion":%q}`, s.states[i][0], s.states[i][1])
+			_, _ = fmt.Fprintf(w, `{"status":%q,"conclusion":%q,"run_attempt":1}`, s.states[i][0], s.states[i][1])
 			return
 		}
 		s.reruns.Add(1)

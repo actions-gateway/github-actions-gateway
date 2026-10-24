@@ -79,6 +79,12 @@ var errRunNotConcluded = errors.New("the original run has not concluded")
 // job a human stopped (Q811).
 var errRunCancelled = errors.New("the run was cancelled at GitHub")
 
+// errRerunCovered marks a scale-set recovery that found the run already re-run past the
+// attempt its job failed in: GAG's re-run of that attempt landed, from this disruption's
+// reservation or another's, or a human re-ran it. Re-running again would be a second
+// re-run of one attempt (Q1182).
+var errRerunCovered = errors.New("the run was already re-run past the attempt the job failed in")
+
 // errRunConclusionUnreadable marks a conclusion check that took no verdict for a reason
 // a later attempt could answer differently, so nothing is known yet about whether a
 // re-run would undo a cancel. Retried like the still-running refusal, and terminal only
@@ -174,7 +180,7 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 			return
 		case <-time.After(retryDelay):
 		}
-		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, attempt, tier, cause)
+		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, attempt, tier, cause, 0)
 	}()
 	return done
 }
@@ -185,14 +191,21 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // detached goroutine: reading the run is a GitHub call, and a reconcile must not wait
 // on one.
 //
-// The run is read before the retry delay, so the attempt it reports is the one the job
-// ran in: GitHub cannot conclude the run, and so cannot accept another disruption's
-// re-run, until this job has concluded too. The reservation then resumes, merges,
-// refuses or reserves (reserveScaleSetRerun), and only a resumed or reserved one goes
-// on to re-run: a merged disruption is covered by the re-run another disruption of the
-// same attempt already reserved, which is what keeps two disruptions in one run from
-// landing two re-runs. A run that cannot be read, or a decision that cannot be
-// written, withholds the re-run: never a re-run without a recorded slot.
+// The run is read before the retry delay. For a disruption detected live, the attempt
+// it reports is the one the job ran in: GitHub cannot conclude the run, and so cannot
+// accept another disruption's re-run, until this job has concluded too. One detected
+// late — the vanished arm, or a scan after a restart — can read an attempt another
+// re-run already started, and then reserves against that one; Q1181's already_rerun
+// check is what closes it.
+//
+// The reservation then resumes, merges, refuses or reserves (reserveScaleSetRerun).
+// Every outcome but a refusal goes on to the re-run loop, which reads the run before
+// each call and stands down once its attempt has moved past the one the job failed in
+// (errRerunCovered). That is what makes a merge safe: a merged disruption re-runs only
+// if the reservation it joined never landed, because its owner's loop failed or its
+// process restarted, and when that re-run does land, every other disruption of the
+// attempt sees the attempt move and stops. A run that cannot be read, or a decision
+// that cannot be written, withholds the re-run: never a re-run without a recorded slot.
 func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, cause string, d rerunDisruption) <-chan struct{} {
 	const tier = evictionTierScaleSet
 	if maxRetries <= 0 {
@@ -242,9 +255,8 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			p.recordRetriesExhausted(target, runID, log, maxRetries, tier, cause)
 			return
 		case outcome == rerunMerged:
-			log.Info("a re-run already reserved for this run attempt covers the disrupted job; no second re-run",
+			log.Info("a re-run is already reserved for this run attempt; this disruption spends no slot and re-runs only if that one never lands",
 				"runID", runID, "runAttempt", d.failedAttempt, "cause", cause)
-			return
 		case outcome == rerunResumed:
 			log.Info("worker pod disrupted; resuming the re-run this disruption already reserved",
 				"runID", runID, "attempt", number, "cause", cause)
@@ -257,7 +269,7 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			return
 		case <-time.After(retryDelay):
 		}
-		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, number, tier, cause)
+		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, number, tier, cause, d.failedAttempt)
 	}()
 	return done
 }
@@ -270,6 +282,11 @@ func (p *Provisioner) readFailedAttempt(ctx context.Context, owner, repo, runID 
 	defer stopWindow()
 	for {
 		run, err := p.runConclusion(ctx, owner, repo, runID)
+		if err == nil && run.attempt == 0 {
+			// Every disruption of every attempt would merge into one key, so a run
+			// that names no attempt cannot be budgeted; it will not name one later.
+			return 0, errors.New("the run carried no run_attempt")
+		}
 		if err == nil {
 			return run.attempt, nil
 		}
@@ -315,16 +332,23 @@ func (p *Provisioner) recordRetryStarted(target Target, runID string, log *slog.
 // recoveries, and re-reserving on failure would let one disruption burn the whole
 // budget), so a re-run that never lands is surfaced to the operator via the
 // EvictionRerunFailures counter and an owner Event rather than retried further.
-func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string) {
+//
+// failedAttempt, where non-zero, is the run attempt the job failed in, and a pass that
+// finds the run already past it stands down (errRerunCovered, the scale-set tier only).
+func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string, failedAttempt int) {
 	windowC, stopWindow := p.startRerunWindow()
 	defer stopWindow()
 
 	for call := 1; ; call++ {
-		err := p.attemptRerun(ctx, target, owner, repo, runID, log, tier, cause)
+		err := p.attemptRerun(ctx, target, owner, repo, runID, log, tier, cause, failedAttempt)
 		switch {
 		case err == nil:
 			log.Info("disruption auto-retry triggered",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
+			return
+		case errors.Is(err, errRerunCovered):
+			log.Info("the run was already re-run past the attempt this job failed in; no further re-run",
+				"runID", runID, "runAttempt", failedAttempt, "cause", cause, "rerunCalls", call)
 			return
 		case errors.Is(err, errRunCancelled):
 			log.Info("the run was cancelled at GitHub, so the disruption auto-retry stands down rather than undoing the cancel",
@@ -390,13 +414,20 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 // cancelled conclusion on that attempt re-runs. Without it, a drained worker of a run
 // whose other job was abandoned would read GAG's own cancel as a human's and stand down,
 // and the abandoned arm's re-run would merge into that withheld one (Q1182).
-func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, tier, cause string) error {
-	if cause == recoveryCauseDeletion && p.canReadRun(owner, repo) {
+//
+// The scale-set tier reads the run on every pass, whatever the cause, for the coverage
+// check: a run already past failedAttempt has been re-run for this job (errRerunCovered).
+func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, tier, cause string, failedAttempt int) error {
+	covering := failedAttempt > 0
+	if (covering || cause == recoveryCauseDeletion) && p.canReadRun(owner, repo) {
 		run, err := p.runConclusion(ctx, owner, repo, runID)
 		if err != nil {
 			return fmt.Errorf("read the run's conclusion before re-running it: %w", err)
 		}
-		if run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
+		if covering && run.attempt > failedAttempt {
+			return errRerunCovered
+		}
+		if cause == recoveryCauseDeletion && run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
 			if tier != evictionTierScaleSet || run.attempt == 0 ||
 				p.selfCancelledAttempt(ctx, target, runID) != run.attempt {
 				return errRunCancelled

@@ -3269,7 +3269,9 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 > `reason="budget_unrecorded"` is the scale-set tier only: the budget decision could not be written to `scaleset-failures-<set>`, so the re-run was withheld rather than made without a slot (Q1182).
 > The AGC log line `could not record the run's re-run budget decision` carries the cause: a `configmaps` write the tenant `Role` refuses, a ledger at its 512 KiB cap, or `requires writer version`: a newer AGC wrote the ConfigMap with a schema this one may not write, which a rollback produces and which clears once the newer AGC is back.
 > Inspect it with `kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='{.data.failures\.json}'`.
-> **A disrupted worker with no re-run and no counter at all**, on the scale-set tier, may have been merged: the AGC log says `a re-run already reserved for this run attempt covers the disrupted job`, and the re-run another worker's disruption reserved re-runs this job too, because GitHub re-runs every failed job of the attempt at once.
+> **A disrupted worker with no re-run and no counter at all**, on the scale-set tier, was most likely merged: the AGC log says `a re-run is already reserved for this run attempt`, then `the run was already re-run past the attempt this job failed in`.
+> The re-run another worker's disruption reserved re-ran this job too, because GitHub re-runs every failed job of the attempt at once.
+> If that re-run never lands (its recovery failed, or the AGC restarted first), the merged worker's own loop re-runs the attempt instead, spending no further slot.
 > On an AGC older than the Q503 fix, the single un-retried re-run always lost this race and every evicted job needed a manual re-run.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing.
