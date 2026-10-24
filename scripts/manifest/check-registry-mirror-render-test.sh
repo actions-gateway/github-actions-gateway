@@ -24,7 +24,7 @@
 # fourteen of them made this the last suite to finish on CI: 152s of a 155s
 # scripts-test job, measured 2026-10-24 (Q1117). Concurrency overlaps that work
 # rather than removing it, so it shortens this suite and not the job, which is
-# bound by total CPU (Q1196). Cases share nothing but WORKDIR, so the only
+# bound by total work (Q1196). Cases share nothing but WORKDIR, so the only
 # ordering left is the order their output is read back in.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -45,7 +45,12 @@ cleanup() {
 }
 rm -rf "${WORKDIR}"
 mkdir -p "${WORKDIR}"
-trap cleanup EXIT INT TERM
+# A signal must still end the suite at 128+n, which run-parallel.sh reads as
+# KILLED. A trap that only cleaned up would return into the replay loop with
+# WORKDIR gone and exit 1 there instead; `exit` in the trap runs the EXIT trap.
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 fails=0
 out=""
