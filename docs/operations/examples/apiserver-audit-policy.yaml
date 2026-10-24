@@ -105,7 +105,7 @@ rules:
       - group: "apps"
         resources: ["deployments"]
       - group: "rbac.authorization.k8s.io"
-        resources: ["roles", "rolebindings"]
+        resources: ["roles", "rolebindings", "clusterrolebindings"]
       - group: "networking.k8s.io"
         resources: ["networkpolicies"]
       - group: "autoscaling"

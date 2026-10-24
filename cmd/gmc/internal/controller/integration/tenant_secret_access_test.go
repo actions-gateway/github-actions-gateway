@@ -184,4 +184,26 @@ func TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces(t *testing.T) {
 	err = gmc.Create(ctx, rb)
 	require.Error(t, err, "the GMC must not bind its reader outside tenant namespaces")
 	require.False(t, apierrors.IsAlreadyExists(err), "got: %v", err)
+
+	// RBAC lets the GMC's `bind` grants back a ClusterRoleBinding too, which would
+	// grant Secret reads in every namespace; the guard admits only the
+	// ClusterRunnerTemplate reader binding.
+	crb := func(name, role string) *rbacv1.ClusterRoleBinding {
+		return &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role},
+			Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: gmcSAName, Namespace: gmcSANamespace}},
+		}
+	}
+	for _, role := range []string{controller.TenantSecretReaderName, "agc-tenant-role"} {
+		err = gmc.Create(ctx, crb("secret-access-escalation-"+role, role))
+		require.True(t, apierrors.IsForbidden(err), "a ClusterRoleBinding to %s must be denied; got: %v", role, err)
+		require.ErrorContains(t, err, "agc-clusterrunnertemplate-reader", "denied by the guard, not by RBAC")
+	}
+	err = gmc.List(ctx, &corev1.SecretList{})
+	require.True(t, apierrors.IsForbidden(err), "Secrets stay unlistable cluster-wide; got: %v", err)
+
+	allowed := crb("secret-access-crt-reader", "agc-clusterrunnertemplate-reader")
+	require.NoError(t, gmc.Create(ctx, allowed), "the per-gateway ClusterRunnerTemplate reader binding stays writable")
+	require.NoError(t, gmc.Delete(ctx, allowed))
 }
