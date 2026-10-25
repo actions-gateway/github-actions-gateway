@@ -2892,7 +2892,7 @@ The P2P path does not: dfdaemon's HTTP back end fetches with no certificate veri
 The rules limit that path to digest-addressed content, so a tampered blob or manifest has the wrong digest; a client pulling by digest rejects it, and whether Distribution itself rejects a proxied blob whose bytes do not match its digest is unmeasured here.
 Tag-to-digest resolution therefore trusts dfdaemon as well as the upstream; a digest-pinned pull still re-verifies client-side, exactly as <a href="../q408-untrusted-pr-egress/#31-the-mirror--one-pull-through-cache-per-upstream">q408 §3.1</a> argues.
 Anyone holding the CA's key can impersonate any upstream to the mirrors.
-It is stored only in <code>gag-dragonfly</code>, and readable beyond it by any principal with cluster-wide Secret read, the GMC's <code>manager-role</code> among them.
+It is stored only in <code>gag-dragonfly</code>, and readable beyond it by any principal with cluster-wide Secret read; the GMC's <code>manager-role</code> held that grant until Q1188 scoped its reads to tenant namespaces.
 The start script creates it with <code>kubectl create</code> rather than <code>apply</code>, which would copy the key into a <code>last-applied-configuration</code> annotation that <code>kubectl describe</code> prints.</p>
 <p><strong>Startup order matters.</strong> Distribution pings its remote while starting and panics if the ping fails, so a mirror pod started before dfdaemon is listening crash-loops until it is; measured once, recovered on restart.
 So does load order: dfdaemon and Distribution both read the CA at startup, so a CA minted under running pods is not seen by either until they restart.</p>

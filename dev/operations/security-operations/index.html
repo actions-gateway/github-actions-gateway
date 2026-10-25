@@ -4245,7 +4245,7 @@ If your scrape config does not add it, drop the interpolation.</p>
 <hr />
 <h2 id="audit-log-abuse-detections">Audit-log abuse detections<a class="headerlink" href="#audit-log-abuse-detections" title="Permanent link">&para;</a></h2>
 <p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
-The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="../../plan/security/">H-2</a>, and reads a tenant's Secret body only to present a pull secret to the registry read behind <code>RunnerVersionTooOld</code>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
+The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="../../plan/security/">H-2</a>, and reads a tenant's Secret body only to present a pull secret to the registry read behind <code>RunnerVersionTooOld</code>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>, and lists and watches Secret metadata only in tenant namespaces), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
 <p>Detecting these requires an <strong>API-server audit policy</strong> that logs the relevant verbs at <code>Metadata</code> level or higher, shipped to a security information and event management (SIEM) system or log-based alerting backend.
 A ready-to-adapt sample policy ships at <a href="../examples/apiserver-audit-policy.yaml"><code>examples/apiserver-audit-policy.yaml</code></a>; <a href="#api-server-audit-policy-sample">§ API server audit policy (sample)</a> below covers installing it and reading the events.
 The table specifies <em>what to alert on</em> once that policy is in place.</p>
@@ -4278,6 +4278,12 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <td>Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate <strong>all</strong> tenant GitHub App keys, audit which Secrets were read.</td>
 </tr>
 <tr>
+<td><strong>GMC Secret read outside tenant namespaces</strong></td>
+<td><code>verb</code> <code>get</code>/<code>list</code>/<code>watch</code> on <code>secrets</code> by the GMC SA with <code>responseStatus.code=403</code>, or a <code>list</code>/<code>watch</code> with no <code>objectRef.namespace</code></td>
+<td>The GMC holds Secret reads only through the <code>gmc-tenant-secret-reader</code> RoleBinding it creates in each tenant namespace (Q1188), so RBAC refuses a read anywhere else. A refusal means the binary tried a read its source never makes.</td>
+<td>A refusal is a successful block but a <em>signal</em> of compromise. Isolate the GMC and investigate.</td>
+</tr>
+<tr>
 <td><strong>GMC namespace-PSA escalation attempt</strong></td>
 <td><code>namespace-psa-guard</code> ValidatingAdmissionPolicy <code>deny</code> events for the GMC SA</td>
 <td>The guard (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>) blocks the GMC relabelling non-tenant namespaces (e.g. <code>kube-system</code> → <code>privileged</code>). A denial means the GMC tried.</td>
@@ -4286,7 +4292,7 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <tr>
 <td><strong>GMC out-of-tenant resource write</strong></td>
 <td><code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy <code>deny</code> events for the GMC SA</td>
-<td>The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked <code>actions-gateway.github.com/tenant=true</code> (e.g. a Deployment or Secret into <code>kube-system</code>). A denial means the GMC tried (Q121/Q122).</td>
+<td>The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked <code>actions-gateway.github.com/tenant=true</code> (e.g. a Deployment or Secret into <code>kube-system</code>), and any ClusterRoleBinding whose <code>roleRef</code> is not <code>agc-clusterrunnertemplate-reader</code>, which is how a compromised GMC would grant itself Secret reads cluster-wide (Q1188). A denial means the GMC tried (Q121/Q122).</td>
 <td>A denial is a successful block but a <em>signal</em> of compromise. Isolate the GMC and investigate.</td>
 </tr>
 <tr>
@@ -4297,9 +4303,10 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 </tr>
 </tbody>
 </table>
-<p>Without the audit policy, these threats are mitigated structurally (RBAC scope, cache-bypass, the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> VAPs, no Secret informer) but write-confinement denials aside are <strong>not observable</strong> — there is no alert that fires if a compromised binary exercises its standing <em>read</em> permissions.
+<p>Without the audit policy, these threats are mitigated structurally (RBAC scope, cache-bypass, the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> VAPs, metadata-only Secret informers per tenant namespace) but write-confinement denials aside are <strong>not observable</strong> — there is no alert that fires if a compromised binary exercises its standing <em>read</em> permissions.
 Closing that gap is the value of the audit policy.
-Note the two VAPs confine GMC <em>writes</em> (create/update/delete) only; Secret <em>reads</em> (<code>get</code>/<code>list</code>/<code>watch</code>) cannot be gated at admission and remain cluster-wide at the RBAC layer — the audit policy is the only detective control for them (see <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>).</p>
+The two VAPs confine GMC <em>writes</em> (create/update/delete); Secret <em>reads</em> (<code>get</code>/<code>list</code>/<code>watch</code>) cannot be gated at admission, so RBAC confines them instead, to the namespaces where the GMC holds a <code>gmc-tenant-secret-reader</code> RoleBinding.
+Inside a tenant namespace the audit policy is the only detective control for them (see <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>).</p>
 <h3 id="api-server-audit-policy-sample">API server audit policy (sample)<a class="headerlink" href="#api-server-audit-policy-sample" title="Permanent link">&para;</a></h3>
 <p>A sample audit policy that captures exactly the verbs the table above alerts on — and nothing else — ships at <a href="../examples/apiserver-audit-policy.yaml"><code>examples/apiserver-audit-policy.yaml</code></a>.</p>
 <p><strong>What it detects.</strong> Three focused rule groups, all at <code>Metadata</code> level:</p>
@@ -4346,7 +4353,7 @@ The provider's default policy is broader than this sample (it logs more than the
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>| filter @logStream like /kube-apiserver-audit/
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>| filter objectRef.resource = "secrets"
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    and user.username = "system:serviceaccount:gmc-system:gmc-controller-manager"
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>| filter verb in ["list","watch"] or objectRef.namespace != "&lt;a-tenant-namespace&gt;"
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>| filter responseStatus.code = 403 or not ispresent(objectRef.namespace)
 </code></pre></div>
 <ul>
 <li><strong>Google GKE.</strong> API-server <strong>write</strong> events are Admin Activity audit logs (always on).
@@ -4367,7 +4374,7 @@ The provider's default policy is broader than this sample (it logs more than the
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="p">|</span><span class="w"> </span><span class="k">extend</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">parse_json</span><span class="p">(</span><span class="n">log_s</span><span class="p">)</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">resource</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"secrets"</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="k">and</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">username</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"system:serviceaccount:gmc-system:gmc-controller-manager"</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">verb</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="p">(</span><span class="s">"list"</span><span class="p">,</span><span class="s">"watch"</span><span class="p">)</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">namespace</span><span class="w"> </span><span class="p">!=</span><span class="w"> </span><span class="s">"&lt;a-tenant-namespace&gt;"</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">responseStatus</span><span class="p">.</span><span class="n">code</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">403</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">isempty</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">namespace</span><span class="p">)</span>
 </code></pre></div>
 <p>Repeat the per-provider queries for each AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:&lt;gateway&gt;-agc</code> under v2, <code>…:actions-gateway-controller</code> under v1), alerting on <code>verb == "list"</code> or a <code>get</code> on a Secret the AGC does not own.</p>
 <p><strong>Read the events.</strong> Audit events are one JSON object per line.
@@ -4378,9 +4385,8 @@ To see GMC Secret reads (substitute your GMC user string):</p>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s1">          code: .responseStatus.code, t: .requestReceivedTimestamp}'</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>/var/log/kubernetes/audit/audit.log
 </code></pre></div>
-<p>A baseline is one <code>get</code> per <code>gitHubAppRef</code> Secret per reconcile, only in tenant namespaces.
-Alert on: any <code>list</code>/<code>watch</code>; a <code>get</code> rate well above the reconcile cadence; or any <code>get</code> outside a tenant namespace (e.g.
-<code>kube-system</code>).
+<p>A baseline is one <code>get</code> per <code>gitHubAppRef</code> Secret per reconcile, plus one <code>list</code> and a long-lived <code>watch</code> per tenant namespace from its metadata-only informer, issued when the GMC starts and whenever a watch is re-established, all in tenant namespaces.
+Alert on: any <code>403</code> (RBAC refused a read outside the tenant namespaces); a <code>list</code>/<code>watch</code> with no namespace, which is a cluster-wide read the GMC no longer holds; or a <code>get</code> rate well above the reconcile cadence.
 For the GMC write rule, a <code>responseStatus.code</code> of <code>403</code> is a VAP block — investigate the binary that attempted it.
 For AGC reads, filter by each AGC user string and alert on <code>verb == "list"</code> (the legit path is metadata-only) or a <code>get</code> on a Secret name the AGC does not own, other than a pull secret.
 The registry read <code>get</code>s each <code>imagePullSecrets</code> entry the worker pod template names, or, when it names none, those on the worker ServiceAccount, which it reads with one <code>get</code> on <code>serviceaccounts</code>; it repeats on a failure's backoff (one minute doubling to an hour) and on each hourly re-check of a tag-addressed image.

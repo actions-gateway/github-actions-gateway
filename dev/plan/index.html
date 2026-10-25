@@ -3696,6 +3696,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td>Running the release-candidate dogfood gate as a workflow on main, dispatched by each candidate tag: keyless CI identity, the gate on Linux, the workflow, and publish reading its evidence artifact</td>
 <td>Archived 2026-10-05, Q880. All four milestones landed; <code>v1.9.0-rc.2</code> is the first candidate validated in CI (gate run 37380198658)</td>
 </tr>
+<tr>
+<td><a href="archive/q1188-scoped-secret-reads/">archive/q1188-scoped-secret-reads.md</a></td>
+<td>Scope the GMC's Secret <code>get</code>/<code>list</code>/<code>watch</code> to tenant namespaces: a <code>resourceNames</code>-scoped <code>bind</code> on a reader ClusterRole, a RoleBinding per tenant namespace, and per-namespace metadata-only Secret informers</td>
+<td>Archived 2026-10-23, Q1188. Shipped in one change; the durable rationale is in <a href="../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">05-security.md §5.1</a>.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>

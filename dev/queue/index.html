@@ -3100,12 +3100,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every PR in a release batch rewrites the same cell, so each merge leaves the next PR conflicted and the batch can only merge one at a time.</td>
 </tr>
 <tr>
-<td><a href="Q1188/">Q1188</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/files/manager-role-rules.yaml">GMC ClusterRole reads every Secret cluster-wide, kube-system included</a></td>
-<td><code>security</code> <code>open-question</code></td>
+<td><a href="Q1200/">Q1200</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/apply_helpers.go">GMC patches owned Secrets with no patch verb on secrets</a></td>
+<td><code>bug</code> <code>security</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>A compromised Gateway Manager Controller (GMC) can read the body of every Secret in the cluster, <code>kube-system</code> included, and nothing but …</td>
+<td>S</td>
+<td>The Gateway Manager Controller (GMC) writes every Secret it owns through <code>applyManagedChild</code>, which calls <code>controllerutil.CreateOrPatch</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1168/">Q1168</a></td>

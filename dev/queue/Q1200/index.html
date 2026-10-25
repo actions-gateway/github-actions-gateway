@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1188/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1200/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>GMC ClusterRole reads every Secret cluster-wide, kube-system included - GitHub Actions Gateway</title>
+        <title>GMC patches owned Secrets with no patch verb on secrets - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gmc-clusterrole-reads-every-secret-cluster-wide-kube-system-included" class="md-skip">
+        <a href="#gmc-patches-owned-secrets-with-no-patch-verb-on-secrets" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GMC ClusterRole reads every Secret cluster-wide, kube-system included
+              GMC patches owned Secrets with no patch verb on secrets
             
           </span>
         </div>
@@ -2616,10 +2616,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#measured-2026-10-13-at-57ee7abfa" class="md-nav__link">
+  <a href="#measured-2026-10-23" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measured 2026-10-13, at 57ee7abfa
+        Measured 2026-10-23
       
     </span>
   </a>
@@ -2627,32 +2627,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-operator-doc-contradicts-the-first-measurement" class="md-nav__link">
+  <a href="#fix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The operator doc contradicts the first measurement
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#stage-one-take-listwatch-off-the-cluster-wide-grant" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stage one: take list/watch off the cluster-wide grant
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#stage-two-open-design-question-scope-get-to-tenant-namespaces" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stage two, open design question: scope get to tenant namespaces
+        Fix
       
     </span>
   </a>
@@ -2679,41 +2657,19 @@
   
 
 
-<h1 id="gmc-clusterrole-reads-every-secret-cluster-wide-kube-system-included">GMC ClusterRole reads every Secret cluster-wide, kube-system included<a class="headerlink" href="#gmc-clusterrole-reads-every-secret-cluster-wide-kube-system-included" title="Permanent link">&para;</a></h1>
-<p>A compromised Gateway Manager Controller (GMC) can read the body of every Secret in the cluster, <code>kube-system</code> included, and nothing but the audit log would see it.
-The ClusterRole <code>&lt;prefix&gt;-manager-role</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml"><code>rbac.yaml</code></a>) is bound by a ClusterRoleBinding and grants <code>create, get, list, update, watch</code> on core <code>secrets</code>.
-The <code>tenant-resource-guard</code> ValidatingAdmissionPolicy fences the writes to tenant namespaces, but admission never runs on <code>get</code>/<code>list</code>/<code>watch</code> (the policy's own header says so), and RBAC cannot scope a grant by namespace label.
-Raised by the maintainer reviewing PR #2077 (Q1066).</p>
-<h2 id="measured-2026-10-13-at-57ee7abfa">Measured 2026-10-13, at <code>57ee7abfa</code><a class="headerlink" href="#measured-2026-10-13-at-57ee7abfa" title="Permanent link">&para;</a></h2>
+<h1 id="gmc-patches-owned-secrets-with-no-patch-verb-on-secrets">GMC patches owned Secrets with no patch verb on secrets<a class="headerlink" href="#gmc-patches-owned-secrets-with-no-patch-verb-on-secrets" title="Permanent link">&para;</a></h1>
+<p>The Gateway Manager Controller (GMC) writes every Secret it owns through <code>applyManagedChild</code>, which calls <code>controllerutil.CreateOrPatch</code>, and <code>CreateOrPatch</code> changes an existing object with a <code>patch</code> request.
+The GMC's manager ClusterRole grants <code>create</code> and <code>update</code> on Secrets and no <code>patch</code>, so a change to an owned Secret's data or labels would be refused, read from source and not observed: the one Secret marker in <code>cmd/gmc</code> is <code>actionsgateway_controller.go</code>'s <code>resources=secrets,verbs=create;update</code>, and <code>charts/actions-gateway/files/manager-role-rules.yaml</code> lists only those two verbs for <code>secrets</code>.</p>
+<h2 id="measured-2026-10-23">Measured 2026-10-23<a class="headerlink" href="#measured-2026-10-23" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>One marker declares the verbs</strong>: <code>grep -rn --include=*.go 'kubebuilder:rbac.*secrets' cmd/gmc</code> returns one marker, <code>verbs=get;list;watch;create;update</code> near the head of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go"><code>actionsgateway_controller.go</code></a>, which <code>make chart-rbac</code> generates into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/files/manager-role-rules.yaml"><code>manager-role-rules.yaml</code></a>.</li>
-<li><strong><code>list</code> and <code>watch</code> are in use, so they cannot simply be dropped.</strong> Both gateway reconcilers register <code>WatchesMetadata(&amp;corev1.Secret{}, …)</code>: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go"><code>actionsgateway_controller.go</code></a> <code>SetupWithManager</code> (v1) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go</code></a> <code>SetupWithManager</code> (v2), found with <code>grep -rn --include=*.go -E 'corev1\.Secret(List)?\{' cmd/gmc</code>.
-  That is a metadata-only informer, so no <code>.data</code> enters the cache, but an informer issues <code>list</code> and <code>watch</code> whatever it keeps, and RBAC cannot tell a metadata <code>list</code> from a full-body one.
-  That the informer's requests reach the API server as <code>verb=list</code>/<code>verb=watch</code> on <code>secrets</code> is read from source, not observed in an audit log.</li>
-<li><strong>The informer is cluster-wide.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/config.go"><code>buildCacheOptions</code></a> sets <code>ByObject</code> only for the allowlist <code>ConfigMap</code> and <code>PriorityClassAllowlist</code>, and nothing sets <code>DefaultNamespaces</code>; read by hand, no command.</li>
-<li><strong>Body reads already bypass the cache</strong>, like the Actions Gateway Controller (AGC): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/wiring.go"><code>wiring.go</code></a> <code>newManager</code> sets <code>Client.Cache.DisableFor: []client.Object{&amp;corev1.Secret{}}</code>, so <code>r.Get</code> on a Secret goes to the API server.</li>
-<li><strong>No GMC code <code>List</code>s Secrets directly</strong>: <code>grep -rn --include=*.go -E '\.List\(' cmd/gmc</code> lists no <code>SecretList</code>.</li>
+<li>The callers are both reconcilers' <code>applyOwnedSecret</code> (v1 <code>actionsgateway_controller.go</code>, v2 <code>actionsgateway_v2_controller.go</code>) and the EgressProxy reconciler's owned-Secret writes, all through <code>applyManagedChild</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/apply_helpers.go"><code>apply_helpers.go</code></a>.</li>
+<li><code>CreateOrPatch</code> skips the request when the mutate function leaves the object unchanged, so the refusal fires only when the desired Secret differs from the live one, for example when a metrics or proxy TLS bundle is reissued.</li>
+<li>Unverified: whether any owned Secret's data changes after creation in practice.
+  The envtest suite runs the reconcilers as the admin user, so no test would see the refusal; <code>TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces</code> runs as the GMC ServiceAccount but never changes an owned Secret.</li>
 </ul>
-<h2 id="the-operator-doc-contradicts-the-first-measurement">The operator doc contradicts the first measurement<a class="headerlink" href="#the-operator-doc-contradicts-the-first-measurement" title="Permanent link">&para;</a></h2>
-<p><a href="../../operations/security-operations/"><code>security-operations.md</code></a> says the GMC's legitimate path is a cache-bypassing <code>Get</code> and lists "no Secret informer" among the structural mitigations.
-Its EKS CloudWatch query alerts on any GMC <code>list</code>/<code>watch</code> of <code>secrets</code>, which the metadata informer issues at every start and every watch re-establishment, so the query as written fires on healthy traffic.
-Correcting the doc is part of this row, whichever stage below lands.</p>
-<h2 id="stage-one-take-listwatch-off-the-cluster-wide-grant">Stage one: take <code>list</code>/<code>watch</code> off the cluster-wide grant<a class="headerlink" href="#stage-one-take-listwatch-off-the-cluster-wide-grant" title="Permanent link">&para;</a></h2>
-<p>The informer drives event-driven reconcile when a <code>gitHubAppRef</code> Secret is created or deleted.
-Two shapes are open, and neither is measured.</p>
-<ul>
-<li><strong>Drop the Secret watch</strong> and pick up credential changes on the requeue cadence, then drop <code>list</code>/<code>watch</code> from the marker.
-  The cost is the latency between a Secret change and the reconcile that notices it.</li>
-<li><strong>Scope the informer to tenant namespaces.</strong> A <code>cache.ByObject</code> <code>Label</code> selector only narrows what is cached, not what RBAC grants, so this needs per-namespace <code>list</code>/<code>watch</code>, which is stage two's problem.</li>
-</ul>
-<p><strong>Measure:</strong> the requeue interval a healthy gateway sits on, and what a rotated or newly created <code>gitHubAppRef</code> Secret costs in reconcile latency with the watch removed; if that is acceptable, stage one is the first shape.</p>
-<h2 id="stage-two-open-design-question-scope-get-to-tenant-namespaces">Stage two, open design question: scope <code>get</code> to tenant namespaces<a class="headerlink" href="#stage-two-open-design-question-scope-get-to-tenant-namespaces" title="Permanent link">&para;</a></h2>
-<p>Even with <code>list</code>/<code>watch</code> gone, <code>get</code> stays cluster-wide.
-The natural shape is a per-namespace Role and RoleBinding created when a namespace is marked <code>actions-gateway.github.com/tenant=true</code>, with the cluster-wide grant removed.
-The catch is RBAC escalation prevention: the GMC cannot create a Role granting <code>get secrets</code> it does not already hold in that namespace.
-The ways round it are the <code>bind</code>/<code>escalate</code> verbs on <code>roles</code>/<code>rolebindings</code> (themselves a Tier-0 grant, so the trade needs weighing) or a platform-admin onboarding step that creates the binding when the namespace is labelled.
-This needs a design pass in <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped"><code>05-security.md</code> §5.1</a> before code.</p>
-<p><strong>Ask:</strong> whether the maintainer accepts granting the GMC <code>bind</code>/<code>escalate</code>, or wants tenant onboarding to carry a platform-admin step instead.</p>
+<h2 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h2>
+<p>Measure first: run a reconcile as the GMC ServiceAccount that changes an owned Secret, and read the response.
+If it is refused, add <code>patch</code> to the Secret marker; the <code>gmc-tenant-resource-guard</code> policy already confines Secret <code>UPDATE</code>, which is the admission operation a patch is, to tenant namespaces.</p>
 
 
 

@@ -3619,7 +3619,7 @@ Threats are grouped by which tier they affect.</p>
 <tr>
 <td><strong>GMC Privilege Escalation</strong> (Blast Radius: All Tenants)</td>
 <td>Critical</td>
-<td>Cluster-wide provisioning writes are confined to marked tenant namespaces by two <code>ValidatingAdmissionPolicy</code> objects (<code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>); the honest residual is cluster-wide Secret <em>reads</em>, offset by metadata-only caching, uncached direct reads, and the Q29 audit policy. Full blast radius and compensating controls: <a href="#gmc-privilege-escalation-blast-radius-and-compensating-controls">see below</a>.</td>
+<td>Cluster-wide provisioning writes are confined to marked tenant namespaces by two <code>ValidatingAdmissionPolicy</code> objects (<code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>), and Secret <em>reads</em> are granted per tenant namespace through a RoleBinding the same policy fences (Q1188). Full blast radius and compensating controls: <a href="#gmc-privilege-escalation-blast-radius-and-compensating-controls">see below</a>.</td>
 </tr>
 <tr>
 <td><strong>Admission Webhook Unavailability or Bypass</strong></td>
@@ -3639,7 +3639,7 @@ Threats are grouped by which tier they affect.</p>
 <tr>
 <td><strong>Cross-Tenant GitHub App Credential Leakage</strong></td>
 <td>High</td>
-<td><code>ActionsGateway</code> is namespace-scoped so a <code>gitHubAppRef</code> cannot cross namespaces, and the credential Secret is mounted into the AGC pod only (never worker pods). Secret <strong>writes</strong> are confined by <code>gmc-tenant-resource-guard</code>; cluster-wide <em>reads</em> are offset by two-layer cache isolation (metadata-only informer + <code>DisableFor</code> uncached <code>Get</code>). Full detail: <a href="#cross-tenant-github-app-credential-leakage-and-cache-isolation">see below</a>.</td>
+<td><code>ActionsGateway</code> is namespace-scoped so a <code>gitHubAppRef</code> cannot cross namespaces, and the credential Secret is mounted into the AGC pod only (never worker pods). Secret <strong>writes</strong> are confined by <code>gmc-tenant-resource-guard</code>, and <em>reads</em> are granted only in tenant namespaces (Q1188), with two-layer cache isolation (metadata-only informer + <code>DisableFor</code> uncached <code>Get</code>) keeping key material out of the GMC's memory. Full detail: <a href="#cross-tenant-github-app-credential-leakage-and-cache-isolation">see below</a>.</td>
 </tr>
 <tr>
 <td><strong><code>ActionsGateway</code> CR in Reserved Namespace</strong></td>
@@ -3652,20 +3652,38 @@ Threats are grouped by which tier they affect.</p>
 <p>The GMC's ClusterRole grants cluster-wide <em>write</em> (<code>create</code>/<code>update</code>/<code>delete</code>) on the tenant provisioning kinds — Deployments, Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, VerticalPodAutoscalers (Q360; the grant is inert on a cluster without the optional <code>autoscaling.k8s.io</code> CRDs, and a VPA only ever resizes the workload it targets), PodDisruptionBudgets, RunnerGroups, and Secret <code>create</code>/<code>update</code> — because RBAC cannot express "only namespaces that carry a marker label".</p>
 <p>Two <code>ValidatingAdmissionPolicy</code> objects close that gap by confining the GMC ServiceAccount at admission: <code>namespace-psa-guard</code> confines <code>namespaces:patch</code> to the six <code>pod-security.kubernetes.io/*</code> keys on marked namespaces, and <strong><code>gmc-tenant-resource-guard</code> confines every <code>create</code>/<code>update</code>/<code>delete</code> of the kinds above to namespaces an administrator has marked <code>actions-gateway.github.com/tenant: "true"</code></strong> (Q121 write path / Q122).
 So a compromised GMC cannot create a Deployment or RoleBinding in <code>kube-system</code>, write a Secret into an arbitrary namespace, or relabel <code>kube-system</code> PSA to <code>privileged</code> (see <a href="#53-security-profiles-and-the-privileged-opt-in">§5.3</a>).</p>
-<p>The grant RBAC and admission cannot confine is Secret <strong>reads</strong>: admission never runs on <code>get</code>/<code>list</code>/<code>watch</code>, <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so <code>get</code> cannot be name-scoped either — therefore the ClusterRole grants cluster-wide Secret <code>get</code>/<code>list</code>/<code>watch</code>, and this is an honestly-stated residual, not a confined property (Q121; compensating controls below).</p>
+<p>Secret <strong>reads</strong> need a different mechanism, because admission never runs on <code>get</code>/<code>list</code>/<code>watch</code>.
+RBAC cannot scope a grant by namespace label either, so the reads leave the ClusterRole altogether (Q1188).
+A singleton ClusterRole, <code>gmc-tenant-secret-reader</code>, holds <code>get</code>/<code>list</code>/<code>watch</code> on Secrets, and the GMC creates a RoleBinding to it in each namespace carrying a tenant marker.
+The GMC holds <code>bind</code> on that one <code>resourceName</code> and nothing broader, the pattern it already uses to hand the AGC <code>agc-tenant-role</code>, so RBAC escalation prevention is satisfied without <code>escalate</code>.
+What stops the GMC binding the reader into <code>kube-system</code> is <code>gmc-tenant-resource-guard</code>, which confines its RoleBinding writes to tenant namespaces, together with <code>namespace-psa-guard</code>, which makes the tenant marker immutable to it.</p>
+<p>A <code>bind</code> grant also lets the GMC create a ClusterRoleBinding to the same role, and a ClusterRoleBinding to <code>gmc-tenant-secret-reader</code> or <code>agc-tenant-role</code> would grant Secret reads in every namespace.
+The GMC needs <code>create</code> on ClusterRoleBindings for the per-gateway <code>agc-clusterrunnertemplate-reader</code> binding, so the guard also checks ClusterRoleBinding writes: the GMC may create, update or delete one only when its <code>roleRef</code> names <code>agc-clusterrunnertemplate-reader</code>.</p>
+<p>The metadata-only informer cannot keep the reads off the cluster-wide grant, because RBAC cannot tell a metadata <code>list</code> from a full-body one.
+A metadata request is an ordinary <code>list secrets</code> whose <code>Accept</code> header asks for <code>PartialObjectMetadataList</code>, and authorization decides on user, verb, namespace, resource, name, path and selectors, never the response format.
+So the GMC runs one metadata-only Secret informer per tenant namespace instead of one cluster-wide, started when the namespace's RoleBinding exists and stopped when the namespace loses its marker.</p>
 <p><strong>Explicit blast radius if compromised.</strong> A compromised GMC can:</p>
 <ul>
 <li>Enumerate every <code>ActionsGateway</code> CR in the cluster, learning each tenant's <code>gitHubAppRef</code> name and namespace.</li>
-<li><code>list</code>/<code>watch</code> and <code>get</code> the full <code>.data</code> of <strong>any</strong> Secret in the cluster, including GitHub App private keys (the metadata-only informer and uncached reads below are client-side hygiene, not authorization).</li>
+<li><code>list</code>/<code>watch</code> and <code>get</code> the full <code>.data</code> of any Secret <strong>in a marked tenant namespace</strong>, including that tenant's GitHub App private key.</li>
 <li>Create/update/delete workloads and Secrets <strong>only in marked tenant namespaces</strong> (the <code>gmc-tenant-resource-guard</code> VAP denies writes elsewhere).</li>
 </ul>
-<p>It CANNOT exec into pods, create new namespaces, or write resources into unmarked namespaces such as <code>kube-system</code>.</p>
-<p><strong>Secret-read compensating controls.</strong> Four, three preventive and one detective:</p>
+<p>It CANNOT exec into pods, create new namespaces, write resources into unmarked namespaces such as <code>kube-system</code>, or read their Secrets.</p>
+<p><strong>Residuals.</strong></p>
 <ul>
-<li><code>WatchesMetadata</code> keeps the informer cache to Secret ObjectMeta only (no <code>.data</code>).</li>
+<li>With <code>admissionPolicy.enabled=false</code> nothing fences the <code>bind</code>, so a compromised GMC can bind the reader into any namespace, or cluster-wide through a ClusterRoleBinding, and read every Secret.
+  Its <code>bind</code> on <code>agc-tenant-role</code> reaches the same reads by the same two routes.</li>
+<li>A namespace that loses its marker keeps the reader RoleBinding: the guard denies the GMC's delete there, because the namespace is no longer a tenant.
+  The platform admin who removes the marker also deletes <code>gmc-tenant-secret-reader</code> in that namespace (<a href="../../operations/upgrade/">upgrade.md</a>).</li>
+<li>Secret <code>create</code>/<code>update</code> stay cluster-wide.
+  Admission rejects an out-of-tenant write before the API server responds, so neither verb returns another namespace's Secret body.</li>
+</ul>
+<p><strong>Secret-read compensating controls</strong>, inside the tenant namespaces where reads are granted:</p>
+<ul>
+<li>The per-namespace informers are metadata-only, so the cache holds Secret ObjectMeta and no <code>.data</code>.</li>
 <li><code>client.Cache.DisableFor[*corev1.Secret]</code> forces <code>r.Get()</code> to hit the API server directly, so key material is never cache-resident.</li>
-<li>In practice the GMC only <code>get</code>s the named credential Secret in the CR's own namespace.</li>
-<li>The Q29 audit policy (<a href="../../operations/examples/apiserver-audit-policy.yaml">sample</a>, <a href="../../operations/security-operations/#api-server-audit-policy-sample">runbook</a>) surfaces any out-of-pattern Secret read.</li>
+<li>In practice the GMC only <code>get</code>s the named credential Secret and the Secrets it owns, in the CR's own namespace.</li>
+<li>The Q29 audit policy (<a href="../../operations/examples/apiserver-audit-policy.yaml">sample</a>, <a href="../../operations/security-operations/#api-server-audit-policy-sample">runbook</a>) surfaces any out-of-pattern Secret read, and a <code>Forbidden</code> outside a tenant namespace.</li>
 </ul>
 <p>GMC pod runs with non-root user, read-only root filesystem, no host mounts, and <code>seccompProfile: {type: RuntimeDefault}</code>.
 Image is digest-pinned, enforced at chart render time — the Helm chart refuses to render an unpinned <code>gmc.image</code>.
@@ -3688,8 +3706,8 @@ This matches the controller-runtime scaffold's own secure default.</p>
 The GMC mounts credentials into the AGC Pod only; worker pods never have access to the Secret object.
 Secrets are immutable; rotation creates a new Secret and updates the CR reference, producing a clean Deployment rollout.
 Old Secrets are not readable by running Pods once the rollout completes.</p>
-<p>The GMC's ClusterRole grants Secret <code>get</code>/<code>list</code>/<code>watch</code> cluster-wide (not name-scoped — <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so it cannot scope <code>get</code> either); Secret <strong>writes</strong> (<code>create</code>/<code>update</code>) are confined to marked tenant namespaces by the <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code>, but reads cannot be confined at the authorization layer (admission does not run on read verbs — Q121).</p>
-<p><strong>Two-layer cache isolation</strong> (the compensating control for reads): the GMC uses <code>WatchesMetadata</code> (not a full Secret watch) so the in-process informer cache holds only Secret ObjectMeta (name, namespace, resourceVersion — no <code>.data</code>); and <code>client.Cache.DisableFor[*corev1.Secret]</code> ensures <code>r.Get()</code> calls bypass the cache entirely and hit the API server directly, so actual key material is never resident in memory beyond the duration of a single reconcile call.</p>
+<p>The GMC reads Secrets only in marked tenant namespaces, through the per-namespace <code>gmc-tenant-secret-reader</code> RoleBinding described <a href="#gmc-privilege-escalation-blast-radius-and-compensating-controls">above</a> (Q1188); Secret <strong>writes</strong> (<code>create</code>/<code>update</code>) are confined to the same namespaces by the <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code>.</p>
+<p><strong>Two-layer cache isolation</strong>: the GMC's per-tenant-namespace Secret informers are metadata-only (not a full Secret watch), so the in-process informer cache holds only Secret ObjectMeta (name, namespace, resourceVersion — no <code>.data</code>); and <code>client.Cache.DisableFor[*corev1.Secret]</code> ensures <code>r.Get()</code> calls bypass the cache entirely and hit the API server directly, so actual key material is never resident in memory beyond the duration of a single reconcile call.</p>
 <hr />
 <h2 id="52-agc--proxy-level-threats-namespace-scoped">5.2. AGC &amp; Proxy-Level Threats (Namespace-Scoped)<a class="headerlink" href="#52-agc--proxy-level-threats-namespace-scoped" title="Permanent link">&para;</a></h2>
 <p>Several mitigations below rest on the per-tenant NetworkPolicies the GMC reconciles (workload egress restricted to DNS + proxy, with <strong>DNS itself confined to the cluster DNS service</strong> rather than any resolver — Q105; only AGC-labelled pods get apiserver egress; <strong>workload pods default-deny all ingress</strong> — Q128).</p>

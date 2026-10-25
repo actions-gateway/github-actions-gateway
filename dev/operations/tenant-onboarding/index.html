@@ -3363,7 +3363,9 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
 </code></pre></div>
   This label is what authorizes the GMC to operate in the namespace at all.
   Two admission policies key on it: <code>namespace-psa-guard</code> denies the GMC any namespace patch (the PSA-stamping step) it has <em>not</em> been marked for, and <code>gmc-tenant-resource-guard</code> denies the GMC any create/update/delete of tenant resources (Deployments, Secrets, RoleBindings, NetworkPolicies, …) outside marked namespaces.
+  The GMC also reads Secrets only in marked namespaces: it binds itself a <code>gmc-tenant-secret-reader</code> RoleBinding there, and holds no Secret read anywhere else.
   So an unlabelled namespace leaves the <code>ActionsGateway</code> stuck with a <code>NamespaceMarkerMissing</code> warning event and no provisioned resources.
+  When a namespace stops being a tenant, delete its <code>gmc-tenant-secret-reader</code> RoleBinding after removing the label: the guard denies the GMC that delete outside marked namespaces.
   Apply the label with a trusted (administrator) identity — the GMC must never set it itself.
   Verify: <code>kubectl get namespace &lt;tenant-namespace&gt; -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'</code> → <code>true</code>.</li>
 <li>[ ] <strong>Cluster CNI enforces egress NetworkPolicy.</strong> The tenant isolation model (workers restricted to DNS + the per-tenant proxy; no direct GitHub or Kubernetes API egress) is implemented as NetworkPolicy egress rules, which are inert unless the cluster's Container Network Interface (CNI) plugin enforces them.
