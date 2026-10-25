@@ -694,6 +694,10 @@ The AGC reads it from its own namespace, resolves nothing across a boundary, and
 Revoking a grant deletes it.
 That is one mechanism doing two jobs rather than a second mechanism invented for the purpose.
 
+A gateway's `defaultProxyRef` is resolved by the GMC, which can read the remote `EgressProxy`, but the AGC pod it provisions still takes its proxy CA from the projection (Q1209).
+A pod can mount neither a Secret nor a ConfigMap from another namespace, and the proxy's TLS Secret exists only in the provider's.
+So the GMC dials the pool's Service in the provider namespace and does not create the AGC until the projection lands, reporting `ProxyShareNotGranted` meanwhile.
+
 One consequence worth stating: the GMC reads these projections through its **uncached** API reader.
 Its ConfigMap informer is pinned to a single name in its own namespace, so a cached label-selected list would return nothing and the prune that revokes a withdrawn grant would silently find nothing to delete.
 

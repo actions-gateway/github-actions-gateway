@@ -129,18 +129,47 @@ type agcWorkloadNames struct {
 	metricsTLSSecret string
 }
 
+// proxyCASource names where the AGC's proxy CA comes from: the pool's TLS Secret
+// when the pool shares the AGC's namespace, or the share ConfigMap the GMC projects
+// into it when the pool lives in another (§H.9), since a pod can mount neither a
+// Secret nor a ConfigMap from another namespace. At most one is set; neither means
+// direct egress and no mount. Either way the cert lands at tls.crt under
+// proxyCACertMountPath, the path the AGC reads.
+type proxyCASource struct {
+	secret    string
+	configMap string
+}
+
+func (s proxyCASource) volumeSource(mode int32) *corev1.VolumeSource {
+	switch {
+	case s.secret != "":
+		return &corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+			SecretName:  s.secret,
+			Items:       []corev1.KeyToPath{{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey}},
+			DefaultMode: &mode,
+		}}
+	case s.configMap != "":
+		return &corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: s.configMap},
+			Items:                []corev1.KeyToPath{{Key: shareCACertKey, Path: corev1.TLSCertKey}},
+			DefaultMode:          &mode,
+		}}
+	}
+	return nil
+}
+
 // buildAGCDeploymentFrom assembles the AGC Deployment pod spec shared by the v1
 // and v2 ActionsGateway reconcilers: the GitHub App credential file mount (never
 // env), the proxy CA pin (public cert only), the metrics mTLS mount, the hardened
 // container/pod SecurityContext, and the probes. The callers differ only in the
 // metadata labels, the derived resource names (v1 fixed, v2 per-gateway), the
-// credential/proxy-CA Secret names, the env list, and the container resources,
-// which are passed in. metaLabels are the Deployment's metadata labels; the
+// credential Secret name, the proxy CA source, the env list, and the container
+// resources, which are passed in. metaLabels are the Deployment's metadata labels; the
 // pod-template `app` label is names.app so it matches the AGC NetworkPolicy and
 // Service selectors. resources is the AGC container's resource requirements — the
 // zero value (v1) leaves the container without requests/limits, unchanged from
 // before; v2 passes the platform default overlaid with spec.agcResources (Q171).
-func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar, resources corev1.ResourceRequirements) *appsv1.Deployment {
+func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName string, proxyCA proxyCASource, agcImage string, env []corev1.EnvVar, resources corev1.ResourceRequirements) *appsv1.Deployment {
 	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment for
 	// why 0o400 alone leaves the file unreadable to the non-root AGC user.
 	credMode := int32(0o440)
@@ -208,17 +237,8 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 	// from a compromised cluster CA. Mounted only when egress is proxied: a v2 gateway
 	// with no defaultProxyRef egresses directly (§H.10), has no proxy TLS Secret, and
 	// mounting a non-existent Secret would wedge the pod at ContainerCreating.
-	if proxyTLSSecret != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: proxyCACertVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  proxyTLSSecret,
-					Items:       []corev1.KeyToPath{{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey}},
-					DefaultMode: &caMode,
-				},
-			},
-		})
+	if src := proxyCA.volumeSource(caMode); src != nil {
+		volumes = append(volumes, corev1.Volume{Name: proxyCACertVolumeName, VolumeSource: *src})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name: proxyCACertVolumeName, MountPath: proxyCACertMountPath, ReadOnly: true,
 		})
