@@ -255,59 +255,31 @@ spec:
 }
 
 // v2ProxyAttributionManifest is a pool in poolNS shared with, and attributing for,
-// two consumer namespaces, each holding a gateway opted in to PerJob and pointed at
-// the pool. Only alpha gets a RunnerSet: the AGC reads the pools its RunnerSets
-// resolve to, and beta needs only its port.
+// two consumer namespaces. Each holds a gateway opted in to PerJob and a RunnerSet
+// whose proxyRef names the pool; the AGC reads the pools its RunnerSets resolve to.
+// The gateways egress directly: a gateway-level defaultProxyRef to another
+// namespace leaves its AGC unable to start (Q1209).
 func v2ProxyAttributionManifest(poolNS, pool, alphaNS, betaNS, secretName, image, runnerSet string) string {
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
-kind: EgressProxy
+	consumer := func(ns, gateway, org, set string) string {
+		return fmt.Sprintf(`---
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
 metadata:
   name: %[2]s
   namespace: %[1]s
 spec:
-  minReplicas: 1
-  maxReplicas: 2
-  failureAttribution: PerConsumerPort
-  sharing:
-    allowedNamespaces: [%[3]s, %[4]s]
----
-apiVersion: actions-gateway.com/v2alpha1
-kind: ActionsGateway
-metadata:
-  name: alpha
-  namespace: %[3]s
-spec:
-  githubURL: https://github.com/example-org-attr-alpha
+  githubURL: https://github.com/%[3]s
   credentials:
     type: GitHubApp
     githubApp:
       name: %[5]s
-  defaultProxyRef:
-    name: %[2]s
-    namespace: %[1]s
-  proxyFailureAttribution: PerJob
----
-apiVersion: actions-gateway.com/v2alpha1
-kind: ActionsGateway
-metadata:
-  name: beta
-  namespace: %[4]s
-spec:
-  githubURL: https://github.com/example-org-attr-beta
-  credentials:
-    type: GitHubApp
-    githubApp:
-      name: %[5]s
-  defaultProxyRef:
-    name: %[2]s
-    namespace: %[1]s
   proxyFailureAttribution: PerJob
 ---
 apiVersion: actions-gateway.com/v2alpha1
 kind: RunnerTemplate
 metadata:
   name: tmpl
-  namespace: %[3]s
+  namespace: %[1]s
 spec:
   workerImage: %[6]s
   podTemplate:
@@ -319,15 +291,33 @@ spec:
 apiVersion: actions-gateway.com/v2alpha1
 kind: RunnerSet
 metadata:
-  name: %[7]s
-  namespace: %[3]s
+  name: %[4]s
+  namespace: %[1]s
 spec:
   gatewayRef:
-    name: alpha
+    name: %[2]s
   templateRef:
     name: tmpl
+  proxyRef:
+    name: %[7]s
+    namespace: %[8]s
   maxListeners: 1
   acquisitionProtocol: Classic   # see v2MultiGatewayManifest (Q264 P5)
   runnerLabels: ["e2e-attr"]
-`, poolNS, pool, alphaNS, betaNS, secretName, image, runnerSet)
+`, ns, gateway, org, set, secretName, image, pool, poolNS)
+	}
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata:
+  name: %[2]s
+  namespace: %[1]s
+spec:
+  minReplicas: 1
+  maxReplicas: 2
+  failureAttribution: PerConsumerPort
+  sharing:
+    allowedNamespaces: [%[3]s, %[4]s]
+`, poolNS, pool, alphaNS, betaNS) +
+		consumer(alphaNS, "alpha", "example-org-attr-alpha", runnerSet) +
+		consumer(betaNS, "beta", "example-org-attr-beta", runnerSet+"-beta")
 }
