@@ -70,6 +70,29 @@ type ActionsGatewaySpec struct {
 	// +optional
 	DefaultProxyRef *ProxyObjectRef `json:"defaultProxyRef,omitempty"`
 
+	// ProxyFailureAttribution opts this gateway's namespace into the egress proxy
+	// recording which job a CONNECT failure came from. Disabled (the default) opts
+	// nothing in.
+	//
+	// PerJob takes effect only on a pool whose EgressProxy.spec.failureAttribution is
+	// PerConsumerPort; either side alone attributes nothing. The opt-in is per
+	// namespace: once any gateway in a namespace sets PerJob, that namespace gets its
+	// own port on each attributing pool it uses, and every gateway in it that uses
+	// such a pool moves to that port, which rolls them. The AGC then reads its
+	// namespace's failures from the pool and keeps only those from its own worker
+	// pods. A policy denial it attributes is reported as an Event in this namespace
+	// naming the blocked host, which is why this is a separate switch from the
+	// pool's. Design: docs/design/05-security.md, "Proxy failure attribution"
+	// (Q1184).
+	//
+	// Not yet effective: it gives the namespace a port on an attributing pool, but
+	// the gateway is not moved onto it and its AGC reads no records yet.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Disabled;PerJob
+	// +kubebuilder:default=Disabled
+	ProxyFailureAttribution string `json:"proxyFailureAttribution,omitempty"`
+
 	// DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate
 	// (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets
 	// under this gateway that set no spec.templateRef of their own (Q172). Optional: it

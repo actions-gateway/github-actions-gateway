@@ -12,7 +12,9 @@ import (
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
+	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -448,6 +450,13 @@ func (r *IPRangeReconciler) patchEgressProxyNetworkPolicy(ctx context.Context, e
 	}
 
 	desired := buildEgressProxyNetworkPolicy(ep, cidrs)
+	// Ingress is replaced wholesale, so the attributed ports' rules (Q1184) are
+	// rebuilt from the port map the pool's Deployment carries.
+	var dep appsv1.Deployment
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &dep); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	applyAttributionToNetworkPolicy(desired, ep, liveAttributionPorts(&dep))
 	np.Spec.Egress = desired.Spec.Egress
 	np.Spec.Ingress = desired.Spec.Ingress
 

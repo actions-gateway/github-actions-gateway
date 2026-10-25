@@ -416,12 +416,13 @@ See [observability-logging.md § Proxy egress audit record](../operations/observ
 Classified retry ([Q555 plan](../plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor)) needs to know which job a proxy failure came from.
 An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
 That is new use of per-job egress data, so it is designed here before it is built ([Q1184](../queue/Q1184.md)).
-The proxy's half is built (`cmd/proxy/attribution.go`) behind environment the GMC does not set yet; the GMC and AGC halves are not ([plan](../plan/q1184-proxy-failure-attribution.md)).
+The proxy's half is built (`cmd/proxy/attribution.go`), and so is the pool side of the GMC's: the two fields, the ports, the ingress rules and the certificates (`cmd/gmc/internal/controller/egressproxy_attribution.go`).
+No consumer is moved onto its port and no AGC reads the records yet ([plan](../plan/q1184-proxy-failure-attribution.md)).
 
 **It is off by default, behind two switches, for the audit record's reasons.** One on the `EgressProxy` makes the pool able to keep failures and serve them.
 One on a consuming `ActionsGateway` opts that gateway's namespace in.
 Either alone attributes nothing.
-Field names are settled under [api-review.md](../development/api-review.md) when the fields are written.
+They are `EgressProxy.spec.failureAttribution: PerConsumerPort` and `ActionsGateway.spec.proxyFailureAttribution: PerJob`, each `Disabled` by default.
 
 **A namespace is attributed only when it has opted in itself.** The pool's existing port stays an unattributed port that records nothing, and every namespace starts on it, the pool's own included.
 The switch is per gateway and the port is per namespace, so a namespace is opted in once any of its gateways is.
@@ -455,7 +456,7 @@ Each attributed namespace's port is a port on the pool's one Service, targeting 
 One Service rather than one per consumer keeps the proxy's serving certificate unchanged as grants come and go, since it lists a single Service's DNS names.
 The provider's ingress NetworkPolicy admits each namespace on its own port only, so a worker that dials another tenant's port is refused before the proxy sees the connection.
 NetworkPolicy matches the pod's port after Service translation, so each rule names the container port, and by number: a named port resolves against the pod's declared `containerPorts`, which would put the grant list into the pool's pod template and roll the pool on every grant.
-`allowedNamespaces` has no maximum today, so enabling attribution adds one, enforced at admission.
+`allowedNamespaces` has no maximum otherwise, so while attribution is on the CRD caps it at 32.
 
 **Where the CNI does not enforce that ingress, NetworkPolicy is not the only defence, and eviction is what is left.** A worker in one namespace can then dial another's port.
 Its records land in that namespace's partition carrying its own pod address, and that namespace's AGC discards them, because the address is no pod of its own in the window it held it.
@@ -471,6 +472,7 @@ That is a separate change and not part of this design.
 **The AGC reads only its own namespace's records.** The endpoint is its own listener with its own per-`EgressProxy` CA, not the metrics port.
 The metrics port admits only `metrics=enabled` namespaces so tenant pods cannot read traffic metrics, and a monitoring certificate must not read per-job data any more than an AGC certificate may read metrics.
 The GMC mints each opted-in gateway's AGC a client certificate naming its namespace, and projects it into that namespace as a Secret.
+Every namespace's client key is also held in the pool's own namespace, in `<ep>-attribution-clients`, because the bundle is generated whole; whoever can read Secrets there already administers the pool, which sees every connection.
 The proxy returns only records from the port mapped to the namespace the certificate names.
 It checks that name against its current port map on every request, so removing a grant ends access at the next configuration reload rather than at certificate expiry.
 The listener's ingress rule admits AGC pods of attributed namespaces only, with both selectors in one peer as the sharing rules require; workers never reach it.
