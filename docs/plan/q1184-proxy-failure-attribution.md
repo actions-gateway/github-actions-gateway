@@ -107,6 +107,15 @@ Nothing calls its lookup until classified retry ([Q1183](../queue/Q1183.md)) lan
   `Lookup(uid)` returns them; the UID rather than the name, because a repeat delivery of a job reuses its pod's name.
 - **The counter.** `actions_gateway_proxy_failure_records_total{namespace, outcome, result}` counts each record read as `attributed` or `discarded`, and `actions_gateway_proxy_failure_reads_total{namespace, result}` each replica read as `ok` or `failed`, which is how an operator sees the CA-roll gap.
 
-## Phase 4
+## Phase 4: the enforcement measurement
 
-The enforcement measurement the row makes a ship requirement, on the Calico lane only, because the kindnet lane's enforcement specs skip themselves.
+The row makes a ship requirement of measuring, on the Calico lane, that a worker is refused on another consumer's port: the proxy learns the consumer from the port alone, so that refusal is the whole of what stops one tenant's failures landing in another's buffer.
+One new e2e file, `cmd/gmc/test/e2e/v2_proxy_attribution_test.go`, holding a pool in a provider namespace that attributes for two consumer namespaces, each with an opted-in gateway.
+
+- **The refusal, Calico only.** One workload-labelled pod in the first consumer namespace waits until its own port answers (the proxy refuses a CONNECT to a host off its allowlist with a 403), then dials the second consumer's port and must get no answer at all.
+  Gating in the same pod is what makes the negative non-vacuous, as for the other enforcement specs: a separate control pod proves only its own endpoint was programmed.
+  It skips on kindnet with the others, since that enforcer does not drop NetworkPolicy negatives.
+- **A denial attributed end to end, both lanes.** A pod carrying a RunnerSet's label, so the AGC counts it as its own worker, waits past the reader's two-second edge margin, CONNECTs to a denied host through its namespace's port, and waits again before exiting so the record does not sit on the close edge either.
+  The gateway's `actions_gateway_proxy_failure_records_total{outcome="denied",result="attributed"}` must then rise, which only a read over mTLS, a matched epoch and cursor, and the address-window join together produce.
+  Nothing else observes the join until classified retry ([Q1183](../queue/Q1183.md)) calls the lookup.
+- **The scrape stays in the cluster.** A pod in the consumer namespace mounts the gateway's metrics client Secret and reads the AGC's metrics endpoint, so no certificate leaves the cluster; the namespace carries the `metrics: enabled` label the AGC's ingress rule admits scrapers from.
