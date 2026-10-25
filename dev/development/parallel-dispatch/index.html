@@ -2964,7 +2964,7 @@
 
 <h1 id="parallel-dispatch-playbook">Parallel-dispatch playbook<a class="headerlink" href="#parallel-dispatch-playbook" title="Permanent link">&para;</a></h1>
 <p>How to clear a batch of backlog items by running several agent sessions in parallel: one session and pull request (PR) per task, coordinated by a single <strong>dispatcher</strong> session that carries each PR to verified-and-ready and hands it to the maintainer.
-No agent merges (<a href="#the-merge-model">the merge model</a>).</p>
+No worker merges, and the dispatcher enqueues only what the repo's standing merge grant leaves to it (<a href="#the-merge-model">the merge model</a>).</p>
 <p><strong>The process itself is two globally-installed skills</strong> — <a href="../skills/#session-orchestrator"><code>session-orchestrator</code></a> for the dispatcher and <a href="../skills/#session-worker"><code>session-worker</code></a> for each worker — and this page does not restate them.
 They own selection, spawning, the worker contract, the watcher loop, assignment and spacing, coordination, conflict principles, and the never-merge rule.
 This page owns what is true of <em>this</em> repo: the gate, the throttle, the merge queue, the tooling under <code>scripts/agent/</code>, the hooks, and every measurement taken here.
@@ -3141,22 +3141,32 @@ A <code>-gate</code> row that the stated theme would exclude is the disagreement
   A version number cannot express this one, which is why <a href="../maintaining-backlog/#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">a gate label answers two questions</a> and only its <code>feature</code>/<code>security</code> half owes a roadmap bullet.</li>
 </ul>
 <h2 id="the-merge-model">The merge model<a class="headerlink" href="#the-merge-model" title="Permanent link">&para;</a></h2>
-<p>Both skills state it: auto-<em>fix</em> is delegated to each session, auto-<em>merge</em> is the maintainer's and no agent takes it, and a request to go faster is a request to shorten everything <strong>before</strong> that step.
+<p>Both skills state it: auto-<em>fix</em> is delegated to each session, and a request to go faster is a request to shorten everything <strong>before</strong> the merge.
+Who merges is declared in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/merge-posture.md"><code>.claude/merge-posture.md</code></a>, which <code>session-orchestrator</code>'s smart review mode reads.
+It grants the dispatcher a standing merge (<code>merge: agent</code>) and lists under <code>human-review</code> what still goes to the maintainer: API and CRD changes, anything judged security, performance, interface or architecture, <code>feat</code> and breaking titles, the pages a released version of the website publishes, design docs, and the root docs.
 The mechanics here:</p>
 <ul>
 <li><strong>The merge queue is the mechanical half, not a delegation of the gate</strong> (active on <code>main</code> since 2026-08-03; see <a href="../../plan/archive/merge-queue/">merge-queue.md</a>).
-  The queue is entered from the PR's web UI, then validates the candidate merge result, including the union with whatever is ahead of it, and kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session.
+  Entering the queue is the merge: the queue validates the candidate merge result, including the union with whatever is ahead of it, kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session, and lands the rest.
   It arbitrates green-ness, freshness, and the jointly-red case.
-  It does <strong>not</strong> decide whether a change should land, so enqueueing is the maintainer's action, taken after their review.</li>
+  It does <strong>not</strong> decide whether a change should land; the enqueue does, so who may enqueue is the whole merge policy.</li>
+<li><strong>The dispatcher may make a first enqueue only for a PR the posture routes to it.</strong> <code>merge-posture.py --route actions-gateway/github-actions-gateway &lt;pr&gt;</code>, in the skill's <code>scripts/</code>, prints <code>agent</code> or <code>maintainer</code>.
+  An <code>agent</code> answer also names the classes it cannot read off paths, and the dispatcher judges the diff for each; any yes routes the PR to the maintainer.
+  A PR routed <code>maintainer</code> is enqueued by the maintainer from the PR's web UI, after their review.
+  Workers never make a first enqueue, whatever the route says.</li>
+<li><strong>The enqueue is the <code>enqueuePullRequest</code> mutation, pinned to the head that was routed.</strong> <code>gh pr merge</code> cannot enqueue, because it routes through <code>enablePullRequestAutoMerge</code>, which this repository forbids (<code>allow_auto_merge: false</code>), so every form of it fails <code>Auto merge is not allowed for this repository</code> (re-measured 2026-09-04 on gh 2.100.0, with all nine required checks green, so it is not the documented fallback for unfinished checks).
+  The mutation works under that setting (<code>gh api graphql</code>, measured 2026-09-04 on #1843-#1846).
+  Pass <code>expectedHeadOid</code> as the head the route read, so a push between the two is not enqueued under it.
+  The schema describes the field only as "the expected head OID"; that a mismatch refuses the enqueue, as the same field does on <code>mergePullRequest</code>, is not yet measured here: <code>gh api graphql -f query='mutation($pr:ID!,$oid:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$pr,expectedHeadOid:$oid}){mergeQueueEntry{position state}}}' -F pr=&lt;node id&gt; -F oid=&lt;routed head SHA&gt;</code>.</li>
 <li><strong>One carve-out: restoring an enqueue the maintainer already made</strong> (Q692).
   A worker may rebase and re-enqueue <strong>only</strong> when <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>scripts/agent/pr-requeue-eligible.sh</code></a> says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   That is three calls, not two: <code>--assess</code> before the rebase, <code>--rebased</code> once the rebase is pushed, and <code>--confirm</code> after CI is green.
   The middle one is what re-measures against the commit the rebase produced, so skipping it leaves <code>--confirm</code> waking on a head the assessment never looked at.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
   A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a <code>gh</code> failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.</li>
-<li><strong><code>ELIGIBLE</code> is the authorization, not the mechanism.</strong> <code>gh pr merge</code> cannot enqueue, because it routes through <code>enablePullRequestAutoMerge</code>, which this repository forbids (<code>allow_auto_merge: false</code>), so every form of it fails <code>Auto merge is not allowed for this repository</code> (re-measured 2026-09-04 on gh 2.100.0, with all nine required checks green, so it is not the documented fallback for unfinished checks).
-  The <code>enqueuePullRequest</code> mutation does work (<code>gh api graphql</code>, measured 2026-09-04 on #1843-#1846), so once both verdicts pass the re-enqueue is runnable here.
-  Report the verdict and its <code>measured:</code> line either way, so the decision is auditable; hand the re-enqueue to the maintainer whenever either verdict fails, and never make a <em>first</em> enqueue.</li>
+<li><strong><code>ELIGIBLE</code> is the authorization, not the mechanism.</strong> Once the verdicts pass, the re-enqueue runs through the same mutation as a first enqueue.
+  Report the verdict and its <code>measured:</code> line either way, so the decision is auditable; hand the re-enqueue to the maintainer whenever either verdict fails.
+  The script never permits a <em>first</em> enqueue; that is the posture's to grant, and only to the dispatcher.</li>
 </ul>
 <h2 id="concurrency-and-contention">Concurrency and contention<a class="headerlink" href="#concurrency-and-contention" title="Permanent link">&para;</a></h2>
 <p><strong><code>gh pr list</code> cannot see a branch pushed before its pull request exists</strong>, so a contention brief built from it reads as a closed list and is not one.
