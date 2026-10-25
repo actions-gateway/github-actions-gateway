@@ -76,11 +76,13 @@ The AGC computes each worker's `HTTPS_PROXY` itself on every acquired job (`cmd/
   A withdrawn Secret is blanked, since the GMC holds no delete on Secrets, and it is read by name before its ConfigMap goes, since the GMC reads Secrets only in tenant namespaces and never lists them cluster-wide ([Q1188](../design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls)); a failed blank leaves the ConfigMap to find the namespace by on the next reconcile.
 - **Workers move; the AGC does not.** Only the workers' `HTTPS_PROXY` changes, read per job, so nothing in the consumer's namespace restarts, and the AGC's own control-plane traffic stays on the shared port because its failures are not a job's.
 - **Egress admits the range.** An opted-in namespace's workload policy admits the whole attributed range on the same proxy peers as `:8080`, and its AGC policy the read port; which port within the range is the pool's to decide, and its ingress pins each namespace to its own.
-- **Opting out cuts running jobs off the port.** The port leaves the pool's ingress, and its listener the pool's environment, on the same reconcile that withdraws the projection, so a job already running on it loses new connections.
-  [Q1208](../queue/Q1208.md) holds the fix.
+- **Opting out holds the port for running jobs.** A departing namespace the pool still admits keeps its listener and its workload ingress rule for the longest `maxWorkerLifetime` of its RunnerSets, counted from the reconcile that withdraws its projection and recorded as `actions-gateway.com/attribution-held-until` on the pool Deployment's own metadata, so recording it rolls nothing.
+  Its client certificate stays in the bundle, so a departure leaves the pod template unchanged; the pool rolls when the hold ends.
+  The consumer keeps its egress to the range while any pool it reaches lists it, and re-reads at the release.
+  A withdrawn grant is not held: sharing ingress already refuses that namespace on every port.
 - **The rollout gate closes the port-reuse window.** Lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace.
   The joiner is projected only once every replica maps the port to it, and the leaver's workers are refused on it by ingress from the same reconcile, so no failure lands in the wrong partition.
-  Q1208's fix reopens the window if it keeps a leaver's port listening, so a port held open for a leaver must not be reallocated until it is released.
+  A held port is not reallocated until it is released, which keeps the window closed while the leaver still listens on it.
 
 ## Phase 3 and 4 outline
 

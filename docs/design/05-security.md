@@ -451,7 +451,9 @@ It withdraws the projection when either side turns off, and new workers go back 
 That is the only consumer-side change: it restarts nothing in the consumer's namespace, and the AGC's own traffic stays on the shared port, since its failures are not a job's.
 So a pool edit can move workers in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
 A namespace where no gateway has opted in is never moved by a pool edit.
-A departing namespace's port leaves the pool's ingress at once, which refuses that namespace's running jobs on it ([Q1208](../queue/Q1208.md)).
+A departing namespace that the pool still admits keeps its port, listening and admitted for its workers alone, until its longest worker lifetime has passed, so its running jobs are not refused mid-run; its failures on the port are recorded until then, readable only with a client certificate its AGC already loaded, since the projected copy is blanked at once.
+The port is not reallocated while held, which keeps a joiner's failures out of the leaver's partition.
+A namespace whose grant is withdrawn is refused on every port at once and is not held.
 Within an opted-in namespace, a gateway that did not opt in moves with the rest, so one gateway's opt-in moves its siblings' workers; that is one tenant's own decision.
 The rule also keeps a namespace that has not opted in from having its failures recorded under someone else's: its traffic arrives on the unattributed port, and nothing reads that.
 Each AGC joins only its own gateway's pods (below), so an opted-in gateway is served its siblings' failures and discards them, which is one tenant seeing its own records rather than a cross-tenant read.

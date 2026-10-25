@@ -66,6 +66,18 @@ const (
 
 	attributionClientCertSuffix = ".crt"
 	attributionClientKeySuffix  = ".key"
+
+	// annAttributionHeld, on the pool Deployment's own metadata, lists as
+	// "<ns>=<RFC3339>" the namespaces that stopped being attributed while the pool
+	// still admits them, and when each one's port is released. Until then the port
+	// keeps its listener and its ingress rule, so a worker that started on it keeps
+	// it, and it is not reallocated. Being metadata rather than template, a hold
+	// rolls nothing.
+	annAttributionHeld = "actions-gateway.com/attribution-held-until"
+
+	// defaultWorkerLifetime is the AGC's worker-pod lifetime cap when a RunnerSet's
+	// spec.maxWorkerLifetime is omitted or "0s" (provisioner.DefaultMaxWorkerLifetime).
+	defaultWorkerLifetime = 12 * time.Hour
 )
 
 func egressProxyAttributes(ep *gmcv2alpha1.EgressProxy) bool {
@@ -140,13 +152,17 @@ func attributedNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2alph
 
 // allocateAttributionPorts maps each namespace to a port, keeping any port it
 // already holds in current and giving a new namespace the lowest free one, so a
-// grant change never moves another namespace.
-func allocateAttributionPorts(namespaces []string, current map[string]int) map[string]int {
+// grant change never moves another namespace. A port in held is not free, and a
+// namespace finding no free port in the range gets none until a hold is released.
+func allocateAttributionPorts(namespaces []string, current, held map[string]int) map[string]int {
 	if len(namespaces) == 0 {
 		return nil
 	}
 	ports := make(map[string]int, len(namespaces))
 	used := map[int]bool{}
+	for _, p := range held {
+		used[p] = true
+	}
 	for _, ns := range namespaces {
 		if p, ok := current[ns]; ok && p >= attributionPortBase && p < attributionPortBase+maxAttributedNamespaces && !used[p] {
 			ports[ns] = p
@@ -160,6 +176,9 @@ func allocateAttributionPorts(namespaces []string, current map[string]int) map[s
 		}
 		for used[next] {
 			next++
+		}
+		if next >= attributionPortBase+maxAttributedNamespaces {
+			break
 		}
 		ports[ns] = next
 		used[next] = true
@@ -194,6 +213,36 @@ func liveAttributionPorts(dep *appsv1.Deployment) map[string]int {
 	return ports
 }
 
+// liveAttributionHolds reads annAttributionHeld back from the pool Deployment. An
+// unparseable entry yields no entry, which releases that port.
+func liveAttributionHolds(dep *appsv1.Deployment) map[string]time.Time {
+	holds := map[string]time.Time{}
+	for _, entry := range strings.Split(dep.Annotations[annAttributionHeld], ",") {
+		ns, at, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if t, err := time.Parse(time.RFC3339, at); err == nil {
+			holds[ns] = t
+		}
+	}
+	return holds
+}
+
+// splitLiveAttributionPorts divides the Deployment's port map into attributed
+// namespaces and held ones, for a caller rebuilding the pool's ingress from it.
+func splitLiveAttributionPorts(dep *appsv1.Deployment) (ports, held map[string]int) {
+	ports = liveAttributionPorts(dep)
+	held = map[string]int{}
+	for ns := range liveAttributionHolds(dep) {
+		if p, ok := ports[ns]; ok {
+			held[ns] = p
+			delete(ports, ns)
+		}
+	}
+	return ports, held
+}
+
 // attributionPortsEnv renders the port map as the proxy's namespace=port list,
 // sorted by namespace so an unchanged map never changes the pod template.
 func attributionPortsEnv(ports map[string]int) string {
@@ -204,12 +253,23 @@ func attributionPortsEnv(ports map[string]int) string {
 	return strings.Join(entries, ",")
 }
 
-// applyAttributionToDeployment adds the attributed listeners, the read listener
-// and its mTLS bundle to the pool Deployment built by buildEgressProxyDeployment.
-// No ports leaves it untouched.
-func applyAttributionToDeployment(dep *appsv1.Deployment, ep *gmcv2alpha1.EgressProxy, ports map[string]int, caPEM []byte) {
+// applyAttributionToDeployment adds the attributed and held listeners, the read
+// listener and its mTLS bundle to the pool Deployment built by
+// buildEgressProxyDeployment, and records the holds. No ports leaves it untouched.
+func applyAttributionToDeployment(dep *appsv1.Deployment, ep *gmcv2alpha1.EgressProxy, plan *attributionPlan) {
+	ports := plan.listening()
 	if len(ports) == 0 {
 		return
+	}
+	if len(plan.until) > 0 {
+		entries := make([]string, 0, len(plan.until))
+		for _, ns := range slices.Sorted(maps.Keys(plan.until)) {
+			entries = append(entries, ns+"="+plan.until[ns].UTC().Format(time.RFC3339))
+		}
+		if dep.Annotations == nil {
+			dep.Annotations = map[string]string{}
+		}
+		dep.Annotations[annAttributionHeld] = strings.Join(entries, ",")
 	}
 	spec := &dep.Spec.Template.Spec
 	tlsMode := int32(0o440)
@@ -231,7 +291,7 @@ func applyAttributionToDeployment(dep *appsv1.Deployment, ep *gmcv2alpha1.Egress
 	)
 	c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: attributionTLSVolumeName, MountPath: attributionTLSMountPath, ReadOnly: true})
 
-	sum := sha256.Sum256(caPEM)
+	sum := sha256.Sum256(plan.caPEM)
 	if dep.Spec.Template.Annotations == nil {
 		dep.Spec.Template.Annotations = map[string]string{}
 	}
@@ -252,22 +312,31 @@ func applyAttributionToService(svc *corev1.Service, ports map[string]int) {
 }
 
 // applyAttributionToNetworkPolicy admits each attributed namespace's workload
-// pods on its own port only, and its AGC pods on the read port. Each peer carries
-// the namespace and pod selectors together so they AND (see the sharing rules in
-// buildEgressProxyNetworkPolicy). Rules naming the container port by number keep
-// the grant list out of the pod template. Like the sharing rules, another
-// namespace's are emitted only while the GMC manages the policy.
-func applyAttributionToNetworkPolicy(np *networkingv1.NetworkPolicy, ep *gmcv2alpha1.EgressProxy, ports map[string]int) {
+// pods on its own port only, and its AGC pods on the read port. A held namespace
+// keeps its workload rule alone, for the workers already on the port. Each peer
+// carries the namespace and pod selectors together so they AND (see the sharing
+// rules in buildEgressProxyNetworkPolicy). Rules naming the container port by
+// number keep the grant list out of the pod template. Like the sharing rules,
+// another namespace's are emitted only while the GMC manages the policy.
+func applyAttributionToNetworkPolicy(np *networkingv1.NetworkPolicy, ep *gmcv2alpha1.EgressProxy, ports, held map[string]int) {
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
-	for _, ns := range slices.Sorted(maps.Keys(ports)) {
+	all := maps.Clone(held)
+	if all == nil {
+		all = map[string]int{}
+	}
+	maps.Copy(all, ports)
+	for _, ns := range slices.Sorted(maps.Keys(all)) {
 		if ns != ep.Namespace && !managed {
 			continue
 		}
+		np.Spec.Ingress = append(np.Spec.Ingress, networkingv1.NetworkPolicyIngressRule{
+			From:  []networkingv1.NetworkPolicyPeer{attributionPeer(ep, ns, map[string]string{labelComponent: componentWorkload})},
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(int32(all[ns])))}},
+		})
+		if _, attributed := ports[ns]; !attributed {
+			continue
+		}
 		np.Spec.Ingress = append(np.Spec.Ingress,
-			networkingv1.NetworkPolicyIngressRule{
-				From:  []networkingv1.NetworkPolicyPeer{attributionPeer(ep, ns, map[string]string{labelComponent: componentWorkload})},
-				Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(int32(ports[ns])))}},
-			},
 			networkingv1.NetworkPolicyIngressRule{
 				From: []networkingv1.NetworkPolicyPeer{attributionPeer(ep, ns, map[string]string{
 					labelComponent:           componentWorkload,
@@ -503,42 +572,134 @@ func (r *EgressProxyReconciler) reconcileAttributionService(ctx context.Context,
 	return nil
 }
 
-// reconcileAttribution resolves the attributed namespaces, allocates their ports
-// against the live Deployment, keeps the bundle in step, and projects each
-// namespace's port and client certificate into it. It returns the port map and
-// the CA the Deployment must carry; both are empty when nothing is attributed.
-func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gmcv2alpha1.EgressProxy) (map[string]int, []byte, error) {
+// attributionPlan is what one reconcile decided: the attributed namespaces' ports,
+// the departed namespaces whose port is held open and until when, and the CA the
+// pool must carry. Everything is empty when nothing is attributed or held.
+type attributionPlan struct {
+	ports map[string]int
+	held  map[string]int
+	until map[string]time.Time
+	caPEM []byte
+}
+
+// listening is every port the pool must serve: the attributed and the held.
+func (p *attributionPlan) listening() map[string]int {
+	all := maps.Clone(p.held)
+	if all == nil {
+		all = map[string]int{}
+	}
+	maps.Copy(all, p.ports)
+	return all
+}
+
+// reconcileAttribution resolves the attributed namespaces, holds the ports of
+// those that left, allocates ports against the live Deployment, keeps the bundle in
+// step, and projects each attributed namespace's port and client certificate into
+// it.
+func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gmcv2alpha1.EgressProxy) (*attributionPlan, error) {
 	namespaces, err := attributedNamespacesFor(ctx, r.Client, ep)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var live appsv1.Deployment
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &live); err != nil && !apierrors.IsNotFound(err) {
-		return nil, nil, fmt.Errorf("read proxy Deployment: %w", err)
+		return nil, fmt.Errorf("read proxy Deployment: %w", err)
 	}
 	current := liveAttributionPorts(&live)
-	ports := allocateAttributionPorts(namespaces, current)
+	plan := &attributionPlan{}
+	plan.held, plan.until, err = r.attributionHolds(ctx, ep, namespaces, current, liveAttributionHolds(&live))
+	if err != nil {
+		return nil, err
+	}
+	plan.ports = allocateAttributionPorts(namespaces, current, plan.held)
 	// A pool that attributes nothing now and attributed nothing at its last
 	// rollout keeps no bundle, but may still have projections: a recreated
 	// Deployment forgets its ports, and a projection left behind would move new
 	// jobs onto a port nothing serves.
-	if len(ports) == 0 && len(current) == 0 {
+	if len(plan.ports) == 0 && len(current) == 0 {
 		if err := r.reconcileAttributionProjections(ctx, ep, nil, nil, false, nil); err != nil {
-			return nil, nil, fmt.Errorf("withdraw attribution: %w", err)
+			return nil, fmt.Errorf("withdraw attribution: %w", err)
 		}
-		return nil, nil, nil
+		return plan, nil
 	}
-	caPEM, clients, err := r.ensureAttributionCerts(ctx, ep, namespaces)
+	// A held namespace keeps its client certificate, so a departure leaves the
+	// bundle, and with it the pool's pod template, unchanged.
+	listening := plan.listening()
+	var clients map[string][]byte
+	plan.caPEM, clients, err = r.ensureAttributionCerts(ctx, ep, slices.Sorted(maps.Keys(listening)))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	if err := r.reconcileAttributionService(ctx, ep, ports); err != nil {
-		return nil, nil, err
+	if err := r.reconcileAttributionService(ctx, ep, listening); err != nil {
+		return nil, err
 	}
-	if err := r.reconcileAttributionProjections(ctx, ep, ports, current, deploymentRolledOut(&live), clients); err != nil {
-		return nil, nil, fmt.Errorf("project attribution: %w", err)
+	if err := r.reconcileAttributionProjections(ctx, ep, plan.ports, current, deploymentRolledOut(&live), clients); err != nil {
+		return nil, fmt.Errorf("project attribution: %w", err)
 	}
-	return ports, caPEM, nil
+	return plan, nil
+}
+
+// attributionHolds decides which namespaces in the live port map that are no
+// longer attributed keep their port, and until when. A namespace the pool still
+// admits is held for the longest worker lifetime its RunnerSets allow, counted
+// from the reconcile that first sees it gone, since a worker that started on the
+// port can live that long. One the pool no longer admits is cut off on every port
+// already, and one with no RunnerSet has no worker to wait for, so neither is held.
+func (r *EgressProxyReconciler) attributionHolds(ctx context.Context, ep *gmcv2alpha1.EgressProxy, namespaces []string, current map[string]int, recorded map[string]time.Time) (map[string]int, map[string]time.Time, error) {
+	now := r.nowFunc()()
+	held := map[string]int{}
+	until := map[string]time.Time{}
+	for _, ns := range slices.Sorted(maps.Keys(current)) {
+		if slices.Contains(namespaces, ns) || (ns != ep.Namespace && !proxyShareGranted(ep, ns)) {
+			continue
+		}
+		release, ok := recorded[ns]
+		if !ok {
+			lifetime, err := workerLifetimeIn(ctx, r.Client, ns)
+			if err != nil {
+				return nil, nil, err
+			}
+			release = now.Add(lifetime)
+		}
+		if !release.After(now) {
+			continue
+		}
+		held[ns] = current[ns]
+		until[ns] = release
+	}
+	return held, until, nil
+}
+
+// workerLifetimeIn returns the longest worker-pod lifetime any RunnerSet in ns
+// allows, zero when there is none. A RunnerSet with no cap is counted at the
+// default one: a worker outliving it loses the port as it did before holds.
+func workerLifetimeIn(ctx context.Context, c client.Client, ns string) (time.Duration, error) {
+	var runnerSets gmcv2alpha1.RunnerSetList
+	if err := c.List(ctx, &runnerSets, client.InNamespace(ns)); err != nil {
+		return 0, fmt.Errorf("list RunnerSets in %q: %w", ns, err)
+	}
+	var longest time.Duration
+	for i := range runnerSets.Items {
+		lifetime := defaultWorkerLifetime
+		if d := runnerSets.Items[i].Spec.MaxWorkerLifetime; d != nil && d.Duration > 0 {
+			lifetime = d.Duration
+		}
+		longest = max(longest, lifetime)
+	}
+	return longest, nil
+}
+
+// attributionHoldRequeue is how long until the pool's next hold is released, so
+// the reconcile that drops its port runs on time. Zero when nothing is held.
+func attributionHoldRequeue(dep *appsv1.Deployment, now time.Time) time.Duration {
+	var next time.Duration
+	for _, release := range liveAttributionHolds(dep) {
+		d := max(release.Sub(now), time.Second)
+		if next == 0 || d < next {
+			next = d
+		}
+	}
+	return next
 }
 
 // deploymentRolledOut reports whether every replica of dep runs its current pod
@@ -707,16 +868,63 @@ func (r *EgressProxyReconciler) applyProjectedSecret(ctx context.Context, desire
 	return r.Update(ctx, &existing)
 }
 
-// namespaceAttributes reports whether any ActionsGateway in ns has opted in.
-func namespaceAttributes(ctx context.Context, c client.Client, ns string) (bool, error) {
+// attributionEgress reports whether ns's workloads need the attributed port range:
+// while any ActionsGateway in ns has opted in, and while a pool it can reach still
+// lists ns in its port map, attributed or held, so its running workers keep their
+// port after it opts out. It also returns when to re-read, zero when nothing is
+// pending.
+func attributionEgress(ctx context.Context, c client.Client, ns string, remoteProxies []remoteProxy, now time.Time) (bool, time.Duration, error) {
 	var gateways gmcv2alpha1.ActionsGatewayList
 	if err := c.List(ctx, &gateways, client.InNamespace(ns)); err != nil {
-		return false, fmt.Errorf("list ActionsGateways: %w", err)
+		return false, 0, fmt.Errorf("list ActionsGateways: %w", err)
 	}
-	return slices.ContainsFunc(gateways.Items, func(ag gmcv2alpha1.ActionsGateway) bool {
+	optedIn := slices.ContainsFunc(gateways.Items, func(ag gmcv2alpha1.ActionsGateway) bool {
 		return ag.Spec.ProxyFailureAttribution == proxyFailureAttributionPerJob
-	}), nil
+	})
+
+	pools := slices.Clone(remoteProxies)
+	var own gmcv2alpha1.EgressProxyList
+	if err := c.List(ctx, &own, client.InNamespace(ns)); err != nil {
+		return false, 0, fmt.Errorf("list EgressProxies: %w", err)
+	}
+	for i := range own.Items {
+		pools = append(pools, remoteProxy{Namespace: ns, Name: own.Items[i].Name})
+	}
+	listed := false
+	var release time.Time
+	for _, pool := range pools {
+		var dep appsv1.Deployment
+		key := types.NamespacedName{Namespace: pool.Namespace, Name: pool.Name + egressProxyResourceSuffix}
+		if err := c.Get(ctx, key, &dep); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return false, 0, fmt.Errorf("read proxy Deployment %s: %w", key, err)
+		}
+		if _, ok := liveAttributionPorts(&dep)[ns]; !ok {
+			continue
+		}
+		listed = true
+		if t, ok := liveAttributionHolds(&dep)[ns]; ok && (release.IsZero() || t.Before(release)) {
+			release = t
+		}
+	}
+	// The pool drops the port on its own reconcile: at the release, or, for a
+	// namespace that opted out with no hold, as soon as it sees the opt-out. This
+	// one re-reads after it, since nothing it watches changes then.
+	var wait time.Duration
+	switch {
+	case !release.IsZero():
+		wait = max(release.Sub(now), 0) + attributionReleaseSlack
+	case listed && !optedIn:
+		wait = attributionReleaseSlack
+	}
+	return optedIn || listed, wait, nil
 }
+
+// attributionReleaseSlack is how long after a pool's hold expires a consumer
+// re-reads it, so the pool's reconcile has dropped the port first.
+const attributionReleaseSlack = 30 * time.Second
 
 // applyAttributionEgress lets an opted-in namespace's workload pods reach the
 // attributed port range, and its AGC the read port, on the same proxy peers the

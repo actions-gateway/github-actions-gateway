@@ -291,7 +291,23 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return r.setDegraded(ctx, &ag, &provisioningError{step: "AGC autoscaler", err: err})
 	}
 
-	return r.updateStatus(ctx, &ag, proxy, autoscaler)
+	res, err := r.updateStatus(ctx, &ag, proxy, autoscaler)
+	if err != nil || res.Requeue {
+		return res, err
+	}
+	// A pool holding this namespace's attribution port releases it on a deadline,
+	// and nothing this reconciler watches changes then, so the egress that port
+	// needed is re-read once it has.
+	remoteProxies, err := grantedRemoteProxies(ctx, r.Client, &ag)
+	if err != nil {
+		return res, err
+	}
+	if _, d, err := attributionEgress(ctx, r.Client, ag.Namespace, remoteProxies, r.nowFunc()()); err != nil {
+		return res, err
+	} else if d > 0 && (res.RequeueAfter == 0 || d < res.RequeueAfter) {
+		res.RequeueAfter = d
+	}
+	return res, nil
 }
 
 // reconcileResources creates or patches every AGC control-plane child, each
@@ -358,7 +374,7 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 	}
 	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct, remoteProxies)
 	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct, remoteProxies)
-	attributes, err := namespaceAttributes(ctx, r.Client, ag.Namespace)
+	attributes, _, err := attributionEgress(ctx, r.Client, ag.Namespace, remoteProxies, r.nowFunc()())
 	if err != nil {
 		return fmt.Errorf("resolve proxy failure attribution: %w", err)
 	}

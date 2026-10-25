@@ -3,8 +3,10 @@ package controller
 import (
 	"context"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
@@ -44,9 +46,15 @@ func gatewayUsing(ns string, perJob bool) *gmcv2alpha1.ActionsGateway {
 
 func reconcilePool(t *testing.T, c client.Client) {
 	t.Helper()
-	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: &IPRangeCache{}, ProxyImage: "proxy:test"}
-	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "provider", Name: "shared"}})
+	reconcilePoolAt(t, c, time.Now())
+}
+
+func reconcilePoolAt(t *testing.T, c client.Client, now time.Time) ctrl.Result {
+	t.Helper()
+	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: &IPRangeCache{}, ProxyImage: "proxy:test", Now: func() time.Time { return now }}
+	res, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "provider", Name: "shared"}})
 	require.NoError(t, err)
+	return res
 }
 
 func poolEnv(t *testing.T, c client.Client) map[string]string {
@@ -61,14 +69,23 @@ func poolEnv(t *testing.T, c client.Client) map[string]string {
 }
 
 func TestAllocateAttributionPorts_KeepsHeldPortsAndFillsTheLowestFree(t *testing.T) {
-	got := allocateAttributionPorts([]string{"a", "b", "c"}, map[string]int{"b": 8101, "gone": 8100})
+	got := allocateAttributionPorts([]string{"a", "b", "c"}, map[string]int{"b": 8101, "gone": 8100}, nil)
 	assert.Equal(t, map[string]int{"a": 8100, "b": 8101, "c": 8102}, got,
 		"b keeps 8101 and the freed 8100 goes to the first new namespace")
 
-	got = allocateAttributionPorts([]string{"a", "b"}, map[string]int{"a": 9000, "b": 8100})
+	got = allocateAttributionPorts([]string{"a", "b"}, map[string]int{"a": 9000, "b": 8100}, nil)
 	assert.Equal(t, map[string]int{"a": 8101, "b": 8100}, got, "a port outside the range is reassigned")
 
-	assert.Nil(t, allocateAttributionPorts(nil, map[string]int{"a": 8100}))
+	assert.Nil(t, allocateAttributionPorts(nil, map[string]int{"a": 8100}, nil))
+
+	got = allocateAttributionPorts([]string{"a", "c"}, map[string]int{"gone": 8100}, map[string]int{"gone": 8100})
+	assert.Equal(t, map[string]int{"a": 8101, "c": 8102}, got, "a held port is not free")
+
+	full := map[string]int{}
+	for i := range maxAttributedNamespaces {
+		full[fmt.Sprintf("held-%d", i)] = attributionPortBase + i
+	}
+	assert.Empty(t, allocateAttributionPorts([]string{"a"}, nil, full), "no port outside the range")
 }
 
 func TestAttributionPortsEnv_RoundTripsThroughTheDeployment(t *testing.T) {
@@ -330,6 +347,190 @@ func TestIPRangeRefresh_KeepsAttributionIngress(t *testing.T) {
 		}
 	}
 	assert.ElementsMatch(t, []int32{proxyPort, 8100, attributionReadPort}, ports)
+
+	// A held port keeps its workload rule through the refresh, and loses the read rule.
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &dep))
+	metav1.SetMetaDataAnnotation(&dep.ObjectMeta, annAttributionHeld, "team-a="+time.Now().Add(time.Hour).UTC().Format(time.RFC3339))
+	require.NoError(t, c.Update(ctx, &dep))
+	require.NoError(t, r.patchEgressProxyNetworkPolicy(ctx, ep, []net.IPNet{*cidr}))
+	assert.ElementsMatch(t, []int32{proxyPort, 8100}, ingressPortsFor(t, c, "team-a"))
+}
+
+// ingressPortsFor lists the ports the pool's NetworkPolicy admits ns on.
+func ingressPortsFor(t *testing.T, c client.Client, ns string) []int32 {
+	t.Helper()
+	var np networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &np))
+	var ports []int32
+	for _, rule := range np.Spec.Ingress {
+		for _, peer := range rule.From {
+			if peer.NamespaceSelector != nil && peer.NamespaceSelector.MatchLabels[corev1.LabelMetadataName] == ns {
+				ports = append(ports, rule.Ports[0].Port.IntVal)
+			}
+		}
+	}
+	return ports
+}
+
+func runnerSetIn(ns string, lifetime *metav1.Duration) *gmcv2alpha1.RunnerSet {
+	rs := &gmcv2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "rs"}}
+	rs.Spec.GatewayRef.Name = "gw"
+	rs.Spec.MaxWorkerLifetime = lifetime
+	return rs
+}
+
+// A namespace that opts out while it may still have workers on its port keeps the
+// port, listening and admitted, for its longest worker lifetime, and nobody else
+// is given it meanwhile. New jobs move off it at once.
+func TestEgressProxyReconcile_HoldsADepartingNamespacesPortForItsWorkers(t *testing.T) {
+	ep := attributingPool("team-a", "team-b")
+	teamA := gatewayUsing("team-a", true)
+	teamB := gatewayUsing("team-b", false)
+	dep := &appsv1.Deployment{}
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		ep, teamA, teamB, runnerSetIn("team-a", &metav1.Duration{Duration: 2 * time.Hour}),
+	).WithStatusSubresource(ep, dep).Build()
+	ctx := context.Background()
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}
+	start := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	caHash := func() string {
+		var d appsv1.Deployment
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &d))
+		return d.Spec.Template.Annotations[annAttributionCA]
+	}
+
+	reconcilePoolAt(t, c, start)
+	markRolledOut(t, c)
+	reconcilePoolAt(t, c, start)
+	require.NoError(t, c.Get(ctx, key, &corev1.ConfigMap{}))
+	before := caHash()
+
+	teamA.Spec.ProxyFailureAttribution = ""
+	require.NoError(t, c.Update(ctx, teamA))
+	res := reconcilePoolAt(t, c, start)
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, key, &corev1.ConfigMap{})), "new jobs move off the port at once")
+	assert.Equal(t, "team-a=8100", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "the listener stays for running workers")
+	assert.ElementsMatch(t, []int32{proxyPort, 8100}, ingressPortsFor(t, c, "team-a"), "admitted on its port, not on the read port")
+	assert.Equal(t, before, caHash(), "a departure rolls nothing")
+	assert.Equal(t, 2*time.Hour, res.RequeueAfter, "the release is reconciled on time")
+
+	teamB.Spec.ProxyFailureAttribution = proxyFailureAttributionPerJob
+	require.NoError(t, c.Update(ctx, teamB))
+	reconcilePoolAt(t, c, start.Add(time.Hour))
+	assert.Equal(t, "team-a=8100,team-b=8101", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "a joiner is not given a held port")
+
+	reconcilePoolAt(t, c, start.Add(2*time.Hour))
+	assert.Equal(t, "team-b=8101", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "the hold ends with the longest worker lifetime")
+	assert.Empty(t, ingressPortsFor(t, c, "team-a")[1:], "only the sharing rule on 8080 is left")
+	var d appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &d))
+	assert.NotContains(t, d.Annotations, annAttributionHeld)
+}
+
+// A namespace that opts back in during its hold takes its own port back.
+func TestEgressProxyReconcile_RejoiningDuringAHoldKeepsThePort(t *testing.T) {
+	ep := attributingPool("team-a", "team-b")
+	teamA := gatewayUsing("team-a", true)
+	dep := &appsv1.Deployment{}
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		ep, teamA, gatewayUsing("team-b", true), runnerSetIn("team-a", nil),
+	).WithStatusSubresource(ep, dep).Build()
+	ctx := context.Background()
+	start := time.Now()
+
+	reconcilePoolAt(t, c, start)
+	teamA.Spec.ProxyFailureAttribution = ""
+	require.NoError(t, c.Update(ctx, teamA))
+	reconcilePoolAt(t, c, start)
+	var d appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &d))
+	assert.Equal(t, start.Add(defaultWorkerLifetime).UTC().Format(time.RFC3339), liveAttributionHolds(&d)["team-a"].Format(time.RFC3339),
+		"an uncapped RunnerSet is held for the default worker lifetime")
+
+	teamA.Spec.ProxyFailureAttribution = proxyFailureAttributionPerJob
+	require.NoError(t, c.Update(ctx, teamA))
+	reconcilePoolAt(t, c, start.Add(time.Minute))
+	markRolledOut(t, c)
+	reconcilePoolAt(t, c, start.Add(time.Minute))
+	assert.Equal(t, "team-a=8100,team-b=8101", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"])
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &d))
+	assert.NotContains(t, d.Annotations, annAttributionHeld)
+	var cm corev1.ConfigMap
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}, &cm))
+	assert.Equal(t, "8100", cm.Data[attributionProxyPortKey])
+}
+
+// Turning attribution off at the pool holds every port the same way; withdrawing a
+// grant holds none, since the namespace is then refused on every port.
+func TestEgressProxyReconcile_HoldsOnPoolOptOutButNotOnRevokedGrant(t *testing.T) {
+	ep := attributingPool("team-a", "team-b")
+	dep := &appsv1.Deployment{}
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		ep, gatewayUsing("team-a", true), gatewayUsing("team-b", true),
+		runnerSetIn("team-a", nil), runnerSetIn("team-b", nil),
+	).WithStatusSubresource(ep, dep).Build()
+	ctx := context.Background()
+	start := time.Now()
+
+	reconcilePoolAt(t, c, start)
+	require.Equal(t, "team-a=8100,team-b=8101", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"])
+
+	require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(ep), ep))
+	ep.Spec.Sharing.AllowedNamespaces = []string{"team-b"}
+	require.NoError(t, c.Update(ctx, ep))
+	reconcilePoolAt(t, c, start)
+	assert.Equal(t, "team-b=8101", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "a revoked grant is not held")
+
+	require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(ep), ep))
+	ep.Spec.FailureAttribution = ""
+	require.NoError(t, c.Update(ctx, ep))
+	reconcilePoolAt(t, c, start)
+	assert.Equal(t, "team-b=8101", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "the pool keeps serving the held port")
+
+	reconcilePoolAt(t, c, start.Add(defaultWorkerLifetime))
+	var d appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &d))
+	assert.Equal(t, buildEgressProxyDeployment(ep, "proxy:test", nil).Spec.Template, d.Spec.Template,
+		"once the hold ends the pool is back to its unattributed template")
+}
+
+// The consumer's egress to the range outlives its opt-out while a pool still
+// lists it, and it re-reads the pool once the hold ends.
+func TestAttributionEgress_FollowsThePoolsPortMap(t *testing.T) {
+	ep := attributingPool("team-a")
+	teamA := gatewayUsing("team-a", true)
+	dep := &appsv1.Deployment{}
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		ep, teamA, runnerSetIn("team-a", &metav1.Duration{Duration: time.Hour}),
+	).WithStatusSubresource(ep, dep).Build()
+	ctx := context.Background()
+	shared := []remoteProxy{{Namespace: "provider", Name: "shared"}}
+	start := time.Now().Truncate(time.Second) // the hold is recorded to the second
+
+	need, wait, err := attributionEgress(ctx, c, "team-a", shared, start)
+	require.NoError(t, err)
+	assert.True(t, need, "opted in, before the pool has a port for it")
+	assert.Zero(t, wait)
+
+	reconcilePoolAt(t, c, start)
+	teamA.Spec.ProxyFailureAttribution = ""
+	require.NoError(t, c.Update(ctx, teamA))
+	need, _, err = attributionEgress(ctx, c, "team-a", shared, start)
+	require.NoError(t, err)
+	assert.True(t, need, "opted out, but the pool still lists it before its own reconcile")
+
+	reconcilePoolAt(t, c, start)
+	need, wait, err = attributionEgress(ctx, c, "team-a", shared, start)
+	require.NoError(t, err)
+	assert.True(t, need, "the pool holds its port")
+	assert.Equal(t, time.Hour+attributionReleaseSlack, wait)
+
+	reconcilePoolAt(t, c, start.Add(time.Hour))
+	need, wait, err = attributionEgress(ctx, c, "team-a", shared, start.Add(time.Hour))
+	require.NoError(t, err)
+	assert.False(t, need, "released")
+	assert.Zero(t, wait)
 }
 
 // markRolledOut sets the pool Deployment's status as a finished rollout would.

@@ -107,6 +107,16 @@ type EgressProxyReconciler struct {
 	// rejected at admission). The deprecated CiliumFQDN/CalicoFQDN intents ignore this
 	// field and always emit their namesake policy (Q245).
 	FQDNBackend FQDNBackend
+	// Now supplies the current time for failure-attribution port holds. nil is
+	// time.Now.
+	Now func() time.Time
+}
+
+func (r *EgressProxyReconciler) nowFunc() func() time.Time {
+	if r.Now != nil {
+		return r.Now
+	}
+	return time.Now
 }
 
 // Reconcile drives an EgressProxy toward its desired proxy pool. EgressProxy uses
@@ -141,7 +151,19 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.setDegraded(ctx, &ep, err)
 	}
 
-	return r.updateStatus(ctx, &ep, gitHubHosts)
+	res, err := r.updateStatus(ctx, &ep, gitHubHosts)
+	if err != nil || res.Requeue {
+		return res, err
+	}
+	// A held attribution port is released by a reconcile, so one is due when it expires.
+	var dep appsv1.Deployment
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(&ep)}, &dep); err != nil {
+		return res, client.IgnoreNotFound(err)
+	}
+	if d := attributionHoldRequeue(&dep, r.nowFunc()()); d > 0 && (res.RequeueAfter == 0 || d < res.RequeueAfter) {
+		res.RequeueAfter = d
+	}
+	return res, nil
 }
 
 // reconcileResources creates or patches every child of the EgressProxy. Each
@@ -155,17 +177,17 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.ensureMetricsCerts(ctx, ep); err != nil {
 		return &provisioningError{step: "ensure metrics TLS certs", err: err}
 	}
-	ports, attributionCA, err := r.reconcileAttribution(ctx, ep)
+	attribution, err := r.reconcileAttribution(ctx, ep)
 	if err != nil {
 		return &provisioningError{step: "reconcile failure attribution", err: err}
 	}
 	dep := buildEgressProxyDeployment(ep, r.ProxyImage, gitHubHosts)
-	applyAttributionToDeployment(dep, ep, ports, attributionCA)
+	applyAttributionToDeployment(dep, ep, attribution)
 	if err := r.applyDeployment(ctx, ep, dep); err != nil {
 		return &provisioningError{step: "apply proxy Deployment", err: err}
 	}
 	svc := buildEgressProxyService(ep)
-	applyAttributionToService(svc, ports)
+	applyAttributionToService(svc, attribution.listening())
 	if err := r.applyService(ctx, ep, svc); err != nil {
 		return &provisioningError{step: "apply proxy Service", err: err}
 	}
@@ -176,7 +198,7 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 		return &provisioningError{step: "apply proxy PDB", err: err}
 	}
 	np := buildEgressProxyNetworkPolicy(ep, githubCIDRs)
-	applyAttributionToNetworkPolicy(np, ep, ports)
+	applyAttributionToNetworkPolicy(np, ep, attribution.ports, attribution.held)
 	if err := r.applyNetworkPolicy(ctx, ep, np); err != nil {
 		return &provisioningError{step: "apply proxy NetworkPolicy", err: err}
 	}
@@ -454,6 +476,11 @@ func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2al
 	err := applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		if obj.ResourceVersion != "" && !equality.Semantic.DeepEqual(obj.Spec.Selector, desired.Spec.Selector) {
 			return errDeploymentSelectorImmutable
+		}
+		if held, ok := desired.Annotations[annAttributionHeld]; ok {
+			metav1.SetMetaDataAnnotation(&obj.ObjectMeta, annAttributionHeld, held)
+		} else {
+			delete(obj.Annotations, annAttributionHeld)
 		}
 		if egressProxyManagedAutoscaling(ep) {
 			assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
