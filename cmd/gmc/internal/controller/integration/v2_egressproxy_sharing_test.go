@@ -9,6 +9,7 @@ import (
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -224,4 +225,104 @@ func TestV2_ProxySharing_RevokedGrantDeletesProjection(t *testing.T) {
 		return true
 	}, 30*time.Second, 250*time.Millisecond,
 		"the provider still admits a namespace whose grant was withdrawn")
+}
+
+// A gateway-level defaultProxyRef to a granted pool must provision an AGC that can
+// start (Q1209). The pod's volumes are the observable: a Secret or ConfigMap volume
+// naming an object absent from the AGC's namespace holds the pod at
+// ContainerCreating, and the pool's TLS Secret exists only in the provider's.
+func TestV2_ProxySharing_GatewayDefaultProxyRefWiresAGCFromProjection(t *testing.T) {
+	const providerNS = "v2-share-agc-provider"
+	const consumerNS = "v2-share-agc-consumer"
+	createNamespace(t, providerNS)
+	createNamespace(t, consumerNS)
+	startEgressProxyReconciler(t, nil)
+	startActionsGatewayV2Reconciler(t)
+	createGitHubAppSecret(t, consumerNS, "share-creds")
+
+	ep := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: providerNS},
+		Spec: v2alpha1.EgressProxySpec{
+			Sharing: &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	ag := newV2GatewayWired("share-gw", consumerNS, "share-creds", "")
+	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+
+	var dep appsv1.Deployment
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "share-gw-agc"}, &dep) == nil
+	}, 60*time.Second, 250*time.Millisecond, "AGC Deployment was not created")
+
+	proxyAddr := "https://" + sharedProxyName + "-proxy." + providerNS + ".svc.cluster.local:8080"
+	assert.Equal(t, proxyAddr, envValue(&dep, "HTTPS_PROXY"), "the AGC dials the pool in the provider's namespace")
+	assert.Equal(t, proxyAddr, envValue(&dep, "HTTP_PROXY"))
+	assert.Empty(t, envValue(&dep, "PROXY_TLS_SECRET_NAME"),
+		"the AGC was handed a Secret name that resolves only in the provider's namespace")
+
+	var caVolume *corev1.Volume
+	for i := range dep.Spec.Template.Spec.Volumes {
+		v := &dep.Spec.Template.Spec.Volumes[i]
+		if v.Name == "proxy-ca" {
+			caVolume = v
+		}
+		var err error
+		switch {
+		case v.Secret != nil:
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: v.Secret.SecretName}, &corev1.Secret{})
+		case v.ConfigMap != nil:
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: v.ConfigMap.Name}, &corev1.ConfigMap{})
+		default:
+			continue
+		}
+		assert.NoError(t, err, "AGC volume %q names an object absent from namespace %q, so the pod cannot start", v.Name, consumerNS)
+	}
+	require.NotNil(t, caVolume, "the proxied AGC mounts no proxy CA")
+	require.NotNil(t, caVolume.ConfigMap, "the proxy CA must come from the share projection")
+	assert.Equal(t, shareConfigMapNameFor(providerNS), caVolume.ConfigMap.Name)
+	assert.Equal(t, []corev1.KeyToPath{{Key: "ca.crt", Path: "tls.crt"}}, caVolume.ConfigMap.Items,
+		"the AGC reads the proxy CA from tls.crt under its fixed mount")
+}
+
+// Until the projection exists, the AGC is not provisioned: its CA volume would name
+// a ConfigMap that is not there, which is the same wedge with a different object.
+func TestV2_ProxySharing_GatewayDefaultProxyRefWaitsForProjection(t *testing.T) {
+	const providerNS = "v2-share-wait-provider"
+	const consumerNS = "v2-share-wait-consumer"
+	createNamespace(t, providerNS)
+	createNamespace(t, consumerNS)
+	// No EgressProxy reconciler: nothing projects the share.
+	startActionsGatewayV2Reconciler(t)
+	createGitHubAppSecret(t, consumerNS, "share-creds")
+
+	ep := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: providerNS},
+		Spec: v2alpha1.EgressProxySpec{
+			Sharing: &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	ag := newV2GatewayWired("share-gw", consumerNS, "share-creds", "")
+	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+
+	require.Eventually(t, func() bool {
+		c := gatewayCondition(t, consumerNS, "share-gw", v2alpha1.ConditionDegraded)
+		return c != nil && c.Reason == v2alpha1.ReasonProxyShareNotGranted
+	}, 30*time.Second, 250*time.Millisecond,
+		"gateway did not fail closed while its proxy's share projection is absent")
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "share-gw-agc"}, &appsv1.Deployment{})
+	assert.True(t, apierrors.IsNotFound(err), "an AGC was provisioned with no projection to mount (err=%v)", err)
+}
+
+func shareConfigMapNameFor(providerNS string) string {
+	return "proxy-share-" + providerNS + "-" + sharedProxyName
 }

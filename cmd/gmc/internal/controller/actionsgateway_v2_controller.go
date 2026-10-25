@@ -248,6 +248,25 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 				fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
 					ag.Spec.DefaultProxyRef.Name, proxyNS, ag.Namespace))
 		}
+		if proxyNS != ag.Namespace {
+			// The AGC mounts the pool's CA from the share projection (§H.9), which the
+			// EgressProxy reconciler writes only once this gateway exists to name the
+			// pool. Provisioning before it lands would wedge the pod at ContainerCreating.
+			projected, err := r.proxyShareProjected(ctx, ag.Namespace, &p)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			if !projected {
+				res, err := r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyShareNotGranted,
+					fmt.Sprintf("EgressProxy %q in namespace %q grants namespace %q, but its CA has not yet been projected here as ConfigMap %q",
+						p.Name, proxyNS, ag.Namespace, proxyShareConfigMapName(proxyNS, p.Name)))
+				if err != nil {
+					return res, err
+				}
+				res.RequeueAfter = proxyShareReprobeInterval
+				return res, nil
+			}
+		}
 		proxy = &p
 	}
 
@@ -430,6 +449,26 @@ func (r *ActionsGatewayV2Reconciler) namespaceSecurityProfile(ctx context.Contex
 // ConfigMap converges while the operator is still watching, and it only runs while
 // the gateway is failed closed.
 const githubCABundleReprobeInterval = time.Minute
+
+// proxyShareReprobeInterval is how often a gateway waiting on a cross-namespace
+// pool's share projection re-reads it. The projection is a tenant ConfigMap the
+// GMC's pinned informer cannot see, so it is polled like the GHES CA bundle, but
+// shorter: a new gateway's first reconcile almost always precedes it.
+const proxyShareReprobeInterval = 10 * time.Second
+
+// proxyShareProjected reports whether ep's share ConfigMap is in ns carrying a CA,
+// read uncached for the same reason as checkGitHubCABundle.
+func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns string, ep *gmcv2alpha1.EgressProxy) (bool, error) {
+	var cm corev1.ConfigMap
+	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyShareConfigMapName(ep.Namespace, ep.Name)}, &cm)
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return cm.Data[shareCACertKey] != "", nil
+}
 
 // checkGitHubCABundle resolves spec.githubCABundleRef. It returns a Degraded reason
 // and message when the reference does not resolve, ("", "", nil) when it resolves or

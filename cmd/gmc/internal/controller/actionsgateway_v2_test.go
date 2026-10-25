@@ -625,6 +625,30 @@ func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 	assert.Equal(t, "shared-proxy-tls", env["PROXY_TLS_SECRET_NAME"])
 }
 
+// TestBuildAGCDeploymentV2_CrossNamespaceProxy: a pool in another namespace is
+// dialled there and its CA mounted from the share projection, since the pool's TLS
+// Secret exists only in the provider's namespace (Q1209, §H.9).
+func TestBuildAGCDeploymentV2_CrossNamespaceProxy(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "pool")
+	proxy := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "pool", Namespace: "platform"}}
+	dep := buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2alpha1.SecurityProfileBaseline, nil)
+	env := agcEnv(dep)
+	assert.Equal(t, "https://pool-proxy.platform.svc.cluster.local:8080", env["HTTPS_PROXY"])
+	assert.NotContains(t, env, "PROXY_TLS_SECRET_NAME")
+
+	var ca *corev1.Volume
+	for i, v := range dep.Spec.Template.Spec.Volumes {
+		if v.Name == proxyCACertVolumeName {
+			ca = &dep.Spec.Template.Spec.Volumes[i]
+		}
+	}
+	require.NotNil(t, ca)
+	assert.Nil(t, ca.Secret)
+	require.NotNil(t, ca.ConfigMap)
+	assert.Equal(t, proxyShareConfigMapName("platform", "pool"), ca.ConfigMap.Name)
+	assert.Equal(t, []corev1.KeyToPath{{Key: shareCACertKey, Path: corev1.TLSCertKey}}, ca.ConfigMap.Items)
+}
+
 // TestBuildAGCDeploymentV2_DirectEgress: with no proxy the AGC Deployment carries no
 // HTTP(S)_PROXY/PROXY_TLS_SECRET_NAME env and mounts no proxy-CA volume, so its own
 // control-plane egress goes directly to GitHub (Q168, §H.10).

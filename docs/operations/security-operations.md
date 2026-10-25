@@ -947,6 +947,10 @@ kubectl get actionsgateway -n team-a gateway -o jsonpath='{.status.conditions}'
 Reason `ProxyNotFound` means the name or namespace is wrong.
 Both fail closed: no worker pods run and no traffic is permitted while either is set.
 
+A gateway's AGC mounts the proxy certificate from that ConfigMap, so the GMC creates the AGC only once the ConfigMap exists.
+For the few seconds after you create a gateway naming a granted proxy, it reports `ProxyShareNotGranted` with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.
+That message persisting means the ConfigMap is not being written: check the provider's `EgressProxy` status and the GMC logs.
+
 Confirm the provider side admits the consumer:
 
 ```bash

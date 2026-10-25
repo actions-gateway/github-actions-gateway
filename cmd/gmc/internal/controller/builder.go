@@ -690,7 +690,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	// ResourceRequirements is byte-identical to leaving the field unset.
 	return buildAGCDeploymentFrom(ag.Namespace,
 		agcWorkloadNames{app: agcAppName, serviceAccount: agcSAName, metricsTLSSecret: metricsTLSSecretName},
-		managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env, corev1.ResourceRequirements{})
+		managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyCASource{secret: proxyTLSSecretName}, agcImage, env, corev1.ResourceRequirements{})
 }
 
 // buildRunnerGroup builds a RunnerGroup CR from a spec entry.

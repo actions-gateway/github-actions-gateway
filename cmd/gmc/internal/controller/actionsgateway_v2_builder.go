@@ -492,7 +492,7 @@ func agcResources(override *corev1.ResourceRequirements) corev1.ResourceRequirem
 // and no proxy-CA volume is mounted. securityProfile is the namespace's effective
 // profile.
 func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy *gmcv2alpha1.EgressProxy, securityProfile string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
-	var proxyTLSSecret string
+	var proxyCA proxyCASource
 
 	env := []corev1.EnvVar{
 		{Name: "POD_NAMESPACE", ValueFrom: fieldRef("metadata.namespace")},
@@ -516,15 +516,25 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 	}
 	// Proxied: wire the AGC's own egress through the resolved EgressProxy. Direct
 	// (proxy == nil): omit the proxy env entirely so the AGC's HTTP clients go direct.
+	// A pool in another namespace (§H.9) is dialled there, and its CA comes from the
+	// share projection in this one; PROXY_TLS_SECRET_NAME is omitted because the
+	// Secret it would name exists only in the provider's namespace.
 	if proxy != nil {
 		proxyAddr := v2ProxyServiceAddr(ag.Namespace, proxy.Name)
-		proxyTLSSecret = v2ProxyTLSSecretName(proxy.Name)
+		if proxy.Namespace != "" && proxy.Namespace != ag.Namespace {
+			proxyAddr = v2ProxyServiceAddr(proxy.Namespace, proxy.Name)
+			proxyCA.configMap = proxyShareConfigMapName(proxy.Namespace, proxy.Name)
+		} else {
+			proxyCA.secret = v2ProxyTLSSecretName(proxy.Name)
+		}
 		env = append(env,
 			corev1.EnvVar{Name: "HTTP_PROXY", Value: proxyAddr},
 			corev1.EnvVar{Name: "HTTPS_PROXY", Value: proxyAddr},
 			corev1.EnvVar{Name: "NO_PROXY", Value: buildNoProxy(proxy.Spec.NoProxyCIDRs)},
-			corev1.EnvVar{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecret},
 		)
+		if proxyCA.secret != "" {
+			env = append(env, corev1.EnvVar{Name: "PROXY_TLS_SECRET_NAME", Value: proxyCA.secret})
+		}
 	}
 	// Worker-address audit record (Q986). Injected only for a non-Off value, for
 	// the same reason proxyAuditEnv is conditional: a gateway that has not opted in
@@ -552,14 +562,14 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 
 	// The pod spec (credential/proxy-CA/metrics mounts, hardened SecurityContext,
 	// probes) is identical to v1; only the metadata labels, the per-gateway derived
-	// names, the proxy CA Secret name, and the env differ. Share the assembly via
+	// names, the proxy CA source, and the env differ. Share the assembly via
 	// buildAGCDeploymentFrom.
 	names := agcWorkloadNames{
 		app:              agcNameV2(ag),
 		serviceAccount:   agcNameV2(ag),
 		metricsTLSSecret: metricsTLSSecretNameV2(ag),
 	}
-	dep := buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
+	dep := buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyCA, agcImage, env, agcResources(ag.Spec.AGCResources))
 	// Placement pass-through (Q282). Applied here rather than threaded through the
 	// v1-shared buildAGCDeploymentFrom: spec.scheduling is a v2-only field, and the
 	// AGC pod carries no built-in affinity, so the block applies verbatim with no
