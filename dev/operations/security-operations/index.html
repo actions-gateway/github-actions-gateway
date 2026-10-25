@@ -4910,6 +4910,9 @@ If it is missing, the grant has not been accepted; check the consumer's conditio
 <p><code>Degraded</code> with reason <code>ProxyShareNotGranted</code> means the proxy exists but does not list this namespace.
 Reason <code>ProxyNotFound</code> means the name or namespace is wrong.
 Both fail closed: no worker pods run and no traffic is permitted while either is set.</p>
+<p>A gateway's AGC mounts the proxy certificate from that ConfigMap, so the GMC creates the AGC only once the ConfigMap exists.
+For the few seconds after you create a gateway naming a granted proxy, it reports <code>ProxyShareNotGranted</code> with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.
+That message persisting means the ConfigMap is not being written: check the provider's <code>EgressProxy</code> status and the GMC logs.</p>
 <p>Confirm the provider side admits the consumer:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>platform-egress<span class="w"> </span>shared-pool-proxy<span class="w"> </span>-o<span class="w"> </span>yaml
 </code></pre></div>

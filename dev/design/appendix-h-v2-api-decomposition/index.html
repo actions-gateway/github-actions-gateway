@@ -4276,6 +4276,9 @@ A per-grant <code>Role</code> plus an uncached read preserves least privilege bu
 The AGC reads it from its own namespace, resolves nothing across a boundary, and fails closed when it is absent.
 Revoking a grant deletes it.
 That is one mechanism doing two jobs rather than a second mechanism invented for the purpose.</p>
+<p>A gateway's <code>defaultProxyRef</code> is resolved by the GMC, which can read the remote <code>EgressProxy</code>, but the AGC pod it provisions still takes its proxy CA from the projection (Q1209).
+A pod can mount neither a Secret nor a ConfigMap from another namespace, and the proxy's TLS Secret exists only in the provider's.
+So the GMC dials the pool's Service in the provider namespace and does not create the AGC until the projection lands, reporting <code>ProxyShareNotGranted</code> meanwhile.</p>
 <p>One consequence worth stating: the GMC reads these projections through its <strong>uncached</strong> API reader.
 Its ConfigMap informer is pinned to a single name in its own namespace, so a cached label-selected list would return nothing and the prune that revokes a withdrawn grant would silently find nothing to delete.</p>
 <p><strong>Losing the watch costs an event source in both directions, so the contract is a bounded re-check (Q999).</strong> The AGC's Role grants <code>get</code> on ConfigMaps and not <code>list</code>/<code>watch</code>, which makes the projection the one referent the <a href="#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a> referent→referrer watch cannot cover.
