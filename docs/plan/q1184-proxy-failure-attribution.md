@@ -12,7 +12,7 @@ Its consumer, classified retry ([Q1183](../queue/Q1183.md)), is blocked, so unti
 | 2a | API and the pool: the two switches, the `allowedNamespaces` cap, port allocation, Service ports, per-port ingress, the attribution PKI, the proxy environment | ✅ Shipped in #2122 |
 | 2b | The consumer: projecting client certificates, carrying the port to the AGC, moving workers' `HTTPS_PROXY`, the AGC's egress, operator docs | ✅ Shipped in #2125 |
 | 3 | AGC: pulling every replica, the epoch and cursor, the join on its own gateway's pod lifetimes | ✅ Shipped in #2127 |
-| 4 | Calico e2e: a worker refused on another namespace's port, and a denial attributed end to end | ❌ Open |
+| 4 | Calico e2e: a worker refused on another namespace's port, and a failure attributed end to end | ❌ In review (#2131) |
 
 Each phase is its own PR.
 The row stays open until phase 4 lands.
