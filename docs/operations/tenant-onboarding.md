@@ -1141,7 +1141,8 @@ The gateway's own traffic stays on the shared port.
 The Secret holds the namespace's client certificate for reading its records back; the same key is also held in the pool's namespace.
 One gateway opting in moves every gateway in that namespace that uses the pool.
 
-**Turn it off between runs.** Opting a namespace out removes its port from the pool at once, so a job already running on that port loses its new connections for the rest of the run (Q1208).
+**Turn it off between runs.** A namespace loses its port at once when it stops being attributed, so a job already running on that port loses its new connections for the rest of the run (Q1208).
+That happens when the tenant's last gateway sets `proxyFailureAttribution: Disabled`, when the pool owner sets `failureAttribution: Disabled`, and when the pool owner removes the namespace from `spec.sharing.allowedNamespaces`.
 
 **Limits.** While the pool has it on, `spec.sharing.allowedNamespaces` takes at most 32 namespaces.
 The per-port isolation is a NetworkPolicy, so it holds only on a CNI that enforces one; kindnet does not.

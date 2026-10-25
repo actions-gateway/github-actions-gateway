@@ -56,6 +56,11 @@ const (
 	proxyAttributionNamePrefix = "proxy-attribution"
 	proxyAttributionPortKey    = "proxy-port"
 
+	// proxyAttributionPortFirst and proxyAttributionPortLast bound the attributed
+	// CONNECT ports, the range the workload NetworkPolicy admits.
+	proxyAttributionPortFirst = 8100
+	proxyAttributionPortLast  = 8132
+
 	// defaultNoProxy excludes cluster-internal traffic from the egress proxy so the
 	// proxy is only used for external (GitHub) traffic. The GMC sets the AGC's own
 	// NO_PROXY from the static half of the same list (its buildNoProxy in
@@ -585,6 +590,9 @@ func applyAttributedPort(ctx context.Context, reader client.Reader, consumerNS, 
 	port, err := strconv.Atoi(cm.Data[proxyAttributionPortKey])
 	if err != nil {
 		return refResolution{err: fmt.Errorf("projected proxy attribution %q carries an unparseable %s: %w", name, proxyAttributionPortKey, err)}
+	}
+	if port < proxyAttributionPortFirst || port > proxyAttributionPortLast {
+		return refResolution{err: fmt.Errorf("projected proxy attribution %q carries %s %d, outside %d-%d", name, proxyAttributionPortKey, port, proxyAttributionPortFirst, proxyAttributionPortLast)}
 	}
 	proxy.port = port
 	return refResolution{}

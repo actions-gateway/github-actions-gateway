@@ -57,16 +57,20 @@ func TestResolveRunnerSetRefs_UsesTheProjectedAttributionPort(t *testing.T) {
 	}
 }
 
-func TestResolveRunnerSetRefs_RejectsAnUnparseableAttributionPort(t *testing.T) {
-	const ns = "team-a"
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "local"} })
-	c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(
-		gwObj("gw", ns, ""), tmplObj("tmpl", ns), rs,
-		&v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}},
-		attributionProjection(ns, ns, "local", "eighty"),
-	).Build()
+func TestResolveRunnerSetRefs_RejectsABadAttributionPort(t *testing.T) {
+	for port, want := range map[string]string{"eighty": "unparseable", "8080": "outside", "8133": "outside"} {
+		t.Run(port, func(t *testing.T) {
+			const ns = "team-a"
+			rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "local"} })
+			c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(
+				gwObj("gw", ns, ""), tmplObj("tmpl", ns), rs,
+				&v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}},
+				attributionProjection(ns, ns, "local", port),
+			).Build()
 
-	_, res := resolveRunnerSetRefs(context.Background(), c, c, rs)
-	require.Error(t, res.err)
-	assert.Contains(t, res.err.Error(), "unparseable")
+			_, res := resolveRunnerSetRefs(context.Background(), c, c, rs)
+			require.Error(t, res.err)
+			assert.Contains(t, res.err.Error(), want)
+		})
+	}
 }

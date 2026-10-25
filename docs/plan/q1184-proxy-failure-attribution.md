@@ -77,11 +77,13 @@ The AGC computes each worker's `HTTPS_PROXY` itself on every acquired job (`cmd/
 - **Workers move; the AGC does not.** Only the workers' `HTTPS_PROXY` changes, read per job, so nothing in the consumer's namespace restarts, and the AGC's own control-plane traffic stays on the shared port because its failures are not a job's.
 - **Egress admits the range.** An opted-in namespace's workload policy admits the whole attributed range on the same proxy peers as `:8080`, and its AGC policy the read port; which port within the range is the pool's to decide, and its ingress pins each namespace to its own.
 - **Opting out cuts running jobs off the port.** The port leaves the pool's ingress, and its listener the pool's environment, on the same reconcile that withdraws the projection, so a job already running on it loses new connections.
-  [Q1208](../queue/Q1208.md) holds the fix, which also closes the port-reuse window below.
-  It also owes the port-reuse window: lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace, so a joiner's failures can land in the leaver's partition until the roll completes.
-  Moving a namespace only after the pool has rolled, or not reusing a port freed in the same rollout, closes it.
+  [Q1208](../queue/Q1208.md) holds the fix.
+- **The rollout gate closes the port-reuse window.** Lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace.
+  The joiner is projected only once every replica maps the port to it, and the leaver's workers are refused on it by ingress from the same reconcile, so no failure lands in the wrong partition.
+  Q1208's fix reopens the window if it keeps a leaver's port listening, so a port held open for a leaver must not be reallocated until it is released.
 
 ## Phase 3 and 4 outline
 
 - **Phase 3** pulls every replica on an interval, resets the cursor on an epoch change, keeps records only for its own gateway's pods inside each pod's address lifetime, and exposes a lookup the retry classes will call.
+  Its reader must tolerate a CA change: when the namespace set changes, an already-projected namespace's Secret is rewritten with the new CA and client certificate on that reconcile, before the pool has rolled onto the new server certificate, so a read can fail verification until the roll completes.
 - **Phase 4** is the enforcement measurement the row makes a ship requirement, on the Calico lane only, because the kindnet lane's enforcement specs skip themselves.

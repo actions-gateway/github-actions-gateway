@@ -369,6 +369,34 @@ func TestEgressProxyReconcile_ProjectsTheConsumerAfterTheRollout(t *testing.T) {
 	assert.Empty(t, sec.Data[corev1.TLSPrivateKeyKey], "its client key is blanked, since the GMC cannot delete Secrets")
 }
 
+// A pool whose Deployment is recreated without attribution has no port map left
+// to diff against, and must still withdraw what it projected.
+func TestEgressProxyReconcile_WithdrawsAfterTheDeploymentForgetsItsPorts(t *testing.T) {
+	ep := attributingPool("team-a")
+	dep := &appsv1.Deployment{}
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, gatewayUsing("team-a", true)).WithStatusSubresource(ep, dep).Build()
+	ctx := context.Background()
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}
+
+	reconcilePool(t, c)
+	markRolledOut(t, c)
+	reconcilePool(t, c)
+	require.NoError(t, c.Get(ctx, key, &corev1.ConfigMap{}))
+
+	require.NoError(t, c.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: "shared-proxy"}}))
+	require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(ep), ep))
+	ep.Spec.FailureAttribution = ""
+	require.NoError(t, c.Update(ctx, ep))
+	reconcilePool(t, c)
+	reconcilePool(t, c)
+
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, key, &corev1.ConfigMap{})), "team-a must not stay on a port nothing serves")
+	var sec corev1.Secret
+	require.NoError(t, c.Get(ctx, key, &sec))
+	assert.Zero(t, len(sec.Data[corev1.TLSPrivateKeyKey]), "its client key is blanked")
+}
+
 func TestApplyAttributionEgress_AdmitsThePortRangeAndTheReadPort(t *testing.T) {
 	workload := &networkingv1.NetworkPolicy{}
 	agc := &networkingv1.NetworkPolicy{}

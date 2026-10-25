@@ -518,8 +518,13 @@ func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gm
 	current := liveAttributionPorts(&live)
 	ports := allocateAttributionPorts(namespaces, current)
 	// A pool that attributes nothing now and attributed nothing at its last
-	// rollout has nothing to clean up, so the default path makes no further call.
+	// rollout keeps no bundle, but may still have projections: a recreated
+	// Deployment forgets its ports, and a projection left behind would move new
+	// jobs onto a port nothing serves.
 	if len(ports) == 0 && len(current) == 0 {
+		if err := r.reconcileAttributionProjections(ctx, ep, nil, nil, false, nil); err != nil {
+			return nil, nil, fmt.Errorf("withdraw attribution: %w", err)
+		}
 		return nil, nil, nil
 	}
 	caPEM, clients, err := r.ensureAttributionCerts(ctx, ep, namespaces)
