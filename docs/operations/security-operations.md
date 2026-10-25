@@ -259,7 +259,7 @@ groups:
 ## Audit-log abuse detections
 
 The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC calls that are *permitted* but *anomalous* — are invisible to Prometheus.
-The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per [H-2](../plan/security.md), and reads a tenant's Secret body only to present a pull secret to the registry read behind `RunnerVersionTooOld`; the GMC reads Secret bodies only during a reconcile via a cache-bypassing `Get`), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.
+The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per [H-2](../plan/security.md), and reads a tenant's Secret body only to present a pull secret to the registry read behind `RunnerVersionTooOld`; the GMC reads Secret bodies only during a reconcile via a cache-bypassing `Get`, and lists and watches Secret metadata only in tenant namespaces), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.
 
 Detecting these requires an **API-server audit policy** that logs the relevant verbs at `Metadata` level or higher, shipped to a security information and event management (SIEM) system or log-based alerting backend.
 A ready-to-adapt sample policy ships at [`examples/apiserver-audit-policy.yaml`](examples/apiserver-audit-policy.yaml); [§ API server audit policy (sample)](#api-server-audit-policy-sample) below covers installing it and reading the events.
@@ -270,13 +270,15 @@ The table specifies *what to alert on* once that policy is in place.
 | **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc` under v2, `…:actions-gateway-controller` under v1) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
 | **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway/runner-group=*` or the AGC's `gitHubAppRef` | The AGC only needs its agent-pool and payload Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
 | **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `gitHubAppRef` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
+| **GMC Secret read outside tenant namespaces** | `verb` `get`/`list`/`watch` on `secrets` by the GMC SA with `responseStatus.code=403`, or a `list`/`watch` with no `objectRef.namespace` | The GMC holds Secret reads only through the `gmc-tenant-secret-reader` RoleBinding it creates in each tenant namespace (Q1188), so RBAC refuses a read anywhere else. A refusal means the binary tried a read its source never makes. | A refusal is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
 | **GMC namespace-PSA escalation attempt** | `namespace-psa-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)) blocks the GMC relabelling non-tenant namespaces (e.g. `kube-system` → `privileged`). A denial means the GMC tried. | A denial is a successful block, but a *signal* of compromise. Isolate the GMC and investigate. |
-| **GMC out-of-tenant resource write** | `gmc-tenant-resource-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked `actions-gateway.github.com/tenant=true` (e.g. a Deployment or Secret into `kube-system`). A denial means the GMC tried (Q121/Q122). | A denial is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
+| **GMC out-of-tenant resource write** | `gmc-tenant-resource-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked `actions-gateway.github.com/tenant=true` (e.g. a Deployment or Secret into `kube-system`), and any ClusterRoleBinding whose `roleRef` is not `agc-clusterrunnertemplate-reader`, which is how a compromised GMC would grant itself Secret reads cluster-wide (Q1188). A denial means the GMC tried (Q121/Q122). | A denial is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
 | **GMC workload creation outside reconcile** | `verb=create resource=deployments|roles|rolebindings` by the GMC SA in a *marked tenant* namespace with no corresponding `ActionsGateway` CR change | The `gmc-tenant-resource-guard` VAP already blocks writes into *unmarked* namespaces; this catches the residual — provisioning inside a legitimate tenant namespace without a triggering CR edit, which is lateral movement within the GMC's confined scope. | Isolate the GMC; diff provisioned resources against live `ActionsGateway` CRs. |
 
-Without the audit policy, these threats are mitigated structurally (RBAC scope, cache-bypass, the `namespace-psa-guard` and `gmc-tenant-resource-guard` VAPs, no Secret informer) but write-confinement denials aside are **not observable** — there is no alert that fires if a compromised binary exercises its standing *read* permissions.
+Without the audit policy, these threats are mitigated structurally (RBAC scope, cache-bypass, the `namespace-psa-guard` and `gmc-tenant-resource-guard` VAPs, metadata-only Secret informers per tenant namespace) but write-confinement denials aside are **not observable** — there is no alert that fires if a compromised binary exercises its standing *read* permissions.
 Closing that gap is the value of the audit policy.
-Note the two VAPs confine GMC *writes* (create/update/delete) only; Secret *reads* (`get`/`list`/`watch`) cannot be gated at admission and remain cluster-wide at the RBAC layer — the audit policy is the only detective control for them (see [§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)).
+The two VAPs confine GMC *writes* (create/update/delete); Secret *reads* (`get`/`list`/`watch`) cannot be gated at admission, so RBAC confines them instead, to the namespaces where the GMC holds a `gmc-tenant-secret-reader` RoleBinding.
+Inside a tenant namespace the audit policy is the only detective control for them (see [§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)).
 
 ### API server audit policy (sample)
 
@@ -339,7 +341,7 @@ The provider's default policy is broader than this sample (it logs more than the
   | filter @logStream like /kube-apiserver-audit/
   | filter objectRef.resource = "secrets"
       and user.username = "system:serviceaccount:gmc-system:gmc-controller-manager"
-  | filter verb in ["list","watch"] or objectRef.namespace != "<a-tenant-namespace>"
+  | filter responseStatus.code = 403 or not ispresent(objectRef.namespace)
   ```
 
 - **Google GKE.** API-server **write** events are Admin Activity audit logs (always on).
@@ -362,7 +364,7 @@ The provider's default policy is broader than this sample (it logs more than the
   | extend e = parse_json(log_s)
   | where e.objectRef.resource == "secrets"
       and e.user.username == "system:serviceaccount:gmc-system:gmc-controller-manager"
-  | where e.verb in ("list","watch") or e.objectRef.namespace != "<a-tenant-namespace>"
+  | where e.responseStatus.code == 403 or isempty(e.objectRef.namespace)
   ```
 
   Repeat the per-provider queries for each AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc` under v2, `…:actions-gateway-controller` under v1), alerting on `verb == "list"` or a `get` on a Secret the AGC does not own.
@@ -378,9 +380,8 @@ jq -c 'select(.user.username == "system:serviceaccount:gmc-system:gmc-controller
   /var/log/kubernetes/audit/audit.log
 ```
 
-A baseline is one `get` per `gitHubAppRef` Secret per reconcile, only in tenant namespaces.
-Alert on: any `list`/`watch`; a `get` rate well above the reconcile cadence; or any `get` outside a tenant namespace (e.g.
-`kube-system`).
+A baseline is one `get` per `gitHubAppRef` Secret per reconcile, plus one `list` and a long-lived `watch` per tenant namespace from its metadata-only informer, issued when the GMC starts and whenever a watch is re-established, all in tenant namespaces.
+Alert on: any `403` (RBAC refused a read outside the tenant namespaces); a `list`/`watch` with no namespace, which is a cluster-wide read the GMC no longer holds; or a `get` rate well above the reconcile cadence.
 For the GMC write rule, a `responseStatus.code` of `403` is a VAP block — investigate the binary that attempted it.
 For AGC reads, filter by each AGC user string and alert on `verb == "list"` (the legit path is metadata-only) or a `get` on a Secret name the AGC does not own, other than a pull secret.
 The registry read `get`s each `imagePullSecrets` entry the worker pod template names, or, when it names none, those on the worker ServiceAccount, which it reads with one `get` on `serviceaccounts`; it repeats on a failure's backoff (one minute doubling to an hour) and on each hourly re-check of a tag-addressed image.
