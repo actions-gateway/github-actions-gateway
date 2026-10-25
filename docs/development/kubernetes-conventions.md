@@ -259,6 +259,7 @@ Grep for the client call (`Client.Patch`/`Update`/`Delete` on the kind) when rev
 
 One path now has an enforced-RBAC backstop: `E2E_AGC_ScaleSetRecovery` (Q519) runs scale-set disruption recovery — the claim patch and the rerun — under the chart's shipped role on kind, so a verb that path needs and the role lacks fails CI.
 It covers only the verbs that path exercises; everywhere else the grep above is still the gate.
+A GMC call can be checked earlier: its envtest suite can run a reconciler under the chart's GMC role ([testing.md § Picking the right test tier](testing.md#picking-the-right-test-tier)).
 
 ## ValidatingAdmissionPolicy `paramKind`: never a core type (Q444/Q492)
 
