@@ -130,9 +130,7 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 
 	// Turning the gateway's opt-in off must clear the pool against real Secret
 	// validation: the TLS Secret keeps its required keys, blanked.
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, ag))
-	ag.Spec.ProxyFailureAttribution = "Disabled"
-	require.NoError(t, k8sClient.Update(ctx, ag))
+	setGatewayAttribution(t, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, "Disabled")
 	require.Eventually(t, func() bool {
 		var s corev1.Secret
 		if k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-attribution-tls"}, &s) != nil {
@@ -150,4 +148,18 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status, "the pool must not go Degraded clearing attribution: %s", c.Message)
 		}
 	}
+}
+
+// setGatewayAttribution sets a gateway's proxyFailureAttribution, rereading on a
+// conflict: the gateway reconciler writes the same object.
+func setGatewayAttribution(t *testing.T, key types.NamespacedName, value string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var ag v2alpha1.ActionsGateway
+		if k8sClient.Get(ctx, key, &ag) != nil {
+			return false
+		}
+		ag.Spec.ProxyFailureAttribution = value
+		return k8sClient.Update(ctx, &ag) == nil
+	}, 10*time.Second, 50*time.Millisecond, "could not set %s's proxyFailureAttribution to %s", key, value)
 }

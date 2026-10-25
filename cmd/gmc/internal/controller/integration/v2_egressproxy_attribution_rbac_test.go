@@ -112,9 +112,7 @@ func TestV2_EgressProxy_Attribution_RunsUnderTheShippedRBAC(t *testing.T) {
 		return k8sClient.Get(ctx, depKey, &appsv1.Deployment{}) == nil
 	}, 30*time.Second, 250*time.Millisecond, "a pool that attributes nothing must still provision under the shipped RBAC")
 
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, ag))
-	ag.Spec.ProxyFailureAttribution = "PerJob"
-	require.NoError(t, k8sClient.Update(ctx, ag))
+	setGatewayAttribution(t, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, "PerJob")
 	require.Eventually(t, func() bool {
 		markPoolRolledOut(t, depKey)
 		var s corev1.Secret
@@ -122,9 +120,7 @@ func TestV2_EgressProxy_Attribution_RunsUnderTheShippedRBAC(t *testing.T) {
 			k8sClient.Get(ctx, projKey, &s) == nil && len(s.Data[corev1.TLSPrivateKeyKey]) > 0
 	}, 30*time.Second, 250*time.Millisecond, "the consumer never received its port and client certificate")
 
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, ag))
-	ag.Spec.ProxyFailureAttribution = "Disabled"
-	require.NoError(t, k8sClient.Update(ctx, ag))
+	setGatewayAttribution(t, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, "Disabled")
 	require.Eventually(t, func() bool {
 		var s corev1.Secret
 		return apierrors.IsNotFound(k8sClient.Get(ctx, projKey, &corev1.ConfigMap{})) &&
