@@ -313,8 +313,10 @@ metadata:
   name: %[2]s
   namespace: %[1]s
 spec:
+  # One replica: the port spec's gate proves only the endpoint it reached was
+  # programmed, and a record lives in one replica's memory until it is read.
   minReplicas: 1
-  maxReplicas: 2
+  maxReplicas: 1
   failureAttribution: PerConsumerPort
   sharing:
     allowedNamespaces: [%[3]s, %[4]s]
