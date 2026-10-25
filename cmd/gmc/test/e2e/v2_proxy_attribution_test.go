@@ -256,10 +256,10 @@ spec:
 }
 
 // v2ProxyAttributionManifest is a pool in poolNS shared with, and attributing for,
-// two consumer namespaces. Each holds a gateway opted in to PerJob and a RunnerSet
-// whose proxyRef names the pool; the AGC reads the pools its RunnerSets resolve to.
-// The gateways egress directly: a gateway-level defaultProxyRef to another
-// namespace leaves its AGC unable to start (Q1209).
+// two consumer namespaces. Each holds a gateway opted in to PerJob whose
+// defaultProxyRef names the pool, and a RunnerSet resolving to it, since the AGC
+// reads the pools its RunnerSets resolve to. The cross-namespace defaultProxyRef
+// also carries the AGC's own egress through the pool (Q1209).
 func v2ProxyAttributionManifest(poolNS, pool, alphaNS, betaNS, secretName, image, runnerSet string) string {
 	consumer := func(ns, gateway, org, set string) string {
 		return fmt.Sprintf(`---
@@ -274,6 +274,9 @@ spec:
     type: GitHubApp
     githubApp:
       name: %[5]s
+  defaultProxyRef:
+    name: %[7]s
+    namespace: %[8]s
   proxyFailureAttribution: PerJob
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -299,9 +302,6 @@ spec:
     name: %[2]s
   templateRef:
     name: tmpl
-  proxyRef:
-    name: %[7]s
-    namespace: %[8]s
   maxListeners: 1
   acquisitionProtocol: Classic   # see v2MultiGatewayManifest (Q264 P5)
   runnerLabels: ["e2e-attr"]

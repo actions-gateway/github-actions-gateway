@@ -110,8 +110,8 @@ Nothing calls its lookup until classified retry ([Q1183](../queue/Q1183.md)) lan
 ## Phase 4: the enforcement measurement
 
 The row makes a ship requirement of measuring, on the Calico lane, that a worker is refused on another consumer's port: the proxy learns the consumer from the port alone, so that refusal is the whole of what stops one tenant's failures landing in another's buffer.
-One new e2e file, `cmd/gmc/test/e2e/v2_proxy_attribution_test.go`, holding a pool in a provider namespace that attributes for two consumer namespaces, each with an opted-in gateway and a RunnerSet whose `proxyRef` names the pool.
-The reference is the RunnerSet's because a gateway-level `defaultProxyRef` to another namespace leaves the AGC unable to start ([Q1209](../queue/Q1209.md)).
+One new e2e file, `cmd/gmc/test/e2e/v2_proxy_attribution_test.go`, holding a pool in a provider namespace that attributes for two consumer namespaces, each with an opted-in gateway whose `defaultProxyRef` names the pool.
+The gateway-level reference also carries each AGC's own egress through the pool, so the spec is the e2e for that path too (Q1209, fixed in #2130).
 
 - **The refusal, Calico only.** One workload-labelled pod in the first consumer namespace waits until its own port answers (the proxy fails a CONNECT to an unresolvable host with a 502), then dials the second consumer's port and must get no answer at all.
   Gating in the same pod is what makes the negative non-vacuous, as for the other enforcement specs: a separate control pod proves only its own endpoint was programmed.
