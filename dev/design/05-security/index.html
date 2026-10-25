@@ -4128,7 +4128,7 @@ A refusal and a failed dial already have their warn/error line and their counter
 An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
 That is new use of per-job egress data, so it is designed here before it is built (<a href="../../queue/Q1184/">Q1184</a>).
 The proxy's half is built (<code>cmd/proxy/attribution.go</code>), and so is the GMC's (<code>cmd/gmc/internal/controller/egressproxy_attribution.go</code>), which moves an opted-in namespace's workers onto their port.
-No AGC reads the records yet (<a href="../../plan/q1184-proxy-failure-attribution/">plan</a>).</p>
+So is the AGC's reader (<code>cmd/agc/internal/proxyattribution</code>), which joins each record to its own worker pods; nothing acts on the result yet (<a href="../../plan/q1184-proxy-failure-attribution/">plan</a>).</p>
 <p><strong>It is off by default, behind two switches, for the audit record's reasons.</strong> One on the <code>EgressProxy</code> makes the pool able to keep failures and serve them.
 One on a consuming <code>ActionsGateway</code> opts that gateway's namespace in.
 Either alone attributes nothing.

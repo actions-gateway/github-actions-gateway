@@ -2139,6 +2139,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-failure-attribution-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy failure attribution metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#proxy-metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2913,6 +2924,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-failure-attribution-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy failure attribution metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#proxy-metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3627,6 +3649,34 @@ See the <a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation
 </tr>
 </tbody>
 </table>
+<h3 id="proxy-failure-attribution-metrics">Proxy failure attribution metrics<a class="headerlink" href="#proxy-failure-attribution-metrics" title="Permanent link">&para;</a></h3>
+<p>Emitted by an AGC whose gateway sets <code>proxyFailureAttribution: PerJob</code> (Q1184).
+Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
+Nothing acts on the attributed records yet; see <a href="../tenant-onboarding/#proxy-failure-attribution">tenant onboarding</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_proxy_failure_records_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>outcome</code>, <code>result</code></td>
+<td>Records read, by <code>outcome</code> (<code>denied</code>, <code>dial-failed</code>, or <code>other</code> for any value the proxy does not write) and <code>result</code>: <code>attributed</code> to one of this gateway's worker pods, or <code>discarded</code>: the address belonged to a sibling gateway's worker, to no pod this AGC saw (one gone before it started, or past the five-minute retention), to two pods at that time, or the time was within two seconds of a pod's taking or giving up the address.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_failure_reads_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>result</code></td>
+<td>Reads of one pool replica, <code>ok</code> or <code>failed</code>; a failed DNS lookup of the pool's replicas counts as one failed read. Failures while the pool rolls are expected: the attribution CA changes before every replica serves the new certificate, and the next good read resumes where the last one ended. A rate that does not stop after the roll means the AGC cannot reach the read port.</td>
+</tr>
+</tbody>
+</table>
 <h3 id="proxy-metrics">Proxy metrics<a class="headerlink" href="#proxy-metrics" title="Permanent link">&para;</a></h3>
 <p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>), and restricted by the L-8 NetworkPolicy (see <a href="../../plan/security/">security.md L-8</a>).
 The proxy's <code>:8081</code> port serves only the plaintext health probes (<code>/healthz</code>, <code>/readyz</code>), not metrics.
@@ -3981,6 +4031,16 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_worker_usage_poll_errors_total</code></td>
 <td>Both</td>
 <td>Counts <code>metrics.k8s.io</code> list failures, which are per-namespace rather than per-tier.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_failure_records_total</code></td>
+<td>Both</td>
+<td>Joined on worker pods, which both protocols label identically.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_failure_reads_total</code></td>
+<td>Both</td>
+<td>Per pool replica, not per tier.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_build_info</code></td>
