@@ -31,7 +31,7 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 		alphaAGC   = "alpha-agc"
 		betaAGC    = "beta-agc"
-		runnerSet  = "set-alpha"
+		runnerSet  = "set-attr"
 		// Off the pool's allowlist, so the proxy answers the CONNECT with a 403 and
 		// records a denial without resolving or dialing anything.
 		deniedTarget = "https://denied.invalid/"
@@ -277,7 +277,7 @@ metadata:
   name: alpha
   namespace: %[3]s
 spec:
-  githubURL: https://github.com/example-org-alpha
+  githubURL: https://github.com/example-org-attr-alpha
   credentials:
     type: GitHubApp
     githubApp:
@@ -293,7 +293,7 @@ metadata:
   name: beta
   namespace: %[4]s
 spec:
-  githubURL: https://github.com/example-org-beta
+  githubURL: https://github.com/example-org-attr-beta
   credentials:
     type: GitHubApp
     githubApp:
