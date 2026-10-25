@@ -2,16 +2,16 @@
 
 Builds [05-security.md § Proxy failure attribution](../design/05-security.md#proxy-failure-attribution), which settles the posture: off by default on two switches, failures only in a per-namespace in-memory buffer, the consumer namespace learned from the port a connection arrives on, and an AGC reading only its own namespace's records over a dedicated mTLS listener.
 The row is [Q1184](../queue/Q1184.md).
-Its consumer, classified retry ([Q1183](../queue/Q1183.md)), is blocked, so until it lands nothing reads what this builds.
+Its consumer, classified retry ([Q1183](../queue/Q1183.md)), is blocked, so until it lands nothing acts on what this builds.
 
 ## Status
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Proxy binary: attributed CONNECT listeners, the failure buffer, the mTLS read endpoint | ✅ Shipped in #2112 (`cmd/proxy/attribution.go`) |
-| 2a | API and the pool: the two switches, the `allowedNamespaces` cap, port allocation, Service ports, per-port ingress, the attribution PKI, the proxy environment | ❌ In review (#2122) |
-| 2b | The consumer: projecting client certificates, carrying the port to the AGC, moving workers' `HTTPS_PROXY`, the AGC's egress, operator docs | ❌ In progress, stacked on #2122 |
-| 3 | AGC: pulling every replica, the epoch and cursor, the join on its own gateway's pod lifetimes | ❌ Open |
+| 2a | API and the pool: the two switches, the `allowedNamespaces` cap, port allocation, Service ports, per-port ingress, the attribution PKI, the proxy environment | ✅ Shipped in #2122 |
+| 2b | The consumer: projecting client certificates, carrying the port to the AGC, moving workers' `HTTPS_PROXY`, the AGC's egress, operator docs | ✅ Shipped in #2125 |
+| 3 | AGC: pulling every replica, the epoch and cursor, the join on its own gateway's pod lifetimes | ❌ In review (#2127) |
 | 4 | Calico e2e: a worker refused on another namespace's port, and a denial attributed end to end | ❌ Open |
 
 Each phase is its own PR.
@@ -82,8 +82,29 @@ The AGC computes each worker's `HTTPS_PROXY` itself on every acquired job (`cmd/
   The joiner is projected only once every replica maps the port to it, and the leaver's workers are refused on it by ingress from the same reconcile, so no failure lands in the wrong partition.
   Q1208's fix reopens the window if it keeps a leaver's port listening, so a port held open for a leaver must not be reallocated until it is released.
 
-## Phase 3 and 4 outline
+## Phase 3: the AGC reads its records
 
-- **Phase 3** pulls every replica on an interval, resets the cursor on an epoch change, keeps records only for its own gateway's pods inside each pod's address lifetime, and exposes a lookup the retry classes will call.
-  Its reader must tolerate a CA change: when the namespace set changes, an already-projected namespace's Secret is rewritten with the new CA and client certificate on that reconcile, before the pool has rolled onto the new server certificate, so a read can fail verification until the roll completes.
-- **Phase 4** is the enforcement measurement the row makes a ship requirement, on the Calico lane only, because the kindnet lane's enforcement specs skip themselves.
+A new package, `cmd/agc/internal/proxyattribution`, run as a manager runnable on every AGC replica, since each replica's sessions own their own pods.
+Nothing calls its lookup until classified retry ([Q1183](../queue/Q1183.md)) lands, so this phase's observable output is a counter.
+
+- **It reads only while its own gateway is opted in.** Each poll re-reads the gateway, so turning `proxyFailureAttribution` off stops the reads and drops what is held, with no restart.
+- **Which pools: derived, not listed.** The AGC's Role can `get` ConfigMaps but not `list` them, so it names each projection from the pools its own RunnerSets resolve to (`proxyRef`, else the gateway's `defaultProxyRef`), the same resolution the worker's port comes from.
+  A pool with no projection in the namespace is skipped.
+- **Every replica, through the headless Service.** It resolves the projection's `read-host` to the replica addresses and reads each one, verifying the server certificate against the projected CA with the projected `server-name`, and presenting the projected client certificate.
+- **Epoch and cursor per replica address.** A changed epoch means the replica restarted and its buffer is new, so the cursor resets and the replica is read from the start.
+- **A failed read is a gap, not an error.** The CA rewrite on a namespace-set change reaches the projected Secret before the pool rolls, so a handshake can fail until it does.
+  A failed read, a failed lookup of the projection or of DNS, and a replica briefly missing from DNS all keep its cursor, so the next good read neither repeats nor skips a record.
+  A cursor goes only after six minutes without a good read, past the proxy's five-minute retention, when reading that replica from the start can return nothing already held.
+  The proxy keeps records for five minutes and the AGC polls every 30 seconds, so a poll or two missed loses nothing.
+- **The join is on the pod's address window, from the pod informer.** A window opens at the pod's `PodReadyToStartContainers` condition (the sandbox, and so the address, exists), falling back to `status.startTime`.
+  It closes when the pod gives the address up: a terminal phase, the condition turning false, or the AGC observing the delete, whichever comes first, since a terminal pod's address can be reused before its object is deleted (KEP-3085's description of the condition, not measured on a cluster here).
+  Every pod in the namespace gets a window, not only this gateway's: a sibling gateway's pods share the namespace's partition, and one holding an address while an own pod's window is open must make that record ambiguous rather than land it on the own pod.
+  A record is attributed only when exactly one window holds it and that window is an own pod's; one within two seconds of either edge is discarded rather than guessed at.
+  A closed window is kept for the proxy's five-minute retention so a record read after its pod is gone still joins.
+- **What is kept.** Attributed records by pod UID, for ten minutes, at most 64 per pod: the outcome, the dial class, the host and port, and the time.
+  `Lookup(uid)` returns them; the UID rather than the name, because a repeat delivery of a job reuses its pod's name.
+- **The counter.** `actions_gateway_proxy_failure_records_total{namespace, outcome, result}` counts each record read as `attributed` or `discarded`, and `actions_gateway_proxy_failure_reads_total{namespace, result}` each replica read as `ok` or `failed`, which is how an operator sees the CA-roll gap.
+
+## Phase 4
+
+The enforcement measurement the row makes a ship requirement, on the Calico lane only, because the kindnet lane's enforcement specs skip themselves.

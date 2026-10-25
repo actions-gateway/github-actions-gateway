@@ -57,6 +57,8 @@ var pinnedSites = map[string]string{
 
 	"cmd/agc/internal/runnerimage/client.go:do":         "the worker image's registry, not GitHub: manifest and blob URLs are composed from the tenant's image reference, and the fake serves no part of them (Q988)",
 	"cmd/agc/internal/runnerimage/client.go:fetchToken": "the registry's token realm, handed whole in its own WWW-Authenticate challenge; the fake serves no part of it (Q988)",
+
+	"cmd/agc/internal/proxyattribution/poller.go:fetch": "the egress proxy's failure-record listener, not GitHub: the replica address comes from the pool's headless Service, and the fake serves no part of it (Q1184)",
 }
 
 func main() {

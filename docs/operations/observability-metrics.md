@@ -158,6 +158,17 @@ See the [right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-re
 | `actions_gateway_worker_usage_jobs_unsampled_total` | Counter | `namespace`, `runner_set` | Jobs that finished before any sample landed (shorter than ~one sampling interval). A high ratio vs `…_jobs_sampled_total` means the histograms under-represent the workload. |
 | `actions_gateway_worker_usage_poll_errors_total` | Counter | `namespace` | Failed `PodMetrics` list calls. A constant rate means usage is not being sampled at all — metrics-server missing or the RBAC grant absent; see [troubleshooting](worker-rightsizing.md#troubleshooting). |
 
+### Proxy failure attribution metrics
+
+Emitted by an AGC whose gateway sets `proxyFailureAttribution: PerJob` (Q1184).
+Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
+Nothing acts on the attributed records yet; see [tenant onboarding](tenant-onboarding.md#proxy-failure-attribution).
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_proxy_failure_records_total` | Counter | `namespace`, `outcome`, `result` | Records read, by `outcome` (`denied`, `dial-failed`, or `other` for any value the proxy does not write) and `result`: `attributed` to one of this gateway's worker pods, or `discarded`: the address belonged to a sibling gateway's worker, to no pod this AGC saw (one gone before it started, or past the five-minute retention), to two pods at that time, or the time was within two seconds of a pod's taking or giving up the address. |
+| `actions_gateway_proxy_failure_reads_total` | Counter | `namespace`, `result` | Reads of one pool replica, `ok` or `failed`; a failed DNS lookup of the pool's replicas counts as one failed read. Failures while the pool rolls are expected: the attribution CA changes before every replica serves the new certificate, and the next good read resumes where the last one ended. A rate that does not stop after the roll means the AGC cannot reach the read port. |
+
 ### Proxy metrics
 
 The per-tenant egress proxy exposes its own metrics on `:8443` over **mutual TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy metrics (mTLS)](observability-metrics-access.md#scraping-per-tenant-agc-and-proxy-metrics-mtls)), and restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
@@ -257,6 +268,8 @@ Neither binary acquires jobs, so neither has a tier.
 | `actions_gateway_worker_usage_jobs_sampled_total` | Both | As above. |
 | `actions_gateway_worker_usage_jobs_unsampled_total` | Both | As above. |
 | `actions_gateway_worker_usage_poll_errors_total` | Both | Counts `metrics.k8s.io` list failures, which are per-namespace rather than per-tier. |
+| `actions_gateway_proxy_failure_records_total` | Both | Joined on worker pods, which both protocols label identically. |
+| `actions_gateway_proxy_failure_reads_total` | Both | Per pool replica, not per tier. |
 | `actions_gateway_build_info` | Tier-neutral | Build metadata of the running binary. |
 
 ### Label-value reach

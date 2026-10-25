@@ -39,6 +39,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/proxyattribution"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
@@ -427,6 +428,10 @@ func run() error {
 		return err
 	}
 
+	if err := setupProxyAttribution(mgr, namespace, cfg.GatewayName); err != nil {
+		return err
+	}
+
 	// Choose registrar (buildRegistrar):
 	//   STUB_AUTH_URL + STUB_BROKER_URL set → StubRegistrar with those URLs (testing)
 	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
@@ -799,6 +804,22 @@ func setupUsageSampler(mgr ctrl.Manager, cfg agcConfig, namespace string) (*usag
 		return nil, fmt.Errorf("add worker usage sampler: %w", err)
 	}
 	return usageSampler, nil
+}
+
+// setupProxyAttribution registers the egress proxy failure reader (Q1184). It
+// reads nothing until the gateway opts in, which it re-checks every poll, so it
+// is registered for every v2 AGC; one with no gateway name has nothing to read.
+func setupProxyAttribution(mgr ctrl.Manager, namespace, gateway string) error {
+	if namespace == "" || gateway == "" {
+		return nil
+	}
+	poller := proxyattribution.NewPoller(mgr.GetClient(), mgr.GetAPIReader(), mgr.GetCache(), namespace, gateway,
+		proxyattribution.NewMetrics(ctrlmetrics.Registry),
+		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("proxyattribution"))))
+	if err := mgr.Add(poller); err != nil {
+		return fmt.Errorf("add proxy failure attribution reader: %w", err)
+	}
+	return nil
 }
 
 // buildScheme builds the AGC client scheme: the core Kubernetes types
