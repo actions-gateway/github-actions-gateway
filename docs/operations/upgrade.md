@@ -193,6 +193,7 @@ Nothing to do.
 
 A job whose worker ran on such a node used to stay failed: PodGC failed and removed the pod, and no recovery arm recognised the shape it left.
 It is now re-run under `cause="node_shutdown"`, the same counter a Spot reclamation uses (Q1207).
+A worker the AGC had already deleted itself (a reaper delete, or a reclaimed `job_abandoned` worker) is no longer re-run under `node_shutdown` when its node then dies, matching the `deletion` cause.
 A `NotReady` node with no taint is unchanged: its worker stays `Running` until you taint the node or delete its Node object, because a node that is only partitioned may still be running the job.
 The command is in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 

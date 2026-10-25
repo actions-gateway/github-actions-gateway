@@ -102,6 +102,7 @@ func TestLostToNodeShutdown(t *testing.T) {
 		phase      corev1.PodPhase
 		conditions []corev1.PodCondition
 		containers []corev1.ContainerStatus
+		agcDeleted bool
 		want       bool
 	}{
 		{name: "failed, no conditions", phase: corev1.PodFailed},
@@ -111,6 +112,26 @@ func TestLostToNodeShutdown(t *testing.T) {
 			// PodGC failed the pod over a dead kubelet: the container is still recorded Running.
 			name: "out-of-service node", phase: corev1.PodFailed,
 			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager), containers: running, want: true,
+		},
+		{
+			// A regular sidecar (dind) outlived the runner, whose job had already ended:
+			// only the runner's state says whether a job was cut off.
+			name: "out-of-service node, runner exited before, sidecar still running", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager),
+			containers: append(append([]corev1.ContainerStatus{}, terminated...), corev1.ContainerStatus{
+				Name: "dind", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+			}),
+		},
+		{
+			// The AGC deleted this worker itself (reaper, job_abandoned) before the node
+			// died; its own deletions are never a disruption.
+			name: "out-of-service node, AGC-deleted worker", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByTaintManager), containers: running,
+			agcDeleted: true,
+		},
+		{
+			name: "PodGC orphan of an AGC-deleted worker", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC), agcDeleted: true,
 		},
 		{
 			// A live kubelet finishing the taint manager's delete records the exit first;
@@ -145,6 +166,9 @@ func TestLostToNodeShutdown(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			pod := &corev1.Pod{Status: corev1.PodStatus{Phase: tc.phase, Conditions: tc.conditions, ContainerStatuses: tc.containers}}
+			if tc.agcDeleted {
+				pod.Annotations = map[string]string{AnnotationDeletionReason: "job_abandoned"}
+			}
 			assert.Equal(t, tc.want, LostToNodeShutdown(pod))
 		})
 	}
@@ -290,6 +314,21 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 				return shutDown(pod, podReasonDeletionByTaintManager)
 			}(),
 			wantCause: recoveryCauseDeletion, wantOK: true,
+		},
+		{
+			// A dind sidecar outlived a runner whose job had already ended; the taint
+			// manager's delete came after the runner's exit, so it is cleanup on every arm.
+			name: "out-of-service node, sidecar outlived the runner",
+			pod: func() *corev1.Pod {
+				pod := outOfService(scaleSetWorkerPod("p", identityAnnotations()))
+				pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+					{Name: WorkerContainerName, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 1, FinishedAt: metav1.NewTime(pod.DeletionTimestamp.Add(-time.Minute)),
+					}}},
+					{Name: "dind", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				}
+				return pod
+			}(),
 		},
 		{
 			// Never started on the out-of-service node: abandonedAwaitingRecovery's.

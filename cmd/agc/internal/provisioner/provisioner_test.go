@@ -1050,7 +1050,7 @@ func TestProvisioner_PreemptionAutoRetry(t *testing.T) {
 // whose node shut down fails with reason Terminated and a kubelet DisruptionTarget, which
 // neither the eviction nor the preemption arm keys on, and nothing deletes it, so the
 // deletion arm never fires either. One on a dead node tainted out-of-service is failed by
-// PodGC over a container still recorded Running, which leaves the deletion arm no
+// PodGC over a runner container still recorded Running, which leaves the deletion arm no
 // termination record to order against.
 func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
 	for _, tc := range []struct {
