@@ -113,10 +113,11 @@ The row makes a ship requirement of measuring, on the Calico lane, that a worker
 One new e2e file, `cmd/gmc/test/e2e/v2_proxy_attribution_test.go`, holding a pool in a provider namespace that attributes for two consumer namespaces, each with an opted-in gateway and a RunnerSet whose `proxyRef` names the pool.
 The reference is the RunnerSet's because a gateway-level `defaultProxyRef` to another namespace leaves the AGC unable to start ([Q1209](../queue/Q1209.md)).
 
-- **The refusal, Calico only.** One workload-labelled pod in the first consumer namespace waits until its own port answers (the proxy refuses a CONNECT to a host off its allowlist with a 403), then dials the second consumer's port and must get no answer at all.
+- **The refusal, Calico only.** One workload-labelled pod in the first consumer namespace waits until its own port answers (the proxy fails a CONNECT to an unresolvable host with a 502), then dials the second consumer's port and must get no answer at all.
   Gating in the same pod is what makes the negative non-vacuous, as for the other enforcement specs: a separate control pod proves only its own endpoint was programmed.
   It skips on kindnet with the others, since that enforcer does not drop NetworkPolicy negatives.
-- **A denial attributed end to end, both lanes.** A pod carrying a RunnerSet's label, so the AGC counts it as its own worker, waits past the reader's two-second edge margin, CONNECTs to a denied host through its namespace's port, and waits again before exiting so the record does not sit on the close edge either.
-  The gateway's `actions_gateway_proxy_failure_records_total{outcome="denied",result="attributed"}` must then rise, which only a read over mTLS, a matched epoch and cursor, and the address-window join together produce.
+- **A failure attributed end to end, both lanes.** A pod carrying a RunnerSet's label, so the AGC counts it as its own worker, waits past the reader's two-second edge margin, CONNECTs to an unresolvable host through its namespace's port, and stays Running so its address window is still open when the record is read.
+  A dial failure rather than a denial, because a pool refuses a destination only once it is opted in to an allowlist, which takes an extra destination the GMC's platform allowlist has to admit.
+  The gateway's `actions_gateway_proxy_failure_records_total{outcome="dial-failed",result="attributed"}` must then rise, which only a read over mTLS, a matched epoch and cursor, and the address-window join together produce.
   Nothing else observes the join until classified retry ([Q1183](../queue/Q1183.md)) calls the lookup.
 - **The scrape stays in the cluster.** A pod in the consumer namespace mounts the gateway's metrics client Secret and reads the AGC's metrics endpoint, so no certificate leaves the cluster; the namespace carries the `metrics: enabled` label the AGC's ingress rule admits scrapers from.
