@@ -437,7 +437,7 @@ Classified retry ([Q555 plan](../plan/q555-flaky-job-retry.md#the-egress-proxy-a
 An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
 That is new use of per-job egress data, so it is designed here before it is built ([Q1184](../queue/Q1184.md)).
 The proxy's half is built (`cmd/proxy/attribution.go`), and so is the GMC's (`cmd/gmc/internal/controller/egressproxy_attribution.go`), which moves an opted-in namespace's workers onto their port.
-No AGC reads the records yet ([plan](../plan/q1184-proxy-failure-attribution.md)).
+So is the AGC's reader (`cmd/agc/internal/proxyattribution`), which joins each record to its own worker pods; nothing acts on the result yet ([plan](../plan/q1184-proxy-failure-attribution.md)).
 
 **It is off by default, behind two switches, for the audit record's reasons.** One on the `EgressProxy` makes the pool able to keep failures and serve them.
 One on a consuming `ActionsGateway` opts that gateway's namespace in.

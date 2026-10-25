@@ -1123,7 +1123,7 @@ The record shape, the field meanings, and how to select the audit stream in a lo
 ### Proxy failure attribution
 
 A proxy pool can keep the CONNECT failures it sees (a destination its allowlist refused, or an upstream it could not dial) labelled with the namespace that sent them, so the tenant's gateway can later tell which job hit them.
-**Nothing reads these records yet.** The gateway side that turns them into retry decisions and Events is still to come, so turning this on today moves workers onto their own port and keeps their failures in the pool's memory, and that is all.
+**Nothing acts on these records yet.** The gateway's AGC reads them and attributes each to the worker pod it came from, counted in `actions_gateway_proxy_failure_records_total` ([metrics](observability-metrics.md#proxy-failure-attribution-metrics)), but the retry decisions and Events that use them are still to come.
 
 It is **off by default** and needs both sides: the pool owner turns it on for the pool, and the tenant turns it on for their namespace.
 

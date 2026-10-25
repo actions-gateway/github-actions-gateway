@@ -86,8 +86,9 @@ type ActionsGatewaySpec struct {
 	// pool's. Design: docs/design/05-security.md, "Proxy failure attribution"
 	// (Q1184).
 	//
-	// The AGC does not read the records yet, so enabling this today moves the
-	// namespace's workers onto their port and nothing more.
+	// The AGC reads and attributes the records but does not act on them yet, so
+	// enabling this today moves the namespace's workers onto their port and counts
+	// their failures.
 	//
 	// +optional
 	// +kubebuilder:validation:Enum=Disabled;PerJob
