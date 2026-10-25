@@ -28,6 +28,9 @@ No pill means no release is decided for that item yet.
   Detection counts flaky jobs per runner set first.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
 
+- **[Attributing egress proxy failures to the job that hit them](design/05-security.md#proxy-failure-attribution)** <!-- q:Q1184 --> An opt-in on the `EgressProxy` and on the consuming `ActionsGateway` records each refused or failed connection against the job whose worker made it, on a shared pool too.
+  It is what lets the retry machinery above tell a platform failure from one in your code.
+
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
 
