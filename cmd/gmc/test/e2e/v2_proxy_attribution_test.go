@@ -20,7 +20,7 @@ import (
 // proxy learns the consumer from that port alone. So the per-port ingress rule is
 // the whole boundary between one tenant's failure records and another's, and the
 // first spec measures it holding on an enforcing CNI. The second follows one
-// denied CONNECT from a worker-labelled pod to the gateway's attributed counter,
+// failed CONNECT from a worker-labelled pod to the gateway's attributed counter,
 // which only the mTLS read, the cursor, and the address-window join together move.
 var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
 	const (
@@ -32,9 +32,10 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
 		alphaAGC   = "alpha-agc"
 		betaAGC    = "beta-agc"
 		runnerSet  = "set-attr"
-		// Off the pool's allowlist, so the proxy answers the CONNECT with a 403 and
-		// records a denial without resolving or dialing anything.
-		deniedTarget = "https://denied.invalid/"
+		// Unresolvable, so the proxy answers the CONNECT with a 502 and records a
+		// dial failure. A denial would need the pool opted in to an allowlist, which
+		// takes an extra destination the GMC's platform allowlist has to admit.
+		failTarget = "https://unresolvable.invalid/"
 	)
 	var (
 		shareCM = "proxy-share-" + poolNS + "-" + poolName
@@ -117,7 +118,7 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
         code=$(curl --silent --output /dev/null --connect-timeout 3 --max-time 5 \
           --proxy https://%[1]s:%[2]s --proxy-cacert /proxy-ca/ca.crt \
           --write-out '%%{http_connect}' %[4]s) || true
-        if [ "$code" = "403" ]; then break; fi
+        if [ "$code" != "000" ]; then break; fi
         sleep 2
       done
       echo "GATE_CONNECT=${code} GATE_ATTEMPTS=${n}"
@@ -128,19 +129,19 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
       echo "PROXY_CONNECT=${code}"
       echo "CURL_RC=${rc}"
       echo DONE
-`, proxyHost, alphaPort, betaPort, deniedTarget)
+`, proxyHost, alphaPort, betaPort, failTarget)
 		logs := runAttributionProbe(alphaNS, "attr-cross-port", map[string]string{
 			"actions-gateway/component": "workload",
 		}, "proxy-ca", proxyCAVolume(shareCM), script)
 
-		Expect(logs).To(ContainSubstring("GATE_CONNECT=403"),
+		Expect(logs).To(MatchRegexp(`GATE_CONNECT=[1-9]`),
 			"the pod's own port %s never answered, so the negative below proves nothing; logs:\n%s", alphaPort, logs)
 		Expect(logs).To(MatchRegexp(`CURL_RC=(7|28)\b`),
 			"a worker in %s reached the port attributed to %s; logs:\n%s", alphaNS, betaNS, logs)
 		Expect(logs).To(ContainSubstring("PROXY_CONNECT=000"), "logs:\n%s", logs)
 	})
 
-	It("E2E_V2_ProxyAttribution_DenialAttributedToTheWorker: a denied CONNECT reaches the gateway's attributed counter", func() {
+	It("E2E_V2_ProxyAttribution_FailureAttributedToTheWorker: a failed CONNECT reaches the gateway's attributed counter", func() {
 		// The RunnerSet label is what makes the AGC count this pod as its own worker.
 		// The pod stays Running afterwards so its address window is still open when
 		// the record is read; the sleep first keeps the record clear of the window's
@@ -154,19 +155,19 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
         code=$(curl --silent --output /dev/null --connect-timeout 3 --max-time 5 \
           --proxy https://%[1]s:%[2]s --proxy-cacert /proxy-ca/ca.crt \
           --write-out '%%{http_connect}' %[3]s) || true
-        if [ "$code" = "403" ]; then break; fi
+        if [ "$code" != "000" ]; then break; fi
         sleep 2
       done
       echo "PROXY_CONNECT=${code} ATTEMPTS=${n}"
       echo DONE
       sleep 900
-`, proxyHost, alphaPort, deniedTarget)
+`, proxyHost, alphaPort, failTarget)
 		logs := runAttributionProbe(alphaNS, "attr-worker", map[string]string{
 			"actions-gateway/component":      "workload",
 			"actions-gateway.com/runner-set": runnerSet,
 		}, "proxy-ca", proxyCAVolume(shareCM), script)
-		Expect(logs).To(ContainSubstring("PROXY_CONNECT=403"),
-			"the proxy did not refuse the CONNECT on %s's port, so there is no record to attribute; logs:\n%s", alphaNS, logs)
+		Expect(logs).To(ContainSubstring("PROXY_CONNECT=502"),
+			"the proxy did not fail the CONNECT on %s's port, so there is no record to attribute; logs:\n%s", alphaNS, logs)
 
 		// The scrape runs in the cluster so the gateway's metrics client key never
 		// leaves it. It polls past the AGC's 30-second read interval.
@@ -178,7 +179,7 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
         line=$(curl --silent --cacert /scrape/ca.crt --cert /scrape/tls.crt --key /scrape/tls.key \
           https://%[1]s.%[2]s.svc:8443/metrics \
           | grep '^actions_gateway_proxy_failure_records_total{' \
-          | grep 'outcome="denied"' | grep 'result="attributed"') || true
+          | grep 'outcome="dial-failed"' | grep 'result="attributed"') || true
         if [ -n "$line" ]; then break; fi
         sleep 5
       done
@@ -192,7 +193,7 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
       secretName: %s-metrics-client
       defaultMode: 0444`, alphaAGC), scrape)
 		Expect(out).To(MatchRegexp(`ATTRIBUTED=actions_gateway_proxy_failure_records_total\{[^}]*\} [1-9]`),
-			"the gateway never attributed the denied CONNECT to its worker; scrape:\n%s", out)
+			"the gateway never attributed the failed CONNECT to its worker; scrape:\n%s", out)
 	})
 })
 
