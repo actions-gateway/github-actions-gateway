@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"crypto/x509"
+	"net"
 	"testing"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -289,4 +290,32 @@ func TestEgressProxyReconcile_NeverDeletesSecrets(t *testing.T) {
 		}
 	}
 	assert.True(t, apierrors.IsNotFound(c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy-attr"}, &corev1.Service{})))
+}
+
+// The daily IP-range refresh replaces the pool policy's ingress wholesale, so it
+// must rebuild the attributed ports' rules rather than drop them until the next
+// pool reconcile.
+func TestIPRangeRefresh_KeepsAttributionIngress(t *testing.T) {
+	ep := attributingPool("team-a")
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, gatewayUsing("team-a", true)).WithStatusSubresource(ep).Build()
+	reconcilePool(t, c)
+	ctx := context.Background()
+
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	r := &IPRangeReconciler{Client: c}
+	require.NoError(t, r.patchEgressProxyNetworkPolicy(ctx, ep, []net.IPNet{*cidr}))
+
+	var np networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &np))
+	var ports []int32
+	for _, rule := range np.Spec.Ingress {
+		for _, peer := range rule.From {
+			if peer.NamespaceSelector != nil && peer.NamespaceSelector.MatchLabels[corev1.LabelMetadataName] == "team-a" {
+				ports = append(ports, rule.Ports[0].Port.IntVal)
+			}
+		}
+	}
+	assert.ElementsMatch(t, []int32{proxyPort, 8100, attributionReadPort}, ports)
 }
