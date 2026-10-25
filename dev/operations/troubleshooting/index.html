@@ -7952,7 +7952,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <tr>
 <td>Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted under it, or a dead node you taint <code>node.kubernetes.io/out-of-service</code></td>
 <td><code class="gag-nowrap">node_shutdown</code></td>
-<td>pod <code>Failed</code> with a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code> (the kubelet's graceful shutdown), <code>DeletionByPodGC</code> (the node was gone first), or <code>DeletionByTaintManager</code> with the container still recorded <code>Running</code> (the out-of-service taint)</td>
+<td>pod <code>Failed</code> with a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code> (the kubelet's graceful shutdown), <code>DeletionByPodGC</code> (the node was gone first), or <code>DeletionByTaintManager</code> with the runner container still recorded <code>Running</code> (the out-of-service taint)</td>
 </tr>
 <tr>
 <td>Node drain of a running worker</td>

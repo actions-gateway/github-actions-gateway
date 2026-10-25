@@ -4548,6 +4548,7 @@ Rolling back further is not: a release that does not serve <code>v2</code> canno
 Nothing to do.</p>
 <p>A job whose worker ran on such a node used to stay failed: PodGC failed and removed the pod, and no recovery arm recognised the shape it left.
 It is now re-run under <code>cause="node_shutdown"</code>, the same counter a Spot reclamation uses (Q1207).
+A worker the AGC had already deleted itself (a reaper delete, or a reclaimed <code>job_abandoned</code> worker) is no longer re-run under <code>node_shutdown</code> when its node then dies, matching the <code>deletion</code> cause.
 A <code>NotReady</code> node with no taint is unchanged: its worker stays <code>Running</code> until you taint the node or delete its Node object, because a node that is only partitioned may still be running the job.
 The command is in <a href="../troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a>.</p>
 <p><strong>Rolling back</strong> returns the job on such a node to staying failed.</p>
