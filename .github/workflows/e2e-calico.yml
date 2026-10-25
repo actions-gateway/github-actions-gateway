@@ -15,7 +15,8 @@
 #   - E2E_Mirror_SharedTenantsNP_AdmitsMarkedNamespaceWorkloadPod  (calico-only, Q1039)
 #   - E2E_Mirror_SharedTenantsNP_DeniesUnlabeledPod               (calico-only, Q1039)
 #   - E2E_Mirror_SharedTenantsNP_DeniesUnmarkedNamespace          (calico-only, Q1039)
-# Those last three gate once in their container's BeforeAll rather than per spec,
+#   - E2E_V2_ProxyAttribution_WorkerRefusedOnAnotherConsumersPort (calico-only, Q1184)
+# The three Mirror specs gate once in their container's BeforeAll rather than per spec,
 # so the call-site count and the spec count differ — read the containers, not the
 # calls.
 # egressEnforcingCNI() is the authoritative list — this comment omitted the
