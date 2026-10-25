@@ -3,7 +3,7 @@ reaches: opt-in-channel
 gate: tag
 reviewers: solo
 merge: agent
-human-review: breaking, feature, interface, security, performance, architecture, api/v*, api/api*, api/config/*, cmd/agc/api/*, cmd/gmc/api/*, cmd/agc/config/*, cmd/gmc/config/*, charts/*, mkdocs.yml, mkdocs-offline.yml, overrides/*, hooks/*, requirements-docs.txt, docs/index.md, docs/why-gag.md, docs/alternatives.md, docs/features.md, docs/demo.md, docs/getting-started.md, docs/roadmap.md, docs/operations/*, docs/reference/*, docs/design/*, docs/assets/*, docs/stylesheets/*, docs/javascripts/*, docs/CNAME, docs/robots.txt, README.md, DESIGN.md, CONTRIBUTING.md, SECURITY.md, CLAUDE.md, AGENTS.md, LICENSE*, NOTICE*, Dockerfile*, docker-bake.hcl, .github/workflows/publish.yml, .github/workflows/pages.yml, .claude/merge-posture.md
+human-review: breaking, feature, interface, security, performance, architecture, api/v*, api/api*, api/config/*, cmd/agc/api/*, cmd/gmc/api/*, cmd/agc/config/*, cmd/gmc/config/*, charts/*, mkdocs.yml, mkdocs-offline.yml, overrides/*, hooks/*, requirements-docs.txt, docs/index.md, docs/why-gag.md, docs/alternatives.md, docs/features.md, docs/demo.md, docs/getting-started.md, docs/roadmap.md, docs/operations/*, docs/reference/*, docs/design/*, docs/assets/*, docs/stylesheets/*, docs/javascripts/*, docs/CNAME, docs/robots.txt, README.md, DESIGN.md, CONTRIBUTING.md, SECURITY.md, CLAUDE.md, AGENTS.md, LICENSE*, NOTICE*, Dockerfile*, docker-bake.hcl, .github/workflows/*, .github/actions/*, *go.mod, vendor/*, tools/vendor/*, coverage-baseline.txt, mk/gate-lists.mk, .gitattributes, .claude/*, scripts/agent/*, devtools/agent/*
 ---
 
 # Merge posture
@@ -41,8 +41,12 @@ Each part of the list maps to one of those:
   A new published page has to be added to the nav in `mkdocs.yml` or the strict build fails, so it is caught there even though its own path is not listed.
 - **Design docs.** `docs/design/*` and `DESIGN.md`.
 - **Critical root docs.** `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, the license files, and `CLAUDE.md` (with its `AGENTS.md` symlink), which governs every agent session in the repo.
-- **What ships.** `Dockerfile`, `docker-bake.hcl` and `publish.yml` decide what an image contains and how it is signed.
-- **This file.** An agent may not widen its own grant.
+- **What ships.** `Dockerfile`, `docker-bake.hcl` and the workflows decide what an image contains and how it is signed.
+  A new module in any `go.mod`, `vendor/` or `tools/vendor/` is supply chain too, and the `architecture` judgement may not read it as one.
+- **What green means.** The workflows produce the required checks the merge queue gates on, so weakening one weakens every later agent merge; ten of them can also route jobs to the self-hosted dogfood runner.
+  `coverage-baseline.txt`, `mk/gate-lists.mk` and `.gitattributes` decide what a gate counts and how the merge drivers resolve conflicts.
+- **The agents' own limits.** `.claude/*` (this file included, and the project's hook config), `scripts/agent/*` (the throttle and sub-agent hooks, and `pr-requeue-eligible`, which authorizes a re-enqueue) and `devtools/agent/*`.
+  An agent may not merge a change to what it is allowed to do.
 
 Deliberately not listed: `docs/queue/`, `docs/plan/`, `docs/development/` and `docs/postmortems/`.
 The `dev` version publishes them, but they are contributor material and released versions exclude them, and nearly every PR closes a backlog row, so listing them would route everything to the maintainer.
