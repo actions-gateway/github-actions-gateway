@@ -3112,7 +3112,8 @@ The drift gate (Q454) pairs markers with chart rules, but nothing pairs <em>code
 That is how the scale-set eviction-recovery claim and the <code>job-completed-at</code> stamp shipped patching pods without the verb and ran broken on every real install until Q502's e2e round surfaced it.
 Grep for the client call (<code>Client.Patch</code>/<code>Update</code>/<code>Delete</code> on the kind) when reviewing a controller change, and treat a new verb in code with no diff under <code>charts/</code> as the smell.</p>
 <p>One path now has an enforced-RBAC backstop: <code>E2E_AGC_ScaleSetRecovery</code> (Q519) runs scale-set disruption recovery — the claim patch and the rerun — under the chart's shipped role on kind, so a verb that path needs and the role lacks fails CI.
-It covers only the verbs that path exercises; everywhere else the grep above is still the gate.</p>
+It covers only the verbs that path exercises; everywhere else the grep above is still the gate.
+A GMC call can be checked earlier: its envtest suite can run a reconciler under the chart's GMC role (<a href="../testing/#picking-the-right-test-tier">testing.md § Picking the right test tier</a>).</p>
 <h2 id="validatingadmissionpolicy-paramkind-never-a-core-type-q444q492">ValidatingAdmissionPolicy <code>paramKind</code>: never a core type (Q444/Q492)<a class="headerlink" href="#validatingadmissionpolicy-paramkind-never-a-core-type-q444q492" title="Permanent link">&para;</a></h2>
 <p><strong>Rule: a <code>paramKind</code> must be a CRD.
 Never <code>ConfigMap</code>, <code>Secret</code>, or any other built-in.</strong> This is not a style preference — a core type is load-bearing broken.</p>
