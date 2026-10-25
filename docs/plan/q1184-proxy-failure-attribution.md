@@ -92,14 +92,17 @@ Nothing calls its lookup until classified retry ([Q1183](../queue/Q1183.md)) lan
   A pool with no projection in the namespace is skipped.
 - **Every replica, through the headless Service.** It resolves the projection's `read-host` to the replica addresses and reads each one, verifying the server certificate against the projected CA with the projected `server-name`, and presenting the projected client certificate.
 - **Epoch and cursor per replica address.** A changed epoch means the replica restarted and its buffer is new, so the cursor resets and the replica is read from the start.
-  A replica that leaves DNS takes its state with it.
-- **A failed read is a gap, not an error.** The CA rewrite on a namespace-set change reaches the projected Secret before the pool rolls, so a handshake can fail until it does; the replica keeps its cursor and is read again next poll.
+- **A failed read is a gap, not an error.** The CA rewrite on a namespace-set change reaches the projected Secret before the pool rolls, so a handshake can fail until it does.
+  A failed read, a failed lookup of the projection or of DNS, and a replica briefly missing from DNS all keep its cursor, so the next good read neither repeats nor skips a record.
+  A cursor goes only after six minutes without a good read, past the proxy's five-minute retention, when reading that replica from the start can return nothing already held.
   The proxy keeps records for five minutes and the AGC polls every 30 seconds, so a poll or two missed loses nothing.
-- **The join is on the pod's address window, from the pod informer.** A window opens at the pod's `PodReadyToStartContainers` condition (the sandbox, and so the address, exists), falling back to `status.startTime`, and closes when the AGC observes the pod deleted.
-  Only pods whose RunnerSet this AGC reconciles get one: a sibling gateway's pods share the namespace's partition, and their records are discarded.
-  A record within two seconds of either edge is discarded rather than guessed at, and so is one inside two windows; a closed window is kept for the proxy's five-minute retention so a record read after its pod is gone still joins.
-- **What is kept.** Attributed records by pod, for ten minutes, at most 64 per pod: the outcome, the dial class, the host and port, and the time.
-  `Lookup(pod)` returns them.
+- **The join is on the pod's address window, from the pod informer.** A window opens at the pod's `PodReadyToStartContainers` condition (the sandbox, and so the address, exists), falling back to `status.startTime`.
+  It closes when the pod gives the address up: a terminal phase, the condition turning false, or the AGC observing the delete, whichever comes first, since a terminal pod's address can be reused before its object is deleted (KEP-3085's description of the condition, not measured on a cluster here).
+  Every pod in the namespace gets a window, not only this gateway's: a sibling gateway's pods share the namespace's partition, and one holding an address while an own pod's window is open must make that record ambiguous rather than land it on the own pod.
+  A record is attributed only when exactly one window holds it and that window is an own pod's; one within two seconds of either edge is discarded rather than guessed at.
+  A closed window is kept for the proxy's five-minute retention so a record read after its pod is gone still joins.
+- **What is kept.** Attributed records by pod UID, for ten minutes, at most 64 per pod: the outcome, the dial class, the host and port, and the time.
+  `Lookup(uid)` returns them; the UID rather than the name, because a repeat delivery of a job reuses its pod's name.
 - **The counter.** `actions_gateway_proxy_failure_records_total{namespace, outcome, result}` counts each record read as `attributed` or `discarded`, and `actions_gateway_proxy_failure_reads_total{namespace, result}` each replica read as `ok` or `failed`, which is how an operator sees the CA-roll gap.
 
 ## Phase 4

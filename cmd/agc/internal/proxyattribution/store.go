@@ -4,6 +4,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -28,17 +30,18 @@ type Failure struct {
 	Port string
 }
 
-// failureStore holds attributed records by pod name.
+// failureStore holds attributed records by pod UID. A repeat delivery of a job
+// reuses its pod's name, never its UID.
 type failureStore struct {
 	mu    sync.Mutex
-	byPod map[string][]Failure
+	byPod map[types.UID][]Failure
 }
 
 func newFailureStore() *failureStore {
-	return &failureStore{byPod: map[string][]Failure{}}
+	return &failureStore{byPod: map[types.UID][]Failure{}}
 }
 
-func (s *failureStore) add(pod string, f Failure) {
+func (s *failureStore) add(pod types.UID, f Failure) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	recs := append(s.byPod[pod], f)
@@ -48,7 +51,7 @@ func (s *failureStore) add(pod string, f Failure) {
 	s.byPod[pod] = recs
 }
 
-func (s *failureStore) lookup(pod string) []Failure {
+func (s *failureStore) lookup(pod types.UID) []Failure {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.byPod[pod])

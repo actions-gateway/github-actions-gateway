@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"log/slog"
 	"math/big"
 	"net"
@@ -55,17 +56,17 @@ func workerPod(name, uid, set, ip string, start time.Time) *corev1.Pod {
 
 func TestAddressWindows_AttributeOnlyInsideOneWindow(t *testing.T) {
 	w := newAddressWindows()
-	w.open(workerPod("first", "u1", "set", "10.1.0.5", t0))
+	w.observe(workerPod("first", "u1", "set", "10.1.0.5", t0), true, t0)
 	w.close("u1", t0.Add(time.Minute))
-	w.open(workerPod("second", "u2", "set", "10.1.0.5", t0.Add(time.Minute+time.Second)))
+	w.observe(workerPod("second", "u2", "set", "10.1.0.5", t0.Add(time.Minute+time.Second)), true, t0)
 
 	for name, tc := range map[string]struct {
 		at   time.Time
-		pod  string
+		pod  types.UID
 		want bool
 	}{
-		"inside the first":        {t0.Add(30 * time.Second), "first", true},
-		"inside the open second":  {t0.Add(5 * time.Minute), "second", true},
+		"inside the first":        {t0.Add(30 * time.Second), "u1", true},
+		"inside the open second":  {t0.Add(5 * time.Minute), "u2", true},
 		"at the first's start":    {t0.Add(time.Second), "", false},
 		"near the first's end":    {t0.Add(time.Minute - time.Second), "", false},
 		"near the second's start": {t0.Add(time.Minute + 2*time.Second), "", false},
@@ -79,20 +80,64 @@ func TestAddressWindows_AttributeOnlyInsideOneWindow(t *testing.T) {
 			}
 		})
 	}
-	w.open(workerPod("third", "u3", "set", "10.1.0.7", t0))
-	w.open(workerPod("fourth", "u4", "set", "10.1.0.7", t0.Add(time.Minute)))
+	w.observe(workerPod("third", "u3", "set", "10.1.0.7", t0), true, t0)
+	w.observe(workerPod("fourth", "u4", "set", "10.1.0.7", t0.Add(time.Minute)), true, t0)
 	_, ok := w.attribute("10.1.0.7", t0.Add(2*time.Minute))
 	assert.False(t, ok, "a time inside two windows names nobody")
 
 	_, ok = w.attribute("10.1.0.6", t0.Add(30*time.Second))
-	assert.False(t, ok, "an address no own pod held names nobody")
+	assert.False(t, ok, "an address no pod held names nobody")
 
 	w.sweep(t0.Add(time.Minute + closedWindowRetention))
 	_, ok = w.attribute("10.1.0.5", t0.Add(30*time.Second))
 	assert.False(t, ok, "a window closed longer than the proxy's retention is dropped")
 	pod, ok := w.attribute("10.1.0.5", t0.Add(5*time.Minute))
 	assert.True(t, ok)
-	assert.Equal(t, "second", pod, "an open window is never swept")
+	assert.Equal(t, types.UID("u2"), pod, "an open window is never swept")
+}
+
+// A pod that is not this gateway's holds its address too: a record inside its
+// window is discarded, and one inside both its window and an own pod's names
+// nobody.
+func TestAddressWindows_ASiblingsWindowBlocksAttribution(t *testing.T) {
+	w := newAddressWindows()
+	w.observe(workerPod("own-1", "u1", "own", "10.1.0.5", t0), true, t0)
+	w.observe(workerPod("sib-1", "u2", "sibling", "10.1.0.5", t0.Add(70*time.Second)), false, t0)
+
+	_, ok := w.attribute("10.1.0.5", t0.Add(90*time.Second))
+	assert.False(t, ok, "a time the sibling also held the address names nobody")
+	pod, ok := w.attribute("10.1.0.5", t0.Add(30*time.Second))
+	assert.True(t, ok)
+	assert.Equal(t, types.UID("u1"), pod)
+
+	w.observe(workerPod("sib-2", "u3", "sibling", "10.1.0.8", t0), false, t0)
+	_, ok = w.attribute("10.1.0.8", t0.Add(30*time.Second))
+	assert.False(t, ok, "a sibling's own window is never attributed")
+}
+
+// A pod gives its address up when it goes terminal or its sandbox is torn down,
+// before the object is deleted.
+func TestAddressWindows_CloseWhenThePodReleasesItsAddress(t *testing.T) {
+	failed := workerPod("own-1", "u1", "own", "10.1.0.5", t0)
+	failed.Status.Phase = corev1.PodFailed
+	torn := workerPod("own-2", "u2", "own", "10.1.0.6", t0)
+	torn.Status.Conditions[0].Status = corev1.ConditionFalse
+	torn.Status.Conditions[0].LastTransitionTime = metav1.NewTime(t0.Add(time.Minute))
+
+	for name, tc := range map[string]struct {
+		pod *corev1.Pod
+		ip  string
+	}{"terminal phase": {failed, "10.1.0.5"}, "sandbox torn down": {torn, "10.1.0.6"}} {
+		t.Run(name, func(t *testing.T) {
+			w := newAddressWindows()
+			w.observe(workerPod(tc.pod.Name, string(tc.pod.UID), "own", tc.ip, t0), true, t0)
+			w.observe(tc.pod, true, t0.Add(time.Minute))
+			_, ok := w.attribute(tc.ip, t0.Add(30*time.Second))
+			assert.True(t, ok, "a record while it held the address still joins")
+			_, ok = w.attribute(tc.ip, t0.Add(90*time.Second))
+			assert.False(t, ok, "nothing after the release joins it")
+		})
+	}
 }
 
 // pki is a CA with a server certificate for serverName and a client certificate
@@ -246,19 +291,22 @@ func TestPoller_AttributesRecordsToItsOwnPods(t *testing.T) {
 	_, addr := startReplica(t, p, "e1",
 		record{Seq: 1, Time: t0.Add(30 * time.Second), SourceIP: "10.1.0.5", Outcome: "denied", Host: "evil.example", Port: "443"},
 		record{Seq: 2, Time: t0.Add(40 * time.Second), SourceIP: "10.1.0.6", Outcome: "dial-failed", DialClass: "timeout", Host: "api.github.com", Port: "443"},
+		record{Seq: 3, Time: t0.Add(90 * time.Second), SourceIP: "10.1.0.5", Outcome: "denied", Host: "evil.example", Port: "443"},
 	)
 	h := newHarness(t, p, addr)
 	ctx := context.Background()
 	h.p.onPod(ctx, workerPod("own-1", "u1", "own", "10.1.0.5", t0))
 	h.p.onPod(ctx, workerPod("sib-1", "u2", "sibling", "10.1.0.6", t0))
+	h.p.onPod(ctx, workerPod("sib-2", "u3", "sibling", "10.1.0.5", t0.Add(70*time.Second)))
 
 	require.NoError(t, h.p.poll(ctx))
-	got := h.p.Lookup("own-1")
+	got := h.p.Lookup("u1")
 	require.Len(t, got, 1)
 	assert.Equal(t, Failure{Time: t0.Add(30 * time.Second), Outcome: "denied", Host: "evil.example", Port: "443"}, got[0])
-	assert.Empty(t, h.p.Lookup("sib-1"), "a sibling gateway's worker is not this AGC's to attribute")
+	assert.Empty(t, h.p.Lookup("u2"), "a sibling gateway's worker is not this AGC's to attribute")
 	assert.Equal(t, 1.0, h.records("denied", "attributed"))
 	assert.Equal(t, 1.0, h.records("dial-failed", "discarded"))
+	assert.Equal(t, 1.0, h.records("denied", "discarded"), "a sibling on own-1's address after it, while own-1's window is open, makes the record ambiguous")
 	assert.Equal(t, 1.0, testutil.ToFloat64(h.p.Metrics.Reads.WithLabelValues(ns, "ok")))
 }
 
@@ -275,12 +323,12 @@ func TestPoller_ResumesFromItsCursorAndResetsOnANewEpoch(t *testing.T) {
 
 	require.NoError(t, h.p.poll(ctx))
 	require.NoError(t, h.p.poll(ctx))
-	assert.Len(t, h.p.Lookup("own-1"), 2, "a second poll reads nothing already read")
+	assert.Len(t, h.p.Lookup("u1"), 2, "a second poll reads nothing already read")
 
 	f.epoch.Store("e2")
 	f.records.Store([]record{rec(1)})
 	require.NoError(t, h.p.poll(ctx))
-	assert.Len(t, h.p.Lookup("own-1"), 3, "a restarted replica's sequence 1 is a new record")
+	assert.Len(t, h.p.Lookup("u1"), 3, "a restarted replica's sequence 1 is a new record")
 }
 
 // A replica the AGC cannot verify, as during the CA roll, is a failed read that
@@ -296,14 +344,42 @@ func TestPoller_RefusesAnUnverifiedReplicaAndKeepsItsCursor(t *testing.T) {
 			f, addr := startReplicaServing(t, server, p, "e1", record{Seq: 8, Time: t0.Add(30 * time.Second), SourceIP: "10.1.0.5", Outcome: "denied"})
 			h := newHarness(t, p, addr)
 			key := replica{pool: pool{"provider", "shared"}, addr: "10.2.0.7"}
-			h.p.cursors[key] = cursor{epoch: "e1", after: 7}
+			h.p.cursors[key] = cursor{epoch: "e1", after: 7, read: t0}
 
 			require.NoError(t, h.p.poll(context.Background()))
 			assert.Zero(t, f.hits.Load(), "no request reaches a replica the AGC did not verify")
 			assert.Equal(t, 1.0, testutil.ToFloat64(h.p.Metrics.Reads.WithLabelValues(ns, "failed")))
-			assert.Equal(t, cursor{epoch: "e1", after: 7}, h.p.cursors[key])
+			assert.Equal(t, cursor{epoch: "e1", after: 7, read: t0}, h.p.cursors[key])
 		})
 	}
+}
+
+// A poll that fails before it reaches a replica (here DNS, then the replica
+// missing from DNS) keeps that replica's cursor, so the next good poll does not
+// read its records again. A cursor unread past the proxy's retention goes.
+func TestPoller_KeepsItsCursorThroughAFailedPoll(t *testing.T) {
+	p := newPKI(t)
+	_, addr := startReplica(t, p, "e1", record{Seq: 1, Time: t0.Add(30 * time.Second), SourceIP: "10.1.0.5", Outcome: "denied"})
+	h := newHarness(t, p, addr)
+	ctx := context.Background()
+	h.p.onPod(ctx, workerPod("own-1", "u1", "own", "10.1.0.5", t0))
+	resolve := h.p.resolve
+	require.NoError(t, h.p.poll(ctx))
+
+	h.p.resolve = func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") }
+	require.Error(t, h.p.poll(ctx))
+	h.p.resolve = func(context.Context, string) ([]string, error) { return nil, nil }
+	require.NoError(t, h.p.poll(ctx))
+	h.p.resolve = resolve
+	require.NoError(t, h.p.poll(ctx))
+
+	assert.Len(t, h.p.Lookup("u1"), 1, "the record is held once")
+	assert.Equal(t, 1.0, h.records("denied", "attributed"), "and counted once")
+
+	h.p.now = func() time.Time { return t0.Add(2*time.Minute + cursorRetention + time.Second) }
+	h.p.resolve = func(context.Context, string) ([]string, error) { return nil, nil }
+	require.NoError(t, h.p.poll(ctx))
+	assert.Empty(t, h.p.cursors, "a cursor unread past the proxy's retention is dropped")
 }
 
 // A gateway that is not opted in reads nothing and drops what it held.
@@ -314,14 +390,14 @@ func TestPoller_ReadsNothingWhileTheGatewayIsOptedOut(t *testing.T) {
 	ctx := context.Background()
 	h.p.onPod(ctx, workerPod("own-1", "u1", "own", "10.1.0.5", t0))
 	require.NoError(t, h.p.poll(ctx))
-	require.Len(t, h.p.Lookup("own-1"), 1)
+	require.Len(t, h.p.Lookup("u1"), 1)
 
 	h.gw.Spec.ProxyFailureAttribution = "Disabled"
 	require.NoError(t, h.c.Update(ctx, h.gw))
 	hits := f.hits.Load()
 	require.NoError(t, h.p.poll(ctx))
 	assert.Equal(t, hits, f.hits.Load(), "no replica is read")
-	assert.Empty(t, h.p.Lookup("own-1"), "what was held is dropped")
+	assert.Empty(t, h.p.Lookup("u1"), "what was held is dropped")
 	assert.Empty(t, h.p.cursors)
 
 	h.p.windows.close("u1", t0.Add(time.Minute))

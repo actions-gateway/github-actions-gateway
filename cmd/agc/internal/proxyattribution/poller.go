@@ -45,6 +45,10 @@ const (
 	// DefaultInterval is how often every replica is read. The proxy keeps a
 	// record for five minutes, so a poll or two missed loses nothing.
 	DefaultInterval = 30 * time.Second
+	// cursorRetention is how long a replica's cursor outlives its last good
+	// read: past the proxy's five-minute retention, plus skew, so a replica read
+	// again from the start after that holds no record this AGC already has.
+	cursorRetention = 6 * time.Minute
 	// readTimeout bounds one replica's read.
 	readTimeout = 10 * time.Second
 	// maxResponseBytes bounds one response body: 1024 records of capped fields.
@@ -75,10 +79,11 @@ type replica struct {
 	addr string
 }
 
-// cursor is where the last read of one replica ended.
+// cursor is where the last good read of one replica ended, and when it was.
 type cursor struct {
 	epoch string
 	after uint64
+	read  time.Time
 }
 
 // Poller reads every replica of each pool this gateway's RunnerSets use, on an
@@ -117,9 +122,9 @@ func NewPoller(c, apiReader client.Reader, informers cache.Informers, namespace,
 	}
 }
 
-// Lookup returns the failures attributed to the worker pod named pod. A record
+// Lookup returns the failures attributed to the worker pod with UID pod. A record
 // reaches it up to one poll interval after the failure.
-func (p *Poller) Lookup(pod string) []Failure { return p.failures.lookup(pod) }
+func (p *Poller) Lookup(pod types.UID) []Failure { return p.failures.lookup(pod) }
 
 // NeedLeaderElection reports false: every replica's sessions own their own pods.
 func (p *Poller) NeedLeaderElection() bool { return false }
@@ -163,11 +168,9 @@ func (p *Poller) clock() time.Time {
 }
 
 func (p *Poller) onPod(ctx context.Context, obj any) {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok || !p.ownPod(ctx, pod) {
-		return
+	if pod, ok := obj.(*corev1.Pod); ok {
+		p.windows.observe(pod, p.ownPod(ctx, pod), p.clock())
 	}
-	p.windows.open(pod)
 }
 
 func (p *Poller) onPodDelete(obj any) {
@@ -215,15 +218,16 @@ func (p *Poller) poll(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	read := map[replica]bool{}
 	var errs []error
 	for _, pl := range pools {
-		if err := p.readPool(ctx, pl, read); err != nil {
+		if err := p.readPool(ctx, pl); err != nil {
 			errs = append(errs, fmt.Errorf("pool %s/%s: %w", pl.namespace, pl.name, err))
 		}
 	}
-	for r := range p.cursors {
-		if !read[r] {
+	// A cursor is kept through failed reads and a replica's absence from DNS,
+	// and dropped only once the proxy can no longer hold anything it covered.
+	for r, cur := range p.cursors {
+		if now.Sub(cur.read) > cursorRetention {
 			delete(p.cursors, r)
 		}
 	}
@@ -269,9 +273,9 @@ func (p *Poller) pools(ctx context.Context, gw *v2alpha1.ActionsGateway) ([]pool
 	return out, nil
 }
 
-// readPool reads every replica of pl through its projection, marking each one
-// read. A pool with no projection here is not attributing this namespace.
-func (p *Poller) readPool(ctx context.Context, pl pool, read map[replica]bool) error {
+// readPool reads every replica of pl through its projection. A pool with no
+// projection here is not attributing this namespace.
+func (p *Poller) readPool(ctx context.Context, pl pool) error {
 	key := types.NamespacedName{Namespace: p.Namespace, Name: apinames.Join(apinames.MaxLabelValue, projectionNamePrefix, pl.namespace, pl.name)}
 	var cm corev1.ConfigMap
 	if err := p.APIReader.Get(ctx, key, &cm); err != nil {
@@ -320,7 +324,6 @@ func (p *Poller) readPool(ctx context.Context, pl pool, read map[replica]bool) e
 	hc := &http.Client{Transport: tr, Timeout: readTimeout}
 	for _, addr := range addrs {
 		r := replica{pool: pl, addr: addr}
-		read[r] = true
 		p.readReplica(ctx, hc, r, net.JoinHostPort(addr, port))
 	}
 	return nil
@@ -344,6 +347,7 @@ func (p *Poller) readReplica(ctx context.Context, hc *http.Client, r replica, ho
 	if resp.Epoch != cur.epoch {
 		cur = cursor{epoch: resp.Epoch}
 	}
+	cur.read = p.clock()
 	for _, rec := range resp.Records {
 		p.ingest(rec)
 		cur.after = max(cur.after, rec.Seq)

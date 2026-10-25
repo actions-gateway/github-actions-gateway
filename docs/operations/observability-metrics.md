@@ -166,8 +166,8 @@ Nothing acts on the attributed records yet; see [tenant onboarding](tenant-onboa
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
-| `actions_gateway_proxy_failure_records_total` | Counter | `namespace`, `outcome`, `result` | Records read, by `outcome` (`denied`, `dial-failed`, or `other` for any value the proxy does not write) and `result`: `attributed` to one of this gateway's worker pods, or `discarded` (a sibling gateway's worker, or a time too near the edge of a pod's address window to be sure). |
-| `actions_gateway_proxy_failure_reads_total` | Counter | `namespace`, `result` | Reads of one pool replica, `ok` or `failed`. Failures while the pool rolls are expected: the attribution CA changes before every replica serves the new certificate, and the next read after the roll resumes where the last one ended. A rate that does not stop after the roll means the AGC cannot reach the read port. |
+| `actions_gateway_proxy_failure_records_total` | Counter | `namespace`, `outcome`, `result` | Records read, by `outcome` (`denied`, `dial-failed`, or `other` for any value the proxy does not write) and `result`: `attributed` to one of this gateway's worker pods, or `discarded`: the address belonged to a sibling gateway's worker, to no pod this AGC saw (one gone before it started, or past the five-minute retention), to two pods at that time, or the time was within two seconds of a pod's taking or giving up the address. |
+| `actions_gateway_proxy_failure_reads_total` | Counter | `namespace`, `result` | Reads of one pool replica, `ok` or `failed`; a failed DNS lookup of the pool's replicas counts as one failed read. Failures while the pool rolls are expected: the attribution CA changes before every replica serves the new certificate, and the next good read resumes where the last one ended. A rate that does not stop after the roll means the AGC cannot reach the read port. |
 
 ### Proxy metrics
 
