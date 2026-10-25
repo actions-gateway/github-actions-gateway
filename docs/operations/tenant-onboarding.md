@@ -1120,6 +1120,38 @@ Reach for it *before* the incident if the answer has to exist afterwards: it rec
 
 The record shape, the field meanings, and how to select the audit stream in a log pipeline are in [logging: proxy egress audit record](observability-logging.md#proxy-egress-audit-record); what a line deliberately never carries is in the [security design](../design/05-security.md#proxy-egress-audit-record).
 
+### Proxy failure attribution
+
+A proxy pool can keep the CONNECT failures it sees (a destination its allowlist refused, or an upstream it could not dial) labelled with the namespace that sent them, so the tenant's gateway can later tell which job hit them.
+**Nothing reads these records yet.** The gateway side that turns them into retry decisions and Events is still to come, so turning this on today moves workers onto their own port and keeps their failures in the pool's memory, and that is all.
+
+It is **off by default** and needs both sides: the pool owner turns it on for the pool, and the tenant turns it on for their namespace.
+
+```bash
+kubectl patch egressproxy -n <pool-namespace> <pool> \
+  --type merge -p '{"spec":{"failureAttribution":"PerConsumerPort"}}'
+kubectl patch actionsgateway -n <tenant-namespace> <gateway> \
+  --type merge -p '{"spec":{"proxyFailureAttribution":"PerJob"}}'
+```
+
+**What changes.** The pool gives the tenant's namespace a CONNECT port of its own, from 8100 up, and admits that namespace's workers on that port only.
+The pool rolls once to listen on it.
+When every replica has rolled, the GMC writes a `proxy-attribution-<pool-namespace>-<pool>` ConfigMap and a Secret of the same name into the tenant's namespace, and each new job's workers use that port in their `HTTPS_PROXY`; nothing in the tenant's namespace restarts.
+The gateway's own traffic stays on the shared port.
+The Secret holds the namespace's client certificate for reading its records back; the same key is also held in the pool's namespace.
+One gateway opting in moves every gateway in that namespace that uses the pool.
+
+**Turn it off between runs.** A namespace loses its port at once when it stops being attributed, so a job already running on that port loses its new connections for the rest of the run (Q1208).
+That happens when the tenant's last gateway sets `proxyFailureAttribution: Disabled`, when the pool owner sets `failureAttribution: Disabled`, and when the pool owner removes the namespace from `spec.sharing.allowedNamespaces`.
+
+**Limits.** While the pool has it on, `spec.sharing.allowedNamespaces` takes at most 32 namespaces.
+The per-port isolation is a NetworkPolicy, so it holds only on a CNI that enforces one; kindnet does not.
+
+**Checking it took effect.** `kubectl get configmap -n <tenant-namespace> proxy-attribution-<pool-namespace>-<pool> -o jsonpath='{.data.proxy-port}'` prints the namespace's port once its workers are moved.
+A worker pod's `HTTPS_PROXY` ends in that port.
+
+What the pool keeps, for how long, and who can read it are in the [security design](../design/05-security.md#proxy-failure-attribution).
+
 ### Workload-identity credentials (external signer)
 
 `spec.credentials` is a discriminated union (keyed by `credentials.type`) with two members.

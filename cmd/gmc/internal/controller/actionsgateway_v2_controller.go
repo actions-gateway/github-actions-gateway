@@ -358,6 +358,13 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 	}
 	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct, remoteProxies)
 	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct, remoteProxies)
+	attributes, err := namespaceAttributes(ctx, r.Client, ag.Namespace)
+	if err != nil {
+		return fmt.Errorf("resolve proxy failure attribution: %w", err)
+	}
+	if attributes {
+		applyAttributionEgress(workloadNP, agcNP, remoteProxies)
+	}
 	// Q246/Q61: in direct egress the GitHub-CIDR allowlist on these two policies is
 	// sourced from the IP-range cache. At GMC startup that cache is empty until
 	// IPRangeReconciler's first api.github.com/meta fetch lands, so rebuilding an

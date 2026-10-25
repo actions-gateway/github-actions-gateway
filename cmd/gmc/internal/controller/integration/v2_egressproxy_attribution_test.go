@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -65,6 +66,7 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 	createNamespace(t, providerNS)
 	createNamespace(t, consumerNS)
 	startEgressProxyReconciler(t, nil)
+	startActionsGatewayV2Reconciler(t)
 	createGitHubAppSecret(t, consumerNS, "attr-creds")
 
 	ep := &v2alpha1.EgressProxy{
@@ -108,11 +110,27 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 	}, 30*time.Second, 250*time.Millisecond)
 	assert.NotEmpty(t, clients.Data[consumerNS+".crt"])
 
+	// The opted-in namespace's workers may reach the attributed port range, which
+	// the real apiserver must accept as an endPort rule.
+	workloadRange := func() bool {
+		var np networkingv1.NetworkPolicy
+		if k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw-workload"}, &np) != nil {
+			return false
+		}
+		for _, rule := range np.Spec.Egress {
+			for _, p := range rule.Ports {
+				if p.Port != nil && p.Port.IntVal == 8100 && p.EndPort != nil && *p.EndPort == 8132 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	require.Eventually(t, workloadRange, 30*time.Second, 250*time.Millisecond, "the workload policy never admitted the attributed port range")
+
 	// Turning the gateway's opt-in off must clear the pool against real Secret
 	// validation: the TLS Secret keeps its required keys, blanked.
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, ag))
-	ag.Spec.ProxyFailureAttribution = "Disabled"
-	require.NoError(t, k8sClient.Update(ctx, ag))
+	setGatewayAttribution(t, types.NamespacedName{Namespace: consumerNS, Name: "attr-gw"}, "Disabled")
 	require.Eventually(t, func() bool {
 		var s corev1.Secret
 		if k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-attribution-tls"}, &s) != nil {
@@ -121,6 +139,8 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 		return len(s.Data[corev1.TLSPrivateKeyKey]) == 0 &&
 			k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-proxy-attr"}, &corev1.Service{}) != nil
 	}, 30*time.Second, 250*time.Millisecond, "the pool never cleared its attribution key material and read Service")
+	require.Eventually(t, func() bool { return !workloadRange() }, 30*time.Second, 250*time.Millisecond,
+		"the workload policy kept the attributed port range after the namespace opted out")
 	var ready v2alpha1.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool"}, &ready))
 	for _, c := range ready.Status.Conditions {
@@ -128,4 +148,18 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status, "the pool must not go Degraded clearing attribution: %s", c.Message)
 		}
 	}
+}
+
+// setGatewayAttribution sets a gateway's proxyFailureAttribution, rereading on a
+// conflict: the gateway reconciler writes the same object.
+func setGatewayAttribution(t *testing.T, key types.NamespacedName, value string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var ag v2alpha1.ActionsGateway
+		if k8sClient.Get(ctx, key, &ag) != nil {
+			return false
+		}
+		ag.Spec.ProxyFailureAttribution = value
+		return k8sClient.Update(ctx, &ag) == nil
+	}, 10*time.Second, 50*time.Millisecond, "could not set %s's proxyFailureAttribution to %s", key, value)
 }
