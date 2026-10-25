@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -619,8 +620,8 @@ func buildProxyAttributionSecret(ep *gmcv2alpha1.EgressProxy, consumerNS string,
 // immediate, which moves new jobs back to the unattributed port.
 //
 // Projections carry no owner reference, as share ConfigMaps do not, and are found
-// by label for pruning. The GMC holds no delete on Secrets, so a withdrawn Secret
-// is blanked in place.
+// by the ConfigMap's label for pruning; each withdrawn ConfigMap's Secret is
+// blanked by name (blankProjectedSecret).
 func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Context, ep *gmcv2alpha1.EgressProxy, ports, live map[string]int, rolledOut bool, clients map[string][]byte) error {
 	labels := client.MatchingLabels{labelAttributionManaged: "true", labelShareProxyNS: ep.Namespace, labelShareProxyNam: ep.Name}
 	var existing corev1.ConfigMapList
@@ -654,25 +655,40 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 		if keep[cm.Namespace] {
 			continue
 		}
+		// Blank first: the ConfigMap is what finds this namespace again, so a
+		// failed blank is retried on the next reconcile.
+		if err := r.blankProjectedSecret(ctx, client.ObjectKeyFromObject(cm)); err != nil {
+			return fmt.Errorf("blank the client certificate in %q: %w", cm.Namespace, err)
+		}
 		if err := r.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("withdraw from %q: %w", cm.Namespace, err)
 		}
 	}
-	var secrets corev1.SecretList
-	if err := r.shareReader().List(ctx, &secrets, labels); err != nil {
-		return fmt.Errorf("list attribution Secrets: %w", err)
-	}
-	for i := range secrets.Items {
-		s := &secrets.Items[i]
-		if keep[s.Namespace] || len(s.Data[corev1.TLSPrivateKeyKey]) == 0 {
-			continue
-		}
-		s.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
-		if err := r.Update(ctx, s); err != nil {
-			return fmt.Errorf("blank the client certificate in %q: %w", s.Namespace, err)
-		}
-	}
 	return nil
+}
+
+// blankProjectedSecret empties the client certificate projected under key. The
+// GMC reads Secrets only in tenant namespaces and holds no delete on them, so it
+// reads the one Secret by name rather than listing, and blanks it in place. A
+// namespace that is no longer a tenant's cannot be read; its workers still move
+// off the port when the ConfigMap goes, and the key stays where it was written.
+func (r *EgressProxyReconciler) blankProjectedSecret(ctx context.Context, key client.ObjectKey) error {
+	var s corev1.Secret
+	if err := r.shareReader().Get(ctx, key, &s); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if apierrors.IsForbidden(err) {
+			logf.FromContext(ctx).Info("cannot read a withdrawn attribution Secret to blank it", "namespace", key.Namespace, "name", key.Name)
+			return nil
+		}
+		return err
+	}
+	if len(s.Data[corev1.TLSPrivateKeyKey]) == 0 {
+		return nil
+	}
+	s.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
+	return r.Update(ctx, &s)
 }
 
 // applyProjectedSecret creates or updates a Secret in a consumer namespace. Like

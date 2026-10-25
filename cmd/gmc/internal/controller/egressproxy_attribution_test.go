@@ -122,8 +122,8 @@ func TestEgressProxyReconcile_UnattributedPoolIsUnchanged(t *testing.T) {
 		"pool on, no namespace opted in": attributingPool("team-a"),
 	} {
 		t.Run(name, func(t *testing.T) {
-			c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
-				WithObjects(ep, gatewayUsing("team-a", name == "pool disabled")).WithStatusSubresource(ep).Build()
+			c := withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+				WithObjects(ep, gatewayUsing("team-a", name == "pool disabled")).WithStatusSubresource(ep).Build())
 			reconcilePool(t, c)
 			ctx := context.Background()
 
@@ -259,19 +259,31 @@ func TestEgressProxyReconcile_PortsAndBundleAreStableAcrossGrantChanges(t *testi
 // The GMC's role grants no delete on Secrets, so a reconcile that deletes one is
 // refused 403 on a real cluster. The fake client and envtest run as admin, so the
 // refusal is injected here.
-func TestEgressProxyReconcile_NeverDeletesSecrets(t *testing.T) {
-	ep := attributingPool("team-a")
-	teamA := gatewayUsing("team-a", true)
-	base := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
-		WithObjects(ep, teamA).WithStatusSubresource(ep).Build()
-	c := interceptor.NewClient(base, interceptor.Funcs{
+// withGMCSecretVerbs refuses what the GMC's shipped RBAC refuses on Secrets: any
+// delete, and any list, since its reads are bound per tenant namespace and the
+// fake client runs as admin.
+func withGMCSecretVerbs(base client.WithWatch) client.WithWatch {
+	return interceptor.NewClient(base, interceptor.Funcs{
 		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
 			if _, ok := obj.(*corev1.Secret); ok {
 				return apierrors.NewForbidden(corev1.Resource("secrets"), obj.GetName(), nil)
 			}
 			return cl.Delete(ctx, obj, opts...)
 		},
+		List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+			if _, ok := list.(*corev1.SecretList); ok {
+				return apierrors.NewForbidden(corev1.Resource("secrets"), "", nil)
+			}
+			return cl.List(ctx, list, opts...)
+		},
 	})
+}
+
+func TestEgressProxyReconcile_NeverDeletesSecrets(t *testing.T) {
+	ep := attributingPool("team-a")
+	teamA := gatewayUsing("team-a", true)
+	c := withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, teamA).WithStatusSubresource(ep).Build())
 	ctx := context.Background()
 
 	reconcilePool(t, c)
@@ -337,8 +349,8 @@ func TestEgressProxyReconcile_ProjectsTheConsumerAfterTheRollout(t *testing.T) {
 	ep := attributingPool("team-a")
 	teamA := gatewayUsing("team-a", true)
 	dep := &appsv1.Deployment{}
-	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
-		WithObjects(ep, teamA).WithStatusSubresource(ep, dep).Build()
+	c := withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, teamA).WithStatusSubresource(ep, dep).Build())
 	ctx := context.Background()
 	key := types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}
 
@@ -374,8 +386,8 @@ func TestEgressProxyReconcile_ProjectsTheConsumerAfterTheRollout(t *testing.T) {
 func TestEgressProxyReconcile_WithdrawsAfterTheDeploymentForgetsItsPorts(t *testing.T) {
 	ep := attributingPool("team-a")
 	dep := &appsv1.Deployment{}
-	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
-		WithObjects(ep, gatewayUsing("team-a", true)).WithStatusSubresource(ep, dep).Build()
+	c := withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, gatewayUsing("team-a", true)).WithStatusSubresource(ep, dep).Build())
 	ctx := context.Background()
 	key := types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}
 
@@ -395,6 +407,48 @@ func TestEgressProxyReconcile_WithdrawsAfterTheDeploymentForgetsItsPorts(t *test
 	var sec corev1.Secret
 	require.NoError(t, c.Get(ctx, key, &sec))
 	assert.Zero(t, len(sec.Data[corev1.TLSPrivateKeyKey]), "its client key is blanked")
+}
+
+// A withdrawal whose blank fails keeps the ConfigMap, which is what finds the
+// namespace again, so the next reconcile blanks the key and then withdraws.
+func TestEgressProxyReconcile_RetriesAFailedBlankBeforeWithdrawing(t *testing.T) {
+	ep := attributingPool("team-a")
+	teamA := gatewayUsing("team-a", true)
+	dep := &appsv1.Deployment{}
+	failBlank := true
+	c := interceptor.NewClient(withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, teamA).WithStatusSubresource(ep, dep).Build()), interceptor.Funcs{
+		Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if s, ok := obj.(*corev1.Secret); ok && failBlank && s.Namespace == "team-a" && len(s.Data[corev1.TLSPrivateKeyKey]) == 0 {
+				return apierrors.NewServiceUnavailable("transient")
+			}
+			return cl.Update(ctx, obj, opts...)
+		},
+	})
+	ctx := context.Background()
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}
+	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: &IPRangeCache{}, ProxyImage: "proxy:test"}
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "provider", Name: "shared"}}
+
+	_, err := r.Reconcile(ctx, req)
+	require.NoError(t, err)
+	markRolledOut(t, c)
+	_, err = r.Reconcile(ctx, req)
+	require.NoError(t, err)
+	require.NoError(t, c.Get(ctx, key, &corev1.ConfigMap{}))
+
+	teamA.Spec.ProxyFailureAttribution = ""
+	require.NoError(t, c.Update(ctx, teamA))
+	_, _ = r.Reconcile(ctx, req)
+	require.NoError(t, c.Get(ctx, key, &corev1.ConfigMap{}), "a failed blank leaves the ConfigMap to find the namespace by")
+
+	failBlank = false
+	_, err = r.Reconcile(ctx, req)
+	require.NoError(t, err)
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, key, &corev1.ConfigMap{})))
+	var sec corev1.Secret
+	require.NoError(t, c.Get(ctx, key, &sec))
+	assert.Zero(t, len(sec.Data[corev1.TLSPrivateKeyKey]), "the retry blanks the key")
 }
 
 func TestApplyAttributionEgress_AdmitsThePortRangeAndTheReadPort(t *testing.T) {
