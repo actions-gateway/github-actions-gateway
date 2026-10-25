@@ -77,16 +77,17 @@ type ActionsGatewaySpec struct {
 	// PerJob takes effect only on a pool whose EgressProxy.spec.failureAttribution is
 	// PerConsumerPort; either side alone attributes nothing. The opt-in is per
 	// namespace: once any gateway in a namespace sets PerJob, that namespace gets its
-	// own port on each attributing pool it uses, and every gateway in it that uses
-	// such a pool moves to that port, which rolls them. The AGC then reads its
-	// namespace's failures from the pool and keeps only those from its own worker
-	// pods. A policy denial it attributes is reported as an Event in this namespace
+	// own port on each attributing pool it uses, and the workers of every gateway
+	// in it that uses such a pool move to that port at their next job, once the
+	// pool has rolled; nothing restarts. The AGC's own traffic stays on the shared
+	// port. The AGC then reads its namespace's failures from the pool and keeps
+	// only those from its own worker pods. A policy denial it attributes is reported as an Event in this namespace
 	// naming the blocked host, which is why this is a separate switch from the
 	// pool's. Design: docs/design/05-security.md, "Proxy failure attribution"
 	// (Q1184).
 	//
-	// Not yet effective: it gives the namespace a port on an attributing pool, but
-	// the gateway is not moved onto it and its AGC reads no records yet.
+	// The AGC does not read the records yet, so enabling this today moves the
+	// namespace's workers onto their port and nothing more.
 	//
 	// +optional
 	// +kubebuilder:validation:Enum=Disabled;PerJob

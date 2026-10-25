@@ -428,10 +428,19 @@ func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context
 	if err != nil {
 		return err
 	}
-	if err := patch(workloadNPNameV2(ag), buildWorkloadNetworkPolicyV2(ag, cidrs, true, remoteProxies)); err != nil {
+	workloadNP := buildWorkloadNetworkPolicyV2(ag, cidrs, true, remoteProxies)
+	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, cidrs, true, remoteProxies)
+	attributes, err := namespaceAttributes(ctx, r.Client, ag.Namespace)
+	if err != nil {
 		return err
 	}
-	if err := patch(agcNameV2(ag), buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, cidrs, true, remoteProxies)); err != nil {
+	if attributes {
+		applyAttributionEgress(workloadNP, agcNP, remoteProxies)
+	}
+	if err := patch(workloadNPNameV2(ag), workloadNP); err != nil {
+		return err
+	}
+	if err := patch(agcNameV2(ag), agcNP); err != nil {
 		return err
 	}
 	if patched && r.Metrics != nil {

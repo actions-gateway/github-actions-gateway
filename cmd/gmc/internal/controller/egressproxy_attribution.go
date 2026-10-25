@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -406,11 +407,11 @@ func attributionClientNamespaces(s *corev1.Secret) []string {
 }
 
 // ensureAttributionCerts keeps the attribution bundle in step with namespaces and
-// returns the CA it holds. It regenerates when either Secret is missing, the two
+// returns the CA and the client certificates it holds. It regenerates when either Secret is missing, the two
 // disagree on the CA, the clients Secret names a different namespace set, or the
 // server cert is near expiry. With no namespaces it empties both Secrets rather
 // than deleting them, since the GMC holds no delete verb on Secrets.
-func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *gmcv2alpha1.EgressProxy, namespaces []string) ([]byte, error) {
+func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *gmcv2alpha1.EgressProxy, namespaces []string) ([]byte, map[string][]byte, error) {
 	if len(namespaces) == 0 {
 		for _, name := range []string{egressProxyAttributionTLSSecretName(ep), egressProxyAttributionClientsSecretName(ep)} {
 			var s corev1.Secret
@@ -418,7 +419,7 @@ func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *
 				if apierrors.IsNotFound(err) {
 					continue
 				}
-				return nil, err
+				return nil, nil, err
 			}
 			if !slices.ContainsFunc(slices.Collect(maps.Values(s.Data)), func(v []byte) bool { return len(v) > 0 }) {
 				continue
@@ -429,20 +430,20 @@ func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *
 				s.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
 			}
 			if err := r.Update(ctx, &s); err != nil {
-				return nil, fmt.Errorf("empty %s: %w", name, err)
+				return nil, nil, fmt.Errorf("empty %s: %w", name, err)
 			}
 		}
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var server, clients corev1.Secret
 	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: egressProxyAttributionTLSSecretName(ep)}, &server)
 	if serverErr != nil && !apierrors.IsNotFound(serverErr) {
-		return nil, serverErr
+		return nil, nil, serverErr
 	}
 	clientsErr := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: egressProxyAttributionClientsSecretName(ep)}, &clients)
 	if clientsErr != nil && !apierrors.IsNotFound(clientsErr) {
-		return nil, clientsErr
+		return nil, nil, clientsErr
 	}
 
 	reason := "secret missing"
@@ -455,7 +456,7 @@ func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *
 				if time.Until(cert.NotAfter) > metricsCertRenewBefore {
 					reason = "CA mismatch"
 					if ca := server.Data[metricsCACertKey]; len(ca) > 0 && string(ca) == string(clients.Data[metricsCACertKey]) {
-						return ca, nil
+						return ca, clients.Data, nil
 					}
 				}
 			}
@@ -464,17 +465,18 @@ func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *
 
 	bundle, err := generateAttributionCerts(ep.Namespace, proxyResourceName(ep), namespaces)
 	if err != nil {
-		return nil, fmt.Errorf("generate attribution certs: %w", err)
+		return nil, nil, fmt.Errorf("generate attribution certs: %w", err)
 	}
 	if err := r.applyOwnedSecret(ctx, ep, buildEgressProxyAttributionTLSSecret(ep, bundle)); err != nil {
-		return nil, fmt.Errorf("attribution server Secret: %w", err)
+		return nil, nil, fmt.Errorf("attribution server Secret: %w", err)
 	}
-	if err := r.applyOwnedSecret(ctx, ep, buildEgressProxyAttributionClientsSecret(ep, bundle)); err != nil {
-		return nil, fmt.Errorf("attribution clients Secret: %w", err)
+	clientsSecret := buildEgressProxyAttributionClientsSecret(ep, bundle)
+	if err := r.applyOwnedSecret(ctx, ep, clientsSecret); err != nil {
+		return nil, nil, fmt.Errorf("attribution clients Secret: %w", err)
 	}
 	r.recordEvent(ep, corev1.EventTypeNormal, "AttributionCertificateIssued", "EnsureAttributionCerts",
 		"issued failure-attribution mTLS certificates for %d namespace(s) (%s)", len(namespaces), reason)
-	return bundle.caPEM, nil
+	return bundle.caPEM, clientsSecret.Data, nil
 }
 
 // reconcileAttributionService applies the headless read Service while any
@@ -501,9 +503,9 @@ func (r *EgressProxyReconciler) reconcileAttributionService(ctx context.Context,
 }
 
 // reconcileAttribution resolves the attributed namespaces, allocates their ports
-// against the live Deployment, and keeps the bundle in step. It returns the port
-// map and the CA the Deployment must carry; both are empty when nothing is
-// attributed.
+// against the live Deployment, keeps the bundle in step, and projects each
+// namespace's port and client certificate into it. It returns the port map and
+// the CA the Deployment must carry; both are empty when nothing is attributed.
 func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gmcv2alpha1.EgressProxy) (map[string]int, []byte, error) {
 	namespaces, err := attributedNamespacesFor(ctx, r.Client, ep)
 	if err != nil {
@@ -520,12 +522,200 @@ func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gm
 	if len(ports) == 0 && len(current) == 0 {
 		return nil, nil, nil
 	}
-	caPEM, err := r.ensureAttributionCerts(ctx, ep, namespaces)
+	caPEM, clients, err := r.ensureAttributionCerts(ctx, ep, namespaces)
 	if err != nil {
 		return nil, nil, err
 	}
 	if err := r.reconcileAttributionService(ctx, ep, ports); err != nil {
 		return nil, nil, err
 	}
+	if err := r.reconcileAttributionProjections(ctx, ep, ports, current, deploymentRolledOut(&live), clients); err != nil {
+		return nil, nil, fmt.Errorf("project attribution: %w", err)
+	}
 	return ports, caPEM, nil
+}
+
+// deploymentRolledOut reports whether every replica of dep runs its current pod
+// template, so each one listens on the ports that template names.
+func deploymentRolledOut(dep *appsv1.Deployment) bool {
+	if dep.ResourceVersion == "" || dep.Spec.Replicas == nil || dep.Status.ObservedGeneration < dep.Generation {
+		return false
+	}
+	want := *dep.Spec.Replicas
+	return dep.Status.UpdatedReplicas == want && dep.Status.Replicas == want && dep.Status.AvailableReplicas == want
+}
+
+const (
+	// Keys of the ConfigMap projected into an attributed namespace. Its presence
+	// moves that namespace's workers onto proxy-port; the rest are what phase 3's
+	// reader dials, with the client certificate in the same-named Secret.
+	attributionProxyPortKey  = "proxy-port"
+	attributionReadHostKey   = "read-host"
+	attributionReadPortKey   = "read-port"
+	attributionServerNameKey = "server-name"
+
+	labelAttributionManaged = "actions-gateway.com/proxy-attribution"
+)
+
+// proxyAttributionName names the ConfigMap and Secret projected into a consumer
+// namespace, keyed on the pool's namespace and name as the share ConfigMap is.
+func proxyAttributionName(proxyNamespace, proxyName string) string {
+	return apinames.Join(apinames.MaxLabelValue, "proxy-attribution", proxyNamespace, proxyName)
+}
+
+func attributionProjectionLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
+	return map[string]string{
+		labelManagedBy:          labelManagerValue,
+		labelAttributionManaged: "true",
+		labelShareProxyNS:       ep.Namespace,
+		labelShareProxyNam:      ep.Name,
+	}
+}
+
+func buildProxyAttributionConfigMap(ep *gmcv2alpha1.EgressProxy, consumerNS string, port int) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      proxyAttributionName(ep.Namespace, ep.Name),
+			Namespace: consumerNS,
+			Labels:    attributionProjectionLabels(ep),
+		},
+		Data: map[string]string{
+			attributionProxyPortKey:  strconv.Itoa(port),
+			attributionReadHostKey:   fmt.Sprintf("%s.%s.svc.cluster.local", egressProxyAttributionServiceName(ep), ep.Namespace),
+			attributionReadPortKey:   strconv.Itoa(attributionReadPort),
+			attributionServerNameKey: egressProxyMetricsServiceDNSName(ep),
+			shareProxyNSKey:          ep.Namespace,
+			shareProxyNamKey:         ep.Name,
+		},
+	}
+}
+
+func buildProxyAttributionSecret(ep *gmcv2alpha1.EgressProxy, consumerNS string, clients map[string][]byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      proxyAttributionName(ep.Namespace, ep.Name),
+			Namespace: consumerNS,
+			Labels:    attributionProjectionLabels(ep),
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       clients[consumerNS+attributionClientCertSuffix],
+			corev1.TLSPrivateKeyKey: clients[consumerNS+attributionClientKeySuffix],
+			metricsCACertKey:        clients[metricsCACertKey],
+		},
+	}
+}
+
+// reconcileAttributionProjections writes each attributed namespace's port and
+// client certificate into it, and withdraws the rest. A namespace is projected
+// only once it holds a port in both the desired map and the rolled-out
+// Deployment: pointing workers at a port before every replica listens on it would
+// send some of their connections to a replica that refuses them. Withdrawal is
+// immediate, which moves new jobs back to the unattributed port.
+//
+// Projections carry no owner reference, as share ConfigMaps do not, and are found
+// by label for pruning. The GMC holds no delete on Secrets, so a withdrawn Secret
+// is blanked in place.
+func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Context, ep *gmcv2alpha1.EgressProxy, ports, live map[string]int, rolledOut bool, clients map[string][]byte) error {
+	labels := client.MatchingLabels{labelAttributionManaged: "true", labelShareProxyNS: ep.Namespace, labelShareProxyNam: ep.Name}
+	var existing corev1.ConfigMapList
+	if err := r.shareReader().List(ctx, &existing, labels); err != nil {
+		return fmt.Errorf("list attribution projections: %w", err)
+	}
+	projected := map[string]bool{}
+	for i := range existing.Items {
+		projected[existing.Items[i].Namespace] = true
+	}
+
+	keep := map[string]bool{}
+	for ns, port := range ports {
+		if live[ns] != port || len(clients[ns+attributionClientCertSuffix]) == 0 {
+			continue
+		}
+		if !rolledOut && !projected[ns] {
+			continue
+		}
+		keep[ns] = true
+		if err := r.applyProxyShare(ctx, buildProxyAttributionConfigMap(ep, ns, port)); err != nil {
+			return fmt.Errorf("project into %q: %w", ns, err)
+		}
+		if err := r.applyProjectedSecret(ctx, buildProxyAttributionSecret(ep, ns, clients)); err != nil {
+			return fmt.Errorf("project client certificate into %q: %w", ns, err)
+		}
+	}
+
+	for i := range existing.Items {
+		cm := &existing.Items[i]
+		if keep[cm.Namespace] {
+			continue
+		}
+		if err := r.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("withdraw from %q: %w", cm.Namespace, err)
+		}
+	}
+	var secrets corev1.SecretList
+	if err := r.shareReader().List(ctx, &secrets, labels); err != nil {
+		return fmt.Errorf("list attribution Secrets: %w", err)
+	}
+	for i := range secrets.Items {
+		s := &secrets.Items[i]
+		if keep[s.Namespace] || len(s.Data[corev1.TLSPrivateKeyKey]) == 0 {
+			continue
+		}
+		s.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
+		if err := r.Update(ctx, s); err != nil {
+			return fmt.Errorf("blank the client certificate in %q: %w", s.Namespace, err)
+		}
+	}
+	return nil
+}
+
+// applyProjectedSecret creates or updates a Secret in a consumer namespace. Like
+// applyProxyShare it sets no owner reference, which cannot cross namespaces.
+func (r *EgressProxyReconciler) applyProjectedSecret(ctx context.Context, desired *corev1.Secret) error {
+	var existing corev1.Secret
+	err := r.shareReader().Get(ctx, client.ObjectKeyFromObject(desired), &existing)
+	if apierrors.IsNotFound(err) {
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return err
+	}
+	existing.Labels = desired.Labels
+	existing.Data = desired.Data
+	return r.Update(ctx, &existing)
+}
+
+// namespaceAttributes reports whether any ActionsGateway in ns has opted in.
+func namespaceAttributes(ctx context.Context, c client.Client, ns string) (bool, error) {
+	var gateways gmcv2alpha1.ActionsGatewayList
+	if err := c.List(ctx, &gateways, client.InNamespace(ns)); err != nil {
+		return false, fmt.Errorf("list ActionsGateways: %w", err)
+	}
+	return slices.ContainsFunc(gateways.Items, func(ag gmcv2alpha1.ActionsGateway) bool {
+		return ag.Spec.ProxyFailureAttribution == proxyFailureAttributionPerJob
+	}), nil
+}
+
+// applyAttributionEgress lets an opted-in namespace's workload pods reach the
+// attributed port range, and its AGC the read port, on the same proxy peers the
+// :8080 rules name. The range is admitted on egress because which port a pool
+// gave this namespace is the pool's to decide; its ingress admits each namespace
+// on its own port only.
+func applyAttributionEgress(workload, agc *networkingv1.NetworkPolicy, remoteProxies []remoteProxy) {
+	peers := []networkingv1.NetworkPolicyPeer{{PodSelector: egressProxyPodPeerSelector()}}
+	for _, rule := range remoteProxyEgressRules(remoteProxies) {
+		peers = append(peers, rule.To...)
+	}
+	workload.Spec.Egress = append(workload.Spec.Egress, networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{{
+			Port:    ptr(intstr.FromInt32(attributionPortBase)),
+			EndPort: ptr(int32(attributionPortBase + maxAttributedNamespaces - 1)),
+		}},
+		To: peers,
+	})
+	agc.Spec.Egress = append(agc.Spec.Egress, networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(attributionReadPort))}},
+		To:    peers,
+	})
 }

@@ -9,8 +9,8 @@ Its consumer, classified retry ([Q1183](../queue/Q1183.md)), is blocked, so unti
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Proxy binary: attributed CONNECT listeners, the failure buffer, the mTLS read endpoint | ✅ Shipped in #2112 (`cmd/proxy/attribution.go`) |
-| 2a | API and the pool: the two switches, the `allowedNamespaces` cap, port allocation, Service ports, per-port ingress, the attribution PKI, the proxy environment | ❌ In progress |
-| 2b | The consumer: projecting client certificates, carrying the port to the AGC, moving workers' `HTTPS_PROXY`, the AGC's egress, operator docs | ❌ Open |
+| 2a | API and the pool: the two switches, the `allowedNamespaces` cap, port allocation, Service ports, per-port ingress, the attribution PKI, the proxy environment | ❌ In review (#2122) |
+| 2b | The consumer: projecting client certificates, carrying the port to the AGC, moving workers' `HTTPS_PROXY`, the AGC's egress, operator docs | ❌ In progress, stacked on #2122 |
 | 3 | AGC: pulling every replica, the epoch and cursor, the join on its own gateway's pod lifetimes | ❌ Open |
 | 4 | Calico e2e: a worker refused on another namespace's port, and a denial attributed end to end | ❌ Open |
 
@@ -66,9 +66,20 @@ The AGC computes each worker's `HTTPS_PROXY` itself on every acquired job (`cmd/
   The GMC holds no delete verb on Secrets, so when nothing is attributed it empties the two Secrets rather than deleting them; a pool that never attributed makes no call for them at all.
 - **Off is unchanged.** A pool with no attributed namespace gets none of the above, and its pod template is byte-for-byte what it was, so upgrading the GMC rolls no pool.
 
-**2b, the consumer side.** Projecting each namespace's client certificate into it and pruning it on revocation, carrying the attributed port to the AGC for a pool in its own namespace as well as another, the AGC moving its workers' `HTTPS_PROXY`, the AGC's egress to the read port, and the operator docs.
-It also owes the port-reuse window: lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace, so a joiner's failures can land in the leaver's partition until the roll completes.
-Moving a namespace only after the pool has rolled, or not reusing a port freed in the same rollout, closes it.
+**2b, the consumer side.** What moves a namespace onto its port:
+
+- **One projection carries both the port and the certificate.** For each attributed namespace the GMC writes a `proxy-attribution-<pool-namespace>-<pool>` ConfigMap (the port, the read Service's host and port, and the server name to verify) and a TLS Secret of the same name holding the namespace's client certificate.
+  A pool in the consumer's own namespace is projected the same way, since the AGC otherwise hardcodes `:8080` for it.
+  The ConfigMap's presence is the decision: the AGC overrides the port it resolved with the projected one, and uses the resolved port when there is none.
+- **Projection waits for the rollout.** A namespace is projected only once it holds its port in the rolled-out Deployment and every replica runs that template, because a Service port with no listener on some replicas refuses part of the traffic sent to it.
+  Withdrawal is immediate: new jobs go back to the shared port at once.
+  A withdrawn Secret is blanked, since the GMC holds no delete on Secrets.
+- **Workers move; the AGC does not.** Only the workers' `HTTPS_PROXY` changes, read per job, so nothing in the consumer's namespace restarts, and the AGC's own control-plane traffic stays on the shared port because its failures are not a job's.
+- **Egress admits the range.** An opted-in namespace's workload policy admits the whole attributed range on the same proxy peers as `:8080`, and its AGC policy the read port; which port within the range is the pool's to decide, and its ingress pins each namespace to its own.
+- **Opting out cuts running jobs off the port.** The port leaves the pool's ingress, and its listener the pool's environment, on the same reconcile that withdraws the projection, so a job already running on it loses new connections.
+  [Q1208](../queue/Q1208.md) holds the fix, which also closes the port-reuse window below.
+  It also owes the port-reuse window: lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace, so a joiner's failures can land in the leaver's partition until the roll completes.
+  Moving a namespace only after the pool has rolled, or not reusing a port freed in the same rollout, closes it.
 
 ## Phase 3 and 4 outline
 

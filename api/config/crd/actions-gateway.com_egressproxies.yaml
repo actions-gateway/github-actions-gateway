@@ -175,11 +175,14 @@ spec:
 
                   While it is PerConsumerPort, sharing.allowedNamespaces is capped at 32, which
                   bounds the ports and the buffer. Granting or revoking a namespace's port is a
-                  rolling restart of the pool, as is the certificate authority's renewal.
+                  rolling restart of the pool, as is the certificate authority's renewal; a
+                  namespace's workers move onto its port at their next job once every replica
+                  has rolled.
                   Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184).
 
-                  Not yet effective: the GMC provisions the ports and the listener, but no
-                  consumer is moved onto its port and no AGC reads the records yet.
+                  Nothing reads the records yet: the AGC side that turns them into retry
+                  decisions and Events is still to come, so enabling this today moves workers
+                  onto their ports and keeps their failures without acting on them.
                 enum:
                 - Disabled
                 - PerConsumerPort
@@ -1839,11 +1842,14 @@ spec:
 
                   While it is PerConsumerPort, sharing.allowedNamespaces is capped at 32, which
                   bounds the ports and the buffer. Granting or revoking a namespace's port is a
-                  rolling restart of the pool, as is the certificate authority's renewal.
+                  rolling restart of the pool, as is the certificate authority's renewal; a
+                  namespace's workers move onto its port at their next job once every replica
+                  has rolled.
                   Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184).
 
-                  Not yet effective: the GMC provisions the ports and the listener, but no
-                  consumer is moved onto its port and no AGC reads the records yet.
+                  Nothing reads the records yet: the AGC side that turns them into retry
+                  decisions and Events is still to come, so enabling this today moves workers
+                  onto their ports and keeps their failures without acting on them.
                 enum:
                 - Disabled
                 - PerConsumerPort
@@ -3502,11 +3508,14 @@ spec:
 
                   While it is PerConsumerPort, sharing.allowedNamespaces is capped at 32, which
                   bounds the ports and the buffer. Granting or revoking a namespace's port is a
-                  rolling restart of the pool, as is the certificate authority's renewal.
+                  rolling restart of the pool, as is the certificate authority's renewal; a
+                  namespace's workers move onto its port at their next job once every replica
+                  has rolled.
                   Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184).
 
-                  Not yet effective: the GMC provisions the ports and the listener, but no
-                  consumer is moved onto its port and no AGC reads the records yet.
+                  Nothing reads the records yet: the AGC side that turns them into retry
+                  decisions and Events is still to come, so enabling this today moves workers
+                  onto their ports and keeps their failures without acting on them.
                 enum:
                 - Disabled
                 - PerConsumerPort

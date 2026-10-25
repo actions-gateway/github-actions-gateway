@@ -49,6 +49,13 @@ const (
 	// GMC wrote, which reads as Off.
 	proxyShareAuditLoggingKey = "audit-logging"
 
+	// proxyAttributionNamePrefix and proxyAttributionPortKey name the ConfigMap the
+	// GMC projects into a namespace an EgressProxy attributes failures for (Q1184),
+	// and its port key. Same convention-not-API reasoning; the authority is
+	// cmd/gmc/internal/controller/egressproxy_attribution.go.
+	proxyAttributionNamePrefix = "proxy-attribution"
+	proxyAttributionPortKey    = "proxy-port"
+
 	// defaultNoProxy excludes cluster-internal traffic from the egress proxy so the
 	// proxy is only used for external (GitHub) traffic. The GMC sets the AGC's own
 	// NO_PROXY from the static half of the same list (its buildNoProxy in
@@ -532,6 +539,9 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 		if !res.resolved() {
 			return nil, res
 		}
+		if res := applyAttributedPort(ctx, reader, ns, proxyNS, proxy); !res.resolved() {
+			return nil, res
+		}
 		refs.proxy = proxy
 		return refs, refResolution{}
 	}
@@ -551,8 +561,33 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 		name:          proxyName,
 		auditLogging:  proxy.Spec.AuditLogging,
 	}
+	if res := applyAttributedPort(ctx, reader, ns, ns, refs.proxy); !res.resolved() {
+		return nil, res
+	}
 
 	return refs, refResolution{}
+}
+
+// applyAttributedPort moves a worker onto the CONNECT port the pool gave this
+// namespace for failure attribution (Q1184), when the GMC has projected one. The
+// projection's presence is the decision: the GMC writes it only once every pool
+// replica listens on that port, and withdraws it to send new workers back to the
+// unattributed port. An absent projection leaves the port unchanged.
+func applyAttributedPort(ctx context.Context, reader client.Reader, consumerNS, proxyNS string, proxy *resolvedProxy) refResolution {
+	name := apinames.Join(apinames.MaxLabelValue, proxyAttributionNamePrefix, proxyNS, proxy.name)
+	var cm corev1.ConfigMap
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: name}, &cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return refResolution{}
+		}
+		return refResolution{err: fmt.Errorf("read projected proxy attribution: %w", err)}
+	}
+	port, err := strconv.Atoi(cm.Data[proxyAttributionPortKey])
+	if err != nil {
+		return refResolution{err: fmt.Errorf("projected proxy attribution %q carries an unparseable %s: %w", name, proxyAttributionPortKey, err)}
+	}
+	proxy.port = port
+	return refResolution{}
 }
 
 // resolvedProxy is the egress wiring a worker needs, flattened off whichever source

@@ -436,8 +436,8 @@ See [observability-logging.md § Proxy egress audit record](../operations/observ
 Classified retry ([Q555 plan](../plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor)) needs to know which job a proxy failure came from.
 An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
 That is new use of per-job egress data, so it is designed here before it is built ([Q1184](../queue/Q1184.md)).
-The proxy's half is built (`cmd/proxy/attribution.go`), and so is the pool side of the GMC's: the two fields, the ports, the ingress rules and the certificates (`cmd/gmc/internal/controller/egressproxy_attribution.go`).
-No consumer is moved onto its port and no AGC reads the records yet ([plan](../plan/q1184-proxy-failure-attribution.md)).
+The proxy's half is built (`cmd/proxy/attribution.go`), and so is the GMC's (`cmd/gmc/internal/controller/egressproxy_attribution.go`), which moves an opted-in namespace's workers onto their port.
+No AGC reads the records yet ([plan](../plan/q1184-proxy-failure-attribution.md)).
 
 **It is off by default, behind two switches, for the audit record's reasons.** One on the `EgressProxy` makes the pool able to keep failures and serve them.
 One on a consuming `ActionsGateway` opts that gateway's namespace in.
@@ -446,11 +446,13 @@ They are `EgressProxy.spec.failureAttribution: PerConsumerPort` and `ActionsGate
 
 **A namespace is attributed only when it has opted in itself.** The pool's existing port stays an unattributed port that records nothing, and every namespace starts on it, the pool's own included.
 The switch is per gateway and the port is per namespace, so a namespace is opted in once any of its gateways is.
-When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and moves every gateway there that uses the pool to it, by `HTTPS_PROXY`; it moves them back when either side turns off.
-That is the only consumer-side change, and it happens when the later of the two sides turns on.
-So a pool edit can roll gateways in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
-A namespace where no gateway has opted in is never rolled by a pool edit.
-Within an opted-in namespace, a gateway that did not opt in moves with the rest, so one gateway's opt-in rolls its siblings; that is one tenant's own decision.
+When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and, once every pool replica listens on it, projects that port into the namespace; the AGC then sets it in the `HTTPS_PROXY` of every new worker of every gateway there that uses the pool.
+It withdraws the projection when either side turns off, and new workers go back to the shared port.
+That is the only consumer-side change: it restarts nothing in the consumer's namespace, and the AGC's own traffic stays on the shared port, since its failures are not a job's.
+So a pool edit can move workers in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
+A namespace where no gateway has opted in is never moved by a pool edit.
+A departing namespace's port leaves the pool's ingress at once, which refuses that namespace's running jobs on it ([Q1208](../queue/Q1208.md)).
+Within an opted-in namespace, a gateway that did not opt in moves with the rest, so one gateway's opt-in moves its siblings' workers; that is one tenant's own decision.
 The rule also keeps a namespace that has not opted in from having its failures recorded under someone else's: its traffic arrives on the unattributed port, and nothing reads that.
 Each AGC joins only its own gateway's pods (below), so an opted-in gateway is served its siblings' failures and discards them, which is one tenant seeing its own records rather than a cross-tenant read.
 

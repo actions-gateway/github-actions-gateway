@@ -319,3 +319,70 @@ func TestIPRangeRefresh_KeepsAttributionIngress(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []int32{proxyPort, 8100, attributionReadPort}, ports)
 }
+
+// markRolledOut sets the pool Deployment's status as a finished rollout would.
+func markRolledOut(t *testing.T, c client.Client) {
+	t.Helper()
+	ctx := context.Background()
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &dep))
+	n := *dep.Spec.Replicas
+	dep.Status = appsv1.DeploymentStatus{ObservedGeneration: dep.Generation, Replicas: n, UpdatedReplicas: n, AvailableReplicas: n, ReadyReplicas: n}
+	require.NoError(t, c.Status().Update(ctx, &dep))
+}
+
+// A namespace is pointed at its port only once every replica listens on it, and
+// pointed away as soon as it leaves.
+func TestEgressProxyReconcile_ProjectsTheConsumerAfterTheRollout(t *testing.T) {
+	ep := attributingPool("team-a")
+	teamA := gatewayUsing("team-a", true)
+	dep := &appsv1.Deployment{}
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, teamA).WithStatusSubresource(ep, dep).Build()
+	ctx := context.Background()
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyAttributionName("provider", "shared")}
+
+	reconcilePool(t, c)
+	reconcilePool(t, c)
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, key, &corev1.ConfigMap{})),
+		"no replica has rolled onto the port yet, so team-a must not be moved to it")
+
+	markRolledOut(t, c)
+	reconcilePool(t, c)
+	var cm corev1.ConfigMap
+	require.NoError(t, c.Get(ctx, key, &cm))
+	assert.Equal(t, "8100", cm.Data[attributionProxyPortKey])
+	assert.Equal(t, "shared-proxy-attr.provider.svc.cluster.local", cm.Data[attributionReadHostKey])
+	assert.Equal(t, "shared-proxy.provider.svc", cm.Data[attributionServerNameKey])
+	var sec corev1.Secret
+	require.NoError(t, c.Get(ctx, key, &sec))
+	cert, err := parseCertPEM(sec.Data[corev1.TLSCertKey])
+	require.NoError(t, err)
+	assert.Equal(t, "team-a", cert.Subject.CommonName, "the projected certificate names its own namespace")
+	assert.NotEmpty(t, sec.Data[corev1.TLSPrivateKeyKey])
+
+	teamA.Spec.ProxyFailureAttribution = ""
+	require.NoError(t, c.Update(ctx, teamA))
+	reconcilePool(t, c)
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, key, &corev1.ConfigMap{})), "a namespace that leaves is moved off at once")
+	require.NoError(t, c.Get(ctx, key, &sec))
+	assert.Empty(t, sec.Data[corev1.TLSPrivateKeyKey], "its client key is blanked, since the GMC cannot delete Secrets")
+}
+
+func TestApplyAttributionEgress_AdmitsThePortRangeAndTheReadPort(t *testing.T) {
+	workload := &networkingv1.NetworkPolicy{}
+	agc := &networkingv1.NetworkPolicy{}
+	applyAttributionEgress(workload, agc, []remoteProxy{{Namespace: "provider", Name: "shared"}})
+
+	require.Len(t, workload.Spec.Egress, 1)
+	rule := workload.Spec.Egress[0]
+	assert.Equal(t, int32(8100), rule.Ports[0].Port.IntVal)
+	assert.Equal(t, int32(8132), *rule.Ports[0].EndPort)
+	require.Len(t, rule.To, 2, "the namespace's own pools and the shared one")
+	assert.Equal(t, "provider", rule.To[1].NamespaceSelector.MatchLabels[corev1.LabelMetadataName])
+	assert.Equal(t, "shared", rule.To[1].PodSelector.MatchLabels[egressProxyComponentLabel],
+		"the shared peer keeps both selectors in one peer")
+
+	require.Len(t, agc.Spec.Egress, 1)
+	assert.Equal(t, int32(attributionReadPort), agc.Spec.Egress[0].Ports[0].Port.IntVal)
+}
