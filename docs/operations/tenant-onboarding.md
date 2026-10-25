@@ -1141,10 +1141,22 @@ The gateway's own traffic stays on the shared port.
 The Secret holds the namespace's client certificate for reading its records back; the same key is also held in the pool's namespace.
 One gateway opting in moves every gateway in that namespace that uses the pool.
 
-**Turn it off between runs.** A namespace loses its port at once when it stops being attributed, so a job already running on that port loses its new connections for the rest of the run (Q1208).
-That happens when the tenant's last gateway sets `proxyFailureAttribution: Disabled`, when the pool owner sets `failureAttribution: Disabled`, and when the pool owner removes the namespace from `spec.sharing.allowedNamespaces`.
+**Turning it off moves new jobs at once and keeps the port for running ones.** When the tenant's last gateway sets `proxyFailureAttribution: Disabled`, or the pool owner sets `failureAttribution: Disabled`, the GMC deletes the ConfigMap, so new jobs go back to the shared port.
+The pool keeps listening on the namespace's port, and keeps admitting its workers there, for the longest `maxWorkerLifetime` of the namespace's RunnerSets (12 hours when one is unset or `0s`), so a job already running finishes on it.
+Its failures on that port are still recorded until then.
+No other namespace is given the port meanwhile; a namespace with no RunnerSet loses it at once.
+The release time is on the pool's Deployment:
+
+```bash
+kubectl get deployment -n <pool-namespace> <pool>-proxy \
+  -o jsonpath='{.metadata.annotations.actions-gateway\.com/attribution-held-until}'
+```
+
+Removing the namespace from `spec.sharing.allowedNamespaces` is different: it refuses the namespace on every port at once, so running jobs lose the pool.
+A job outliving its `maxWorkerLifetime` (one whose template sets a longer `activeDeadlineSeconds`, or whose RunnerSet sets `0s`) loses its new connections when the hold ends.
 
 **Limits.** While the pool has it on, `spec.sharing.allowedNamespaces` takes at most 32 namespaces.
+A held port counts against the pool's 33 ports, so a namespace opting in while every port is taken waits for a hold to end.
 The per-port isolation is a NetworkPolicy, so it holds only on a CNI that enforces one; kindnet does not.
 
 **Checking it took effect.** `kubectl get configmap -n <tenant-namespace> proxy-attribution-<pool-namespace>-<pool> -o jsonpath='{.data.proxy-port}'` prints the namespace's port once its workers are moved.

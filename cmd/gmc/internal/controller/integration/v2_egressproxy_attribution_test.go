@@ -10,6 +10,7 @@ import (
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -162,4 +163,83 @@ func setGatewayAttribution(t *testing.T, key types.NamespacedName, value string)
 		ag.Spec.ProxyFailureAttribution = value
 		return k8sClient.Update(ctx, &ag) == nil
 	}, 10*time.Second, 50*time.Millisecond, "could not set %s's proxyFailureAttribution to %s", key, value)
+}
+
+// A namespace with a RunnerSet that opts out keeps its port listening and admitted,
+// and its workers' egress to the range, across both reconcilers on the real
+// apiserver (Q1208). Nothing here waits out the hold: the unit tests release it on
+// a fake clock.
+func TestV2_EgressProxy_Attribution_HoldsAnOptedOutNamespacesPort(t *testing.T) {
+	const providerNS = "v2-attr-hold-provider"
+	const consumerNS = "v2-attr-hold-consumer"
+	createNamespace(t, providerNS)
+	createNamespace(t, consumerNS)
+	startEgressProxyReconciler(t, nil)
+	startActionsGatewayV2Reconciler(t)
+	createGitHubAppSecret(t, consumerNS, "hold-creds")
+
+	ep := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "hold-pool", Namespace: providerNS},
+		Spec: v2alpha1.EgressProxySpec{
+			FailureAttribution: "PerConsumerPort",
+			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	rs := &v2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "hold-rs", Namespace: consumerNS},
+		Spec: v2alpha1.RunnerSetSpec{
+			GatewayRef:        v2alpha1.ObjectRef{Name: "hold-gw"},
+			RunnerLabels:      []string{"self-hosted"},
+			MaxWorkerLifetime: &metav1.Duration{Duration: time.Hour},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+	ag := newV2GatewayWired("hold-gw", consumerNS, "hold-creds", "")
+	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "hold-pool", Namespace: providerNS}
+	ag.Spec.ProxyFailureAttribution = "PerJob"
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+
+	poolState := func() (ports, held string) {
+		var dep appsv1.Deployment
+		if k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "hold-pool-proxy"}, &dep) != nil {
+			return "", ""
+		}
+		for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+			if e.Name == "PROXY_ATTRIBUTION_PORTS" {
+				ports = e.Value
+			}
+		}
+		return ports, dep.Annotations["actions-gateway.com/attribution-held-until"]
+	}
+	workloadRange := func() bool {
+		var np networkingv1.NetworkPolicy
+		if k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "hold-gw-workload"}, &np) != nil {
+			return false
+		}
+		for _, rule := range np.Spec.Egress {
+			for _, p := range rule.Ports {
+				if p.Port != nil && p.Port.IntVal == 8100 && p.EndPort != nil && *p.EndPort == 8132 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	require.Eventually(t, func() bool { p, _ := poolState(); return p == consumerNS+"=8100" && workloadRange() },
+		30*time.Second, 250*time.Millisecond, "the consumer was never given its port")
+
+	setGatewayAttribution(t, types.NamespacedName{Namespace: consumerNS, Name: "hold-gw"}, "Disabled")
+	require.Eventually(t, func() bool { _, h := poolState(); return h != "" }, 30*time.Second, 250*time.Millisecond,
+		"the pool never recorded a hold for the departing namespace")
+	ports, held := poolState()
+	assert.Equal(t, consumerNS+"=8100", ports, "the held port keeps its listener")
+	release, err := time.Parse(time.RFC3339, held[len(consumerNS)+1:])
+	require.NoError(t, err, "hold %q", held)
+	assert.WithinDuration(t, time.Now().Add(time.Hour), release, time.Minute, "held for the RunnerSet's maxWorkerLifetime")
+	assert.Never(t, func() bool { return !workloadRange() }, 3*time.Second, 250*time.Millisecond,
+		"the workers' egress to the range must outlive the opt-out while the port is held")
 }

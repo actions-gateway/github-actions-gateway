@@ -430,7 +430,7 @@ func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context
 	}
 	workloadNP := buildWorkloadNetworkPolicyV2(ag, cidrs, true, remoteProxies)
 	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, cidrs, true, remoteProxies)
-	attributes, err := namespaceAttributes(ctx, r.Client, ag.Namespace)
+	attributes, _, err := attributionEgress(ctx, r.Client, ag.Namespace, remoteProxies, time.Now())
 	if err != nil {
 		return err
 	}
@@ -465,7 +465,8 @@ func (r *IPRangeReconciler) patchEgressProxyNetworkPolicy(ctx context.Context, e
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &dep); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	applyAttributionToNetworkPolicy(desired, ep, liveAttributionPorts(&dep))
+	ports, held := splitLiveAttributionPorts(&dep)
+	applyAttributionToNetworkPolicy(desired, ep, ports, held)
 	np.Spec.Egress = desired.Spec.Egress
 	np.Spec.Ingress = desired.Spec.Ingress
 
