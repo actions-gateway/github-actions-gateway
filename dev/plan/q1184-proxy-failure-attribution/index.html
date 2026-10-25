@@ -2649,10 +2649,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#phase-2-to-4-outline" class="md-nav__link">
+  <a href="#phase-2-the-api-and-the-pool" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 2 to 4 outline
+        Phase 2: the API and the pool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-and-4-outline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 and 4 outline
       
     </span>
   </a>
@@ -2696,11 +2707,16 @@ Its consumer, classified retry (<a href="../../queue/Q1183/">Q1183</a>), is bloc
 <tr>
 <td>1</td>
 <td>Proxy binary: attributed CONNECT listeners, the failure buffer, the mTLS read endpoint</td>
-<td>❌ Built in <code>cmd/proxy/attribution.go</code>, in review; inert until phase 2 sets its environment</td>
+<td>✅ Shipped in #2112 (<code>cmd/proxy/attribution.go</code>)</td>
 </tr>
 <tr>
-<td>2</td>
-<td>API and GMC: the two switches, the <code>allowedNamespaces</code> cap, port allocation, Service ports, per-port ingress, the attribution PKI, moving a namespace's <code>HTTPS_PROXY</code></td>
+<td>2a</td>
+<td>API and the pool: the two switches, the <code>allowedNamespaces</code> cap, port allocation, Service ports, per-port ingress, the attribution PKI, the proxy environment</td>
+<td>❌ In progress</td>
+</tr>
+<tr>
+<td>2b</td>
+<td>The consumer: projecting client certificates, carrying the port to the AGC, moving workers' <code>HTTPS_PROXY</code>, the AGC's egress, operator docs</td>
 <td>❌ Open</td>
 </tr>
 <tr>
@@ -2739,10 +2755,35 @@ The row stays open until phase 4 lands.</p>
 <li><strong>How the AGC reaches each replica: a headless Service's DNS records.</strong> It needs no RBAC in the provider's namespace, which a cross-namespace reader does not have, and the AGC already has cluster DNS egress.
   The AGC verifies the server certificate against the attribution CA with the regular Service name as the server name, so the dial address does not need to be in the certificate.</li>
 </ul>
-<h2 id="phase-2-to-4-outline">Phase 2 to 4 outline<a class="headerlink" href="#phase-2-to-4-outline" title="Permanent link">&para;</a></h2>
+<h2 id="phase-2-the-api-and-the-pool">Phase 2: the API and the pool<a class="headerlink" href="#phase-2-the-api-and-the-pool" title="Permanent link">&para;</a></h2>
+<p>Phase 2 is two PRs, because moving a namespace onto its port is not the GMC's alone to do.
+The AGC computes each worker's <code>HTTPS_PROXY</code> itself on every acquired job (<code>cmd/agc/internal/controller/runnerset_target.go</code>), from the share ConfigMap for a pool in another namespace and from a hardcoded <code>:8080</code> for a pool in its own, so the move needs an AGC change as well as a GMC one.</p>
+<p><strong>2a, the pool side.</strong> Everything the provider namespace holds, inert to consumers until 2b moves them:</p>
 <ul>
-<li><strong>Phase 2</strong> adds <code>EgressProxy</code> and <code>ActionsGateway</code> fields (named under <a href="../../development/api-review/">api-review.md</a>), a <code>MaxItems</code> on <code>allowedNamespaces</code> enforced when attribution is on, port allocation stable across reconciles, the Service ports and a headless Service, numbered per-port ingress rules, an attribution CA with a server certificate and one client certificate per attributed namespace projected into that namespace, the AGC's egress to the read port, and the proxy environment.
-  Operator docs move with it, since this phase is the first an operator can observe.</li>
+<li><strong>The fields.</strong> <code>EgressProxy.spec.failureAttribution</code> (<code>Disabled</code> by default, or <code>PerConsumerPort</code>) and <code>ActionsGateway.spec.proxyFailureAttribution</code> (<code>Disabled</code> by default, or <code>PerJob</code>), identical in v2, v2beta1 and v2alpha1.
+  Each names the method rather than an on-state, and neither uses <code>Off</code>, which YAML reads as a boolean.
+  While the pool's is <code>PerConsumerPort</code>, a CEL rule caps <code>spec.sharing.allowedNamespaces</code> at 32.</li>
+<li><strong>Which namespaces get a port.</strong> A namespace that references the pool, from a gateway's <code>defaultProxyRef</code> or a RunnerSet's <code>proxyRef</code>, that the pool admits (its own namespace, or one in <code>allowedNamespaces</code>), and where any gateway has opted in.</li>
+<li><strong>Allocation.</strong> Ports start at 8100, one per attributed namespace.
+  The current map is read back from the live Deployment's <code>PROXY_ATTRIBUTION_PORTS</code>, so an existing namespace keeps its port across reconciles and only a new one is assigned, to the lowest free port.
+  The map lives in the owned object rather than in status because a controller must not make a decision from a value only status carries (<a href="../../development/api-review/#status-reports-it-does-not-control">api-review.md</a>), and a lost Deployment only reassigns ports.</li>
+<li><strong>The Service and a headless Service.</strong> Each port becomes a <code>attr-&lt;port&gt;</code> port on <code>&lt;ep&gt;-proxy</code> targeting the same container port by number.
+  <code>&lt;ep&gt;-proxy-attr</code> is a headless Service on the read port, whose DNS records name each replica for phase 3.</li>
+<li><strong>Ingress.</strong> One rule per attributed namespace admits that namespace's workload pods on its port only, and one admits its AGC pods (<code>app.kubernetes.io/name: actions-gateway-controller</code> with the workload label, both in one peer) on the read port.
+  Worker pods never carry the AGC's name label: the provisioner builds their labels from a fixed set and does not pass template labels through.</li>
+<li><strong>The PKI, regenerated rather than kept.</strong> One bundle holds a CA, a server certificate for the <code>&lt;ep&gt;-proxy</code> Service names, and a client certificate per attributed namespace with that namespace as its common name.
+  The CA key is never persisted, as with the metrics bundle: the whole bundle regenerates when the namespace set changes or nears expiry.
+  A namespace-set change already rolls the pool through <code>PROXY_ATTRIBUTION_PORTS</code>, and a hash of the CA in the pod template rolls it on renewal.
+  The proxy reads its CA only at start, so until each replica rolls, it rejects the new client certificates: phase 3's reader treats a failed handshake with one replica as a gap in that replica's records, not as an error.
+  The client certificates wait in the provider namespace until 2b projects them.
+  The GMC holds no delete verb on Secrets, so when nothing is attributed it empties the two Secrets rather than deleting them; a pool that never attributed makes no call for them at all.</li>
+<li><strong>Off is unchanged.</strong> A pool with no attributed namespace gets none of the above, and its pod template is byte-for-byte what it was, so upgrading the GMC rolls no pool.</li>
+</ul>
+<p><strong>2b, the consumer side.</strong> Projecting each namespace's client certificate into it and pruning it on revocation, carrying the attributed port to the AGC for a pool in its own namespace as well as another, the AGC moving its workers' <code>HTTPS_PROXY</code>, the AGC's egress to the read port, and the operator docs.
+It also owes the port-reuse window: lowest-free allocation can give a joining namespace a port another just left, while replicas that have not rolled still map that port to the old namespace, so a joiner's failures can land in the leaver's partition until the roll completes.
+Moving a namespace only after the pool has rolled, or not reusing a port freed in the same rollout, closes it.</p>
+<h2 id="phase-3-and-4-outline">Phase 3 and 4 outline<a class="headerlink" href="#phase-3-and-4-outline" title="Permanent link">&para;</a></h2>
+<ul>
 <li><strong>Phase 3</strong> pulls every replica on an interval, resets the cursor on an epoch change, keeps records only for its own gateway's pods inside each pod's address lifetime, and exposes a lookup the retry classes will call.</li>
 <li><strong>Phase 4</strong> is the enforcement measurement the row makes a ship requirement, on the Calico lane only, because the kindnet lane's enforcement specs skip themselves.</li>
 </ul>
