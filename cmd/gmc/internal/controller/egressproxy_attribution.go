@@ -331,7 +331,7 @@ func applyAttributionToNetworkPolicy(np *networkingv1.NetworkPolicy, ep *gmcv2al
 		}
 		np.Spec.Ingress = append(np.Spec.Ingress, networkingv1.NetworkPolicyIngressRule{
 			From:  []networkingv1.NetworkPolicyPeer{attributionPeer(ep, ns, map[string]string{labelComponent: componentWorkload})},
-			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(int32(all[ns])))}},
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(attributionPortBase)), EndPort: ptr(int32(attributionPortBase + maxAttributedNamespaces - 1))}},
 		})
 		if _, attributed := ports[ns]; !attributed {
 			continue

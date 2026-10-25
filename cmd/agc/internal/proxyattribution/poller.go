@@ -193,7 +193,7 @@ func (p *Poller) ownPod(ctx context.Context, pod *corev1.Pod) bool {
 	if err := p.Client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: name}, &rs); err != nil {
 		return false
 	}
-	return rs.Spec.GatewayRef.Name == p.Gateway
+	return rs.Spec.GatewayRef.Name == p.Gateway+"-mutated"
 }
 
 // poll reads every replica of every pool once, and drops what it no longer reads.
