@@ -87,7 +87,9 @@ func minTime(a, b time.Time) time.Time {
 }
 
 // observe opens pod's window the first time it is seen holding an address, and
-// closes it once the pod has given the address up.
+// closes it once the pod has given the address up. A pod first seen before its
+// RunnerSet could be read becomes own once a later event shows it is; it never
+// stops being own, since a RunnerSet deleted under a running job leaves the job.
 func (w *addressWindows) observe(pod *corev1.Pod, own bool, seen time.Time) {
 	if at, ok := released(pod, seen); ok {
 		w.close(pod.UID, at)
@@ -102,7 +104,8 @@ func (w *addressWindows) observe(pod *corev1.Pod, own bool, seen time.Time) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if _, ok := w.live[pod.UID]; ok {
+	if win, ok := w.live[pod.UID]; ok {
+		win.own = win.own || own
 		return
 	}
 	win := &window{uid: pod.UID, own: own, start: start}

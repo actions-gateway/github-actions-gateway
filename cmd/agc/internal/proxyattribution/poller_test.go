@@ -115,6 +115,25 @@ func TestAddressWindows_ASiblingsWindowBlocksAttribution(t *testing.T) {
 	assert.False(t, ok, "a sibling's own window is never attributed")
 }
 
+// A pod first seen as not this gateway's, before its RunnerSet was readable, is
+// attributed once a later event shows it is, and stays so.
+func TestAddressWindows_OwnershipIsLearnedLater(t *testing.T) {
+	w := newAddressWindows()
+	pod := workerPod("own-1", "u1", "own", "10.1.0.5", t0)
+	w.observe(pod, false, t0)
+	_, ok := w.attribute("10.1.0.5", t0.Add(30*time.Second))
+	assert.False(t, ok)
+
+	w.observe(pod, true, t0)
+	uid, ok := w.attribute("10.1.0.5", t0.Add(30*time.Second))
+	assert.True(t, ok, "a later event that shows the pod is own makes it so")
+	assert.Equal(t, types.UID("u1"), uid)
+
+	w.observe(pod, false, t0)
+	_, ok = w.attribute("10.1.0.5", t0.Add(30*time.Second))
+	assert.True(t, ok, "and a later miss does not undo it")
+}
+
 // A pod gives its address up when it goes terminal or its sandbox is torn down,
 // before the object is deleted.
 func TestAddressWindows_CloseWhenThePodReleasesItsAddress(t *testing.T) {
