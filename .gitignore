@@ -6,6 +6,7 @@
 !.claude/settings.json
 !.claude/prod-guard.json
 !.claude/foreground-guard.json
+!.claude/merge-posture.md
 !.claude/commands/
 !.claude/agents/
 !.claude/skills/

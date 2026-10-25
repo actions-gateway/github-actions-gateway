@@ -1,7 +1,7 @@
 # Parallel-dispatch playbook
 
 How to clear a batch of backlog items by running several agent sessions in parallel: one session and pull request (PR) per task, coordinated by a single **dispatcher** session that carries each PR to verified-and-ready and hands it to the maintainer.
-No agent merges ([the merge model](#the-merge-model)).
+No worker merges, and the dispatcher enqueues only what the repo's standing merge grant leaves to it ([the merge model](#the-merge-model)).
 
 **The process itself is two globally-installed skills** — [`session-orchestrator`](skills.md#session-orchestrator) for the dispatcher and [`session-worker`](skills.md#session-worker) for each worker — and this page does not restate them.
 They own selection, spawning, the worker contract, the watcher loop, assignment and spacing, coordination, conflict principles, and the never-merge rule.
@@ -209,22 +209,32 @@ A `-gate` row that the stated theme would exclude is the disagreement the skill 
 
 ## The merge model
 
-Both skills state it: auto-*fix* is delegated to each session, auto-*merge* is the maintainer's and no agent takes it, and a request to go faster is a request to shorten everything **before** that step.
+Both skills state it: auto-*fix* is delegated to each session, and a request to go faster is a request to shorten everything **before** the merge.
+Who merges is declared in [`.claude/merge-posture.md`](../../.claude/merge-posture.md), which `session-orchestrator`'s smart review mode reads.
+It grants the dispatcher a standing merge (`merge: agent`) and lists under `human-review` what still goes to the maintainer: API and CRD changes, anything judged security, performance, interface or architecture, `feat` and breaking titles, the pages a released version of the website publishes, design docs, and the root docs.
 The mechanics here:
 
 - **The merge queue is the mechanical half, not a delegation of the gate** (active on `main` since 2026-08-03; see [merge-queue.md](../plan/archive/merge-queue.md)).
-  The queue is entered from the PR's web UI, then validates the candidate merge result, including the union with whatever is ahead of it, and kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session.
+  Entering the queue is the merge: the queue validates the candidate merge result, including the union with whatever is ahead of it, kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session, and lands the rest.
   It arbitrates green-ness, freshness, and the jointly-red case.
-  It does **not** decide whether a change should land, so enqueueing is the maintainer's action, taken after their review.
+  It does **not** decide whether a change should land; the enqueue does, so who may enqueue is the whole merge policy.
+- **The dispatcher may make a first enqueue only for a PR the posture routes to it.** `merge-posture.py --route actions-gateway/github-actions-gateway <pr>`, in the skill's `scripts/`, prints `agent` or `maintainer`.
+  An `agent` answer also names the classes it cannot read off paths, and the dispatcher judges the diff for each; any yes routes the PR to the maintainer.
+  A PR routed `maintainer` is enqueued by the maintainer from the PR's web UI, after their review.
+  Workers never make a first enqueue, whatever the route says.
+- **The enqueue is the `enqueuePullRequest` mutation, pinned to the head that was routed.** `gh pr merge` cannot enqueue, because it routes through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so every form of it fails `Auto merge is not allowed for this repository` (re-measured 2026-09-04 on gh 2.100.0, with all nine required checks green, so it is not the documented fallback for unfinished checks).
+  The mutation works under that setting (`gh api graphql`, measured 2026-09-04 on #1843-#1846).
+  Pass `expectedHeadOid` as the head the route read, so a push between the two is not enqueued under it.
+  The schema describes the field only as "the expected head OID"; that a mismatch refuses the enqueue, as the same field does on `mergePullRequest`, is not yet measured here: `gh api graphql -f query='mutation($pr:ID!,$oid:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$pr,expectedHeadOid:$oid}){mergeQueueEntry{position state}}}' -F pr=<node id> -F oid=<routed head SHA>`.
 - **One carve-out: restoring an enqueue the maintainer already made** (Q692).
   A worker may rebase and re-enqueue **only** when [`scripts/agent/pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   That is three calls, not two: `--assess` before the rebase, `--rebased` once the rebase is pushed, and `--confirm` after CI is green.
   The middle one is what re-measures against the commit the rebase produced, so skipping it leaves `--confirm` waking on a head the assessment never looked at.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
   A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a `gh` failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
-- **`ELIGIBLE` is the authorization, not the mechanism.** `gh pr merge` cannot enqueue, because it routes through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so every form of it fails `Auto merge is not allowed for this repository` (re-measured 2026-09-04 on gh 2.100.0, with all nine required checks green, so it is not the documented fallback for unfinished checks).
-  The `enqueuePullRequest` mutation does work (`gh api graphql`, measured 2026-09-04 on #1843-#1846), so once both verdicts pass the re-enqueue is runnable here.
-  Report the verdict and its `measured:` line either way, so the decision is auditable; hand the re-enqueue to the maintainer whenever either verdict fails, and never make a *first* enqueue.
+- **`ELIGIBLE` is the authorization, not the mechanism.** Once the verdicts pass, the re-enqueue runs through the same mutation as a first enqueue.
+  Report the verdict and its `measured:` line either way, so the decision is auditable; hand the re-enqueue to the maintainer whenever either verdict fails.
+  The script never permits a *first* enqueue; that is the posture's to grant, and only to the dispatcher.
 
 ## Concurrency and contention
 
