@@ -67,7 +67,7 @@ kubectl apply -k deploy/dogfood-e2e/overlays/dind   # or .../overlays/kata
 ```
 
 Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '"gag-ci-e2e"'` (unset ⇒ github-hosted).
-The RunnerSet is authored at **v2beta1** — ScaleSet-only, so it declares exactly one `runnerLabel` (`gag-ci-e2e`), and `GAG_E2E_RUNNER` is that single JSON string, not a Classic multi-label array.
+The RunnerSet is authored at **v2** — ScaleSet-only, so it declares exactly one `runnerLabel` (`gag-ci-e2e`), and `GAG_E2E_RUNNER` is that single JSON string, not a Classic multi-label array.
 Prefer the on-demand `scripts/dogfood/e2e-start.sh` / `e2e-stop.sh`, which set this **and** spin the tenant AGC up/down (Q231); `E2E_VARIANT=kata|dind` selects the overlay (default `kata` since the Q286 flip; `dind` is the explicit opt-in fallback for environments without nested virtualization).
 This is a dogfood/dev config, not a shipped product install.
 
@@ -110,5 +110,5 @@ Then re-add the binary via the `scripts/ci/check-tools.sh` registry — version-
   Sizing is Kata-specific, not a straight port of the Q248 dind measurements: Kata turns CPU limits into guest vCPUs and memory limits into the guest's whole RAM (page cache included), with none of the dind overlay's burst-to-node headroom — the first live run with the dind-derived split starved the in-dind kind cluster (calico-node probe timeouts).
   The template splits the guest evenly (dind 4 cpu / 8Gi, runner 4 cpu / 4Gi); rationale inline in [`templates/kata-dind/template.yaml`](../templates/kata-dind/template.yaml).
 
-The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`) is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and was live-validated green on GAG on 2026-07-07 (Q231, done).
+The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`) is authored at `actions-gateway.com/v2` (ScaleSet, single `runnerLabel`) since Q1212; it was live-validated green on GAG at `v2beta1` on 2026-07-07 (Q231, done).
 The Kata isolation variant was live-validated green and made the default on 2026-07-17 ([Q286 — archive/kata-on-gke.md](../../docs/plan/archive/kata-on-gke.md)).
