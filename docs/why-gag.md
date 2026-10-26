@@ -165,7 +165,7 @@ A cell with no stamp asserts nothing; see [how to read the ARC column](#how-to-r
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet`<br><span class="gag-cont">the chart takes one `template:` PodSpec per release; nothing shares it between sets</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span> | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
 Every GAG capability above is available today.
-Rows marked <span class="gag-v2-badge">v2</span> need the `actions-gateway.com/v2beta1` API, which is where new tenants start.
+Rows marked <span class="gag-v2-badge">v2</span> need the `actions-gateway.com/v2` API, which is where new tenants start.
 Which release a capability arrived in is on [Features](features.md); the version selector at the top of the page switches between what each release shipped.
 
 ### How to read the ARC column
@@ -243,7 +243,7 @@ Two we do not plan to match: the support entitlement, and `containerMode: kubern
   That is a real cost, and it is a trade rather than a straight loss: ARC needs no *pod* privilege there because it takes a namespace-wide Kubernetes API grant instead, which needs no exploit to use and reaches the other runner sets in that namespace.
 - **GHES that is actually tested.** GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.
 
-The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API still stores its beta (`v2beta1`, its first stability contract) and serves the GA `v2` beside it only from 1.9.
+The maturity gap is real too: ARC is GA and widely deployed, while GAG has served its GA `v2` API only since 1.9, and stored objects at it only since 1.10.
 That is why the v1 to v2 migration runs on a committed, documented schedule with a working [`gag-migrate`](operations/migration-v1-to-v2.md) tool.
 The discipline is the "won't strand you" signal while the track record accumulates.
 
