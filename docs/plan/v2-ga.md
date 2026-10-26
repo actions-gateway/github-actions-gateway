@@ -35,12 +35,21 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](release-1.10
 | [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate` (Phase 3) | `2.0-gate` | 🚫 blocked on the 1.10 tag |
 | [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q1167 and Q273 |
 | [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q273 and Q264 |
+| [Q555](../queue/Q555.md) | Detect flaky jobs and record each failure's platform context | `2.0-gate` | 🔲 open: the dogfood `result` reading comes first |
+| [Q1183](../queue/Q1183.md) | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | 🚫 blocked on Q555 |
+| [Q1181](../queue/Q1181.md) | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | 🔲 open |
+| [Q1184](../queue/Q1184.md) | Attribute egress proxy failures to the job that hit them | `2.0-gate` | 🔲 open: the feature code merged, its e2e measurement is in review |
+| [Q1178](../queue/Q1178.md) | Label egress proxy outcome metrics by allowlist entry and outcome | `2.0-gate` | 🔲 open |
+| [Q1180](../queue/Q1180.md) | Dogfood keeps no AGC or proxy metrics past the pod's life | `2.0-gate` | 🔲 open |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 | [Q275](../queue/Q275.md) | Reconcile the capacity and density docs with the ScaleSet default | rides | 🚫 blocked on Q264, whose removal makes the classic framing false |
 
 **Scoped 2026-10-09, and nothing rides yet.** The removals are gated on the 1.10 tag as well as on their rows, since `main`'s next tag once one lands is `v2.0.0`.
 `scripts/release/semver-floor.sh v1.9.0` read `FLOOR: NONE` over the two commits since the tag, so the scope is the gating rows alone.
 The ledger takes a row for each item that merges onto the released surface before the tag, as 1.9's did.
+
+**Widened 2026-10-25** by the maintainer to gate on automatic recovery: Q555's flaky-job detection and the open rows split from it, retry (Q1183, Q1181), proxy failure attribution (Q1184, Q1178) and dogfood metric retention (Q1180).
+Unlike the removals, none of these waits on the 1.10 tag.
 
 Two rows end with the release rather than ship in it.
 Q416, a classic-listener defect parked until classic removal slips, is retired when Q264 lands.
