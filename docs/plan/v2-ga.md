@@ -38,7 +38,6 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](release-1.10
 | [Q555](../queue/Q555.md) | Detect flaky jobs and record each failure's platform context | `2.0-gate` | 🔲 open: the dogfood `result` reading comes first |
 | [Q1183](../queue/Q1183.md) | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | 🚫 blocked on Q555 |
 | [Q1181](../queue/Q1181.md) | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | 🔲 open |
-| [Q1184](../queue/Q1184.md) | Attribute egress proxy failures to the job that hit them | `2.0-gate` | 🔲 open: the feature code merged, its e2e measurement is in review |
 | [Q1178](../queue/Q1178.md) | Label egress proxy outcome metrics by allowlist entry and outcome | `2.0-gate` | 🔲 open |
 | [Q1180](../queue/Q1180.md) | Dogfood keeps no AGC or proxy metrics past the pod's life | `2.0-gate` | 🔲 open |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
@@ -48,7 +47,8 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](release-1.10
 `scripts/release/semver-floor.sh v1.9.0` read `FLOOR: NONE` over the two commits since the tag, so the scope is the gating rows alone.
 The ledger takes a row for each item that merges onto the released surface before the tag, as 1.9's did.
 
-**Widened 2026-10-25** by the maintainer to gate on automatic recovery: Q555's flaky-job detection and the open rows split from it, retry (Q1183, Q1181), proxy failure attribution (Q1184, Q1178) and dogfood metric retention (Q1180).
+**Widened 2026-10-25** by the maintainer to gate on automatic recovery: Q555's flaky-job detection and the open rows split from it, retry (Q1183, Q1181), labelled proxy outcome metrics (Q1178) and dogfood metric retention (Q1180).
+Q1184, the proxy failure attribution retry reads, is not here: it gates 1.10.
 Unlike the removals, none of these waits on the 1.10 tag.
 
 Two rows end with the release rather than ship in it.
