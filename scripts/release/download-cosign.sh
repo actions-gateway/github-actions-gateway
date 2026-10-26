@@ -47,7 +47,7 @@ expected_sha256() {
 	case "$key" in
 		"v2.5.2 darwin-amd64") echo "0681abe20a482f4b9b3ed65b3debb8c6346591f2dc484b6bfa79609ff1318de4" ;;
 		"v3.1.4 darwin-arm64") echo "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4" ;;
-		"v2.5.2 linux-amd64") echo "bcfeae05557a9f313ee4392d2f335d0ff69ebbfd232019e3736fb04999fe1734" ;;
+		"v3.1.4 linux-amd64") echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa" ;;
 		"v2.5.2 linux-arm64") echo "2cbcea1873ad76274c3f241ef175d204654e3aac3e73e6ec4504e5227015cb0a" ;;
 		*) return 1 ;;
 	esac
