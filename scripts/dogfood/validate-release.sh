@@ -1837,8 +1837,11 @@ storage_leg() {
 	local context="gke_${PROJECT}_${ZONE}_${CLUSTER}"
 
 	echo "Applying the main chart's PriorityClassAllowlist CRD for ${GAG_IMAGE_TAG}..."
-	helm show crds "oci://ghcr.io/${REPO%%/*}/charts/actions-gateway" \
-		--version "${GAG_IMAGE_TAG#v}" >"${WORKDIR}/actions-gateway-crds.yaml" || return 1
+	# Read the CRDs from a pulled chart: `helm show crds oci://…` prints its pull
+	# banner on stdout (Helm 4.2.3), which breaks the captured manifest.
+	helm pull "oci://ghcr.io/${REPO%%/*}/charts/actions-gateway" \
+		--version "${GAG_IMAGE_TAG#v}" --untar --untardir "${WORKDIR}/chart" >/dev/null || return 1
+	helm show crds "${WORKDIR}/chart/actions-gateway" >"${WORKDIR}/actions-gateway-crds.yaml" || return 1
 	kubectl apply -f "${WORKDIR}/actions-gateway-crds.yaml" || return 1
 
 	echo "Downloading and verifying the signed gag-migrate binary for ${GAG_IMAGE_TAG}..."
