@@ -2065,10 +2065,37 @@ storage_case() (
 		cp "${STORAGE_DIR}/SHA256SUMS" "${WORKDIR}/SHA256SUMS"
 		: >"${WORKDIR}/SHA256SUMS.cosign.bundle"
 	}
-	helm() { echo "helm $*" >>"${STORAGE_LOG}"; }
+	# Helm 4.2.3 prints an OCI pull's banner on stdout, so a stub that prints
+	# nothing hides the one way capturing its output breaks.
+	helm() {
+		echo "helm $*" >>"${STORAGE_LOG}"
+		local arg ref="" untardir=""
+		while (($#)); do
+			arg="$1"
+			shift
+			case "${arg}" in
+			oci://*) ref="${arg}" ;;
+			--untardir) untardir="$1" ;;
+			esac
+		done
+		[[ -n "${ref}" ]] && printf 'Pulled: %s\nDigest: sha256:0\n' "${ref#oci://}"
+		if [[ -n "${untardir}" ]]; then
+			mkdir -p "${untardir}/actions-gateway/crds"
+			printf 'apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\n' \
+				>"${untardir}/actions-gateway/crds/crd.yaml"
+		else
+			printf -- '---\napiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\n'
+		fi
+	}
 	kubectl() {
 		case "$1" in
-		apply) echo "kubectl $*" >>"${STORAGE_LOG}" ;;
+		apply)
+			echo "kubectl $*" >>"${STORAGE_LOG}"
+			if grep -q '^Pulled:' "$3"; then
+				echo 'error: error validating data: [apiVersion not set, kind not set]' >&2
+				return 1
+			fi
+			;;
 		get) fake_crd_json ;;
 		esac
 	}
@@ -2080,7 +2107,7 @@ rc=0
 storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
 check "storage: a verified binary and a pruned cluster pass" "0" "${rc}"
 check "storage: the order is pin, chart CRDs, apply, verify, preview, sweep" \
-	"pin|helm show crds oci://ghcr.io/octo/charts/actions-gateway --version 1.10.0-rc.1|kubectl apply -f ${STORAGE_DIR}/work/actions-gateway-crds.yaml|cosign verify-blob|gag-migrate storage-version --context gke_p_z_c|gag-migrate storage-version --context gke_p_z_c --apply --assume-yes" \
+	"pin|helm pull oci://ghcr.io/octo/charts/actions-gateway --version 1.10.0-rc.1 --untar --untardir ${STORAGE_DIR}/work/chart|helm show crds ${STORAGE_DIR}/work/chart/actions-gateway|kubectl apply -f ${STORAGE_DIR}/work/actions-gateway-crds.yaml|cosign verify-blob|gag-migrate storage-version --context gke_p_z_c|gag-migrate storage-version --context gke_p_z_c --apply --assume-yes" \
 	"$(paste -sd'|' "${STORAGE_LOG}")"
 
 storage_fixture match 0
