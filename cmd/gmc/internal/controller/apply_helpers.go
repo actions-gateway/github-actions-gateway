@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -53,6 +54,25 @@ func applyManagedChild[T client.Object](
 			return controllerutil.SetControllerReference(owner, obj, scheme)
 		}
 		return nil
+	})
+	return err
+}
+
+// applyManagedSecret is applyManagedChild for a Secret the owner controls, writing
+// its labels, type and data. It reads then updates rather than patching, because
+// the GMC holds no patch on Secrets: a PATCH response carries the stored object, so
+// the verb would read any Secret admission lets through, beyond the tenant
+// namespaces its read binding covers (Q1188, Q1214). The update carries the read's
+// resourceVersion, so a concurrent writer conflicts and the reconcile retries.
+func applyManagedSecret(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *corev1.Secret) error {
+	obj := &corev1.Secret{}
+	obj.SetNamespace(desired.Namespace)
+	obj.SetName(desired.Name)
+	_, err := controllerutil.CreateOrUpdate(ctx, c, obj, func() error {
+		obj.SetLabels(desired.Labels)
+		obj.Type = desired.Type
+		obj.Data = desired.Data
+		return controllerutil.SetControllerReference(owner, obj, scheme)
 	})
 	return err
 }

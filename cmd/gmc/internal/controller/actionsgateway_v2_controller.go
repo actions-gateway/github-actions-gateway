@@ -709,12 +709,7 @@ func (r *ActionsGatewayV2Reconciler) applyDeployment(ctx context.Context, ag *gm
 }
 
 func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.Secret) error {
-	obj := &corev1.Secret{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
-		obj.Type = desired.Type
-		obj.Data = desired.Data
-		return nil
-	})
+	return applyManagedSecret(ctx, r.Client, r.Scheme, ag, desired)
 }
 
 // --- status ---

@@ -1,7 +1,7 @@
 # Release 1.10 Milestone Definition
 
 > **Status: scoped 2026-10-09, no candidate cut.** The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-> Ten rows gate the tag and three ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211 and Q1212 joined it on 2026-10-26.
+> Eleven rows gate the tag and three ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211, Q1212 and Q1214 joined it on 2026-10-26.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -40,6 +40,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q1210 | The AGC records an Event naming the host when it attributes a policy denial, as `proxyFailureAttribution`'s description says it does | `1.10-gate` | ✅ landed: an `EgressDestinationDenied` Warning Event on the worker's `RunnerSet`, once per job and destination, at most eight a job. Unit-tested against a fake replica; not reproduced on a cluster. Found by the candidate's API pre-flight 2026-10-26 |
 | Q1211 | Onboarding pages and shipped runner templates tell a new tenant to write `actions-gateway.com/v2`, not `v2beta1`, which `v2.0.0` removes | `1.10-gate` | ✅ landed: every new-tenant page, the README, the three `deploy/templates/` entries and the generated API reference name `v2`; the dogfood e2e overlays' template patch targets moved with them. Not on the released surface by `check-artifact-unchanged.sh`, but the template library ships outside it |
 | Q1212 | Dogfood tenant objects are written at `actions-gateway.com/v2`, so the project runs what onboarding now recommends | `1.10-gate` | ✅ landed: `setup.sh`'s tenant and the e2e tenant's base and overlays author `v2`, and `setup.sh` defaults to `v1.10.0-rc.1` so a defaults run serves it. Kustomize renders and unit tests only; reaches the cluster at the next `setup.sh` |
+| [Q1214](../queue/Q1214.md) | An attribution pool that gains a consumer namespace reissues its certificates, so `E2E_V2_ProxyAttribution` stops flaking | `1.10-gate` | ✅ fixed: the GMC writes its owned Secrets by fetch-then-update, under the role it already holds, closing Q1200; envtest as the GMC ServiceAccount fails on the patch path. In flake watch. Found diagnosing the flake 2026-10-26 |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none, under a `get` on `serviceaccounts`. Stage two 🔲 ready |

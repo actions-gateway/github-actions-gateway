@@ -89,6 +89,21 @@ var _ = Describe("E2E_V2_ProxyAttribution", Ordered, func() {
 			utils.DumpEgressProxyDiagnostics(poolNS, poolName+"-proxy")
 			out, _ := utils.Run(exec.Command("kubectl", "logs", "-n", alphaNS, "deployment/"+alphaAGC, "--tail=200"))
 			_, _ = fmt.Fprintf(GinkgoWriter, "--- %s/%s logs ---\n%s\n", alphaNS, alphaAGC, out)
+			// The pool's side of a port that never arrived: its conditions and Events,
+			// and every GMC replica's lines about it, since the leader may be either.
+			out, _ = utils.Run(exec.Command("kubectl", "get", "egressproxy", poolName, "-n", poolNS, "-o", "jsonpath={.status}"))
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- %s/%s status ---\n%s\n", poolNS, poolName, out)
+			out, _ = utils.Run(exec.Command("kubectl", "get", "events", "-n", poolNS, "--sort-by=.lastTimestamp"))
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- events in %s ---\n%s\n", poolNS, out)
+			out, _ = utils.Run(exec.Command("kubectl", "logs", "-n", gmcNamespace, "-l", "control-plane=controller-manager",
+				"--prefix", "--tail=-1"))
+			var gmcLines []string
+			for _, line := range strings.Split(out, "\n") {
+				if strings.Contains(line, "v2-attr-") {
+					gmcLines = append(gmcLines, line)
+				}
+			}
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- GMC log lines naming v2-attr-* ---\n%s\n", strings.Join(gmcLines, "\n"))
 		}
 	})
 
