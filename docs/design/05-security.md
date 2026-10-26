@@ -31,6 +31,11 @@ A singleton ClusterRole, `gmc-tenant-secret-reader`, holds `get`/`list`/`watch` 
 The GMC holds `bind` on that one `resourceName` and nothing broader, the pattern it already uses to hand the AGC `agc-tenant-role`, so RBAC escalation prevention is satisfied without `escalate`.
 What stops the GMC binding the reader into `kube-system` is `gmc-tenant-resource-guard`, which confines its RoleBinding writes to tenant namespaces, together with `namespace-psa-guard`, which makes the tenant marker immutable to it.
 
+The ClusterRole's Secret write verbs are `create` and `update`, and never `patch`, because a `patch` is a read.
+A PATCH needs no prior `get` and its response carries the stored object, so an empty merge patch returns a Secret's `.data` to a caller holding `patch` alone (measured on kind, Kubernetes v1.36.1, 2026-10-26).
+Granted cluster-wide, that verb would read any Secret admission lets through, which is every namespace whenever `gmc-tenant-resource-guard` runs in `Audit` or is disabled.
+An `update` cannot read: it returns only what it sent, and the GMC fetches an owned Secret through its tenant reader binding before updating it (Q1214).
+
 A `bind` grant also lets the GMC create a ClusterRoleBinding to the same role, and a ClusterRoleBinding to `gmc-tenant-secret-reader` or `agc-tenant-role` would grant Secret reads in every namespace.
 The GMC needs `create` on ClusterRoleBindings for the per-gateway `agc-clusterrunnertemplate-reader` binding, so the guard also checks ClusterRoleBinding writes: the GMC may create, update or delete one only when its `roleRef` names `agc-clusterrunnertemplate-reader`.
 
