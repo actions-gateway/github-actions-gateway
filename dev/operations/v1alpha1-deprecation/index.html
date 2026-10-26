@@ -2924,11 +2924,11 @@
 </blockquote>
 <div class="admonition warning">
 <p class="admonition-title">Four deprecations, one removal release: <code>v2.0.0</code></p>
-<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> (see <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>), and author them as single-label <code>ScaleSet</code> runner sets.
+<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2</code> (see <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>), and author them as single-label <code>ScaleSet</code> runner sets.
 Everything named below stays <strong>fully served until <code>v2.0.0</code></strong>, so nothing is forced today.
 Migrate existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> at your convenience: the move changes the API objects, not how jobs are acquired.</p>
 <p><code>v2beta1</code> is itself removed at <code>v2.0.0</code>, superseded by the General Availability (GA) version <code>v2</code>.
-That is not a reason to delay: the release before <code>v2.0.0</code> serves <code>v2beta1</code> and <code>v2</code> side by side, and moving between them is a re-apply rather than a re-author.</p>
+A tenant already on <code>v2beta1</code> moves by re-applying at <code>v2</code>: 1.9 and 1.10 serve both side by side, and the two differ only in the deprecated <code>egressPolicyMode</code> aliases below.</p>
 </div>
 <p>This page is the project's standing deprecation notice.
 It records what <code>v2.0.0</code> removes, what keeps working until then, and what an operator has to do before upgrading past it.
@@ -3008,7 +3008,7 @@ A pool that already stores one is admitted unchanged, with the warning, so an op
 </code></pre></div>
 <p>The warning is advisory: it does not fail an <code>apply</code>, and both controllers deduplicate it to one log line per process (<a href="../observability-logging/#logging">observability-logging</a>).
 Classic acquisition carries no apiserver warning of its own — it is a <em>field value</em>, not a version, and the versions that admit it are the two that warn above.
-- <strong>New tenants should onboard on <code>v2beta1</code>.</strong> See <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
+- <strong>New tenants should onboard on <code>v2</code>.</strong> See <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
 - <strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong> It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a new tenant does not.
   Note that alpha's contract allows an alpha version to be dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the maturity level requires.
 - <strong>Existing tenants migrate with the tool</strong> on their own schedule: see <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>.
@@ -3111,7 +3111,7 @@ Gating on v2 maturity is what lets the commitment be concrete: you are never ask
 <ol>
 <li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.
    Do this <em>before</em> upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects have no served version.</li>
-<li><strong>Move <code>v2alpha1</code> objects to <code>v2beta1</code>.</strong> Re-apply them at <code>v2beta1</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
+<li><strong>Move <code>v2alpha1</code> and <code>v2beta1</code> objects to <code>v2</code>.</strong> Re-apply them at <code>v2</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
 <li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> Created fresh, since <code>acquisitionProtocol</code> is immutable.
    The labels carry across as they are, since a <code>ScaleSet</code> set registers every <code>runnerLabel</code>, so a multi-label group does not have to be split.
    Pick the <em>first</em> one deliberately: it names the scale set at GitHub and must be unique under the gateway.

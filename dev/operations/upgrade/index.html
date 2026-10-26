@@ -1715,6 +1715,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required if you overlay a library template: deploy/templates/ is written at v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3606,6 +3617,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required if you overlay a library template: deploy/templates/ is written at v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4423,6 +4445,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
+<li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
@@ -4566,6 +4589,14 @@ If the apiserver refuses an object, for example because a validating webhook rej
 Fix the named objects and run it again.</p>
 <p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
+<h3 id="action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: <code>deploy/templates/</code> is written at <code>v2</code><a class="headerlink" href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> operators who apply a <a href="../runner-template-library/">runner template library</a> entry through their own kustomize overlay with a JSON 6902 patch.</p>
+<p><strong>What changed.</strong> The three <code>ClusterRunnerTemplate</code>s under <code>deploy/templates/</code> are now written at <code>actions-gateway.com/v2</code>, the version new tenants onboard on, instead of <code>v2beta1</code>.
+The objects they create are identical: the two versions share every <code>ClusterRunnerTemplate</code> field.</p>
+<p><strong>What you will see.</strong> A patch whose <code>target</code> still says <code>version: v2beta1</code> matches nothing, and kustomize skips it without an error.
+<code>kubectl kustomize</code> exits 0 and renders the library template without your changes, so your workers run its default image and land on whatever nodes it allows.</p>
+<p><strong>What to do.</strong> Change <code>version: v2beta1</code> to <code>version: v2</code> in each patch <code>target</code> that names a library template, then render the overlay and confirm your patched fields are in the output.
+A strategic-merge patch that names the template by <code>apiVersion</code> needs the same change.</p>
 <h3 id="action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces<a class="headerlink" href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a cluster with an <code>ActionsGateway</code> or <code>EgressProxy</code> in a namespace carrying neither tenant marker, which is possible only while the <code>gmc-tenant-resource-guard</code> binding runs in <code>Audit</code> mode or <code>admissionPolicy.enabled=false</code>.
 An install whose guard runs in the default <code>Deny</code> mode already has every tenant namespace marked, and needs nothing.</p>

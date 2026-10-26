@@ -2832,7 +2832,7 @@
 <h2 id="when-to-regenerate">When to regenerate<a class="headerlink" href="#when-to-regenerate" title="Permanent link">&para;</a></h2>
 <p>Whenever you modify CRD types (<code>api/</code> for the shared v2 kinds, <code>cmd/agc/api/</code> or <code>cmd/gmc/api/</code> for the v1 kinds), run the corresponding targets.
 Also run <code>make manifests</code> whenever you add or remove RBAC verbs/resources in a controller.</p>
-<p>A <code>v2beta1</code> change also has a second output: <code>make api-reference</code> rewrites the published field reference from the same markers.
+<p>A <code>v2</code> change also has a second output: <code>make api-reference</code> rewrites the published field reference from the same markers.
 It is not part of <code>make generate</code> — that target is controller-gen's three modules — so a doc-comment edit that changes no schema still owes it.
 See <a href="#the-generated-api-reference">§ The generated API reference</a>.</p>
 <p>The v2 (<code>actions-gateway.com</code>) <code>v2alpha1</code> kinds live in the neutral <code>api/</code> module shared by both controllers — the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164); the v1 (<code>actions-gateway.github.com</code>) kinds stay split across <code>cmd/agc/api/v1alpha1</code> and <code>cmd/gmc/api/v1alpha1</code>.</p>
@@ -2888,10 +2888,10 @@ Editing a field's description means editing the Go doc comment, then:</p>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>api-reference-check<span class="w">  </span><span class="c1"># the drift gate, run by `make check` and CI's lint job</span>
 </code></pre></div>
 <p><code>crd-ref-docs</code> is pinned in the vendored <code>tools/</code> module like controller-gen, so <code>make tools</code> builds it into <code>.build/</code> and no host install is involved.</p>
-<p><strong>Scope is <code>api/v2beta1</code> only</strong> — the served version every install authors at.
-<code>v1alpha1</code> and <code>v2alpha1</code> are removed at v2.0.0; a deprecated version documented field by field beside the current one reads as a supported choice, and <code>v2alpha1</code> is <code>v2beta1</code>'s shape anyway apart from the two RunnerSet fields the conversion webhook round-trips.
-Readers on either get <code>kubectl explain</code> and the <a href="../../operations/v1alpha1-deprecation/">deprecation</a> and <a href="../../operations/migration-v1-to-v2/">migration</a> pages instead — spelled out on the <a href="../../reference/">reference overview</a>.
-<strong>Adding a version to the page is a deliberate decision, not a mechanical one</strong>; adding a <em>kind</em> to <code>v2beta1</code> needs nothing beyond <code>make api-reference</code>, but do add it to the generator's completeness assertion (below).</p>
+<p><strong>Scope is <code>api/v2</code> only</strong> — the General Availability (GA) version every new install authors at.
+<code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code> are removed at v2.0.0; a version on its way out documented field by field beside the current one reads as a supported choice, and <code>v2beta1</code> is <code>v2</code>'s shape anyway apart from the two deprecated <code>egressPolicyMode</code> values (<code>v2alpha1</code> adds the two RunnerSet fields the conversion webhook round-trips).
+Readers on any of them get <code>kubectl explain</code> and the <a href="../../operations/v1alpha1-deprecation/">deprecation</a> and <a href="../../operations/migration-v1-to-v2/">migration</a> pages instead — spelled out on the <a href="../../reference/">reference overview</a>.
+<strong>Adding a version to the page is a deliberate decision, not a mechanical one</strong>; adding a <em>kind</em> to <code>v2</code> needs nothing beyond <code>make api-reference</code>, but do add it to the generator's completeness assertion (below).</p>
 <p>Three inputs shape the output, all under <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/api/hack/crd-ref-docs"><code>api/hack/crd-ref-docs/</code></a>:</p>
 <ul>
 <li><strong><code>config.yaml</code></strong> — the ignored types/fields, and <code>render.kubernetesVersion</code>, which pins the Kubernetes release the embedded core types (<code>PodTemplateSpec</code>, <code>Affinity</code>, <code>ObjectMeta</code>) link to on kubernetes.io.
@@ -2902,7 +2902,7 @@ Readers on either get <code>kubectl explain</code> and the <a href="../../operat
   The tool's <code>markdownRenderFieldDoc</code> turns <em>every</em> newline into <code>&lt;br /&gt;</code>, so a description reached the table cell still wrapped at the Go source's ~80 columns and broke mid-sentence at a width the browser never chose; <code>field_doc</code> joins the soft wraps back into prose and keeps a break only for a blank line or a list item.
   <strong>Doc comments are reflowed, so write them for godoc</strong>: the site no longer inherits their wrap points.
   <strong>Re-diff the fork against <code>tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/</code> when the pinned <code>crd-ref-docs</code> version moves.</strong> A Dependabot bump that changes the rendering turns <code>api-reference-check</code> red on its own PR — <code>tools/**</code> is in the gate's CI path filter — and <code>make api-reference</code> is the remedy.</li>
-<li><strong>the kind list in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/gen-api-reference.sh"><code>gen-api-reference.sh</code></a></strong> — the script fails unless every <code>v2beta1</code> kind has a section in the output.
+<li><strong>the kind list in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/gen-api-reference.sh"><code>gen-api-reference.sh</code></a></strong> — the script fails unless every <code>v2</code> kind has a section in the output.
   A tool that finds no API types exits 0 having rendered a stub, which would make <code>--check</code> pass on any tree and the writing mode quietly replace a good page.</li>
 </ul>
 <h2 id="sync-the-helm-chart-crds-after-any-crd-change">Sync the Helm chart CRDs (after any CRD change)<a class="headerlink" href="#sync-the-helm-chart-crds-after-any-crd-change" title="Permanent link">&para;</a></h2>

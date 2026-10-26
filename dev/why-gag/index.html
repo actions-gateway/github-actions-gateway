@@ -3153,7 +3153,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 </tbody>
 </table>
 <p>Every GAG capability above is available today.
-Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2beta1</code> API, which is where new tenants start.
+Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2</code> API, which is where new tenants start.
 Which release a capability arrived in is on <a href="../features/">Features</a>; the version selector at the top of the page switches between what each release shipped.</p>
 <h3 id="how-to-read-the-arc-column">How to read the ARC column<a class="headerlink" href="#how-to-read-the-arc-column" title="Permanent link">&para;</a></h3>
 <p>Every ARC cell renders one of two things, and the difference is what it rests on:</p>
@@ -3221,7 +3221,7 @@ Two we do not plan to match: the support entitlement, and <code>containerMode: k
   That is a real cost, and it is a trade rather than a straight loss: ARC needs no <em>pod</em> privilege there because it takes a namespace-wide Kubernetes API grant instead, which needs no exploit to use and reaches the other runner sets in that namespace.</li>
 <li><strong>GHES that is actually tested.</strong> GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.</li>
 </ul>
-<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API still stores its beta (<code>v2beta1</code>, its first stability contract) and serves the GA <code>v2</code> beside it only from 1.9.
+<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG has served its GA <code>v2</code> API only since 1.9, and stored objects at it only since 1.10.
 That is why the v1 to v2 migration runs on a committed, documented schedule with a working <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> tool.
 The discipline is the "won't strand you" signal while the track record accumulates.</p>
 <p>One thing is <strong>not</strong> a differentiator either way: both ride the same Public-Preview runner-scale-set protocol, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library.</p>

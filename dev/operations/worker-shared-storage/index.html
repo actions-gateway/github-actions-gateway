@@ -2830,7 +2830,7 @@ Anything a Kubernetes <code>PersistentVolumeClaim</code> can express, a worker c
 <p>A freshly provisioned volume's root directory belongs to <code>root</code>.
 The AGC gap-fills <code>runAsUser: 1001</code> on every profile except <code>privileged</code>, so the runner is neither <code>root</code> nor in any group that owns the directory, and its first write gets <code>Permission denied</code>.
 Pod-level <code>fsGroup</code> is what fixes it: the kubelet adds the group to the container's supplementary groups and applies it to the volume, after which the runner can write.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-workspace</span>

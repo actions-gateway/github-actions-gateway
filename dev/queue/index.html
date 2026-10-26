@@ -2820,6 +2820,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>make e2e</code> and <code>make e2e-cluster</code> never name a cluster.</td>
 </tr>
 <tr>
+<td><a href="Q1213/">Q1213</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-template-library.sh">template-library-check passes an overlay whose patch matched nothing</a></td>
+<td><code>ci</code> <code>tests</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A dogfood e2e overlay's JSON 6902 patch against a shipped <code>ClusterRunnerTemplate</code> selects its target by <code>group</code>/<code>version</code>/<code>kind</code>/<code>name</code> …</td>
+</tr>
+<tr>
 <td><a href="Q1149/">Q1149</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go">Warn before the pinned runner ages out of GitHub's 30-day window</a></td>
 <td><code>ci</code> <code>dogfood</code></td>
