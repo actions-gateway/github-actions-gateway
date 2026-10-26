@@ -38,11 +38,11 @@ patches:
         annotations:
           actions-gateway.com/allow-profile-downgrade: allowed
   # Point the RunnerSet at the library entry. The apiVersion must match the base
-  # RunnerSet (v2beta1) for the strategic-merge patch to target it; this patch
+  # RunnerSet (v2) for the strategic-merge patch to target it; this patch
   # touches only maps and scalars, which is why a strategic merge is safe here
   # and is not safe against the template below.
   - patch: |
-      apiVersion: actions-gateway.com/v2beta1
+      apiVersion: actions-gateway.com/v2
       kind: RunnerSet
       metadata:
         name: ci-e2e

@@ -40,7 +40,7 @@
 #                    chart on the SAME code, so the v2 alpha schema can never drift
 #                    between them. Dogfood deliberately exercises PRE-RELEASE code,
 #                    so this is NOT limited to cut `v*` releases: point it at any
-#                    post-Q74 ref whose control-plane image has been built + pushed
+#                    post-Q1086 ref whose control-plane image has been built + pushed
 #                    to GHCR. Build one for a ref with (amd64 GKE nodes):
 #                      SHA=<ref>; GIT_SHA="$SHA" docker buildx bake gmc agc proxy wrapper \
 #                        --set '*.platform=linux/amd64' \
@@ -59,11 +59,10 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/dogfood/lib/gmc.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 
-# Default: a post-Q74 main SHA whose control-plane image is published to GHCR and
-# whose tree carries the v2beta1+v2alpha1 conversion-webhook CRD chart (Q281). This
-# is a plain git ref, not a `v*` release: dogfood tracks pre-release code and must
-# not wait for a cut release, and the publish pipeline builds images only on `v*`
-# tags — so the image at this ref was built + pushed by hand (see the
+# Default: the first ref whose CRD chart serves and stores v2 (Q1086), which the
+# tenant CRs below are authored at; an older chart serves no v2 and the apply
+# fails. Any git ref with a GHCR image works: a `v*` tag is published by the
+# pipeline, while a plain main SHA has to be built + pushed by hand (see the
 # GAG_IMAGE_TAG note above). `latest` is never published, so never float to it.
 #
 # This default only ever moves forward, and re-running with it must never roll the
@@ -73,7 +72,7 @@ source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 # 2026-07-07 ref while dogfood ran 2026-07-24 and then 2026-07-31 code, so a
 # defaults run would have withdrawn the capacity-gate rung and re-blocked Q472.
 # When you pin a newer ref by hand, update this line in the same change.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-2715e7f87e48896b26aaa7c4bf4b8b48425576be}"
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.10.0-rc.1}"
 
 # Optional build-capable worker image for the RunnerTemplate (Q239). When set,
 # the runner container pins this image instead of staying image-less; the AGC
@@ -375,10 +374,10 @@ QUOTA
 
 # ---------------------------------------------------------------------------
 # Part B3b — wire the GMC's self-signed webhook CA into each v2 CRD's
-# spec.conversion.webhook.clientConfig.caBundle (Q279). Since Q74 the v2 kinds
-# are served at BOTH v2beta1 and v2alpha1 and stored at v2beta1, so a request
-# naming v2alpha1 crosses the GMC-hosted conversion webhook and one naming
-# v2beta1 does not; the apiserver calls that webhook over TLS and must trust its
+# spec.conversion.webhook.clientConfig.caBundle (Q279). From 1.10 the v2 kinds
+# are served at v2, v2beta1 and v2alpha1 and stored at v2, so a request naming
+# either older version crosses the GMC-hosted conversion webhook and one naming
+# v2 does not; the apiserver calls that webhook over TLS and must trust its
 # serving cert via each CRD's caBundle. Dogfood is self-signed (no cert-manager),
 # so the CRD chart renders an EMPTY caBundle — without this step every CR apply
 # (and conversion read-back) fails the webhook TLS handshake ("x509: certificate
@@ -586,7 +585,7 @@ apply_athens() {
 # ---------------------------------------------------------------------------
 
 apply_cr() {
-	echo "Applying v2beta1 ActionsGateway + RunnerTemplate + RunnerSet..."
+	echo "Applying v2 ActionsGateway + RunnerTemplate + RunnerSet..."
 	# Resolve the runner container image (Q239/Q295). Precedence:
 	#   1. DOGFOOD_RUNNER_IMAGE set          -> pin it (build-capable image).
 	#   2. env unset + existing runner image -> PRESERVE the cluster's current
@@ -623,7 +622,7 @@ apply_cr() {
 		runner_image_field="          image: ${runner_image}"
 	fi
 	kubectl apply -f - <<EOF
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: dogfood
@@ -635,7 +634,7 @@ spec:
       name: github-app-v1
   githubURL: https://github.com/${REPO}
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: default
@@ -688,7 +687,7 @@ ${runner_image_field}
             limits:
               memory: "3Gi"
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: ci
@@ -698,10 +697,10 @@ spec:
     name: dogfood
   templateRef:
     name: default
-  # No acquisitionProtocol here: v2beta1 is ScaleSet-only and has no such field
+  # No acquisitionProtocol here: v2 is ScaleSet-only and has no such field
   # (api/v2alpha1/conversion.go stashes the v2alpha1 value in a conversion
   # annotation precisely because the hub cannot hold it). Authoring one makes the
-  # apply fail strict decoding, which is what a v2beta1 tenant gets for carrying a
+  # apply fail strict decoding, which is what a v2 tenant gets for carrying a
   # v2alpha1 knob rather than dropping it.
   #
   # This tenant migrated off Classic in Q399 and the protocol is now the API's by
@@ -771,9 +770,9 @@ EOF
 # apply_cr authored at v2alpha1, a non-storage served version, so every apply
 # crossed the webhook. That version was residue from before the Q74 graduation
 # rather than a chosen exercise, and Q452 removes it at v2.0.0, so the tenant now
-# authors at v2beta1 and the check is made explicit here instead. Before 1.10
-# v2beta1 was the storage version, so an apply never reached the webhook; from
-# 1.10 v2 is, and it does, but this check does not depend on either.
+# authors at v2, the storage version from 1.10 (Q1212), and the check is made
+# explicit here instead: an apply at the storage version never reaches the
+# webhook, so only a read at another version proves it.
 #
 # Reading at CONVERSION_PROBE_VERSION forces the apiserver to call the GMC over
 # TLS to convert out of storage, so an empty or wrong caBundle fails here with
