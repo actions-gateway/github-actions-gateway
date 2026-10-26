@@ -2861,6 +2861,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-light-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The light palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#interface-rules-the-custom-layer-must-satisfy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3599,6 +3610,16 @@ A label that needs more than that is making an argument, and an argument belongs
 </code></pre></div>
 <p><strong>Two pages must not carry near-identical bands.</strong> <code>index.md</code> and <code>why-gag.md</code> both used one, and two of the four tiles matched verbatim, number and lead text alike, so the comparison page read as a repeat of the landing page.
 The band was removed from <code>why-gag.md</code> rather than reworded: the outcome flow diagram above it and the capability table below it already carried the same argument twice.</p>
+<h3 id="the-light-palette">The light palette<a class="headerlink" href="#the-light-palette" title="Permanent link">&para;</a></h3>
+<p>Light mode does not use Material's <code>primary: black</code> chrome.
+A black header, tab bar and footer around a pure-white page put the two highest-contrast edges on the screen at its frame, so the page read as harsher than dark mode.
+The light block in <code>extra.css</code> instead sets an off-white canvas (<code>#f6f8fa</code>), white cards and code blocks on it (<code>--gag-surface</code>), a white header and tab bar with a hairline rule, a pale footer, and an accent-tinted announce bar whose <code>&lt;code&gt;</code> version strings take a tint of the bar's own ink.
+Code uses GitHub-light syntax colours in place of Material's saturated defaults.</p>
+<p><code>primary: black</code> paints the header, tab bar, drawer title and mobile repo link with direct <code>background-color</code> rules, not only through <code>--md-primary-fg-color</code>, so each one is overridden by name.
+The search field's tint lives on <code>.md-search__form</code>, not the input.</p>
+<p>Moving the canvas off white cost contrast, so the inks were re-measured on it (2026-10-26): <code>--gag-muted</code> darkened from <code>#6e6e6e</code> to <code>#646464</code> to stay at Lc 75, and the footer's secondary inks rose to 0.88 and 0.8 alpha to clear 75 on the footer strip.
+The badges dropped to Lc 64.9–67.2, still inside the spot-text band below.
+Slate is untouched apart from the announce-bar chips.</p>
 <h3 id="interface-rules-the-custom-layer-must-satisfy">Interface rules the custom layer must satisfy<a class="headerlink" href="#interface-rules-the-custom-layer-must-satisfy" title="Permanent link">&para;</a></h3>
 <p>Material owns the page chrome and handles its own controls.
 The <code>gag-</code>, <code>persona-</code> and <code>backlog-</code> components are hand-built on top of it, so nothing checks their hit targets, contrast, or animation properties but this page.
@@ -3654,12 +3675,12 @@ A component inheriting it loses 32.6 points when the reader flips the palette, w
 <tbody>
 <tr>
 <td><code>--gag-muted</code></td>
-<td><code>#6e6e6e</code>, Lc 75.2</td>
+<td><code>#646464</code>, Lc 75.3 on the canvas, 79.6 on a card</td>
 <td><code>hsl(225 15% 70%)</code>, Lc 55.6</td>
 </tr>
 <tr>
 <td><code>--gag-accent-ink</code></td>
-<td><code>#2456c9</code>, Lc 81.4</td>
+<td><code>#2456c9</code>, Lc 77.1 on the canvas</td>
 <td><code>hsl(220 82% 78%)</code>, Lc 61.5</td>
 </tr>
 </tbody>
@@ -3686,7 +3707,7 @@ What that leaves, measured on <code>/why-gag/</code>:</p>
 <tbody>
 <tr>
 <td>Light</td>
-<td><code>.gag-flow__sub</code>, <code>.gag-flow__arrow</code> (Lc 75.2 against 90), <code>.gag-vs-row__text</code> (85.6 against 90)</td>
+<td><code>.gag-flow__sub</code> (Lc 79.6 against 90), <code>.gag-flow__arrow</code> (75.3), <code>.gag-vs-row__text</code> (85.6 against 90)</td>
 <td>the size of the type, not the token: at 15.6px regular nothing short of near-body ink clears 90</td>
 </tr>
 <tr>
