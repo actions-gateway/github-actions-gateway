@@ -4691,7 +4691,7 @@ Deleting the annotation, or setting another mode, at <code>v2</code> migrates th
 So does replacing the whole object with a <code>v2</code> manifest that lacks the annotation, as <code>kubectl replace</code> or a GitOps tool that replaces objects does, with no warning; migrate such a pool deliberately first.
 Don't set the annotation yourself: admission rejects a write that would introduce an alias this way, as it does any other.
 Find any pools still on an alias with the <a href="#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">pre-upgrade check</a>, which is pinned to <code>v2beta1</code> because an unpinned read shows <code>FQDN</code>.</p>
-<p><strong>What to do.</strong> Re-apply both charts' CRDs as every upgrade already does: the <code>actions-gateway-crds-v2</code> render, and <code>helm show crds</code> for the main chart's <code>PriorityClassAllowlist</code>.
+<p><strong>What to do.</strong> Re-apply both charts' CRDs as every upgrade already does: the <code>actions-gateway-crds-v2</code> render, and the main chart's <code>PriorityClassAllowlist</code> CRD, pulled first.
 Nothing else is required, and manifests can stay on <code>v2beta1</code>.
 Move them to <code>v2</code> before <code>v2.0.0</code>, which removes <code>v2beta1</code>; until then, a manifest on <code>v2beta1</code> is the one that still applies after a rollback.</p>
 <p><strong>Rolling back</strong> to a release that does not serve <code>v2</code> is safe for stored objects, because they are stored at <code>v2beta1</code>.
@@ -5572,17 +5572,20 @@ Pin <code>--version 1.9.0</code>; copy the image digests from the <a href="https
 <a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="c1"># that directory on `helm install` only and skips it on upgrade, so this is the</span>
 <a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="c1"># only way changes to those CRDs reach an existing release. Idempotent, and</span>
 <a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a><span class="c1"># version-correct: it reads the CRDs out of the exact chart you are upgrading to.</span>
-<a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
-<a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a>
-<a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a><span class="c1"># Upgrade in place to a newer published chart version (carries CRD field changes — see below)</span>
-<a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a><span class="c1"># --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below</span>
-<a id="__codelineno-31-19" name="__codelineno-31-19" href="#__codelineno-31-19"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-20" name="__codelineno-31-20" href="#__codelineno-31-20"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-21" name="__codelineno-31-21" href="#__codelineno-31-21"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;new-gmc&gt;
-<a id="__codelineno-31-22" name="__codelineno-31-22" href="#__codelineno-31-22"></a>
-<a id="__codelineno-31-23" name="__codelineno-31-23" href="#__codelineno-31-23"></a><span class="c1"># Roll back to the previous release</span>
-<a id="__codelineno-31-24" name="__codelineno-31-24" href="#__codelineno-31-24"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="c1"># Pull first: `helm show crds oci://...` prints its pull banner on stdout</span>
+<a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="c1"># (measured on Helm 4.2), and kubectl rejects the banner.</span>
+<a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
+<a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<a id="__codelineno-31-19" name="__codelineno-31-19" href="#__codelineno-31-19"></a>
+<a id="__codelineno-31-20" name="__codelineno-31-20" href="#__codelineno-31-20"></a><span class="c1"># Upgrade in place to a newer published chart version (carries CRD field changes — see below)</span>
+<a id="__codelineno-31-21" name="__codelineno-31-21" href="#__codelineno-31-21"></a><span class="c1"># --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below</span>
+<a id="__codelineno-31-22" name="__codelineno-31-22" href="#__codelineno-31-22"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-23" name="__codelineno-31-23" href="#__codelineno-31-23"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-24" name="__codelineno-31-24" href="#__codelineno-31-24"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;new-gmc&gt;
+<a id="__codelineno-31-25" name="__codelineno-31-25" href="#__codelineno-31-25"></a>
+<a id="__codelineno-31-26" name="__codelineno-31-26" href="#__codelineno-31-26"></a><span class="c1"># Roll back to the previous release</span>
+<a id="__codelineno-31-27" name="__codelineno-31-27" href="#__codelineno-31-27"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
 </code></pre></div>
 <p>The following upgrade-time behaviors are specific to this chart:</p>
 <ul>
@@ -5606,8 +5609,9 @@ Pin <code>--version 1.9.0</code>; copy the image digests from the <a href="https
   The <code>PriorityClassAllowlist</code> CRD cannot: the same release <em>creates</em> a <code>PriorityClassAllowlist</code> object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright.
   It therefore ships in the chart-root <code>crds/</code> directory — which Helm installs on <code>helm install</code> <strong>only, never on upgrade</strong>.</p>
 <p>Rather than make that a conditional "did your release predate X?" step, the upgrade command above applies the chart's CRDs unconditionally:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
 <p>It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
   The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster.
@@ -5647,8 +5651,9 @@ A CRD <code>paramKind</code> gets a fresh dynamic informer per context and survi
 <code>crds/</code> is the only directory Helm installs early enough.
 The cost is that Helm skips <code>crds/</code> entirely on upgrade, so an existing release never receives it.</p>
 <h4 id="1-apply-the-charts-crds">1. Apply the chart's CRDs<a class="headerlink" href="#1-apply-the-charts-crds" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
 <p>This is the standard pre-upgrade step for every release (<a href="#gmc-install-and-upgrade-via-helm-recommended">above</a>), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
 From a chart directory, <code>helm show crds charts/actions-gateway | kubectl apply -f -</code> does the same thing.</p>
