@@ -3425,6 +3425,10 @@ The package var is safe because each process has its own copy and each suite wri
 `Ordered` orders specs within a container; it does not order containers against each other.
 A resource that is genuinely shared *outside* the process — a cluster object, a fixed host port, a GitHub session — gets no protection from `Ordered` and needs `Serial`, an owner-scoped filter, or a per-process derivation such as `GinkgoParallelProcess()`.
 
+A RunnerSet's agent identity is one of those, and a namespace does not scope it.
+The webhook derives the stem `rs-<RunnerSet name>` and rejects a second claim on it under the same GitHub scope from any namespace (`agent-identity stem "rs-set-alpha" is already claimed by another runner pool registered against GitHub scope …`), so a new suite that reuses another suite's set name and org fails in `BeforeAll` on whichever runs second.
+Give each suite its own org (fakegithub accepts any name, e.g. `example-org-<suite>`) and set names prefixed by the suite; check with `git grep -n 'name: set-' cmd/gmc/test/e2e/` before choosing one.
+
 Dropping `Serial` from a suite is therefore a claim about *external* isolation, never about package state.
 Worked example, including the owner-prefix filter that made one such drop safe: [e2e-ci-speed-round-2.md](../plan/archive/e2e-ci-speed-round-2.md#5-de-serialize-e2e_agc_workerpodlifecycle-).
 
