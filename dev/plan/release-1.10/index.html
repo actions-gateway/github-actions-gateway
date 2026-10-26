@@ -2660,6 +2660,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-release-notes-edit-owed-at-the-candidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A release-notes edit owed at the candidate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2807,6 +2818,19 @@ The ledger takes a row for each further item that merges onto the released surfa
 Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports <code>storedVersions: ["v2"]</code> after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as <code>v2beta1</code> today.
 The gate's <code>storage</code> leg runs the sweep and takes that reading (Q1171, landed), so the candidate's evidence carries it.
 Only the first candidate's run rewrites anything: it leaves dogfood at <code>["v2"]</code>, so every later candidate's sweep takes the no-op path, and a sweep fix shipped in a later candidate is never exercised on a real cluster.</p>
+<h2 id="a-release-notes-edit-owed-at-the-candidate">A release-notes edit owed at the candidate<a class="headerlink" href="#a-release-notes-edit-owed-at-the-candidate" title="Permanent link">&para;</a></h2>
+<p>The notes' scale-set caveat reads "None of these five scale-set fixes was reproduced on a cluster.
+Each is covered by unit tests."
+That is accurate, but it understates Q1169, whose fix also passed the AGC envtest suite, and it does not say what the tests prove.
+The proposed wording, for the candidate's prose pass:</p>
+<blockquote>
+<p>None of these five was reproduced on a cluster, and the release gate does not assert them.
+Each has unit tests that fail with the fix removed, and Q1169's also passed the AGC's envtest suite.</p>
+</blockquote>
+<p>It holds only if all five PRs report an inversion check.
+Q1152 (#2059), Q1169 (#2103) and Q1174 (#2101) do.
+Read Q1153's (#2062) and Q1154's (#2063) before applying it, and narrow the claim to the three if either does not.
+The caveat stays true after dogfood validation, because nothing in the gate builds a crossed worker on purpose.</p>
 <h2 id="decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version">Decided: an operator runs the sweep, as <code>gag-migrate storage-version</code><a class="headerlink" href="#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version" title="Permanent link">&para;</a></h2>
 <p><strong>Decided by the maintainer on 2026-10-09</strong>, choosing between the operator-run command and a sweep the GMC runs itself at startup.
 The GMC's ClusterRole had <code>get</code> on <code>customresourcedefinitions</code> and no write on four of the six kinds, so a GMC-run sweep would have widened a long-lived controller's privileges for a job that runs once per cluster.
