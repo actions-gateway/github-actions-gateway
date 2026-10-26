@@ -203,8 +203,8 @@ type EgressProxySpec struct {
 	//
 	// A consuming AGC reads and attributes the records, and records an Event for
 	// each attributed policy denial (ActionsGateway.spec.proxyFailureAttribution).
-	// No retry decision uses them yet, so enabling this today moves workers onto
-	// their ports, counts their failures, and reports their denials.
+	// No retry decision uses them, so enabling this moves workers onto their
+	// ports, counts their failures, and reports their denials.
 	//
 	// +optional
 	// +kubebuilder:validation:Enum=Disabled;PerConsumerPort

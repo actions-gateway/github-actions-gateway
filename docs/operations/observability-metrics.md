@@ -162,7 +162,7 @@ See the [right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-re
 
 Emitted by an AGC whose gateway sets `proxyFailureAttribution: PerJob` (Q1184).
 Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
-Nothing acts on the attributed records yet; see [tenant onboarding](tenant-onboarding.md#proxy-failure-attribution).
+An attributed denial is also reported as an `EgressDestinationDenied` Event, and no retry decision uses the records; see [tenant onboarding](tenant-onboarding.md#proxy-failure-attribution).
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |

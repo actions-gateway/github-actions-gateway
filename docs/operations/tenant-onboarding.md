@@ -1133,7 +1133,7 @@ kubectl get events -n <tenant-namespace> --field-selector reason=EgressDestinati
 The note names the pool, the worker pod and the host and port.
 A retry is refused the same way, so the fix is the pool's allowlist (`destinationFQDNs` or `destinationCIDRs` on the `EgressProxy`, within what the platform admits) or the job.
 Each job is reported once per destination, for at most eight destinations; anyone who can read Events in the namespace can see the host.
-Nothing retries on these records yet.
+Nothing retries on these records.
 
 It is **off by default** and needs both sides: the pool owner turns it on for the pool, and the tenant turns it on for their namespace.
 

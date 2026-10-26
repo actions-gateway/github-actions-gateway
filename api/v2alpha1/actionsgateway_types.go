@@ -88,9 +88,9 @@ type ActionsGatewaySpec struct {
 	// this is a separate switch from the pool's. Design:
 	// docs/design/05-security.md, "Proxy failure attribution" (Q1184, Q1210).
 	//
-	// The AGC does not retry a job, or withhold a retry, on these records yet, so
-	// enabling this today moves the namespace's workers onto their port, counts
-	// their failures, and reports their denials.
+	// The AGC does not retry a job, or withhold a retry, on these records, so
+	// enabling this moves the namespace's workers onto their port, counts their
+	// failures, and reports their denials.
 	//
 	// +optional
 	// +kubebuilder:validation:Enum=Disabled;PerJob
