@@ -42,7 +42,7 @@ KIND_NODE_IMAGE ?=
 # kube-network-policies does not drop egress traffic, so the negative e2e specs
 # skip themselves on a kindnet cluster. CALICO_VERSION pins the Calico release.
 KIND_CNI       ?= kindnet
-CALICO_VERSION ?= v3.31.5
+CALICO_VERSION ?= v3.33.0
 GIT_SHA       := $(shell git rev-parse --short HEAD)
 
 # Local OCI registry that kind nodes pull from. scripts/e2e/kind-with-registry.sh
