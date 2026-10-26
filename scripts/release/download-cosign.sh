@@ -45,7 +45,7 @@ fi
 expected_sha256() {
 	local key="$1"
 	case "$key" in
-		"v2.5.2 darwin-amd64") echo "0681abe20a482f4b9b3ed65b3debb8c6346591f2dc484b6bfa79609ff1318de4" ;;
+		"v3.1.4 darwin-amd64") echo "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f" ;;
 		"v3.1.4 darwin-arm64") echo "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4" ;;
 		"v3.1.4 linux-amd64") echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa" ;;
 		"v3.1.4 linux-arm64") echo "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2" ;;
