@@ -357,7 +357,7 @@ So does replacing the whole object with a `v2` manifest that lacks the annotatio
 Don't set the annotation yourself: admission rejects a write that would introduce an alias this way, as it does any other.
 Find any pools still on an alias with the [pre-upgrade check](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias), which is pinned to `v2beta1` because an unpinned read shows `FQDN`.
 
-**What to do.** Re-apply both charts' CRDs as every upgrade already does: the `actions-gateway-crds-v2` render, and `helm show crds` for the main chart's `PriorityClassAllowlist`.
+**What to do.** Re-apply both charts' CRDs as every upgrade already does: the `actions-gateway-crds-v2` render, and the main chart's `PriorityClassAllowlist` CRD, pulled first.
 Nothing else is required, and manifests can stay on `v2beta1`.
 Move them to `v2` before `v2.0.0`, which removes `v2beta1`; until then, a manifest on `v2beta1` is the one that still applies after a rollback.
 
@@ -1259,8 +1259,11 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
 # that directory on `helm install` only and skips it on upgrade, so this is the
 # only way changes to those CRDs reach an existing release. Idempotent, and
 # version-correct: it reads the CRDs out of the exact chart you are upgrading to.
-helm show crds oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version <new-chart-version> | kubectl apply -f -
+# Pull first: `helm show crds oci://...` prints its pull banner on stdout
+# (measured on Helm 4.2), and kubectl rejects the banner.
+helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <new-chart-version> --untar --untardir gag-chart-<new-chart-version>
+helm show crds gag-chart-<new-chart-version>/actions-gateway | kubectl apply -f -
 
 # Upgrade in place to a newer published chart version (carries CRD field changes — see below)
 # --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below
@@ -1300,8 +1303,9 @@ The following upgrade-time behaviors are specific to this chart:
   Rather than make that a conditional "did your release predate X?" step, the upgrade command above applies the chart's CRDs unconditionally:
 
   ```bash
-  helm show crds oci://ghcr.io/actions-gateway/charts/actions-gateway \
-    --version <new-chart-version> | kubectl apply -f -
+  helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+    --version <new-chart-version> --untar --untardir gag-chart-<new-chart-version>
+  helm show crds gag-chart-<new-chart-version>/actions-gateway | kubectl apply -f -
   ```
 
   It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
@@ -1353,8 +1357,9 @@ The cost is that Helm skips `crds/` entirely on upgrade, so an existing release 
 #### 1. Apply the chart's CRDs
 
 ```bash
-helm show crds oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version <new-chart-version> | kubectl apply -f -
+helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <new-chart-version> --untar --untardir gag-chart-<new-chart-version>
+helm show crds gag-chart-<new-chart-version>/actions-gateway | kubectl apply -f -
 ```
 
 This is the standard pre-upgrade step for every release ([above](#gmc-install-and-upgrade-via-helm-recommended)), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.

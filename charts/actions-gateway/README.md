@@ -19,8 +19,12 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
   So applying the chart's CRDs is a standard pre-upgrade step for this chart, run every time rather than conditionally:
 
   ```sh
-  helm show crds <chart> --version <version> | kubectl apply -f -
+  helm pull <chart> --version <version> --untar --untardir gag-chart-<version>
+  helm show crds gag-chart-<version>/actions-gateway | kubectl apply -f -
   ```
+
+  Pull first: for an OCI reference, `helm show crds` prints its pull banner on stdout, and `kubectl` rejects the result.
+  From a local chart directory, `helm show crds <dir> | kubectl apply -f -` is enough.
 
   It is idempotent, and reads the CRDs from the exact chart version you are upgrading to — so it covers any future schema change without anyone having to remember a release note.
   The chart preflights the CRD's presence and fails with that command if it is skipped.
@@ -84,7 +88,7 @@ The chart generates a self-signed webhook serving cert and wires the webhook `ca
 helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reuse-values
 ```
 
-CRDs ship as templates, so field changes are applied on upgrade — except the `PriorityClassAllowlist` CRD, which ships in `crds/` and needs `helm show crds <chart> | kubectl apply -f -` first (see *What it installs*).
+CRDs ship as templates, so field changes are applied on upgrade — except the `PriorityClassAllowlist` CRD, which ships in `crds/` and needs its CRD applied first (see *What it installs*).
 Setting the removed `priorityClassAllowlist.configMapName` now fails the render with migration instructions.
 The `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if you are upgrading a cluster whose tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them first (or temporarily set both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 

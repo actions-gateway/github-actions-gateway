@@ -330,6 +330,26 @@ fi
 readonly released_tgz="${work_dir}/actions-gateway-${released_version}.tgz"
 [[ -f "${released_tgz}" ]] || die "helm pull succeeded but ${released_tgz} does not exist."
 
+step "running the documented pre-upgrade CRD commands against ${helm_pull_ref}"
+# The operator's form, from an OCI reference: docs/operations/upgrade.md pulls
+# before `helm show crds`, because show prints its pull banner on stdout
+# (Helm 4.2.3) and kubectl rejects it. Step 3 below reads a local chart dir,
+# which prints no banner, so only this step runs the OCI path.
+doc_pull_ok=""
+for attempt in 1 2 3; do
+	if helm pull "${helm_pull_ref}" "${helm_pull_scheme_args[@]}" --version "${released_version}" \
+		--untar --untardir "${work_dir}/doc-step" >/dev/null; then
+		doc_pull_ok="yes"
+		break
+	fi
+	echo "     helm pull --untar attempt ${attempt} failed; retrying"
+	sleep 5
+done
+[[ -n "${doc_pull_ok}" ]] || die "the documented 'helm pull --untar' of ${helm_pull_ref} failed."
+kc apply --dry-run=server -f - <<<"$(helm show crds "${work_dir}/doc-step/actions-gateway")" >/dev/null ||
+	die "the documented CRD commands, run against ${helm_pull_ref}, produce a manifest kubectl rejects."
+echo "OK: the documented CRD commands apply cleanly from ${helm_pull_ref}"
+
 step "capturing the installed release's values (replayed on the upgrade to HEAD)"
 helm get values "${HELM_RELEASE}" --kube-context "${KUBE_CONTEXT}" --namespace "${RELEASE_NS}" \
 	-o yaml >"${work_dir}/values.yaml"
