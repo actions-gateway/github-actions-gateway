@@ -3,7 +3,7 @@
 Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see [Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
 
-Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed `actions-gateway.com` API, at `v2beta1` and, from 1.9, `v2`; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.9</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed `actions-gateway.com` API, at `v2beta1` and, from 1.9, `v2`; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.10</span> marks one a recent release added; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.
 
 !!! tip "Check the version you're running"
@@ -17,7 +17,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
   The default in v2.
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
 - **[Multi-label runner sets](operations/troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every `runnerLabel` is registered at GitHub, so a job asking for any of them matches and a `runs-on` array migrates unedited.
-- **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to eviction, preemption, Spot reclamation, a node drain, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
+- **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to preemption, Spot reclamation, a node drain or shutdown, most evictions, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.
@@ -50,7 +50,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
   An unknown group fails the set closed.
 - **[Cross-tenant scale-set name guard](operations/troubleshooting.md#actionsgateway-reports-scalesetnamecollision)**: a set's first `runnerLabel` names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
   Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.
-- **[Agent-identity collision guard](operations/upgrade.md#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name)** <span class="gag-new-badge">new in 1.8</span>: two pools reaching one agent identity both register the same GitHub runner name.
+- **[Agent-identity collision guard](operations/upgrade.md#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name)**: two pools reaching one agent identity both register the same GitHub runner name.
   Admission now rejects the second, so the pair never forms; the holder is named only when the tenant owns both.
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
@@ -79,6 +79,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
   An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal.
   The mandatory default-deny NetworkPolicy stays the primary gate.
 - **[Self-confining controller privileges](design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls)**: shipped `ValidatingAdmissionPolicy` guards deny the GMC's own cluster-wide writes outside admin-marked tenant namespaces, so a compromised manager cannot touch `kube-system` or any unmarked namespace.
+  It [reads Secrets only in those namespaces](operations/upgrade.md#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces) too, through a binding per tenant rather than a cluster-wide grant.
 - **[Restart-free platform allowlists](operations/security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298)**: grow the worker and infra PriorityClass allowlists and the egress-destination allowlist by editing a watched `PriorityClassAllowlist` custom resource (CR) or ConfigMap, no GMC restart; a missing, invalid, or overlapping object fails safe back to the flag baseline.
 - **[Credential redaction in logs](operations/observability-logging.md#what-never-appears-in-logs)**: every GitHub response body passes one sanitizer that strips tokens, JWTs, and JIT configs before it can reach a log line, at every log level.
 - **[Abuse detection and response](operations/security-operations.md)**: the threat model's abuse heuristics mapped to operator alerts, with compromise-response playbooks.
@@ -93,11 +94,13 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Grafana dashboards](operations/observability-dashboards.md)**: tenant, platform, budget, and security dashboards, all as code.
 - **[Why a set is not being offered jobs](operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)** <span class="gag-v2-badge">v2</span>: `RunnerSet` status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
   Readable from `kubectl describe`, so answering it no longer needs metrics access.
-- **[Egress attribution readiness](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.8</span>: an `EgressAuditUnattributed` condition and gauge, on each gateway and each `RunnerSet`, say whether both halves of that attribution are on, and name the half that is not.
+- **[Egress attribution readiness](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span>: an `EgressAuditUnattributed` condition and gauge, on each gateway and each `RunnerSet`, say whether both halves of that attribution are on, and name the half that is not.
   Advisory: it never gates `Ready`.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
 - **[Which host each job reached](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.
+- **[Which job a proxy refused](operations/tenant-onboarding.md#proxy-failure-attribution)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.10</span>: opt-in on both the pool and the gateway.
+  A refused or failed CONNECT is tied to the worker pod that made it, and a denial raises an `EgressDestinationDenied` Event on the `RunnerSet` naming the blocked host.
 
 ## Install and day-2 operations
 
@@ -110,7 +113,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)**: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
 - **[Observed runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-v2-badge">v2</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
   A self-report from the tenant's own container, not an attestation.
-- **[Registry-read runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-new-badge">new in 1.8</span>: the gateway reads the runner version out of the worker image in its registry before any pod runs it, so a digest-only or custom-tagged image gets a verdict rather than `Unknown`.
+- **[Registry-read runner version](operations/troubleshooting.md#worker-image-runner-version)**: the gateway reads the runner version out of the worker image in its registry before any pod runs it, so a digest-only or custom-tagged image gets a verdict rather than `Unknown`.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
 - **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.
@@ -119,7 +122,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 ## API surface and migration
 
 - **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with `v2beta1` as the graduated hub version and `v2` the storage version.
-- **[`v2`, served beside `v2beta1`](operations/upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.9</span>: every kind is also served at the General Availability (GA) version, with `v2beta1` still stored, so `v2.0.0` has a release to roll back to.
+- **[`v2`, served beside `v2beta1`](operations/upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.9</span>: every kind is also served at the General Availability (GA) version, so `v2.0.0` has a release to roll back to.
+- **[`v2` stored, and a sweep to rewrite the rest](operations/upgrade.md#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.10</span>: every kind now stores `v2`, and `gag-migrate storage-version` rewrites objects already stored at an older version, so `v2.0.0` can stop serving them in one CRD apply.
 - **[Reusable runner templates](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one `RunnerTemplate` referenced by many runner sets, or a cluster-wide `ClusterRunnerTemplate` shared across namespaces.
 - **[Multiple gateways per namespace](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.
 - **[GitHub Enterprise Server gateways](operations/troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance)**: a gateway whose `gitHubURL` names a GHES appliance addresses that appliance on every GitHub surface, with a `GitHubEgressIncomplete` condition flagging an incomplete CIDR allow-list.
