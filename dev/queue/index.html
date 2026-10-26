@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1214/">Q1214</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_proxy_attribution_test.go">Flake: an attribution pool gaining a namespace never reissues its certs</a></td>
+<td><code>flake</code> <code>bug</code> <code>1.10-gate</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>E2E_V2_ProxyAttribution</code>'s <code>BeforeAll</code> times out on <code>main</code> at <code>v2_proxy_attribution_test.go:56</code>, waiting for …</td>
+</tr>
+<tr>
 <td><a href="Q1205/">Q1205</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">lease-test's renewer-exit check reads a zombie as alive on GAG runners</a></td>
 <td><code>tests</code> <code>ci</code> <code>dogfood</code></td>
@@ -3098,14 +3106,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Every PR in a release batch rewrites the same cell, so each merge leaves the next PR conflicted and the batch can only merge one at a time.</td>
-</tr>
-<tr>
-<td><a href="Q1200/">Q1200</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/apply_helpers.go">GMC patches owned Secrets with no patch verb on secrets</a></td>
-<td><code>bug</code> <code>security</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The Gateway Manager Controller (GMC) writes every Secret it owns through <code>applyManagedChild</code>, which calls <code>controllerutil.CreateOrPatch</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1168/">Q1168</a></td>
@@ -4138,6 +4138,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>CI jobs read their tool pins from <code>scripts/ci/pins.env</code> through a <code>pins</code> step running <code>scripts/ci/load-pins.sh</code> (Q1166).</td>
+</tr>
+<tr>
+<td><a href="Q1215/">Q1215</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/apply_helpers.go">GMC child writes strip labels other controllers set</a></td>
+<td><code>bug</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Every child the GMC applies loses any label it did not write itself, on the next reconcile.</td>
+</tr>
+<tr>
+<td><a href="Q1216/">Q1216</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_attribution.go">Version the attribution bundle Secret instead of updating it in place</a></td>
+<td><code>debt</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>An <code>EgressProxy</code>'s attribution server bundle (<code>&lt;ep&gt;-attribution-tls</code>) is rewritten in place when its namespace set changes, so a pod …</td>
 </tr>
 </tbody>
 </table>

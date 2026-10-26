@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1200/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1215/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>GMC patches owned Secrets with no patch verb on secrets - GitHub Actions Gateway</title>
+        <title>GMC child writes strip labels other controllers set - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gmc-patches-owned-secrets-with-no-patch-verb-on-secrets" class="md-skip">
+        <a href="#gmc-child-writes-strip-labels-other-controllers-set" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GMC patches owned Secrets with no patch verb on secrets
+              GMC child writes strip labels other controllers set
             
           </span>
         </div>
@@ -2609,36 +2609,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#measured-2026-10-23" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Measured 2026-10-23
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fix" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fix
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2657,19 +2627,17 @@
   
 
 
-<h1 id="gmc-patches-owned-secrets-with-no-patch-verb-on-secrets">GMC patches owned Secrets with no patch verb on secrets<a class="headerlink" href="#gmc-patches-owned-secrets-with-no-patch-verb-on-secrets" title="Permanent link">&para;</a></h1>
-<p>The Gateway Manager Controller (GMC) writes every Secret it owns through <code>applyManagedChild</code>, which calls <code>controllerutil.CreateOrPatch</code>, and <code>CreateOrPatch</code> changes an existing object with a <code>patch</code> request.
-The GMC's manager ClusterRole grants <code>create</code> and <code>update</code> on Secrets and no <code>patch</code>, so a change to an owned Secret's data or labels would be refused, read from source and not observed: the one Secret marker in <code>cmd/gmc</code> is <code>actionsgateway_controller.go</code>'s <code>resources=secrets,verbs=create;update</code>, and <code>charts/actions-gateway/files/manager-role-rules.yaml</code> lists only those two verbs for <code>secrets</code>.</p>
-<h2 id="measured-2026-10-23">Measured 2026-10-23<a class="headerlink" href="#measured-2026-10-23" title="Permanent link">&para;</a></h2>
-<ul>
-<li>The callers are both reconcilers' <code>applyOwnedSecret</code> (v1 <code>actionsgateway_controller.go</code>, v2 <code>actionsgateway_v2_controller.go</code>) and the EgressProxy reconciler's owned-Secret writes, all through <code>applyManagedChild</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/apply_helpers.go"><code>apply_helpers.go</code></a>.</li>
-<li><code>CreateOrPatch</code> skips the request when the mutate function leaves the object unchanged, so the refusal fires only when the desired Secret differs from the live one, for example when a metrics or proxy TLS bundle is reissued.</li>
-<li>Unverified: whether any owned Secret's data changes after creation in practice.
-  The envtest suite runs the reconcilers as the admin user, so no test would see the refusal; <code>TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces</code> runs as the GMC ServiceAccount but never changes an owned Secret.</li>
-</ul>
-<h2 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h2>
-<p>Measure first: run a reconcile as the GMC ServiceAccount that changes an owned Secret, and read the response.
-If it is refused, add <code>patch</code> to the Secret marker; the <code>gmc-tenant-resource-guard</code> policy already confines Secret <code>UPDATE</code>, which is the admission operation a patch is, to tenant namespaces.</p>
+<h1 id="gmc-child-writes-strip-labels-other-controllers-set">GMC child writes strip labels other controllers set<a class="headerlink" href="#gmc-child-writes-strip-labels-other-controllers-set" title="Permanent link">&para;</a></h1>
+<p>Every child the GMC applies loses any label it did not write itself, on the next reconcile.
+<code>applyManagedChild</code> and <code>applyManagedSecret</code> (the Secret path, added by #2151) both call <code>obj.SetLabels(desired.Labels)</code>, which replaces the live label map, so a label another controller or an operator added is dropped.</p>
+<p><strong>Read from source 2026-10-26, not exercised against a cluster.</strong> Both helpers read the object first (controller-runtime v0.25.2 <code>CreateOrPatch</code> and <code>CreateOrUpdate</code> each open with <code>c.Get</code>).
+Annotations, finalizers and other owner references survive, because the mutate function never touches them.
+Labels do not: under <code>CreateOrPatch</code> the merge patch from the read copy turns each dropped key into <code>null</code>, and under <code>CreateOrUpdate</code> the update carries the replaced map.
+So the behaviour predates Q1214's switch to <code>CreateOrUpdate</code> for Secrets and is identical on both paths.
+The foreign label is itself the difference between the read copy and the mutated one, so the helpers' no-op check never skips it: any reconcile of the owner strips it.
+Whether anything in a real cluster labels a GMC child today is unmeasured.</p>
+<p><strong>Done when</strong> both helpers merge the desired labels over the live ones, so a key the GMC owns is set and every other key is left alone, with a unit test that seeds a foreign label on the live object, reconciles, and asserts the foreign label survives.
+Removing a label the GMC used to set is the case a plain merge cannot express; decide whether any child has ever dropped one before choosing merge over a tracked owned-key set.</p>
 
 
 
