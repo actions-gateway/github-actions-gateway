@@ -56,7 +56,7 @@ patches:
   # measurement.
   - target:
       group: actions-gateway.com
-      version: v2beta1
+      version: v2
       kind: ClusterRunnerTemplate
       name: privileged-dind
     patch: |
