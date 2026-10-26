@@ -3652,7 +3652,7 @@ See the <a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation
 <h3 id="proxy-failure-attribution-metrics">Proxy failure attribution metrics<a class="headerlink" href="#proxy-failure-attribution-metrics" title="Permanent link">&para;</a></h3>
 <p>Emitted by an AGC whose gateway sets <code>proxyFailureAttribution: PerJob</code> (Q1184).
 Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
-Nothing acts on the attributed records yet; see <a href="../tenant-onboarding/#proxy-failure-attribution">tenant onboarding</a>.</p>
+An attributed denial is also reported as an <code>EgressDestinationDenied</code> Event, and no retry decision uses the records; see <a href="../tenant-onboarding/#proxy-failure-attribution">tenant onboarding</a>.</p>
 <table>
 <thead>
 <tr>
@@ -4434,6 +4434,11 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <td><code>AssignmentAbandoned</code></td>
 <td>Scale-set only</td>
 <td>The listener giving up on assignments the queue stopped reporting. The classic protocol delivers no assignment to abandon.</td>
+</tr>
+<tr>
+<td><code>EgressDestinationDenied</code></td>
+<td>Both</td>
+<td>The failure-attribution reader joins records to worker pods off the shared pod informer, which watches both tiers' workers (Q1210).</td>
 </tr>
 <tr>
 <td><code>EvictionRecoveryEvidenceLost</code></td>

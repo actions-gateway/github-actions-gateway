@@ -2704,7 +2704,7 @@
 <h1 id="release-110-milestone-definition">Release 1.10 Milestone Definition<a class="headerlink" href="#release-110-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scoped 2026-10-09, no candidate cut.</strong> The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-Seven rows gate the tag and three ride; Q1086, the storage advance, has landed, and Q1184 joined the gate on 2026-10-25 and landed the same day.
+Eight rows gate the tag and three ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210 joined it on 2026-10-26.
 Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
@@ -2772,7 +2772,13 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>Q1184</td>
 <td>Attribute egress proxy failures to the job that hit them, through phase 4</td>
 <td><code>1.10-gate</code></td>
-<td>✅ landed (#2112, #2122, #2125, #2127, #2131): an opted-in namespace's workers move onto a port of their own, and the AGC reads and attributes their failure records, which nothing acts on yet. The Calico e2e lane measures a pod refused on another namespace's port. Q1208's port hold on opt-out landed with it (#2126)</td>
+<td>✅ landed (#2112, #2122, #2125, #2127, #2131): an opted-in namespace's workers move onto a port of their own, and the AGC reads and attributes their failure records, reporting a denial as an Event through Q1210. The Calico e2e lane measures a pod refused on another namespace's port. Q1208's port hold on opt-out landed with it (#2126)</td>
+</tr>
+<tr>
+<td>Q1210</td>
+<td>The AGC records an Event naming the host when it attributes a policy denial, as <code>proxyFailureAttribution</code>'s description says it does</td>
+<td><code>1.10-gate</code></td>
+<td>✅ landed: an <code>EgressDestinationDenied</code> Warning Event on the worker's <code>RunnerSet</code>, once per job and destination, at most eight a job. Unit-tested against a fake replica; not reproduced on a cluster. Found by the candidate's API pre-flight 2026-10-26</td>
 </tr>
 <tr>
 <td>—</td>

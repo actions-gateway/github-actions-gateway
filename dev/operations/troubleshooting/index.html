@@ -7060,6 +7060,12 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <td><a href="#the-reason-is-podsnotstarting-the-image-will-not-pull">The reason is <code>PodsNotStarting</code>: the image will not pull</a></td>
 </tr>
 <tr>
+<td><code>EgressDestinationDenied</code></td>
+<td>Warning</td>
+<td>A worker's job was refused a CONNECT because the destination is not on the egress proxy pool's allowlist, attributed to that job's pod through <code>proxyFailureAttribution: PerJob</code> (Q1210). The note names the pool, the pod and the host and port. A retry is refused the same way. Once per job and destination, at most eight destinations a job.</td>
+<td><a href="../tenant-onboarding/#proxy-failure-attribution">Proxy failure attribution</a></td>
+</tr>
+<tr>
 <td><code>AgentDeregistrationFailed</code></td>
 <td>Warning</td>
 <td>A <code>RunnerGroup</code>/<code>RunnerSet</code> is being deleted and its agent Secrets could not be deregistered at GitHub, so the delete is retried and the finalizer is still held. The named error is the API server's or GitHub's. Usually a revoked or expired App credential: the pool cleanup proceeds without deregistration when no token can be fetched, so this reports the delete itself failing.</td>
