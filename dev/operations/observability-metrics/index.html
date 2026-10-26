@@ -3653,6 +3653,8 @@ See the <a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation
 <p>Emitted by an AGC whose gateway sets <code>proxyFailureAttribution: PerJob</code> (Q1184).
 Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
 An attributed denial is also reported as an <code>EgressDestinationDenied</code> Event, and no retry decision uses the records; see <a href="../tenant-onboarding/#proxy-failure-attribution">tenant onboarding</a>.</p>
+<p><strong><code>outcome="denied"</code> needs a pool with a destination allowlist.</strong> Only a pool that sets <code>destinationFQDNs</code> or <code>destinationCIDRs</code> refuses a CONNECT itself; one with neither forwards every request and leaves the pool's NetworkPolicy to block the destination, so the proxy records the blocked connection as <code>dial-failed</code>.
+Alert on <code>denied</code> alone and a default pool never fires it.</p>
 <table>
 <thead>
 <tr>
