@@ -3030,7 +3030,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1180/">Q1180</a></td>
 <td><a href="../plan/gke-dogfood/">Dogfood keeps no AGC or proxy metrics past the pod's life</a></td>
-<td><code>dogfood</code></td>
+<td><code>dogfood</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Google Managed Prometheus is enabled on the dogfood cluster, but its only scrape targets are <code>kube-state-metrics</code> and <code>dcgm</code>: no …</td>
@@ -3038,7 +3038,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1181/">Q1181</a></td>
 <td><a href="../plan/q555-flaky-job-retry/#known-futile-retries">Skip known-futile re-runs on the existing disruption arms</a></td>
-<td><code>feature</code></td>
+<td><code>feature</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The disruption arms (eviction, preemption, node_shutdown, deletion, abandoned, vanished) spend a slot of <code>maxEvictionRetries</code> on any re-run …</td>
@@ -3054,7 +3054,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q555/">Q555</a></td>
 <td><a href="../plan/q555-flaky-job-retry/">Detect flaky jobs and record each failure's platform context</a></td>
-<td><code>tests</code> <code>feature</code></td>
+<td><code>tests</code> <code>feature</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td><strong>Goal:</strong> automatic recovery that cuts human intervention and so operating cost; success is a falling rate of manual re-runs per set (draft …</td>
@@ -3062,7 +3062,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1183/">Q1183</a></td>
 <td><a href="../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">Retry classified platform failures, starting with OOM under right-sizing</a></td>
-<td><code>feature</code></td>
+<td><code>feature</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>M</td>
 <td>Blocked on Q555, whose detection measures each class's retry success rate (R14); the budget a class spends survives a restart …</td>
@@ -3070,7 +3070,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1178/">Q1178</a></td>
 <td><a href="../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Label egress proxy outcome metrics by allowlist entry and outcome</a></td>
-<td><code>feature</code></td>
+<td><code>feature</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The proxy's <code>actions_gateway_proxy_dial_errors_total</code> and <code>_connect_denied_total</code> carry no labels, so neither an operator nor the AGC can …</td>
