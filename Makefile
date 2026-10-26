@@ -662,11 +662,11 @@ codegen-check: $(CONTROLLER_GEN) ## Fail if committed CRD/RBAC/webhook manifests
 # regenerated, which is what api-reference-check (in `make check`) enforces.
 # Scope and the deprecated-version decision: docs/development/code-generation.md.
 .PHONY: api-reference
-api-reference: $(CRD_REF_DOCS) ## Regenerate docs/reference/api.md from the api/v2beta1 kubebuilder markers
+api-reference: $(CRD_REF_DOCS) ## Regenerate docs/reference/api.md from the api/v2 kubebuilder markers
 	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh
 
 .PHONY: api-reference-check
-api-reference-check: $(CRD_REF_DOCS) ## Fail if docs/reference/api.md drifted from the api/v2beta1 Go types it is generated from (Q632)
+api-reference-check: $(CRD_REF_DOCS) ## Fail if docs/reference/api.md drifted from the api/v2 Go types it is generated from (Q632)
 	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh --check
 
 # api-reference with the kubernetesVersion pin re-derived from api/go.mod rather
