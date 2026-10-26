@@ -3312,13 +3312,13 @@ Diagnosis and the verification command are in <a href="../../operations/troubles
 <a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="s">replicaCount: 1</span>
 <a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="s">gmc:</span>
 <a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="s">  image:</span>
-<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="s">    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="s">    tag: v1.10.0-rc.1</span>
 <a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="s">agc:</span>
 <a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="s">  image:</span>
-<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="s">    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be</span>
+<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="s">    tag: v1.10.0-rc.1</span>
 <a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="s">proxy:</span>
 <a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="s">  image:</span>
-<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="s">    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be</span>
+<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="s">    tag: v1.10.0-rc.1</span>
 <a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="s"># WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to</span>
 <a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="s"># every AGC, which injects the wrapper into each worker pod so the runner</span>
 <a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="s"># container can be the unmodified upstream actions-runner. Pin it: the chart's</span>
@@ -3326,7 +3326,7 @@ Diagnosis and the verification command are in <a href="../../operations/troubles
 <a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="s"># and ImagePullBackOffs the injection.</span>
 <a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="s">wrapper:</span>
 <a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="s">  image:</span>
-<a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="s">    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be</span>
+<a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="s">    tag: v1.10.0-rc.1</span>
 <a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>
 <a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="s"># Self-signed webhook cert — no cert-manager dependency.</span>
 <a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="s"># The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.</span>
@@ -3377,7 +3377,7 @@ The chart ships that permit-only quota (<code>gmc-critical-pods</code>) by defau
 See <a href="../../operations/install/#gke-and-other-restricted-priorityclass-clusters">install.md</a>.</p>
 </blockquote>
 <h4 id="wire-the-webhook-ca-into-the-crd-conversion-cabundle-q279">Wire the webhook CA into the CRD conversion <code>caBundle</code> (Q279)<a class="headerlink" href="#wire-the-webhook-ca-into-the-crd-conversion-cabundle-q279" title="Permanent link">&para;</a></h4>
-<p>Since Q74 the v2 kinds are served at <strong>both</strong> <code>v2beta1</code> and <code>v2alpha1</code> and stored at <code>v2beta1</code>, so a request naming <code>v2alpha1</code> crosses the GMC-hosted conversion webhook and one naming <code>v2beta1</code> does not.
+<p>From 1.10 the v2 kinds are served at <code>v2</code>, <code>v2beta1</code> and <code>v2alpha1</code> and stored at <code>v2</code>, so a request naming either older version crosses the GMC-hosted conversion webhook and one naming <code>v2</code> does not.
 The apiserver calls that webhook over TLS and only trusts it if each CRD's <code>spec.conversion.webhook.clientConfig.caBundle</code> carries the CA that signed the GMC's serving cert.
 Dogfood is <strong>self-signed</strong> (no cert-manager), and the CRD chart renders an empty <code>caBundle</code> when <code>conversion.certManager.enabled=false</code> and <code>conversion.caBundle</code> is unset — so <strong>without this step every CR <code>apply</code> (and its conversion read-back) fails the TLS handshake</strong> with <code>x509: certificate signed by unknown authority</code>.</p>
 <p>The chart mints that CA once and stores it in the <code>webhook-server-cert</code> Secret in <code>gmc-system</code> (reused across renders via Helm <code>lookup</code>, so it is stable on re-runs).
@@ -3507,7 +3507,7 @@ Revisit if Athens is extended to a shared multi-tenant cluster or used to serve 
 This is the minimal <strong>direct-egress</strong> form — no <code>EgressProxy</code>, so workers egress directly to GitHub, still behind the default-deny egress NetworkPolicy (DNS + GitHub CIDR), just without a per-tenant egress IP.
 Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on the gateway to add per-tenant egress IP attribution.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s">apiVersion: actions-gateway.com/v2beta1</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s">apiVersion: actions-gateway.com/v2</span>
 <a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="s">kind: ActionsGateway</span>
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="s">metadata:</span>
 <a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="s">  name: dogfood</span>
@@ -3519,7 +3519,7 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="s">      name: github-app-v1</span>
 <a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="s">  githubURL: https://github.com/actions-gateway/github-actions-gateway</span>
 <a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="s">---</span>
-<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="s">apiVersion: actions-gateway.com/v2beta1</span>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="s">apiVersion: actions-gateway.com/v2</span>
 <a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="s">kind: RunnerTemplate</span>
 <a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="s">metadata:</span>
 <a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="s">  name: default</span>
@@ -3564,7 +3564,7 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-56" name="__codelineno-20-56" href="#__codelineno-20-56"></a><span class="s">            limits:</span>
 <a id="__codelineno-20-57" name="__codelineno-20-57" href="#__codelineno-20-57"></a><span class="s">              memory: "3Gi"</span>
 <a id="__codelineno-20-58" name="__codelineno-20-58" href="#__codelineno-20-58"></a><span class="s">---</span>
-<a id="__codelineno-20-59" name="__codelineno-20-59" href="#__codelineno-20-59"></a><span class="s">apiVersion: actions-gateway.com/v2beta1</span>
+<a id="__codelineno-20-59" name="__codelineno-20-59" href="#__codelineno-20-59"></a><span class="s">apiVersion: actions-gateway.com/v2</span>
 <a id="__codelineno-20-60" name="__codelineno-20-60" href="#__codelineno-20-60"></a><span class="s">kind: RunnerSet</span>
 <a id="__codelineno-20-61" name="__codelineno-20-61" href="#__codelineno-20-61"></a><span class="s">metadata:</span>
 <a id="__codelineno-20-62" name="__codelineno-20-62" href="#__codelineno-20-62"></a><span class="s">  name: ci</span>
@@ -3574,10 +3574,10 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-66" name="__codelineno-20-66" href="#__codelineno-20-66"></a><span class="s">    name: dogfood</span>
 <a id="__codelineno-20-67" name="__codelineno-20-67" href="#__codelineno-20-67"></a><span class="s">  templateRef:</span>
 <a id="__codelineno-20-68" name="__codelineno-20-68" href="#__codelineno-20-68"></a><span class="s">    name: default</span>
-<a id="__codelineno-20-69" name="__codelineno-20-69" href="#__codelineno-20-69"></a><span class="s">  # ScaleSet (the Q264 P5 default), stated explicitly so the tenant's protocol is</span>
-<a id="__codelineno-20-70" name="__codelineno-20-70" href="#__codelineno-20-70"></a><span class="s">  # readable here. One runnerLabel, which is BOTH the scale set's name at GitHub and</span>
-<a id="__codelineno-20-71" name="__codelineno-20-71" href="#__codelineno-20-71"></a><span class="s">  # the workflows' runs-on target, so it must match vars.GAG_RUNNER exactly (Part C2).</span>
-<a id="__codelineno-20-72" name="__codelineno-20-72" href="#__codelineno-20-72"></a><span class="s">  acquisitionProtocol: ScaleSet</span>
+<a id="__codelineno-20-69" name="__codelineno-20-69" href="#__codelineno-20-69"></a><span class="s">  # No acquisitionProtocol: v2 is ScaleSet-only and has no such field, so naming</span>
+<a id="__codelineno-20-70" name="__codelineno-20-70" href="#__codelineno-20-70"></a><span class="s">  # one fails strict decoding. One runnerLabel, which is BOTH the scale set's name</span>
+<a id="__codelineno-20-71" name="__codelineno-20-71" href="#__codelineno-20-71"></a><span class="s">  # at GitHub and the workflows' runs-on target, so it must match vars.GAG_RUNNER</span>
+<a id="__codelineno-20-72" name="__codelineno-20-72" href="#__codelineno-20-72"></a><span class="s">  # exactly (Part C2).</span>
 <a id="__codelineno-20-73" name="__codelineno-20-73" href="#__codelineno-20-73"></a><span class="s">  runnerLabels: ["gag-ci-scaleset"]</span>
 <a id="__codelineno-20-74" name="__codelineno-20-74" href="#__codelineno-20-74"></a><span class="s">  # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node</span>
 <a id="__codelineno-20-75" name="__codelineno-20-75" href="#__codelineno-20-75"></a><span class="s">  # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. On ScaleSet this</span>
@@ -3966,7 +3966,7 @@ Note this alone would not have fixed anything; the global limit was the real blo
 3. Creates the <code>kata</code> RuntimeClass alias (over the chart-owned <code>kata-qemu</code> handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
 4. Creates the <code>gag-dogfood-e2e</code> namespace (v2 marker <code>actions-gateway.com/tenant=managed</code>) and the GitHub App Secret</p>
 <p>The <strong>tenant objects</strong> (ResourceQuota, <code>ActionsGateway</code>, <code>ClusterRunnerTemplate</code>, <code>RunnerSet</code>, egress policy, and the namespace's security-profile gates) are owned by the worker-isolation overlays under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/</code></a> and applied on demand by <code>e2e-start.sh</code> (<code>E2E_VARIANT=kata|dind</code>, default <code>kata</code> since the Q286 flip; <code>dind</code> is the explicit opt-in fallback).
-They are authored <strong>directly at <code>actions-gateway.com/v2beta1</code></strong> (Q231) — the graduated served+storage front-door shape (Q273), the same version <code>scripts/dogfood/setup.sh</code> (main dogfood) authors at since Q1104 moved it off <code>v2alpha1</code>.</p>
+They are authored <strong>directly at <code>actions-gateway.com/v2</code></strong>, the storage version from 1.10 and the same version <code>scripts/dogfood/setup.sh</code> (main dogfood) authors at (Q1212).</p>
 <p>In both variants the DinD native sidecar runs <code>dockerd</code> on <code>tcp://localhost:2375</code> (no TLS — pod-internal only) and the <code>runner</code> container sets <code>DOCKER_HOST=tcp://localhost:2375</code>.
 Because all containers in a pod share a network namespace, kind's API server is reachable at <code>localhost:&lt;apiserver-port&gt;</code> from the runner.</p>
 <blockquote>
@@ -4029,7 +4029,7 @@ All resizes pin <code>--project</code> and <code>--zone</code> and are idempoten
 <p><strong>Migrating a pre-existing Classic e2e tenant (one-time).</strong> If the tenant's RunnerSet was previously authored at <code>v2alpha1</code> with <code>acquisitionProtocol: Classic</code>, the conversion webhook stamped a <code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> annotation on the stored v2beta1 object.
 <code>kubectl apply</code> of the new v2beta1 ScaleSet spec does <strong>not</strong> strip that webhook-added annotation, so the AGC keeps running Classic (it reads the RunnerSet through the v2beta1→v2alpha1 conversion, which restores <code>Classic</code> from the annotation).
 Recreate the RunnerSet once so it comes back v2beta1-native (annotation defaults to <code>ScaleSet</code>): <code>kubectl delete runnerset ci-e2e -n gag-dogfood-e2e</code> then <code>kubectl apply -k deploy/dogfood-e2e/overlays/dind</code>.
-A tenant created fresh by <code>e2e-setup.sh</code> (authored at v2beta1 directly) never carries the annotation.
+A tenant created fresh (authored at <code>v2</code> directly) never carries the annotation.
 Verified live 2026-07-07 (Q231).</p>
 </blockquote>
 <hr />

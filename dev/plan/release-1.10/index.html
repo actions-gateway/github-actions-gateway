@@ -2781,6 +2781,12 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>✅ landed: an <code>EgressDestinationDenied</code> Warning Event on the worker's <code>RunnerSet</code>, once per job and destination, at most eight a job. Unit-tested against a fake replica; not reproduced on a cluster. Found by the candidate's API pre-flight 2026-10-26</td>
 </tr>
 <tr>
+<td>Q1212</td>
+<td>Dogfood tenant objects are written at <code>actions-gateway.com/v2</code>, so the project runs what onboarding now recommends</td>
+<td><code>1.10-gate</code></td>
+<td>✅ landed: <code>setup.sh</code>'s tenant and the e2e tenant's base and overlays author <code>v2</code>, and <code>setup.sh</code> defaults to <code>v1.10.0-rc.1</code> so a defaults run serves it. Kustomize renders and unit tests only; reaches the cluster at the next <code>setup.sh</code></td>
+</tr>
+<tr>
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
