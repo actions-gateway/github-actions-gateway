@@ -1,7 +1,7 @@
 # Release 1.10 Milestone Definition
 
 > **Status: scoped 2026-10-09, no candidate cut.** The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-> Seven rows gate the tag and three ride; Q1086, the storage advance, has landed, and Q1184 joined the gate on 2026-10-25.
+> Seven rows gate the tag and three ride; Q1086, the storage advance, has landed, and Q1184 joined the gate on 2026-10-25 and landed the same day.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -36,7 +36,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q1153 | Reclaim the idle scale-set worker a cancelled job leaves behind | `1.10-gate` | ✅ landed: a runnerless completion whose own worker is busy stamps the oldest idle `Running` worker, once per job, and a start moves the stamp on. Unit-tested on crossed workers; not reproduced on a cluster |
 | Q1154 | Reclaim the JIT-config Secret of a worker reaped before its job completes | `1.10-gate` | ✅ landed: the worker pod becomes the Secret's only owner once created, so the garbage collector deletes it with the pod. Unit-tested with a collector stand-in; not reproduced on a cluster |
 | Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
-| [Q1184](../queue/Q1184.md) | Attribute egress proxy failures to the job that hit them, through phase 4 | `1.10-gate` | Phases 1 to 3 ✅ landed (#2112, #2122, #2125, #2127): an opted-in namespace's workers move onto a port of their own, and the AGC reads and attributes their failure records, which nothing acts on yet. Q1208's port hold on opt-out ✅ landed (#2126). Phase 4, the Calico measurement, 🔲 |
+| Q1184 | Attribute egress proxy failures to the job that hit them, through phase 4 | `1.10-gate` | ✅ landed (#2112, #2122, #2125, #2127, #2131): an opted-in namespace's workers move onto a port of their own, and the AGC reads and attributes their failure records, which nothing acts on yet. The Calico e2e lane measures a pod refused on another namespace's port. Q1208's port hold on opt-out landed with it (#2126) |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none, under a `get` on `serviceaccounts`. Stage two 🔲 ready |
